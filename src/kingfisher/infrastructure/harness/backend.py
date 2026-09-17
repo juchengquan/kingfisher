@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Protocol
@@ -449,10 +449,31 @@ def default_backend(
 
 
 #: Which arguments name a file. The convention this repository already keeps --
-#: `test_every_shipped_tool_taking_a_path_says_which_kind` walks the shipped tools
-#: looking for exactly this parameter name -- so widening it is a line here and a test,
-#: rather than a design question.
+#: `test_every_shipped_tool_taking_a_path_says_it_is_a_session_path` walks the shipped
+#: tools looking for exactly this parameter name -- so widening it is a line here and a
+#: test, rather than a design question.
 PATH_ARGUMENTS: frozenset[str] = frozenset({"path"})
+
+#: Where a workspace tool's *other* arguments may not point: the prefixes the file tools
+#: refuse, and the four a process reads its host and itself through --
+#: `/proc/self/environ` holds this process's API keys. Refused rather than translated,
+#: because nothing says such an argument names a file, and it reaches the tool as
+#: written: a tool calling its file `input_file` was handed another session's secret.
+#: Not a boundary -- a tool runs in kingfisher's own process, unfenced, and can open
+#: anything it likes -- but it takes away the obvious way for a model to ask one to.
+NOT_FOR_TOOLS: tuple[str, ...] = (*_HOST_ROOTS, "/root/", "/proc/", "/sys/", "/dev/")
+
+
+def _strings_in(value: Any) -> Iterator[str]:
+    """Every string an argument carries, however deeply a list or a mapping holds it."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, Mapping):
+        for inner in value.values():
+            yield from _strings_in(inner)
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        for inner in value:
+            yield from _strings_in(inner)
 
 
 class WorkspaceToolPaths(AgentMiddleware):
@@ -475,7 +496,25 @@ class WorkspaceToolPaths(AgentMiddleware):
     def __init__(self, names: frozenset[str], session_dir: Path) -> None:
         self.names = names
         self.session_dir = Path(session_dir)
+        # The directory this session's siblings are in, spelled both ways. In a
+        # container the workspace is `/workspace`, which no host root names, and
+        # another session is one directory over from this one.
+        siblings = self.session_dir.parent
+        self._refused = (
+            *NOT_FOR_TOOLS,
+            *{f"{root}/" for root in (str(siblings), str(siblings.resolve()))},
+        )
         super().__init__()
+
+    def _host_path_in(self, args: Mapping[str, Any]) -> str | None:
+        """The first host path in an argument that is not `path`, or `None`."""
+        for key, value in args.items():
+            if key in PATH_ARGUMENTS:
+                continue
+            for text in _strings_in(value):
+                if text.startswith(self._refused) or f"{text}/" in self._refused:
+                    return text
+        return None
 
     def _translated(self, request: Any) -> Any:
         """The same call with its path arguments made real, or the request
@@ -484,6 +523,9 @@ class WorkspaceToolPaths(AgentMiddleware):
         if call.get("name") not in self.names:
             return request
         args = call.get("args") or {}
+        if (host := self._host_path_in(args)) is not None:
+            msg = f"{host!r} is a host path, and a tool is handed this session's own paths"
+            raise HostPathError(msg)
         wanted = {key: args[key] for key in args if key in PATH_ARGUMENTS}
         if not wanted:
             return request
@@ -522,18 +564,18 @@ class WorkspaceToolPaths(AgentMiddleware):
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         try:
             return handler(self._translated(request))
-        except UnsafeReferenceError as escaped:
-            return self._refused(request, escaped)
+        except (UnsafeReferenceError, HostPathError) as escaped:
+            return self._refusal(request, escaped)
 
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
         try:
             return await handler(self._translated(request))
-        except UnsafeReferenceError as escaped:
-            return self._refused(request, escaped)
+        except (UnsafeReferenceError, HostPathError) as escaped:
+            return self._refusal(request, escaped)
 
-    def _refused(self, request: Any, escaped: UnsafeReferenceError) -> ToolMessage:
+    def _refusal(self, request: Any, escaped: ValueError) -> ToolMessage:
         """A path that climbs out, reported the way `reject_host_path` reports one."""
         call = request.tool_call
         return ToolMessage(
