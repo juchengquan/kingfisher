@@ -36,12 +36,12 @@ def _agents(found: Inventory) -> Iterator[str]:
     for name, described in found.agents.items():
         source = found.agent_sources.get(name)
         yield f"  {name}{_from(source, f'{name}.yaml')} — {described}"
-        # The delegates it ends up with: its own, and the ones those bring.
-        # Printed rather than left to be worked out, because an agent file names
-        # only what it calls -- so this is the one place the whole tree is
-        # visible without opening every definition it reaches.
-        if reached := found.agent_delegates.get(name):
-            yield f"      delegates: {', '.join(reached)}"
+        # The delegates this agent activates, which is what it names and no more:
+        # a helper one of them consults reaches a run only where this file names
+        # it too. Printed rather than left to be worked out, because `["*"]` is a
+        # name for whatever the catalogue holds today.
+        if delegates := found.agent_delegates.get(name):
+            yield f"      delegates: {', '.join(delegates)}"
     if not found.agents:
         yield f"  (none)  — a request must name one; try {SEED_HINT}"
     yield ""
