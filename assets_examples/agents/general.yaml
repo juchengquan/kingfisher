@@ -45,7 +45,11 @@ tools: [web_search, http_fetch]
 # Off rather than "no opinion". What this agent looks up belongs in the answer
 # it was asked for; carrying a previous caller's lookups into the next session
 # is how a stale figure outlives the question that produced it.
-memory: true
+#
+# `false` is the only value that does anything here: `true` and an absent line
+# both mean "on if the deployment wired it", so a file arguing for off and
+# writing `true` argues for nothing.
+memory: false
 system_prompt: |
   You work in this workspace and you can look things up outside it.
 

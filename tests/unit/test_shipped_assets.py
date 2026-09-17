@@ -340,6 +340,19 @@ def test_every_preset_agent_parses(shipped):
         assert len(spec.system_prompt) > 200  # a real prompt, not a stub
 
 
+def test_the_lookup_agent_keeps_nothing_between_sessions(shipped):
+    """`general.yaml` argued for memory off and wrote `memory: true`, which means what
+    an absent line means -- so the line did nothing and the argument above it described
+    a file that was not there.
+
+    Pinned because the two can only disagree in silence: nothing refuses `true`, and an
+    agent quietly keeping a memory file is not a failure anything reports.
+    """
+    spec = LocalAgentRepository(shipped / "agents").specs["general"]
+
+    assert spec.memory is False, "the only value on this axis that subtracts"
+
+
 def test_every_preset_names_tools_this_distribution_actually_offers(shipped):
     """The test that was missing, and the reason two broken definitions shipped."""
     offering = Offering.of(LocalToolRepository(shipped / "tools").found)
