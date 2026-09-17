@@ -10,7 +10,6 @@ from pathlib import Path
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.ports import (
     AgentRepository,
-    AssetRepository,
     MiddlewareRepository,
     SkillRepository,
     SubagentRepository,
@@ -170,16 +169,6 @@ STAGED_KINDS: tuple[str, ...] = tuple(
 )
 
 
-def source_of(repository: AssetRepository) -> str:
-    """Where a repository's definitions live, for a message a person reads."""
-    return str(repository.root) if repository.root is not None else "the catalogue"
-
-
-def catalogue_root(repository: AssetRepository) -> Path | None:
-    """The directory behind a repository, or `None` when there is not one."""
-    return repository.root
-
-
 def resolve_definitions(
     cfg: Config, supplied: Definitions | Mapping[str, Path] | None = None
 ) -> Definitions:
@@ -216,7 +205,7 @@ def resolve_definitions(
 
     # Checked however it arrived, and only where there is something to check: a
     # repository with a `root` of `None` has no directory that could be missing.
-    roots = {kind: catalogue_root(getattr(supplied, kind)) for kind in STAGED_KINDS}
+    roots = {kind: getattr(supplied, kind).root for kind in STAGED_KINDS}
     if absent := tuple(
         f"{kind} ({path})" for kind, path in roots.items() if path is not None and not path.is_dir()
     ):

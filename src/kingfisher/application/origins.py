@@ -6,7 +6,7 @@ from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from kingfisher.infrastructure.catalogue import DEFINITION_KINDS, catalogue_root
+from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
 if TYPE_CHECKING:
     from kingfisher.config import Config
@@ -160,7 +160,7 @@ def _catalogue(cfg: Config, kind: str, catalogue: Definitions | None) -> Origin:
     if catalogue is None:
         return Origin(_derived(configured, cfg.workspace / kind), configured)
 
-    root = catalogue_root(getattr(catalogue, kind))
+    root = getattr(catalogue, kind).root
     if root is None:
         return Origin("supplied")
     if root != configured:

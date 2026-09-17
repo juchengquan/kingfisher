@@ -147,7 +147,7 @@ true of every agent in the workspace.
 | `skills` | optional | Which procedures it is told about. Unset grants **none**; write `["*"]` for every skill the workspace offers |
 | `subagents` | optional | Delegates it may consult. Unset grants **none**; `["*"]` is every subagent the workspace offers |
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
-| `model` | optional | An entry in your `models.yaml`. Unset runs the `default:` there. May be a list, tried in order |
+| `model` | optional | One entry in your `models.yaml`. Unset runs the `default:` there. A list is refused |
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 | `source_ids` | optional | Who may open a session on this agent. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
