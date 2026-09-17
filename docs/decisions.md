@@ -58,8 +58,8 @@ form did exactly that -- adding one audience rewrote every entry in the field.
 
 Refused rather than dropped, and the message names the entry to write.
 *(2026-09-03. The `all_of` spelling nested one level deeper under it, which was the
-one place the old form read better and was accepted knowingly. `all_of` is refused
-now, and a requirement is written as the set it is -- *Source-id access* has why.)*
+one place the old form read better and was accepted knowingly.)* `all_of` is refused
+now, and a requirement is written as the set it is -- *Source-id access* has why.
 
 ## The catalogue
 
@@ -1293,10 +1293,11 @@ anywhere. Only a filesystem smaller than the limit gives a clean `ENOSPC`.
 
 **The run log never crosses the wire.** `run_dir` and `log_path` are typed `Path`
 in the domain so `json.dumps` raises rather than quietly stringifying them, and
-`service/payloads.py` is the one place that knows to leave them behind. A
-mirrored pydantic model would be a second home for that rule, and the kind that
-gets it wrong helpfully -- adding a `Path` serialiser makes the error go away and
-ships exactly the leak.
+`service/payloads.py` was the one place that knew to leave them behind. A
+mirrored pydantic model would have been a second home for that rule, and the kind
+that gets it wrong helpfully -- adding a `Path` serialiser makes the error go away
+and ships exactly the leak. The service and its payloads went on 2026-09-15; the
+fields are still `Path`, so a caller serialising a result meets the same refusal.
 
 **The session quota is checked between turns and never during one.** This reverses
 what *Nothing at rest* argued: N11 said the bound could be metered on the
@@ -1306,13 +1307,14 @@ exceed the bound and only a filesystem quota underneath could stop it. What the
 check prevents is the next turn making it worse.
 **A session's files reach a store the deployment wired, and its directory is a
 port too.** `SessionStore` -- `fetch`, `save`, `knows`, `forget` -- is the missing
-half of a symmetry this package already had: bytes arrived through a door
-(`FileStore`, `DefinitionStore`) and left through a host path, which only ever
-worked for a caller sharing that host. `SessionRoot` is the other half, handing
+half of a symmetry this package then had: bytes arrived through a door
+(`FileStore`, `DefinitionStore`, both since removed) and left through a host path,
+which only ever worked for a caller sharing that host. `SessionRoot` is the other half, handing
 back the one directory a turn addresses everything from, as a context manager so
-that a mount is released when the turn ends however it ended. `LocalSessionStore`
-and `LocalSessionRoot` are the defaults, and **a local directory is a perfectly
-good implementation of either** -- what the constraint forbids is kingfisher
+that a mount is released when the turn ends however it ended. `LocalSessionRoot`
+is the default root; there is no store unless one is named, and
+`KINGFISHER_SESSION_STORE` naming a directory gets a `LocalSessionStore`. **A local
+directory is a perfectly good implementation of either** -- what the constraint forbids is kingfisher
 *assuming* a disk, not a deployment choosing one.
 
 **A session owns what it costs: everything per-session lives in the session.**
@@ -1434,14 +1436,16 @@ the field empty -- `stop_reason` says why. *(2026-09-15.)*
 **The session directory is the backend root**, `/data` is materialised once at
 session creation, writes come back as a manifest, and processes are stateless
 while the service is stateful. `sweep()` came off the request path.
-*(2026-08-16, `session-scoped-api.md`, `durable-session-data.md`.)*
+*(2026-08-16, `session-scoped-api.md`, `durable-session-data.md`.)* Two of those
+have since changed: `/data` is placed on every turn that brings files, replacing any
+of the same name, and the service is gone.
 
 **A deployment names its store in a setting; it does not pass an object.**
 `Config.session_store` could only be a directory and its comment said why -- *"a
 deployment reaching for that passes an object rather than a path"* -- and both
 halves were wrong. An environment variable can name a factory, which is how
 `models.yaml` has always reached a chat class; and passing an object only reaches
-the one construction site a deployment controls, which is neither of the two
+the one construction site a deployment controls, which is none of the ones
 kingfisher ships. `presentation/cli/__main__.py` builds its own `Kingfisher` and
 there is nowhere to point it. A setting resolved inside `Kingfisher.__init__` is
 inherited by every entry point at once.
@@ -1468,17 +1472,20 @@ directory it stopped meaning to use, and nothing says so until somebody goes
 looking.
 
 **Environment variables, never a workspace file.** Measured rather than assumed:
-`confinement.writable_roots` returns the whole workspace plus scratch, carving
-out only `skills/`, so `models.yaml`, `agents/`, `subagents/` and `tools/` are
-writable by the agent's shell. The rule is already stated at
-`confinement.resolve` -- *"host-side configuration, and a file the agent could
-edit is not a boundary"*. This is why a store as a workspace *asset* is closed
+`confinement.writable_roots` returned the whole workspace plus scratch, carving
+out only `skills/`, so `models.yaml`, `agents/`, `subagents/` and `tools/` were
+writable by the agent's shell. The rule was quoted from `confinement.resolve` --
+*"host-side configuration, and a file the agent could edit is not a boundary"* --
+though *Confining the shell* found that sentence already gone. The definition
+roots have been protected since 2026-09-07; `models.yaml` still is not, so the
+rule still holds. This is why a store as a workspace *asset* is closed
 rather than deferred: it is the middleware decision again, one object further in.
 The agent cannot reach environment variables at all -- its shell gets an
 allowlist of five plus the skills directory.
 
 **A port a deployment can name gets a runnable contract.** `SESSION_STORE_CONTRACT`
-and `FILE_STORE_CONTRACT` in `kingfisher.testing` are the checks
+in `kingfisher.testing` -- and `FILE_STORE_CONTRACT` beside it until that port went
+-- are the checks
 `tests/unit/` runs, exported so a deployment runs them against its own adapter. A
 setting inviting somebody to write an implementation without a way to check it is
 worse than no setting, and the parts easiest to get wrong are the ones that
@@ -1494,23 +1501,28 @@ pytest's assertion rewriting does not reach an imported library and `python -O`
 strips a bare `assert` -- a conformance kit passing while checking nothing is
 worse than no kit.
 
-**The two kits take different arguments, because the ports differ.**
+**The two kits took different arguments, because the ports differed.**
 `SessionStore` writes, so its checks are handed a factory and fill their own.
-`FileStore` is one method and that method reads: kingfisher never writes to a
-file store, so a check cannot plant the file it then fetches, and the deployment
-hands over a `Planted` describing what it planted.
+`FileStore` was one method and that method read: kingfisher never wrote to a
+file store, so a check could not plant the file it then fetched, and the deployment
+handed over a `Planted` describing what it planted. Both went with `FileStore`; the
+kits left, for the session store, the session root and the command runner, all take
+a factory.
 
-**`FileStore`'s setting is the service's, `SessionStore`'s is the library's.** An
-asymmetry, kept deliberately: a `FileStore` resolves *refs*, the vocabulary of a
+**`FileStore`'s setting was the service's, `SessionStore`'s is the library's.** Both
+the port and its setting are gone (*The HTTP service*); the asymmetry was kept
+deliberately while they existed: a `FileStore` resolves *refs*, the vocabulary of a
 caller with no host paths, and `kingfisher run` takes `--input` as a path on this
 machine and neither builds one nor could use one. The setting belongs where the
 port is used. Flagged while proposed as the decision most likely to be wrong, and
 it survived being built.
 
 **The backend stays kingfisher's, and a store as a workspace asset is refused.**
+*(The first half was reversed on 2026-09-15 -- a deployment names the filesystem its
+agents run on, below. The refusal of a store as a workspace asset stands.)*
 The backend is not "where files live": it wraps every shell command in
-`sandbox-exec` or Landlock, it is what refuses a host path, and its route table
-is what makes `DATA_IS_READ_ONLY` legal at all -- deepagents refuses
+`sandbox-exec`, bubblewrap or Landlock, it is what refuses a host path, and its route
+table is what makes `read_only_permissions` legal at all -- deepagents refuses
 `permissions=` outright on a backend that executes unless every rule is
 route-scoped. Routing `/data` to a store would also break the promise
 `prompts/system.md` makes the model in a table -- *"nothing in the workspace is
@@ -1539,10 +1551,12 @@ arriving at a turn rather than at the definition.
 `"/memory/"`; `ARTIFACT_DIRS` spelled two of them a third time. The leaves are
 named once now and everything is composed from them, which is what this module
 already recorded doing for `UPLOADED_SKILLS`: *"a second spelling is how the two
-halves of this layout drifted apart in the first place."*
+halves of this layout drifted apart in the first place."* That constant went with
+uploads, and the quotation with it.
 
 **Writability hangs on a scope, not on a route.** `/skills/**` is one rule
-covering the catalogue, a session's uploads and every bundle's mount. A rule per
+covering the catalogue and every bundle's mount, and covered a session's uploads
+too while they existed. A rule per
 route would make a deployment's permission list grow with the number of bundles
 its catalogue ships, protecting nothing more, and it would have stopped this
 being a refactor that changes nothing observable -- which is the property that
@@ -1624,9 +1638,13 @@ answers to what filesystem a turn runs against, and a pre-built graph already
 carries one, so either would be silently discarded. Refused where the wiring is
 written, which is the last moment it is cheap to say so.
 
+*(The parameter was renamed `backend` on 2026-09-15, below, so its name no longer
+does the work the paragraph before last describes; the type error for an instance
+does.)*
+
 **Not opened with it: a setting.** A deployment needing this builds `Kingfisher`
-itself, and `create_app` already takes one ready-made, so the service reaches the
-seam without a name to resolve. The command line does not, and would need one --
+itself, and `create_app` took one ready-made, so the service reached the seam
+without a name to resolve. The command line does not, and would need one --
 left until something wants it, because a setting is permanent and nothing has
 asked yet.
 *(2026-09-14.)*
@@ -1678,17 +1696,18 @@ the constructor.
 
 **`default_backend` is one of the eleven names, back through the front door.** The
 rule they left under -- a caller means a caller outside this wheel -- is unchanged;
-what changed is that every such caller now has to name this one. Its witness is
-`service` rather than `document`, because the service imports it and that half of
-the table is read off the real imports and cannot rot.
+what changed is that every such caller now has to name this one. Its witness was
+`service` rather than `document`, because the service imported it and that half of
+the table was read off the real imports and could not rot. It is `document` now,
+since the service is gone and the guides write it out.
 
 **Considered and rejected:** requiring `backend_from` unchanged, which would have
 been ceremony with the default still built inside; a narrower `(session_dir) ->
 backend` factory, which makes the deployment build the closure and worsens the
 dropped-runner problem; keeping both a required base factory and the optional
 adjuster, two parameters answering one question; and a service setting naming a
-factory, which stays unopened for the reason the entry above gives -- the service
-reaches the seam without a name to resolve, and the parameter becoming required is
+factory, which stayed unopened for the reason the entry above gives -- the service
+reached the seam without a name to resolve, and the parameter becoming required is
 not the same as something asking for one.
 *(2026-09-15, in three slices: the rename, the check, then the parameter.)*
 
@@ -1779,9 +1798,11 @@ first command. A verb with a required task argument cannot be reached by
 accident. *(2026-09-04, `the-verb-that-runs-a-task.md`.)*
 
 **`run` takes six flags, and the eight that narrow capabilities are not among
-them.** `task`, `--agent`, `--session`, `--input`, `--data`, `--as`. Narrowing
-what a request may activate is a deployment's concern with two better homes --
-the service clamps with `grants`, an agent file declares what it holds -- and
+them.** `task`, `--agent`, `--session`, `--input`, `--data`, `--as` -- and
+`--delete-session` since 2026-09-14, which says what happens to the session
+afterwards rather than what the run may do. Narrowing what a request may activate
+is a deployment's concern with two better homes -- `Kingfisher(grants=...)`
+clamps, an agent file declares what it holds -- and
 `--without-*` freezes what the workspace offers *now*, which is a subtlety for
 somebody wiring a service rather than running a first task. The cost is that you
 cannot say "without the shell" from the command line; write an agent that
@@ -1878,9 +1899,10 @@ every mistake becomes fatal. `test_doctor_sees_an_agents_moved_tool_that_nothing
 asserts both halves so neither can drift.
 
 **`REFUSALS` is what stops the next one.** One entry per function in the
-catalogue-reading code that can refuse a definition -- 43 refusals in 21
-functions -- each naming a broken catalogue that reaches it, or saying why no
-file on disk can. Deny by default in both directions, with the raise count
+catalogue-reading code that can refuse a definition, each naming a broken
+catalogue that reaches it or saying why no file on disk can. It was 43 refusals in
+21 functions when this was written, and the count is the table's to keep rather
+than this page's. Deny by default in both directions, with the raise count
 checked so a refusal added to a function already listed cannot inherit an entry
 written about a different one.
 
@@ -1932,10 +1954,11 @@ reader now looks up the name it wants and stops.
 That leaves the failure the shims existed to prevent, and it is real: renaming an
 environment variable is the one rename that fails in silence, where a moved
 import stops the program and says which. A deployment upgrading with
-`KINGFISHER_SERVER_PORT` still set gets port 8000 and no explanation. Refusing to
+`KINGFISHER_SERVER_PORT` still set got port 8000 and no explanation, while there
+was a server to get it. Refusing to
 start was the other candidate and was not taken -- a stale line somebody forgot
 to delete is untidy rather than broken, and stopping a deployment over it makes
-an upgrade look like a failure. `health.RETIRED` and `RETIRED_PREFIX` carry the
+an upgrade look like a failure. `health.RETIRED` and `RETIRED_PREFIXES` carry the
 dead names and `doctor` warns about any that are set, which is a place to find
 out rather than a thing that happens to you.
 
@@ -1990,7 +2013,8 @@ override was set -- so a deployment naming the default path explicitly is
 `default`, which is what it is. `relocated` is any other configured path,
 `overridden` means the configuration is not what is being read, `supplied` is a
 repository with no directory, and `unset` carries where it looked. `--json` and
-the service read this, so "nothing is configured" and "you handed me a store"
+the line `Kingfisher` logs at construction read this -- and the service did -- so
+"nothing is configured" and "you handed me a store"
 must not arrive as two spellings a consumer has to match on.
 
 **`Config` remembers where it looked for `source_ids.yaml`.** The path was read,
@@ -2004,11 +2028,12 @@ up reachable by everyone and says nothing.
 One INFO record per construction, and that is the whole budget. `print` is not an
 option -- a library that writes to stdout cannot be used by a server -- and
 `warnings.warn` means "this is probably not what you meant", which a summary is
-not. The name is the load-bearing part: `kingfisher.audit` is left unconfigured
-so that writing session ids stays a deployment's decision, a logger named
-`kingfisher` is its *parent*, and the server raises this one to INFO -- so asking
+not. The name was the load-bearing part: `kingfisher.audit` was left unconfigured
+so that writing session ids stayed a deployment's decision, a logger named
+`kingfisher` is its *parent*, and the server raised this one to INFO -- so asking
 where the definitions live would have turned the audit trail on. A test in the
-service holds the two apart.
+service held the two apart. The audit logger and the server went with the service,
+and nothing in the library writes to `kingfisher.audit` now.
 
 **`doctor` gained two checks a path alone could not express.** An empty
 catalogue at a path somebody typed is not an empty workspace: resolving one
@@ -2067,8 +2092,8 @@ kept for fetched bytes. A caller whose files are elsewhere copies them to this
 host and passes paths, which is what `kingfisher run --input` and `--data`
 already do. *(2026-09-16.)*
 
-**Taken: opening a session without a turn goes.** `start_session`,
-`remember_agent` and `open_session_for` minted a session, fixed its agent and
+**Taken: opening a session without a turn goes.** `start_session`, the
+`Kingfisher.remember_agent` method and `open_session_for` minted a session, fixed its agent and
 handed back an id before any turn ran -- what a server does between the request
 that opens a session and the first one to use it. Nothing here does that: the
 command continues a session it was given and mints one by running a turn, and the
@@ -2099,8 +2124,8 @@ there, the half that read them goes: the overlay `layered.py` built per turn,
 and its mount, and the entry in `SESSION_PLUMBING` that made the directory in
 every session. That entry is also what granted the shell write access to it, so
 the fence now grants `data`, `derived`, `memory`, `runs`, `.home` and `.tmp` and
-nothing more -- the list *A session's directories are granted one at a time*
-above names one place fewer. The `session_dir` that threaded through
+nothing more -- the list under *Landlock cannot take back what it has granted*,
+above, names one place fewer. The `session_dir` that threaded through
 `available_skills`, `defined_subagents`, `indistinct_delegates` and
 `withheld_by_kind` went with it: what a request may activate is what the
 catalogue holds, and a turn reads no definitions of its own. *(2026-09-16.)*
@@ -2125,14 +2150,15 @@ before trusting it for anything. *(2026-08-16, `session-scoped-api.md`.)*
 to somebody holding `pip install kingfisher` and nothing else. The command ships
 in the same distribution, so it is family: it reaches a name the door does not
 carry at the module defining it, and still comes through the door for every name
-that is there. The service is its own distribution and keeps the strict rule.
+that is there. The service was its own distribution and kept the strict rule.
 *(2026-09-06, `the-front-door-is-for-outsiders.md`. Three slices, all landed
-the same day.)*
+the same day.)* With the service gone, the command is the only consumer
+`CONSUMERS` holds.
 
 **It started as a proposal to move the CLI into its own wheel, and the
 measurement reversed it.** The stated reason was keeping the library's import
 surface clean, and the split would have made that strictly worse: `CONSUMERS` in
-`test_architecture.py` already holds `kingfisher_service` -- a separate wheel --
+`test_architecture.py` then held `kingfisher_service` -- a separate wheel --
 to the front door, so a `kingfisher-cli` would be the second out-of-tree consumer
 and every name it reaches would be locked public permanently, as a
 cross-distribution promise rather than an in-tree convention. The packaging
@@ -2147,7 +2173,7 @@ probe had made the probe a promise to everybody.
 
 **Enforced by name, not by file.** The line could have run between CLI modules --
 `__main__.py` and `progress.py` held, `health.py` and `listing.py` free, which is
-where the claim in `cli/__init__.py` actually lives. Rejected: those two files
+where the claim in `cli/__init__.py` then lived; its docstring is one line now. Rejected: those two files
 also use `Config`, `inventory`, `Origins` and `Inventory`, so freeing the files
 lets them drift to deep imports for real public names with nothing going red. The
 rule is that the door is mandatory for anything on it, which is self-maintaining
@@ -2155,7 +2181,9 @@ rule is that the door is mandatory for anything on it, which is self-maintaining
 anyone remembering to move a file between buckets.
 
 **Every public name carries a witness, and the service's half is read rather
-than claimed.** `WITNESSES` says who asked for each name: `service` (verified by
+than claimed.** *(Four kinds of witness when this was written; `command` and
+`service` have gone since, as the entries below record, and `document` and `embedder`
+remain.)* `WITNESSES` says who asked for each name: `service` (verified by
 parsing the service's imports, both directions), `document` (a page tells a
 reader to write it -- checked by a person, because `offered` gets five hits in
 the guides and `run` thirty-one, all of them the English word), `embedder` (kept
@@ -2169,8 +2197,8 @@ rule reads the service rather than the label, so it said so, on the direction
 that is easy to leave out: not a claimed witness that is false, but a real one
 that arrived after somebody wrote a weaker reason down.
 
-It is the fifth list of these names, in a file whose own docstring says a second
-table is what it exists to distrust. Accepted on the precedent beside it --
+It is the fifth list of these names, in a file one of whose rules said, when this
+was written, that a second table is what it exists to distrust. Accepted on the precedent beside it --
 `LIGHT_EXPORTS | HEAVY_EXPORTS` is a second table made safe by a test that it is
 *total*, and this one is held the same way.
 
@@ -2302,12 +2330,15 @@ under *The catalogue*.
 **`infrastructure/harness/` holds every module that imports deepagents, langchain
 or langgraph**, and only that package may. Registries and DTOs did *not* move to
 `application/`, and the package root did not change.
-*(2026-08-17, `layer-boundaries.md`.)*
+*(2026-08-17, `layer-boundaries.md`.)* Two kinds may since: `kinds/skills`, which
+asks deepagents which skills an agent has, and `kinds/middlewares`, which refuses a
+class that is not an `AgentMiddleware` -- *The cost is the swap boundary*, below.
 
 **The layout is not domain vocabulary, and moved to the package root.**
 `kingfisher.layout` was `domain/layout.py`, and it left for the reason `Config`
-left before it: **no domain rule reads it.** Every reader is in
-`infrastructure/`, `skills/`, `tools/` or `subagents/`, and it sat in the
+left before it: **no domain rule reads it.** Every reader was in
+`infrastructure/`, `skills/`, `tools/` or `subagents/` -- now `infrastructure/`
+and `application/disposal.py`, for the claim's filename -- and it sat in the
 innermost layer so those could share it without depending on each other -- which
 is `config.py`'s own words, *"reasoning about import direction, not
 modelling"*.
@@ -2328,8 +2359,8 @@ imports no framework does not belong in the package defined by importing one.
 shaped by deepagents -- `routed` exists because `CompositeBackend` has a default
 slot, `deny_write_under` is a glob because `FilesystemMiddleware` takes globs,
 the trailing slash exists because matching is by prefix -- and only
-`infrastructure.harness.backend` and `infrastructure.harness.activation` read it
-in code. That is a real argument, and the entry above is one day older than it:
+`infrastructure.harness.backend` and `infrastructure.harness.agent` read it in
+code, with the backend contract kit beside them. That is a real argument, and the entry above is one day older than it:
 pulling the table apart would undo the joining that entry exists to record. The
 root belongs to no layer, so framework-shaped data there costs much less than in
 the innermost one.
@@ -2348,8 +2379,9 @@ fetches from them; they do not answer to a layer. *(2026-09-04.)*
 
 **Reversed: "at the package root."** The five kinds are `kinds/agents`,
 `kinds/skills`, `kinds/subagents`, `kinds/tools` and `kinds/middlewares`. Everything
-else in the entry above stands -- a kind still owns its format, its walk over the
-disk and its route to the runtime, and still answers to no layer. What changed is
+else in the entry above stands -- a kind still owns its format and its walk over
+the disk, and still answers to no layer. It owned its route to the runtime too when
+this was written; `tools` and `subagents` have since handed theirs to `harness/`. What changed is
 where the five sit relative to each other, which that entry never argued for.
 
 **The reason is a rule, and the tidier root listing is not it.** Read honestly, the
@@ -2370,12 +2402,15 @@ against: the top level legitimately holds four layers and three loose modules to
 check is writable today without moving anything -- the nine packages at the root are
 five kinds and four layers, so a four-name `LAYERS` constant and one assertion gets
 it. That is six lines against seventy files, and both versions keep a hand-written
-constant: this one keeps `KINDS_HELPERS`, two names. So the check is not what pays
+constant: this one keeps `KINDS_HELPERS`, two names then and three since
+`documents` joined. So the check is not what pays
 for the move, and saying otherwise would be reverse-engineering a reason. The move
 is taken on the presentation case with the rule as a consequence, and the numbers
 are here so the next reader is not told a better story than the one that happened.
 
-**`infrastructure/importing.py` came too, and `documents.py` did not.** Four kind
+**`infrastructure/importing.py` came too, and `documents.py` did not** -- until
+2026-09-11, when the seeding scans had gone to `seeding` and what was left served
+only the kind readers, and it moved into `kinds/` as well. Four kind
 catalogues are `kinds.importing`'s only readers and it imports nothing from
 kingfisher at all. `documents` serves two audiences -- `decode` and
 `require_literal_prompt` for the kind readers, `source_ids_named` and `middleware_named`
@@ -2390,6 +2425,8 @@ into one `kinds` key would hand `kinds/agents` -- the only kind whose set is emp
 and empty because its runtime half stayed in `harness/` -- the union of the other
 four. The five stay, re-keyed, and `kinds` itself is named with an empty set so a
 kind added without an entry inherits nothing rather than the package root's answer.
+*(Since then `kinds/tools` and `kinds/subagents` are empty too, and `kinds` grants
+`yaml` for `documents`, so a kind added without an entry inherits that.)*
 
 **Found on the way past: `CLAUDE.md` had been wrong since 2026-09-04.** It said only
 `infrastructure/harness/` may import deepagents, langchain or langgraph, which
@@ -2416,9 +2453,12 @@ implementation is not a seam".
 about a document rather than about what any kind means, and the agent and
 subagent formats reflow a prompt identically. `documents` is now that, plus two
 scans that read a document without parsing it, and it names no kind at all --
-one kingfisher import where it had five.
+one kingfisher import where it had five. *(The skill reader went on 2026-09-16, so
+the agent and subagent readers are its only users; the scans have gone to `seeding`,
+and it imports nothing from kingfisher.)*
 
-**`skills` gained a `reading` beside its `spec`, and the reason is a rule.** A
+**`skills` gained a `reading` beside its `spec`, and the reason is a rule.**
+*(That `reading` went on 2026-09-16 with the upload path, its only caller.)* A
 domain module may name a kind's `spec` and nothing else of it, on the stated
 grounds that a spec is format vocabulary with no adapter behind it. Reading a
 document needs `yaml`, so folding the reader into `kinds.skills.spec` would have made
@@ -2435,7 +2475,8 @@ generic:
 imports one thing. `infrastructure/__init__` imports nothing, so moving them up
 removes the edge instead of reordering around it.
 
-**Not moved: `layered`.** `LayeredSkills` and `LayeredSubagents` stay in one
+**Not moved: `layered`.** *(Removed on 2026-09-16, when a session stopped bringing
+definitions of its own.)* `LayeredSkills` and `LayeredSubagents` stay in one
 file because it exists so that two *differing* merge rules can be read against
 each other -- a sorted set union for one, a right-wins `dict |` for the other.
 They were once two inline expressions in `agent.py` that silently did different
@@ -2457,16 +2498,18 @@ suite green. That gap is older than the move and is now covered.
 three do it their own way -- `kinds.tools.spec.split_reference` and
 `kinds.skills.registry.split_qualified` differ today by one call that strips a
 trailing slash. Written once and shared, a change for one kind would have to be
-argued past the other two. The duplication is the price of each kind changing on
+argued past the other two. *(Subagents have since taken the tools' `split_reference`,
+so two ways remain.)* The duplication is the price of each kind changing on
 its own, and it is the point rather than an oversight. What stays shared is the
 vocabulary of *grants* -- `SEPARATOR` and `_bare` in `domain.capabilities` --
 because a grant is spelled the same way whatever it names.
 
 **Reversed to get there: "the domain imports only the standard library and
-itself."** Four domain modules need an asset kind's `spec`: `ports` names
+itself."** Four domain modules needed an asset kind's `spec`: `ports` names
 `Found` and `SubagentSpec` because a port cannot name a type it has no word for,
-and the definition readers parse a tool reference because an agent definition
-*writes* `csv_profile::csv_profile` in its `tools:` list. That is the format
+and the definition readers parsed a tool reference because an agent definition
+*writes* `csv_profile::csv_profile` in its `tools:` list. The readers have since
+moved into the kinds, and two remain: `ports`, and `request` for `RunOn`. That is the format
 referring to itself, not the domain reaching for a layer.
 
 The rule was refused as a wall first and then measured, which is the order that
@@ -2478,14 +2521,17 @@ the work was DDD purity in a codebase that had already decided it is an adapter
 over deepagents rather than a domain model.
 
 The exception is narrow and stated where it is enforced: the domain may name a
-kind's `spec`, never its `catalogue` or its `harness`. A spec is format
+kind's `spec`, never its `catalogue` or its `harness` -- and no kind has a `harness`
+any more, both having moved into `infrastructure/harness/`. A spec is format
 vocabulary with no adapter behind it; the other two walk the disk and reach the
 runtime, and a test asserts the predicate at each of those edges.
 
 **The cost is the swap boundary.** `THIRD_PARTY` now names four areas that may
 import the agent runtime rather than one. An upgrade is still a list of files
 rather than a search -- which is what that rule was ever for -- but the list
-spans `infrastructure/harness/`, `tools/`, `skills/` and `subagents/`.
+spans `infrastructure/harness/`, `tools/`, `skills/` and `subagents/`. *(Three
+areas now: `infrastructure/harness/`, `kinds/skills` and `kinds/middlewares`, once
+the tools and subagents halves moved into `harness/`.)*
 
 **Three things were in the wrong place and only the move said so.** Each had
 lived quietly because the two halves shared a directory and nothing had to
@@ -2515,12 +2561,12 @@ files the entry moved to keep, and a format's parser is not an assembly.
 `agents/` is the fourth kind module: `spec` the format, `reading` the parser,
 `catalogue` the walk and the repository -- `subagents`' shape minus `rules`,
 whose one cross-definition question is answered where it is found, and minus
-`harness`, for the reason above.
+`harness`, for the reason above -- which no kind has now.
 
 **The test applied is the neighbouring entry's.** *Not a module: middleware* is
 what says what earns a package -- *a file somebody authors, a reader for it, and
 a registry built from what was found* -- and an agent has all three where
-middleware has none. Agents was the only kind that met that test and lacked the
+middleware then had none. Agents was the only kind that met that test and lacked the
 package, and this entry refused it on a different ground: what an agent *is* at
 runtime, which is a fact about the graph rather than about where a YAML parser
 lives.
@@ -2534,12 +2580,15 @@ it is empty precisely because the runtime half stayed in `harness/`.
 **One rule got smaller.** `test_the_catalogue_holds_one_module_per_kind` looked
 in two places while three kinds had left `catalogue/` and one had not. With the
 fourth gone that branch is unreachable, so it is one place again -- a rule with
-a branch nothing can reach is half a rule. `catalogue/` keeps `__init__` and
-`layered`, which is `Definitions` and the per-session merge, and holds no
-per-kind module at all.
+a branch nothing can reach is half a rule. `catalogue/` kept `__init__` and
+`layered`, which was `Definitions` and the per-session merge, and held no
+per-kind module at all -- `__init__` alone since `layered` went.
 *(2026-09-04, reversed in part 2026-09-07.)*
 
-**Not a module: middleware.** It has a field in both definition formats and a
+**Not a module: middleware.** (Reversed on 2026-09-07 by *Middleware is a
+definition kind*: `middlewares/` is a directory with a reader and a registry, and
+`kinds/middlewares` is on `THIRD_PARTY`. The entry stays for the page it asked
+for.) It has a field in both definition formats and a
 name in `Capabilities`, which is what makes it look like a fourth kind. What it
 does not have is the thing the other three earned their packages with: a format
 of its own and a walk over the disk. `tools`, `skills` and `subagents` each own
@@ -2566,7 +2615,8 @@ one a test exercises. Measured on the way past, and worth recording because it
 was the argument for a package that did not survive it -- a deployment writing
 middleware imports **nothing** from kingfisher. Both examples import
 `langchain` alone, and `MiddlewareFactory` is an annotation this package uses on
-itself. *(2026-09-07.)*
+itself. *(2026-09-07. There are three examples now, and two import `langchain_core`
+as well -- still nothing from kingfisher.)*
 
 **Reversed: "the rest of the layer stays flat."** The clause read *a second
 subpackage would advertise a distinction no test could hold*, and by the time
@@ -2579,12 +2629,15 @@ What makes a group rather than a folder, since the original worry was real: the
 modules have to share a *subject*, not a layer. `confinement`, `fence` and
 `bubblewrap` are one policy and the two kernels that carry it -- the only corner
 of `infrastructure/` where being wrong is a security failure rather than a bug.
-`fs`, `seeding`, `uploads` and `files` all write into one directory, and three
-of them have a rule about not destroying what another put there.
+`fs`, `seeding`, `uploads` and `files` all wrote into one directory, and three
+of them had a rule about not destroying what another put there. *(`fs` has since
+been split, and `uploads` and `files` removed; `workspace/` holds `backing`,
+`layout`, `permissions`, `placement`, `seeding`, `sessions` and `snapshots`.)*
 
 And the harness rule is what bounds them. The backend that *applies* a
-confinement, and the registry `uploads` asks about a name, both import
-deepagents -- so they stay in `harness/` and the groups are "everything about
+confinement, and the registry `uploads` asked about a name, both import
+deepagents -- so they stayed in `harness/`, until the skill registry moved to
+`kinds/skills` -- and the groups are "everything about
 this subject that does not need the agent runtime". A grouping that had pulled
 them in would have traded an enforced rule for a tidier directory.
 
@@ -2733,9 +2786,10 @@ The costs are on top of a benefit that was not there. `ConfigError` is raised by
 it is this package's *configuration is wrong*, not a model error, so it cannot
 travel with the records. That forces a `config/` package rather than a sibling
 module, and a package has to re-export to keep `from kingfisher.config import
-Config` working in the 40 files that write it. No subpackage here re-exports --
+Config` working in the 40 files that write it. No subpackage here re-exported --
 the root `__init__` has a table, and that is there to defer an import cost, not
-to spare callers a module name. Moving only the records out to a top-level
+to spare callers a module name. (`application/__init__` has one since, for the
+same cost -- *A layer may answer for its own names, lazily*.) Moving only the records out to a top-level
 `models.py` avoids all of that and buys a third thing named "models", beside
 `infrastructure/harness/models.py` and `infrastructure/model_catalogue.py`.
 
@@ -2826,10 +2880,12 @@ non-blank line in the repository was comment or docstring -- 27,889 lines of
 prose against 24,124 of code, and `domain/ports.py` at 351 prose lines out of 359.
 
 **The rule is a test now, not a quantity.** A comment earns its place only if
-removing it would let a competent editor make a change that is wrong. That keeps
+removing it would let a competent editor make a change that is wrong. That kept
 the paragraph in `wiring.py` explaining why a factory's own exception is
-deliberately not wrapped -- delete it and someone helpfully wraps it -- and drops
-the paragraph after it that says the same thing again at greater length.
+deliberately not wrapped -- delete it and someone helpfully wraps it -- and dropped
+the paragraph after it that says the same thing again at greater length. *(The
+pass removed both in the end; the reason lives in `guides/ports.md` now, and
+`test_named_store.py` holds the behaviour.)*
 
 **Four kinds were named as always-cut**, because a test alone drifts: repo
 history, a paragraph restating the one above it, framing that announces an
@@ -2840,7 +2896,7 @@ copy in a docstring the redundant half.
 
 **What it did not rest on: deduplication.** The first pass assumed source prose
 was largely restating `docs/`, on the strength of `wiring.py`, whose docstring
-shares near-verbatim paragraphs with *Wiring a store* above. Shingled against the
+shared near-verbatim paragraphs with *Wiring a store* above -- it is one line now. Shingled against the
 whole of `docs/`, that is 1.4% of source prose -- 288 lines of 21,051.
 `wiring.py` is the outlier, not the pattern, and the cut had to be justified as
 losing information rather than moving it. *(2026-09-07.)*
@@ -3021,7 +3077,9 @@ the middleware registry merged once before either branch reads it, both `wants`
 sites through one builder, `test_both_kinds_are_handed_the_same_things_to_want`
 guarding a second inline mapping, and one compiled agent per definition because per
 path is exponential. The piece that could come out already did: `_resolve_tools`,
-whose probe is 7.7ms and is skipped when no definition names a tool.
+whose probe is 7.7ms and is skipped when nothing needs it -- no definition names a
+tool, the workspace defines none, and the request asks for every tool. A workspace
+with tools of its own runs it on every build.
 
 What the review saw as thin seams is real and is one seam: 21 test files reach what
 a build produced by monkeypatching `create_deep_agent` by string path and reading
@@ -3059,9 +3117,9 @@ never been checked, which is why `AgentSpec` now marks its derived fields. So a 
 both formats take goes into both readers and into a document there, and the test is
 red until it does. *(2026-09-16.)*
 
-*`nothing-at-rest-on-this-machine` was the last one out, on 2026-09-04, and its
-removal is the sharpest example this file has of why a status line is not
-evidence. It was audited decision by decision on 2026-09-01 and still reported
+*`nothing-at-rest-on-this-machine` went on 2026-09-04 -- several more have gone
+since, and `docs/README.md` names them -- and its removal is the sharpest example
+this file has of why a status line is not evidence. It was audited decision by decision on 2026-09-01 and still reported
 "no store port in `domain/ports.py`" -- six days after `SessionStore` and
 `SessionRoot` shipped in #254. It was describing a codebase that had moved
 underneath it. Its decisions are under *Sessions: what persists and where* above
