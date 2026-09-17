@@ -215,14 +215,13 @@ class SkillRegistry:
         return self.offered[key].description if key is not None and key in self.offered else ""
 
 
-def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegistry:
+def read(repository: SkillRepository) -> SkillRegistry:
     """Ask deepagents what this repository offers."""
     # Deferred for the reason `listed` gives.
     from deepagents.backends import FilesystemBackend  # noqa: PLC0415
 
-    from kingfisher.kinds.skills.backend import skills_backend  # noqa: PLC0415
-
-    backend = FilesystemBackend(root_dir=str(root)) if root else skills_backend(repository)
+    root = repository.root
+    backend = FilesystemBackend(root_dir=str(root))
 
     # One listing per source, kept apart. deepagents merges them by name and
     # lets the last win, which is the collapse this exists to undo: two parties
@@ -247,8 +246,6 @@ def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegis
             for directory in reachable(root)
             if not any(f"/{directory.name}/" in path for path in kept)
         )
-        if root
-        else sorted(name for name in repository.names if not any(f"/{name}/" in p for p in kept))
     )
     # A skill whose header names something its directory does not. deepagents files it
     # under the header and logs a warning nobody reads, so `--list` shows a name that is

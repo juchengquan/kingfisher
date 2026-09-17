@@ -18,7 +18,7 @@ def _skill(root, folder, name, desc="What it is for."):
 
 
 def _read(root):
-    return skill_registry.read(LocalSkillRepository(root), root=root)
+    return skill_registry.read(LocalSkillRepository(root))
 
 
 # -- an upload may not take a name the catalogue already uses --------------

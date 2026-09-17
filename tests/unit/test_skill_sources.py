@@ -27,7 +27,7 @@ def _skill(root, folder, name, desc):
 def _two_parties(cfg):
     for party in ("research", "legal"):
         _skill(cfg.skills_dir, f"{party}/lookup", "lookup", f"The {party} way.")
-    return skill_registry.read(LocalSkillRepository(cfg.skills_dir), root=cfg.skills_dir)
+    return skill_registry.read(LocalSkillRepository(cfg.skills_dir))
 
 
 # -- both survive ----------------------------------------------------------
@@ -71,7 +71,7 @@ def test_a_unique_name_stays_bare(cfg):
 
 
 def _read(cfg):
-    return skill_registry.read(LocalSkillRepository(cfg.skills_dir), root=cfg.skills_dir)
+    return skill_registry.read(LocalSkillRepository(cfg.skills_dir))
 
 
 # -- naming one ------------------------------------------------------------

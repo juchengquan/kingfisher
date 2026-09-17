@@ -8,10 +8,10 @@ both directions, so a sixth cannot arrive by being dropped here.
 
 **Nothing is imported here, and that is the point rather than an omission.** This
 file runs before any kind's own `__init__`, so a convenience re-export is paid for
-by every import of every kind. One reaching `kingfisher.kinds.skills.backend`
-puts deepagents in front of all of them: `kingfisher.kinds.skills` is 6ms and 65
-modules today, and 1,033ms and 3,124 behind such a line -- so `kingfisher seed`
-would import three provider SDKs to read a directory. Each module is imported by
+by every import of every kind. One reaching a module that imports deepagents
+puts it in front of all of them: `kingfisher.kinds.skills` is 6ms and 65 modules
+today, and was 1,033ms and 3,124 behind such a line -- so `kingfisher seed` would
+import three provider SDKs to read a directory. Each module is imported by
 name instead, which is what `agents/__init__.py` already says about its own.
 
 `importing.py` is here and is not a kind. It loads a workspace's own Python

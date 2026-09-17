@@ -46,7 +46,7 @@ class Definitions:
     @cached_property
     def registry(self) -> SkillRegistry:
         """What the agent will actually be told about, asked of deepagents."""
-        return skill_registry.read(self.skills, root=catalogue_root(self.skills))
+        return skill_registry.read(self.skills)
 
     @cached_property
     def bundled_tools(self) -> Mapping[str, ToolRepository]:
@@ -71,9 +71,7 @@ class Definitions:
         if not bundles:
             return {}
         return {
-            name: skill_registry.read(
-                LocalSkillRepository(bundle.skills), root=bundle.skills
-            )
+            name: skill_registry.read(LocalSkillRepository(bundle.skills))
             for name, bundle in bundles.items()
             if bundle.skills is not None
         }

@@ -37,10 +37,15 @@ class AssetRepository(Protocol):
 
 @runtime_checkable
 class SkillRepository(AssetRepository, Protocol):
-    """Skills: their names, and the files each one is made of."""
+    """Skills, in a directory.
 
-    def files(self, name: str) -> Mapping[str, str]:
-        """The files making up one skill, keyed by path relative to the skill."""
+    A directory rather than anything that can hand over files, because deepagents reads
+    skills off a filesystem and the shell runs a skill's scripts from where they sit.
+    """
+
+    @property
+    def root(self) -> Path:
+        """The directory the skills are in."""
         ...
 
     @property

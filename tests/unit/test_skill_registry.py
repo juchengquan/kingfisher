@@ -24,7 +24,7 @@ def _skill(root, folder, text):
 
 
 def _read(root):
-    return skill_registry.read(LocalSkillRepository(root), root=root)
+    return skill_registry.read(LocalSkillRepository(root))
 
 
 # -- what the registry answers --------------------------------------------
