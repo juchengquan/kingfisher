@@ -185,22 +185,18 @@ class Inventory:
         }
 
 
-def reached(named: Selection, defined: Mapping[str, SubagentSpec]) -> tuple[str, ...]:
-    """Every delegate an agent ends up with: the ones it names, and theirs."""
+def activated(named: Selection, defined: Mapping[str, SubagentSpec]) -> tuple[str, ...]:
+    """The delegates an agent activates: the ones it names, with `"*"` expanded.
+
+    Its delegates' own `subagents:` are deliberately not walked. A helper reaches a
+    run only where the agent names it too -- `subagent_helpers` narrows one by what
+    the agent declared -- so walking the chain here printed a delegate the build
+    would drop, which is worse than printing nothing: a listing is read to find out
+    what an agent ends up with.
+    """
     if named is None:
         return ()
-    frontier = list(defined) if named == ALL else list(named)
-    seen: set[str] = set()
-    while frontier:
-        name = frontier.pop()
-        if name in seen:
-            continue
-        seen.add(name)
-        spec = defined.get(name)
-        if spec is None or spec.subagents is None:
-            continue
-        frontier.extend(defined if spec.subagents == ALL else spec.subagents)
-    return tuple(sorted(seen))
+    return tuple(sorted(defined if named == ALL else set(named) & set(defined)))
 
 
 def _bundled(
@@ -529,7 +525,7 @@ def inventory(
         agent_sources = MappingProxyType(dict(resolved.agents.sources))
         agent_delegates = MappingProxyType(
             {
-                name: reached(spec.subagents, resolved.subagents.specs)
+                name: activated(spec.subagents, resolved.subagents.specs)
                 for name, spec in defined_agents.items()
             }
         )

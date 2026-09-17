@@ -70,6 +70,35 @@ def test_an_agent_taking_every_delegate_lists_every_delegate(cfg):
     assert found.agent_delegates["one"] == ("alpha",)
 
 
+def test_an_agent_lists_the_delegates_it_activates_and_not_their_helpers(cfg):
+    """The listing answers "what does this agent end up with", and it walked the chain
+    below each delegate to answer it -- printing a helper the build then dropped.
+
+    A helper reaches a run only where the agent names it too: `subagent_helpers`
+    narrows a delegate's helpers by what the agent declared. So an agent naming only
+    the parent got a delegate with no `task` tool, while the listing said otherwise.
+    """
+    from tests.conftest import an_agent
+
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "reviewer.yaml").write_text(
+        "name: reviewer\ndescription: d\nsubagents: [second-opinion]\n"
+        "system_prompt: |\n  You check figures.\n",
+        encoding="utf-8",
+    )
+    (subagents_dir(cfg) / "second-opinion.yaml").write_text(
+        "name: second-opinion\ndescription: d\nsystem_prompt: |\n  You answer again.\n",
+        encoding="utf-8",
+    )
+    an_agent(cfg, "one", subagents="[reviewer]")
+    an_agent(cfg, "both", subagents="[reviewer, second-opinion]")
+
+    found = inventory(cfg)
+
+    assert found.agent_delegates["one"] == ("reviewer",)
+    assert found.agent_delegates["both"] == ("reviewer", "second-opinion")
+
+
 def test_the_names_a_subtraction_uses_are_the_names_the_listing_shows(cfg):
     """The guard this whole record exists for."""
     _populate(cfg)

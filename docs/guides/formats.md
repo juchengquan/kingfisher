@@ -158,13 +158,18 @@ out and you get none.** Tools are what an agent needs to *act* and it can do
 nothing without them; skills and delegates are what it needs to *know* and
 *ask*, and most agents need neither.
 
-### Helpers arrive with the delegate that wants them
+### An agent grants the helpers its delegates may consult
 
-An agent naming `reviewer` gets whatever `reviewer` names, and whatever those
-name in turn. The chain is worked out when the catalogue loads, and
-`kingfisher list` prints it — so an agent file never carries a name it has no
-relationship with, and never goes stale because a file it does not own changed
-its own helpers.
+An agent activates the delegates it names and no others. A delegate may name
+helpers of its own — [below](#a-delegate-that-consults-another) — and one of
+those reaches a run only where the agent names it as well: `reviewer` consulting
+`profiler` needs both on the agent's `subagents:` line, and an agent naming only
+`reviewer` gets a reviewer that cannot delegate.
+
+That is the rule `middlewares:` already follows, and for the reason given there:
+an agent's line is the ceiling everything beneath it is clamped by, so a file
+that grants one thing never quietly grants another. `kingfisher list` prints what
+each agent activates, which is that list rather than the chain below it.
 
 **The agent itself has to work.** A model your catalogue does not define
 refuses. **Anything below it that cannot run is left out and reported** — which

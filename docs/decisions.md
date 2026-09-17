@@ -329,6 +329,29 @@ Refused at the read, beside the `subagents` star and for the same reason: the
 habit comes from a request, where the star is the ordinary way to say
 everything. The two tool axes still take it, where it means what it says.
 
+**An agent grants the helpers its delegates consult, and the docs said otherwise
+for months.** *Helpers arrive with the delegate that wants them* promised that an
+agent naming `reviewer` got whatever `reviewer` named; `kingfisher list` printed
+that chain, computed by `inventory.reached`. The build never did it:
+`AgentSpec.declares` returns the agent's own `subagents:`, and `subagent_helpers`
+narrows a delegate's helpers by it, so an agent naming only the parent built a
+delegate with no `task` tool at all. Measured both ways before changing anything --
+naming both works, naming one drops the helper silently.
+
+The code kept its rule and the prose moved to it, because the alternative widens
+one axis alone: `middlewares:` already makes an agent's line the ceiling its
+delegates are clamped by -- *the shipped pairing had never been built* is the entry
+where that cost `researcher` a name it does not use itself -- and a `subagents:`
+that granted what it did not name would be the only field where naming one thing
+grants another. It would also compile a graph per turn for a helper nobody asked
+for.
+
+So the listing prints what an agent *activates*, `reached` is `activated` and no
+longer walks the chain, and the guide says a delegate's helper needs naming on the
+agent too. What did not change: a *request* naming `reviewer` alone still gets a
+reviewer without its helper, dropped rather than refused, which is the half the
+guide always had right. *(2026-09-17.)*
+
 **Delegation is unbounded in depth and is a DAG, not a tree.** A definition may
 appear in several places, each is compiled once and its runnable shared, and a
 cycle anywhere in the catalogue is refused, whether or not the agent being built
