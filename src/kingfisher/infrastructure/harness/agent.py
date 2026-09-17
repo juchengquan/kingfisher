@@ -24,7 +24,7 @@ from kingfisher.domain.capabilities import (
     Selection,
     refuse_ungranted_models,
 )
-from kingfisher.infrastructure.catalogue import Definitions, source_of
+from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.activation import (
     _activated_subagents,
     _private_skills,
@@ -346,7 +346,7 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
 
     defined, activated = _activated_subagents(cfg, capabilities, catalogue=roots)
     surface = _resolve_tools(
-        source_of(roots.tools),
+        str(roots.tools.root) if roots.tools.root is not None else "the catalogue",
         capabilities,
         walked,
         assemble,

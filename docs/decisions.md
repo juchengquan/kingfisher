@@ -330,21 +330,39 @@ habit comes from a request, where the star is the ordinary way to say
 everything. The two tool axes still take it, where it means what it says.
 
 **Delegation is unbounded in depth and is a DAG, not a tree.** A definition may
-appear in several places, each is compiled once and its runnable shared, and
-cycles are refused for the whole catalogue at load. Compiling per *path* is
-exponential -- 15 definitions naming three each is 6,872 compilations and seven
-seconds. *(2026-08-18, `subagents-all-the-way-down.md`.)*
+appear in several places, each is compiled once and its runnable shared, and a
+cycle anywhere in the catalogue is refused, whether or not the agent being built
+reaches it. Compiling per *path* is exponential -- 15 definitions naming three each
+is 6,872 compilations and seven seconds. *(2026-08-18, `subagents-all-the-way-down.md`.)*
+
+"At load" meant when a build read the catalogue, which was the only time it was
+read. The catalogue has been read at startup since, and a cycle is still not
+refused there: `kingfisher list` reports one, and the first build of an agent with
+delegates refuses it. *(2026-09-17.)*
 
 **A subagent may be a compiled graph rather than a spec**, told apart by
 extension. `SUBAGENTS` is declared and never inferred; name and description are
 static text and only the graph comes from a function; the function receives the
-model and tools rather than choosing them. An unrecognised extension in
-`subagents/` is an error. *(2026-08-18, `compiled-subagents.md`.)*
+model and tools rather than choosing them. A `.yml` file there is refused as the
+`.yaml` it was meant to be; anything else is left alone. *(2026-08-18,
+`compiled-subagents.md`.)*
 
-**A definition may demand a distinct model** with `distinct: true`, and then an
-indistinct one is refused rather than reported. `model` may take a list, tried in
-order. A subagent naming no model runs its caller's.
+That read "an unrecognised extension in `subagents/` is an error" until now, though
+it was reversed the day it was written: a folder there may be a Python package, and
+a package may hold a fixture or a prompt beside its `__init__.py`, so the one real
+confusion is named rather than every unfamiliar suffix refused. *(2026-09-17.)*
+
+**A definition names at most one model**, and a subagent naming none runs its
+caller's. A list there is refused rather than read. `indistinct` reports a
+delegate that named a model and did not end up anywhere different.
 *(2026-08-18, `compiled-subagents.md`, `agents-as-definitions.md`.)*
+
+**Reversed on 2026-08-19: a list of models, and `distinct: true`.** `model` took a
+list tried in order, and `alias` was the only thing that could use one, so the two
+went together. `distinct: true` turned `indistinct`'s report into a refusal, and
+`second-opinion` was its only user in the shipped catalogue, so both went; the field
+can come back if that delegate does. This entry kept describing both until
+2026-09-17.
 
 ## Packaging: where the definitions live
 
