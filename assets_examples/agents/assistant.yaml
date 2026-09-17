@@ -46,7 +46,7 @@ middlewares:
   - call-cap-generous
   - tool-note
   - compact
-# No `model:` and no `alias:`, so this runs the `default:` in your models.yaml.
+# No `model:`, so this runs the `default:` in your models.yaml.
 # That is the right answer for a general agent -- and for a file that ships
 # inside a wheel, since no vendor's model id is portable anywhere else.
 #

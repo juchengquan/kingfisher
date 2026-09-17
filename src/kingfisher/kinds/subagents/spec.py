@@ -38,8 +38,7 @@ class SubagentSpec:
     #: The delegate's whole instruction -- or empty, when `build` carries it
     #: instead. Exactly one of the two is set, checked below rather than
     #: promised: a spec with neither builds a delegate with no instructions, and
-    #: a spec with both has said one thing twice with no rule for which wins --
-    #: which is the argument `model` and `alias` already make about themselves.
+    #: a spec with both has said one thing twice with no rule for which wins.
     system_prompt: str = ""
     #: The two tool axes, granted apart because they are offered apart: the
     #: built-ins come with deepagents, `tools` is what this workspace wrote.

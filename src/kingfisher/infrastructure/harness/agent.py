@@ -88,8 +88,8 @@ MEMORY_IS_DENIED = FilesystemPermission(
 def read_only_permissions() -> list[FilesystemPermission]:
     """A deny rule for every scope the layout refuses writes under.
 
-    Deduplicated there, so `/skills/**` is one rule covering the catalogue, a
-    session's uploads and every bundle. One rule per *mount* would make the count
+    Deduplicated there, so `/skills/**` is one rule covering the catalogue and every
+    bundle. One rule per *mount* would make the count
     depend on how many bundles a catalogue ships, for no gain.
 
     **What this does not reach is the shell.** Filesystem permissions are applied by

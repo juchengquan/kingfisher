@@ -505,8 +505,9 @@ file.
 
 **Any depth, no loops.** A helper may name helpers of its own, and so may
 those. What a catalogue may not do is come back to where it started — and that
-is checked over the whole catalogue when the definitions load, not per request,
-because a set of files is either coherent or it is not:
+is checked over the whole catalogue, not only the delegates one agent reaches,
+because a set of files is either coherent or it is not. `kingfisher list` reports
+it, and building any agent with delegates refuses it:
 
 ```
 subagents reach themselves: reviewer -> second-opinion -> reviewer. Delegation
@@ -1264,9 +1265,9 @@ guidance, and an agent holding `execute` can read anything. The boundary is the
 tools a skill's procedure would need, which have audiences of their own.
 
 **`builtin_tools` deliberately takes none.** deepagents registers its own tools
-itself, so kingfisher can filter them but never leave them out of a graph —
-`infrastructure.harness.narrowing` records a live run where a model called
-`execute` from memory. Writing a mapping there is refused rather than parsed as a
+itself, so kingfisher can filter them but never leave them out of a graph, and a
+model has been measured calling `execute` from memory when it was never offered.
+Writing a mapping there is refused rather than parsed as a
 single tool named `{'execute': ['A']}`.
 
 What gates the built-ins is which *agents* a source id may open: an agent declaring

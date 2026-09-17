@@ -14,10 +14,10 @@ today, and was 1,033ms and 3,124 behind such a line -- so `kingfisher seed` woul
 import three provider SDKs to read a directory. Each module is imported by
 name instead, which is what `agents/__init__.py` already says about its own.
 
-`importing.py` is here and is not a kind. It loads a workspace's own Python
-without putting it on the import path, four kind catalogues are its only readers,
-and it imports nothing from kingfisher at all. It is named in that same test, so
-a second shared helper is a deliberate edit rather than a drift -- the kinds
-duplicate on purpose, and a folder with a helper in it is where that stops being
-true quietly.
+`importing.py` and `documents.py` are here and are not kinds. The first loads a
+workspace's own Python without putting it on the import path, and four kind
+catalogues are its only readers; the second reads the YAML the agent and subagent
+formats are written in. Both are named in that same test, so a third shared helper
+is a deliberate edit rather than a drift -- the kinds duplicate on purpose, and a
+folder with a helper in it is where that stops being true quietly.
 """

@@ -17,12 +17,9 @@ a definition root, and stopped being true when `protected` was widened to every
 one of them. The premise moved rather than the principle -- *Middleware is a
 definition kind* in `docs/decisions.md` records both.
 
-What did not move is `Capabilities.including`, which widens skills and subagents
-from an upload and still refuses this one: "a skill or subagent an upload brings
-is the caller's own text; a middleware *name* is a selector for code the
-deployment wrote". A directory the deployment laid down is the deployment's; a
-file a request uploaded is not, and the distinction is which of the two a name
-may reach.
+What did not move is what a name may reach: code the deployment wrote. A directory
+the deployment laid down is the deployment's, and nothing a request carries can
+add to it.
 
 The other way is the registry below, handed to `Kingfisher` by whatever
 constructs it. It is not the workspace route spelled differently: a registry

@@ -54,7 +54,7 @@ root now, so the premise is gone and this is a definition kind like the rest:
 imported.
 
 The half that did not change is what a *name* reaches. A definition naming
-`call-cap-strict` selects code the deployment wrote, and no upload may widen
-that -- which is why a request can bring a skill and cannot bring a middleware.
+`call-cap-strict` selects code the deployment wrote, and nothing a request carries
+can widen that.
 `middlewares/call_cap.py` carries the argument in place, and `assets/README.md`
 gives it again next to the seeding rule it comes from.

@@ -27,7 +27,7 @@ tools: [csv_profile::csv_profile]
 memory: false
 # Required, like `name` and `description`. The ten lines above say everything
 # this agent may *do*; this is the only one that says what it is for, and a
-# narrow agent is exactly where that gap would show -- four tools and an alias
+# narrow agent is exactly where that gap would show -- four tools and a model
 # describe a shape, not a job. Literal block, so the procedure below keeps the
 # lines it was written on.
 system_prompt: |

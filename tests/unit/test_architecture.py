@@ -1013,7 +1013,7 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     "kinds/middlewares": frozenset({"langchain"}),
     # The folder itself, which holds no kind. `kinds.importing` loads a workspace's
     # own Python and takes nothing but the standard library; `kinds.documents` reads
-    # the YAML header all three document formats share, which takes the parser.
+    # the YAML the agent and subagent formats share, which takes the parser.
     #
     # The cost of that entry, stated rather than discovered: a sixth kind added
     # without one of its own falls through to here and inherits `yaml`, where it
@@ -1096,8 +1096,8 @@ def test_a_subpackage_is_judged_by_its_own_area():
     # name the runtime without `domain/` or `kinds/` inheriting the permission.
     assert _area_of(SRC / "kinds" / "skills" / "registry.py") == "kinds/skills"
     # And the folder over them is an area of its own, so a kind that arrives
-    # without an entry is judged by `kinds` -- which grants nothing -- rather than
-    # by the longest prefix happening to be the package root.
+    # without an entry is judged by `kinds` -- which grants only `yaml` -- rather
+    # than by the longest prefix happening to be the package root.
     assert _area_of(SRC / "kinds" / "importing.py") == "kinds"
     assert _area_of(SRC / "config.py") == ""
 
@@ -2653,10 +2653,11 @@ def test_the_catalogue_holds_one_module_per_kind():
 
 #: What sits in `kinds/` and is not a kind. `importing` loads a workspace's own
 #: Python without putting it on the import path, and four kind catalogues are its
-#: only readers; `__init__` is the folder's docstring and holds no import on
-#: purpose. A third name here is where the kinds start sharing an implementation,
-#: which they duplicate in order to avoid -- so it is an edit somebody argues for,
-#: not a file that turns up.
+#: only readers; `documents` reads the YAML the agent and subagent formats are
+#: written in; `__init__` is the folder's docstring and holds no import on purpose.
+#: A fourth name here is where the kinds start sharing an implementation, which they
+#: duplicate in order to avoid -- so it is an edit somebody argues for, not a file
+#: that turns up.
 KINDS_HELPERS = frozenset({"__init__", "documents", "importing"})
 
 
