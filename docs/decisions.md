@@ -30,9 +30,9 @@ lines apart.
 | | [Proposals, and what became of them](#proposals-and-what-became-of-them) |
 
 *Sessions* and *Wiring a store* sit together and are not one section: the first is
-what survives a turn, the second is how a deployment names a storage port -- and
-that one covers `FileStore` as well, which is why it is no longer called
-*Sessions and storage*.
+what survives a turn, the second is how a deployment names a storage port. It
+covered `FileStore` as well until that port was removed, which is why it is not
+called *Sessions and storage*.
 
 ---
 
@@ -57,16 +57,20 @@ wanted a setting would make the common case pay for the rare one."* The mapping
 form did exactly that -- adding one audience rewrote every entry in the field.
 
 Refused rather than dropped, and the message names the entry to write.
-*(2026-09-03. The `all_of` spelling nests one level deeper under it, which is the
-one place the old form read better and was accepted knowingly.)*
+*(2026-09-03. The `all_of` spelling nested one level deeper under it, which was the
+one place the old form read better and was accepted knowingly. `all_of` is refused
+now, and a requirement is written as the set it is -- *Source-id access* has why.)*
 
 ## The catalogue
 
 **Tools and subagents nest; skills stay flat.** A folder is organisation and never
 enters a name; a folder with `__init__.py` is one package and the scan stops
-there. Skills stay one level because deepagents reads them off the filesystem and
-that is the only shape it offers. Multi-source nesting for skills was measured and
-rejected. *(2026-08-16, `nested-discovery.md`.)*
+there. Skills nest one level and no further, because deepagents lists a skills
+source one level deep: a folder under the skills root is a source of its own, and a
+skill below that is reported as misplaced. Nesting skills to any depth was measured
+and rejected; one level of grouping was accepted the next day, when several parties
+had to ship skills into one catalogue. *(2026-08-16, `nested-discovery.md`;
+2026-08-17, `skills-from-several-parties.md`.)*
 
 **The catalogue holds paths, not content, under three named roots.** A plain
 mapping rather than an object, and library-only -- no environment variable.
@@ -76,7 +80,9 @@ building, on the grounds that one implementation is not a seam.
 *(2026-08-16, `injectable-catalogue.md`.)*
 
 **Two definitions of one name coexist, and the refusal moves to construction.**
-The catalogue keeps both; an *agent* holding two of a name is what gets refused.
+The catalogue keeps both, and what an agent holding two of a name gets depends on
+the kind: two subagents are refused, and two tools leave it with neither, which the
+run reports.
 Refusing at load would stop a deployment over a clash no single agent would ever
 see, unfixable by anyone who does not own both files. This was worked out three
 times over -- skills got sources, tools got references, subagents came last and
@@ -84,8 +90,11 @@ failed hardest.
 *(2026-08-17, `skills-from-several-parties.md`, `two-tools-called-fetch.md`,
 `two-subagents-called-surveyor.md`.)*
 
-**A reference is a selector, not a checked label.** `vendor_a/fetch.py::fetch`
-resolves to one tool. The model never sees a reference -- it is given a flat
+**A reference is a selector, and a checked label too.** `vendor_a/fetch.py::fetch`
+resolves to one tool, and where a name is unique the path is still checked: a
+subagent naming a tool at a path it has moved from stops startup and a delegate's
+build, while an agent naming one is reported by `doctor` and `kingfisher list` and
+runs without the tool. The model never sees a reference -- it is given a flat
 `fetch` -- because tool names go to the provider as identifiers and `::` is not
 something to put in one. A bare name two folders offer is refused, naming both.
 *(2026-08-17, `qualified-tool-references.md`, `two-tools-called-fetch.md`.)*
@@ -155,7 +164,7 @@ vendors, which is why that one is qualified instead.
 whether that rule held. Added to `Definitions` and left in, every supplied
 catalogue in the tree stopped loading at once -- *"catalogue is missing
 middlewares"* -- which is the breakage the `agents` exclusion was written to
-prevent, arriving on the first kind added after it. `seeding.definition_roots`
+prevent, arriving on the first kind added after it. `seeding.destinations`
 now skips a kind the destination does not name, for the same reason: a
 `Destination` is satisfied by shape, so one written when there were four kinds
 hands over four roots.
@@ -188,9 +197,10 @@ them alone leaves a folder nothing looks in.
 So this was taken as the breaking change it is, not as tidying: `middlewares:` in
 an agent or subagent file, `middlewares` in a `CapabilitiesBody` that forbids
 unknown fields, `Kingfisher(middlewares=...)`, `MIDDLEWARES` in a workspace file,
-`middlewares/` in a workspace. The last one is the quiet one -- the definition
-roots are outside `LAYOUT_DIRS`, so the marker's `LAYOUT_VERSION` cannot refuse
-an old layout here the way it refuses one inside a session. A workspace that
+`middlewares/` in a workspace. The last one is the quiet one -- `middlewares/` is
+outside `LAYOUT_DIRS`, and the marker's `LAYOUT_VERSION` is a number compared rather
+than a list of directories checked, so it cannot refuse an old layout here the way
+it refuses one inside a session. A workspace that
 keeps a populated `middleware/` gets an empty `middlewares/` made beside it and
 offers nothing, with nothing said.
 
@@ -210,8 +220,9 @@ class has always been able to close over one -- `guides/middleware.md` documents
 the pattern, and a deployment can build a model in its own program and capture it.
 What could not be reached was narrower and sharper: *this build's* answer, which
 is decided per agent and per delegate and cannot be closed over at startup, and
-anything at all from a `middlewares/` file, which is re-imported per request and
-so has nothing made once to capture.
+the model from a `middlewares/` file, which is imported once when `Kingfisher`
+reads its catalogue -- before any agent has been built, so there is no model yet to
+capture.
 
 **The set is open and lives at the two call sites.** No constant enumerates it.
 Each site in `build_agent` builds a mapping from what it holds, `_instantiate`
@@ -434,9 +445,10 @@ rather than the definition's, so they stay narrowed by the request: otherwise
 `SubagentSpec.bundle` stays the claim it was -- names, checked against a folder --
 and `carried` beside it holds what a definition brought instead, refused together
 by `__post_init__` since a delegate owns one or the other. Putting imported tool
-objects on the spec for folder bundles too would have made reading the catalogue
-import every bundle's Python, which `kingfisher list` deliberately avoids by
-skipping `warm`. *(2026-09-16.)*
+objects on the spec for folder bundles too would have made *parsing* a definition
+import its bundle's Python, where now the import happens when a bundle's tools are
+asked for. `kingfisher list` asks, to report them, and so does `warm`.
+*(2026-09-16.)*
 
 **Considered and not taken: `own_subagents`, private nested helpers.** The key was
 reserved when `subagents:` was refused, so that a portable definition wanting a
@@ -513,16 +525,18 @@ qualified it, and that one call site now stutters; fifty-two others got clearer.
 
 ## Capabilities
 
-**One refusal, with the caller naming itself.** Tool-name rules live in the domain
-as a value object, `Offering`, beside `Found` -- not a `Tool` entity. Offered
+**One refusal, with the caller naming itself.** Tool-name rules live in a value
+object, `Offering`, beside `Found` -- not a `Tool` entity. Both were in the domain
+when this was written and are in `kinds.tools.spec` now, with the tools format. Offered
 names and sources are stored; grants are derived. There is a test that fails when
 a function has no caller outside tests.
 *(2026-08-17, `tool-rules-in-the-domain.md`.)*
 
-**Capabilities narrow and never widen**, with one exception: an upload may widen
-skills and subagents, because those are the caller's own text. A middleware name
-is not -- it selects code the deployment wrote -- so it gets no such exemption.
+**Capabilities narrow and never widen.** There was one exception: an upload could
+widen skills and subagents, because those were the caller's own text, and a
+middleware name got no such exemption because it selects code the deployment wrote.
 *(2026-08-18, `agents-as-definitions.md`, and the middleware work of 2026-08-31.)*
+Uploads were removed on 2026-09-16, and nothing widens now.
 
 ## Source-id access
 
@@ -530,7 +544,8 @@ is not -- it selects code the deployment wrote -- so it gets no such exemption.
 `source_ids:` for who may reach it, and an entry of `tools:`, `subagents:` or
 `skills:` may be written long -- `{name: X, source_ids: [...]}` -- for who reaches
 that one. One central
-file, `source_ids.yaml`, holds the vocabulary and `contains` -- names only, no policy.
+file, `source_ids.yaml`, holds the vocabulary -- names only, no policy. It held
+`contains` as well, which is a retired spelling now and refused.
 An audience resolves into an ordinary `Capabilities`, so nothing downstream
 changed: an ungranted tool is never attached to the graph and an ungranted
 subagent is never compiled. *(2026-08-31.)*
@@ -540,8 +555,9 @@ default audience for everything the definition holds, and the ceiling on what an
 entry may say.** So an omitted or plain-list `tools:` keeps its exact meaning, and
 an entry is always an *and* with the definition's own line -- the only way to
 reach an entry is through the definition holding it, so naming a source id from
-outside that line adds a second requirement rather than replacing the first. A definition with no `source_ids:` line is reachable by everyone, and startup
-names every such definition -- default-open must not also be silent.
+outside that line adds a second requirement rather than replacing the first. A definition with no `source_ids:` line is reachable by everyone, and the report of
+every such definition is built at startup -- default-open must not also be silent.
+It is `kingfisher list` that prints it; a plain start says nothing.
 
 **Reversed: a central `access.yaml` listing every asset by name.** Built in full
 -- vocabulary, per-asset audiences, reconciliation against the catalogue, two
@@ -558,8 +574,8 @@ the next one -- see below. *(2026-08-31, reversed the same day.)*
 
 **Reversed: `for_groups` and the `Caller` handle.** A caller said who they were
 once and reused the handle; now every call takes `source_ids=`. Counted before
-removing: zero production callers. The service -- the only consumer that serves
-several callers, which is the case the handle was built for -- resolves source ids
+removing: zero production callers. The service -- then the only consumer that served
+several callers, which is the case the handle was built for -- resolved source ids
 per request from a header and passed `source_ids=` at all seven of its call sites.
 Two of the handle's three stated benefits did not survive checking either: the
 grant it resolved once measures **0.81 microseconds**, because the transitive
@@ -594,8 +610,8 @@ works for free**, since a compound whose parts are held is held.
 not present one: it is what holding the parts adds up to, not something to
 claim, and accepting it would let one assertion stand in for the two that the
 requirement exists to demand. The refusal names the parts. Over HTTP this
-surfaces as the `misconfigured` 500 a drifted vocabulary already gets, which is
-exactly what a gateway emitting a derived name is.
+surfaced as the `misconfigured` 500 a drifted vocabulary already got, which is
+exactly what a gateway emitting a derived name was.
 
 A covers list may not hand one over either, and that is the same rule rather
 than a second one. `admin: [finance-senior]` was legal for one commit and gave
@@ -697,8 +713,7 @@ Source-id access was two days old at the time.
 
 **`builtin_tools` takes no audience, and that is not an omission.** deepagents
 registers its own tools, so kingfisher can filter them but never leave them out
-of a graph -- `harness/narrowing.py` records a live run where a model called
-`execute` from memory. Gating them here would promise a boundary it cannot keep.
+of a graph -- a live run was measured where a model called `execute` from memory. Gating them here would promise a boundary it cannot keep.
 What gates them is which *agents* a source id may open, since an agent declaring a
 read-only builtin set cannot yield the shell to anyone.
 
@@ -738,6 +753,15 @@ nothing. A source id the vocabulary does not declare answers 500 `misconfigured`
 with a body naming no source id, while the message that lists them all goes to the
 service logger. Reading and deleting a session are checked like running one: a
 session you cannot run is one you cannot touch.
+
+*The four entries above were the HTTP surface's, removed with it on 2026-09-15, and
+stay as the record.* What they decided that the library still does: every call
+names its caller with `source_ids=`; a caller presenting a compound is refused with
+an `AccessError` naming the parts; `UNSCOPED` is a value a caller passes on purpose,
+which `kingfisher run --as UNSCOPED` accepts; and a session whose agent a caller
+cannot reach raises the same `UnknownSessionError` a wrong id does. Reading a
+session asks who is calling. Deleting one does not -- `delete_session` is the
+operator's, and the checks it made over HTTP went with the surface.
 
 **A turn checks who is calling before it touches the session.** The entry
 reversing `access.yaml` lists "the per-turn re-check of a session's pinned agent"
@@ -799,10 +823,11 @@ audience, so they stay with the definition that has an opinion about them -- a
 shared body returning the whole record would have flattened a difference no test
 was watching. One is now. *(2026-09-16.)*
 
-**`errors.STATUS` stays exactly the caller-facing set.** A deployment error that
-still deserves a name goes in `DEPLOYMENT_STATUS` beside it, disjoint and tested
-as such -- the first table's value is that it is checkable in both directions,
-and an entry a caller cannot cause would be a status nobody decided on.
+**`errors.STATUS` stayed exactly the caller-facing set.** A deployment error that
+still deserved a name went in `DEPLOYMENT_STATUS` beside it, disjoint and tested
+as such -- the first table's value was that it was checkable in both directions,
+and an entry a caller cannot cause would be a status nobody decided on. Both tables
+were the HTTP service's, and went with it.
 
 **Reversed: `groups.yaml.example`, shipped in the package and placed by
 `ensure_layout`.** The reasoning was that `seed` names `source_ids.yaml` in a skip
@@ -903,9 +928,10 @@ that were deleted, and `for_source_ids` describes a function that never existed.
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds
 both; a model names an endpoint. Model parameters live there and a definition
 names a model and nothing more. An endpoint whose `key_env` is unset is dropped as
-the catalogue loads, `Models` keeps what it dropped, and `doctor` reports it as a
-warning rather than staying silent -- silence made a typo in `key_env` look
-identical to a shared catalogue naming an endpoint this machine cannot reach.
+the catalogue loads, with a warning; `Models` keeps the models that named it, and
+`doctor` warns about those rather than staying silent -- silence made a typo in
+`key_env` look identical to a shared catalogue naming an endpoint this machine
+cannot reach. An endpoint no model names is dropped with the loader's warning alone.
 *(2026-08-16, `model-catalogue.md`; 2026-08-18, `what-the-catalogue-dropped.md`.)*
 
 **The shipped definitions name no models.** A vendor's model id is portable
@@ -964,7 +990,8 @@ second name for someone else's contract, which is the thing `guides/tools.md`
 refuses to be in its opening lines.
 
 Documented instead, with the cost stated where an author reads it: a `Command`
-that writes its own message leaves the run log naming no tool, and a `files`
+that writes its own message leaves its streamed `tool_result` event naming no tool,
+and a `files`
 update reaches nothing, because this harness puts the file tools on a real
 filesystem rather than in graph state. `findings.md` has the measurement and
 `tests/unit/test_tool_returns.py` pins the behaviour, so a langchain change lands
@@ -1079,17 +1106,20 @@ be only `skills/` -- one call site, one value -- on the reasoning that a skill i
 prompt text the agent follows. The premise was always broader than the rule.
 
 `writable_roots` returns the whole workspace, so `tools/` was writable by the
-shell, and `LocalToolRepository` *executes* its modules to read them. A graph is
-built per request, so a `.py` file the shell wrote was imported and run -- in this
-process, outside this profile -- on the next turn. Measured rather than reasoned
+shell, and `LocalToolRepository` *executes* its modules to read them. The catalogue
+is read each time a `Kingfisher` is constructed -- once per process, and once per
+`kingfisher run` -- so a `.py` file the shell wrote was imported and run, in this
+process and outside this profile, the next time one was. Measured rather than reasoned
 about: a write to `skills/` was denied and a write to `tools/` succeeded under the
 profile a deployment actually builds, and a fresh repository ran the module-level
 code of a file that had not been there.
 
-The other three roots decide rather than execute, and are denied for the same
-reason one step along. An agent that edits its own `agents/*.yaml` strikes out the
-`source_ids:` line saying who may reach it, and source ids are read when the catalogue
-loads -- which is per request.
+The other three roots decided rather than executed when this was written, and are
+denied for the same reason one step along. An agent that edits its own
+`agents/*.yaml` strikes out the `source_ids:` line saying who may reach it, and that
+line is read when the catalogue loads -- the same next construction. `subagents/`
+and `middlewares/` have since come to hold Python too, which is one more reason
+rather than a different one.
 
 Half of this was already recorded under *Wiring a store*, which quotes the same
 `writable_roots` sentence to argue that a store must be named by an environment
@@ -1099,10 +1129,11 @@ the neighbour -- *"it is the middleware decision again, one object further in."*
 
 **Nothing relied on the hole**, checked four ways before closing it, because a
 capability somebody uses is a different argument from a side effect nobody asked
-for. A caller cannot add tools: uploads layer skills and subagents and there is no
-`LayeredTools`. The agent's file tools cannot reach a catalogue root -- the
-backend is rooted at the session and no route addresses one, so the shell was the
-only path. The prompt never mentions `tools/`. And `guides/tools.md` is written
+for. A caller could not add tools: uploads layered skills and subagents and there
+was no `LayeredTools`. The agent's file tools cannot write to a catalogue root --
+the backend is rooted at the session, and the routes that do address one, the
+skills catalogue and each bundle's skills, are read-only -- so the shell was the only
+path. The prompt never mentions `tools/`. And `guides/tools.md` is written
 throughout to a person authoring before a run.
 
 **Writes, not reads**, which is what `skills/` already did: an agent reading the
@@ -1110,10 +1141,11 @@ skill it was told to follow is ordinary, and `execute` runs scripts the catalogu
 ships. The cheap way to pass the write test is to deny the directory outright, so
 the read control is parametrised beside it.
 
-**An absent root is still named.** The profile is written once when the
-confinement resolves and `kingfisher seed` runs after that at least once, so
-filtering directories that do not exist would leave a workspace seeded afterwards
-with a protection nobody removed and nothing applied.
+**An absent root is still named.** The profile is written when the confinement
+resolves, which is each time a backend is built, and `kingfisher seed` can run
+between one build and the next, so filtering directories that do not exist would
+leave a workspace seeded in between with a protection nobody removed and nothing
+applied.
 
 **Stated as the property, not the four names.**
 `test_every_definition_root_is_protected` walks `catalogue_roots` rather than a
@@ -1127,9 +1159,14 @@ workspace files and both are writable, but `config_from_env` runs once when
 next request. A different shape, and its own argument about who writes
 `source_ids.yaml` and when. *(2026-09-07.)*
 
+The shape is not different: the definitions are read at construction too, as the
+corrected paragraph above says, so an edit to either lands at the same next start.
+What is left to exclude these two is the argument about who writes
+`source_ids.yaml`, and that has not been had. *(2026-09-17.)*
+
 **The profile was not the agent's to edit either, and was.** The rule above
 applied one object further in than anybody had looked: `shell.sb` sat inside the
-region its own rules declared writable. `state_dir` defaults to
+region its own rules declared writable. `state_dir` defaulted to
 `<workspace>/.kingfisher`, `writable_roots` returned the whole workspace, and
 `protected_roots` named only the definition roots -- so two commands in one turn
 were enough. Write `(allow default)` over the profile; run under it.
@@ -1148,8 +1185,9 @@ sentence out of the docstring, so this page cited a docstring that no longer sai
 it, about a state directory that *was* the workspace by default. The rule
 survived in prose and had never been true in the code.
 
-`profile` now takes the path it will be written to and denies writes to it, last,
-by `path` rather than `subpath`. Required rather than defaulted: a caller who
+`profile` now takes the path it will be written to and denies writes to it, by
+`path` rather than `subpath`, after every other rule but the one refusing each
+session's `.harness`. Required rather than defaulted: a caller who
 forgets it gets no boundary, which is the failure being fixed. Four ways are
 covered rather than the obvious one -- overwrite, append, unlink and rename-over
 are all `file-write*` against that name. The profile is also replaced rather than
@@ -1183,8 +1221,9 @@ agent definition its own session was pinned to.
 session, which leaves that walk nothing to find. The price is that the shell
 cannot write into the directory it starts in on a Landlock host, where it can
 under bubblewrap and on macOS -- both of which can express a carve-out and both of
-which still do. `data`, `derived`, `memory`, `runs`, `.home`, `.tmp` and
-`skills/uploaded` stay writable, so what stops working is scratch dropped straight
+which still do. `data`, `derived`, `memory`, `runs`, `.home` and `.tmp` stay
+writable -- and `skills/uploaded` did, until uploads went -- so what stops working is
+scratch dropped straight
 into the session; the alternative was leaving the pinned agent, the conversation,
 the turn lock and the run log writable by the shell they belong to. *(2026-09-08.)*
 
