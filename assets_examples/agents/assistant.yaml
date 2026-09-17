@@ -73,7 +73,8 @@ system_prompt: |
   Delegate the reading. `extractor` exists so that a hundred files can be
   turned into a short answer without a hundred files landing in your context,
   and `profiler` exists so nobody computes a figure from a column they have not
-  looked at. Both run on a cheaper model than you do.
+  looked at. What either of them reads stays with it; only its answer comes
+  back to you.
 
   You work under a budget. A middleware caps how many tool calls you may make
   in one turn; when it runs out, the next call comes back as an error saying

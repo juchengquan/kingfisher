@@ -11,9 +11,9 @@ demonstrates the role with the set this repository ships.
 
 ## The two directories, and why they are two
 
-**`assets_examples/`** is ours. One working agent, skill, subagent and tool,
-each demonstrating a distinct feature of the formats. It is committed, and about
-four hundred lines of tests check that every file in it parses, loads and runs.
+**`assets_examples/`** is ours. Every kind the formats define — agents, skills,
+subagents, tools, middlewares — each file demonstrating a distinct feature of
+one. It is committed, and the suite parses, loads and runs every file in it.
 It is a curriculum rather than a bag of assets — it is named for the thing it is
 an example *of*, so that it sorts beside this directory and finding either finds
 both. That was the whole argument for the name: this pair is the one part of the
