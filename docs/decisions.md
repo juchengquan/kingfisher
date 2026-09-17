@@ -709,6 +709,12 @@ catalogue by guessing. The withheld report hides only what source-id narrowing
 removed, never what the agent simply never declared: the second is a fact about
 the agent and has always been reported.
 
+It did not hold for skills until 2026-09-17. The report's skills row was written when
+a skill took no audience and was left unfiltered when it gained one, so a caller was
+told a run had withheld the very skill their source ids hide. Skills are filtered now,
+and compared by the one skill each spelling means, because an audience written
+`catalogue::audit` has to hide `audit` too.
+
 **The HTTP surface asks who is calling; it still authenticates nobody.**
 `create_app(source_ids_from=...)` takes a callable given the request and returning
 source ids, and `from_header` is shipped but never defaulted -- the header is an
