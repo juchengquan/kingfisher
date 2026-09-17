@@ -115,14 +115,42 @@ def test_the_catalogue_reads_it_once(cfg):
 # -- the coupling, pinned --------------------------------------------------
 
 
-def test_the_private_lister_is_still_there():
-    """`SkillMetadata` is public and the lister is not, so this reaches for an
+def test_the_private_listers_are_still_there():
+    """`SkillMetadata` is public and the listers are not, so this reaches for an
     underscore -- the same coupling `WorkspaceScopedBackend` takes on
-    `_get_backend_and_key`, and pinned for the same reason.
+    `_get_backend_and_key`, and pinned for the same reason. Both of them: the async one
+    serves a graph run on an event loop and had gone unpinned.
     """
-    from deepagents.middleware.skills import _list_skills_with_errors
+    from deepagents.middleware.skills import (
+        _alist_skills_with_errors,
+        _list_skills_with_errors,
+    )
 
     assert callable(_list_skills_with_errors)
+    assert callable(_alist_skills_with_errors)
+
+
+def test_only_the_registry_names_the_private_listers():
+    """An upgrade that moves them should break one file. Two modules called them, one
+    of them both, and the pin above says nothing about how many places would need the
+    same edit.
+    """
+    import ast
+
+    from tests.conftest import repository_root
+
+    private = {"_list_skills_with_errors", "_alist_skills_with_errors"}
+    src = repository_root() / "src"
+    naming = {
+        path.relative_to(src).as_posix()
+        for path in src.rglob("*.py")
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if (isinstance(node, ast.Name) and node.id in private)
+        or (isinstance(node, ast.alias) and node.name in private)
+        or (isinstance(node, ast.Attribute) and node.attr in private)
+    }
+
+    assert naming == {"kingfisher/kinds/skills/registry.py"}
 
 
 def test_the_metadata_still_carries_what_the_registry_reads():

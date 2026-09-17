@@ -100,6 +100,16 @@ a caller could activate a skill the agent was never told about. A directory the
 agent will not load is reported, not refused.
 *(2026-08-17, `skill-registry.md`.)*
 
+**Only `kinds.skills.registry` calls it.** The lister and its async twin were called
+from there and from `infrastructure.harness.narrowing`, so an upgrade that moved
+either meant the same edit in two files, and the async one was never pinned.
+`listed` and `alisted` are the only calls now; `test_skill_registry` pins both
+names and fails if another module names either. A listing becomes a `Listed` where
+it arrives, so `name`, `path` and `description` are read off deepagents' metadata in
+one function rather than by key wherever an entry is used. The skills index hands
+deepagents' own dictionaries back to it, because its formatting reads them.
+*(2026-09-16.)*
+
 **Middleware is a definition kind.** `middlewares/*.py` declaring `MIDDLEWARES`,
 read like `tools/`, seeded like everything else, and named from a definition in
 the long form that already existed. It was the one kind a workspace could not

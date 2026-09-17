@@ -73,6 +73,9 @@ wrong.*
 - **The skills lister is a private function**, called deliberately with a test
   pinning it, because kingfisher's own listing and deepagents' disagreed and a
   caller could activate a skill the agent was never told about. *(2026-08-17.)*
+  It has an async twin, `_alist_skills_with_errors`, with the same return shape --
+  the skills and a source error it has already logged. *(2026-09-16, deepagents
+  0.7.6.)*
 - **deepagents accepts two kinds of subagent** -- a spec it builds, and a compiled
   graph it runs as given. A compiled one is never given middleware and never gets
   a skills middleware added to it. *(2026-08-18.)*

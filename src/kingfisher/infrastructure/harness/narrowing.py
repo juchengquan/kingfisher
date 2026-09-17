@@ -5,16 +5,12 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from deepagents.middleware.skills import (
-    SkillsMiddleware,
-    _alist_skills_with_errors,
-    _list_skills_with_errors,
-)
+from deepagents.middleware.skills import SkillsMiddleware
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
 
-from kingfisher.kinds.skills.registry import KEY, qualified
+from kingfisher.kinds.skills.registry import KEY, alisted, listed, qualified
 
 
 def _tool_name(tool: Any) -> str | None:
@@ -90,8 +86,7 @@ class NarrowedSkills(SkillsMiddleware):
         """Every skill every source offers, tagged with the source it came from."""
         found = []
         for label, path in zip(self.source_labels, self.sources, strict=True):
-            skills, _error = _list_skills_with_errors(self._backend, path)
-            for one in skills:
+            for one in listed(self._backend, path):
                 found.append({**one, KEY: qualified(label, one["name"])})
         return found
 
@@ -99,8 +94,7 @@ class NarrowedSkills(SkillsMiddleware):
         """The same, for a graph run on an event loop."""
         found = []
         for label, path in zip(self.source_labels, self.sources, strict=True):
-            skills, _error = await _alist_skills_with_errors(self._backend, path)
-            for one in skills:
+            for one in await alisted(self._backend, path):
                 found.append({**one, KEY: qualified(label, one["name"])})
         return found
 
