@@ -12,18 +12,25 @@ import pytest
 import yaml
 
 from kingfisher.kinds.agents import reading as agents
+from kingfisher.kinds.agents import spec as agent_spec
 from kingfisher.kinds.agents.spec import KNOWN as AGENT_KNOWN
 from kingfisher.kinds.agents.spec import AgentError, AgentSpec
 from kingfisher.kinds.subagents import reading as subagents
+from kingfisher.kinds.subagents import spec as subagent_spec
+from kingfisher.kinds.subagents.spec import KNOWN as SUBAGENT_KNOWN
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
 
 #: Each format as a check needs it: its reader, the keys it defines, the spec it builds.
 FORMATS = {
     "agent": (agents.read, AGENT_KNOWN, AgentSpec),
-    "subagent": (subagents.read, subagents.KNOWN, SubagentSpec),
+    "subagent": (subagents.read, SUBAGENT_KNOWN, SubagentSpec),
 }
 
-SHARED_KEYS = AGENT_KNOWN & subagents.KNOWN
+#: The module each format's vocabulary and parsing live in, which is the thing
+#: `test_every_kind_keeps_its_vocabulary_beside_its_spec` is about.
+SPEC_MODULES = {"agent": agent_spec, "subagent": subagent_spec}
+
+SHARED_KEYS = AGENT_KNOWN & SUBAGENT_KNOWN
 SHARED_FIELDS = sorted(
     set(AgentSpec.__dataclass_fields__) & set(SubagentSpec.__dataclass_fields__)
 )
@@ -39,6 +46,22 @@ REQUIRED = frozenset(yaml.safe_load(HEAD))
 #: constant defined for a test is what `test_nothing_is_defined_for_tests_alone`
 #: exists to refuse.
 FOLDED_INTO = {"model": "wanted"}
+
+
+@pytest.mark.parametrize("kind", sorted(FORMATS))
+def test_every_kind_keeps_its_vocabulary_beside_its_spec(kind):
+    """One concept reachable by two paths, which is what this file exists to stop --
+    and it was true of this file. `AGENT_KNOWN` came from `kinds.agents.spec` while the
+    subagent's came from `kinds.subagents.reading`, so the two formats were held to each
+    other through modules that did not correspond.
+
+    Asserted rather than merely achieved: a move with no behaviour change is held by
+    nothing, so without this the arrangement drifts back and the suite stays green.
+    """
+    module = SPEC_MODULES[kind]
+
+    assert hasattr(module, "KNOWN"), f"{kind}: the vocabulary belongs beside the spec"
+    assert hasattr(module, "parse"), f"{kind}: mapping-to-spec belongs beside the spec"
 
 
 @pytest.mark.parametrize("kind", sorted(FORMATS))

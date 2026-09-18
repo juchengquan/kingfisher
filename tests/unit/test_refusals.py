@@ -116,6 +116,10 @@ def a_subagent_that_will_not_parse(cfg):
     _write(_root(cfg, "subagents") / "bad.yaml", "name: [unclosed\n")
 
 
+def a_subagent_missing_a_field(cfg):
+    _write(_root(cfg, "subagents") / "thin.yaml", "description: A subagent.\n")
+
+
 #: A portable declaration -- no `build`, so kingfisher assembles it -- with one key
 #: spliced in. One template rather than six literals: every defect below differs by
 #: exactly that key, and six copies would let five of them drift out of the format
@@ -235,22 +239,23 @@ REFUSALS: dict[str, Refusal] = {
     "kinds/subagents/catalogue.py::_declared_in": Refusal(
         2, defect=a_subagent_module_declaring_nothing),
     "kinds/subagents/catalogue.py::_definitions_in": Refusal(1, defect=a_subagent_filed_as_yml),
-    "kinds/subagents/reading.py::_refuse_unknown": Refusal(
+    "kinds/subagents/spec.py::_refuse_unknown": Refusal(
         1, defect=a_subagent_with_a_field_nobody_reads),
-    "kinds/subagents/reading.py::_bundle": Refusal(
+    "kinds/subagents/spec.py::_bundle": Refusal(
         3, defect=a_subagent_describing_a_bundle_it_has_not_got),
-    "kinds/subagents/reading.py::_carried": Refusal(
+    "kinds/subagents/spec.py::_carried": Refusal(
         4, defect=a_portable_subagent_carrying_tools_that_are_not_a_list),
-    "kinds/subagents/reading.py::_portable": Refusal(
+    "kinds/subagents/spec.py::_portable": Refusal(
         4, defect=a_declared_subagent_with_no_name),
-    "kinds/subagents/reading.py::_skills_directory": Refusal(
+    "kinds/subagents/spec.py::_skills_directory": Refusal(
         3, defect=a_portable_subagent_whose_skills_are_a_relative_path),
     # Filed on the build rather than on a missing name, which is what it used to be:
     # an entry with no `build` is now a portable declaration rather than a compiled
     # one missing a key, so the old defect reaches `_portable` and never gets here.
-    "kinds/subagents/reading.py::declared": Refusal(
+    "kinds/subagents/spec.py::declared": Refusal(
         5, defect=a_compiled_subagent_whose_build_is_not_callable),
-    "kinds/subagents/reading.py::read": Refusal(3, defect=a_subagent_that_will_not_parse),
+    "kinds/subagents/reading.py::read": Refusal(1, defect=a_subagent_that_will_not_parse),
+    "kinds/subagents/spec.py::parse": Refusal(2, defect=a_subagent_missing_a_field),
     "kinds/tools/catalogue.py::CarriedTools.found": Refusal(
         1, defect=a_portable_subagent_carrying_two_tools_of_a_name),
     "kinds/tools/catalogue.py::LocalToolRepository.found": Refusal(

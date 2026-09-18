@@ -2581,8 +2581,8 @@ def test_the_content_rule_can_tell_a_document_from_a_package(tmp_path):
 
 def _definition_documents(root: Path) -> list[Path]:
     """Every definition document below `root`, whatever directory it sits in."""
+    from kingfisher.kinds.documents import SUFFIX
     from kingfisher.kinds.skills.spec import FILENAME as SKILL_FILE
-    from kingfisher.kinds.subagents.reading import SUFFIX
 
     return sorted(
         path

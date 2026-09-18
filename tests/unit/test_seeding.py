@@ -412,7 +412,7 @@ def test_the_readme_subagent_table_matches_the_real_field_set(formats_doc):
     """The table is where a contributor learns which fields exist, and now that an
     unlisted one is an error, a stale row is a definition that will not load.
     """
-    from kingfisher.kinds.subagents.reading import KNOWN
+    from kingfisher.kinds.subagents.spec import KNOWN
 
     readme = (formats_doc).read_text(encoding="utf-8")
     table = readme.split("## Subagents")[1].split("\n---")[0]

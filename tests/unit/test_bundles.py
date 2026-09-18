@@ -921,7 +921,7 @@ def test_the_bundle_key_covers_every_directory_a_bundle_holds():
     that is read as a subagent, and neither has a symptom before it happens.
     """
     from kingfisher.kinds.subagents.catalogue import ASSET_DIRECTORIES
-    from kingfisher.kinds.subagents.reading import BUNDLE_KEYS
+    from kingfisher.kinds.subagents.spec import BUNDLE_KEYS
 
     assert set(BUNDLE_KEYS) == set(ASSET_DIRECTORIES)
 
