@@ -2105,9 +2105,30 @@ overlap on one event loop, which a server needs and nothing left here is; with t
 service gone their only callers were their own tests and one spike. They were also
 the second copy of the turn -- `_astream_turn` repeated `_stream_turn` down to its
 cleanup, and mutation testing had already found a flag the copy set by hand. A
-caller wanting turns to overlap runs `run` on threads, which should overlap as
-well since a turn is almost all waiting on the model -- reasoned, not measured.
-*(2026-09-15.)*
+caller wanting turns to overlap runs `run` on threads. *(2026-09-15.)*
+
+**They do overlap, and it took two checks to say so.** The sentence above ended
+"which should overlap as well since a turn is almost all waiting on the model --
+reasoned, not measured", and an entry that names a measurable claim and declines
+to measure it reads as an open question. Eight turns in eight sessions: **26.14s
+one after another, 5.27s together, 4.96x** on the live gateway
+(`spikes/concurrent_turns.py`, 2026-09-18). Not 8x, and the shortfall is the part
+of a turn that is not waiting -- `service.py` records construction as CPU-bound
+and unhelped by threads.
+
+`test_turns_in_separate_sessions_are_in_flight_at_once` is the half a gateway
+cannot answer: a barrier where the model call goes, so the check is driven rather
+than timed and goes red if anything later serialises a turn. Its control is the
+half worth insisting on -- without it the check passes against a barrier one turn
+fills. The spike is the half a fake model cannot answer, since an endpoint free to
+serve one request at a time would make the threads pointless however good the
+library is.
+
+**The measurement found a bug rather than confirming a number.** Eight concurrent
+turns crashed four times over on macOS: the sandbox profile's scratch file was
+named after the process, and every thread of a process shares a pid. The advice in
+this entry was unrunnable on the platform it is developed on for as long as it has
+stood. Fixed where the mistake was, in `_write_atomically`. *(2026-09-18.)*
 
 **Taken: files passed by id go.** `Request.input_refs` and `data_refs` let a
 caller with no host paths name files for a `FileStore` the deployment wired to
