@@ -52,8 +52,9 @@ class RunOn:
 class SubagentSpec(Definition):
     """One subagent, as the workspace defines it.
 
-    The thirteen fields it shares with an agent are on `Definition`; what is here is
-    what only a delegate has, or declares differently.
+    What it shares with an agent is on `Definition`; what is here is what only a
+    delegate has -- the graph it may bring instead of a prompt, and the bundle that
+    comes with it.
     """
 
     #: What this delegate's own folder holds, written down so the definition says it.

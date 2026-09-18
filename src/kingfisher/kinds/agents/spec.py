@@ -79,8 +79,8 @@ REFUSED: Mapping[str, str] = MappingProxyType(
 class AgentSpec(Definition):
     """One agent, once its definition has been read.
 
-    The thirteen fields it shares with a delegate are on `Definition`; what is here
-    is what only an agent has, or declares differently.
+    What it shares with a delegate is on `Definition`; `memory` is the whole of what
+    only an agent has.
     """
 
     #: `False` to run without the memory file on a deployment that wired one.
