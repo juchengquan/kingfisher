@@ -620,6 +620,29 @@ middleware name got no such exemption because it selects code the deployment wro
 *(2026-08-18, `agents-as-definitions.md`, and the middleware work of 2026-08-31.)*
 Uploads were removed on 2026-09-16, and nothing widens now.
 
+**The axes are read off the dataclass.** They were written three times -- as fields,
+again in `__post_init__` to be normalised, again in `intersect` to be narrowed --
+with nothing holding the three lists together. Measured, by adding a ninth axis and
+changing nothing else: it kept whatever list it arrived as, breaking the contract
+that a `Selection` is `ALL` or a tuple, and `intersect` answered `'*'` for it, so a
+grant of one name narrowed by a request asking two returned everything. A narrowing
+that widens is the one thing this object promises not to do, and the whole suite,
+ruff and ty stayed green.
+
+Both loops now read `SELECTIONS`, which is `fields(Capabilities)` minus the one field
+marked `SWITCH`. A field says which of the two it is in its own declaration and
+nowhere else. The marker is on the exception rather than on the axes, so the
+defaulting fails closed: a field that is neither a `Selection` nor marked reaches
+`_normalise`, which refuses a value that is not a selection at the first
+construction, rather than being quietly left out of the narrowing.
+
+`intersect` builds its answer with `replace` rather than a fresh `Capabilities`, and
+that is worth stating because it changes what a mistake looks like: a dropped axis
+keeps the grant whole instead of resetting to the class default. Safer, and the
+reason the obvious test did not bite -- a grant of one name against a request asking
+two answers the grant either way. The rule drives each axis with two sets that
+overlap without either containing the other. *(2026-09-18.)*
+
 ## Source-id access
 
 **An audience lives in the definition it is about.** An agent or subagent writes

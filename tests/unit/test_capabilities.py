@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from dataclasses import fields
+from typing import Any
+
 import pytest
 
 from kingfisher.domain.capabilities import (
     ALL,
+    SELECTIONS,
+    SWITCH,
     UNRESTRICTED,
     Capabilities,
     CapabilityError,
@@ -71,6 +76,47 @@ def test_intersect_handles_each_dimension_independently():
     assert narrowed.builtin_tools == ("read_file",)
     assert narrowed.skills == ("tabular-qa",)  # the request named nothing, so ALL
     assert narrowed.subagents == ("reviewer",)  # the grant named nothing, so ALL
+
+
+# -- every axis, not the ones somebody remembered ---------------------------
+
+
+def test_every_field_is_a_selection_or_marked_as_the_switch_it_is():
+    """The two sources that have to agree, and the reason the marker is not a comment.
+
+    `SELECTIONS` is read off the `SWITCH` metadata and this reads the annotations, so a
+    field typed `Selection` and marked a switch -- or neither -- is caught here rather
+    than by being quietly left out of the narrowing.
+    """
+    annotated = {f.name for f in fields(Capabilities) if f.type == "Selection"}
+    marked = {f.name for f in fields(Capabilities) if f.metadata.get(SWITCH)}
+
+    assert annotated == set(SELECTIONS)
+    assert not annotated & marked
+    assert annotated | marked == {f.name for f in fields(Capabilities)}
+
+
+@pytest.mark.parametrize("axis", SELECTIONS)
+def test_every_selection_axis_is_normalised_and_narrowed(axis):
+    """Measured on a ninth axis, before the two loops were read off the fields: a field
+    added to the dataclass alone kept whatever list it arrived as, and `intersect`
+    answered `'*'` for it -- so a grant of one name, narrowed by a request asking two,
+    returned everything. Driven per axis because the failure was per axis.
+
+    The two sides overlap without either containing the other, so the answer is a set
+    neither of them holds. Written the obvious way -- a grant of one name against a
+    request asking for two -- this passed with the axis dropped from `intersect`
+    altogether, because the answer there is the grant and dropping it keeps the grant.
+    """
+    def holding(*names: str) -> Capabilities:
+        """A grant on this axis alone, built by name because the axis is a parameter."""
+        written: dict[str, Any] = {axis: names}
+        return Capabilities(**written)
+
+    listed: dict[str, Any] = {axis: ["a", "b"]}
+    assert getattr(Capabilities(**listed), axis) == ("a", "b")
+
+    assert getattr(holding("a", "b").intersect(holding("b", "c")), axis) == ("b",)
 
 
 def test_capabilities_are_hashable_and_comparable():
