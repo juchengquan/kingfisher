@@ -6,14 +6,17 @@ computed list and dispatches for each item.
 
     uv run python spikes/dynamic_subagents.py
 
-Two things it needs, and neither is obvious until it fails:
+Three things it needs, and none of them is obvious until it fails:
 
-  * `KINGFISHER_INTERPRETER=true`. This script sets the flag itself.
-  * the *async* path. `task()` inside the REPL awaits, so a saver without
-    async methods raises partway through a workflow that has already run. The
-    default is `InMemorySaver`, which serves both halves, so this passes no
-    saver at all -- it used to open an async sqlite one, back when that was the
-    only kind that did not refuse. Hence `arun` below.
+  * the interpreter. This script turns it on in the config it builds, rather
+    than asking the environment for it.
+  * an agent of its own, written beside the delegate. A request must name an
+    agent, and an agent's `subagents:` is the ceiling a request is clamped by --
+    so a delegate no agent declares cannot be dispatched from inside the sandbox
+    any more than from a tool call.
+  * `eval` and `task` named on the *builtin* axis. Both are deepagents' own, so
+    naming them under `tools:` grants neither and withholds every workspace tool
+    besides.
 
 Streamed rather than drained, because the fan-out happens inside a single
 `eval` call: without it the whole workflow is a silent pause and then an
@@ -23,7 +26,6 @@ check rather than only as a demonstration.
 
 from __future__ import annotations
 
-import asyncio
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -51,15 +53,27 @@ once per word yourself, since the point is the fan-out from code.
 """
 
 NAMER = """\
----
 name: namer
 description: Names a colour for a single word. Replies with one word.
----
-You reply with exactly one colour word and nothing else.
+builtin_tools: []
+tools: []
+system_prompt: |
+  You reply with exactly one colour word and nothing else.
+"""
+
+FANOUT = """\
+name: fanout
+description: Dispatches the namer delegate from inside the sandbox.
+builtin_tools: [eval, task]
+subagents: [namer]
+system_prompt: |
+  You run workflows in the JavaScript sandbox. When a task asks for a loop,
+  write the loop and dispatch from inside it rather than calling the task tool
+  once per item yourself.
 """
 
 
-async def main() -> int:
+def main() -> int:
     load_dotenv()
 
     from kingfisher import Kingfisher, config_from_env, default_backend
@@ -69,29 +83,36 @@ async def main() -> int:
 
     cfg = replace(config_from_env(), interpreter_enabled=True)
 
-    # A delegate to fan out to. Written beside the catalogue rather than into
-    # it permanently -- this is a demonstration, not a definition anyone asked
-    # to keep.
-    cfg.catalogue_roots["subagents"].mkdir(parents=True, exist_ok=True)
-    definition = cfg.catalogue_roots["subagents"] / f"namer{SUFFIX}"
-    existed = definition.exists()
-    if not existed:
-        definition.write_text(NAMER, encoding="utf-8")
+    # An agent and a delegate to fan out to. Written beside the catalogue rather
+    # than into it permanently -- these are a demonstration, not definitions
+    # anybody asked to keep.
+    written = []
+    for kind, name, text in (
+        ("subagents", f"namer{SUFFIX}", NAMER),
+        ("agents", f"fanout{SUFFIX}", FANOUT),
+    ):
+        root = cfg.catalogue_roots[kind]
+        root.mkdir(parents=True, exist_ok=True)
+        definition = root / name
+        if not definition.exists():
+            definition.write_text(text, encoding="utf-8")
+            written.append(definition)
 
     try:
         service = Kingfisher(cfg, backend=default_backend)
-        session = service.start_session()
-        print(f"session   : {session}")
-        print(f"catalogue : {cfg.catalogue_roots["subagents"]}")
+        subagents = cfg.catalogue_roots["subagents"]
+        print(f"catalogue : {subagents}")
         print(f"task      : fan out over {list(WORDS)}\n", flush=True)
 
         request = Request(
             TASK,
-            session_id=session,
-            # `eval` to run the loop, `task` so the loop may dispatch.
-            # Withhold `task` and the sandbox cannot delegate at all,
+            agent="fanout",
+            # `eval` to run the loop, `task` so the loop may dispatch. Both are
+            # built-ins. Withhold `task` and the sandbox cannot delegate at all,
             # which is the point of gating it.
-            capabilities=Capabilities(tools=("eval", "task"), subagents=("namer",)),
+            capabilities=Capabilities(
+                builtin_tools=("eval", "task"), subagents=("namer",)
+            ),
         )
 
         # Streamed rather than drained: the fan-out happens inside one
@@ -99,21 +120,27 @@ async def main() -> int:
         # pause followed by an answer. What arrives live is the code the
         # model wrote, then its prose a word at a time.
         #
-        # `Progress` is the shipped one, so this, the driver and
+        # Synchronously, and `task()` awaiting inside the REPL is not an
+        # objection to that: `eval`'s sync half runs the code on the REPL's own
+        # worker loop, so the await has a loop to run on whether or not the
+        # caller is one. The saver a session gets answers both halves.
+        #
+        # `Progress` is the shipped one, so this and the driver agree on
         # when a newline is owed between tagged lines and model text.
         progress = Progress(sys.stdout)
         result = None
-        async for event in service.astream(request):
+        for event in service.stream(request):
             result = progress.write(event) or result
         progress.close()
     finally:
-        if not existed:
+        for definition in written:
             definition.unlink(missing_ok=True)
 
-    if result is None:  # pragma: no cover -- astream always ends with `finished`
+    if result is None:  # pragma: no cover -- stream always ends with `finished`
         print("the run produced no result", file=sys.stderr)
         return 1
 
+    print(f"\nsession   : {result.session_id}", file=sys.stderr)
     named = [word for word in WORDS if word in result.answer.lower()]
     if len(named) != len(WORDS):
         print(f"\nonly {len(named)}/{len(WORDS)} words came back; the fan-out did not run",
@@ -124,4 +151,4 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(main()))
+    raise SystemExit(main())
