@@ -11,7 +11,7 @@ turn keeps its hits.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field, fields, replace
 from typing import Literal
 
 #: Everything the workspace offers, whatever that turns out to be. The top of
@@ -38,6 +38,15 @@ def _bare(written: str) -> str:
 #: a service deserialising JSON hands us lists; that leniency is a backstop, not
 #: the contract, so a caller holding a list should convert at its own edge.
 Selection = Literal["*"] | tuple[str, ...] | None
+
+
+#: What marks the field that is not a list of names. A field says which of the two
+#: it is once, in its own declaration, and the two tuples below are read off that --
+#: because the axes used to be written out again in `__post_init__` and again in
+#: `intersect`, and an axis missing from the second came back at its class default.
+#: For most of them that default is `ALL`, so the narrowing *widened*: measured on a
+#: ninth axis, a grant of one name narrowed by a request asking two answered `'*'`.
+SWITCH = "switch"
 
 
 class CapabilityError(ValueError):
@@ -86,19 +95,13 @@ class Capabilities:
     endpoints: Selection = ALL
     #: Models a request may put a delegate on, overriding what its file says.
     models: Selection = None
-    memory: bool | None = None
+    #: Not a list of names, and the only field that is not. It says so here rather
+    #: than being left out of two loops, which is what `SWITCH` is for.
+    memory: bool | None = field(default=None, metadata={SWITCH: True})
 
     def __post_init__(self) -> None:
-        for field_name in (
-            "builtin_tools",
-            "tools",
-            "skills",
-            "subagents",
-            "middlewares",
-            "endpoints",
-            "models",
-        ):
-            object.__setattr__(self, field_name, _normalise(getattr(self, field_name)))
+        for name in SELECTIONS:
+            object.__setattr__(self, name, _normalise(getattr(self, name)))
 
     @property
     def is_unrestricted(self) -> bool:
@@ -107,16 +110,25 @@ class Capabilities:
 
     def intersect(self, other: Capabilities) -> Capabilities:
         """Narrow these capabilities by another set. Never widens."""
-        return Capabilities(
-            builtin_tools=narrowed(other.builtin_tools, by=self.builtin_tools),
-            tools=narrowed(other.tools, by=self.tools),
-            skills=narrowed(other.skills, by=self.skills),
-            subagents=narrowed(other.subagents, by=self.subagents),
-            middlewares=narrowed(other.middlewares, by=self.middlewares),
-            endpoints=narrowed(other.endpoints, by=self.endpoints),
-            models=narrowed(other.models, by=self.models),
-            memory=_narrow_switch(self.memory, other.memory),
+        narrowing: dict[str, object] = {
+            n: narrowed(getattr(other, n), by=getattr(self, n)) for n in SELECTIONS
+        }
+        narrowing.update(
+            (n, _narrow_switch(getattr(self, n), getattr(other, n))) for n in SWITCHES
         )
+        return replace(self, **narrowing)
+
+
+#: Read off the class, so a field added to it is an axis of one kind or the other
+#: and never of neither. A field that is neither a `Selection` nor marked `SWITCH`
+#: reaches `_normalise`, which refuses anything that is not one -- loudly, at the
+#: first construction, rather than by quietly permitting everything.
+SELECTIONS: tuple[str, ...] = tuple(
+    f.name for f in fields(Capabilities) if not f.metadata.get(SWITCH)
+)
+SWITCHES: tuple[str, ...] = tuple(
+    f.name for f in fields(Capabilities) if f.metadata.get(SWITCH)
+)
 
 
 def _narrow_switch(left: bool | None, right: bool | None) -> bool | None:
