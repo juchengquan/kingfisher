@@ -191,6 +191,36 @@ cost an experiment to establish.
   carries no `name`, so `_event_for` records a `tool_result` naming no tool.
   Documented rather than refused, and `decisions.md` says why. *(2026-09-04.)*
 
+Four more, measured while wrapping the tools a compiled delegate is handed. They are
+about what survives *re-wrapping* a tool, which nothing above needed to ask.
+
+- **Inside a graph kingfisher did not build, every exception ends the run.** A tool
+  node raises `FileNotFoundError`, `ValueError` and langchain's own `ToolException`
+  straight through to the caller -- all three measured against a success control that
+  passed. There is no upstream conversion to lean on, so anything wrapping a tool for
+  such a graph must *return* its refusals. `handle_tool_error=True` on the wrapper is
+  what converts one: a `ToolException` raised in `_run` comes back as a `ToolMessage`
+  with `status="error"` carrying the exception's own message, and the artifact pair
+  still survives beside it. *(2026-09-18.)*
+- **Rebuilding a tool as a `StructuredTool` loses a subclass's arguments, silently.**
+  `StructuredTool.from_function` over a delegating callable advertises
+  `{'kwargs': ...}` for a `BaseTool` subclass that declares no `args_schema` -- the
+  model is told the wrong arguments, nothing raises, and the inner `_run` then fails
+  for missing them. A wrapper that subclasses `BaseTool` and carries the inner tool's
+  `args_schema`, falling back to `get_input_schema()`, keeps `.args` and the OpenAI
+  schema identical across every shape. *(2026-09-18.)*
+- **The plain invoke form drops an artifact.** A tool declaring
+  `content_and_artifact` returns the pair only through the tool-call form
+  (`{"type": "tool_call", ...}`), which comes back as a `ToolMessage` carrying
+  `.artifact`; `invoke(dict)` yields the content alone. A wrapper that re-dispatches
+  the plain way loses every artifact it passes on, and the content still arrives, so
+  nothing looks wrong. *(2026-09-18.)*
+- **`ToolNode.invoke` needs a runtime config**, and fails
+  `Missing required config key 'N/A' for 'tools'` without one -- identically for a
+  succeeding tool and a raising one. Drive it inside a compiled graph instead, or the
+  control passes the same way the case does and the measurement says nothing.
+  *(2026-09-18.)*
+
 ## The Linux fence
 
 - **GitHub's `ubuntu-latest` runs Landlock ABI 7** against the 6 a full ruleset
