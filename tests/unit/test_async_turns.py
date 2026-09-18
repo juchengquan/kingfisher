@@ -29,8 +29,9 @@ def _claim(cfg, session_id: str) -> Path:
 class _SlowAgent(StubAgent):
     """A graph with a step that takes a moment, standing in for a model call.
 
-    A turn that cannot be interrupted mid-step is the whole reason `astream`
-    waits on cancellation, so a test of that needs a step to be inside.
+    Slow on both halves and slow in the way each one is: the sync step blocks,
+    and the async step awaits, so a cancellation reaches it the way it would
+    reach a real model call rather than the way it reaches a blocked thread.
     """
 
     def __init__(self, answer: str = "ok", *, step_s: float = 0.2) -> None:
@@ -40,6 +41,11 @@ class _SlowAgent(StubAgent):
     def stream(self, state, config, stream_mode=None, subgraphs=False):
         time.sleep(self._step_s)
         yield from super().stream(state, config, stream_mode, subgraphs)
+
+    async def astream(self, state, config, stream_mode=None, subgraphs=False):
+        await asyncio.sleep(self._step_s)
+        for chunk in StubAgent.stream(self, state, config, stream_mode, subgraphs):
+            yield chunk
 
 
 def _drain(kf, request):
@@ -67,19 +73,37 @@ def test_astream_yields_what_stream_yields(cfg):
     assert async_kinds == sync_kinds
 
 
-def test_the_graph_is_still_driven_synchronously(cfg):
-    """`guides/middleware.md` tells a deployment that the sync hook is the one that
-    runs, and a middleware with only `wrap_model_call` raises the moment a graph is
-    driven asynchronously. `StubAgent` has no `astream` at all, so an `astream` that
-    reached for one could not pass this.
+def test_each_entry_point_drives_the_graph_its_own_way(cfg):
+    """`stream` drives `graph.stream` and `astream` drives `graph.astream`, and the
+    whole benefit rests on that one line: stepping the sync turn through a thread
+    instead measured 9.71s to cancel a ten-second model call where driving the
+    graph's own stream measured 0.00s.
+
+    It is also what a deployment owes the async path -- the `a`-prefixed
+    middleware hook is the one that runs here -- so a turn that quietly fell back
+    to the sync driver would make that requirement disappear and reappear.
     """
-    graph = StubAgent("ok")
-    assert not hasattr(graph, "astream"), "this proves nothing if the stub grows one"
+    used: list[str] = []
+
+    class _Recording(StubAgent):
+        def stream(self, state, config, stream_mode=None, subgraphs=False):
+            used.append("stream")
+            yield from super().stream(state, config, stream_mode, subgraphs)
+
+        async def astream(self, state, config, stream_mode=None, subgraphs=False):
+            used.append("astream")
+            for chunk in StubAgent.stream(self, state, config, stream_mode, subgraphs):
+                yield chunk
+
     start(cfg, "s")
+    kf = service(cfg, _Recording("ok"))
 
-    events = _drain(service(cfg, graph), Request("go", session_id="s"))
+    _drain(kf, Request("go", session_id="s"))
+    assert used == ["astream"]
 
-    assert [e.kind for e in events][-1] == "finished"
+    used.clear()
+    list(kf.stream(Request("again", session_id="s")))
+    assert used == ["stream"]
 
 
 def test_arun_returns_what_run_returns(cfg):

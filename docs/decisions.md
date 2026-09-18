@@ -2147,28 +2147,51 @@ get subtly wrong, and described on no page here. Streaming is what an async
 caller wants -- a bot showing tokens, a route streaming a response -- so the
 workaround was fiddliest exactly where it was needed most.
 
-**What is not back is the thing worth removing.** `astream` steps the sync turn
-through `asyncio.to_thread`, which is `BaseLoader.alazy_load`'s loop plus the two
-things a turn needs and a document loader does not: the step is shielded from the
-caller's cancellation and awaited before the generator is closed. `arun` drains
-it; and `_drained` is the tail both drains share, so the `delete_session`
-decision exists once.
+**What is not back is the second copy of the turn.** `stream` drives
+`graph.stream` and `astream` drives `graph.astream`, and those eight lines are
+the whole of the difference: every bound, translation and release is in
+`_turn_lifecycle`, which both share, and the state they write is one `_Turn`
+record. That is what the 2026-09-15 removal was actually about -- `_astream_turn`
+repeated `_stream_turn` down to its cleanup and set a flag by hand -- so the
+lifecycle came out first and the loops are only loops.
 
-**The first draft of it was hand-rolled, and was worse in a way no test caught.**
-A `threading.Thread` and a one-deep queue passed every behaviour test and
-dropped the caller's context on the floor -- a bare thread starts with an empty
-one, so a deployment's tracing stopped at the turn and nothing said so. Both
-helpers that look like the obvious choice copy the context (`asyncio.to_thread`,
-and langchain's `run_in_executor` by hand); the executor call underneath them
-does not. `test_the_callers_context_reaches_the_turn` is the guard, and
-`findings.md` records what else was read. Thirty lines shorter for being the
-shape upstream already uses. `graph.stream` still drives the graph, which is what keeps *Write the sync
-hook* in `guides/middleware.md` true: measured against langchain's own
-machinery, a middleware implementing only `wrap_model_call` **raises** the moment
-a graph is driven asynchronously, and it does so loudly rather than being skipped.
-Every middleware in this repository implements both halves; deepagents'
-`PatchToolCallsMiddleware` implements only `before_agent`, which langgraph runs on
-a thread of its own, so that one is fine either way.
+**Driving the graph for real is what makes cancelling immediate.** Measured on a
+ten-second model call: **0.00s** against **9.71s**. A cancelled `await` abandons
+the request; a thread has to be waited out, which is what the first version of
+this did, and the turn's cleanup still runs inside that instant so the session is
+free before the caller continues. The 120-second worst case this entry used to
+document was a property of that shape rather than of the problem.
+
+**What the async path asks of a deployment, and the sync path does not.** The
+`a`-prefixed middleware hook is the one that runs there, so a middleware written
+only as `wrap_model_call` raises the first time an `astream` turn reaches it --
+loudly, measured against langchain's own machinery, rather than being skipped.
+A saver passed as `threads=` needs `aget_tuple` and `aput`, which langgraph
+calls; `InMemorySaver` has both and `SqliteSaver` does not. Neither refusal can
+reach a caller of `stream`, whose behaviour is unchanged, and the async pair had
+no callers at all when this landed -- so this is a requirement of a new API
+rather than a break in an old one. `guides/middleware.md` says it where a
+deployment reads it.
+
+**Two things that had to be closed by hand.** `_prepare` goes through
+`asyncio.to_thread`: it is 15-46ms of CPU-bound construction, and on the loop it
+would be 15-46ms every other turn waits through. And `astream` closes
+`_astream_turn` itself, because an async generator dropped by another one is
+finalised by the event loop's `shutdown_asyncgens` rather than when it goes out of
+scope -- `yield from` closes a nested *sync* generator for free and there is no
+async spelling of that. Without it a caller who stopped reading left the turn's
+`finally` unrun and its session claimed until the loop ended;
+`test_a_cancelled_turn_does_not_keep_running_behind_the_caller` fails with
+`SessionBusyError` when it is removed.
+
+**The first version of this was thread-backed, and the record of why is worth
+keeping.** It stepped the sync turn through `asyncio.to_thread` -- the
+`BaseLoader.alazy_load` shape -- because a middleware with only sync hooks raises
+under a native async graph, and that looked like a reason to avoid the native
+path rather than a requirement to document. It also hand-rolled a thread and a
+queue first, which passed every behaviour test while silently dropping the
+caller's context, since a bare `threading.Thread` starts with an empty one.
+`findings.md` keeps what was measured about both.
 
 **A thread per turn in flight, not many turns on one loop.** That is the honest
 limit, and it is affordable for the reason the entry above now records with a

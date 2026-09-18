@@ -44,23 +44,32 @@ wrong.*
 
 ### Nothing upstream bridges a sync stream to an async one
 
-*Read against deepagents, langchain-core and langgraph on 2026-09-18, when
-`Kingfisher.astream` was written. The question was whether to reuse rather than
-write one.*
+*Read against deepagents, langchain-core and langgraph on 2026-09-18, while
+`Kingfisher.astream` was being written. It ended up needing no bridge at all --
+it drives `graph.astream` -- so this is a record of what is and is not there,
+for the next reader who reaches for one.*
 
 - **There is no reusable bridge.** `Runnable.astream`'s default does not iterate
   the sync `stream` at all -- it yields a single chunk from `ainvoke`, which is
   giving up on streaming rather than bridging to it. `langgraph`'s `Pregel` has a
   native `astream` instead of a fallback, and `langchain_core.utils.aiter` only
   takes async iterators as input. Nothing in deepagents does it either.
-- **The pattern to copy is `BaseLoader.alazy_load`**, in
+- **The nearest pattern is `BaseLoader.alazy_load`**, in
   `langchain_core/document_loaders/base.py`: `run_in_executor(None, next,
-  iterator, done)` in a loop, with a sentinel. `astream` is that loop, plus the
-  two things a turn needs and a document loader does not. Upstream **never closes
-  the iterator** -- fine when abandoning it costs nothing, and not fine for a turn
-  that holds a session's claim until its `finally` runs. So the step is shielded
-  from the caller's cancellation and awaited before the close, because closing a
-  generator mid-step raises `generator already executing`.
+  iterator, done)` in a loop, with a sentinel. It works, and two things have to be
+  added for a turn -- it **never closes the iterator**, which is fine when
+  abandoning one costs nothing and not fine for something holding a session's
+  claim until its `finally` runs; and the step has to be shielded from the
+  caller's cancellation, because closing a generator mid-step raises `generator
+  already executing`. Measured against driving `graph.astream` instead: **9.71s
+  to cancel a ten-second model call, against 0.00s**, because a thread has to be
+  waited out. That is why this is a record rather than what `astream` does.
+- **An async generator dropped by another async generator is not finalised
+  promptly.** `yield from` closes a nested *sync* generator, and there is no async
+  spelling of it: the inner one waits for the event loop's `shutdown_asyncgens`.
+  So an outer `aclose()` does not run an inner `finally` -- which, for a turn,
+  meant a session stayed claimed until the loop ended. `astream` closes its inner
+  turn by hand.
 - **Context reaches the worker through either helper, but not through the
   executor directly.** `asyncio.to_thread` copies the current context, and
   langchain's `run_in_executor` does it by hand -- `partial(copy_context().run,

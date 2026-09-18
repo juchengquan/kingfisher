@@ -243,12 +243,21 @@ kingfisher runs a turn with `graph.stream`, so the hook that runs is the sync on
 twin. A middleware written only as `awrap_tool_call` fails loudly: the turn raises
 the first time it reaches that hook, rather than skipping it.
 
-**`Kingfisher.astream` does not change this.** It runs the same sync turn on a
-thread of its own rather than driving the graph asynchronously, so the sync hook
-is still the one that runs for a caller on an event loop. That is deliberate and
-is the reason the async pair is shaped that way: a graph driven with `astream`
-raises on every middleware that implements only the sync half, which would make
-the rule on this page depend on which entry point a caller happened to use.
+**`Kingfisher.astream` and `arun` are the exception, and they invert it.** Those
+drive `graph.astream`, so on that path the `a`-prefixed hook is the one that runs
+and the sync one never does. A middleware with only `wrap_model_call` raises the
+first time an `astream` turn reaches it — loudly, with a message naming the fix.
+
+So which hook runs depends on which entry point the caller used, and the remedy
+is the same either way: **write both halves.** The examples do. A middleware that
+implements only one works under one of the two entry points and refuses the
+other, which is a deployment-shaped surprise rather than a bug you can find by
+reading the class.
+
+The same applies to a saver passed as `threads=`: langgraph calls `aget_tuple`
+and `aput` on the async path, so a sync-only one — `SqliteSaver` is the obvious
+example — refuses there while working under `stream`. The default `InMemorySaver`
+implements both.
 
 A subclass fails quietly. A LangChain middleware that implements both halves —
 `SummarizationMiddleware` is one — keeps its own sync hook when a subclass

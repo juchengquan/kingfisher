@@ -25,9 +25,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Generator, Iterator
-from contextlib import suppress
-from dataclasses import replace
+from collections.abc import AsyncGenerator, AsyncIterator, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from time import monotonic, time
 from typing import TYPE_CHECKING, Any
@@ -65,7 +65,7 @@ from kingfisher.domain.capabilities import (
 )
 from kingfisher.domain.ports import SessionStore
 from kingfisher.domain.request import Request
-from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
+from kingfisher.domain.result import END_TURN, RunEvent, RunResult, normalize_answer
 from kingfisher.domain.session import (
     Session,
 )
@@ -130,6 +130,28 @@ if TYPE_CHECKING:
 
 #: `kingfisher.origins`, and deliberately not `kingfisher`.
 logger = logging.getLogger("kingfisher.origins")
+
+
+@dataclass
+class _Turn:
+    """What a turn accumulates, so its lifecycle and whichever loop drives it agree.
+
+    One record rather than five locals, because there are two loops now -- one
+    over `graph.stream` and one over `graph.astream`. The last time there were
+    two, the second was a copy of the whole turn and drifted from the first: it
+    set `ok` by hand, and mutation testing rather than a reviewer found it. What
+    the loops share is here, and what they do not is the eight lines that differ.
+    """
+
+    prepared: Prepared
+    answer: str = ""
+    ok: bool = False
+    stop_reason: str = END_TURN
+    kept: tuple[str, ...] = ()
+    delegates: runtime.Delegates = field(default_factory=runtime.Delegates)
+    #: What the lifecycle produced and the loop still owes its caller: a context
+    #: manager cannot yield into the generator wrapped around it.
+    pending: list[RunEvent] = field(default_factory=list)
 
 
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
@@ -807,15 +829,8 @@ class Kingfisher(Sessions, Disposal):
 
     def stream(
         self, request: str | Request, *, source_ids: Held | None = None
-    ) -> Generator[RunEvent, None, None]:
-        """Run one task, yielding progress as it happens.
-
-        `Generator` rather than the `Iterator` this said, because `astream` has
-        to be able to *stop* one: it closes this to end a cancelled turn, and a
-        turn that is never closed keeps its session's claim until a garbage
-        collection nobody scheduled. Narrower is otherwise better here, so the
-        reason is written where the narrowing would be put back.
-        """
+    ) -> Iterator[RunEvent]:
+        """Run one task, yielding progress as it happens."""
         # Coerced here rather than only in `_prepare`, because holding the
         # session now happens first and a bare task string has no session id to
         # read.
@@ -823,44 +838,27 @@ class Kingfisher(Sessions, Disposal):
         with self._held_session(request) as session:
             yield from self._stream_turn(request, session, source_ids=source_ids)
 
-    def _stream_turn(
-        self, request: Request, session: Session, *, source_ids: Held | None = None
-    ) -> Iterator[RunEvent]:
-        """One turn, with its directory already held."""
-        prepared = self._prepare(request, session, source_ids=source_ids)
-        answer = ""
-        ok = False
-        stop_reason = "end_turn"
-        kept: tuple[str, ...] = ()
-        delegates = runtime.Delegates()
+    @contextmanager
+    def _turn_lifecycle(self, turn: _Turn) -> Iterator[None]:
+        """Everything a turn does around its graph loop, in one copy.
+
+        The bookkeeping is identical whichever way the graph is driven, and it is
+        the half that drifted when the async path was a second copy of the turn.
+        So the loops below are only loops -- they read chunks and watch the clock
+        -- and every bound, translation and release is here.
+        """
         try:
-            # Inside the `try`, not before it. A caller that stops reading
-            # during these -- `run_start` is the first -- used to leave the turn
-            # with no end at all: the claim stayed taken, the checkpointer
-            # stayed open, and nothing was persisted.
-            yield from prepared.events
-            for namespace, mode, chunk in prepared.graph.stream(
-                runtime.user_payload(prepared.message, prepared.history),
-                config=prepared.config,
-                stream_mode=runtime.STREAM_MODES,
-                subgraphs=True,
-            ):
-                answer, events = consume(namespace, mode, chunk, answer, delegates)
-                yield from events
-                if (stop := overrun(prepared)) is not None:
-                    stop_reason = "max_duration"
-                    yield stop
-                    break
-            answer = normalize_answer(answer)
-            ok = True
+            yield
+            turn.answer = normalize_answer(turn.answer)
+            turn.ok = True
         except runtime.OutOfSteps:
-            # The other bound, reported like the first. `ok` stays true: the
-            # turn ended in a way the caller was told about, which is what that
-            # flag records -- not that every step it wanted happened.
-            answer = normalize_answer(answer)
-            stop_reason = "max_steps"
-            ok = True
-            yield out_of_steps(self.cfg)
+            # The other bound, reported like the first. `ok` stays true: the turn
+            # ended in a way the caller was told about, which is what that flag
+            # records -- not that every step it wanted happened.
+            turn.answer = normalize_answer(turn.answer)
+            turn.stop_reason = "max_steps"
+            turn.ok = True
+            turn.pending.append(out_of_steps(self.cfg))
         except Exception as exc:
             # Translated, not handled: a 401 is the one model-call failure the
             # person at the terminal caused and can fix, so it joins the errors
@@ -871,13 +869,14 @@ class Kingfisher(Sessions, Disposal):
                 raise
             raise refused from exc
         finally:
-            prepared.logger.run_end(ok=ok, answer_chars=len(answer))
+            prepared = turn.prepared
+            prepared.logger.run_end(ok=turn.ok, answer_chars=len(turn.answer))
             # Before the slot goes back, and inside its own `finally` so that a
             # store which is unreachable does not also leak the claim. Ending
             # the turn is the only moment that happens whether the caller read
             # the last event or walked away after the answer.
             try:
-                kept = self._keep(prepared)
+                turn.kept = self._keep(prepared)
             finally:
                 # The slot goes back however the turn ended -- answered, refused
                 # mid-stream, or cut short by its deadline.
@@ -890,7 +889,87 @@ class Kingfisher(Sessions, Disposal):
             # the process rather than leaking a handle. See `release_interpreter`.
             release_interpreter(self.cfg, prepared.graph)
 
-        yield self._finished(prepared, answer, kept, stop_reason=stop_reason)
+    def _read(self, turn: _Turn, namespace: Any, mode: Any, chunk: Any) -> tuple[RunEvent, ...]:
+        """One stream chunk, recorded on the turn and read as events.
+
+        Two lines, shared, because they are the two the loops would otherwise
+        each hold a copy of -- and the answer accumulating in the wrong one is
+        exactly the kind of drift the record above exists to prevent.
+        """
+        turn.answer, events = consume(namespace, mode, chunk, turn.answer, turn.delegates)
+        return events
+
+    def _payload(self, turn: _Turn) -> dict[str, Any]:
+        return runtime.user_payload(turn.prepared.message, turn.prepared.history)
+
+    def _stream_turn(
+        self, request: Request, session: Session, *, source_ids: Held | None = None
+    ) -> Iterator[RunEvent]:
+        """One turn, with its directory already held."""
+        turn = _Turn(self._prepare(request, session, source_ids=source_ids))
+        with self._turn_lifecycle(turn):
+            # Inside the lifecycle, not before it. A caller that stops reading
+            # during these -- `run_start` is the first -- used to leave the turn
+            # with no end at all: the claim stayed taken, the checkpointer
+            # stayed open, and nothing was persisted.
+            yield from turn.prepared.events
+            for namespace, mode, chunk in turn.prepared.graph.stream(
+                self._payload(turn),
+                config=turn.prepared.config,
+                stream_mode=runtime.STREAM_MODES,
+                subgraphs=True,
+            ):
+                yield from self._read(turn, namespace, mode, chunk)
+                if (stop := overrun(turn.prepared)) is not None:
+                    turn.stop_reason = "max_duration"
+                    yield stop
+                    break
+        yield from turn.pending
+        yield self._finished(
+            turn.prepared, turn.answer, turn.kept, stop_reason=turn.stop_reason
+        )
+
+    async def _astream_turn(
+        self, request: Request, session: Session, *, source_ids: Held | None = None
+    ) -> AsyncGenerator[RunEvent, None]:
+        """The same turn on the graph's own async stream, its directory held.
+
+        `AsyncGenerator` rather than `AsyncIterator`, because `astream` has to be
+        able to *close* this one: an async generator dropped by another is
+        finalised by the event loop rather than at scope, so the close is by hand
+        and the type has to admit it. Private, so nothing public is widened.
+
+        The loop's twin and only the loop: the lifecycle above is shared, so a
+        bound added to one is added to both.
+
+        `_prepare` goes through a thread because it is not loop work -- 15-46ms
+        of filesystem and graph construction, CPU-bound and measured as no
+        better on threads, which is 15-46ms the event loop would otherwise spend
+        on one turn while every other turn waits.
+        """
+        turn = _Turn(
+            await asyncio.to_thread(self._prepare, request, session, source_ids=source_ids)
+        )
+        with self._turn_lifecycle(turn):
+            for event in turn.prepared.events:
+                yield event
+            async for namespace, mode, chunk in turn.prepared.graph.astream(
+                self._payload(turn),
+                config=turn.prepared.config,
+                stream_mode=runtime.STREAM_MODES,
+                subgraphs=True,
+            ):
+                for event in self._read(turn, namespace, mode, chunk):
+                    yield event
+                if (stop := overrun(turn.prepared)) is not None:
+                    turn.stop_reason = "max_duration"
+                    yield stop
+                    break
+        for event in turn.pending:
+            yield event
+        yield self._finished(
+            turn.prepared, turn.answer, turn.kept, stop_reason=turn.stop_reason
+        )
 
     def run(
         self,
@@ -943,57 +1022,40 @@ class Kingfisher(Sessions, Disposal):
     ) -> AsyncIterator[RunEvent]:
         """`stream`, for a caller already on an event loop.
 
-        The turn is the sync one, on a thread of its own. `graph.stream` still
-        drives it, so a middleware written as `wrap_model_call` runs under this
-        exactly as it does under `stream` -- which is what *Write the sync hook*
-        in `guides/middleware.md` tells a deployment it may rely on. Anything
-        that drove the graph asynchronously instead would raise on every
-        middleware that implements only the sync half.
+        The twin of `stream` down to the line that differs: that one drives
+        `graph.stream` and this one drives `graph.astream`, over one shared
+        lifecycle. Driving it for real rather than stepping the sync turn through
+        a thread is what makes cancellation immediate -- measured at 0.00s
+        against 9.71s on a ten-second model call, because a cancelled `await`
+        abandons the request where a thread has to be waited out. The turn's
+        cleanup still runs inside that instant, so the session is free before
+        the caller continues.
 
-        What it costs is a thread per turn in flight rather than many turns on
-        one loop. A turn is almost all waiting on the model -- measured at 4.96x
-        across eight -- so that thread is idle for nearly all of its life.
-
-        **Cancelling waits.** A thread cannot be interrupted, so the turn is
-        asked to stop at the next event it produces and this returns once it
-        has, which is at worst one model call or one shell command away. The
-        session is genuinely free by then, and that is worth more than a prompt
-        return: a session answering "busy" for reasons the caller cannot see is
-        a worse thing to be handed than a slow cancel.
+        **What a deployment owes this path, and owes `stream` nothing of.** The
+        `a`-prefixed hook is the one that runs here, so a middleware written only
+        as `wrap_model_call` raises the first time this reaches it, and a saver
+        passed as `threads=` needs `aget_tuple` and `aput` -- langgraph calls
+        them. Both refusals are loud, and neither can reach a caller of `stream`,
+        whose behaviour is unchanged. `guides/middleware.md` says the same thing
+        where a deployment reads it.
         """
-        events = self.stream(request, source_ids=source_ids)
-        #: Handed back instead of `StopIteration`, which cannot cross a `Future`:
-        #: `to_thread(next, events)` raises `RuntimeError` rather than ending the
-        #: loop. `findings.md` has the measurement and the stale upstream comment
-        #: about it.
-        done = object()
-        step: asyncio.Future[Any] | None = None
-        try:
-            while True:
-                # `asyncio.to_thread` rather than a thread of our own, which is
-                # also what carries the caller's context in -- a bare
-                # `threading.Thread` starts with an empty one, so a deployment's
-                # tracing stopped at the turn and nothing said so.
-                #
-                # Shielded, because a cancelled caller must not cancel the step:
-                # the thread could not be interrupted anyway, and a generator
-                # cannot be closed while one of its steps is running.
-                step = asyncio.ensure_future(asyncio.to_thread(next, events, done))
-                item = await asyncio.shield(step)
-                if item is done:
-                    return
-                yield item
-        finally:
-            # The two lines `BaseLoader.alazy_load` does not have, and a turn is
-            # why: upstream abandons its iterator, where this one holds a
-            # session's claim until its `finally` runs. Wait for the step in
-            # flight and *then* close -- the other order raises `generator
-            # already executing`, and the claim is held until a garbage
-            # collection nobody scheduled.
-            if step is not None:
-                with suppress(BaseException):
-                    await asyncio.shield(step)
-            await asyncio.to_thread(events.close)
+        # Coerced here rather than only in `_prepare`, for the reason `stream`
+        # gives: holding the session happens first, and a bare task string has
+        # no session id to read.
+        request = Request.coerce(request)
+        with self._held_session(request) as session:
+            turn = self._astream_turn(request, session, source_ids=source_ids)
+            try:
+                async for event in turn:
+                    yield event
+            finally:
+                # Closed by hand, because an async generator dropped by another
+                # one is finalised by the event loop's `shutdown_asyncgens` and
+                # not when it goes out of scope. `yield from` closes a nested
+                # sync generator for us; there is no async spelling of that, so
+                # without this a caller who stops reading leaves the turn's
+                # `finally` unrun and its session claimed until the loop ends.
+                await turn.aclose()
 
     async def arun(
         self,
