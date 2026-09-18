@@ -3189,6 +3189,34 @@ it catches no drift `test_format_parity.py` does not already catch.
 What would change the answer is a product change rather than tidying: one definition
 file usable both as an agent and as a delegate. *(2026-09-17.)*
 
+*Asked again the next day and measured rather than argued, because the entry above
+asserts what the two share without counting it. Of the 14 shared fields: **all 14
+declare the same type**, 13 of 14 the same default -- `system_prompt` is the one, and
+it is the guarantee the entry names -- and **12 of 14 are read by byte-identical
+calls**. The two that are not are `skills` and `subagents`, where a delegate passes
+`refuse_all` and an agent does not, which is the star the one-reader entry above
+already named as where the formats part.*
+
+*So the mechanics do not decline it, and one of them looks like it does. A shared base
+holding the defaulted fields appears to force `AgentSpec` to default `system_prompt`
+too -- `non-default argument follows default argument` -- and `kw_only=True` removes
+that entirely: the base compiles, the agent keeps `system_prompt` required, and
+construction still fails without one. Nothing in `src/` or `tests/` builds either spec
+positionally, so nothing would break. Written down because the next person to ask this
+will find `kw_only` and think they have found the unlock.*
+
+*What declines it is the prose, and that is measurable too: only 4 of the 14 comments
+could move to a base unchanged -- `name`, `description` and `tools` are bare in both
+and `audiences` is identical. The other 10 are the same field explained for its own
+kind. `source_ids` is "who may open a session on this agent" against "who may reach
+this delegate, wherever it is used"; `wanted` is the deployment's default against
+whatever summoned it. A base would put 12 declarations in one file and 10 of their
+reasons in another, which is the fault* Write the reason where the mistake is *names.
+The measurement also found one of those comments stale -- the agent's `wanted` still
+described the list form, which `wanted_model` stopped taking -- and a shared field
+whose two comments disagree is the case for keeping both, not for merging them.
+*(2026-09-18.)*
+
 **Left for now: a `ToolSpec` a tool could be declared as.** Asked after the entry
 above, about the kind that has no spec at all. A tool is exported as an object and
 `Found` pairs it with where it came from; agents, subagents and skills each read a

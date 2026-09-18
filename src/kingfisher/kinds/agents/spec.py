@@ -102,8 +102,9 @@ class AgentSpec:
     middleware_settings: Mapping[str, Mapping[str, object]] = field(
         default_factory=dict, metadata={"derived": True}
     )
-    #: What this agent asked to run, in the order it would prefer. Empty means
-    #: it named nothing, so it runs the deployment's `default:`.
+    #: The model this agent runs, out of what the catalogue defines. `None` means it
+    #: named none, so it runs the deployment's `default:` -- which is where this parts
+    #: from a delegate's identical field, whose `None` means whatever summoned it.
     wanted: str | None = field(default=None, metadata={"derived": True})
     #: `False` to run without the memory file on a deployment that wired one.
     #: `None` is no opinion, which is not the same: a switch narrows like every
