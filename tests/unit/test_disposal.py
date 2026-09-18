@@ -97,6 +97,58 @@ def test_a_directory_that_would_not_go_keeps_the_store_copy_behind_it(cfg, tmp_p
     assert kept.knows(session_id)
 
 
+def test_an_evicted_session_resumes_from_the_store_with_its_history(cfg, tmp_path):
+    """Eviction frees this machine and keeps the session. One that kept the store's copy
+    but not the conversation would resume as a stranger to its own first turn.
+    """
+    from kingfisher import LocalSessionStore
+
+    kept = LocalSessionStore(tmp_path / "kept")
+    agent = StubAgent("ok")
+    kf = Kingfisher(cfg, graph=agent, threads=StubCheckpointer(), sessions=kept)
+    session_id = kf.run(Request("the first task")).session_id
+
+    assert kf.delete_session(session_id, forget=False) is None
+
+    assert not (cfg.workspace / "sessions" / session_id).exists()
+    assert kept.knows(session_id)
+    kf.run(Request("again", session_id=session_id))
+    assert agent.state is not None
+    assert "the first task" in str(agent.state["messages"])
+
+
+def test_reap_forgets_the_store_copy_of_what_it_swept(cfg, tmp_path):
+    """A sweep that kept the store's copy would leave an expired session resumable by id."""
+    import time
+
+    from kingfisher import LocalSessionStore
+
+    kept = LocalSessionStore(tmp_path / "kept")
+    kf = service(cfg, sessions=kept)
+    session_id = kf.run(Request("go")).session_id
+
+    result = kf.reap(older_than_seconds=0, now=time.time() + 10)
+
+    assert result.removed == (session_id,)
+    assert not kept.knows(session_id)
+
+
+def test_reap_can_evict_rather_than_forget(cfg, tmp_path):
+    """A sweep that ignored the flag would forget every session it was asked to evict."""
+    import time
+
+    from kingfisher import LocalSessionStore
+
+    kept = LocalSessionStore(tmp_path / "kept")
+    kf = service(cfg, sessions=kept)
+    session_id = kf.run(Request("go")).session_id
+
+    result = kf.reap(older_than_seconds=0, now=time.time() + 10, forget=False)
+
+    assert result.removed == (session_id,)
+    assert kept.knows(session_id)
+
+
 def test_reap_disposes_of_the_idle_and_leaves_the_rest(cfg):
     """Age, not count: how long a session has been idle is a property of that session
     alone, so one caller's traffic cannot evict another's.
