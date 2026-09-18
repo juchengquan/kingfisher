@@ -1001,6 +1001,14 @@ class Kingfisher(Sessions, Disposal):
         handoff: queue.Queue[Any] = queue.Queue(maxsize=1)
 
         def pump() -> None:
+            # A thread of its own rather than a step at a time through the default
+            # executor, which is the shorter shape and the one upstream uses --
+            # `BaseLoader.alazy_load` is `run_in_executor(None, next, it, done)`
+            # in a loop. It cannot be borrowed here because it never closes the
+            # iterator: a cancelled turn would keep its session's claim until a
+            # garbage collection nobody scheduled. `findings.md` records what else
+            # was read before writing this.
+            #
             # This thread owns the generator and nothing outside reaches it.
             # Only the thread running a generator may close it -- `close` from
             # anywhere else mid-step raises `generator already executing`, and
