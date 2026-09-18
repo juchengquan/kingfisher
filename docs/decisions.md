@@ -338,6 +338,27 @@ itself needed widening: it already followed an error class *handed in* as a
 parameter, and an envelope hands one in as a field of a parameter, which it read as
 no refusal at all. *(2026-09-18.)*
 
+**One walk for both definition roots.** `NEAR_MISS` and `SUFFIX` moved to
+`documents` so the agent catalogue would stop importing the subagent one for them;
+the walk that used them stayed behind, written out twice. The two copies differed
+by the error class and by one `continue`, and the `.yml` refusal in the middle of
+each was byte-identical -- which is a copy that has not drifted yet rather than one
+that cannot.
+
+`documents_in` takes the error class, the way `require_literal_prompt` beside it
+already did, and a `skipping` set of folder names. That set is the asymmetry and
+the reason this is not simply a shared function: `tools/` and `skills/` under
+`subagents/` hold a bundle's own assets and are kept out of the scan, and under
+`agents/` they are ordinary folder names. Only the subagent caller passes them.
+Handing the walk that list by default, or passing it at both call sites, loses an
+agent filed under `agents/tools/` with nothing red, so
+`test_a_folder_called_tools_is_organisation_here_too` is what holds the other side
+of it.
+
+`documents` now reads `kinds.importing.skipped`, so the Layering entry saying four
+kind catalogues are that module's only readers names one reader short.
+*(2026-09-18.)*
+
 ## Agents and delegation
 
 **The main agent is a definition.** It used to be assembled from four places that

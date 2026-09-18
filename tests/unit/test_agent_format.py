@@ -210,6 +210,17 @@ def test_a_folder_is_organisation_and_the_name_field_is_the_identity(tmp_path):
     assert LocalAgentRepository(tmp_path).names == ("triage",)
 
 
+def test_a_folder_called_tools_is_organisation_here_too(tmp_path):
+    """The asymmetry in the walk both kinds share: `tools/` and `skills/` are reserved
+    under `subagents/`, where they hold a bundle's own assets, and are ordinary folder
+    names under `agents/`. Handing this walk the subagent's skip list would lose an
+    agent filed in one, and nothing else would say so.
+    """
+    _write(tmp_path, "tools/triage.yaml", "triage", "Sorts.")
+
+    assert LocalAgentRepository(tmp_path).names == ("triage",)
+
+
 def test_two_agents_of_one_name_are_refused_rather_than_disambiguated(tmp_path):
     """Where subagents keep both under a reference, this refuses."""
     _write(tmp_path, "a.yaml", "assistant")

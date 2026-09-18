@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING
 
 import yaml
 
+from kingfisher.kinds.importing import skipped
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -40,6 +42,39 @@ NEAR_MISS = ".yml"
 #: The scalar style that keeps a prompt's line breaks. `|`, `|2`, `|-` and
 #: `|+` are all this one style once parsed -- the suffix never reaches the node.
 LITERAL = "|"
+
+
+def documents_in(
+    directory: Path, *, error: type[ValueError], skipping: frozenset[str] = frozenset()
+) -> list[Path]:
+    """Every definition document below `directory`, at any depth, in a stable order.
+
+    A folder is organisation and is walked into, unless the kind names it in
+    `skipping`: a subagent bundle keeps its own assets in folders beside its
+    definition, and those hold no definitions of its own.
+
+    One walk for both kinds because the refusal below is the point of it. A `.yml`
+    file is a definition somebody wrote that kingfisher would not read, and the two
+    copies of that sentence were byte-identical -- which is a copy that has not
+    drifted yet rather than one that cannot.
+    """
+    found: list[Path] = []
+    for entry in sorted(directory.iterdir()):
+        if skipped(entry.name):
+            continue
+        if entry.is_dir():
+            if entry.name in skipping:
+                continue
+            found.extend(documents_in(entry, error=error, skipping=skipping))
+        elif entry.name.endswith(SUFFIX):
+            found.append(entry)
+        elif entry.suffix == NEAR_MISS:
+            msg = (
+                f"{entry.name}: kingfisher reads {SUFFIX!r} here, so this file is "
+                f"not loaded -- rename it to {entry.stem}{SUFFIX}"
+            )
+            raise error(msg)
+    return found
 
 
 def decode(text: str) -> dict[str, object] | str:

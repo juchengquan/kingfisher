@@ -60,10 +60,6 @@ def two_agents_of_a_name(cfg):
     _write(_root(cfg, "agents") / "b.yaml", AGENT.format(name="dup"))
 
 
-def an_agent_filed_as_yml(cfg):
-    _write(_root(cfg, "agents") / "near.yml", AGENT.format(name="near"))
-
-
 def an_agent_that_will_not_parse(cfg):
     _write(_root(cfg, "agents") / "bad.yaml", "name: [unclosed\n")
 
@@ -235,11 +231,14 @@ class Refusal:
 REFUSALS: dict[str, Refusal] = {
     "kinds/agents/catalogue.py::LocalAgentRepository._defined": Refusal(
         1, defect=two_agents_of_a_name),
-    "kinds/agents/catalogue.py::_definitions_in": Refusal(1, defect=an_agent_filed_as_yml),
     "kinds/agents/reading.py::read": Refusal(1, defect=an_agent_that_will_not_parse),
     "kinds/agents/spec.py::parse": Refusal(3, defect=an_agent_missing_a_field),
     # Raises the error class it was handed, which is how it stayed out of the first
     # version of the rule below.
+    # The walk both kinds' definition roots are read by. A subagent catalogue reaches
+    # it here because that call passes `skipping` and the agent one does not, so the
+    # defect filed covers the shape with the extra branch in it.
+    "kinds/documents.py::documents_in": Refusal(1, defect=a_subagent_filed_as_yml),
     "kinds/documents.py::require_literal_prompt": Refusal(
         1, defect=a_prompt_written_so_it_reflows),
     "kinds/importing.py::load": Refusal(2, defect=a_tool_module_that_will_not_import),
@@ -253,7 +252,6 @@ REFUSALS: dict[str, Refusal] = {
         2, defect=a_middleware_that_is_not_one),
     "kinds/subagents/catalogue.py::LocalSubagentRepository.bundles": Refusal(
         1, defect=a_bundle_holding_two_definitions),
-    "kinds/subagents/catalogue.py::_definitions_in": Refusal(1, defect=a_subagent_filed_as_yml),
     "kinds/subagents/spec.py::_refuse_unknown": Refusal(
         1, defect=a_subagent_with_a_field_nobody_reads),
     "kinds/subagents/spec.py::_bundle": Refusal(
