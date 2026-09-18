@@ -22,6 +22,7 @@ import re
 import shlex
 import shutil
 import sys
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -498,6 +499,11 @@ def _write_atomically(path: Path, text: str) -> None:
     Beside the profile rather than in a temp directory: `os.replace` is atomic
     only within a filesystem, and the state directory is relocatable.
     """
-    scratch = path.with_name(f"{path.name}.{os.getpid()}")
+    # Per thread as well as per process. Every thread in a process shares one pid,
+    # so a pid-named scratch is one file that concurrent turns all write and then
+    # race to rename -- the winner renames it and the losers find theirs gone.
+    # Measured: four of eight concurrent turns died that way, on the arrangement
+    # `decisions.md` recommends to a caller who wants turns to overlap.
+    scratch = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}")
     scratch.write_text(text, encoding="utf-8")
     scratch.replace(path)

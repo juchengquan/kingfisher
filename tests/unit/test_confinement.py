@@ -12,6 +12,7 @@ import os
 import platform
 import shutil
 import tempfile
+from concurrent import futures
 from dataclasses import replace
 from pathlib import Path
 
@@ -811,6 +812,34 @@ def test_a_profile_is_replaced_rather_than_truncated(tmp_path):
     for _ in range(2):
         confinement.resolve(confinement.AUTO, workspace=workspace)
 
+    beside = confinement.profile_path(workspace).parent
+    assert sorted(p.name for p in beside.iterdir()) == ["shell.sb"], (
+        "a temporary profile was left beside the real one"
+    )
+
+
+@macos
+def test_concurrent_writers_do_not_share_one_scratch_file(tmp_path):
+    """Written concurrently, because the test above writes twice in a row -- the one
+    arrangement in which a scratch file named after the process cannot collide.
+
+    The scratch was named `shell.sb.<pid>`, and every thread of a process has the
+    same pid: eight concurrent turns wrote one file and raced to rename it, four of
+    them failing with `FileNotFoundError` because the winner had already moved
+    theirs. Found by measuring whether turns overlap on threads, which is what
+    `decisions.md` sends a caller wanting that to do.
+    """
+    workspace = tmp_path / "ws"
+    writers = 8
+
+    with futures.ThreadPoolExecutor(max_workers=writers) as pool:
+        done = [
+            pool.submit(confinement.resolve, confinement.AUTO, workspace=workspace)
+            for _ in range(writers)
+        ]
+    failed = [task.exception() for task in done if task.exception() is not None]
+
+    assert not failed, f"{len(failed)} of {writers} concurrent writers failed: {failed[0]!r}"
     beside = confinement.profile_path(workspace).parent
     assert sorted(p.name for p in beside.iterdir()) == ["shell.sb"], (
         "a temporary profile was left beside the real one"
