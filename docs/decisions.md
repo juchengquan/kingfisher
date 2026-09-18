@@ -2113,7 +2113,10 @@ overlap on one event loop, which a server needs and nothing left here is; with t
 service gone their only callers were their own tests and one spike. They were also
 the second copy of the turn -- `_astream_turn` repeated `_stream_turn` down to its
 cleanup, and mutation testing had already found a flag the copy set by hand. A
-caller wanting turns to overlap runs `run` on threads. *(2026-09-15.)*
+caller wanting turns to overlap runs `run` on threads. *(2026-09-15. **Half of
+this was reversed** -- see *Reversed in half* below, which is where a caller
+should start: `astream` is back, and turns overlap on one loop without the
+threads. What stayed removed is the second copy of the turn.)*
 
 **They do overlap, and it took two checks to say so.** The sentence above ended
 "which should overlap as well since a turn is almost all waiting on the model --
@@ -2137,6 +2140,107 @@ turns crashed four times over on macOS: the sandbox profile's scratch file was
 named after the process, and every thread of a process shares a pid. The advice in
 this entry was unrunnable on the platform it is developed on for as long as it has
 stood. Fixed where the mistake was, in `_write_atomically`. *(2026-09-18.)*
+
+**Reversed in half: `astream` and `arun` are back, the second copy of the turn is
+not.** What the removal missed is an asymmetry it never mentioned. A caller on an
+event loop who wants an *answer* writes `asyncio.to_thread(kf.run, ...)` and is
+done; a caller who wants the events as they arrive has to run the turn on a
+thread and hand each event across through a queue, which is twenty lines, easy to
+get subtly wrong, and described on no page here. Streaming is what an async
+caller wants -- a bot showing tokens, a route streaming a response -- so the
+workaround was fiddliest exactly where it was needed most.
+
+**What is not back is the second copy of the turn.** `stream` drives
+`graph.stream` and `astream` drives `graph.astream`, and those eight lines are
+the whole of the difference: every bound, translation and release is in
+`_turn_lifecycle`, which both share, and the state they write is one `_Turn`
+record. That is what the 2026-09-15 removal was actually about -- `_astream_turn`
+repeated `_stream_turn` down to its cleanup and set a flag by hand -- so the
+lifecycle came out first and the loops are only loops.
+
+**Driving the graph for real is what makes cancelling immediate.** Measured on a
+ten-second model call: **0.00s** against **9.71s**. A cancelled `await` abandons
+the request; a thread has to be waited out, which is what the first version of
+this did, and the turn's cleanup still runs inside that instant so the session is
+free before the caller continues. The 120-second worst case this entry used to
+document was a property of that shape rather than of the problem.
+
+**What the async path asks of a deployment, and the sync path does not.** The
+`a`-prefixed middleware hook is the one that runs there, so a middleware written
+only as `wrap_model_call` raises the first time an `astream` turn reaches it --
+loudly, measured against langchain's own machinery, rather than being skipped.
+A saver passed as `threads=` needs `aget_tuple` and `aput`, which langgraph
+calls; `InMemorySaver` has both and `SqliteSaver` does not. Neither refusal can
+reach a caller of `stream`, whose behaviour is unchanged, and the async pair had
+no callers at all when this landed -- so this is a requirement of a new API
+rather than a break in an old one. `guides/middleware.md` says it where a
+deployment reads it.
+
+**Two things that had to be closed by hand.** `_prepare` goes through
+`asyncio.to_thread`: it is 15-46ms of CPU-bound construction, and on the loop it
+would be 15-46ms every other turn waits through. And `astream` closes
+`_astream_turn` itself, because an async generator dropped by another one is
+finalised by the event loop's `shutdown_asyncgens` rather than when it goes out of
+scope -- `yield from` closes a nested *sync* generator for free and there is no
+async spelling of that. Without it a caller who stopped reading left the turn's
+`finally` unrun and its session claimed until the loop ended;
+`test_a_cancelled_turn_does_not_keep_running_behind_the_caller` fails with
+`SessionBusyError` when it is removed.
+
+**The first version of this was thread-backed, and the record of why is worth
+keeping.** It stepped the sync turn through `asyncio.to_thread` -- the
+`BaseLoader.alazy_load` shape -- because a middleware with only sync hooks raises
+under a native async graph, and that looked like a reason to avoid the native
+path rather than a requirement to document. It also hand-rolled a thread and a
+queue first, which passed every behaviour test while silently dropping the
+caller's context, since a bare `threading.Thread` starts with an empty one.
+`findings.md` keeps what was measured about both.
+
+**A thread per turn in flight, not many turns on one loop.** That is the honest
+limit, and it is affordable for the reason the entry above now records with a
+number: turns overlap, 4.96x across eight, because a turn is almost all waiting.
+The one resource that does not come free is the sandbox -- a turn that calls
+`eval` holds its own QuickJS runtime, so eight concurrent such turns hold eight.
+
+**Cancelling waits.** A thread cannot be interrupted, so a cancelled `astream`
+asks the turn to stop at its next event and returns once it has -- at worst one
+model call or one shell command. Returning sooner would leave a window in which
+the session answers `SessionBusyError` to a retry for reasons the caller cannot
+see, which is a worse thing to be handed than a slow cancel.
+`test_a_cancelled_turn_does_not_keep_running_behind_the_caller` fails with
+exactly that error when the wait is removed.
+
+**Methods on `Kingfisher`, and no module-level pair.** `run` and `stream` have
+one-line conveniences over a default service; these do not, because a new name in
+`__all__` needs a witness and the honest witness today is that no caller outside
+this wheel has asked. The day one does, the convenience is four lines -- which is
+how `default_backend` came back. *(2026-09-18.)*
+
+**Asked and declined: making a turn a langchain `Runnable`.** The question is
+reasonable -- `Runnable` is the interface that ecosystem's callers already know,
+and it would bring `batch`, `astream_events` and LCEL composition with it. Three
+reasons not to, and the first is the one that surprised us:
+
+It removes none of the work. `Runnable.astream`'s default does not iterate the
+sync `stream` -- it yields one chunk from `ainvoke` -- so the bridge above would
+still have to be written, and the interface would sit on top of it rather than
+instead of it.
+
+It cannot live where the turn lives. `THIRD_PARTY` grants `application` nothing,
+and that is not an oversight to edit around: the runtime's types belong behind
+`infrastructure/harness`, which is where `subagents.py` and `tools.py` went for
+this same reason. A `Runnable` adapter there is a perfectly good idea the day
+somebody wants one, and it needs a witness first.
+
+It adds a second vocabulary for what a request may do. `RunnableConfig` is
+langchain's answer to "how should this run"; `Capabilities` is kingfisher's answer
+to "what may this request reach", and it narrows and never widens. There is
+nowhere in the first for the second to live, so the two would sit side by side
+meaning different things, permanently.
+
+What was actually worth having out of that ecosystem -- a caller's context, and
+the tracing hanging off it, reaching the turn -- arrived with the bridge above
+and needed no interface at all. *(2026-09-18.)*
 
 **Taken: files passed by id go.** `Request.input_refs` and `data_refs` let a
 caller with no host paths name files for a `FileStore` the deployment wired to

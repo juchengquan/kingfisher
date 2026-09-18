@@ -42,6 +42,75 @@ wrong.*
 - **No `<think>` output on either surface**, even for a genuine reasoning prompt --
   82 and 57 chunks of step-by-step, zero `<think>`.
 
+### Nothing upstream bridges a sync stream to an async one
+
+*Read against deepagents, langchain-core and langgraph on 2026-09-18, while
+`Kingfisher.astream` was being written. It ended up needing no bridge at all --
+it drives `graph.astream` -- so this is a record of what is and is not there,
+for the next reader who reaches for one.*
+
+- **There is no reusable bridge.** `Runnable.astream`'s default does not iterate
+  the sync `stream` at all -- it yields a single chunk from `ainvoke`, which is
+  giving up on streaming rather than bridging to it. `langgraph`'s `Pregel` has a
+  native `astream` instead of a fallback, and `langchain_core.utils.aiter` only
+  takes async iterators as input. Nothing in deepagents does it either.
+- **The nearest pattern is `BaseLoader.alazy_load`**, in
+  `langchain_core/document_loaders/base.py`: `run_in_executor(None, next,
+  iterator, done)` in a loop, with a sentinel. It works, and two things have to be
+  added for a turn -- it **never closes the iterator**, which is fine when
+  abandoning one costs nothing and not fine for something holding a session's
+  claim until its `finally` runs; and the step has to be shielded from the
+  caller's cancellation, because closing a generator mid-step raises `generator
+  already executing`. Measured against driving `graph.astream` instead: **9.71s
+  to cancel a ten-second model call, against 0.00s**, because a thread has to be
+  waited out. That is why this is a record rather than what `astream` does.
+- **An async generator dropped by another async generator is not finalised
+  promptly.** `yield from` closes a nested *sync* generator, and there is no async
+  spelling of it: the inner one waits for the event loop's `shutdown_asyncgens`.
+  So an outer `aclose()` does not run an inner `finally` -- which, for a turn,
+  meant a session stayed claimed until the loop ended. `astream` closes its inner
+  turn by hand.
+- **A cancelled task's generator is finalised one turn of the loop later, and
+  that is soon enough to be unobservable.** Measured by cancelling a turn and
+  looking after exactly N turns of the loop: held at 0, released at 1, with an
+  explicit `aclose` in the drain or without one. So `arun` has none -- awaiting a
+  cancelled task is itself a turn of the loop, which is all the finalizer needs,
+  and nothing a test can see distinguishes the two. `astream`'s inner close is
+  the opposite case and its guard fails when it goes: there a caller can run
+  synchronous work with no loop turn in between.
+- **Cancellation cannot interrupt a turn's cleanup, and the reason is
+  structural.** A cancellation is delivered at a suspension point, and
+  `_turn_lifecycle` is a *sync* context manager -- the claim, the checkpointer and
+  the interpreter are released without ever suspending. Cancelling twice, five
+  times, during the unwinding, or through `wait_for` and `asyncio.timeout` all
+  leave the session free. Made async, that stops being true and every one of
+  those tests would pass on timing alone.
+- **Context reaches the worker through either helper, but not through the
+  executor directly.** `asyncio.to_thread` copies the current context, and
+  langchain's `run_in_executor` does it by hand -- `partial(copy_context().run,
+  wrapper)`. A bare `loop.run_in_executor(None, f)` does not, and neither does a
+  `threading.Thread`, which starts with an empty context. That decides whether a
+  caller's ambient `RunnableConfig` -- and the tracing hanging off it -- survives
+  into the turn. Measured both ways: the first draft of `astream` ran the turn on
+  a thread of its own and silently dropped it.
+- **deepagents' own pattern for an async twin is `asyncio.to_thread` per
+  method** -- `als`, `aread`, `aglob`, `awrite` and the rest in
+  `backends/protocol.py` are each one line of it. Precedent for the approach, not
+  a helper to import.
+- **`StopIteration` cannot cross a `Future`, and the failure is loud.**
+  `asyncio.to_thread(next, gen)` raises `RuntimeError: StopIteration interacts
+  badly with generators and cannot be raised into a Future`; langchain's
+  `run_in_executor` converts it to a bare `RuntimeError` of its own. Its comment
+  there says the future is "pending forever", which is why the sentinel above
+  exists -- **that comment is stale on 3.12**, where CPython raises instead of
+  hanging. Either way the obvious `to_thread(next, gen)` loop is wrong.
+- **A thread pool does not cap how many turns overlap.** Each `astream` waits on
+  its hand-off through `asyncio.to_thread`, so the concern was that the default
+  executor's `min(32, cpu+4)` would bound concurrency. Measured on an 8-CPU host,
+  pool of 12: 8, 12, 20 and 40 concurrent `arun` calls all reached the model call
+  together. A dedicated thread runs each turn and blocks on the model; the pool is
+  only borrowed to hand an event over, which is a moment rather than the turn.
+
 ## Middleware
 
 - **`create_deep_agent` merges middleware by name, replacing in place.**

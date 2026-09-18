@@ -38,6 +38,16 @@ class StubAgent:
             yield (self.delegate, "updates", update)
         yield ((), "values", {"messages": [AIMessage(content=self.answer)]})
 
+    async def astream(self, state, config, stream_mode=None, subgraphs=False):
+        """The async twin, because a compiled graph has one and `astream` drives it.
+
+        A stub offering only `stream` would make every async test fail for the
+        stub's reason rather than the code's -- and one offering only this would
+        hide a sync path that had stopped working.
+        """
+        for chunk in self.stream(state, config, stream_mode, subgraphs):
+            yield chunk
+
     def get_state(self, config):
         """What a real graph holds when the turn ends."""
         del config
