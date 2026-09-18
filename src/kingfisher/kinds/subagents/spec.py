@@ -21,8 +21,8 @@ from types import MappingProxyType
 from typing import Any
 
 from kingfisher.domain import fields
-from kingfisher.domain.access import AUDIENCED, narrowed_for
-from kingfisher.domain.capabilities import ALL, Capabilities
+from kingfisher.domain.access import AUDIENCED
+from kingfisher.domain.capabilities import ALL
 from kingfisher.domain.definition import Definition
 from kingfisher.kinds.tools.spec import claimed_sources
 
@@ -99,17 +99,6 @@ class SubagentSpec(Definition):
     #: YAML. Called with a model and the tools it was granted, and it returns a graph
     #: deepagents runs as given.
     build: Any = field(default=None, metadata={"derived": True})
-
-    def declares(self, held: frozenset[str] | None = None) -> Capabilities:
-        """What this delegate holds, narrowed to what one caller reaches."""
-        reached = narrowed_for(self, held)
-        return Capabilities(
-            builtin_tools=self.builtin_tools,
-            tools=reached["tools"],
-            skills=reached["skills"],
-            subagents=reached["subagents"],
-            middlewares=self.middlewares,
-        )
 
     def __post_init__(self) -> None:
         """Exactly one of `system_prompt` and `build`, and never two kinds of bundle."""

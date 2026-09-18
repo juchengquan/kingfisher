@@ -9,12 +9,12 @@ while every delegate compiles a graph at ~6ms. Re-measured 2026-09-03.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
-from kingfisher.domain.access import AUDIENCED, narrowed_for
+from kingfisher.domain.access import AUDIENCED
 from kingfisher.domain.capabilities import ALL, Capabilities
 from kingfisher.domain.definition import Definition
 
@@ -98,24 +98,23 @@ class AgentSpec(Definition):
     memory: bool | None = None
 
     def declares(self, held: frozenset[str] | None = None) -> Capabilities:
-        """What this agent holds, said as the narrowing a request is clamped by."""
-        reached = narrowed_for(self, held)
-        return Capabilities(
-            builtin_tools=self.builtin_tools,
-            tools=reached["tools"],
-            skills=reached["skills"],
-            subagents=reached["subagents"],
-            # Narrowed, unlike `endpoints` and `models`, because middleware is not additive
-            # in effect: `call-cap-generous` is a *looser* ceiling than
-            # `call-cap-strict`, so a delegate free to name any registered entry
-            # could pick the roomiest one a deployment happens to offer and leave
-            # the bound its parent runs under. This is what makes an agent decide
-            # which its delegates may choose from -- and why an agent lists one it
-            # does not use itself when a delegate needs it.
-            middlewares=self.middlewares,
-            endpoints=ALL,
-            models=ALL,
-            memory=self.memory,
+        """What this agent holds, said as the narrowing a request is clamped by.
+
+        The five a delegate answers identically come from `Definition`; these three
+        are an agent's alone. `models` opens to everything because an agent decides
+        which model its delegates may run, and `memory` is a field only it has.
+
+        **`middlewares` is deliberately not among them**, and the contrast is the
+        reason this is worth reading: middleware is not additive in effect --
+        `call-cap-generous` is a *looser* ceiling than `call-cap-strict`, so a
+        delegate free to name any registered entry could pick the roomiest one a
+        deployment happens to offer and leave the bound its parent runs under. So it
+        stays narrowed in the base, which is what makes an agent decide which its
+        delegates may choose from, and why an agent lists one it does not use itself
+        when a delegate needs it.
+        """
+        return replace(
+            super().declares(held), endpoints=ALL, models=ALL, memory=self.memory
         )
 
 

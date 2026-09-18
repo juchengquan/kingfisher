@@ -24,8 +24,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from kingfisher.domain.access import Audience
-from kingfisher.domain.capabilities import ALL, Selection
+from kingfisher.domain.access import Audience, narrowed_for
+from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -100,3 +100,21 @@ class Definition:
     audiences: Mapping[str, Mapping[str, Audience]] = field(
         default_factory=dict, metadata={"derived": True}
     )
+
+    def declares(self, held: frozenset[str] | None = None) -> Capabilities:
+        """What this definition holds, narrowed to what one caller reaches.
+
+        The five axes both kinds answer the same way. An agent widens two more and
+        carries `memory`, which is its override's business rather than this one's --
+        and a delegate leaving all three unset is the behaviour
+        `test_the_two_kinds_declare_the_unaudienced_axes_differently` was written to
+        pin, because one body serving both kinds is exactly how it would be lost.
+        """
+        reached = narrowed_for(self, held)
+        return Capabilities(
+            builtin_tools=self.builtin_tools,
+            tools=reached["tools"],
+            skills=reached["skills"],
+            subagents=reached["subagents"],
+            middlewares=self.middlewares,
+        )
