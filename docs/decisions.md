@@ -3217,6 +3217,37 @@ described the list form, which `wanted_model` stopped taking -- and a shared fie
 whose two comments disagree is the case for keeping both, not for merging them.
 *(2026-09-18.)*
 
+**Taken, in the middle form: `Definition`, a base holding what both kinds declare
+identically.** The entry above judged that option a wash and the measurement after it
+did not overturn that. What changed is two things neither had, and both came out of
+building it rather than arguing about it.
+
+**`kw_only=True` is the whole of the mechanism.** A base holding defaulted fields makes
+a required one in a subclass illegal -- *non-default argument follows default argument*
+-- which reads like the structural objection to all of this and is not one. With it,
+`AgentSpec` keeps `system_prompt` required and constructing one without a prompt still
+fails. Nothing builds either spec positionally, so nothing had to change to allow it.
+
+**And a shared comment turned out to be the point rather than the cost.** The objection
+was that ten of the fourteen comments are kind-specific and would go neutral. They do
+not: where the kinds part, the one comment now says which is which -- an agent may write
+`["*"]` for `subagents` and a delegate may not, because for a delegate that set includes
+itself and is always a loop. A reader meets that difference in one place for the first
+time. Two comments each knowing half is how the agent's `wanted` sat stale for months
+with nothing red, and a merged comment cannot drift because there is one of it.
+
+**One spec is still refused, and its three reasons are unchanged**: `_subject` tells the
+kinds apart by `isinstance` to name the file a refusal is about, an agent's
+`system_prompt` is required where a delegate's defaults, and each kind has an invariant
+the other must not run. A base keeps all three; one class turns each into a check on a
+kind field. The readers are untouched -- that is *Not taken: one reader* above, and
+nothing here reopens it.
+
+**What it costs, accepted rather than argued away**: reading a spec is two files, and
+ten comments that were true of one kind now have to be true of both. `system_prompt` is
+declared in both subclasses and not on the base, which is the one field a reader will
+expect to find there and will not. *(2026-09-18.)*
+
 **Left for now: a `ToolSpec` a tool could be declared as.** Asked after the entry
 above, about the kind that has no spec at all. A tool is exported as an object and
 `Found` pairs it with where it came from; agents, subagents and skills each read a

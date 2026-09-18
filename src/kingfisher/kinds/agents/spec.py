@@ -9,13 +9,14 @@ while every delegate compiles a graph at ~6ms. Re-measured 2026-09-03.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
-from kingfisher.domain.access import AUDIENCED, Audience, narrowed_for
-from kingfisher.domain.capabilities import ALL, Capabilities, Selection
+from kingfisher.domain.access import AUDIENCED, narrowed_for
+from kingfisher.domain.capabilities import ALL, Capabilities
+from kingfisher.domain.definition import Definition
 
 # A `tools:` entry may be written `where::what`, so reading this format means
 # parsing a tool reference -- the format referring to itself, which is why the
@@ -74,50 +75,27 @@ REFUSED: Mapping[str, str] = MappingProxyType(
 )
 
 
-@dataclass(frozen=True)
-class AgentSpec:
-    """One agent, once its definition has been read."""
+@dataclass(frozen=True, kw_only=True)
+class AgentSpec(Definition):
+    """One agent, once its definition has been read.
 
-    name: str
-    description: str
+    The thirteen fields it shares with a delegate are on `Definition`; what is here
+    is what only an agent has, or declares differently.
+    """
+
     #: Added after `system.md` and `PROMPT.md`, never instead of them. Required,
     #: and with no default here: `parse` refuses a definition that omits it, and
     #: a default would leave a second way in for something the format does not
     #: allow -- a spec built in code saying what no file may say.
+    #:
+    #: Declared here rather than on `Definition` because a delegate defaults it to
+    #: empty, having `build` as the alternative. A base would have to pick one of
+    #: the two, and picking the delegate's would be this guarantee going quiet.
     system_prompt: str
-    builtin_tools: Selection = ALL
-    tools: Selection = ALL
-    #: Where each `tools:` entry said its tool lives, for the entries that said.
-    #: A claim to check, never a choice between tools.
-    tool_sources: Mapping[str, str] = field(
-        default_factory=dict, metadata={"derived": True}
-    )
-    skills: Selection = None
-    subagents: Selection = None
-    middlewares: Selection = None
-    #: What each `middlewares:` entry wrote under `settings:`. Beside the names rather
-    #: than folded into them, like `tool_sources` beside `tools`: granting and narrowing
-    #: are operations on names, and neither has anything to say about a value passed to
-    #: one.
-    middleware_settings: Mapping[str, Mapping[str, object]] = field(
-        default_factory=dict, metadata={"derived": True}
-    )
-    #: The model this agent runs, out of what the catalogue defines. `None` means it
-    #: named none, so it runs the deployment's `default:` -- which is where this parts
-    #: from a delegate's identical field, whose `None` means whatever summoned it.
-    wanted: str | None = field(default=None, metadata={"derived": True})
     #: `False` to run without the memory file on a deployment that wired one.
     #: `None` is no opinion, which is not the same: a switch narrows like every
     #: other axis, and only `False` can subtract.
     memory: bool | None = None
-    metadata: Mapping[str, object] = field(default_factory=dict)
-    #: Who may open a session on this agent.
-    source_ids: Audience = ALL
-    #: Field name -> entry name -> who reaches that entry, for the fields in
-    #: `AUDIENCED`. Empty for a definition written as plain lists.
-    audiences: Mapping[str, Mapping[str, Audience]] = field(
-        default_factory=dict, metadata={"derived": True}
-    )
 
     def declares(self, held: frozenset[str] | None = None) -> Capabilities:
         """What this agent holds, said as the narrowing a request is clamped by."""
