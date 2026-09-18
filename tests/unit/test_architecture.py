@@ -2763,7 +2763,16 @@ def test_the_package_ships_the_catalogue_example():
 #: that is the finding: all 58 are frozen, so this is a rule rather than a list.
 #: Anything added has to say why a record somebody is handed can be edited
 #: underneath them.
-MAY_BE_MUTABLE: frozenset[str] = frozenset()
+MAY_BE_MUTABLE: frozenset[str] = frozenset({
+    # `_Turn` is the one record here that is never handed anywhere: it is private
+    # to `application/service.py` and exists so that `_turn_lifecycle` and the
+    # loop inside it agree about what the turn produced. Being written in place is
+    # the mechanism -- a frozen one would have to be rebuilt on every chunk, and
+    # the context manager could not see what the loop wrote. The rule this
+    # exempts it from is about a record edited *after crossing a layer*, and this
+    # one crosses none.
+    "_Turn",
+})
 
 
 def _dataclasses(tree: ast.Module) -> list[tuple[str, bool]]:
@@ -3051,7 +3060,7 @@ def test_the_event_kinds_are_what_the_package_emits():
 
 def test_the_stop_reasons_are_what_the_package_assigns():
     """`STOP_REASONS` is a contract with a caller like `KINDS`, and pinned the same way."""
-    from kingfisher.domain.result import STOP_REASONS
+    from kingfisher.domain.result import END_TURN, STOP_REASONS
 
     assigned = set()
     for path in sorted(SRC.rglob("*.py")):
@@ -3062,9 +3071,26 @@ def test_the_stop_reasons_are_what_the_package_assigns():
                 targets = node.targets
             else:
                 continue
-            named = any(isinstance(t, ast.Name) and t.id == "stop_reason" for t in targets)
-            if named and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            # An attribute as well as a name. It was a local until the turn's
+            # state moved onto one record so that a sync loop and an async one
+            # could share a lifecycle; `turn.stop_reason = "max_steps"` is the
+            # same assignment, and a detector reading only `ast.Name` found
+            # nothing at all and failed rather than going quiet -- which is the
+            # only reason this was noticed.
+            named = any(
+                (isinstance(t, ast.Name) and t.id == "stop_reason")
+                or (isinstance(t, ast.Attribute) and t.attr == "stop_reason")
+                for t in targets
+            )
+            if not named:
+                continue
+            if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 assigned.add(node.value.value)
+            # `END_TURN` by name, which is the spelling `domain/result.py` asks
+            # for and the one a dataclass default uses. Reading only literals
+            # made the *better* spelling look like a reason no turn produces.
+            elif isinstance(node.value, ast.Name) and node.value.id == "END_TURN":
+                assigned.add(END_TURN)
 
     assert assigned == set(STOP_REASONS), (
         "STOP_REASONS and the reasons actually assigned have diverged — the value "

@@ -21,7 +21,7 @@ from kingfisher.domain.capabilities import (
     narrowed,
     refuse_unoffered,
 )
-from kingfisher.infrastructure.harness.backend import tool_guards
+from kingfisher.infrastructure.harness.backend import guarded_tools, tool_guards
 from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.prompting import with_user_prompt
@@ -32,6 +32,7 @@ from kingfisher.kinds.tools.spec import Found, Offering, select, split_reference
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from pathlib import Path
 
     from kingfisher.config import Config
     from kingfisher.kinds.skills.registry import SkillRegistry
@@ -178,6 +179,10 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     #: function without them for as long as both features have existed: `list`
     #: printed `[private tool]` under it and the graph dispatched nothing.
     private: Sequence[Found] = (),
+    #: What this delegate's tools resolve their paths against. Needed here and
+    #: nowhere else in this file: an assembled delegate gets translation from the
+    #: middleware built below, and this one has no middleware to get it from.
+    session_dir: Path | None = None,
     run_on: RunOn | None = None,
     default_model: Any = None,
 ) -> dict[str, Any]:
@@ -213,7 +218,11 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     owned = {one.name for one in private}
     granted = [one.tool for one in (*private, *(o for o in shared if o.name not in owned))]
 
-    runnable = spec.build(model, granted)
+    # Wrapped rather than handed over bare: this graph gets no middleware of
+    # kingfisher's, so its tools carry their guards or have none. The shipped
+    # `scribe` is what found that -- it handed `show-your-work` three path-taking
+    # tools and the first call died on a path nothing had translated.
+    runnable = spec.build(model, guarded_tools(granted, session_dir))
     # Against `Runnable`, which is what `CompiledSubAgent` declares this field to be --
     # the same reason `test_the_compiled_shape_is_deepagents_own` pins the *keys*
     # against their declaration rather than a copy of it.
@@ -270,6 +279,9 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     #: request granted, for the reason `private` is.
     private_skills: tuple[tuple[str, ...], tuple[str, str]] | None = None,
     skill_sources: list[Any] | None = None,
+    #: Passed on to a compiled delegate, whose tools carry their own translation.
+    #: An assembled one resolves paths through the middleware built below instead.
+    session_dir: Path | None = None,
     #: Where this request wants this delegate to run, replacing its file's
     #: answer. `None` is the ordinary case: the file decides.
     run_on: RunOn | None = None,
@@ -287,6 +299,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
             tools=tools,
             catalogue=catalogue,
             private=private,
+            session_dir=session_dir,
             run_on=run_on,
             default_model=default_model,
         )

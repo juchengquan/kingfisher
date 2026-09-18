@@ -396,6 +396,26 @@ the model wrote, which is exactly the leak translation exists to close, and a fa
 tool raised instead of answering. `tool_guards` builds the three now and all three
 sites call it, so a fourth cannot be written half-right.
 
+**A compiled delegate's tools are wrapped, because it is the fourth graph.**
+`tool_guards` reaches a graph through its middleware, and a compiled delegate has
+none -- deepagents runs it as given. The shipped `scribe` is what showed it: three
+path-taking tools handed to `show-your-work`, and the first call died on
+`log_levels('/data/api.log')` with `FileNotFoundError`, the run over. `GuardedTool`
+carries the translation and the error conversion on the tool objects, which is the
+one thing kingfisher still owns for a graph it did not build.
+
+This reverses, for that path only, the reasoning `WorkspaceToolPaths` records --
+rewrite the call rather than wrap each tool, because the tools are not alike. They
+still are not, so the wrapper normalises: a plain function becomes the tool
+`create_agent` would have made of it anyway, refusing a missing docstring exactly
+where that already failed, and a `BaseTool` keeps its own `args_schema`, since a
+wrapper advertising `**kwargs` tells the model the wrong arguments and nothing
+raises. A refusal is returned rather than raised, because inside a graph kingfisher
+did not build nothing catches one -- measured for `ToolException`, `ValueError` and
+`FileNotFoundError` alike, each ending the run -- so `handle_tool_error` converts it
+before it leaves the tool. That also keeps `ToolMessage.status` true, which
+`show_your_work` reads to report a call as failed. *(2026-09-18.)*
+
 **The skills switch is the deployment's, for delegates too.** `cfg.skills_enabled`
 says what is wired and a request says what it wants of that. The delegate branch asked
 only the request, so a workspace with skills switched off still handed a delegate an
@@ -1469,6 +1489,14 @@ still needs the history behind it. An id that names nothing is still not an
 error, so a retried delete need not care whether the first one landed.
 *(2026-09-15.)*
 
+**Eviction is deletion that keeps the store's copy, and only when asked.**
+`delete_session` and `reap` take `forget=False`, which removes a session from
+this machine and leaves it in the store, so it resumes here or on another host.
+This qualifies the entry above rather than reversing it: forgetting stays the
+default, because a caller who asked for a deletion and got a resumable session is
+the bug that entry fixed. The thread goes either way -- the next turn is rebuilt
+from the transcript, which the store carries. *(2026-09-18.)*
+
 **`run(delete_session=True)` reports a deletion that failed, on the result.** It
 called `delete_session` and threw away what came back, so a caller got the answer
 and no sign the session was still there. `RunResult.deletion_failure` carries the
@@ -2126,7 +2154,10 @@ overlap on one event loop, which a server needs and nothing left here is; with t
 service gone their only callers were their own tests and one spike. They were also
 the second copy of the turn -- `_astream_turn` repeated `_stream_turn` down to its
 cleanup, and mutation testing had already found a flag the copy set by hand. A
-caller wanting turns to overlap runs `run` on threads. *(2026-09-15.)*
+caller wanting turns to overlap runs `run` on threads. *(2026-09-15. **Half of
+this was reversed** -- see *Reversed in half* below, which is where a caller
+should start: `astream` is back, and turns overlap on one loop without the
+threads. What stayed removed is the second copy of the turn.)*
 
 **They do overlap, and it took two checks to say so.** The sentence above ended
 "which should overlap as well since a turn is almost all waiting on the model --
@@ -2150,6 +2181,107 @@ turns crashed four times over on macOS: the sandbox profile's scratch file was
 named after the process, and every thread of a process shares a pid. The advice in
 this entry was unrunnable on the platform it is developed on for as long as it has
 stood. Fixed where the mistake was, in `_write_atomically`. *(2026-09-18.)*
+
+**Reversed in half: `astream` and `arun` are back, the second copy of the turn is
+not.** What the removal missed is an asymmetry it never mentioned. A caller on an
+event loop who wants an *answer* writes `asyncio.to_thread(kf.run, ...)` and is
+done; a caller who wants the events as they arrive has to run the turn on a
+thread and hand each event across through a queue, which is twenty lines, easy to
+get subtly wrong, and described on no page here. Streaming is what an async
+caller wants -- a bot showing tokens, a route streaming a response -- so the
+workaround was fiddliest exactly where it was needed most.
+
+**What is not back is the second copy of the turn.** `stream` drives
+`graph.stream` and `astream` drives `graph.astream`, and those eight lines are
+the whole of the difference: every bound, translation and release is in
+`_turn_lifecycle`, which both share, and the state they write is one `_Turn`
+record. That is what the 2026-09-15 removal was actually about -- `_astream_turn`
+repeated `_stream_turn` down to its cleanup and set a flag by hand -- so the
+lifecycle came out first and the loops are only loops.
+
+**Driving the graph for real is what makes cancelling immediate.** Measured on a
+ten-second model call: **0.00s** against **9.71s**. A cancelled `await` abandons
+the request; a thread has to be waited out, which is what the first version of
+this did, and the turn's cleanup still runs inside that instant so the session is
+free before the caller continues. The 120-second worst case this entry used to
+document was a property of that shape rather than of the problem.
+
+**What the async path asks of a deployment, and the sync path does not.** The
+`a`-prefixed middleware hook is the one that runs there, so a middleware written
+only as `wrap_model_call` raises the first time an `astream` turn reaches it --
+loudly, measured against langchain's own machinery, rather than being skipped.
+A saver passed as `threads=` needs `aget_tuple` and `aput`, which langgraph
+calls; `InMemorySaver` has both and `SqliteSaver` does not. Neither refusal can
+reach a caller of `stream`, whose behaviour is unchanged, and the async pair had
+no callers at all when this landed -- so this is a requirement of a new API
+rather than a break in an old one. `guides/middleware.md` says it where a
+deployment reads it.
+
+**Two things that had to be closed by hand.** `_prepare` goes through
+`asyncio.to_thread`: it is 15-46ms of CPU-bound construction, and on the loop it
+would be 15-46ms every other turn waits through. And `astream` closes
+`_astream_turn` itself, because an async generator dropped by another one is
+finalised by the event loop's `shutdown_asyncgens` rather than when it goes out of
+scope -- `yield from` closes a nested *sync* generator for free and there is no
+async spelling of that. Without it a caller who stopped reading left the turn's
+`finally` unrun and its session claimed until the loop ended;
+`test_a_cancelled_turn_does_not_keep_running_behind_the_caller` fails with
+`SessionBusyError` when it is removed.
+
+**The first version of this was thread-backed, and the record of why is worth
+keeping.** It stepped the sync turn through `asyncio.to_thread` -- the
+`BaseLoader.alazy_load` shape -- because a middleware with only sync hooks raises
+under a native async graph, and that looked like a reason to avoid the native
+path rather than a requirement to document. It also hand-rolled a thread and a
+queue first, which passed every behaviour test while silently dropping the
+caller's context, since a bare `threading.Thread` starts with an empty one.
+`findings.md` keeps what was measured about both.
+
+**A thread per turn in flight, not many turns on one loop.** That is the honest
+limit, and it is affordable for the reason the entry above now records with a
+number: turns overlap, 4.96x across eight, because a turn is almost all waiting.
+The one resource that does not come free is the sandbox -- a turn that calls
+`eval` holds its own QuickJS runtime, so eight concurrent such turns hold eight.
+
+**Cancelling waits.** A thread cannot be interrupted, so a cancelled `astream`
+asks the turn to stop at its next event and returns once it has -- at worst one
+model call or one shell command. Returning sooner would leave a window in which
+the session answers `SessionBusyError` to a retry for reasons the caller cannot
+see, which is a worse thing to be handed than a slow cancel.
+`test_a_cancelled_turn_does_not_keep_running_behind_the_caller` fails with
+exactly that error when the wait is removed.
+
+**Methods on `Kingfisher`, and no module-level pair.** `run` and `stream` have
+one-line conveniences over a default service; these do not, because a new name in
+`__all__` needs a witness and the honest witness today is that no caller outside
+this wheel has asked. The day one does, the convenience is four lines -- which is
+how `default_backend` came back. *(2026-09-18.)*
+
+**Asked and declined: making a turn a langchain `Runnable`.** The question is
+reasonable -- `Runnable` is the interface that ecosystem's callers already know,
+and it would bring `batch`, `astream_events` and LCEL composition with it. Three
+reasons not to, and the first is the one that surprised us:
+
+It removes none of the work. `Runnable.astream`'s default does not iterate the
+sync `stream` -- it yields one chunk from `ainvoke` -- so the bridge above would
+still have to be written, and the interface would sit on top of it rather than
+instead of it.
+
+It cannot live where the turn lives. `THIRD_PARTY` grants `application` nothing,
+and that is not an oversight to edit around: the runtime's types belong behind
+`infrastructure/harness`, which is where `subagents.py` and `tools.py` went for
+this same reason. A `Runnable` adapter there is a perfectly good idea the day
+somebody wants one, and it needs a witness first.
+
+It adds a second vocabulary for what a request may do. `RunnableConfig` is
+langchain's answer to "how should this run"; `Capabilities` is kingfisher's answer
+to "what may this request reach", and it narrows and never widens. There is
+nowhere in the first for the second to live, so the two would sit side by side
+meaning different things, permanently.
+
+What was actually worth having out of that ecosystem -- a caller's context, and
+the tracing hanging off it, reaching the turn -- arrived with the bridge above
+and needed no interface at all. *(2026-09-18.)*
 
 **Taken: files passed by id go.** `Request.input_refs` and `data_refs` let a
 caller with no host paths name files for a `FileStore` the deployment wired to
@@ -3237,6 +3369,65 @@ The measurement also found one of those comments stale -- the agent's `wanted` s
 described the list form, which `wanted_model` stopped taking -- and a shared field
 whose two comments disagree is the case for keeping both, not for merging them.
 *(2026-09-18.)*
+
+**Taken, in the middle form: `Definition`, a base holding what both kinds declare
+identically.** The entry above judged that option a wash and the measurement after it
+did not overturn that. What changed is two things neither had, and both came out of
+building it rather than arguing about it.
+
+**`kw_only=True` is the whole of the mechanism.** A base holding defaulted fields makes
+a required one in a subclass illegal -- *non-default argument follows default argument*
+-- which reads like the structural objection to all of this and is not one. With it,
+`AgentSpec` keeps `system_prompt` required and constructing one without a prompt still
+fails. Nothing builds either spec positionally, so nothing had to change to allow it.
+
+**And a shared comment turned out to be the point rather than the cost.** The objection
+was that ten of the fourteen comments are kind-specific and would go neutral. They do
+not: where the kinds part, the one comment now says which is which -- an agent may write
+`["*"]` for `subagents` and a delegate may not, because for a delegate that set includes
+itself and is always a loop. A reader meets that difference in one place for the first
+time. Two comments each knowing half is how the agent's `wanted` sat stale for months
+with nothing red, and a merged comment cannot drift because there is one of it.
+
+**One spec is still refused, and the reason for it changed in this same work.** Two of
+the three hold: `_subject` tells the kinds apart by `isinstance` to name the file a
+refusal is about, and each kind has an invariant the other must not run. The third is
+void -- `system_prompt` is required on both now, so merging no longer makes a promptless
+agent constructible, and anyone re-asking this should know that argument has been spent.
+
+What replaced it is stronger and is a test rather than a judgement.
+`test_the_known_set_matches_the_spec_it_builds` asserts *equality* between a format's
+`KNOWN` and the non-derived fields of the spec it builds, in both directions, and its
+docstring says what that catches: a key accepted and never read. One class makes the
+spec's fields the union of both kinds', so the equality fails for each and the check can
+only weaken to a subset -- which stops catching the thing it exists for. The argument
+about a spec built in code saying what no file may say does not go away with
+`system_prompt` either; it moves to `memory`, `build`, `bundle` and `carried`, where a
+delegate could carry a `memory` nothing reads.
+
+A base keeps all of that; one class turns each into a check on a kind field. The readers
+are untouched -- that is *Not taken: one reader* above, and nothing here reopens it.
+
+**What it costs, accepted rather than argued away**: reading a spec is two files, and
+ten comments that were true of one kind now have to be true of both. `system_prompt` is
+declared in both subclasses at first, and joined them once the question "why do the
+defaults differ?" was asked rather than worked around. *(2026-09-18.)*
+
+*Fourteen, not thirteen: `system_prompt` unified by losing its default rather than by
+sharing one. The two arrived at their defaults from opposite directions -- an agent has
+no second shape, so `parse` refuses a definition without a prompt and a default would
+be the second way in that field exists to refuse; a delegate does, because a compiled
+one carries its instruction inside the graph. Required on both is the stricter reading
+of each: the one caller that builds a compiled delegate now writes `system_prompt=""`,
+which says* this one has no prompt *instead of leaving it to a default nobody reads, and
+`__post_init__` can still tell "brought a graph" from "said nothing". What counts as
+acceptable stays per kind.*
+
+*Doing it found the guarantee untested. Putting the default back on the base makes a
+promptless agent constructible and all 1,959 tests pass -- `parse` refuses a document
+that omits it and always did, and nothing was watching the other door.
+`test_neither_kind_can_be_built_without_saying_what_it_instructs_with` is that door,
+and it is the one part of this work that would have been worth doing on its own.*
 
 **Left for now: a `ToolSpec` a tool could be declared as.** Asked after the entry
 above, about the kind that has no spec at all. A tool is exported as an object and

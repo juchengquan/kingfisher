@@ -23,9 +23,11 @@ definitions is the thing to reach for.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from collections.abc import Iterator
-from dataclasses import replace
+from collections.abc import AsyncGenerator, AsyncIterator, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from time import monotonic, time
 from typing import TYPE_CHECKING, Any
@@ -63,7 +65,7 @@ from kingfisher.domain.capabilities import (
 )
 from kingfisher.domain.ports import SessionStore
 from kingfisher.domain.request import Request
-from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
+from kingfisher.domain.result import END_TURN, RunEvent, RunResult, normalize_answer
 from kingfisher.domain.session import (
     Session,
 )
@@ -128,6 +130,22 @@ if TYPE_CHECKING:
 
 #: `kingfisher.origins`, and deliberately not `kingfisher`.
 logger = logging.getLogger("kingfisher.origins")
+
+
+@dataclass
+class _Turn:
+    """What a turn accumulates: written by its loop, read by its lifecycle."""
+
+    prepared: Prepared
+    answer: str = ""
+    ok: bool = False
+    stop_reason: str = END_TURN
+    kept: tuple[str, ...] = ()
+    delegates: runtime.Delegates = field(default_factory=runtime.Delegates)
+    #: What the lifecycle produced and the loop still owes its caller: a context
+    #: manager cannot yield into the generator around it.
+    pending: list[RunEvent] = field(default_factory=list)
+
 
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
 #: run without a checkpointer at all.
@@ -799,44 +817,25 @@ class Kingfisher(Sessions, Disposal):
         with self._held_session(request) as session:
             yield from self._stream_turn(request, session, source_ids=source_ids)
 
-    def _stream_turn(
-        self, request: Request, session: Session, *, source_ids: Held | None = None
-    ) -> Iterator[RunEvent]:
-        """One turn, with its directory already held."""
-        prepared = self._prepare(request, session, source_ids=source_ids)
-        answer = ""
-        ok = False
-        stop_reason = "end_turn"
-        kept: tuple[str, ...] = ()
-        delegates = runtime.Delegates()
+    @contextmanager
+    def _turn_lifecycle(self, turn: _Turn) -> Iterator[None]:
+        """Everything a turn does around its graph loop, shared by both of them.
+
+        A bound, a translation or a release added here reaches `stream` and
+        `astream` at once; they differ only in the loop.
+        """
         try:
-            # Inside the `try`, not before it. A caller that stops reading
-            # during these -- `run_start` is the first -- used to leave the turn
-            # with no end at all: the claim stayed taken, the checkpointer
-            # stayed open, and nothing was persisted.
-            yield from prepared.events
-            for namespace, mode, chunk in prepared.graph.stream(
-                runtime.user_payload(prepared.message, prepared.history),
-                config=prepared.config,
-                stream_mode=runtime.STREAM_MODES,
-                subgraphs=True,
-            ):
-                answer, events = consume(namespace, mode, chunk, answer, delegates)
-                yield from events
-                if (stop := overrun(prepared)) is not None:
-                    stop_reason = "max_duration"
-                    yield stop
-                    break
-            answer = normalize_answer(answer)
-            ok = True
+            yield
+            turn.answer = normalize_answer(turn.answer)
+            turn.ok = True
         except runtime.OutOfSteps:
-            # The other bound, reported like the first. `ok` stays true: the
-            # turn ended in a way the caller was told about, which is what that
-            # flag records -- not that every step it wanted happened.
-            answer = normalize_answer(answer)
-            stop_reason = "max_steps"
-            ok = True
-            yield out_of_steps(self.cfg)
+            # The other bound, reported like the first. `ok` stays true: the turn
+            # ended in a way the caller was told about, which is what that flag
+            # records -- not that every step it wanted happened.
+            turn.answer = normalize_answer(turn.answer)
+            turn.stop_reason = "max_steps"
+            turn.ok = True
+            turn.pending.append(out_of_steps(self.cfg))
         except Exception as exc:
             # Translated, not handled: a 401 is the one model-call failure the
             # person at the terminal caused and can fix, so it joins the errors
@@ -847,13 +846,14 @@ class Kingfisher(Sessions, Disposal):
                 raise
             raise refused from exc
         finally:
-            prepared.logger.run_end(ok=ok, answer_chars=len(answer))
+            prepared = turn.prepared
+            prepared.logger.run_end(ok=turn.ok, answer_chars=len(turn.answer))
             # Before the slot goes back, and inside its own `finally` so that a
             # store which is unreachable does not also leak the claim. Ending
             # the turn is the only moment that happens whether the caller read
             # the last event or walked away after the answer.
             try:
-                kept = self._keep(prepared)
+                turn.kept = self._keep(prepared)
             finally:
                 # The slot goes back however the turn ended -- answered, refused
                 # mid-stream, or cut short by its deadline.
@@ -866,7 +866,86 @@ class Kingfisher(Sessions, Disposal):
             # the process rather than leaking a handle. See `release_interpreter`.
             release_interpreter(self.cfg, prepared.graph)
 
-        yield self._finished(prepared, answer, kept, stop_reason=stop_reason)
+    def _read(self, turn: _Turn, namespace: Any, mode: Any, chunk: Any) -> tuple[RunEvent, ...]:
+        """One stream chunk, read as events. The answer accumulates on `turn`."""
+        turn.answer, events = consume(namespace, mode, chunk, turn.answer, turn.delegates)
+        return events
+
+    def _payload(self, turn: _Turn) -> dict[str, Any]:
+        return runtime.user_payload(turn.prepared.message, turn.prepared.history)
+
+    def _driving(self, turn: _Turn) -> dict[str, Any]:
+        """The keywords both graph streams are driven with.
+
+        Shared so that one of them cannot quietly lose `subgraphs`, which would
+        leave a delegate's tokens out of that path and nothing else changed.
+        """
+        return {
+            "config": turn.prepared.config,
+            "stream_mode": runtime.STREAM_MODES,
+            "subgraphs": True,
+        }
+
+    def _bound(self, turn: _Turn) -> RunEvent | None:
+        """The turn's deadline, read between chunks. `None` while there is time."""
+        stop = overrun(turn.prepared)
+        if stop is not None:
+            turn.stop_reason = "max_duration"
+        return stop
+
+    def _ending(self, turn: _Turn) -> tuple[RunEvent, ...]:
+        """What a turn owes its caller once the lifecycle has closed."""
+        return (
+            *turn.pending,
+            self._finished(
+                turn.prepared, turn.answer, turn.kept, stop_reason=turn.stop_reason
+            ),
+        )
+
+    def _stream_turn(
+        self, request: Request, session: Session, *, source_ids: Held | None = None
+    ) -> Iterator[RunEvent]:
+        """One turn, with its directory already held."""
+        turn = _Turn(self._prepare(request, session, source_ids=source_ids))
+        with self._turn_lifecycle(turn):
+            # Inside the lifecycle, not before it. A caller that stops reading
+            # during these -- `run_start` is the first -- used to leave the turn
+            # with no end at all: the claim stayed taken, the checkpointer
+            # stayed open, and nothing was persisted.
+            yield from turn.prepared.events
+            for chunk in turn.prepared.graph.stream(self._payload(turn), **self._driving(turn)):
+                yield from self._read(turn, *chunk)
+                if (stop := self._bound(turn)) is not None:
+                    yield stop
+                    break
+        yield from self._ending(turn)
+
+    async def _astream_turn(
+        self, request: Request, session: Session, *, source_ids: Held | None = None
+    ) -> AsyncGenerator[RunEvent, None]:
+        """The same turn on the graph's own async stream, its directory held.
+
+        `AsyncGenerator` because `astream` closes this by hand, and the type has
+        to admit `aclose`. `_prepare` goes through a thread because it is 15-46ms
+        of CPU-bound construction, which on the loop is 15-46ms every other turn
+        waits through.
+        """
+        turn = _Turn(
+            await asyncio.to_thread(self._prepare, request, session, source_ids=source_ids)
+        )
+        with self._turn_lifecycle(turn):
+            for event in turn.prepared.events:
+                yield event
+            async for chunk in turn.prepared.graph.astream(
+                self._payload(turn), **self._driving(turn)
+            ):
+                for event in self._read(turn, *chunk):
+                    yield event
+                if (stop := self._bound(turn)) is not None:
+                    yield stop
+                    break
+        for event in self._ending(turn):
+            yield event
 
     def run(
         self,
@@ -895,12 +974,69 @@ class Kingfisher(Sessions, Disposal):
         for event in self.stream(request, source_ids=source_ids):
             if event.kind == "finished":
                 result = event.result
+        return self._drained(result, delete_session=delete_session)
 
-        if result is None:  # pragma: no cover -- stream always ends with `finished`
-            msg = "stream() ended without a finished event"
+    def _drained(self, result: RunResult | None, *, delete_session: bool) -> RunResult:
+        """What both drains do once the stream they read has ended."""
+        if result is None:  # pragma: no cover -- a stream always ends with `finished`
+            msg = "the stream ended without a finished event"
             raise RuntimeError(msg)
         if delete_session and result.completed:
             failure = self.delete_session(result.session_id)
             if failure:
                 result = replace(result, deletion_failure=failure)
         return result
+
+    async def astream(
+        self, request: str | Request, *, source_ids: Held | None = None
+    ) -> AsyncIterator[RunEvent]:
+        """`stream`, for a caller already on an event loop. Cancelling is immediate.
+
+        **This path asks two things `stream` does not.** The `a`-prefixed
+        middleware hook is the one that runs, so a middleware written only as
+        `wrap_model_call` raises the first time this reaches it; and a saver
+        passed as `threads=` needs `aget_tuple` and `aput`. Both refusals are
+        loud, and neither reaches a caller of `stream`.
+        """
+        request = Request.coerce(request)  # for the reason `stream` gives
+        with self._held_session(request) as session:
+            turn = self._astream_turn(request, session, source_ids=source_ids)
+            try:
+                async for event in turn:
+                    yield event
+            finally:
+                # By hand: an async generator dropped by another waits for the
+                # loop to finalise it, and `yield from`'s close has no async
+                # spelling. Without this a caller who stops reading leaves the
+                # session claimed.
+                await turn.aclose()
+
+    async def arun(
+        self,
+        request: str | Request,
+        *,
+        source_ids: Held | None = None,
+        delete_session: bool = False,
+    ) -> RunResult:
+        """`run`, for a caller already on an event loop. A drain of `astream`.
+
+        `delete_session` means here what it means on `run`, and for the same
+        reason it is offered on neither stream: a drain has an "after" that a
+        generator does not.
+
+        No `aclose` to match `astream`'s, deliberately: measured, a cancelled
+        drain gives the claim back one turn of the loop later either way, so the
+        close would be a line nothing can observe. `findings.md` has the numbers.
+        """
+        events = self.astream(request, source_ids=source_ids)
+        result: RunResult | None = None
+        async for event in events:
+            if event.kind == "finished":
+                result = event.result
+        if not delete_session:
+            return self._drained(result, delete_session=False)
+        # On a thread, because disposal reaches the store as well as the disk and
+        # a deployment's store may be a network away -- 0.75ms locally, a round
+        # trip wherever `KINGFISHER_SESSION_STORE_FACTORY` points. The whole tail
+        # goes rather than the deletion alone, which keeps `_drained` the one copy.
+        return await asyncio.to_thread(self._drained, result, delete_session=True)

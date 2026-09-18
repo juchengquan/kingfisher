@@ -9,13 +9,14 @@ while every delegate compiles a graph at ~6ms. Re-measured 2026-09-03.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
-from kingfisher.domain.access import AUDIENCED, Audience, narrowed_for
-from kingfisher.domain.capabilities import ALL, Capabilities, Selection
+from kingfisher.domain.access import AUDIENCED
+from kingfisher.domain.capabilities import ALL, Capabilities
+from kingfisher.domain.definition import Definition
 
 # A `tools:` entry may be written `where::what`, so reading this format means
 # parsing a tool reference -- the format referring to itself, which is why the
@@ -74,70 +75,37 @@ REFUSED: Mapping[str, str] = MappingProxyType(
 )
 
 
-@dataclass(frozen=True)
-class AgentSpec:
-    """One agent, once its definition has been read."""
+@dataclass(frozen=True, kw_only=True)
+class AgentSpec(Definition):
+    """One agent, once its definition has been read.
 
-    name: str
-    description: str
-    #: Added after `system.md` and `PROMPT.md`, never instead of them. Required,
-    #: and with no default here: `parse` refuses a definition that omits it, and
-    #: a default would leave a second way in for something the format does not
-    #: allow -- a spec built in code saying what no file may say.
-    system_prompt: str
-    builtin_tools: Selection = ALL
-    tools: Selection = ALL
-    #: Where each `tools:` entry said its tool lives, for the entries that said.
-    #: A claim to check, never a choice between tools.
-    tool_sources: Mapping[str, str] = field(
-        default_factory=dict, metadata={"derived": True}
-    )
-    skills: Selection = None
-    subagents: Selection = None
-    middlewares: Selection = None
-    #: What each `middlewares:` entry wrote under `settings:`. Beside the names rather
-    #: than folded into them, like `tool_sources` beside `tools`: granting and narrowing
-    #: are operations on names, and neither has anything to say about a value passed to
-    #: one.
-    middleware_settings: Mapping[str, Mapping[str, object]] = field(
-        default_factory=dict, metadata={"derived": True}
-    )
-    #: The model this agent runs, out of what the catalogue defines. `None` means it
-    #: named none, so it runs the deployment's `default:` -- which is where this parts
-    #: from a delegate's identical field, whose `None` means whatever summoned it.
-    wanted: str | None = field(default=None, metadata={"derived": True})
+    What it shares with a delegate is on `Definition`; `memory` is the whole of what
+    only an agent has.
+    """
+
     #: `False` to run without the memory file on a deployment that wired one.
     #: `None` is no opinion, which is not the same: a switch narrows like every
     #: other axis, and only `False` can subtract.
     memory: bool | None = None
-    metadata: Mapping[str, object] = field(default_factory=dict)
-    #: Who may open a session on this agent.
-    source_ids: Audience = ALL
-    #: Field name -> entry name -> who reaches that entry, for the fields in
-    #: `AUDIENCED`. Empty for a definition written as plain lists.
-    audiences: Mapping[str, Mapping[str, Audience]] = field(
-        default_factory=dict, metadata={"derived": True}
-    )
 
     def declares(self, held: frozenset[str] | None = None) -> Capabilities:
-        """What this agent holds, said as the narrowing a request is clamped by."""
-        reached = narrowed_for(self, held)
-        return Capabilities(
-            builtin_tools=self.builtin_tools,
-            tools=reached["tools"],
-            skills=reached["skills"],
-            subagents=reached["subagents"],
-            # Narrowed, unlike `endpoints` and `models`, because middleware is not additive
-            # in effect: `call-cap-generous` is a *looser* ceiling than
-            # `call-cap-strict`, so a delegate free to name any registered entry
-            # could pick the roomiest one a deployment happens to offer and leave
-            # the bound its parent runs under. This is what makes an agent decide
-            # which its delegates may choose from -- and why an agent lists one it
-            # does not use itself when a delegate needs it.
-            middlewares=self.middlewares,
-            endpoints=ALL,
-            models=ALL,
-            memory=self.memory,
+        """What this agent holds, said as the narrowing a request is clamped by.
+
+        The five a delegate answers identically come from `Definition`; these three
+        are an agent's alone. `models` opens to everything because an agent decides
+        which model its delegates may run, and `memory` is a field only it has.
+
+        **`middlewares` is deliberately not among them**, and the contrast is the
+        reason this is worth reading: middleware is not additive in effect --
+        `call-cap-generous` is a *looser* ceiling than `call-cap-strict`, so a
+        delegate free to name any registered entry could pick the roomiest one a
+        deployment happens to offer and leave the bound its parent runs under. So it
+        stays narrowed in the base, which is what makes an agent decide which its
+        delegates may choose from, and why an agent lists one it does not use itself
+        when a delegate needs it.
+        """
+        return replace(
+            super().declares(held), endpoints=ALL, models=ALL, memory=self.memory
         )
 
 

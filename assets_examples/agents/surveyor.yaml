@@ -14,8 +14,10 @@ builtin_tools: [read_file, ls, glob, grep]
 # file nobody can find.
 tools: [csv_profile::csv_profile]
 # No `skills:` and no `subagents:`, so it has none of either. A narrow agent
-# with a procedure in its prompt does not need the skills index, which is
-# injected into that prompt and was measured at ~464 tokens for three.
+# with a procedure in its prompt does not need the skills index, and the cost of
+# taking one is almost all entry fee: deepagents' own preamble is paid before a
+# single skill is named, and each skill adds little beside it. So there is no
+# cheap first skill -- `findings.md` has the split, re-measured.
 #
 # No `model:`, so this runs your `default:`. Surveying is bulk reading, which is
 # what a cheap model is for -- pin one with a `model:` line naming an entry your

@@ -97,6 +97,13 @@ Three things the kit will hold you to that the signatures do not say:
 
 Verified with `SESSION_STORE_CONTRACT` — twelve checks.
 
+**Evicting frees the machine and keeps the session.** `delete_session(id,
+forget=False)` and `reap(forget=False)` remove the directory and the thread and
+leave the store's copy, so the id still resolves and the next turn restores from
+the store. What comes back is what the store was handed — `/derived`, `/memory`,
+the transcript and the pinned agent — so `/data` does not. With no store wired
+there is nothing to keep, and eviction is deletion.
+
 ## `SessionRoot` — where a session's directory is, for one turn
 
 `hold(session_id)` returns a context manager giving a `Path`. This is the port
