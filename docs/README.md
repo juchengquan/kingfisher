@@ -58,6 +58,12 @@ slices land.
   when a caller wants a schema, and why the format that prompted it is not
   named in the source. Its first slice has landed; the rest waits for something
   that renders.
+- [A mount kingfisher can
+  name](design/2026-09-10-a-mount-kingfisher-can-name.md) — mounting a remote
+  store as a path the agent and the shell can both read, and what
+  `CAP_SYS_ADMIN` costs to do it. Nothing built. Half its premise went with
+  #502 and the document says so at the top; its measurements are the part that
+  kept.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
