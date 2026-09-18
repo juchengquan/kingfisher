@@ -25,11 +25,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import queue
-import threading
 from collections.abc import AsyncIterator, Generator, Iterator
 from contextlib import suppress
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from pathlib import Path
 from time import monotonic, time
 from typing import TYPE_CHECKING, Any
@@ -132,37 +130,6 @@ if TYPE_CHECKING:
 
 #: `kingfisher.origins`, and deliberately not `kingfisher`.
 logger = logging.getLogger("kingfisher.origins")
-
-
-#: Handed over when the turn's thread is done, however it ended.
-_FINISHED = object()
-
-#: How long the wait below sleeps between looks. Only reached while a cancelled
-#: turn is finishing its last step, so it costs nothing on the path that ends
-#: normally -- and a poll rather than a blocking `get` because the thread may be
-#: about to exit rather than about to hand anything over.
-_LOOK_AGAIN_S = 0.05
-
-
-@dataclass(frozen=True)
-class _Raised:
-    """What the turn's thread took, on its way to the caller's side."""
-
-    error: BaseException
-
-
-def _until_the_turn_stops(handoff: queue.Queue[Any], worker: threading.Thread) -> None:
-    """Wait for the turn's thread, keeping the handoff clear so it can get there.
-
-    The thread may be blocked handing over an event nobody is going to read now.
-    Taking it is what lets that hand-over return, so the turn reaches the
-    `finally` that gives its session's claim back -- a join on its own would wait
-    for a thread that is waiting for this.
-    """
-    while worker.is_alive():
-        with suppress(queue.Empty):
-            handoff.get(timeout=_LOOK_AGAIN_S)
-    worker.join()
 
 
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
@@ -994,56 +961,39 @@ class Kingfisher(Sessions, Disposal):
         return: a session answering "busy" for reasons the caller cannot see is
         a worse thing to be handed than a slow cancel.
         """
-        stop = threading.Event()
-        #: One event at a time, which is what gives this the backpressure
-        #: `stream` has for free: the turn advances when the caller asks for the
-        #: next event and not before.
-        handoff: queue.Queue[Any] = queue.Queue(maxsize=1)
-
-        def pump() -> None:
-            # A thread of its own rather than a step at a time through the default
-            # executor, which is the shorter shape and the one upstream uses --
-            # `BaseLoader.alazy_load` is `run_in_executor(None, next, it, done)`
-            # in a loop. It cannot be borrowed here because it never closes the
-            # iterator: a cancelled turn would keep its session's claim until a
-            # garbage collection nobody scheduled. `findings.md` records what else
-            # was read before writing this.
-            #
-            # This thread owns the generator and nothing outside reaches it.
-            # Only the thread running a generator may close it -- `close` from
-            # anywhere else mid-step raises `generator already executing`, and
-            # the turn is then left holding its session's claim.
-            events = self.stream(request, source_ids=source_ids)
-            try:
-                for event in events:
-                    handoff.put(event)
-                    if stop.is_set():
-                        # The turn's own cleanup, reached the way a caller who
-                        # stops reading `stream` reaches it: `GeneratorExit` at
-                        # the yield, then the `finally` that gives the claim back.
-                        events.close()
-                        break
-            except BaseException as exc:  # noqa: BLE001 -- carried over the thread
-                # boundary and re-raised on the caller's side, which is the only
-                # place it can mean anything. Swallowing it there would end the
-                # stream as though the turn had finished.
-                handoff.put(_Raised(exc))
-            finally:
-                handoff.put(_FINISHED)
-
-        worker = threading.Thread(target=pump, name="kingfisher-turn", daemon=True)
-        worker.start()
+        events = self.stream(request, source_ids=source_ids)
+        #: Handed back instead of `StopIteration`, which cannot cross a `Future`:
+        #: `to_thread(next, events)` raises `RuntimeError` rather than ending the
+        #: loop. `findings.md` has the measurement and the stale upstream comment
+        #: about it.
+        done = object()
+        step: asyncio.Future[Any] | None = None
         try:
             while True:
-                item = await asyncio.to_thread(handoff.get)
-                if item is _FINISHED:
+                # `asyncio.to_thread` rather than a thread of our own, which is
+                # also what carries the caller's context in -- a bare
+                # `threading.Thread` starts with an empty one, so a deployment's
+                # tracing stopped at the turn and nothing said so.
+                #
+                # Shielded, because a cancelled caller must not cancel the step:
+                # the thread could not be interrupted anyway, and a generator
+                # cannot be closed while one of its steps is running.
+                step = asyncio.ensure_future(asyncio.to_thread(next, events, done))
+                item = await asyncio.shield(step)
+                if item is done:
                     return
-                if isinstance(item, _Raised):
-                    raise item.error
                 yield item
         finally:
-            stop.set()
-            await asyncio.to_thread(_until_the_turn_stops, handoff, worker)
+            # The two lines `BaseLoader.alazy_load` does not have, and a turn is
+            # why: upstream abandons its iterator, where this one holds a
+            # session's claim until its `finally` runs. Wait for the step in
+            # flight and *then* close -- the other order raises `generator
+            # already executing`, and the claim is held until a garbage
+            # collection nobody scheduled.
+            if step is not None:
+                with suppress(BaseException):
+                    await asyncio.shield(step)
+            await asyncio.to_thread(events.close)
 
     async def arun(
         self,

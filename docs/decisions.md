@@ -2147,10 +2147,22 @@ get subtly wrong, and described on no page here. Streaming is what an async
 caller wants -- a bot showing tokens, a route streaming a response -- so the
 workaround was fiddliest exactly where it was needed most.
 
-**What is not back is the thing worth removing.** `astream` runs the sync turn on
-a thread of its own and hands events over one at a time; `arun` drains it; and
-`_drained` is the tail both drains share, so the `delete_session` decision exists
-once. `graph.stream` still drives the graph, which is what keeps *Write the sync
+**What is not back is the thing worth removing.** `astream` steps the sync turn
+through `asyncio.to_thread`, which is `BaseLoader.alazy_load`'s loop plus the two
+things a turn needs and a document loader does not: the step is shielded from the
+caller's cancellation and awaited before the generator is closed. `arun` drains
+it; and `_drained` is the tail both drains share, so the `delete_session`
+decision exists once.
+
+**The first draft of it was hand-rolled, and was worse in a way no test caught.**
+A `threading.Thread` and a one-deep queue passed every behaviour test and
+dropped the caller's context on the floor -- a bare thread starts with an empty
+one, so a deployment's tracing stopped at the turn and nothing said so. Both
+helpers that look like the obvious choice copy the context (`asyncio.to_thread`,
+and langchain's `run_in_executor` by hand); the executor call underneath them
+does not. `test_the_callers_context_reaches_the_turn` is the guard, and
+`findings.md` records what else was read. Thirty lines shorter for being the
+shape upstream already uses. `graph.stream` still drives the graph, which is what keeps *Write the sync
 hook* in `guides/middleware.md` true: measured against langchain's own
 machinery, a middleware implementing only `wrap_model_call` **raises** the moment
 a graph is driven asynchronously, and it does so loudly rather than being skipped.
@@ -2177,6 +2189,32 @@ one-line conveniences over a default service; these do not, because a new name i
 `__all__` needs a witness and the honest witness today is that no caller outside
 this wheel has asked. The day one does, the convenience is four lines -- which is
 how `default_backend` came back. *(2026-09-18.)*
+
+**Asked and declined: making a turn a langchain `Runnable`.** The question is
+reasonable -- `Runnable` is the interface that ecosystem's callers already know,
+and it would bring `batch`, `astream_events` and LCEL composition with it. Three
+reasons not to, and the first is the one that surprised us:
+
+It removes none of the work. `Runnable.astream`'s default does not iterate the
+sync `stream` -- it yields one chunk from `ainvoke` -- so the bridge above would
+still have to be written, and the interface would sit on top of it rather than
+instead of it.
+
+It cannot live where the turn lives. `THIRD_PARTY` grants `application` nothing,
+and that is not an oversight to edit around: the runtime's types belong behind
+`infrastructure/harness`, which is where `subagents.py` and `tools.py` went for
+this same reason. A `Runnable` adapter there is a perfectly good idea the day
+somebody wants one, and it needs a witness first.
+
+It adds a second vocabulary for what a request may do. `RunnableConfig` is
+langchain's answer to "how should this run"; `Capabilities` is kingfisher's answer
+to "what may this request reach", and it narrows and never widens. There is
+nowhere in the first for the second to live, so the two would sit side by side
+meaning different things, permanently.
+
+What was actually worth having out of that ecosystem -- a caller's context, and
+the tracing hanging off it, reaching the turn -- arrived with the bridge above
+and needed no interface at all. *(2026-09-18.)*
 
 **Taken: files passed by id go.** `Request.input_refs` and `data_refs` let a
 caller with no host paths name files for a `FileStore` the deployment wired to

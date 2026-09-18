@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import time
 from pathlib import Path
 
@@ -168,6 +169,54 @@ def test_a_cancelled_turn_does_not_keep_running_behind_the_caller(cfg):
         return kf.run(Request("again", session_id=session))
 
     assert asyncio.run(cancel_mid_turn()).completed
+
+
+def test_a_real_cancelled_task_also_leaves_the_session_free(cfg):
+    """The tests above stop reading and call `aclose`, which is not the path a
+    cancelled task takes -- the cleanup runs with a cancellation already delivered.
+    Both were written before either was checked, and only `aclose` was covered.
+    """
+    session = start(cfg, "s")
+    kf = service(cfg, _SlowAgent(step_s=0.2))
+
+    async def cancel_the_task():
+        task = asyncio.ensure_future(kf.arun(Request("go", session_id=session)))
+        await asyncio.sleep(0.05)  # far enough in to be inside the step
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(cancel_the_task())
+
+    assert not _claim(cfg, session).exists()
+    assert kf.run(Request("again", session_id=session)).completed
+
+
+def test_the_callers_context_reaches_the_turn(cfg):
+    """langchain carries an ambient `RunnableConfig` -- and a deployment's tracing
+    with it -- in a `ContextVar`. A turn run on a bare `threading.Thread` starts
+    with an empty context, so tracing stopped at the turn and nothing said so; this
+    is the guard for the shape that does not. `stream` has it for free, and an
+    `astream` that loses it is a difference between the two nobody asked for.
+    """
+    ambient: contextvars.ContextVar[str] = contextvars.ContextVar("ambient", default="UNSET")
+    seen = []
+
+    class _Peeking(StubAgent):
+        def stream(self, state, config, stream_mode=None, subgraphs=False):
+            seen.append(ambient.get())
+            yield from super().stream(state, config, stream_mode, subgraphs)
+
+    start(cfg, "s")
+    kf = service(cfg, _Peeking("ok"))
+
+    async def run_with_a_context():
+        ambient.set("set-by-the-caller")
+        await kf.arun(Request("go", session_id="s"))
+
+    asyncio.run(run_with_a_context())
+
+    assert seen == ["set-by-the-caller"]
 
 
 def test_a_busy_session_still_refuses_the_async_path(cfg):

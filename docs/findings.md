@@ -53,13 +53,22 @@ write one.*
   giving up on streaming rather than bridging to it. `langgraph`'s `Pregel` has a
   native `astream` instead of a fallback, and `langchain_core.utils.aiter` only
   takes async iterators as input. Nothing in deepagents does it either.
-- **The nearest pattern is `BaseLoader.alazy_load`**, in
+- **The pattern to copy is `BaseLoader.alazy_load`**, in
   `langchain_core/document_loaders/base.py`: `run_in_executor(None, next,
-  iterator, done)` in a loop, with a sentinel. It is the right shape for a
-  document loader and **never closes the iterator**, so a consumer that stops
-  early abandons it -- which is why kingfisher's `astream` does not copy it. A
-  turn holds its session's claim until its `finally` runs, and a turn nobody
-  closes holds it until a garbage collection nobody scheduled.
+  iterator, done)` in a loop, with a sentinel. `astream` is that loop, plus the
+  two things a turn needs and a document loader does not. Upstream **never closes
+  the iterator** -- fine when abandoning it costs nothing, and not fine for a turn
+  that holds a session's claim until its `finally` runs. So the step is shielded
+  from the caller's cancellation and awaited before the close, because closing a
+  generator mid-step raises `generator already executing`.
+- **Context reaches the worker through either helper, but not through the
+  executor directly.** `asyncio.to_thread` copies the current context, and
+  langchain's `run_in_executor` does it by hand -- `partial(copy_context().run,
+  wrapper)`. A bare `loop.run_in_executor(None, f)` does not, and neither does a
+  `threading.Thread`, which starts with an empty context. That decides whether a
+  caller's ambient `RunnableConfig` -- and the tracing hanging off it -- survives
+  into the turn. Measured both ways: the first draft of `astream` ran the turn on
+  a thread of its own and silently dropped it.
 - **deepagents' own pattern for an async twin is `asyncio.to_thread` per
   method** -- `als`, `aread`, `aglob`, `awrite` and the rest in
   `backends/protocol.py` are each one line of it. Precedent for the approach, not
