@@ -153,7 +153,7 @@ import kingfisher.kinds.subagents.catalogue as store
 
 
 def _record(model, tools):
-    store.SEEN = (model, [t.name for t in tools])
+    store.SEEN = (model, tools)
     return RunnableLambda(lambda state: state)
 
 
@@ -406,6 +406,18 @@ def probe(text: str) -> str:
 TOOLS = [probe]
 """
 
+PATH_PROBE = """from langchain_core.tools import tool
+
+
+@tool
+def probe(path: str) -> str:
+    \"\"\"Report the path this tool was actually handed, at length for the check.\"\"\"
+    return f"handed={path}"
+
+
+TOOLS = [probe]
+"""
+
 
 def _with_probe(cfg):
     _write(cfg.workspace / "tools", "probe.py", PROBE)
@@ -416,7 +428,8 @@ def _with_probe(cfg):
     )
 
 
-def _tools_seen(cfg, session_dir, monkeypatch, capabilities):
+def _tools_given(cfg, session_dir, monkeypatch, capabilities):
+    """The objects `build` was handed, which is what the graph will call."""
     capture_build(monkeypatch)
     build_agent(
         cfg,
@@ -429,6 +442,10 @@ def _tools_seen(cfg, session_dir, monkeypatch, capabilities):
     _model, tools = store.SEEN
     del store.SEEN
     return tools
+
+
+def _tools_seen(cfg, session_dir, monkeypatch, capabilities):
+    return [one.name for one in _tools_given(cfg, session_dir, monkeypatch, capabilities)]
 
 
 def test_a_compiled_delegate_is_granted_the_workspace_tools_it_named(
@@ -444,6 +461,31 @@ def test_a_compiled_delegate_is_granted_the_workspace_tools_it_named(
     )
 
     assert seen == ["probe"]
+
+
+def test_a_compiled_delegates_tool_is_wired_to_this_session(cfg, monkeypatch, session_dir):
+    """The wiring is the claim: `session_dir` has to reach `compiled` for the tools to
+    be wrapped against anything, and no test of the wrapper alone would notice it
+    stopping at `as_subagent`.
+
+    The shipped `scribe` is where this was found -- it handed `show-your-work`
+    path-taking tools and the first call died on `log_levels('/data/api.log')`.
+    """
+    _write(cfg.workspace / "tools", "probe.py", PATH_PROBE)
+    _write(
+        cfg.workspace / "subagents",
+        "researcher.py",
+        RECORDING.format(extra='        "tools": ["probe"],\n'),
+    )
+
+    given = _tools_given(
+        cfg, session_dir, monkeypatch, Capabilities(subagents=("researcher",))
+    )
+
+    answer = given[0].invoke(
+        {"type": "tool_call", "id": "c1", "name": "probe", "args": {"path": "/data/api.log"}}
+    )
+    assert answer.content == f"handed={session_dir / 'data' / 'api.log'}"
 
 
 def test_a_request_that_withheld_a_tool_withholds_it_from_the_graph(

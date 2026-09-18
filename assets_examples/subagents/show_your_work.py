@@ -103,6 +103,11 @@ def _build(model: Any, tools: list[Any]) -> Any:
     resolves the declaration against the offering and hands over objects. A
     compiled delegate is given no allowlist middleware, so this list is the whole
     of what it can call.
+
+    Each object arrives wrapped, and that wrapping is every guard this graph gets:
+    the virtual path the model writes is resolved before the tool runs, and a tool
+    that raises returns a failed result rather than ending the run. A tool closed
+    over in this module instead of taken from `tools` would get neither.
     """
     from langchain.agents import create_agent  # noqa: PLC0415 -- 370ms per listing
     from langchain_core.messages import AIMessage  # noqa: PLC0415

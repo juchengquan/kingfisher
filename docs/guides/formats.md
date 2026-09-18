@@ -741,6 +741,15 @@ never applies kingfisher's allowlist to it, so `--tools` narrows what `build`
 *receives* and nothing stops the graph calling something it closed over.
 `kingfisher list` marks these `[compiled]` and says so underneath.
 
+**What `build` receives is wrapped, and that is the only guard a compiled graph
+gets.** Those tools take the same virtual paths as everywhere else —
+`/data/<name>` — resolved before the tool runs; a host path in any other
+argument is refused, and a tool that raises comes back as a failed result rather
+than ending the run. It rides on the tool objects because there is no middleware
+in front of a graph kingfisher did not build. A tool the graph closed over
+instead of taking from that list gets none of it, and is handed the path the
+model wrote.
+
 **Defer the heavy imports into `build`.** Every `.py` file under `subagents/` is
 imported whenever the catalogue is read — `kingfisher list` included — and
 `from langchain.agents import create_agent` costs about 370 ms. At module scope

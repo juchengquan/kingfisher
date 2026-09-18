@@ -1067,12 +1067,13 @@ def test_a_compiled_delegates_bundle_wins_a_name_the_catalogue_also_defines(cfg,
         private=LocalToolRepository(tmp_path / "own").found,
     )
 
-    # `tool_name` rather than an attribute: a workspace tool reaches `build` as
-    # whatever its module exported, which for a plain function is the function.
+    # `tool_name` rather than an attribute, and invoked rather than called: a compiled
+    # delegate's tools arrive wrapped, so a plain function reaches `build` as the tool
+    # `create_agent` would have made of it rather than as the function itself.
     names = [tool_name(one) for one in handed]
     assert names.count("probe") == 1, "two tools of a name reached `build`"
     assert names[0] == "probe", "the bundle's goes first, so the order is stated here"
-    assert handed[0]() == "from the bundle"
+    assert handed[0].invoke({}) == "from the bundle"
     assert "other" in names, "the catalogue's own still arrive"
 
 
