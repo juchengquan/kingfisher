@@ -3148,6 +3148,59 @@ it catches no drift `test_format_parity.py` does not already catch.
 What would change the answer is a product change rather than tidying: one definition
 file usable both as an agent and as a delegate. *(2026-09-17.)*
 
+**Left for now: a `ToolSpec` a tool could be declared as.** Asked after the entry
+above, about the kind that has no spec at all. A tool is exported as an object and
+`Found` pairs it with where it came from; agents, subagents and skills each read a
+document into one. Feasible was checked by running it rather than reasoned about:
+`StructuredTool.from_function(fn, name=, description=, metadata=, args_schema=)`
+builds a real `BaseTool`, so a declared form translates in one call.
+
+It has nothing to carry. `BaseTool` already holds `name`, `description`,
+`args_schema`, `tags` and `metadata`, so a spec would restate the object. The one
+thing it could hold that the object cannot is an audience, and that is settled the
+other way: a tool's audience is a property of the use rather than of the tool, with
+the cost named in `docs/guides/formats.md` and mitigated by the roll-up in
+`kingfisher list`. What is left is `name`, `description` and the callable, which
+`@tool` handles.
+
+It is not a rename of `Found` either. `Found.source` is the one fact the object
+cannot know, and it is the whole of what `Found` adds.
+
+The ergonomics are genuinely bad and that is the argument for building it later:
+`@tool` refuses `metadata=`, `extras=` lands on a different attribute and leaves
+`metadata` as `None`, and the working route is assigning after the decorator. The
+first time kingfisher reads `.metadata`, a workspace that wrote `extras` gets no
+error and no value.
+
+**The trigger is the first field kingfisher wants to read off a tool** -- whether one
+writes rather than reads, what it costs, a timeout of its own. None is designed and
+none is asked for. Before that, a spec is a second way to spell `@tool` and every
+`Found` consumer pays for it; after it, the need says what shape the field is and
+there is a caller. Whoever builds it should pick one of `metadata` and `extras` and
+refuse the other, so the trap is decided once rather than by every workspace.
+*(2026-09-18.)*
+
+**Left for now: a `TypedDict` for a package writing `SUBAGENTS`.** A portable
+definition is a plain mapping on purpose -- it pins no kingfisher version -- and the
+want behind this is type checking, not a different runtime shape. A `PortableSubagent`
+and a `CompiledSubagent` published under `TYPE_CHECKING` would catch a misspelled key
+before a run does, with no runtime dependency.
+
+Not built, and **the trigger is the first package that is not ours**: nothing outside
+this repository exports `SUBAGENTS`, so there is no author to help and no usage to
+check the shape against. The cost is also the one *Keep a subagent's vocabulary beside the spec*
+is about -- the fields would be a fourth statement of a vocabulary `KNOWN`, `PORTABLE`
+and `NOT_PORTABLE` already state three times, so it needs a line in the drift test to
+stay honest.
+
+**Accepting `SubagentSpec` instances is refused rather than deferred**, which is the
+difference between this entry and the `ToolSpec` one above it. Six of its fields are `derived`
+and the reader fills them: a hand-built spec writing `tools=("csv_profile::profile",)`
+gets an empty `tool_sources`, so `Offering.refuse_moved` checks nothing and a stale
+path claim that a mapping would have caught passes in silence. Publishing the type
+would also put a name through the front door under a rule that has removed eleven.
+*(2026-09-18.)*
+
 *`nothing-at-rest-on-this-machine` went on 2026-09-04 -- several more have gone
 since, and `docs/README.md` names them -- and its removal is the sharpest example
 this file has of why a status line is not evidence. It was audited decision by decision on 2026-09-01 and still reported
