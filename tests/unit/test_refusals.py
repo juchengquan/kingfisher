@@ -83,8 +83,15 @@ def a_tool_module_that_will_not_import(cfg):
     _write(_root(cfg, "tools") / "broken.py", "def (:\n")
 
 
-def a_middleware_module_declaring_nothing(cfg):
-    _write(_root(cfg, "middlewares") / "m.py", "X = 1\n")
+MIDDLEWARE = (
+    "from langchain.agents.middleware import AgentMiddleware\n\n\n"
+    "class {c}(AgentMiddleware):\n    name = {n!r}\n\n\nMIDDLEWARES = [{c}]\n"
+)
+
+
+def two_files_defining_a_middleware_of_a_name(cfg):
+    _write(_root(cfg, "middlewares") / "a.py", MIDDLEWARE.format(c="A", n="dup"))
+    _write(_root(cfg, "middlewares") / "b.py", MIDDLEWARE.format(c="B", n="dup"))
 
 
 def a_middleware_that_is_not_one(cfg):
@@ -94,10 +101,6 @@ def a_middleware_that_is_not_one(cfg):
 def a_bundle_holding_two_definitions(cfg):
     _write(_root(cfg, "subagents") / "s" / "s.yaml", SUBAGENT.format(name="s"))
     _write(_root(cfg, "subagents") / "s" / "t.yaml", SUBAGENT.format(name="t"))
-
-
-def a_subagent_module_declaring_nothing(cfg):
-    _write(_root(cfg, "subagents") / "m.py", "X = 1\n")
 
 
 def a_subagent_filed_as_yml(cfg):
@@ -176,6 +179,16 @@ def a_tool_module_declaring_nothing(cfg):
     _write(_root(cfg, "tools") / "x.py", "X = 1\n")
 
 
+def a_tool_module_defining_a_name_twice(cfg):
+    _write(
+        _root(cfg, "tools") / "twice.py",
+        "from langchain_core.tools import tool\n\n\n"
+        '@tool("probe")\ndef first(x: str) -> str:\n    """Probe."""\n    return x\n\n\n'
+        '@tool("probe")\ndef second(x: str) -> str:\n    """Probe."""\n    return x\n\n\n'
+        "TOOLS = [first, second]\n",
+    )
+
+
 def a_subagent_naming_a_tool_that_moved(cfg):
     _write(_root(cfg, "tools") / "here.py", TOOL.format(n="probe"))
     _write(
@@ -230,14 +243,16 @@ REFUSALS: dict[str, Refusal] = {
     "kinds/documents.py::require_literal_prompt": Refusal(
         1, defect=a_prompt_written_so_it_reflows),
     "kinds/importing.py::load": Refusal(2, defect=a_tool_module_that_will_not_import),
+    # The envelope all three kinds' modules arrive in. A tool catalogue reaches it
+    # here because one of them has to; what the other two get from the same two
+    # refusals is now the same sentence rather than a near copy of it.
+    "kinds/importing.py::exported_from": Refusal(2, defect=a_tool_module_declaring_nothing),
     "kinds/middlewares/catalogue.py::LocalMiddlewareRepository.found": Refusal(
-        3, defect=a_middleware_module_declaring_nothing),
+        1, defect=two_files_defining_a_middleware_of_a_name),
     "kinds/middlewares/catalogue.py::_refuse_unless_buildable": Refusal(
         2, defect=a_middleware_that_is_not_one),
     "kinds/subagents/catalogue.py::LocalSubagentRepository.bundles": Refusal(
         1, defect=a_bundle_holding_two_definitions),
-    "kinds/subagents/catalogue.py::_declared_in": Refusal(
-        2, defect=a_subagent_module_declaring_nothing),
     "kinds/subagents/catalogue.py::_definitions_in": Refusal(1, defect=a_subagent_filed_as_yml),
     "kinds/subagents/spec.py::_refuse_unknown": Refusal(
         1, defect=a_subagent_with_a_field_nobody_reads),
@@ -259,7 +274,7 @@ REFUSALS: dict[str, Refusal] = {
     "kinds/tools/catalogue.py::CarriedTools.found": Refusal(
         1, defect=a_portable_subagent_carrying_two_tools_of_a_name),
     "kinds/tools/catalogue.py::LocalToolRepository.found": Refusal(
-        3, defect=a_tool_module_declaring_nothing),
+        1, defect=a_tool_module_defining_a_name_twice),
     "kinds/tools/catalogue.py::refuse_untoollike": Refusal(
         2, defect=a_portable_subagent_carrying_a_class),
     "kinds/tools/spec.py::Offering.refuse_moved": Refusal(
@@ -286,9 +301,10 @@ REFUSALS: dict[str, Refusal] = {
 def _refusals_in(path: Path, found: dict[str, int]) -> None:
     """Every function in one file that raises a kind's error, and how often.
 
-    Counts a `raise` of a name the function was *given* as well as one it names, so a
-    refusal that takes its error class from the caller cannot slip past -- which two
-    of them did until this was written that way.
+    Counts a `raise` of a name the function was *given* -- whether handed as the class
+    itself or as a field of something handed -- as well as one it names, so a refusal
+    that takes its error class from the caller cannot slip past. Three of them did,
+    each in one of those two ways, until this was written to look for both.
     """
 
     def walk(node: ast.AST, stack: list[str], params: dict[str, set[str]]) -> None:
@@ -300,7 +316,14 @@ def _refusals_in(path: Path, found: dict[str, int]) -> None:
             elif isinstance(child, ast.ClassDef):
                 walk(child, [*stack, child.name], params)
             elif isinstance(child, ast.Raise):
-                callee = getattr(getattr(child.exc, "func", None), "id", None)
+                raised = getattr(child.exc, "func", None)
+                # `raise declares.error(msg)` as well as `raise error(msg)`: an
+                # envelope carrying the kind's error class is still a class the
+                # function was handed, and reading only `.id` counted it as no
+                # refusal at all -- which is how the first two hid.
+                callee = getattr(raised, "id", None) or getattr(
+                    getattr(raised, "value", None), "id", None
+                )
                 handed = callee is not None and any(
                     callee in params.get(".".join(stack[: index + 1]), set())
                     for index in range(len(stack))

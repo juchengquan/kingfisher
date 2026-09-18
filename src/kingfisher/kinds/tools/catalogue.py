@@ -9,8 +9,9 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.kinds.importing import (
     PACKAGE_MARKER,
+    Export,
     LoadError,
-    load,
+    exported_from,
     modules_in,
 )
 from kingfisher.kinds.tools.spec import Found, named, tool_name
@@ -35,6 +36,9 @@ EXPORT = "TOOLS"
 
 class ToolError(LoadError):
     """A workspace's tool module could not be loaded, or should not be."""
+
+
+DECLARES = Export(EXPORT, error=ToolError, holding="tools", example="my_tool")
 
 
 def refuse_untoollike(tool: Any, *, where: str, holder: str) -> None:
@@ -158,23 +162,7 @@ class LocalToolRepository:
             # there.
             where = str(path.relative_to(directory)) + ("/" if path.is_dir() else "")
 
-            module = load(path, declares=EXPORT, error=ToolError)
-            exported = getattr(module, EXPORT, None)
-            if exported is None:
-                declared_in = f"{where}{PACKAGE_MARKER}" if path.is_dir() else where
-                msg = f"{declared_in}: must define {EXPORT}, the tools it contributes"
-                raise ToolError(msg)
-            # A list or a tuple, and nothing looser. `BaseTool` is a pydantic
-            # model and pydantic models are iterable, so `TOOLS = add` would
-            # pass a duck test and then quietly iterate the tool's own fields.
-            if not isinstance(exported, (list, tuple)):
-                msg = (
-                    f"{where}: {EXPORT} must be a list or tuple of tools, "
-                    f"got {type(exported).__name__} -- write {EXPORT} = [my_tool]"
-                )
-                raise ToolError(msg)
-
-            for tool in exported:
+            for tool in exported_from(path, where=where, declares=DECLARES):
                 refuse_untoollike(tool, where=where, holder=EXPORT)
                 name = tool_name(tool)
                 if name in claimed and claimed[name] == where:

@@ -4,12 +4,22 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
-__all__ = ["PACKAGE_MARKER", "LoadError", "load", "modules_in", "skipped"]
+__all__ = [
+    "PACKAGE_MARKER",
+    "Export",
+    "LoadError",
+    "exported_from",
+    "load",
+    "modules_in",
+    "skipped",
+]
 
 #: The package marker. A subfolder holding one is a unit rather than a pile:
 #: it states its exports once, in there, and nothing inside it is scanned.
@@ -108,3 +118,43 @@ def _relative_import_advice(path: Path, exc: Exception, *, declares: str) -> str
         f"its own. Add {PACKAGE_MARKER} to {path.parent.name}/ and declare {declares} "
         f"there -- then its modules import from each other normally."
     )
+
+
+@dataclass(frozen=True)
+class Export:
+    """The name a kind's modules declare, and enough to say so to whoever forgot it."""
+
+    #: `TOOLS`, `SUBAGENTS`, `MIDDLEWARES`.
+    name: str
+    #: The kind's own error, so a refusal reads as that kind's and `doctor` files it.
+    error: type[ValueError]
+    #: What the list holds, as a reader would say it: "tools", "middleware".
+    holding: str
+    #: One entry, spelled as an author would write it: `my_tool`, `MyMiddleware`.
+    example: str
+
+
+def exported_from(path: Path, *, where: str, declares: Export) -> Sequence[Any]:
+    """The sequence one workspace module declares, or a refusal an author can act on.
+
+    Here rather than in each catalogue because it was written out three times and the
+    third copy had already drifted: middleware named the type it got where the other
+    two also said what to write instead.
+    """
+    module = load(path, declares=declares.name, error=declares.error)
+    exported = getattr(module, declares.name, None)
+    if exported is None:
+        declared_in = f"{where}{PACKAGE_MARKER}" if path.is_dir() else where
+        msg = f"{declared_in}: must define {declares.name}, the {declares.holding} it contributes"
+        raise declares.error(msg)
+    # A list or a tuple, and nothing looser. Two of the three things that get
+    # declared here are iterable for reasons of their own -- a `BaseTool` is a
+    # pydantic model, a compiled subagent is a `dict` -- so a duck test would take
+    # `TOOLS = add` or `SUBAGENTS = {...}` and quietly loop over field or key names.
+    if not isinstance(exported, (list, tuple)):
+        msg = (
+            f"{where}: {declares.name} must be a list or tuple of {declares.holding}, "
+            f"got {type(exported).__name__} -- write {declares.name} = [{declares.example}]"
+        )
+        raise declares.error(msg)
+    return exported
