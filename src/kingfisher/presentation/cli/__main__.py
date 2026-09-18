@@ -642,7 +642,10 @@ def _nothing_reaped(kept: int, age: float, *, from_config: bool) -> None:
 
 def _reap_one(kf: Kingfisher, session_id: str) -> int:
     """Reap one session by name, whatever its age and whatever is running in it."""
-    if kf.session(session_id) is None:
+    # `UNSCOPED` because this is housekeeping on the machine rather than a call on
+    # anyone's behalf, and a policied deployment now refuses a read that names nobody.
+    # `reap` and `sessions` are the operator's, which is why neither takes `--as`.
+    if kf.session(session_id, source_ids=UNSCOPED) is None:
         # Asked before deleting, because `delete_session` answers `None` both
         # for "removed it" and for "there was no such session" -- so without
         # this a mistyped id reports success for work nothing did.
