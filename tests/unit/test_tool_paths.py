@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from kingfisher.infrastructure.harness.backend import WorkspaceToolPaths
+from kingfisher.infrastructure.harness.backend import WorkspaceToolPaths, guarded_tools
 
 
 @dataclass
@@ -388,3 +388,167 @@ def test_a_link_that_stays_inside_still_works(session, bridge):
     args = handed(bridge, a_call(path="/derived/near.csv"))
 
     assert args["path"] == str((session / "data" / "real.csv").resolve())
+
+
+# -- the tools a compiled delegate is handed ---------------------------------
+#
+# A compiled graph is given no middleware of kingfisher's, so everything above
+# reaches it only by travelling on the tools themselves. These drive the wrapped
+# objects rather than the middleware, because that is the whole difference.
+
+
+def guarded(one, root):
+    return guarded_tools([one], root)[0]
+
+
+def answered(wrapped, **args):
+    """What the graph gets back: the call form, which is the one carrying status."""
+    return wrapped.invoke({"type": "tool_call", "id": "c1", "name": wrapped.name, "args": args})
+
+
+def test_a_compiled_delegates_tool_is_handed_a_real_path(session):
+    """The crash this exists for: the shipped `scribe` handed `show-your-work`
+    path-taking tools, and `log_levels('/data/api.log')` raised `FileNotFoundError`
+    because a compiled graph has no middleware to translate the path.
+    """
+    from langchain_core.tools import tool
+
+    @tool
+    def peek(path: str) -> str:
+        """Report what it was handed."""
+        return f"handed={path}"
+
+    answer = answered(guarded(peek, session), path="/data/notes.txt")
+
+    assert answer.content == f"handed={session / 'data' / 'notes.txt'}"
+
+
+def test_a_tool_that_raises_answers_instead_of_ending_the_run(session):
+    """Measured inside a compiled graph: every exception reaches the caller and ends
+    the run -- `ToolException` and `ValueError` as much as `FileNotFoundError`. A
+    delegate that cannot report a bad path can only die on one.
+    """
+    from langchain_core.tools import tool
+
+    @tool
+    def missing(path: str) -> str:
+        """Raise the way a workspace tool raises."""
+        msg = f"[Errno 2] No such file or directory: {path!r}"
+        raise FileNotFoundError(msg)
+
+    answer = answered(guarded(missing, session), path="/data/gone.txt")
+
+    assert answer.status == "error"
+    assert "FileNotFoundError" in answer.content
+
+
+def test_climbing_out_is_refused_as_an_answer_rather_than_an_exception(session):
+    """Refused *and* returned. Raising would have closed the leak by ending the run,
+    which is the failure this wrapper replaced rather than one to reintroduce.
+    """
+    from langchain_core.tools import tool
+
+    @tool
+    def peek(path: str) -> str:
+        """Report what it was handed."""
+        return f"handed={path}"
+
+    answer = answered(guarded(peek, session), path="../other/secret.txt")
+
+    assert answer.status == "error"
+    assert "/data/<name>" in answer.content
+    assert "handed=" not in answer.content
+
+
+def test_a_host_path_in_another_argument_is_refused_here_too(session):
+    """The leak that keys on the argument's name, closed on this path as well: a tool
+    calling its file `input_file` was handed another session's secret.
+    """
+    from langchain_core.tools import tool
+
+    @tool
+    def peek(input_file: str) -> str:
+        """Report what it was handed."""
+        return f"handed={input_file}"
+
+    other = session.parent / "other" / "data" / "secret.txt"
+
+    answer = answered(guarded(peek, session), input_file=str(other))
+
+    assert answer.status == "error"
+    assert "handed=" not in answer.content
+
+
+def test_a_subclass_keeps_the_arguments_it_declares(session):
+    """A `BaseTool` subclass carries its arguments on `_run` rather than in an
+    `args_schema`. A wrapper taking `**kwargs` advertised `kwargs` to the model and
+    was then called with none of them -- measured, as `TypeError: _run() missing 1
+    required positional argument`, from a wrapper that looked right.
+    """
+    from langchain_core.tools import BaseTool
+
+    class Shout(BaseTool):
+        name: str = "shout"
+        description: str = "Shout it."
+
+        def _run(self, path: str) -> str:
+            return f"shouted {path}"
+
+    wrapped = guarded(Shout(), session)
+
+    assert wrapped.args == Shout().args
+    assert answered(wrapped, path="/data/x").content == f"shouted {session / 'data' / 'x'}"
+
+
+def test_a_plain_function_arrives_as_the_tool_the_graph_would_have_made(session):
+    """A plain function has no `BaseTool` machinery to report a refusal through, so it
+    is normalised first -- and normalising must not change what it advertises.
+    """
+    from langchain_core.tools import StructuredTool
+
+    def peek_lines(path: str) -> str:
+        """Count them."""
+        return f"counted {path}"
+
+    wrapped = guarded(peek_lines, session)
+    direct = StructuredTool.from_function(peek_lines)
+
+    assert wrapped.name == direct.name
+    assert wrapped.description == direct.description
+    assert wrapped.args == direct.args
+
+
+def test_an_artifact_survives_the_wrapping(session):
+    """A tool declaring `content_and_artifact` returns the pair through a
+    `ToolMessage`, so a wrapper invoking the plain way would drop every artifact it
+    passed on -- silently, since the content still arrives.
+    """
+    from langchain_core.tools import tool
+
+    @tool(response_format="content_and_artifact")
+    def paired(path: str):
+        """Return both."""
+        return "counted", {"read": path}
+
+    answer = answered(guarded(paired, session), path="/data/x")
+
+    assert answer.artifact == {"read": str(session / "data" / "x")}
+
+
+def test_without_a_session_a_failure_is_still_an_answer():
+    """`tool_guards` puts the session condition on translation and not on the error
+    half, and this follows it: a build with no session has nowhere to translate
+    against, and a tool that raises still must not end the run.
+    """
+    from langchain_core.tools import tool
+
+    @tool
+    def missing(path: str) -> str:
+        """Raise."""
+        msg = f"no such file: {path}"
+        raise FileNotFoundError(msg)
+
+    answer = answered(guarded(missing, None), path="/data/gone.txt")
+
+    assert answer.status == "error"
+    assert "/data/gone.txt" in answer.content, "nothing to translate against, so untranslated"

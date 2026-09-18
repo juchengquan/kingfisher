@@ -396,6 +396,26 @@ the model wrote, which is exactly the leak translation exists to close, and a fa
 tool raised instead of answering. `tool_guards` builds the three now and all three
 sites call it, so a fourth cannot be written half-right.
 
+**A compiled delegate's tools are wrapped, because it is the fourth graph.**
+`tool_guards` reaches a graph through its middleware, and a compiled delegate has
+none -- deepagents runs it as given. The shipped `scribe` is what showed it: three
+path-taking tools handed to `show-your-work`, and the first call died on
+`log_levels('/data/api.log')` with `FileNotFoundError`, the run over. `GuardedTool`
+carries the translation and the error conversion on the tool objects, which is the
+one thing kingfisher still owns for a graph it did not build.
+
+This reverses, for that path only, the reasoning `WorkspaceToolPaths` records --
+rewrite the call rather than wrap each tool, because the tools are not alike. They
+still are not, so the wrapper normalises: a plain function becomes the tool
+`create_agent` would have made of it anyway, refusing a missing docstring exactly
+where that already failed, and a `BaseTool` keeps its own `args_schema`, since a
+wrapper advertising `**kwargs` tells the model the wrong arguments and nothing
+raises. A refusal is returned rather than raised, because inside a graph kingfisher
+did not build nothing catches one -- measured for `ToolException`, `ValueError` and
+`FileNotFoundError` alike, each ending the run -- so `handle_tool_error` converts it
+before it leaves the tool. That also keeps `ToolMessage.status` true, which
+`show_your_work` reads to report a call as failed. *(2026-09-18.)*
+
 **The skills switch is the deployment's, for delegates too.** `cfg.skills_enabled`
 says what is wired and a request says what it wants of that. The delegate branch asked
 only the request, so a workspace with skills switched off still handed a delegate an

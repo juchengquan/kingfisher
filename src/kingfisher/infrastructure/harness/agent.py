@@ -427,6 +427,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                 # route either way -- withholding the index here would leave the files
                 # reachable and unnamed.
                 private_skills=_private_skills(roots, name),
+                # Reaches only a compiled delegate, whose tools are wrapped against it.
+                # An assembled one is given the same translation as middleware.
+                session_dir=session_dir,
                 run_on=wanted.get(name),
                 extra_middleware=declared_middleware(
                     defined[name],
