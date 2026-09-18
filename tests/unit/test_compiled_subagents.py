@@ -8,8 +8,7 @@ from langchain_core.messages import AIMessage
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
-from kingfisher.kinds.subagents.reading import EXPORT, NOT_COMPILED, declared
-from kingfisher.kinds.subagents.spec import SubagentError
+from kingfisher.kinds.subagents.spec import EXPORT, NOT_COMPILED, SubagentError, declared
 from tests.conftest import FakeToolCallingModel, capture_build, declared_subagents
 
 COMPILED = '''"""A delegate the workspace assembled."""

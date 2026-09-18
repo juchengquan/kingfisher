@@ -8,6 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.kinds.documents import NEAR_MISS, SUFFIX
 from kingfisher.kinds.importing import (
     PACKAGE_MARKER,
     load,
@@ -15,8 +16,7 @@ from kingfisher.kinds.importing import (
     skipped,
 )
 from kingfisher.kinds.subagents import reading
-from kingfisher.kinds.subagents.reading import EXPORT, NEAR_MISS, SUFFIX, declared
-from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
+from kingfisher.kinds.subagents.spec import EXPORT, SubagentError, SubagentSpec, declared
 from kingfisher.kinds.tools.catalogue import CarriedTools, LocalToolRepository
 from kingfisher.kinds.tools.spec import SEPARATOR, reference
 

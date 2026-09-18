@@ -9,9 +9,8 @@ import pytest
 from kingfisher.domain.capabilities import ALL
 from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
-from kingfisher.kinds.subagents.reading import KNOWN, REFUSED
 from kingfisher.kinds.subagents.rules import resolved_model
-from kingfisher.kinds.subagents.spec import RunOn, SubagentError, SubagentSpec
+from kingfisher.kinds.subagents.spec import KNOWN, REFUSED, RunOn, SubagentError, SubagentSpec
 
 MINIMAL = """name: reviewer
 description: Checks an analysis for arithmetic errors.

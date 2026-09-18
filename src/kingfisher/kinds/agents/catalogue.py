@@ -12,12 +12,12 @@ from pathlib import Path
 
 from kingfisher.kinds.agents import reading
 from kingfisher.kinds.agents.spec import AgentError, AgentSpec
-from kingfisher.kinds.importing import skipped
 
 # `SUFFIX` comes from the format that already names it rather than being
 # restated here: both are YAML documents kingfisher reads, and a second copy of
 # the extension is a second thing to keep in step.
-from kingfisher.kinds.subagents.reading import NEAR_MISS, SUFFIX
+from kingfisher.kinds.documents import NEAR_MISS, SUFFIX
+from kingfisher.kinds.importing import skipped
 
 
 def _definitions_in(directory: Path) -> list[Path]:

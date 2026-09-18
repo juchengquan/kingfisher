@@ -26,6 +26,17 @@ import yaml
 if TYPE_CHECKING:
     from pathlib import Path
 
+#: What a definition file is called, and the spelling that used to vanish. `.yml` is
+#: valid YAML everywhere else, so a file named that way is a definition somebody wrote
+#: and kingfisher silently did not read.
+#:
+#: Here for the reason everything else in this module is: what a document is called is
+#: a fact about the document rather than about what either kind means, and both kinds
+#: need it -- the subagent format to walk its own directory, the agent catalogue to
+#: walk its.
+SUFFIX = ".yaml"
+NEAR_MISS = ".yml"
+
 #: The scalar style that keeps a prompt's line breaks. `|`, `|2`, `|-` and
 #: `|+` are all this one style once parsed -- the suffix never reaches the node.
 LITERAL = "|"
