@@ -3124,6 +3124,30 @@ never been checked, which is why `AgentSpec` now marks its derived fields. So a 
 both formats take goes into both readers and into a document there, and the test is
 red until it does. *(2026-09-16.)*
 
+**Left for now: one spec for agents and subagents.** Asked straight after the entry
+above, and a different question: not one reader but one record. The two share 14
+fields, and the differences are guarantees the types enforce rather than
+declarations kept twice. An agent's `system_prompt` is required with no default, so no
+code builds an agent without one; a delegate has a prompt or a `build`, exactly one.
+`memory` is an agent's, and `bundle`, `carried` and `build` a delegate's. `declares`
+parts where no audience reaches: an agent opens `models` and `endpoints` and carries
+`memory`, a delegate leaves all three unset, and
+`test_the_two_kinds_declare_the_unaudienced_axes_differently` exists because one
+shared body would erase that with nothing going red. One class would turn each of
+those into a check on a kind field, and an agent with a `build` would become
+something code can construct.
+
+Nothing downstream was asking for it either. `build_agent` reads two things off an
+`AgentSpec`, the model functions in `harness/subagents.py` already take either in four
+signatures, and access reads both by attribute name on purpose. The middle option --
+a base class in `domain/` for the shared fields -- would write the declarations once
+and put one name in place of the union. It was judged a wash: reading `AgentSpec`
+would mean two files, comments that give a delegate's reasons would go neutral, and
+it catches no drift `test_format_parity.py` does not already catch.
+
+What would change the answer is a product change rather than tidying: one definition
+file usable both as an agent and as a delegate. *(2026-09-17.)*
+
 *`nothing-at-rest-on-this-machine` went on 2026-09-04 -- several more have gone
 since, and `docs/README.md` names them -- and its removal is the sharpest example
 this file has of why a status line is not evidence. It was audited decision by decision on 2026-09-01 and still reported
