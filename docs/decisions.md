@@ -963,6 +963,27 @@ Entries above still say `for_groups` and `groups.yaml.example`. Those name thing
 that were deleted, and `for_source_ids` describes a function that never existed.
 *(2026-09-15.)*
 
+**One place asks who is calling.** A call that named nobody where a policy is in
+force was refused at two of the three doors that take `source_ids=`. Reading one
+session took the argument, ignored its absence and answered -- because `held_by`
+returns `None` for three different things -- no vocabulary, nobody named,
+`UNSCOPED` -- and every reach check reads `None` as reaching everything. Right for
+the first and the third, wrong for the second: a deployment with a policy was
+asked something on a caller's behalf and nobody said whose behalf, and the answer
+named the agent someone else's session is pinned to.
+
+`caller_holds` is the refusal and the lookup together, and the three doors --
+`_effective_grants`, `agent_named` and `Sessions.session` -- go through it. The
+refusal was written out at two of them and forgotten at the third, which is what
+one function removes rather than a third copy of the sentence.
+
+The two housekeeping calls take no caller and stay that way: `sessions()` lists
+the workspace and `delete_session` removes one, both the operator's, so there is
+nothing to forget. `kingfisher reap` passes `source_ids=UNSCOPED` where it reads a
+session, which is what a caller who means no caller writes. `kingfisher list`
+stays exempt for the reason recorded beside it -- read-only, run by whoever has
+the policy file in front of them. *(2026-09-18.)*
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds

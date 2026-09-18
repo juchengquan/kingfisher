@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from kingfisher.application.access import held_by
+from kingfisher.application.access import caller_holds
 from kingfisher.domain.access import reaches
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import (
@@ -121,7 +121,7 @@ class Sessions:
         that is not there. The reason is not lost; it is what that caller's audit
         line says.
         """
-        held = held_by(self.access, source_ids)
+        held = caller_holds(self.access, source_ids)
         found = next((s for s in self.sessions() if s.id == session_id), None)
         if found is None:
             return None

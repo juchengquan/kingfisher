@@ -408,19 +408,13 @@ class Kingfisher(Sessions, Disposal):
                 )
                 raise AccessError(msg)
             return self.grants
-        if source_ids is None:
-            msg = (
-                "this deployment has an access policy, so a call must say who is "
-                "calling: pass source_ids=[...] with the caller's source ids, or "
-                "source_ids=UNSCOPED to run without one"
-            )
-            raise AccessError(msg)
         # Nothing central left to intersect with: the narrowing that source ids
         # imply is per definition, and happens in `AgentSpec.declares` where
-        # the spec is known. What this still does is validate the names -- a
-        # caller naming a source id this deployment does not declare is refused
-        # here rather than quietly reaching nothing.
-        self.held_for(source_ids)
+        # the spec is known. What this still does is ask `caller_holds` for the
+        # refusal every door shares, and validate the names -- a caller naming a
+        # source id this deployment does not declare is refused here rather than
+        # quietly reaching nothing.
+        access.caller_holds(self.access, source_ids)
         return self.grants
 
     def _graph_for(
@@ -516,18 +510,10 @@ class Kingfisher(Sessions, Disposal):
         # exactly the way an agent that was never written is: anything else lets a
         # caller enumerate the catalogue by guessing, and sends them off to try
         # something they will only be refused for.
-        if self.access is not None:
-            if source_ids is None:
-                msg = (
-                    "this deployment has an access policy, so a call must say who "
-                    "is calling: pass source_ids=[...] with the caller's source ids, or "
-                    "source_ids=UNSCOPED to run without one"
-                )
-                raise AccessError(msg)
-            if (held := self.held_for(source_ids)) is not None:
-                offered = {
-                    n: spec for n, spec in offered.items() if reaches(spec.source_ids, held)
-                }
+        if (held := access.caller_holds(self.access, source_ids)) is not None:
+            offered = {
+                n: spec for n, spec in offered.items() if reaches(spec.source_ids, held)
+            }
         listing = ", ".join(sorted(offered)) if offered else "none"
         # Two refusals, one remedy, and the remedy is different when there is nothing at
         # all. `SEED_HINT` says `--from DIR`, which needs a DIR -- and `SUGGESTION`

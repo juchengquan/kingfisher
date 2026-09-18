@@ -220,6 +220,39 @@ def test_a_first_turn_is_refused_however_the_ids_are_written(two_agents, held):
         _first_event(kf, Request(task="t", agent="assistant"), held)
 
 
+def test_reading_a_session_without_saying_who_is_calling_is_refused(two_agents):
+    """The door that answered. Running a turn and asking for an agent both refuse a call
+    that names nobody; reading one session took the same argument, ignored its absence,
+    and answered for a session pinned to an agent the caller could not open -- because
+    "nobody named" and "reaches everything" were the same value.
+    """
+    kf = Kingfisher(two_agents, backend=default_backend)
+
+    with pytest.raises(AccessError, match="source_ids="):
+        kf.session(_pinned_by_a(kf))
+
+
+def test_an_operator_reads_a_session_by_saying_so(two_agents):
+    """`UNSCOPED` is what a caller writes to mean no caller, and housekeeping on the
+    machine is exactly that -- which is what `kingfisher reap` passes.
+    """
+    kf = Kingfisher(two_agents, backend=default_backend)
+
+    assert kf.session(_pinned_by_a(kf), source_ids=UNSCOPED) is not None
+
+
+def test_listing_sessions_stays_the_operators(two_agents):
+    """The two housekeeping calls take no caller at all, so there is nothing to forget.
+    Stated here because the refusal above makes the difference deliberate rather than an
+    oversight in the same area.
+    """
+    kf = Kingfisher(two_agents, backend=default_backend)
+    session_id = _pinned_by_a(kf)
+
+    assert [info.id for info in kf.sessions()] == [session_id]
+    assert kf.delete_session(session_id) is None
+
+
 @pytest.mark.parametrize("held", [("B",), ["B"]], ids=["tuple", "list"])
 def test_a_session_out_of_reach_is_hidden_however_the_ids_are_written(two_agents, held):
     """And reading one: `["B"]` was shown a session pinned to A's agent."""

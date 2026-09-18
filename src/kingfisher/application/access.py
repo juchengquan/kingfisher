@@ -38,6 +38,32 @@ def held_by(
     return vocabulary.expand(tuple(source_ids))
 
 
+def caller_holds(
+    vocabulary: SourceIds | None, source_ids: Iterable[str] | _Unscoped | None
+) -> frozenset[str] | None:
+    """What a caller holds, refusing a call that named nobody where a policy is in force.
+
+    `held_by` answers `None` for three different things -- no vocabulary, nobody named,
+    or `UNSCOPED` -- and every reach check reads `None` as reaching everything. That is
+    right for the first and the third, and wrong for the second: a deployment with a
+    policy was asked something on a caller's behalf and nobody said whose behalf.
+
+    Here rather than at each door, because the sentence below was written out at two of
+    them and forgotten at the third, where reading one session answered for any of them.
+    A caller who means no caller says so with `UNSCOPED`, which is what that value is
+    for; housekeeping that is nobody's -- listing every session, deleting one -- does not
+    come through here at all.
+    """
+    if vocabulary is not None and source_ids is None:
+        msg = (
+            "this deployment has an access policy, so a call must say who is "
+            "calling: pass source_ids=[...] with the caller's source ids, or "
+            "source_ids=UNSCOPED to run without one"
+        )
+        raise AccessError(msg)
+    return held_by(vocabulary, source_ids)
+
+
 def walked(*kinds: Kind) -> Iterator[tuple[str, str, Stated]]:
     """Every definition of every kind, with what it says, in a stable order.
 
