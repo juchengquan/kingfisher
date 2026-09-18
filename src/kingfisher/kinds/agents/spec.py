@@ -83,15 +83,6 @@ class AgentSpec(Definition):
     is what only an agent has, or declares differently.
     """
 
-    #: Added after `system.md` and `PROMPT.md`, never instead of them. Required,
-    #: and with no default here: `parse` refuses a definition that omits it, and
-    #: a default would leave a second way in for something the format does not
-    #: allow -- a spec built in code saying what no file may say.
-    #:
-    #: Declared here rather than on `Definition` because a delegate defaults it to
-    #: empty, having `build` as the alternative. A base would have to pick one of
-    #: the two, and picking the delegate's would be this guarantee going quiet.
-    system_prompt: str
     #: `False` to run without the memory file on a deployment that wired one.
     #: `None` is no opinion, which is not the same: a switch narrows like every
     #: other axis, and only `False` can subtract.

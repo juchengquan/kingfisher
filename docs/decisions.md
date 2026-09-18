@@ -3245,8 +3245,24 @@ nothing here reopens it.
 
 **What it costs, accepted rather than argued away**: reading a spec is two files, and
 ten comments that were true of one kind now have to be true of both. `system_prompt` is
-declared in both subclasses and not on the base, which is the one field a reader will
-expect to find there and will not. *(2026-09-18.)*
+declared in both subclasses at first, and joined them once the question "why do the
+defaults differ?" was asked rather than worked around. *(2026-09-18.)*
+
+*Fourteen, not thirteen: `system_prompt` unified by losing its default rather than by
+sharing one. The two arrived at their defaults from opposite directions -- an agent has
+no second shape, so `parse` refuses a definition without a prompt and a default would
+be the second way in that field exists to refuse; a delegate does, because a compiled
+one carries its instruction inside the graph. Required on both is the stricter reading
+of each: the one caller that builds a compiled delegate now writes `system_prompt=""`,
+which says* this one has no prompt *instead of leaving it to a default nobody reads, and
+`__post_init__` can still tell "brought a graph" from "said nothing". What counts as
+acceptable stays per kind.*
+
+*Doing it found the guarantee untested. Putting the default back on the base makes a
+promptless agent constructible and all 1,959 tests pass -- `parse` refuses a document
+that omits it and always did, and nothing was watching the other door.
+`test_neither_kind_can_be_built_without_saying_what_it_instructs_with` is that door,
+and it is the one part of this work that would have been worth doing on its own.*
 
 **Left for now: a `ToolSpec` a tool could be declared as.** Asked after the entry
 above, about the kind that has no spec at all. A tool is exported as an object and

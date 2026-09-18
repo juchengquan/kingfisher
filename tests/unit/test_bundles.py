@@ -1056,7 +1056,12 @@ def test_a_compiled_delegates_bundle_wins_a_name_the_catalogue_also_defines(cfg,
         return RunnableLambda(lambda value: value)
 
     compiled(
-        SubagentSpec(name="surveyor", description="A compiled subagent.", build=build),
+        SubagentSpec(
+            name="surveyor",
+            description="A compiled subagent.",
+            system_prompt="",
+            build=build,
+        ),
         cfg,
         catalogue=LocalToolRepository(tmp_path / "shared").found,
         private=LocalToolRepository(tmp_path / "own").found,

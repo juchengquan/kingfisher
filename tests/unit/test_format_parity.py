@@ -49,6 +49,29 @@ FOLDED_INTO = {"model": "wanted"}
 
 
 @pytest.mark.parametrize("kind", sorted(FORMATS))
+def test_neither_kind_can_be_built_without_saying_what_it_instructs_with(kind):
+    """A default on `Definition.system_prompt` and the whole suite stays green.
+
+    Measured, on the commit that put the field there: adding `= ""` back to the base
+    makes a promptless agent constructible -- the second way in that field's comment
+    exists to refuse, "a spec built in code saying what no file may say" -- and 1959
+    tests pass anyway. `parse` refuses a *document* that omits it and always did; this
+    is the other door, and nothing was watching it.
+
+    A delegate is held to the same thing for a different reason: a compiled one says
+    `system_prompt=""` out loud, so `__post_init__` can tell "brought a graph" from
+    "said nothing", which it cannot do if the field defaults.
+    """
+    _, _, spec = FORMATS[kind]
+
+    with pytest.raises(TypeError, match="system_prompt"):
+        # The omission is the subject, so `ty` reporting it is the check agreeing
+        # rather than a fault -- and it reports it once per format, which is why the
+        # suppression sits on the call rather than on the file.
+        spec(name="x", description="d")  # ty: ignore[missing-argument]
+
+
+@pytest.mark.parametrize("kind", sorted(FORMATS))
 def test_every_kind_keeps_its_vocabulary_beside_its_spec(kind):
     """One concept reachable by two paths, which is what this file exists to stop --
     and it was true of this file. `AGENT_KNOWN` came from `kinds.agents.spec` while the

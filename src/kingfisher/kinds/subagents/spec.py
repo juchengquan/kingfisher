@@ -56,14 +56,6 @@ class SubagentSpec(Definition):
     what only a delegate has, or declares differently.
     """
 
-    #: The delegate's whole instruction -- or empty, when `build` carries it
-    #: instead. Exactly one of the two is set, checked below rather than
-    #: promised: a spec with neither builds a delegate with no instructions, and
-    #: a spec with both has said one thing twice with no rule for which wins.
-    #:
-    #: Declared here rather than on `Definition` because an agent requires one with
-    #: no default at all, and a base could only hold one of the two answers.
-    system_prompt: str = ""
     #: What this delegate's own folder holds, written down so the definition says it.
     #: `tools` and `skills`, each present only where the file wrote that half; empty
     #: is the ordinary case, since a bundle reaches its owner whether this names it
@@ -359,6 +351,9 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     return SubagentSpec(
         name=fields.text(entry["name"]),
         description=fields.text(entry["description"]),
+        # Said rather than defaulted: a compiled delegate's instruction is inside the
+        # graph it brings, and `__post_init__` reads this as exactly that.
+        system_prompt="",
         build=build,
         # Not `ALL`, which is what a document that stays quiet means. A
         # compiled graph is handed the workspace tools it was granted and

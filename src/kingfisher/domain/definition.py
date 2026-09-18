@@ -34,6 +34,22 @@ class Definition:
 
     name: str
     description: str
+    #: What this definition instructs with. **Required, and with no default**, which
+    #: is the one field here whose two kinds arrived at from opposite directions.
+    #:
+    #: An agent has no second shape: `parse` refuses a definition that omits it, and a
+    #: default would leave a second way in for something the format does not allow --
+    #: a spec built in code saying what no file may say. A delegate does have one: a
+    #: compiled delegate carries its instruction inside the graph, so the string is
+    #: empty and `SubagentSpec.__post_init__` refuses a spec that has neither or both.
+    #:
+    #: It defaulted to empty for a delegate until the pair was looked at together, and
+    #: required here is the stricter reading of both: the one caller that builds a
+    #: compiled delegate now writes `system_prompt=""`, which says *this one has no
+    #: prompt* rather than leaving it to a default nobody reads. What counts as
+    #: acceptable stays with each kind -- an agent's may not be blank, a delegate's
+    #: must be blank exactly when it brought a graph.
+    system_prompt: str
     #: The two tool axes, granted apart because they are offered apart: the
     #: built-ins come with deepagents, `tools` is what this workspace wrote. One
     #: list meant a definition could not ask for a workspace tool without giving
