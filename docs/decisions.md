@@ -2138,6 +2138,46 @@ named after the process, and every thread of a process shares a pid. The advice 
 this entry was unrunnable on the platform it is developed on for as long as it has
 stood. Fixed where the mistake was, in `_write_atomically`. *(2026-09-18.)*
 
+**Reversed in half: `astream` and `arun` are back, the second copy of the turn is
+not.** What the removal missed is an asymmetry it never mentioned. A caller on an
+event loop who wants an *answer* writes `asyncio.to_thread(kf.run, ...)` and is
+done; a caller who wants the events as they arrive has to run the turn on a
+thread and hand each event across through a queue, which is twenty lines, easy to
+get subtly wrong, and described on no page here. Streaming is what an async
+caller wants -- a bot showing tokens, a route streaming a response -- so the
+workaround was fiddliest exactly where it was needed most.
+
+**What is not back is the thing worth removing.** `astream` runs the sync turn on
+a thread of its own and hands events over one at a time; `arun` drains it; and
+`_drained` is the tail both drains share, so the `delete_session` decision exists
+once. `graph.stream` still drives the graph, which is what keeps *Write the sync
+hook* in `guides/middleware.md` true: measured against langchain's own
+machinery, a middleware implementing only `wrap_model_call` **raises** the moment
+a graph is driven asynchronously, and it does so loudly rather than being skipped.
+Every middleware in this repository implements both halves; deepagents'
+`PatchToolCallsMiddleware` implements only `before_agent`, which langgraph runs on
+a thread of its own, so that one is fine either way.
+
+**A thread per turn in flight, not many turns on one loop.** That is the honest
+limit, and it is affordable for the reason the entry above now records with a
+number: turns overlap, 4.96x across eight, because a turn is almost all waiting.
+The one resource that does not come free is the sandbox -- a turn that calls
+`eval` holds its own QuickJS runtime, so eight concurrent such turns hold eight.
+
+**Cancelling waits.** A thread cannot be interrupted, so a cancelled `astream`
+asks the turn to stop at its next event and returns once it has -- at worst one
+model call or one shell command. Returning sooner would leave a window in which
+the session answers `SessionBusyError` to a retry for reasons the caller cannot
+see, which is a worse thing to be handed than a slow cancel.
+`test_a_cancelled_turn_does_not_keep_running_behind_the_caller` fails with
+exactly that error when the wait is removed.
+
+**Methods on `Kingfisher`, and no module-level pair.** `run` and `stream` have
+one-line conveniences over a default service; these do not, because a new name in
+`__all__` needs a witness and the honest witness today is that no caller outside
+this wheel has asked. The day one does, the convenience is four lines -- which is
+how `default_backend` came back. *(2026-09-18.)*
+
 **Taken: files passed by id go.** `Request.input_refs` and `data_refs` let a
 caller with no host paths name files for a `FileStore` the deployment wired to
 resolve -- the service's vocabulary, which is why that store's setting was the

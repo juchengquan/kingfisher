@@ -23,9 +23,13 @@ definitions is the thing to reach for.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from collections.abc import Iterator
-from dataclasses import replace
+import queue
+import threading
+from collections.abc import AsyncIterator, Generator, Iterator
+from contextlib import suppress
+from dataclasses import dataclass, replace
 from pathlib import Path
 from time import monotonic, time
 from typing import TYPE_CHECKING, Any
@@ -128,6 +132,38 @@ if TYPE_CHECKING:
 
 #: `kingfisher.origins`, and deliberately not `kingfisher`.
 logger = logging.getLogger("kingfisher.origins")
+
+
+#: Handed over when the turn's thread is done, however it ended.
+_FINISHED = object()
+
+#: How long the wait below sleeps between looks. Only reached while a cancelled
+#: turn is finishing its last step, so it costs nothing on the path that ends
+#: normally -- and a poll rather than a blocking `get` because the thread may be
+#: about to exit rather than about to hand anything over.
+_LOOK_AGAIN_S = 0.05
+
+
+@dataclass(frozen=True)
+class _Raised:
+    """What the turn's thread took, on its way to the caller's side."""
+
+    error: BaseException
+
+
+def _until_the_turn_stops(handoff: queue.Queue[Any], worker: threading.Thread) -> None:
+    """Wait for the turn's thread, keeping the handoff clear so it can get there.
+
+    The thread may be blocked handing over an event nobody is going to read now.
+    Taking it is what lets that hand-over return, so the turn reaches the
+    `finally` that gives its session's claim back -- a join on its own would wait
+    for a thread that is waiting for this.
+    """
+    while worker.is_alive():
+        with suppress(queue.Empty):
+            handoff.get(timeout=_LOOK_AGAIN_S)
+    worker.join()
+
 
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
 #: run without a checkpointer at all.
@@ -804,8 +840,15 @@ class Kingfisher(Sessions, Disposal):
 
     def stream(
         self, request: str | Request, *, source_ids: Held | None = None
-    ) -> Iterator[RunEvent]:
-        """Run one task, yielding progress as it happens."""
+    ) -> Generator[RunEvent, None, None]:
+        """Run one task, yielding progress as it happens.
+
+        `Generator` rather than the `Iterator` this said, because `astream` has
+        to be able to *stop* one: it closes this to end a cancelled turn, and a
+        turn that is never closed keeps its session's claim until a garbage
+        collection nobody scheduled. Narrower is otherwise better here, so the
+        reason is written where the narrowing would be put back.
+        """
         # Coerced here rather than only in `_prepare`, because holding the
         # session now happens first and a bare task string has no session id to
         # read.
@@ -909,12 +952,106 @@ class Kingfisher(Sessions, Disposal):
         for event in self.stream(request, source_ids=source_ids):
             if event.kind == "finished":
                 result = event.result
+        return self._drained(result, delete_session=delete_session)
 
-        if result is None:  # pragma: no cover -- stream always ends with `finished`
-            msg = "stream() ended without a finished event"
+    def _drained(self, result: RunResult | None, *, delete_session: bool) -> RunResult:
+        """What a drain does once the stream it read has ended.
+
+        Shared by `run` and `arun` rather than written twice. The async path
+        before this one was a second copy of the whole turn and drifted from the
+        first -- see *Taken: the async turn path goes* in `docs/decisions.md` --
+        so what the two paths have in common is named once, here.
+        """
+        if result is None:  # pragma: no cover -- a stream always ends with `finished`
+            msg = "the stream ended without a finished event"
             raise RuntimeError(msg)
         if delete_session and result.completed:
             failure = self.delete_session(result.session_id)
             if failure:
                 result = replace(result, deletion_failure=failure)
         return result
+
+    async def astream(
+        self, request: str | Request, *, source_ids: Held | None = None
+    ) -> AsyncIterator[RunEvent]:
+        """`stream`, for a caller already on an event loop.
+
+        The turn is the sync one, on a thread of its own. `graph.stream` still
+        drives it, so a middleware written as `wrap_model_call` runs under this
+        exactly as it does under `stream` -- which is what *Write the sync hook*
+        in `guides/middleware.md` tells a deployment it may rely on. Anything
+        that drove the graph asynchronously instead would raise on every
+        middleware that implements only the sync half.
+
+        What it costs is a thread per turn in flight rather than many turns on
+        one loop. A turn is almost all waiting on the model -- measured at 4.96x
+        across eight -- so that thread is idle for nearly all of its life.
+
+        **Cancelling waits.** A thread cannot be interrupted, so the turn is
+        asked to stop at the next event it produces and this returns once it
+        has, which is at worst one model call or one shell command away. The
+        session is genuinely free by then, and that is worth more than a prompt
+        return: a session answering "busy" for reasons the caller cannot see is
+        a worse thing to be handed than a slow cancel.
+        """
+        stop = threading.Event()
+        #: One event at a time, which is what gives this the backpressure
+        #: `stream` has for free: the turn advances when the caller asks for the
+        #: next event and not before.
+        handoff: queue.Queue[Any] = queue.Queue(maxsize=1)
+
+        def pump() -> None:
+            # This thread owns the generator and nothing outside reaches it.
+            # Only the thread running a generator may close it -- `close` from
+            # anywhere else mid-step raises `generator already executing`, and
+            # the turn is then left holding its session's claim.
+            events = self.stream(request, source_ids=source_ids)
+            try:
+                for event in events:
+                    handoff.put(event)
+                    if stop.is_set():
+                        # The turn's own cleanup, reached the way a caller who
+                        # stops reading `stream` reaches it: `GeneratorExit` at
+                        # the yield, then the `finally` that gives the claim back.
+                        events.close()
+                        break
+            except BaseException as exc:  # noqa: BLE001 -- carried over the thread
+                # boundary and re-raised on the caller's side, which is the only
+                # place it can mean anything. Swallowing it there would end the
+                # stream as though the turn had finished.
+                handoff.put(_Raised(exc))
+            finally:
+                handoff.put(_FINISHED)
+
+        worker = threading.Thread(target=pump, name="kingfisher-turn", daemon=True)
+        worker.start()
+        try:
+            while True:
+                item = await asyncio.to_thread(handoff.get)
+                if item is _FINISHED:
+                    return
+                if isinstance(item, _Raised):
+                    raise item.error
+                yield item
+        finally:
+            stop.set()
+            await asyncio.to_thread(_until_the_turn_stops, handoff, worker)
+
+    async def arun(
+        self,
+        request: str | Request,
+        *,
+        source_ids: Held | None = None,
+        delete_session: bool = False,
+    ) -> RunResult:
+        """`run`, for a caller already on an event loop. A drain of `astream`.
+
+        `delete_session` means here what it means on `run`, and for the same
+        reason it is offered on neither stream: a drain has an "after" that a
+        generator does not.
+        """
+        result: RunResult | None = None
+        async for event in self.astream(request, source_ids=source_ids):
+            if event.kind == "finished":
+                result = event.result
+        return self._drained(result, delete_session=delete_session)

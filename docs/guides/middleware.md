@@ -243,6 +243,13 @@ kingfisher runs a turn with `graph.stream`, so the hook that runs is the sync on
 twin. A middleware written only as `awrap_tool_call` fails loudly: the turn raises
 the first time it reaches that hook, rather than skipping it.
 
+**`Kingfisher.astream` does not change this.** It runs the same sync turn on a
+thread of its own rather than driving the graph asynchronously, so the sync hook
+is still the one that runs for a caller on an event loop. That is deliberate and
+is the reason the async pair is shaped that way: a graph driven with `astream`
+raises on every middleware that implements only the sync half, which would make
+the rule on this page depend on which entry point a caller happened to use.
+
 A subclass fails quietly. A LangChain middleware that implements both halves —
 `SummarizationMiddleware` is one — keeps its own sync hook when a subclass
 overrides only `abefore_model`: the subclass is installed, the turn runs, and none
