@@ -13,30 +13,10 @@ from pathlib import Path
 from kingfisher.kinds.agents import reading
 from kingfisher.kinds.agents.spec import AgentError, AgentSpec
 
-# `SUFFIX` comes from the format that already names it rather than being
-# restated here: both are YAML documents kingfisher reads, and a second copy of
-# the extension is a second thing to keep in step.
-from kingfisher.kinds.documents import NEAR_MISS, SUFFIX
-from kingfisher.kinds.importing import skipped
-
-
-def _definitions_in(directory: Path) -> list[Path]:
-    """Every agent document below `directory`, at any depth, in a stable order."""
-    found: list[Path] = []
-    for entry in sorted(directory.iterdir()):
-        if skipped(entry.name):
-            continue
-        if entry.is_dir():
-            found.extend(_definitions_in(entry))
-        elif entry.name.endswith(SUFFIX):
-            found.append(entry)
-        elif entry.suffix == NEAR_MISS:
-            msg = (
-                f"{entry.name}: kingfisher reads {SUFFIX!r} here, so this file is "
-                f"not loaded -- rename it to {entry.stem}{SUFFIX}"
-            )
-            raise AgentError(msg)
-    return found
+# The walk comes from the format that already names what a document is called,
+# rather than being restated here: both kinds read the same YAML out of the same
+# shape of directory, and a second copy is a second thing to keep in step.
+from kingfisher.kinds.documents import documents_in
 
 
 @dataclass(frozen=True)
@@ -54,7 +34,7 @@ class LocalAgentRepository:
             return {}
 
         read: list[tuple[AgentSpec, str, str]] = []
-        for path in _definitions_in(directory):
+        for path in documents_in(directory, error=AgentError):
             where = str(path.relative_to(directory))
             text = path.read_text(encoding="utf-8")
             read.append((reading.read(text, path), where, text))

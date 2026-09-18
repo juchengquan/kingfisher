@@ -8,7 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.kinds.documents import NEAR_MISS, SUFFIX
+from kingfisher.kinds.documents import documents_in
 from kingfisher.kinds.importing import (
     Export,
     exported_from,
@@ -32,34 +32,13 @@ ASSET_DIRECTORIES: frozenset[str] = frozenset({"tools", "skills"})
 DECLARES = Export(EXPORT, error=SubagentError, holding="subagents", example="my_subagent")
 
 
-def _definitions_in(directory: Path) -> list[Path]:
-    """Every definition document below `directory`, at any depth, in a stable order."""
-    found: list[Path] = []
-    for entry in sorted(directory.iterdir()):
-        if skipped(entry.name):
-            continue
-        if entry.is_dir():
-            if entry.name in ASSET_DIRECTORIES:
-                continue
-            found.extend(_definitions_in(entry))
-        elif entry.name.endswith(SUFFIX):
-            found.append(entry)
-        elif entry.suffix == NEAR_MISS:
-            msg = (
-                f"{entry.name}: kingfisher reads {SUFFIX!r} here, so this file is "
-                f"not loaded -- rename it to {entry.stem}{SUFFIX}"
-            )
-            raise SubagentError(msg)
-    return found
-
-
 def _declared_in(directory: Path) -> list[tuple[SubagentSpec, str]]:
     """Every subagent a module under `directory` declares, with where it came from."""
     found: list[tuple[SubagentSpec, str]] = []
     for path in modules_in(directory):
         relative = path.relative_to(directory)
-        # The Python half of what `_definitions_in` skips, and it has to be here
-        # rather than in `modules_in`: that walk is shared with the tool
+        # The Python half of what `documents_in` is told to skip, and it has to be
+        # here rather than in `modules_in`: that walk is shared with the tool
         # catalogue, where a folder called `tools` is ordinary organisation.
         # Filtered after the walk rather than during it because the walk imports
         # nothing -- `exported_from` does, further down -- so a module under a
@@ -171,7 +150,7 @@ class LocalSubagentRepository:
         # deepagents two subagents called `profiler` compiles one. No error, and
         # the other simply never exists.
         read: list[tuple[SubagentSpec, str]] = []
-        for path in _definitions_in(directory):
+        for path in documents_in(directory, error=SubagentError, skipping=ASSET_DIRECTORIES):
             # Relative to the catalogue: `reviewer.yaml` stops identifying a
             # file once two folders may each hold one.
             where = str(path.relative_to(directory))
