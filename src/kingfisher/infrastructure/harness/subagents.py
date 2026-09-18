@@ -21,11 +21,7 @@ from kingfisher.domain.capabilities import (
     narrowed,
     refuse_unoffered,
 )
-from kingfisher.infrastructure.harness.backend import (
-    HostPathGuard,
-    WorkspaceToolErrors,
-    WorkspaceToolPaths,
-)
+from kingfisher.infrastructure.harness.backend import tool_guards
 from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.prompting import with_user_prompt
@@ -334,31 +330,22 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     if private:
         owned = {one.name for one in private}
         mine = tuple(one for one in mine if one.name not in owned)
-    # Unconditional, for the reason the parent gives: the backend rejects host paths on
-    # every run, so the thing that turns that rejection into a correction must always be
-    # here. A delegate is built with the parent's backend and inherits none of the
-    # parent's middleware, so the rejection fired for it exactly as it fires above and
-    # had nothing to become -- `HostPathError` came out of the graph and killed the run.
-    middleware.append(HostPathGuard())
-    # Then the workspace tools' own failures. Both wrap every call this delegate makes
-    # -- they catch different exceptions, so the order between them is the parent's
-    # rather than a requirement.
-    if catalogue or private:
-        names = frozenset(entry.name for entry in (*catalogue, *private))
-        middleware.append(WorkspaceToolErrors(names))
-        # And the same translation the parent gets, from the backend it was
-        # handed -- a delegate has no `session_dir` of its own, and the backend
-        # is rooted at one.
-        #
-        # This matters more here than for the parent. A delegate is built with
-        # its own prompt and none of `system.md`, so it never learns that host
-        # paths exist and cannot be told one except by its caller. #245 left
-        # that open in as many words: "a design question about what a delegate
-        # is told". This is the answer -- it is told the same paths as everyone
-        # else, because there is no other kind.
-        root = getattr(backend, "workspace", None)
-        if root is not None:
-            middleware.append(WorkspaceToolPaths(names, root))
+    # The same three every graph holding workspace tools gets, built by `tool_guards`
+    # so that the agent, this delegate and the `general-purpose` one cannot differ --
+    # which they did, and the one that differed held the agent's own tools.
+    #
+    # Translation matters more here than for the parent. A delegate is built with its
+    # own prompt and none of `system.md`, so it never learns that host paths exist and
+    # cannot be told one except by its caller. #245 left that open in as many words:
+    # "a design question about what a delegate is told". This is the answer -- it is
+    # told the same paths as everyone else, because there is no other kind. The root is
+    # the backend's, since a delegate has no `session_dir` of its own.
+    middleware.extend(
+        tool_guards(
+            frozenset(entry.name for entry in (*catalogue, *private)),
+            getattr(backend, "workspace", None),
+        )
+    )
     if allowed != ALL:
         # `None` is a delegate permitted nothing, which is an empty allowlist rather
         # than an absent one -- the same split the parent makes.

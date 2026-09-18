@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.domain.capabilities import Capabilities, CapabilityError
+from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.kinds.subagents import reading
@@ -41,6 +41,48 @@ def build(cfg, session_dir, monkeypatch, **caps):
 def middleware_of(captured, name: str) -> list:
     (spec,) = [s for s in captured["subagents"] if s["name"] == name]
     return spec.get("middleware", [])
+
+
+# -- the deployment's switch ----------------------------------------------
+
+
+def test_a_delegate_gets_no_skills_when_the_deployment_switched_them_off(
+    cfg, session_dir, monkeypatch
+):
+    """`cfg` says what is wired and the request says what it wants of that, and this
+    branch asked only the request. With `KINGFISHER_SKILLS_ENABLED` off the agent got no
+    index and no deny rules while a delegate naming one still got an index over the
+    catalogue -- and `doctor` reported that none would be offered.
+    """
+    offer_skills(cfg, "tabular-qa")
+    define(cfg, "name: reviewer\ndescription: d\nskills: [tabular-qa]\n"
+        "system_prompt: |\n  You review.\n")
+    captured = capture_build(monkeypatch)
+
+    build_agent(
+        cfg,  # the fixture's own, with skills off
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("reviewer",), skills=("tabular-qa",)),
+    )
+
+    assert not [m for m in captured["middleware"] if type(m).__name__ == "NarrowedSkills"]
+    kinds = [type(m).__name__ for m in middleware_of(captured, "reviewer")]
+    assert "NarrowedSkills" not in kinds, f"the delegate was told about skills: {kinds}"
+
+
+def test_a_delegate_still_gets_them_when_the_deployment_wired_them(
+    cfg, session_dir, monkeypatch
+):
+    """The control, so the test above is the switch rather than the wiring."""
+    offer_skills(cfg, "tabular-qa")
+    define(cfg, "name: reviewer\ndescription: d\nskills: [tabular-qa]\n"
+        "system_prompt: |\n  You review.\n")
+
+    captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",), skills=ALL)
+
+    kinds = [type(m).__name__ for m in middleware_of(captured, "reviewer")]
+    assert "NarrowedSkills" in kinds, kinds
 
 
 # -- the field ------------------------------------------------------------
