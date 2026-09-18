@@ -33,11 +33,9 @@ from kingfisher.infrastructure.harness.activation import (
 )
 from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
-    HostPathGuard,
-    WorkspaceToolErrors,
-    WorkspaceToolPaths,
     default_backend,
     skills_sources,
+    tool_guards,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
 from kingfisher.infrastructure.harness.interpreter import _interpreter
@@ -210,8 +208,7 @@ def builtin_tool_names(
         )
 
 
-def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; each
-    # branch is one collaborator being absent, counted a different way
+def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each parameter
     # is one injectable collaborator, and the body is the wiring itself: every
     # statement attaches one thing to the graph, so splitting it would move the
     # wiring somewhere a reader has to go and find rather than shortening it.
@@ -237,11 +234,25 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     capabilities = agent.declares(held).intersect(asked) if agent is not None else asked
     roots = catalogue or Definitions.from_config(cfg)
     resolved_backend = _backend_for(cfg, session_dir, backend, roots)
-    # Unconditional: the backend rejects host paths on every run, so the
-    # thing that turns that rejection into a correction must always be here.
-    middleware: list[Any] = [TodoListMiddleware(), HostPathGuard()]
+    # The catalogue walked these when the deployment was wired; a caller that
+    # has already walked them itself -- `--list` -- still wins. Walked before the
+    # stack rather than beside the tools below, because `tool_guards` needs the
+    # names and every graph built here gets the same three.
+    walked = tuple(roots.tools.found if workspace_tools is None else workspace_tools)
+    # Every walked tool, not the granted ones: a request that activated none of
+    # them cannot reach one, and narrowing this to the grant would mean building
+    # the guard from a set that is computed after it.
+    held = frozenset(entry.name for entry in walked)
+    middleware: list[Any] = [TodoListMiddleware(), *tool_guards(held, session_dir)]
     permissions = read_only_permissions()
     extras: dict[str, Any] = {}
+
+    # One answer to "are skills on", for this agent and for every delegate it
+    # builds. `cfg` says what is wired and the request says what it wants of that --
+    # and the delegate branch below asked only the request, so a deployment with
+    # skills switched off still handed a delegate an index over a route it was
+    # never meant to reach.
+    skills_on = cfg.skills_enabled
 
     # Two axes, and this is where they meet: `cfg` says what is wired, the
     # request says what it wants of that. Narrowing can only subtract --
@@ -255,7 +266,7 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
         # breakpoint, so dropping the block leaves the prefix cached.
         permissions.append(MEMORY_IS_DENIED)
 
-    if cfg.skills_enabled:
+    if skills_on:
         registry = activatable_skills(cfg, catalogue=roots)
         # One source per folder, so a skill below the top level is visible at
         # all -- and labelled the way the registry labelled it, because a label
@@ -321,28 +332,6 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
             tools=list(extra_tools) or None,
             **extras,
         )
-
-    # The catalogue walked these when the deployment was wired; a caller that
-    # has already walked them itself -- `--list` -- still wins.
-    walked = tuple(roots.tools.found if workspace_tools is None else workspace_tools)
-
-    # Appended here rather than beside `HostPathGuard` above, because it needs
-    # the names and they are not known until now. `assemble` closes over the
-    # list, so anything added before it runs is in the built agent.
-    #
-    # Every walked tool, not the granted ones: a request that activated none of
-    # them cannot reach one, and narrowing this to the grant would mean building
-    # the guard from a set that is computed after it.
-    if walked:
-        middleware.append(WorkspaceToolErrors(frozenset(entry.name for entry in walked)))
-        # And the same set gets its paths translated, when there is a session to
-        # translate against. A build with no session -- `inventory` reading the
-        # built-in tool set off a compiled graph -- has no root to resolve to and
-        # no turn to protect.
-        if session_dir is not None:
-            middleware.append(
-                WorkspaceToolPaths(frozenset(entry.name for entry in walked), session_dir)
-            )
 
     defined, activated = _activated_subagents(cfg, capabilities, catalogue=roots)
     surface = _resolve_tools(
@@ -415,8 +404,15 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
                 endpoints=capabilities.endpoints,
                 builtin_tools=surface.granted_builtin,
                 tools=surface.granted_workspace,
-                skills=subagent_skills(defined[name], offered, capabilities.skills),
-                skill_sources=skills_sources(roots.registry.folders),
+                # Behind the deployment's switch, like the agent's own index above:
+                # a delegate asked only the request before this, so a workspace with
+                # skills off still handed one an index of the shared catalogue.
+                skills=(
+                    subagent_skills(defined[name], offered, capabilities.skills)
+                    if skills_on
+                    else None
+                ),
+                skill_sources=skills_sources(roots.registry.folders) if skills_on else None,
                 helpers=helpers,
                 default_model=default_model,
                 tool_objects=tool_objects,
@@ -426,6 +422,10 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
                 # so a qualified `analysis/surveyor.yaml::surveyor` finds its
                 # bundle and a bare `surveyor` finds its own.
                 private=_private_tools(roots, name),
+                # Not behind the switch: a bundle is the delegate's own folder rather
+                # than the catalogue the switch is about, and the backend mounts its
+                # route either way -- withholding the index here would leave the files
+                # reachable and unnamed.
                 private_skills=_private_skills(roots, name),
                 run_on=wanted.get(name),
                 extra_middleware=declared_middleware(
@@ -518,8 +518,13 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     supplied.append(
         {
             **GENERAL_PURPOSE_SUBAGENT,
+            # It is handed *this* agent's tools -- deepagents fills a spec that
+            # names none from the parent -- so it holds the same objects and needs
+            # the same guards around them. Without them a tool call through this
+            # delegate reached the tool with its paths untranslated.
             "middleware": (
-                ([ToolAllowlist(permitted)] if permitted is not None else [])
+                tool_guards(held, session_dir)
+                + ([ToolAllowlist(permitted)] if permitted is not None else [])
                 + deployment_middleware()
             ),
         }

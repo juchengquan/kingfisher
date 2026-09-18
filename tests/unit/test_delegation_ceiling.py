@@ -524,7 +524,12 @@ def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session
     assert not [m for m in seen["middleware"] if isinstance(m, ToolAllowlist)]
     supplied = [s for s in (seen.get("subagents") or ()) if s["name"] == "general-purpose"]
     assert len(supplied) == 1
-    assert supplied[0]["middleware"] == [], "nothing was narrowed and nothing registered"
+    kinds = [type(m).__name__ for m in supplied[0]["middleware"]]
+    assert "ToolAllowlist" not in kinds, "nothing was narrowed, so nothing to narrow it by"
+    # It still carries the guards every graph holding workspace tools carries. This
+    # asserted an empty list, which was the defect: deepagents hands this delegate the
+    # agent's own tools, and it held them with nothing wrapped around them.
+    assert kinds == ["HostPathGuard"], kinds
 
 
 # -- a tool name nothing offers -------------------------------------------
@@ -691,6 +696,13 @@ class _Audit(AgentMiddleware):
     name = "_Audit"
 
 
+def _declared(captured, name: str) -> list:
+    """One named delegate's middleware, as it was handed to deepagents."""
+    supplied = [s for s in captured.get("subagents", ()) if s.get("name") == name]
+    assert supplied, f"no {name!r} delegate was supplied"
+    return list(supplied[0].get("middleware") or [])
+
+
 def _gp(captured) -> dict:
     """The `general-purpose` spec handed to deepagents, or `{}` if absent."""
     for spec in captured.get("subagents", ()):
@@ -716,6 +728,51 @@ def _audited_build(cfg, monkeypatch, session_dir, **caps):
         capabilities=Capabilities(**caps),
     )
     return captured
+
+
+A_WORKSPACE_TOOL = '''
+def peek(path: str) -> str:
+    """Read a file. `path` is the same virtual path the file tools take."""
+    from pathlib import Path
+
+    return Path(path).read_text()
+
+
+TOOLS = [peek]
+'''
+
+
+def _with_a_tool(cfg):
+    from tests.conftest import tools_dir
+
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "peek.py").write_text(A_WORKSPACE_TOOL, encoding="utf-8")
+    return cfg
+
+
+def test_every_graph_holding_the_workspace_tools_carries_the_same_guards(
+    cfg, monkeypatch, session_dir
+):
+    """deepagents fills a delegate spec that names no tools from the parent, so the
+    built-in one holds the agent's own tool objects. It was handed the ceiling and the
+    deployment's middleware and nothing else -- no path translation, so a call through
+    it reached the tool with the paths the model wrote, and no error guard, so a failing
+    tool raised instead of answering. Asserted for all three stacks at once, because
+    each was composed where it was built and the one built last got none of it.
+    """
+    _with_a_tool(cfg)
+    captured = _audited_build(
+        cfg, monkeypatch, session_dir, subagents=("helper",), builtin_tools=("task",)
+    )
+    guards = ["HostPathGuard", "WorkspaceToolErrors", "WorkspaceToolPaths"]
+
+    for where, stack in (
+        ("the agent", captured["middleware"]),
+        ("general-purpose", _gp(captured).get("middleware", ())),
+        ("helper", _declared(captured, "helper")),
+    ):
+        kinds = [type(m).__name__ for m in stack]
+        assert [k for k in kinds if k in guards] == guards, f"{where} carries {kinds}"
 
 
 def test_the_builtin_delegate_carries_the_deployments_middleware(cfg, monkeypatch, session_dir):

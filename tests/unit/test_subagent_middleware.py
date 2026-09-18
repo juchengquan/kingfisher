@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
@@ -202,8 +204,11 @@ def test_what_a_delegate_carries_is_pinned_here_and_only_here(cfg, session_dir, 
     define(cfg, EVERYTHING)
     define(cfg, HELPER, name="helper")
 
+    # Skills on, because this stack is the one with every branch in it and a
+    # delegate's index is the deployment's to switch off -- see
+    # `test_a_delegate_gets_no_skills_when_the_deployment_switched_them_off`.
     captured = build(
-        cfg,
+        replace(cfg, skills_enabled=True),
         monkeypatch,
         registry={"audit": Audited},
         subagents=("reviewer", "helper"),

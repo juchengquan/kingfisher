@@ -386,6 +386,26 @@ it was reversed the day it was written: a folder there may be a Python package, 
 a package may hold a fixture or a prompt beside its `__init__.py`, so the one real
 confusion is named rather than every unfamiliar suffix refused. *(2026-09-17.)*
 
+**One stack for every graph that holds the workspace tools.** Three graphs hold
+them -- the agent, a delegate, and the `general-purpose` delegate deepagents supplies
+-- and each composed its own middleware where it was built. The one built last got
+none of it: deepagents fills a delegate spec that names no tools from the parent, so
+`general-purpose` held the agent's own tool objects with no host-path guard, no error
+guard and no path translation. A tool call through it reached the tool with the paths
+the model wrote, which is exactly the leak translation exists to close, and a failing
+tool raised instead of answering. `tool_guards` builds the three now and all three
+sites call it, so a fourth cannot be written half-right.
+
+**The skills switch is the deployment's, for delegates too.** `cfg.skills_enabled`
+says what is wired and a request says what it wants of that. The delegate branch asked
+only the request, so a workspace with skills switched off still handed a delegate an
+index of the catalogue while the agent got none and `doctor` reported that none would
+be offered. Read once now, beside the request's own ceiling. A delegate's *own* bundle
+stays outside the switch: it is the delegate's folder rather than the catalogue the
+switch is about, and the backend mounts its route either way, so withholding the index
+would leave those files reachable and unnamed. *(2026-09-18, from an architecture
+review; both were found by reading the three stacks side by side.)*
+
 **A definition names at most one model**, and a subagent naming none runs its
 caller's. A list there is refused rather than read. `indistinct` reports a
 delegate that named a model and did not end up anywhere different.
