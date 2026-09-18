@@ -1059,12 +1059,26 @@ Read the diff first, then the files it touches. Report each finding with the
 file, the line, and what goes wrong — a finding nobody can locate is a comment.
 ```
 
-Two shapes:
+Three shapes:
 
 - **Single file.** `skills/<name>/SKILL.md` and nothing else. The common one.
 - **A `reference/` file the body points to,** read on demand. Use this when the
   detail is long and most tasks will not need it: `SKILL.md` stays short enough
   that reading it is cheap, and the reference is fetched only when it applies.
+- **A script the body tells the agent to run.** Put it under the skill —
+  `skills/<name>/scripts/` — and give the command in the procedure, reaching it
+  through `$KINGFISHER_SKILLS`, which the shell exports as the catalogue's path:
+
+      python3 "$KINGFISHER_SKILLS/incident/timeline/scripts/timeline.py" data/api.log
+
+  Reach for this where a step is mechanical and a model doing it by eye would
+  miss things — `skills/incident/timeline/` walks every line of a log so a
+  write-up is not built from whatever the model happened to read. The command
+  takes shell paths, not the file tools' virtual ones, and the script runs
+  under whatever interpreter the shell finds, so keep it to the standard
+  library: nothing installs a skill's dependencies. Only a skill in the shared
+  catalogue can do this — [a bundle's are readable and not
+  runnable](#tools-and-skills-of-its-own--subagentsname).
 
 A skill the agent declines to read is not a failure. If the task did not warrant
 it, not loading it is the mechanism working.

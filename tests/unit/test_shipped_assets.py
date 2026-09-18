@@ -129,6 +129,27 @@ def test_the_timeline_skill_runs_the_script_it_names(shipped, tmp_path):
     assert "data/api.log:3" in out, "an event has to cite the line it came from"
 
 
+def test_the_shipped_set_shows_all_three_skill_shapes(shipped):
+    """`formats.md` documents three shapes a skill may take, and a guide describing one
+    nothing ships is a shape a reader takes on trust.
+
+    The scripted one is why this exists: nothing else under `skills/` is executable, so
+    it is the shape most likely to be tidied away as an oddity -- and it went undocumented
+    for as long as it shipped, which is the same drift one layer up.
+    """
+    root = shipped / "skills"
+    holding = [path.parent for path in root.glob(f"*/{skill.FILENAME}")]
+    holding += [path.parent for path in root.glob(f"*/*/{skill.FILENAME}")]
+
+    alone = {d.name for d in holding if not [p for p in d.iterdir() if p.is_dir()]}
+    referenced = {d.name for d in holding if (d / "reference").is_dir()}
+    scripted = {d.name for d in holding if (d / "scripts").is_dir()}
+
+    assert alone, "no skill is a single file"
+    assert referenced == {"release-notes"}
+    assert scripted == {"timeline"}
+
+
 def test_the_extractor_preset_demonstrates_the_optional_fields(shipped):
     """Both optional fields appear in at least one example, or they are documented in
     the README and shown nowhere.
