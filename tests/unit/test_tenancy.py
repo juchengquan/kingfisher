@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import threading
+from concurrent import futures
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, default_backend
 from kingfisher.domain.capabilities import UNRESTRICTED, Capabilities
@@ -193,6 +197,70 @@ def test_two_sessions_do_not_block_each_other(cfg):
     held.claim(service.dirs, _claim(cfg, busy), stale_after=3600, now=1000.0)
 
     assert service.run(Request("go", session_id=other)).turn_id == "t001"
+
+
+#: Enough turns that anything serialising them is unmistakable, and the number
+#: `test_workspace.py` already pools for the same reason.
+CONCURRENT = 8
+
+
+class _BarrierAgent:
+    """A graph that answers only once every concurrent turn has reached it.
+
+    Stands where the model call stands, which is where a turn spends nearly all
+    of its wall clock. Driven rather than timed: a stopwatch here would go red on
+    a loaded machine, and the question is not how fast the turns are but whether
+    they are ever inside the model call together.
+    """
+
+    def __init__(self, barrier: threading.Barrier) -> None:
+        self._barrier = barrier
+
+    def stream(self, state, config, stream_mode=None, subgraphs=False):
+        del state, config, stream_mode, subgraphs
+        # Its own timeout rather than an unbounded wait, so turns that queue up
+        # fail this suite instead of hanging it.
+        self._barrier.wait()
+        yield ((), "values", {"messages": [AIMessage(content="ok")]})
+
+    def get_state(self, config):
+        del config
+        return SimpleNamespace(values={"messages": [AIMessage(content="ok")]})
+
+
+def test_turns_in_separate_sessions_are_in_flight_at_once(cfg):
+    """`docs/decisions.md` sends a caller wanting turns to overlap to threads, and
+    nothing here had ever run two at the same time -- the test above proves only that
+    a held claim does not refuse another session, which one turn can show on its own.
+
+    A lock anywhere in the turn -- the store, the claim, a saver shared between
+    sessions -- makes each of these wait for the last, and the barrier is what
+    notices.
+    """
+    barrier = threading.Barrier(CONCURRENT, timeout=10)
+    kf = Kingfisher(cfg, graph=_BarrierAgent(barrier), threads=StubCheckpointer())
+    for n in range(CONCURRENT):
+        start(cfg, f"s{n}")
+
+    with futures.ThreadPoolExecutor(max_workers=CONCURRENT) as pool:
+        results = list(
+            pool.map(lambda n: kf.run(Request("go", session_id=f"s{n}")), range(CONCURRENT))
+        )
+
+    assert [result.completed for result in results] == [True] * CONCURRENT
+
+
+def test_the_overlap_check_fails_when_the_turns_do_not_overlap(cfg):
+    """The control. Without it the test above passes against a barrier of its own
+    making -- one a single turn fills -- and would go on passing if something
+    serialised every turn in the process.
+    """
+    barrier = threading.Barrier(CONCURRENT, timeout=0.5)
+    kf = Kingfisher(cfg, graph=_BarrierAgent(barrier), threads=StubCheckpointer())
+    start(cfg, "alone")
+
+    with pytest.raises(threading.BrokenBarrierError):
+        kf.run(Request("go", session_id="alone"))
 
 
 # -- asking about a session without running one ---------------------------
