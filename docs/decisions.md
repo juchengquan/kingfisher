@@ -317,6 +317,27 @@ always told `$KINGFISHER_SKILLS`, since there is always a directory to name.
 `kinds/skills` imports `deepagents` alone now, deferred in the registry, and no kind
 module loads a provider SDK at import. *(2026-09-17.)*
 
+**One envelope for what a Python module declares.** Three kinds read modules out
+of the workspace -- `TOOLS`, `SUBAGENTS`, `MIDDLEWARES` -- and each catalogue wrote
+out the same load, the same `getattr`, and the same two refusals. The copies had
+drifted where a copy drifts first: middleware told an author the type it got and
+stopped, where tools and subagents also said what to write instead. Nothing was
+red, and no duplication rule finds it, because the three say it about different
+nouns.
+
+`kinds/importing.Export` carries the four things that differ -- the name, the
+kind's own error, what the list holds, and one entry spelled as an author would
+write it -- and `exported_from` is the envelope. A catalogue declares its
+`DECLARES` once beside its error class, and the loop body is one line.
+
+`test_refusals.py` is where this showed up as more than tidying. Its table names
+every refusal in the catalogue-reading code, keyed by function and counted against
+the parsed source, so moving two refusals out of three functions made five tests go
+red at once and the table now says the refusal lives in one place. The counter
+itself needed widening: it already followed an error class *handed in* as a
+parameter, and an envelope hands one in as a field of a parameter, which it read as
+no refusal at all. *(2026-09-18.)*
+
 ## Agents and delegation
 
 **The main agent is a definition.** It used to be assembled from four places that

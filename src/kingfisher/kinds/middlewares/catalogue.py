@@ -10,9 +10,9 @@ from types import MappingProxyType
 from typing import Any
 
 from kingfisher.kinds.importing import (
-    PACKAGE_MARKER,
+    Export,
     LoadError,
-    load,
+    exported_from,
     modules_in,
 )
 
@@ -23,6 +23,9 @@ EXPORT = "MIDDLEWARES"
 
 class MiddlewareError(LoadError):
     """A `middlewares/` file that cannot be read, or does not declare itself."""
+
+
+DECLARES = Export(EXPORT, error=MiddlewareError, holding="middleware", example="MyMiddleware")
 
 
 def name_of(entry: type) -> str:
@@ -74,19 +77,7 @@ class LocalMiddlewareRepository:
         claimed: dict[str, str] = {}
         for path in modules_in(directory):
             where = str(path.relative_to(directory)) + ("/" if path.is_dir() else "")
-            module = load(path, declares=EXPORT, error=MiddlewareError)
-            exported = getattr(module, EXPORT, None)
-            if exported is None:
-                declared_in = f"{where}{PACKAGE_MARKER}" if path.is_dir() else where
-                msg = f"{declared_in}: must define {EXPORT}, the middleware it contributes"
-                raise MiddlewareError(msg)
-            if not isinstance(exported, (list, tuple)):
-                msg = (
-                    f"{where}: {EXPORT} must be a list or tuple of middleware classes, "
-                    f"not {type(exported).__name__}"
-                )
-                raise MiddlewareError(msg)
-            for entry in exported:
+            for entry in exported_from(path, where=where, declares=DECLARES):
                 _refuse_unless_buildable(entry, where=where)
                 name = name_of(entry)
                 if (earlier := claimed.get(name)) is not None:

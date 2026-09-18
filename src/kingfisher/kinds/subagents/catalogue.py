@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.kinds.documents import NEAR_MISS, SUFFIX
 from kingfisher.kinds.importing import (
-    PACKAGE_MARKER,
-    load,
+    Export,
+    exported_from,
     modules_in,
     skipped,
 )
@@ -28,6 +28,8 @@ if TYPE_CHECKING:
 #: definitions and nothing else -- but these two hold a subagent's private tools and
 #: skills, and the definition walk must not descend into them.
 ASSET_DIRECTORIES: frozenset[str] = frozenset({"tools", "skills"})
+
+DECLARES = Export(EXPORT, error=SubagentError, holding="subagents", example="my_subagent")
 
 
 def _definitions_in(directory: Path) -> list[Path]:
@@ -60,27 +62,12 @@ def _declared_in(directory: Path) -> list[tuple[SubagentSpec, str]]:
         # rather than in `modules_in`: that walk is shared with the tool
         # catalogue, where a folder called `tools` is ordinary organisation.
         # Filtered after the walk rather than during it because the walk imports
-        # nothing -- `load` does, further down -- so a module under a bundle's
-        # `tools/` is dropped before anything executes it.
+        # nothing -- `exported_from` does, further down -- so a module under a
+        # bundle's `tools/` is dropped before anything executes it.
         if ASSET_DIRECTORIES & set(relative.parts):
             continue
         where = str(relative) + ("/" if path.is_dir() else "")
-        module = load(path, declares=EXPORT, error=SubagentError)
-        exported = getattr(module, EXPORT, None)
-        if exported is None:
-            declared_in = f"{where}{PACKAGE_MARKER}" if path.is_dir() else where
-            msg = f"{declared_in}: must define {EXPORT}, the subagents it contributes"
-            raise SubagentError(msg)
-        # A list or a tuple, and nothing looser. A compiled subagent is a
-        # `dict`, and a dict is iterable, so `SUBAGENTS = {...}` would pass a
-        # duck test and then loop over its own key names. `TOOLS` learned this
-        # from pydantic models, which are iterable for a different reason.
-        if not isinstance(exported, (list, tuple)):
-            msg = (
-                f"{where}: {EXPORT} must be a list or tuple of subagents, "
-                f"got {type(exported).__name__} -- write {EXPORT} = [my_subagent]"
-            )
-            raise SubagentError(msg)
+        exported = exported_from(path, where=where, declares=DECLARES)
         found.extend((declared(entry, where), where) for entry in exported)
     return found
 
