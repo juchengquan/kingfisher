@@ -70,6 +70,21 @@ for the next reader who reaches for one.*
   So an outer `aclose()` does not run an inner `finally` -- which, for a turn,
   meant a session stayed claimed until the loop ended. `astream` closes its inner
   turn by hand.
+- **A cancelled task's generator is finalised one turn of the loop later, and
+  that is soon enough to be unobservable.** Measured by cancelling a turn and
+  looking after exactly N turns of the loop: held at 0, released at 1, with an
+  explicit `aclose` in the drain or without one. So `arun` has none -- awaiting a
+  cancelled task is itself a turn of the loop, which is all the finalizer needs,
+  and nothing a test can see distinguishes the two. `astream`'s inner close is
+  the opposite case and its guard fails when it goes: there a caller can run
+  synchronous work with no loop turn in between.
+- **Cancellation cannot interrupt a turn's cleanup, and the reason is
+  structural.** A cancellation is delivered at a suspension point, and
+  `_turn_lifecycle` is a *sync* context manager -- the claim, the checkpointer and
+  the interpreter are released without ever suspending. Cancelling twice, five
+  times, during the unwinding, or through `wait_for` and `asyncio.timeout` all
+  leave the session free. Made async, that stops being true and every one of
+  those tests would pass on timing alone.
 - **Context reaches the worker through either helper, but not through the
   executor directly.** `asyncio.to_thread` copies the current context, and
   langchain's `run_in_executor` does it by hand -- `partial(copy_context().run,

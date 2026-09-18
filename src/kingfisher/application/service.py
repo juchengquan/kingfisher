@@ -1069,9 +1069,20 @@ class Kingfisher(Sessions, Disposal):
         `delete_session` means here what it means on `run`, and for the same
         reason it is offered on neither stream: a drain has an "after" that a
         generator does not.
+
+        No `aclose` here, and it was tried. `async for` does not close what it
+        drives, so a cancelled drain leaves `astream` to asyncio's
+        async-generator finalizer -- and that was measured as indistinguishable:
+        the session's claim comes back one turn of the event loop after the
+        cancellation, with an explicit close or without one. A defensive line
+        whose removal nothing can observe is one to leave out.
+
+        `astream` closes its own inner turn, which is *not* the same case: that
+        one is load-bearing and its guard fails without it.
         """
+        events = self.astream(request, source_ids=source_ids)
         result: RunResult | None = None
-        async for event in self.astream(request, source_ids=source_ids):
+        async for event in events:
             if event.kind == "finished":
                 result = event.result
         return self._drained(result, delete_session=delete_session)

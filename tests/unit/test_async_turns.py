@@ -216,6 +216,122 @@ def test_a_real_cancelled_task_also_leaves_the_session_free(cfg):
     assert kf.run(Request("again", session_id=session)).completed
 
 
+#: Every way a caller can cancel twice, or cancel something already cancelling.
+#: Named rather than inlined because the interesting one is not obvious: a second
+#: cancellation arriving *during* the first one's cleanup is what would interrupt
+#: the close and leave the session claimed.
+DOUBLE_CANCELS = (
+    "twice at once",
+    "five times at once",
+    "again while it unwinds",
+    "wait_for expiry",
+    "timeout, then cancelled",
+)
+
+
+async def _cancel_twice(kf, session: str, how: str) -> None:
+    """Cancel a turn in flight the way `how` says, and return once it has stopped."""
+    if how == "wait_for expiry":
+        with pytest.raises((TimeoutError, asyncio.CancelledError)):
+            await asyncio.wait_for(kf.arun(Request("go", session_id=session)), timeout=0.05)
+        return
+
+    if how == "timeout, then cancelled":
+
+        async def under_a_deadline() -> None:
+            async with asyncio.timeout(0.05):
+                await kf.arun(Request("go", session_id=session))
+
+        task = asyncio.ensure_future(under_a_deadline())
+        await asyncio.sleep(0.04)
+        task.cancel()
+        with pytest.raises(BaseException):  # noqa: B017 -- either arrives first
+            await task
+        return
+
+    task = asyncio.ensure_future(kf.arun(Request("go", session_id=session)))
+    await asyncio.sleep(0.05)
+    if how == "again while it unwinds":
+        task.cancel()
+        for _ in range(5):
+            # A cancel on each of the next few loop iterations, which is while the
+            # first one's cleanup is unwinding.
+            await asyncio.sleep(0)
+            task.cancel()
+    else:
+        for _ in range(2 if how == "twice at once" else 5):
+            task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+
+@pytest.mark.parametrize("how", DOUBLE_CANCELS)
+def test_cancelling_twice_still_leaves_the_session_free(cfg, how):
+    """A second cancellation must not interrupt the first one's cleanup.
+
+    The only await in the cleanup is the `aclose` that runs the turn's `finally`,
+    and an await is where a cancellation lands -- so the worry was that cancelling
+    twice would skip the close and hold the claim, which is the failure the close
+    exists to prevent arriving by another door.
+
+    **What this cannot do, said plainly.** It asserts what a caller sees, and it
+    cannot discriminate how the session came free: awaiting a cancelled task is
+    itself a turn of the event loop, and one turn is all asyncio's
+    async-generator finalizer needs. Measured -- every case here passes with the
+    explicit closes deleted. The guard for the mechanism is the test below, and
+    the one for `astream`'s inner close is
+    `test_a_cancelled_turn_does_not_keep_running_behind_the_caller`, which uses
+    `aclose` and so can run synchronous work with no loop turn in between.
+
+    It stays because the behaviour is what a caller depends on, and because five
+    ways of cancelling twice is the part nobody would re-derive by reading.
+    """
+    session = start(cfg, f"s-{DOUBLE_CANCELS.index(how)}")
+    # Long enough that the cancellations land inside the step and short enough
+    # that the turn admitted afterwards does not cost the suite a second.
+    kf = service(cfg, _SlowAgent(step_s=0.3))
+
+    async def cancel_then_look() -> tuple[bool, bool]:
+        await _cancel_twice(kf, session, how)
+        # No await between the cancellation and these two, so nothing gets a
+        # chance to tidy up on the turn's behalf.
+        held = _claim(cfg, session).exists()
+        try:
+            admitted = kf.run(Request("after", session_id=session)).completed
+        except SessionBusyError:
+            admitted = False
+        return held, admitted
+
+    held, admitted = asyncio.run(cancel_then_look())
+
+    assert not held, f"{how} left the turn's claim behind"
+    assert admitted, f"{how} left the session unusable"
+
+
+def test_the_turns_cleanup_cannot_be_interrupted_by_a_cancellation():
+    """Why the tests above hold by construction and not by timing.
+
+    A cancellation is delivered at a suspension point. `_turn_lifecycle` is a
+    *sync* context manager, so the `finally` that releases the claim, the
+    checkpointer and the interpreter cannot suspend and cannot be interrupted --
+    however many times a caller cancels, and however slow that cleanup gets.
+
+    Made async for the async path, it would start being interruptible, every test
+    above would pass on timing alone, and nothing else here would notice.
+    """
+    import inspect
+
+    from kingfisher.application.service import Kingfisher as Service
+
+    lifecycle = Service._turn_lifecycle.__wrapped__  # the function `contextmanager` wrapped
+
+    assert inspect.isgeneratorfunction(lifecycle), (
+        "`_turn_lifecycle` is no longer a sync generator, so the turn's cleanup can "
+        "now be interrupted mid-way by a cancellation -- the claim, the checkpointer "
+        "and the interpreter are released in there"
+    )
+
+
 def test_the_callers_context_reaches_the_turn(cfg):
     """langchain carries an ambient `RunnableConfig` -- and a deployment's tracing
     with it -- in a `ContextVar`. A turn run on a bare `threading.Thread` starts
