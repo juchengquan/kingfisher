@@ -134,14 +134,7 @@ logger = logging.getLogger("kingfisher.origins")
 
 @dataclass
 class _Turn:
-    """What a turn accumulates, so its lifecycle and whichever loop drives it agree.
-
-    One record rather than five locals, because there are two loops now -- one
-    over `graph.stream` and one over `graph.astream`. The last time there were
-    two, the second was a copy of the whole turn and drifted from the first: it
-    set `ok` by hand, and mutation testing rather than a reviewer found it. What
-    the loops share is here, and what they do not is the eight lines that differ.
-    """
+    """What a turn accumulates: written by its loop, read by its lifecycle."""
 
     prepared: Prepared
     answer: str = ""
@@ -150,7 +143,7 @@ class _Turn:
     kept: tuple[str, ...] = ()
     delegates: runtime.Delegates = field(default_factory=runtime.Delegates)
     #: What the lifecycle produced and the loop still owes its caller: a context
-    #: manager cannot yield into the generator wrapped around it.
+    #: manager cannot yield into the generator around it.
     pending: list[RunEvent] = field(default_factory=list)
 
 
@@ -840,12 +833,10 @@ class Kingfisher(Sessions, Disposal):
 
     @contextmanager
     def _turn_lifecycle(self, turn: _Turn) -> Iterator[None]:
-        """Everything a turn does around its graph loop, in one copy.
+        """Everything a turn does around its graph loop, shared by both of them.
 
-        The bookkeeping is identical whichever way the graph is driven, and it is
-        the half that drifted when the async path was a second copy of the turn.
-        So the loops below are only loops -- they read chunks and watch the clock
-        -- and every bound, translation and release is here.
+        A bound, a translation or a release added here reaches `stream` and
+        `astream` at once; they differ only in the loop.
         """
         try:
             yield
@@ -890,12 +881,7 @@ class Kingfisher(Sessions, Disposal):
             release_interpreter(self.cfg, prepared.graph)
 
     def _read(self, turn: _Turn, namespace: Any, mode: Any, chunk: Any) -> tuple[RunEvent, ...]:
-        """One stream chunk, recorded on the turn and read as events.
-
-        Two lines, shared, because they are the two the loops would otherwise
-        each hold a copy of -- and the answer accumulating in the wrong one is
-        exactly the kind of drift the record above exists to prevent.
-        """
+        """One stream chunk, read as events. The answer accumulates on `turn`."""
         turn.answer, events = consume(namespace, mode, chunk, turn.answer, turn.delegates)
         return events
 
@@ -934,18 +920,10 @@ class Kingfisher(Sessions, Disposal):
     ) -> AsyncGenerator[RunEvent, None]:
         """The same turn on the graph's own async stream, its directory held.
 
-        `AsyncGenerator` rather than `AsyncIterator`, because `astream` has to be
-        able to *close* this one: an async generator dropped by another is
-        finalised by the event loop rather than at scope, so the close is by hand
-        and the type has to admit it. Private, so nothing public is widened.
-
-        The loop's twin and only the loop: the lifecycle above is shared, so a
-        bound added to one is added to both.
-
-        `_prepare` goes through a thread because it is not loop work -- 15-46ms
-        of filesystem and graph construction, CPU-bound and measured as no
-        better on threads, which is 15-46ms the event loop would otherwise spend
-        on one turn while every other turn waits.
+        `AsyncGenerator` because `astream` closes this by hand, and the type has
+        to admit `aclose`. `_prepare` goes through a thread because it is 15-46ms
+        of CPU-bound construction, which on the loop is 15-46ms every other turn
+        waits through.
         """
         turn = _Turn(
             await asyncio.to_thread(self._prepare, request, session, source_ids=source_ids)
@@ -1001,13 +979,7 @@ class Kingfisher(Sessions, Disposal):
         return self._drained(result, delete_session=delete_session)
 
     def _drained(self, result: RunResult | None, *, delete_session: bool) -> RunResult:
-        """What a drain does once the stream it read has ended.
-
-        Shared by `run` and `arun` rather than written twice. The async path
-        before this one was a second copy of the whole turn and drifted from the
-        first -- see *Taken: the async turn path goes* in `docs/decisions.md` --
-        so what the two paths have in common is named once, here.
-        """
+        """What both drains do once the stream they read has ended."""
         if result is None:  # pragma: no cover -- a stream always ends with `finished`
             msg = "the stream ended without a finished event"
             raise RuntimeError(msg)
@@ -1020,41 +992,25 @@ class Kingfisher(Sessions, Disposal):
     async def astream(
         self, request: str | Request, *, source_ids: Held | None = None
     ) -> AsyncIterator[RunEvent]:
-        """`stream`, for a caller already on an event loop.
+        """`stream`, for a caller already on an event loop. Cancelling is immediate.
 
-        The twin of `stream` down to the line that differs: that one drives
-        `graph.stream` and this one drives `graph.astream`, over one shared
-        lifecycle. Driving it for real rather than stepping the sync turn through
-        a thread is what makes cancellation immediate -- measured at 0.00s
-        against 9.71s on a ten-second model call, because a cancelled `await`
-        abandons the request where a thread has to be waited out. The turn's
-        cleanup still runs inside that instant, so the session is free before
-        the caller continues.
-
-        **What a deployment owes this path, and owes `stream` nothing of.** The
-        `a`-prefixed hook is the one that runs here, so a middleware written only
-        as `wrap_model_call` raises the first time this reaches it, and a saver
-        passed as `threads=` needs `aget_tuple` and `aput` -- langgraph calls
-        them. Both refusals are loud, and neither can reach a caller of `stream`,
-        whose behaviour is unchanged. `guides/middleware.md` says the same thing
-        where a deployment reads it.
+        **This path asks two things `stream` does not.** The `a`-prefixed
+        middleware hook is the one that runs, so a middleware written only as
+        `wrap_model_call` raises the first time this reaches it; and a saver
+        passed as `threads=` needs `aget_tuple` and `aput`. Both refusals are
+        loud, and neither reaches a caller of `stream`.
         """
-        # Coerced here rather than only in `_prepare`, for the reason `stream`
-        # gives: holding the session happens first, and a bare task string has
-        # no session id to read.
-        request = Request.coerce(request)
+        request = Request.coerce(request)  # for the reason `stream` gives
         with self._held_session(request) as session:
             turn = self._astream_turn(request, session, source_ids=source_ids)
             try:
                 async for event in turn:
                     yield event
             finally:
-                # Closed by hand, because an async generator dropped by another
-                # one is finalised by the event loop's `shutdown_asyncgens` and
-                # not when it goes out of scope. `yield from` closes a nested
-                # sync generator for us; there is no async spelling of that, so
-                # without this a caller who stops reading leaves the turn's
-                # `finally` unrun and its session claimed until the loop ends.
+                # By hand: an async generator dropped by another waits for the
+                # loop to finalise it, and `yield from`'s close has no async
+                # spelling. Without this a caller who stops reading leaves the
+                # session claimed.
                 await turn.aclose()
 
     async def arun(
@@ -1070,15 +1026,9 @@ class Kingfisher(Sessions, Disposal):
         reason it is offered on neither stream: a drain has an "after" that a
         generator does not.
 
-        No `aclose` here, and it was tried. `async for` does not close what it
-        drives, so a cancelled drain leaves `astream` to asyncio's
-        async-generator finalizer -- and that was measured as indistinguishable:
-        the session's claim comes back one turn of the event loop after the
-        cancellation, with an explicit close or without one. A defensive line
-        whose removal nothing can observe is one to leave out.
-
-        `astream` closes its own inner turn, which is *not* the same case: that
-        one is load-bearing and its guard fails without it.
+        No `aclose` to match `astream`'s, deliberately: measured, a cancelled
+        drain gives the claim back one turn of the loop later either way, so the
+        close would be a line nothing can observe. `findings.md` has the numbers.
         """
         events = self.astream(request, source_ids=source_ids)
         result: RunResult | None = None
