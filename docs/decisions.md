@@ -1448,6 +1448,14 @@ still needs the history behind it. An id that names nothing is still not an
 error, so a retried delete need not care whether the first one landed.
 *(2026-09-15.)*
 
+**Eviction is deletion that keeps the store's copy, and only when asked.**
+`delete_session` and `reap` take `forget=False`, which removes a session from
+this machine and leaves it in the store, so it resumes here or on another host.
+This qualifies the entry above rather than reversing it: forgetting stays the
+default, because a caller who asked for a deletion and got a resumable session is
+the bug that entry fixed. The thread goes either way -- the next turn is rebuilt
+from the transcript, which the store carries. *(2026-09-18.)*
+
 **`run(delete_session=True)` reports a deletion that failed, on the result.** It
 called `delete_session` and threw away what came back, so a caller got the answer
 and no sign the session was still there. `RunResult.deletion_failure` carries the

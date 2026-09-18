@@ -41,9 +41,14 @@ class Disposal:
     session_root: SessionRoot
     _shared: Any
 
-    def delete_session(self, session_id: str) -> str | None:
+    def delete_session(self, session_id: str, *, forget: bool = True) -> str | None:
         """Dispose of one session: its directory and thread where this workspace keeps
         them, and the store's copy wherever it is. Returns a failure, or None.
+
+        `forget=False` evicts instead: this machine's copy goes and the store's stays,
+        so the session can still be resumed -- without `/data`, which the store is
+        never handed. The thread goes either way; the next turn is rebuilt from the
+        transcript, which the store carries.
         """
         root = sessions_root(self.workspace)
         failure = None
@@ -55,17 +60,25 @@ class Disposal:
         # stopping at the missing directory left a deleted session resumable. Not
         # after a failure, for the reason `reap` gives -- a directory that stayed
         # needs the history behind it.
-        if failure is None:
+        if failure is None and forget:
             self._forget(session_id)
         return failure
 
-    def reap(self, older_than_seconds: float | None = None, *, now: float) -> SweepResult:
+    def reap(
+        self,
+        older_than_seconds: float | None = None,
+        *,
+        now: float,
+        forget: bool = True,
+    ) -> SweepResult:
         """Dispose of every session untouched for `older_than_seconds`.
 
         A claim only spares a session while somebody could still be holding it. This
         used to read claim names and spare every one, so a process that died mid-turn
         exempted its session from retention for good -- ten years idle and still
         there, measured.
+
+        `forget=False` evicts, as it does for `delete_session`.
         """
         root = sessions_root(self.workspace)
         age = self.cfg.session_ttl_s if older_than_seconds is None else older_than_seconds
@@ -82,8 +95,9 @@ class Disposal:
         # whose directory refused to delete is still there and its store copy
         # has to stay with it, or the next turn would find a directory with no
         # history behind it.
-        for gone in result.removed:
-            self._forget(gone)
+        if forget:
+            for gone in result.removed:
+                self._forget(gone)
         return result
 
     def _forget(self, session_id: str) -> None:
