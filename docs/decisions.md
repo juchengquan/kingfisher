@@ -3236,12 +3236,24 @@ itself and is always a loop. A reader meets that difference in one place for the
 time. Two comments each knowing half is how the agent's `wanted` sat stale for months
 with nothing red, and a merged comment cannot drift because there is one of it.
 
-**One spec is still refused, and its three reasons are unchanged**: `_subject` tells the
-kinds apart by `isinstance` to name the file a refusal is about, an agent's
-`system_prompt` is required where a delegate's defaults, and each kind has an invariant
-the other must not run. A base keeps all three; one class turns each into a check on a
-kind field. The readers are untouched -- that is *Not taken: one reader* above, and
-nothing here reopens it.
+**One spec is still refused, and the reason for it changed in this same work.** Two of
+the three hold: `_subject` tells the kinds apart by `isinstance` to name the file a
+refusal is about, and each kind has an invariant the other must not run. The third is
+void -- `system_prompt` is required on both now, so merging no longer makes a promptless
+agent constructible, and anyone re-asking this should know that argument has been spent.
+
+What replaced it is stronger and is a test rather than a judgement.
+`test_the_known_set_matches_the_spec_it_builds` asserts *equality* between a format's
+`KNOWN` and the non-derived fields of the spec it builds, in both directions, and its
+docstring says what that catches: a key accepted and never read. One class makes the
+spec's fields the union of both kinds', so the equality fails for each and the check can
+only weaken to a subset -- which stops catching the thing it exists for. The argument
+about a spec built in code saying what no file may say does not go away with
+`system_prompt` either; it moves to `memory`, `build`, `bundle` and `carried`, where a
+delegate could carry a `memory` nothing reads.
+
+A base keeps all of that; one class turns each into a check on a kind field. The readers
+are untouched -- that is *Not taken: one reader* above, and nothing here reopens it.
 
 **What it costs, accepted rather than argued away**: reading a spec is two files, and
 ten comments that were true of one kind now have to be true of both. `system_prompt` is
