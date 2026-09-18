@@ -174,6 +174,33 @@ def test_arun_can_dispose_of_the_session_like_run(cfg):
     assert not (cfg.workspace / "sessions" / session).exists()
 
 
+def test_disposing_of_a_session_does_not_happen_on_the_event_loop(cfg):
+    """Disposal reaches the store as well as the disk, and a deployment's store may
+    be a network away -- so `arun` must not do it on the loop while every other turn
+    in the process waits. Measured at 0.75ms locally, which is the floor and not the
+    cost that matters.
+
+    Asserted as *which thread*, because the time it takes is the deployment's and
+    the thread it takes it on is ours.
+    """
+    import threading
+
+    ran_on_main = []
+
+    class _Watching(Kingfisher):
+        def delete_session(self, session_id: str, *, forget: bool = True) -> str | None:
+            ran_on_main.append(threading.current_thread() is threading.main_thread())
+            return super().delete_session(session_id, forget=forget)
+
+    session = start(cfg, "s")
+    kf = _Watching(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+
+    asyncio.run(kf.arun(Request("go", session_id=session), delete_session=True))
+
+    assert ran_on_main == [False], "the deletion ran on the event loop's own thread"
+    assert not (cfg.workspace / "sessions" / session).exists()
+
+
 def test_a_failing_turn_raises_on_the_callers_side(cfg):
     """A turn that raises must raise at the caller, not end the stream as though it
     had finished -- an answer of "" and no sign why.

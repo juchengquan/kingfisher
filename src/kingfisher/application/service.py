@@ -1047,4 +1047,10 @@ class Kingfisher(Sessions, Disposal):
         async for event in events:
             if event.kind == "finished":
                 result = event.result
-        return self._drained(result, delete_session=delete_session)
+        if not delete_session:
+            return self._drained(result, delete_session=False)
+        # On a thread, because disposal reaches the store as well as the disk and
+        # a deployment's store may be a network away -- 0.75ms locally, a round
+        # trip wherever `KINGFISHER_SESSION_STORE_FACTORY` points. The whole tail
+        # goes rather than the deletion alone, which keeps `_drained` the one copy.
+        return await asyncio.to_thread(self._drained, result, delete_session=True)

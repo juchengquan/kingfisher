@@ -2113,7 +2113,10 @@ overlap on one event loop, which a server needs and nothing left here is; with t
 service gone their only callers were their own tests and one spike. They were also
 the second copy of the turn -- `_astream_turn` repeated `_stream_turn` down to its
 cleanup, and mutation testing had already found a flag the copy set by hand. A
-caller wanting turns to overlap runs `run` on threads. *(2026-09-15.)*
+caller wanting turns to overlap runs `run` on threads. *(2026-09-15. **Half of
+this was reversed** -- see *Reversed in half* below, which is where a caller
+should start: `astream` is back, and turns overlap on one loop without the
+threads. What stayed removed is the second copy of the turn.)*
 
 **They do overlap, and it took two checks to say so.** The sentence above ended
 "which should overlap as well since a turn is almost all waiting on the model --
