@@ -5,13 +5,17 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import time
+from dataclasses import replace
+from functools import partial
 from pathlib import Path
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from kingfisher.application.service import Kingfisher
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import SessionBusyError
+from kingfisher.infrastructure.harness import runtime
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 
@@ -58,30 +62,70 @@ def _drain(kf, request):
 # -- the same turn, not a second one --------------------------------------
 
 
-def test_astream_yields_what_stream_yields(cfg):
-    """One turn, reachable two ways. The async path before this one was a second
-    copy of the turn and drifted from the first -- a flag it set by hand, found by
-    mutation testing -- so what matters is not that `astream` works but that it is
-    the same turn underneath.
+class _ManySteps(StubAgent):
+    """Keeps taking steps, so a deadline of zero fires between chunks."""
+
+    def __init__(self) -> None:
+        super().__init__("ok", updates=[{"agent": {"messages": [AIMessage("working")]}}] * 6)
+
+
+class _OutOfSteps(StubAgent):
+    """Hits langgraph's own recursion bound, which arrives as an exception."""
+
+    def stream(self, state, config, stream_mode=None, subgraphs=False):
+        yield from ()
+        raise runtime.OutOfSteps
+
+    async def astream(self, state, config, stream_mode=None, subgraphs=False):
+        for chunk in ():  # pragma: no cover -- an async generator that only raises
+            yield chunk
+        raise runtime.OutOfSteps
+
+
+#: Each way a turn can end, as a factory rather than an instance: the two paths
+#: get their own graph, since a stub records what it was asked and sharing one
+#: would let the second run read the first one's state.
+ENDINGS = {
+    "answered": partial(StubAgent, "ok"),
+    "past its deadline": _ManySteps,
+    "out of steps": partial(_OutOfSteps, "ok"),
+}
+
+
+@pytest.mark.parametrize("ending", ENDINGS)
+def test_both_paths_end_a_turn_the_same_way(cfg, ending):
+    """Parity where it is decided per loop rather than shared.
+
+    Every bound used to be written twice, once in each loop, and the ending the
+    caller sees with it -- which is the shape the async path drifted in before, a
+    flag set by hand in the copy. Only the answered path was compared across the
+    two, and that is the one path neither loop decides anything about.
+
+    Compared as the events a caller receives and the reason the turn gives for
+    stopping, because those are what a caller branches on.
     """
-    start(cfg, "s")
-    sync_kinds = [e.kind for e in service(cfg).stream(Request("go", session_id="s"))]
+    bounded = replace(cfg, turn_timeout_s=0) if ending == "past its deadline" else cfg
 
-    start(cfg, "a")
-    async_kinds = [e.kind for e in _drain(service(cfg), Request("go", session_id="a"))]
+    start(bounded, "sync")
+    synchronous = list(
+        service(bounded, ENDINGS[ending]()).stream(Request("go", session_id="sync"))
+    )
 
-    assert async_kinds == sync_kinds
+    start(bounded, "async")
+    asynchronous = _drain(
+        service(bounded, ENDINGS[ending]()), Request("go", session_id="async")
+    )
+
+    assert [e.kind for e in asynchronous] == [e.kind for e in synchronous]
+    assert asynchronous[-1].result.stop_reason == synchronous[-1].result.stop_reason
+    assert asynchronous[-1].result.completed == synchronous[-1].result.completed
 
 
 def test_each_entry_point_drives_the_graph_its_own_way(cfg):
-    """`stream` drives `graph.stream` and `astream` drives `graph.astream`, and the
-    whole benefit rests on that one line: stepping the sync turn through a thread
-    instead measured 9.71s to cancel a ten-second model call where driving the
-    graph's own stream measured 0.00s.
-
-    It is also what a deployment owes the async path -- the `a`-prefixed
-    middleware hook is the one that runs here -- so a turn that quietly fell back
-    to the sync driver would make that requirement disappear and reappear.
+    """Which driver each entry point uses, which is not an implementation detail:
+    the `a`-prefixed middleware hook runs on one and the sync hook on the other,
+    so a path that quietly fell back to the other driver would make that
+    requirement disappear and reappear.
     """
     used: list[str] = []
 
@@ -131,8 +175,8 @@ def test_arun_can_dispose_of_the_session_like_run(cfg):
 
 
 def test_a_failing_turn_raises_on_the_callers_side(cfg):
-    """The exception crosses the thread boundary or it is lost, and a lost one ends
-    the stream as though the turn had finished -- an answer of "" and no sign why.
+    """A turn that raises must raise at the caller, not end the stream as though it
+    had finished -- an answer of "" and no sign why.
     """
 
     class _Broken(StubAgent):

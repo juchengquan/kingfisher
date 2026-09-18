@@ -888,6 +888,34 @@ class Kingfisher(Sessions, Disposal):
     def _payload(self, turn: _Turn) -> dict[str, Any]:
         return runtime.user_payload(turn.prepared.message, turn.prepared.history)
 
+    def _driving(self, turn: _Turn) -> dict[str, Any]:
+        """The keywords both graph streams are driven with.
+
+        Shared so that one of them cannot quietly lose `subgraphs`, which would
+        leave a delegate's tokens out of that path and nothing else changed.
+        """
+        return {
+            "config": turn.prepared.config,
+            "stream_mode": runtime.STREAM_MODES,
+            "subgraphs": True,
+        }
+
+    def _bound(self, turn: _Turn) -> RunEvent | None:
+        """The turn's deadline, read between chunks. `None` while there is time."""
+        stop = overrun(turn.prepared)
+        if stop is not None:
+            turn.stop_reason = "max_duration"
+        return stop
+
+    def _ending(self, turn: _Turn) -> tuple[RunEvent, ...]:
+        """What a turn owes its caller once the lifecycle has closed."""
+        return (
+            *turn.pending,
+            self._finished(
+                turn.prepared, turn.answer, turn.kept, stop_reason=turn.stop_reason
+            ),
+        )
+
     def _stream_turn(
         self, request: Request, session: Session, *, source_ids: Held | None = None
     ) -> Iterator[RunEvent]:
@@ -899,21 +927,12 @@ class Kingfisher(Sessions, Disposal):
             # with no end at all: the claim stayed taken, the checkpointer
             # stayed open, and nothing was persisted.
             yield from turn.prepared.events
-            for namespace, mode, chunk in turn.prepared.graph.stream(
-                self._payload(turn),
-                config=turn.prepared.config,
-                stream_mode=runtime.STREAM_MODES,
-                subgraphs=True,
-            ):
-                yield from self._read(turn, namespace, mode, chunk)
-                if (stop := overrun(turn.prepared)) is not None:
-                    turn.stop_reason = "max_duration"
+            for chunk in turn.prepared.graph.stream(self._payload(turn), **self._driving(turn)):
+                yield from self._read(turn, *chunk)
+                if (stop := self._bound(turn)) is not None:
                     yield stop
                     break
-        yield from turn.pending
-        yield self._finished(
-            turn.prepared, turn.answer, turn.kept, stop_reason=turn.stop_reason
-        )
+        yield from self._ending(turn)
 
     async def _astream_turn(
         self, request: Request, session: Session, *, source_ids: Held | None = None
@@ -931,23 +950,16 @@ class Kingfisher(Sessions, Disposal):
         with self._turn_lifecycle(turn):
             for event in turn.prepared.events:
                 yield event
-            async for namespace, mode, chunk in turn.prepared.graph.astream(
-                self._payload(turn),
-                config=turn.prepared.config,
-                stream_mode=runtime.STREAM_MODES,
-                subgraphs=True,
+            async for chunk in turn.prepared.graph.astream(
+                self._payload(turn), **self._driving(turn)
             ):
-                for event in self._read(turn, namespace, mode, chunk):
+                for event in self._read(turn, *chunk):
                     yield event
-                if (stop := overrun(turn.prepared)) is not None:
-                    turn.stop_reason = "max_duration"
+                if (stop := self._bound(turn)) is not None:
                     yield stop
                     break
-        for event in turn.pending:
+        for event in self._ending(turn):
             yield event
-        yield self._finished(
-            turn.prepared, turn.answer, turn.kept, stop_reason=turn.stop_reason
-        )
 
     def run(
         self,
