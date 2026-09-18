@@ -3217,6 +3217,65 @@ described the list form, which `wanted_model` stopped taking -- and a shared fie
 whose two comments disagree is the case for keeping both, not for merging them.
 *(2026-09-18.)*
 
+**Taken, in the middle form: `Definition`, a base holding what both kinds declare
+identically.** The entry above judged that option a wash and the measurement after it
+did not overturn that. What changed is two things neither had, and both came out of
+building it rather than arguing about it.
+
+**`kw_only=True` is the whole of the mechanism.** A base holding defaulted fields makes
+a required one in a subclass illegal -- *non-default argument follows default argument*
+-- which reads like the structural objection to all of this and is not one. With it,
+`AgentSpec` keeps `system_prompt` required and constructing one without a prompt still
+fails. Nothing builds either spec positionally, so nothing had to change to allow it.
+
+**And a shared comment turned out to be the point rather than the cost.** The objection
+was that ten of the fourteen comments are kind-specific and would go neutral. They do
+not: where the kinds part, the one comment now says which is which -- an agent may write
+`["*"]` for `subagents` and a delegate may not, because for a delegate that set includes
+itself and is always a loop. A reader meets that difference in one place for the first
+time. Two comments each knowing half is how the agent's `wanted` sat stale for months
+with nothing red, and a merged comment cannot drift because there is one of it.
+
+**One spec is still refused, and the reason for it changed in this same work.** Two of
+the three hold: `_subject` tells the kinds apart by `isinstance` to name the file a
+refusal is about, and each kind has an invariant the other must not run. The third is
+void -- `system_prompt` is required on both now, so merging no longer makes a promptless
+agent constructible, and anyone re-asking this should know that argument has been spent.
+
+What replaced it is stronger and is a test rather than a judgement.
+`test_the_known_set_matches_the_spec_it_builds` asserts *equality* between a format's
+`KNOWN` and the non-derived fields of the spec it builds, in both directions, and its
+docstring says what that catches: a key accepted and never read. One class makes the
+spec's fields the union of both kinds', so the equality fails for each and the check can
+only weaken to a subset -- which stops catching the thing it exists for. The argument
+about a spec built in code saying what no file may say does not go away with
+`system_prompt` either; it moves to `memory`, `build`, `bundle` and `carried`, where a
+delegate could carry a `memory` nothing reads.
+
+A base keeps all of that; one class turns each into a check on a kind field. The readers
+are untouched -- that is *Not taken: one reader* above, and nothing here reopens it.
+
+**What it costs, accepted rather than argued away**: reading a spec is two files, and
+ten comments that were true of one kind now have to be true of both. `system_prompt` is
+declared in both subclasses at first, and joined them once the question "why do the
+defaults differ?" was asked rather than worked around. *(2026-09-18.)*
+
+*Fourteen, not thirteen: `system_prompt` unified by losing its default rather than by
+sharing one. The two arrived at their defaults from opposite directions -- an agent has
+no second shape, so `parse` refuses a definition without a prompt and a default would
+be the second way in that field exists to refuse; a delegate does, because a compiled
+one carries its instruction inside the graph. Required on both is the stricter reading
+of each: the one caller that builds a compiled delegate now writes `system_prompt=""`,
+which says* this one has no prompt *instead of leaving it to a default nobody reads, and
+`__post_init__` can still tell "brought a graph" from "said nothing". What counts as
+acceptable stays per kind.*
+
+*Doing it found the guarantee untested. Putting the default back on the base makes a
+promptless agent constructible and all 1,959 tests pass -- `parse` refuses a document
+that omits it and always did, and nothing was watching the other door.
+`test_neither_kind_can_be_built_without_saying_what_it_instructs_with` is that door,
+and it is the one part of this work that would have been worth doing on its own.*
+
 **Left for now: a `ToolSpec` a tool could be declared as.** Asked after the entry
 above, about the kind that has no spec at all. A tool is exported as an object and
 `Found` pairs it with where it came from; agents, subagents and skills each read a

@@ -229,8 +229,11 @@ def test_a_spec_cannot_carry_both_a_prompt_and_a_builder():
     with pytest.raises(ValueError, match="one or the other"):
         SubagentSpec(name="r", description="d", system_prompt="Go.", build=lambda: None)
 
+    # An empty prompt is stated rather than defaulted, so this still reaches
+    # `__post_init__` rather than failing on the signature -- which is the whole of
+    # what this asserts.
     with pytest.raises(ValueError, match="neither"):
-        SubagentSpec(name="r", description="d")
+        SubagentSpec(name="r", description="d", system_prompt="")
 
 
 # -- building ---------------------------------------------------------------
@@ -361,7 +364,10 @@ def test_something_that_merely_looks_like_a_graph_is_refused(cfg):
             return {}
 
     spec = SubagentSpec(
-        name="researcher", description="d", build=lambda model, tools: OnlyInvoke()
+        name="researcher",
+        description="d",
+        system_prompt="",
+        build=lambda model, tools: OnlyInvoke(),
     )
 
     with pytest.raises(SubagentError, match="not a graph"):
@@ -380,7 +386,7 @@ def test_the_check_is_the_interface_not_a_particular_graph_class(cfg):
 
     not_a_graph = RunnableLambda(lambda state: state)
     spec = SubagentSpec(
-        name="researcher", description="d", build=lambda model, tools: not_a_graph
+        name="researcher", description="d", system_prompt="", build=lambda model, tools: not_a_graph
     )
 
     delegate = compiled(spec, cfg)
@@ -483,7 +489,11 @@ def test_a_compiled_delegate_is_handed_the_tool_it_named_either_way(cfg):
         return RunnableLambda(lambda state: state)
 
     spec = SubagentSpec(
-        name="researcher", description="d", tools=("probe.py::probe",), build=build
+        name="researcher",
+        description="d",
+        system_prompt="",
+        tools=("probe.py::probe",),
+        build=build,
     )
 
     compiled(

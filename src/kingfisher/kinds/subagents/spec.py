@@ -21,8 +21,9 @@ from types import MappingProxyType
 from typing import Any
 
 from kingfisher.domain import fields
-from kingfisher.domain.access import AUDIENCED, Audience, narrowed_for
-from kingfisher.domain.capabilities import ALL, Capabilities, Selection
+from kingfisher.domain.access import AUDIENCED
+from kingfisher.domain.capabilities import ALL
+from kingfisher.domain.definition import Definition
 from kingfisher.kinds.tools.spec import claimed_sources
 
 DIRECTORY = "subagents"
@@ -47,54 +48,15 @@ class RunOn:
     model: str
 
 
-@dataclass(frozen=True)
-class SubagentSpec:
-    """One subagent, as the workspace defines it."""
+@dataclass(frozen=True, kw_only=True)
+class SubagentSpec(Definition):
+    """One subagent, as the workspace defines it.
 
-    name: str
-    description: str
-    #: The delegate's whole instruction -- or empty, when `build` carries it
-    #: instead. Exactly one of the two is set, checked below rather than
-    #: promised: a spec with neither builds a delegate with no instructions, and
-    #: a spec with both has said one thing twice with no rule for which wins.
-    system_prompt: str = ""
-    #: The two tool axes, granted apart because they are offered apart: the
-    #: built-ins come with deepagents, `tools` is what this workspace wrote.
-    #: One list meant a delegate could not ask for a workspace tool without
-    #: giving up every built-in, and nothing in the file showed it happening --
-    #: the same trade `Offering.permitted` splits for a request, resolving each
-    #: axis against its own offered set.
-    builtin_tools: Selection = ALL
-    tools: Selection = ALL
-    #: Where each `tools:` entry claimed its tool lives, by name, for the entries
-    #: written `where::what`. Beside `tools` rather than inside it, because a path is a
-    #: claim to be checked and a name is what everything downstream keys on -- folding
-    #: them together would make every consumer learn a spelling that only the checker
-    #: cares about.
-    tool_sources: Mapping[str, str] = field(
-        default_factory=dict, metadata={"derived": True}
-    )
-    #: Skills this delegate is told about. `None` means *none*, which is not
-    #: what `tools` means, and the difference is deliberate: tools are what a
-    #: delegate needs to act, skills are what it needs to know -- and its body
-    #: already is its procedure. Inheriting the caller's index would also put
-    #: it in a context whose narrowness is the reason to delegate at all.
-    skills: Selection = None
-    #: Middleware this delegate runs with, by name, from a registry the
-    #: deployment supplies. A name here selects *code* the deployment wrote,
-    #: which is why a request may narrow it and never add to it.
-    middlewares: Selection = None
-    #: What each `middlewares:` entry wrote under `settings:`, for the entries that wrote
-    #: one. Keyed by name and kept beside them, the way `tool_sources` sits beside
-    #: `tools`: a name is what gets granted and narrowed, and a value passed to the code
-    #: behind it is neither.
-    middleware_settings: Mapping[str, Mapping[str, object]] = field(
-        default_factory=dict, metadata={"derived": True}
-    )
-    #: Delegates this one may consult, by name, from the same catalogue. Absent means
-    #: none -- like `skills`, and for the same reason: a delegate that needed the whole
-    #: catalogue would not have been worth defining.
-    subagents: Selection = None
+    What it shares with an agent is on `Definition`; what is here is what only a
+    delegate has -- the graph it may bring instead of a prompt, and the bundle that
+    comes with it.
+    """
+
     #: What this delegate's own folder holds, written down so the definition says it.
     #: `tools` and `skills`, each present only where the file wrote that half; empty
     #: is the ordinary case, since a bundle reaches its owner whether this names it
@@ -126,38 +88,10 @@ class SubagentSpec:
     #: rule saying which wins, and `miscounted` would check the claim against the
     #: wrong half.
     carried: Mapping[str, Any] = field(default_factory=dict, metadata={"derived": True})
-    #: The model this delegate runs, out of what the catalogue defines. `None` means
-    #: whatever summoned it. Naming one decides where the prompt goes and whose
-    #: credentials pay -- the endpoint follows from the model -- which is why it is
-    #: granted rather than free.
-    wanted: str | None = field(default=None, metadata={"derived": True})
-    #: The caller's own keys, carried and never interpreted. Kingfisher reads
-    #: nothing here and never will: the moment it did, this would be a field
-    #: with rules, and the point of it is to be the one place a definition can
-    #: say something this format has no opinion about.
-    metadata: Mapping[str, object] = field(default_factory=dict)
     #: What assembles this delegate, when a workspace declared it in Python rather than
     #: YAML. Called with a model and the tools it was granted, and it returns a graph
     #: deepagents runs as given.
     build: Any = field(default=None, metadata={"derived": True})
-    #: Who may reach this delegate, wherever it is used.
-    source_ids: Audience = ALL
-    #: Field name -> entry name -> who reaches that entry, for the fields in
-    #: `AUDIENCED`. Empty for a definition written as plain lists.
-    audiences: Mapping[str, Mapping[str, Audience]] = field(
-        default_factory=dict, metadata={"derived": True}
-    )
-
-    def declares(self, held: frozenset[str] | None = None) -> Capabilities:
-        """What this delegate holds, narrowed to what one caller reaches."""
-        reached = narrowed_for(self, held)
-        return Capabilities(
-            builtin_tools=self.builtin_tools,
-            tools=reached["tools"],
-            skills=reached["skills"],
-            subagents=reached["subagents"],
-            middlewares=self.middlewares,
-        )
 
     def __post_init__(self) -> None:
         """Exactly one of `system_prompt` and `build`, and never two kinds of bundle."""
@@ -418,6 +352,9 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     return SubagentSpec(
         name=fields.text(entry["name"]),
         description=fields.text(entry["description"]),
+        # Said rather than defaulted: a compiled delegate's instruction is inside the
+        # graph it brings, and `__post_init__` reads this as exactly that.
+        system_prompt="",
         build=build,
         # Not `ALL`, which is what a document that stays quiet means. A
         # compiled graph is handed the workspace tools it was granted and
