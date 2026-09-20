@@ -71,6 +71,22 @@ OFF = "off"
 
 MODES = (AUTO, BUBBLEWRAP, EXTERNAL, OFF)
 
+#: What `Confinement.mechanism` can say. A separate vocabulary from `MODES`, which
+#: reads like a coincidence because bubblewrap is in both and is not one: a mode is
+#: what a deployment asks for, and a mechanism is what ended up confining the command.
+#: `AUTO` produces every one of these and is not any of them.
+#:
+#: Named because three files outside this one branched on the spellings -- `_fence_for`
+#: twice, `doctor` once -- and a mechanism renamed here would have gone on reading as
+#: "not a fence" at each of them, which is a shell running unfenced and reported as
+#: confined.
+LANDLOCK = "Landlock"
+SANDBOX_EXEC = "sandbox-exec"
+
+#: The two this process builds and runs itself, which is the question `_fence_for`
+#: asks. `SANDBOX_EXEC` is not one: it confines by wrapping the command string.
+LINUX_FENCES = (LANDLOCK, BUBBLEWRAP)
+
 
 @dataclass(frozen=True)
 class Confinement:
@@ -139,7 +155,7 @@ def _bubblewrap() -> Confinement:
     from kingfisher.infrastructure.sandbox.bubblewrap import bubblewrap_available  # noqa: PLC0415
 
     if bubblewrap_available():
-        return Confinement(wrap=_unwrapped, mechanism="bubblewrap")
+        return Confinement(wrap=_unwrapped, mechanism=BUBBLEWRAP)
     return Confinement(
         wrap=_unwrapped,
         warning=(
@@ -168,7 +184,7 @@ def _linux() -> Confinement:
     session's files and `doctor` said so. Something beats that.
     """
     if landlock_ready():
-        return Confinement(wrap=_unwrapped, mechanism="Landlock")
+        return Confinement(wrap=_unwrapped, mechanism=LANDLOCK)
     # Through `_bubblewrap` rather than probing again, so there is one place
     # that decides whether bubblewrap works here. Two would eventually disagree,
     # and the disagreement would be `doctor` naming a fence that is not running.
@@ -483,7 +499,7 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
             protected_files=tuple(dict.fromkeys(Path(p).resolve() for p in authored)),
         ),
     )
-    return Confinement(wrap=_sandbox_exec(path), mechanism="sandbox-exec")
+    return Confinement(wrap=_sandbox_exec(path), mechanism=SANDBOX_EXEC)
 
 
 def _write_atomically(path: Path, text: str) -> None:

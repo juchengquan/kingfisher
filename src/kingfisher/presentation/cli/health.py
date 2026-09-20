@@ -539,7 +539,7 @@ def _mechanism(confined: Confinement) -> str:
     """What is doing the confining, named rather than implied."""
     named = (
         "bubblewrap (Landlock is unavailable here, and the shell has no network)"
-        if confined.mechanism == "bubblewrap"
+        if confined.mechanism == confinement.BUBBLEWRAP
         else confined.mechanism or "the platform's sandbox"
     )
     # A supplied runner that is *local* still receives the confined command, so

@@ -41,12 +41,13 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kingfisher.domain.ports import CommandResult
-from kingfisher.infrastructure.sandbox.fence import MAX_OUTPUT_BYTES
+from kingfisher.infrastructure.sandbox.linux import MAX_OUTPUT_BYTES, outcome, present
 from kingfisher.layout import HARNESS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
+
+    from kingfisher.domain.ports import CommandResult
 
 #: Bound read-only so a shell can be a shell. `/proc` is absent for the reason
 #: the module explains, and `/dev` is not here because `--dev` builds a fresh
@@ -76,13 +77,6 @@ def bubblewrap_available() -> bool:
     return done.returncode == 0
 
 
-def _present(paths: Iterable[Path | str]) -> list[str]:
-    """The ones that exist. `bwrap` refuses a bind whose source is absent, and
-    `/lib64` is missing on arm64 Debian -- the same finding that stopped the
-    Landlock policy building, arriving through a different mechanism."""
-    return [str(path) for path in paths if Path(path).exists()]
-
-
 def argv_for(
     session_dir: Path,
     *,
@@ -91,18 +85,18 @@ def argv_for(
 ) -> list[str]:
     """The sandbox one session's commands run in, generated from it."""
     argv = ["bwrap"]
-    for path in _present(SYSTEM_PATHS):
+    for path in present(SYSTEM_PATHS):
         argv += ["--ro-bind", path, path]
-    for path in _present(readable):
+    for path in present(readable):
         argv += ["--ro-bind", str(path), str(path)]
-    for path in _present([session_dir, *writable]):
+    for path in present([session_dir, *writable]):
         argv += ["--bind", str(path), str(path)]
     # After the session's own bind, and that order is the whole mechanism: bwrap
     # applies binds in sequence, so a read-only bind of a subpath lands on top of
     # the writable one underneath it. Before it, the session bind would cover
-    # this again. `_present` drops it if it is absent, which is why
+    # this again. `present` drops it if it is absent, which is why
     # `ensure_session_layout` makes it before a fence is built.
-    for path in _present([Path(session_dir) / HARNESS]):
+    for path in present([Path(session_dir) / HARNESS]):
         argv += ["--ro-bind", str(path), str(path)]
     argv += [
         # A fresh minimal /dev rather than the container's.
@@ -140,8 +134,9 @@ class BubblewrapRunner:
 
     def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
         """Run `command` through a shell, inside the sandbox."""
-        try:
-            done = subprocess.run(  # noqa: S603 -- generated argv, and the shell is the point
+
+        def launch() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(  # noqa: S603 -- generated argv, and the shell is the point
                 [*self.argv, "/bin/sh", "-c", command],
                 env=self.env,
                 capture_output=True,
@@ -149,23 +144,10 @@ class BubblewrapRunner:
                 timeout=timeout,
                 check=False,
             )
-        except subprocess.TimeoutExpired:
-            return CommandResult(
-                output=f"Error: Command timed out after {timeout} seconds.",
-                exit_code=124,
-            )
-        except (OSError, subprocess.SubprocessError) as failed:
-            return CommandResult(
-                output=f"[fence] the command did not run: bubblewrap failed ({failed})",
-                exit_code=1,
-            )
-        return self._shaped(done.stdout + done.stderr, done.returncode)
 
-    def _shaped(self, output: str, exit_code: int) -> CommandResult:
-        """Truncated where an unfenced command would truncate, so a fence does
-        not change how much of a turn the agent can see."""
-        truncated = len(output.encode("utf-8")) > self.max_output_bytes
-        if truncated:
-            output = output[: self.max_output_bytes]
-            output += f"\n\n... Output truncated at {self.max_output_bytes} bytes."
-        return CommandResult(output=output, exit_code=exit_code, truncated=truncated)
+        return outcome(
+            launch,
+            timeout=timeout,
+            max_output_bytes=self.max_output_bytes,
+            unstartable="bubblewrap failed",
+        )

@@ -41,11 +41,13 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.domain.ports import CommandResult
+from kingfisher.infrastructure.sandbox.linux import MAX_OUTPUT_BYTES, outcome, present
 from kingfisher.layout import HARNESS, SESSION_DIRS, SESSION_PLUMBING
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from kingfisher.domain.ports import CommandResult
 
 #: What a shell needs to be a shell. Landlock denies by default and the fence is
 #: applied before `exec`, so a policy without these cannot start `/bin/sh` at
@@ -53,26 +55,12 @@ if TYPE_CHECKING:
 #: than a denied path. Taken from `sandlock`'s own quick-start rather than
 #: assembled here, with `/sbin` added because a Debian shell reaches for it.
 #:
-#: Filtered against the host by `_present`, and that is not tidiness. Measured:
-#: `/lib64` does not exist on arm64 Debian, and naming it made `sandlock_create`
-#: fail outright -- so the fence did not build, and every command came back with
-#: exit -1 and no output, which reads as a broken image rather than as a fence
-#: that was never applied. A list of paths compiled into this file is a claim
-#: about every image kingfisher will ever run in, and it was wrong on the second
-#: one it met.
+#: Filtered against the host by `present`, and that is not tidiness: the finding
+#: that made it necessary is recorded there, and it cost this fence a release
+#: where every command came back looking like a broken image.
 SYSTEM_PATHS: tuple[str, ...] = (
     "/usr", "/lib", "/lib64", "/bin", "/sbin", "/etc", "/proc", "/dev",
 )
-
-#: Matches `LocalShellBackend`'s own limit, so a fenced command and an unfenced
-#: one truncate at the same place. A fence that changed how much output a turn
-#: could see would be a fence that changed the agent's behaviour.
-MAX_OUTPUT_BYTES = 100_000
-
-
-def _present(paths: Iterable[Path | str]) -> list[str]:
-    """The ones that exist, as strings."""
-    return [str(path) for path in paths if Path(path).exists()]
 
 
 def _session_writable(session_dir: Path) -> list[Path]:
@@ -125,8 +113,8 @@ def policy_for(
         # cannot list its own working directory gets swapped out for no fence at
         # all. Writable is narrower than readable here, and `_session_writable`
         # says why it has to be.
-        fs_readable=_present([*SYSTEM_PATHS, *readable, session_dir]),
-        fs_writable=_present([*_session_writable(session_dir), *writable]),
+        fs_readable=present([*SYSTEM_PATHS, *readable, session_dir]),
+        fs_writable=present([*_session_writable(session_dir), *writable]),
     )
 
 
@@ -180,8 +168,8 @@ class LandlockRunner:
         def fence() -> None:
             confine(self.policy)
 
-        try:
-            done = subprocess.run(  # noqa: S602 -- `execute` is a shell by definition
+        def launch() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(  # noqa: S602 -- `execute` is a shell by definition
                 command,
                 shell=True,
                 cwd=self.cwd,
@@ -192,33 +180,10 @@ class LandlockRunner:
                 timeout=timeout,
                 check=False,
             )
-        except subprocess.TimeoutExpired:
-            return CommandResult(
-                output=f"Error: Command timed out after {timeout} seconds.",
-                # The shell's own, so a caller cannot tell a fenced timeout from
-                # an unfenced one -- which is the point: the fence is not
-                # supposed to change what a turn sees except by denying a path.
-                exit_code=124,
-            )
-        except (OSError, subprocess.SubprocessError) as failed:
-            # The fence failing to *build* used to arrive as an exit code with two empty
-            # byte strings, which is what a command with no output looks like -- so a
-            # fence that never applied read as a broken image. Both types are caught
-            # because a `preexec_fn` that raises comes back as a `SubprocessError`
-            # wrapping the child's exception rather than as the exception itself.
-            return CommandResult(
-                output=(
-                    f"[fence] the command did not run: the Landlock fence could not be "
-                    f"applied ({failed})"
-                ),
-                exit_code=1,
-            )
-        return self._shaped(done.stdout + done.stderr, done.returncode)
 
-    def _shaped(self, output: str, exit_code: int) -> CommandResult:
-        """Truncated where an unfenced command would truncate."""
-        truncated = len(output.encode("utf-8")) > self.max_output_bytes
-        if truncated:
-            output = output[: self.max_output_bytes]
-            output += f"\n\n... Output truncated at {self.max_output_bytes} bytes."
-        return CommandResult(output=output, exit_code=exit_code, truncated=truncated)
+        return outcome(
+            launch,
+            timeout=timeout,
+            max_output_bytes=self.max_output_bytes,
+            unstartable="the Landlock fence could not be applied",
+        )
