@@ -100,7 +100,7 @@ from kingfisher.infrastructure.session_store import (
 from kingfisher.infrastructure.wiring import store_named
 from kingfisher.infrastructure.workspace.layout import ensure_layout
 from kingfisher.infrastructure.workspace.permissions import protect_data
-from kingfisher.infrastructure.workspace.placement import check_placeable, place_data, place_inputs
+from kingfisher.infrastructure.workspace.placement import place_data
 from kingfisher.infrastructure.workspace.seeding import SEED_HINT, STARTER_AGENT
 from kingfisher.infrastructure.workspace.sessions import (
     LocalSessionDirs,
@@ -632,11 +632,6 @@ class Kingfisher(Sessions, Disposal):
             source_ids=source_ids,
         )
 
-        # The last thing that can refuse, and the reason this half exists. The
-        # files themselves cannot be copied until a turn directory holds them,
-        # but refusing them must not wait that long.
-        check_placeable(request.inputs)
-
         return Admitted(
             request=request,
             session=session,
@@ -678,14 +673,13 @@ class Kingfisher(Sessions, Disposal):
 
     def _open_turn(self, admitted: Admitted) -> Prepared:
         """Create the turn and compose what the loop needs."""
-        cfg, dirs = self.cfg, self.dirs
+        cfg = self.cfg
         request, session = admitted.request, admitted.session
         session_id = session.id
 
-        # The aggregate owns turn allocation: atomic, and a caller-supplied id wins.
-        turn = session.allocate_turn(dirs, request.turn_id)
-
-        place_inputs(request.inputs, turn.input_dir)
+        # A caller-supplied id wins; otherwise one is made. No directory is claimed,
+        # so there is nothing to be atomic about any more.
+        turn = session.allocate_turn(request.turn_id)
 
         logger = JsonlRunLogger(
             log_path(session.directory),
@@ -693,18 +687,13 @@ class Kingfisher(Sessions, Disposal):
             endpoint=cfg.models.resolve()[0].endpoint,
             session_id=session_id,
         )
-        logger.run_start(request.task, turn.virtual_dir)
+        logger.run_start(request.task, str(session.directory))
 
         return Prepared(
             graph=admitted.graph,
             release=admitted.release,
             history=read_transcript(session.directory),
-            message=turn_message(
-                request.task,
-                turn,
-                admitted.placement.placed,
-                has_inputs=bool(request.inputs),
-            ),
+            message=turn_message(request.task, admitted.placement.placed),
             session=session,
             turn=turn,
             logger=logger,
@@ -714,7 +703,7 @@ class Kingfisher(Sessions, Disposal):
                 "recursion_limit": cfg.recursion_limit,
             },
             events=opening_events(
-                turn.virtual_dir,
+                turn.id,
                 admitted.unprotected,
                 admitted.placement,
                 admitted.withheld,
@@ -768,8 +757,7 @@ class Kingfisher(Sessions, Disposal):
                 session_id=prepared.session.id,
                 turn_id=prepared.turn.id,
                 answer=answer,
-                virtual_dir=prepared.turn.virtual_dir,
-                run_dir=prepared.turn.directory,
+                session_dir=prepared.session.directory,
                 log_path=log_path(prepared.session.directory),
                 # Collected after the graph has finished, so it reflects what
                 # the turn actually left behind -- including what the shell

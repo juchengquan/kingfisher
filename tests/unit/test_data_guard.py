@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher.infrastructure.workspace.permissions import protect_data, writable_data
-from kingfisher.infrastructure.workspace.placement import DataError, place_data, place_inputs
+from kingfisher.infrastructure.workspace.placement import DataError, place_data
 from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs
 
 
@@ -182,52 +182,6 @@ def test_a_missing_source_is_refused_before_anything_is_written(session_dir, tmp
 # documented counterpart had. Both cases below were measured against the real
 # service before the fix: the first was accepted, and the second left
 # `runs/t001/input/present.csv` behind.
-
-
-def test_two_inputs_with_one_basename_are_refused(tmp_path):
-    """The same loss as for `/data`, and it was silent here."""
-    (tmp_path / "a").mkdir()
-    (tmp_path / "b").mkdir()
-    first = tmp_path / "a" / "report.csv"
-    second = tmp_path / "b" / "report.csv"
-    first.write_text("one")
-    second.write_text("two")
-    into = tmp_path / "input"
-
-    with pytest.raises(DataError, match=r"report\.csv"):
-        place_inputs((first, second), into)
-
-    assert not into.exists()
-
-
-def test_a_missing_input_leaves_nothing_half_placed(tmp_path):
-    present = tmp_path / "present.csv"
-    present.write_text("x")
-    into = tmp_path / "input"
-
-    with pytest.raises(DataError, match=r"gone\.csv"):
-        place_inputs((present, tmp_path / "gone.csv"), into)
-
-    assert not (into / "present.csv").exists()
-
-
-def test_placing_inputs_names_what_landed(tmp_path):
-    one = tmp_path / "one.csv"
-    two = tmp_path / "two.csv"
-    one.write_text("1")
-    two.write_text("2")
-    into = tmp_path / "input"
-
-    assert place_inputs((one, two), into) == ("one.csv", "two.csv")
-    assert sorted(p.name for p in into.iterdir()) == ["one.csv", "two.csv"]
-
-
-def test_no_inputs_makes_no_directory(tmp_path):
-    """A turn that supplied nothing should not look like one that did."""
-    into = tmp_path / "input"
-
-    assert place_inputs((), into) == ()
-    assert not into.exists()
 
 
 def test_resupplying_replaces_and_says_so(session_dir, tmp_path):

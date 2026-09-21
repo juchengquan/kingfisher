@@ -44,7 +44,7 @@ def main() -> int:
             "What is the total headcount in the file supplied with this request? "
             "Answer with the number and the filename you read.",
             session_id=session,
-            inputs=[upload],
+            data=[upload],
         ),
         cfg=cfg,
     )
@@ -62,11 +62,11 @@ def main() -> int:
     print(f"  turn {second.turn_id}: {second.answer.splitlines()[0][:120]}")
 
     checks = {
-        "isolated": first.run_dir != second.run_dir
-        and (first.run_dir / "report.md").exists()
-        and (second.run_dir / "report.md").exists(),
+        "isolated": first.session_dir != second.session_dir
+        and (first.session_dir / "report.md").exists()
+        and (second.session_dir / "report.md").exists(),
         "continuous": "design" in second.answer.lower(),
-        "scoped": (first.run_dir / "input" / UPLOAD_NAME).exists()
+        "scoped": (first.session_dir / "input" / UPLOAD_NAME).exists()
         and not (workspace / "data" / UPLOAD_NAME).exists(),
         "totalled": "50" in first.answer,
     }
@@ -76,8 +76,8 @@ def main() -> int:
         print(f"[{'PASS' if ok else 'FAIL'}] {name}")
     print(f"\n{sum(checks.values())}/{len(checks)} passed")
     print(
-        f"turn dirs: {first.run_dir.name}, {second.run_dir.name} "
-        f"under {first.run_dir.parent.name}"
+        f"turn dirs: {first.session_dir.name}, {second.session_dir.name} "
+        f"under {first.session_dir.parent.name}"
     )
     return 0 if all(checks.values()) else 1
 

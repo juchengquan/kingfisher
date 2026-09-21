@@ -38,18 +38,20 @@ STOP_REASONS: tuple[str, ...] = (
 @dataclass(frozen=True)
 class RunResult:
     session_id: str
-    #: Sequential within the session — `t001`, `t002`. One turn is one request.
+    #: What this turn was called. A caller's own id where it supplied one, so a
+    #: service can tie the run back to the request that asked for it; otherwise one
+    #: made here. Not a sequence -- nothing compares two.
     turn_id: str
     answer: str
-    #: Where the turn's files are, as the agent addresses them -- `/runs/t001`.
-    #: Machine-independent, so this is the one a caller somewhere else can use, and
-    #: it pairs with `artifacts`, which is relative to the same root.
-    virtual_dir: str = ""
     #: Host paths, and the two fields here that must not leave the machine. They name a
     #: directory on the server's disk, which a remote caller cannot read and should not
     #: be told about. They are here because a *local* caller is on the host: the driver
-    #: prints `run_dir` to say where your files landed.
-    run_dir: Path = Path()
+    #: prints `session_dir` to say where your files landed.
+    #:
+    #: The session's, not the turn's. A turn had a directory of its own until
+    #: `/scratch` and `/derived` took over what it held, and `artifacts` below is
+    #: relative to this root.
+    session_dir: Path = Path()
     log_path: Path = Path()
     #: Everything under `/derived` and `/memory` at the end of this turn, as paths
     #: relative to the session root. What is *present*, not what changed: `execute`

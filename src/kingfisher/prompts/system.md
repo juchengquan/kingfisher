@@ -12,9 +12,10 @@ same thing in every session and on every machine:
   and it is reported back to whoever asked for the work when the turn ends. There is
   no separate place for reports; whatever should be kept goes here, whatever it is
   called.
-- Your run directory — named in the task. Scratch, intermediates and this turn's
-  outputs. Nothing here is reported back and old sessions are swept, so anything you
-  want kept belongs in `/derived` instead.
+- `/scratch` — working files: intermediates, downloads, anything you need while you
+  think. Nothing here is reported back and old sessions are swept, so anything you
+  want kept belongs in `/derived` instead. It is also where the shell's `TMPDIR`
+  points, so both halves of your toolkit write the same place.
 
 The session is yours alone; another session's files are not reachable from any path
 you can write.
@@ -32,11 +33,10 @@ leading slash, and nothing in the workspace is out of the shell's reach:
 | --- | --- |
 | `/data/<name>` | `data/<name>` |
 | `/derived/<name>` | `derived/<name>` |
-| `/runs/t001/input` | `runs/t001/input` |
+| `/scratch/<name>` | `scratch/<name>` |
 
-Your run directory is named in the task as `/runs/<turn>`; in the shell it is
-`runs/<turn>`. It already exists when the turn starts, so do not go searching for it —
-`find` will not locate it any faster than dropping the slash will.
+All four already exist when a turn starts, so do not go searching for them — `find`
+will not locate one any faster than dropping the slash will.
 
 Tools this workspace defines take these same virtual paths.
 

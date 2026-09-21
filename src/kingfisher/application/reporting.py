@@ -142,7 +142,7 @@ def delegate_only(allowed: Capabilities, cfg: Config, *, catalogue: Any) -> tupl
 def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning
     # kind, and folding them into a bag would only move the list somewhere
     # a reader has to go and find it.
-    turn_dir: str,
+    turn_id: str,
     unprotected: tuple[str, ...],
     placement: Any,
     withheld: tuple[tuple[str, tuple[str, ...]], ...] = (),
@@ -195,5 +195,8 @@ def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning
         events.append(
             RunEvent(kind="data_placed", text=f"{', '.join(placement.placed)}{replaced}")
         )
-    events.append(RunEvent(kind="run_start", text=turn_dir))
+    # The turn's name, where this used to be its directory. A turn has none now --
+    # it works in the session's `/scratch` like every other turn -- so the one fact
+    # left worth opening with is which turn a caller is watching.
+    events.append(RunEvent(kind="run_start", text=turn_id))
     return tuple(events)

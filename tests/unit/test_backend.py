@@ -61,7 +61,7 @@ def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
     bare.mkdir()
     (bare / "data").mkdir()
 
-    wanted = r"missing derived, memory, runs, \.home, \.tmp, \.harness"
+    wanted = r"missing derived, memory, scratch, \.home, \.harness"
     with pytest.raises(ValueError, match=wanted):
         default_backend(cfg, bare)
 
@@ -121,7 +121,7 @@ def test_derived_is_unrouted_and_the_table_says_so(cfg, session_dir):
     backend = default_backend(cfg, session_dir)
     unrouted = {r.path for r in ROUTES if not r.routed}
 
-    assert unrouted == {"/derived/", "/runs/"}
+    assert unrouted == {"/derived/", "/scratch/"}
     assert not (unrouted & set(backend.routes)), "an unrouted path was mounted"
 
 
@@ -178,12 +178,12 @@ def test_every_read_and_write_path_resolves_through_the_guarded_hook():
     assert WorkspaceScopedBackend._get_backend_and_key is not CompositeBackend._get_backend_and_key
 
 
-def test_tmpdir_is_the_session_s_own(cfg, session_dir):
+def test_scratch_is_the_session_s_own(cfg, session_dir):
     """One shared scratch directory was swept by nothing, counted against nothing, and
     readable by every other session's shell. Per session, `reap` and `session_bytes`
     already cover it and neither fence has to grant anything extra.
     """
-    assert shell_env(cfg, session_dir)["TMPDIR"] == str(session_dir / ".tmp")
+    assert shell_env(cfg, session_dir)["TMPDIR"] == str(session_dir / "scratch")
 
 
 def test_two_sessions_do_not_share_a_tmpdir(cfg, session_dir, workspace):
@@ -194,13 +194,13 @@ def test_two_sessions_do_not_share_a_tmpdir(cfg, session_dir, workspace):
     assert shell_env(cfg, session_dir)["TMPDIR"] != shell_env(cfg, other)["TMPDIR"]
 
 
-def test_tmpdir_is_created_private(cfg, session_dir):
+def test_scratch_is_created_private(cfg, session_dir):
     """The mode the shared scratch directory had, kept rather than quietly widened.
 
     Not a boundary on its own -- `derived/` sits beside it at whatever the umask gave
     it -- and `ensure_session_layout` says so where it does this.
     """
-    assert (session_dir / ".tmp").stat().st_mode & 0o077 == 0
+    assert (session_dir / "scratch").stat().st_mode & 0o077 == 0
 
 
 def test_the_run_log_is_the_session_s_own(session_dir):

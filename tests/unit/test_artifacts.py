@@ -37,7 +37,7 @@ def test_run_scratch_is_not_reported(cfg):
     start(cfg, "s")
     result = run(Request("t", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
                  checkpointer=StubCheckpointer())
-    (result.run_dir / "scratch.txt").write_text("intermediate")
+    (result.session_dir / "scratch.txt").write_text("intermediate")
 
     again = run(Request("t2", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
                 checkpointer=StubCheckpointer())

@@ -32,23 +32,6 @@ def _checked(sources: tuple[Path, ...]) -> dict[str, Path]:
     return seen
 
 
-def check_placeable(sources: tuple[Path, ...]) -> None:
-    """Raise if these files could not be placed, without placing them."""
-    _checked(sources)
-
-
-def place_inputs(sources: tuple[Path, ...], input_dir: Path) -> tuple[str, ...]:
-    """Copy a turn's supplied files into its `input/`, and name what landed."""
-    checked = _checked(sources)
-    if not checked:
-        return ()
-
-    input_dir.mkdir(exist_ok=True)
-    for name, source in checked.items():
-        shutil.copy(source, input_dir / name)
-    return tuple(checked)
-
-
 @dataclass(frozen=True)
 class DataPlacement:
     """What `place_data` did. `replaced` is a subset of `placed`."""

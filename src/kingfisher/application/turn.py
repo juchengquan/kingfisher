@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.result import RunEvent
 from kingfisher.infrastructure.harness import runtime
+from kingfisher.layout import SCRATCH, SCRATCH_ROUTE
 
 if TYPE_CHECKING:
     from kingfisher.config import Config
@@ -62,26 +63,26 @@ class Prepared:
     history: tuple[Message, ...] = ()
 
 
-def turn_message(task: str, turn: Any, placed: tuple[str, ...], has_inputs: bool) -> str:
+def turn_message(task: str, placed: tuple[str, ...]) -> str:
     """The task, plus this turn's facts and nothing more."""
     # Named because `/data` changed under a session the agent may already have
-    # looked at.
+    # looked at. It is also where a caller's files for *this* request land now --
+    # they used to have a turn directory of their own, and this line said where.
     arrived = f" New files in /data: {', '.join(placed)}." if placed else ""
-    supplied = (
-        f" Files supplied with this request are in {turn.virtual_input_dir}."
-        if has_inputs
-        else ""
-    )
     # Both names for the one directory. `system.md` states the rule -- drop the
     # leading slash for the shell -- and stating it there was not enough: over
     # ten runs of one task the agent passed the virtual path to `execute` 4
     # times, each failing and costing roughly three times the whole task to
-    # recover. The 6 that used the shell form first never failed. This line is
-    # already per-turn, so unlike the system prompt it costs no cache to say.
+    # recover. The 6 that used the shell form first never failed.
+    #
+    # It said this about a per-turn `/runs/<turn>`; the directory is the session's
+    # `/scratch` now and the sentence is unchanged in kind, because what was
+    # measured was the agent's handling of the two spellings rather than anything
+    # about which directory it was being handed.
     return (
         f"{task}\n\n"
-        f"Your run directory for this task is {turn.virtual_dir} "
-        f"(from the shell, {turn.shell_dir}).{supplied}{arrived}"
+        f"{SCRATCH_ROUTE} is yours to work in (from the shell, {SCRATCH})."
+        f"{arrived}"
     )
 
 

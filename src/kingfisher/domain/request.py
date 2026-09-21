@@ -25,7 +25,6 @@ class Request:
     agent: str | None = None
     session_id: str | None = None
     turn_id: str | None = None
-    inputs: tuple[Path, ...] = ()
     data: tuple[Path, ...] = ()
     capabilities: Capabilities = field(default_factory=Capabilities)
     #: Delegate name -> where this request wants it to run. Empty by default.
@@ -41,7 +40,6 @@ class Request:
             msg = "task must not be empty"
             raise ValueError(msg)
         # Normalise at the edge so everything downstream sees real paths.
-        object.__setattr__(self, "inputs", tuple(Path(p) for p in self.inputs))
         object.__setattr__(self, "data", tuple(Path(p) for p in self.data))
 
     @classmethod

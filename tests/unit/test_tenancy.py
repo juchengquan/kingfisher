@@ -130,10 +130,10 @@ def test_the_slot_goes_back_when_the_turn_ends(cfg):
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     start(cfg, "s")
 
-    service.run(Request("first", session_id="s"))
+    first = service.run(Request("first", session_id="s"))
     second = service.run(Request("second", session_id="s"))
 
-    assert second.turn_id == "t002"
+    assert second.turn_id != first.turn_id
     assert not _claim(cfg, "s").exists()
 
 
@@ -148,7 +148,7 @@ def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
         service.run(Request("go", session_id="s", data=(tmp_path / "gone.csv",)))
 
     assert not _claim(cfg, "s").exists()
-    assert service.run(Request("after", session_id="s")).turn_id == "t001"
+    assert service.run(Request("after", session_id="s")).turn_id
 
 
 def test_a_claim_older_than_a_turn_could_be_is_taken_over(cfg):
@@ -196,7 +196,7 @@ def test_two_sessions_do_not_block_each_other(cfg):
     held = Session(id=busy, directory=cfg.workspace / "sessions" / busy)
     held.claim(service.dirs, _claim(cfg, busy), stale_after=3600, now=1000.0)
 
-    assert service.run(Request("go", session_id=other)).turn_id == "t001"
+    assert service.run(Request("go", session_id=other)).turn_id
 
 
 #: Enough turns that anything serialising them is unmistakable, and the number
