@@ -7,7 +7,9 @@ file that cannot be read.
 
 from __future__ import annotations
 
+import ast
 import asyncio
+import inspect
 import os
 import platform
 import shutil
@@ -534,6 +536,59 @@ def test_nothing_configured_is_not_confined_elsewhere(cfg, tmp_path):
     )
 
     assert not chosen.elsewhere
+
+
+# -- what is doing the confining, by name -------------------------------------
+
+#: Why a mechanism is not one `_fence_for` builds a runner for. A mechanism that is
+#: in neither this table nor `LINUX_FENCES` is one `_fence_for` answers `None` for:
+#: the shell then runs unfenced while the `Confinement` beside it says confined.
+NOT_A_LINUX_FENCE = {
+    "sandbox-exec": "confines by wrapping the command string, not the process",
+}
+
+
+def _mechanisms_in(module) -> list[ast.keyword]:
+    """Every `mechanism=` this module hands a `Confinement`, as written."""
+    source = ast.parse(Path(inspect.getfile(module)).read_text(encoding="utf-8"))
+    return [
+        word
+        for node in ast.walk(source)
+        if isinstance(node, ast.Call)
+        for word in node.keywords
+        if word.arg == "mechanism"
+    ]
+
+
+def test_every_mechanism_is_named_and_accounted_for():
+    """The vocabulary is closed, and a fourth mechanism has to say which half it is in.
+
+    `_fence_for` builds a runner for the names in `LINUX_FENCES` and nothing else, so
+    one added here and not there is a shell running unfenced while `doctor` reports a
+    fence. Nothing connected the two until they were named -- three files outside
+    `confinement` branched on the spellings.
+    """
+    written = _mechanisms_in(confinement)
+
+    assert written, "nothing was parsed, so this asserts nothing"
+    literal = [word for word in written if not isinstance(word.value, ast.Name)]
+    assert not literal, (
+        "a mechanism is handed over by name, never as a literal -- a spelling written "
+        "out here is one `_fence_for` and `doctor` cannot be renamed along with"
+    )
+    produced = {getattr(confinement, word.value.id) for word in written}
+
+    assert produced == set(confinement.LINUX_FENCES) | set(NOT_A_LINUX_FENCE)
+    assert not set(confinement.LINUX_FENCES) & set(NOT_A_LINUX_FENCE)
+
+
+def test_a_mode_and_a_mechanism_are_different_vocabularies():
+    """They overlap on one word, which is why this says so: `bubblewrap` is a mode a
+    deployment asks for *and* the mechanism that answers, and `auto` -- a mode -- is
+    never a mechanism.
+    """
+    assert set(confinement.MODES) & set(confinement.LINUX_FENCES) == {confinement.BUBBLEWRAP}
+    assert confinement.LANDLOCK not in confinement.MODES
 
 
 # -- what runs a command, said once ------------------------------------------

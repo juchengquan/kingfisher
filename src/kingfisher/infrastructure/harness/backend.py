@@ -276,7 +276,7 @@ def _fence_for(
     env: Mapping[str, str],
 ) -> CommandRunner | None:
     """The Linux fence, when the confinement says there is one."""
-    if confined.mechanism not in ("bubblewrap", "Landlock"):
+    if confined.mechanism not in confinement.LINUX_FENCES:
         return None
 
     # One answer for both fences rather than the same three lines twice. `argv_for` and
@@ -300,7 +300,7 @@ def _fence_for(
     # inside it now, so the writable set is exactly the session this turn owns.
     writable: list[Path] = []
 
-    if confined.mechanism == "bubblewrap":
+    if confined.mechanism == confinement.BUBBLEWRAP:
         from kingfisher.infrastructure.sandbox.bubblewrap import (  # noqa: PLC0415
             BubblewrapRunner,
             argv_for,

@@ -1359,6 +1359,35 @@ scratch dropped straight
 into the session; the alternative was leaving the pinned agent, the conversation,
 the turn lock and the run log writable by the shell they belong to. *(2026-09-08.)*
 
+**The two Linux fences share one front door.** They differ in the middle -- Landlock
+confines between `fork` and `exec`, bubblewrap prepends a sandbox to the argv -- and
+were identical on both sides of it. `sandbox/linux.py` holds what is neither
+mechanism's: `present`, which drops a path the host does not have, and `outcome`,
+which is the three ways a fenced command comes back. The launch stays in each runner,
+as a callable, because that is the only half worth writing twice.
+
+`MAX_OUTPUT_BYTES` moved with them. It had lived in `fence.py` with `bubblewrap.py`
+importing it from there, which reads as bubblewrap depending on Landlock for a number
+that is really `LocalShellBackend`'s. Each fence keeps its own path list: bubblewrap
+binds no `/proc` and builds a fresh `/dev`, and one list serving both is how a
+mechanism gains a path the other meant to deny.
+
+The duplication was hiding a gap rather than only costing lines. `test_fence.py`
+stubs `sandlock` so the Landlock runner's shaping, timeout and failure paths run on
+any host; `test_bubblewrap.py` drove `argv_for` and one thing about the runner. So
+the copy nobody tested was the one on the kernels Landlock cannot reach. Four
+mutations that used to fail one test each now fail two.
+
+**A mechanism is named, not spelled out.** `LANDLOCK`, `BUBBLEWRAP` and
+`SANDBOX_EXEC` are a vocabulary of their own, and `MODES` is a different one that
+overlaps it on a single word: a mode is what a deployment asks for, a mechanism is
+what ended up confining the command, and `auto` is never a mechanism. Three files
+outside `confinement` branched on the spellings -- `_fence_for` twice, `doctor` once
+-- so a mechanism renamed in one place would have gone on reading as *not a fence* at
+each of them, which is a shell running unfenced beside a `Confinement` reporting one.
+`LINUX_FENCES` is the pair `_fence_for` builds a runner for, and a fourth mechanism
+has to say which half it is in. *(2026-09-20.)*
+
 ## Sessions: what persists and where
 
 These began as decisions in *Nothing at rest on this machine* and were built

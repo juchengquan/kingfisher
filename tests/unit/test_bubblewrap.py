@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+
 import pytest
 
 from kingfisher.infrastructure.sandbox.bubblewrap import SYSTEM_PATHS, BubblewrapRunner, argv_for
@@ -118,6 +120,83 @@ def test_the_runner_puts_the_command_after_the_sandbox(session):
         module.subprocess.run = original
 
     assert seen[0][-3:] == ["/bin/sh", "-c", "echo hi"]
+
+
+def _launching(monkeypatch, outcome):
+    """A `subprocess.run` that answers `outcome`, whatever it is handed.
+
+    The runner's own half -- what a command comes back as -- is what these drive, and
+    it is reachable on any host: `bwrap` never runs. What the sandbox *does* is
+    asserted against a real one in `tests/linux/test_bubblewrap_escapes.py`.
+    """
+    import kingfisher.infrastructure.sandbox.linux as module
+
+    def fake_run(*args, **kwargs):
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+
+class Done:
+    """`CompletedProcess`, as the runner reads it."""
+
+    def __init__(self, stdout="", stderr="", returncode=0):
+        self.stdout, self.stderr, self.returncode = stdout, stderr, returncode
+
+
+def test_long_output_truncates_where_an_unfenced_command_would(session, monkeypatch):
+    """Untested until the shaping moved: this runner had its own copy of it, identical
+    to the Landlock one to the byte, and only that one was ever driven.
+    """
+    _launching(monkeypatch, Done(stdout="x" * 200))
+
+    result = BubblewrapRunner(["bwrap"], max_output_bytes=50).run("anything")
+
+    assert result.truncated is True
+    assert "truncated at 50 bytes" in result.output
+
+
+def test_both_streams_reach_the_model(session, monkeypatch):
+    """`stderr` is where a denied path is reported, so a sandbox whose refusals were
+    invisible would look like a broken command.
+    """
+    _launching(monkeypatch, Done(stdout="out", stderr="denied", returncode=1))
+
+    result = BubblewrapRunner(["bwrap"]).run("anything")
+
+    assert result.output == "outdenied"
+    assert result.exit_code == 1
+
+
+def test_a_timeout_is_a_result_rather_than_an_exception(session, monkeypatch):
+    """The shell's own exit code, so a caller cannot tell a sandboxed timeout from an
+    unsandboxed one.
+    """
+    _launching(monkeypatch, subprocess.TimeoutExpired(cmd="bwrap", timeout=1))
+
+    result = BubblewrapRunner(["bwrap"]).run("sleep 5", timeout=1)
+
+    assert result.exit_code == 124
+    assert "timed out" in result.output
+
+
+def test_a_sandbox_that_will_not_start_says_so_rather_than_looking_empty(
+    session, monkeypatch
+):
+    """`bwrap` failing to build a namespace used to arrive as an exit code with no
+    output, which is what a command with no output looks like -- so a sandbox that
+    never applied read as a broken image.
+    """
+    _launching(monkeypatch, OSError("no user namespaces"))
+
+    result = BubblewrapRunner(["bwrap"]).run("anything")
+
+    assert result.exit_code == 1
+    assert "[fence] the command did not run" in result.output
+    assert "bubblewrap failed" in result.output
+    assert "no user namespaces" in result.output
 
 
 def test_the_runner_says_it_is_local(session):
