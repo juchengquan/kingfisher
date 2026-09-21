@@ -41,14 +41,6 @@ class LocalSkillRepository:
     root: Path
 
     @cached_property
-    def names(self) -> tuple[str, ...]:
-        """Skill names in this directory, which are its subdirectory names."""
-        directory = Path(self.root)
-        if not directory.is_dir():
-            return ()
-        return tuple(sorted(p.name for p in directory.iterdir() if (p / FILENAME).is_file()))
-
-    @cached_property
     def misplaced(self) -> tuple[str, ...]:
         """Skills sitting below the deepest place anything will look for them."""
         directory = Path(self.root)

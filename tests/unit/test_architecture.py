@@ -2542,8 +2542,8 @@ def test_only_one_module_decides_what_a_skill_is():
     ]
 
     assert not offenders, (
-        f"{offenders} decide what a skill is; use domain.skill.FILENAME and "
-        "LocalSkillRepository.names so the inventory and the validator cannot disagree"
+        f"{offenders} decide what a skill is; use kinds.skills.spec.FILENAME and "
+        "`reachable`, or the registry, so no two readers of the catalogue disagree"
     )
 
 

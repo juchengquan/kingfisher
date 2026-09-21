@@ -119,6 +119,25 @@ one function rather than by key wherever an entry is used. The skills index hand
 deepagents' own dictionaries back to it, because its formatting reads them.
 *(2026-09-16.)*
 
+**And the repository stopped answering `names`.** The second reader that decision
+removed from the deciding path was still there beside it, satisfying a port that
+promises "every definition held, by the name a request grants it". It listed the
+directories one level under the root, and measured on a catalogue of four it got both
+halves wrong at once: it missed both skills in a source folder and advertised one
+whose file does not parse. Nothing in production depended on the answer -- `warm`
+forced it two lines above forcing the registry, and a bundle's skills were already the
+registry's -- so three tests carried comments steering readers off it and an
+architecture rule's failure message recommended it by name.
+
+Listing more deeply was the obvious repair and is not available: it fixes the missing
+skills and can never fix the advertised one, because only deepagents' parse decides
+what loads. Any answer here is the disagreement, so there is no answer here.
+`SkillRepository` is the one repository that is not an `AssetRepository`; it keeps
+`root` and `misplaced`, which are facts about the directory rather than claims about
+what the agent will be told. `reachable` is what a caller asking "is anything here?"
+uses -- seeding's own tests do -- and the registry is what a caller asking for names
+uses. *(2026-09-21.)*
+
 **Middleware is a definition kind.** `middlewares/*.py` declaring `MIDDLEWARES`,
 read like `tools/`, seeded like everything else, and named from a definition in
 the long form that already existed. It was the one kind a workspace could not

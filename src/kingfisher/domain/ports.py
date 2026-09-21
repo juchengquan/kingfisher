@@ -36,11 +36,18 @@ class AssetRepository(Protocol):
 
 
 @runtime_checkable
-class SkillRepository(AssetRepository, Protocol):
+class SkillRepository(Protocol):
     """Skills, in a directory.
 
     A directory rather than anything that can hand over files, because deepagents reads
     skills off a filesystem and the shell runs a skill's scripts from where they sit.
+
+    **The one repository that does not answer `names`**, so not an `AssetRepository`.
+    Which skills there are is `SkillRegistry`'s answer and cannot be this one's: the
+    directories that look like a skill are not the set deepagents parses and offers,
+    and listing them is precisely the second reader that registry exists to replace.
+    Measured, on a catalogue of four: the listing answered two, missing both skills in
+    a source folder and advertising one whose file does not parse.
     """
 
     @property
@@ -50,7 +57,13 @@ class SkillRepository(AssetRepository, Protocol):
 
     @property
     def misplaced(self) -> tuple[str, ...]:
-        """Skills written where deepagents will not look for them, for a listing."""
+        """Skills written where deepagents will not look for them, for a listing.
+
+        Here rather than on the registry because it is a fact about the directory,
+        which is the half this does answer: these are below the deepest level anything
+        looks in, so no reader finds them and there is nothing for the two to disagree
+        about.
+        """
         ...
 
 

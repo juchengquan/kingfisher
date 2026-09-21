@@ -130,18 +130,24 @@ def test_nothing_reads_a_repository_member_with_a_default():
     )
 
 
-def test_all_three_answer_the_one_question_the_grant_layer_asks(catalogue):
+def test_the_kinds_a_grant_names_answer_the_one_question_it_asks(catalogue):
     """`names` is the whole of the shared vocabulary, and it is shared because
     capabilities filter every kind by name and by nothing else.
+
+    Skills are not here, and that is the one exception: which skills there are is the
+    registry's answer, because a directory holding a `SKILL.md` is not the same set as
+    the skills deepagents parses. A listing here answered both halves wrongly at once
+    -- it missed every skill in a source folder and offered one whose file does not
+    parse -- so `SkillRepository` stopped promising it.
     """
     every = (
-        LocalSkillRepository(catalogue / "skills"),
         LocalSubagentRepository(catalogue / "subagents"),
         LocalToolRepository(catalogue / "tools"),
     )
 
     assert all(isinstance(repo, AssetRepository) for repo in every)
-    assert [repo.names for repo in every] == [("greeting",), ("alpha",), ("noisy",)]
+    assert [repo.names for repo in every] == [("alpha",), ("noisy",)]
+    assert not isinstance(LocalSkillRepository(catalogue / "skills"), AssetRepository)
 
 
 # -- read once, however many views are taken -------------------------------
@@ -181,25 +187,24 @@ def test_a_subagent_repository_parses_each_definition_once_for_both_views(catalo
     assert len(parsed) == 1, "the definition was parsed more than once"
 
 
-def test_a_skill_repository_lists_once_for_both_of_its_questions(catalogue, monkeypatch):
-    """Cheapest of the three -- a listing, not a parse -- and cached for the same
-    reason: a catalogue's repository answers every turn of a deployment's life from
-    one read.
+def test_a_skill_repository_walks_once_for_the_question_it_answers(catalogue, monkeypatch):
+    """Cheapest of the three -- a walk, not a parse -- and cached for the same reason:
+    a catalogue's repository answers every turn of a deployment's life from one read.
     """
-    listings = []
-    real_iterdir = type(catalogue).iterdir
+    walks = []
+    real_rglob = type(catalogue).rglob
 
-    def counting(self):
-        listings.append(self)
-        return real_iterdir(self)
+    def counting(self, pattern, **kwargs):
+        walks.append(self)
+        return real_rglob(self, pattern, **kwargs)
 
-    monkeypatch.setattr(type(catalogue), "iterdir", counting)
+    monkeypatch.setattr(type(catalogue), "rglob", counting)
 
     skills = LocalSkillRepository(catalogue / "skills")
-    assert skills.names == ("greeting",)
-    assert skills.names == ("greeting",)
+    assert skills.misplaced == ()
+    assert skills.misplaced == ()
 
-    assert len(listings) == 1, "the directory was listed again for a cached answer"
+    assert len(walks) == 1, "the directory was walked again for a cached answer"
 
 
 # -- and the cost of reading once -----------------------------------------

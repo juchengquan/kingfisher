@@ -357,10 +357,10 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     # so adding a preset failed a test about *reporting* for a reason having
     # nothing to do with reporting. Sortedness is still asserted -- this is a
     # line a person reads -- but the membership comes from the catalogue.
-    # `available_skills`, not `LocalSkillRepository.names`: the report measures
-    # against what the *run* was offered, which resolves a skill in a source
-    # folder -- `incident::postmortem` -- that the directory listing does not
-    # show. The two agreed until a sourced skill shipped.
+    # `available_skills`, because the report measures against what the *run* was
+    # offered, which resolves a skill in a source folder -- `incident::postmortem`.
+    # A directory listing did not show that one, and the two agreed until a sourced
+    # skill shipped.
     from kingfisher.infrastructure.harness.activation import available_skills
 
     seeded_skills = set(available_skills(cfg))

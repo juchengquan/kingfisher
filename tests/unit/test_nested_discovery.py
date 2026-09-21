@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.kinds.skills.catalogue import LocalSkillRepository
+from kingfisher.kinds.skills.catalogue import LocalSkillRepository, reachable
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.tools.catalogue import LocalToolRepository, ToolError, tool_name
 from kingfisher.kinds.tools.spec import Offering
@@ -262,9 +262,10 @@ def test_sources_report_the_file_when_the_name_is_not_it(tmp_path):
 
 
 def test_the_repository_still_lists_only_the_root(tmp_path):
-    """`names` is what a *store-backed* catalogue mounts by, and a store has no folders
-    -- so this stays a root listing on purpose while the registry, which reads
-    through sources, is the one that sees `research::company-lookup`.
+    """A folder one level down is a source, so what it holds is reachable and is not
+    misplaced -- and the registry is the only thing that says what it is called. A
+    listing of the root answered `()` here for as long as it existed, which is why the
+    repository no longer offers one.
     """
     nested = tmp_path / "research" / "company-lookup"
     nested.mkdir(parents=True)
@@ -272,7 +273,7 @@ def test_the_repository_still_lists_only_the_root(tmp_path):
         "---\nname: company-lookup\ndescription: x\n---\nBody.\n", encoding="utf-8"
     )
 
-    assert LocalSkillRepository(tmp_path).names == ()
+    assert reachable(tmp_path) == (nested,)
     assert LocalSkillRepository(tmp_path).misplaced == (), "one level loads now"
 
 
