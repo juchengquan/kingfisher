@@ -44,9 +44,17 @@ SANDBOX_PROFILE = "shell.sb"
 DATA = "data"
 DERIVED = "derived"
 MEMORY = "memory"
-RUNS = "runs"
+#: Where the agent works. Disposable by contract: never returned to the caller,
+#: never saved, swept when the session goes.
+#:
+#: It was `.tmp`, plumbing the agent was never told about, while a parallel
+#: `runs/<turn>` held the same kind of file under a name the agent *was* told. Two
+#: scratch directories with one purpose, and the per-turn one accumulated for the
+#: life of a session because nothing ever swept it. The dot went with the silence:
+#: a name the agent addresses belongs in this tuple rather than beside the lock.
+SCRATCH = "scratch"
 
-SESSION_DIRS: tuple[str, ...] = (DATA, DERIVED, MEMORY, RUNS)
+SESSION_DIRS: tuple[str, ...] = (DATA, DERIVED, MEMORY, SCRATCH)
 
 #: The agent's HOME. Created inside every session like `SESSION_DIRS`, and kept
 #: apart from it because that tuple means "the names the agent addresses" and
@@ -56,14 +64,6 @@ AGENT_HOME = ".home"
 
 #: Where skills live.
 SKILLS = "skills"
-
-#: The agent's `TMPDIR`, for the reason `.home` is here: one shared scratch
-#: directory for the whole workspace was swept by nothing, counted against no
-#: session's quota, and readable by every other session's shell -- so what one
-#: caller derived sat where another caller's agent could read it. Per session,
-#: it is deleted with the session and counted by `session_bytes`, and neither
-#: fence has to grant anything beyond the session directory it already grants.
-AGENT_TMP = ".tmp"
 
 #: What the harness keeps about a session, inside the session and out of the
 #: agent's reach: the agent it opened with, its conversation, the lock a turn
@@ -91,14 +91,13 @@ RUNLOG = "runlog.jsonl"
 
 SESSION_PLUMBING: tuple[str, ...] = (
     AGENT_HOME,
-    AGENT_TMP,
     HARNESS,
 )
 
 #: What a run produces and would lose. `/data` is read-only and came from the
-#: caller; `/runs` is scratch the prompt already calls disposable. These two are
-#: the ones the agent is told will outlive the run, so these are what a reaped
-#: session takes with it unless the caller is handed a list.
+#: caller; `/scratch` is disposable and says so. These two are the ones the agent
+#: is told will outlive the run, so these are what a reaped session takes with it
+#: unless the caller is handed a list.
 ARTIFACT_DIRS: tuple[str, ...] = (DERIVED, MEMORY)
 
 
@@ -121,8 +120,12 @@ BUNDLED_SKILLS_ROUTE = _route(SKILLS, RESERVED_SKILL_FOLDER)
 #: they reach the default backend -- the shell's, rooted at the session -- and a
 #: reader asking "what happens to /derived" should find the answer here rather
 #: than by noticing an absence.
+#:
+#: `/scratch` is among them, and that is what lets the shell and the file tools
+#: write the same place: `TMPDIR` points at it on disk, and the virtual path is
+#: the same name with a slash.
 DERIVED_ROUTE = _route(DERIVED)
-RUNS_ROUTE = _route(RUNS)
+SCRATCH_ROUTE = _route(SCRATCH)
 
 #: A route the agent may not read or write, which is the only reason it is one:
 #: `FilesystemMiddleware` refuses `permissions=` outright unless every rule path
@@ -189,7 +192,7 @@ ROUTES: tuple[Route, ...] = (
     # Unrouted, and deliberately. What a run produces is the agent's to write, and
     # it reaches the default backend along with everything else the session holds.
     Route(DERIVED_ROUTE, routed=False),
-    Route(RUNS_ROUTE, routed=False),
+    Route(SCRATCH_ROUTE, routed=False),
     # The one route that exists to be refused. Denied both ways: a run able to
     # write here could rewrite the agent definition it is running under, or the
     # conversation the next turn is rebuilt from, halfway through the

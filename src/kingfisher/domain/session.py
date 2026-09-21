@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 
 from kingfisher.domain.ports import SessionDirs, ThreadStore
 
@@ -29,39 +30,17 @@ class QuotaExceededError(ValueError):
 
 @dataclass(frozen=True)
 class Turn:
-    """One request within a conversation."""
+    """One request within a conversation.
+
+    A name and nothing else. It held a directory until `/runs` went: a turn's
+    working files are the session's `/scratch` and its outputs the session's
+    `/derived`, so there was nothing left for a per-turn folder to hold -- and
+    the folders had been the turn counter, which is why the id is now made
+    rather than counted.
+    """
 
     session_id: str
     id: str
-    directory: Path
-
-    @property
-    def virtual_dir(self) -> str:
-        """The directory as the agent addresses it -- machine-independent."""
-        return f"/runs/{self.id}"
-
-    @property
-    def shell_dir(self) -> str:
-        """The same directory as `execute` addresses it.
-
-        The shell starts in the session root, which is what virtual `/` names, so
-        this is `virtual_dir` without its leading slash. Worth a name because the
-        agent has to be *told*: measured over ten runs of one task, it passed the
-        virtual path to the shell 4 times out of 10, and every one failed with `No
-        such file or directory` and cost about three times the whole task to
-        recover from. The 6 that started with this form never failed once.
-        """
-        return self.virtual_dir.lstrip("/")
-
-    @property
-    def input_dir(self) -> Path:
-        """Files supplied with this request. Never `/data`: they arrive fresh each
-        round and leave with the turn."""
-        return self.directory / "input"
-
-    @property
-    def virtual_input_dir(self) -> str:
-        return f"{self.virtual_dir}/input"
 
 
 def sessions_root(workspace: Path | str) -> Path:
@@ -122,11 +101,6 @@ class Session:
         dirs.ensure(directory)
         return cls(id=session_id, directory=directory)
 
-    @property
-    def runs_dir(self) -> Path:
-        """Where this session's turns live, one level inside its root."""
-        return self.directory / "runs"
-
     def claim(
         self, dirs: SessionDirs, path: Path, *, stale_after: float, now: float
     ) -> Path:
@@ -166,29 +140,21 @@ class Session:
         """Give the slot back. Safe to call when it was never taken."""
         dirs.remove_tree(path)
 
-    def allocate_turn(self, dirs: SessionDirs, turn_id: str | None = None) -> Turn:
-        """Create the next turn's directory and return it."""
-        runs = self.runs_dir
-        dirs.ensure(runs)
+    def allocate_turn(self, turn_id: str | None = None) -> Turn:
+        """Name the next turn. A caller's own id wins, or one is made.
 
-        if turn_id:
-            path = runs / turn_id
-            dirs.ensure(path)
-            return Turn(session_id=self.id, id=turn_id, directory=path)
+        It used to read `runs/` and take the number after the highest, which made a
+        directory listing the counter and meant a session restored on another host
+        -- where nothing restores `runs/` -- silently began again at `t001`. Nothing
+        reads the sequence: the id reaches a printed line, the run log and the
+        result, and none of them compares two.
 
-        existing = dirs.children(runs)
-        number = max(
-            (int(n[1:]) for n in existing if n.startswith("t") and n[1:].isdigit()),
-            default=0,
-        )
-        while True:
-            number += 1
-            candidate = runs / f"t{number:03d}"
-            if dirs.create_exclusive(candidate):
-                return Turn(session_id=self.id, id=candidate.name, directory=candidate)
-            # Lost the race for this id; take the next one. The retry lives here
-            # rather than in the adapter because it is the rule, not the primitive
-            # -- the port only has to refuse a name it cannot claim.
+        A caller's id is still honoured, because a service passes its own request id
+        to tie a run back to the request that asked for it. What it no longer buys is
+        de-duplication on retry -- that was `ensure` on the same directory, and the
+        directory is gone.
+        """
+        return Turn(session_id=self.id, id=turn_id or f"t{uuid4().hex[:8]}")
 
     def discard(self, dirs: SessionDirs, threads: ThreadStore | None = None) -> str | None:
         """Delete this session's thread and directory. Returns a failure, or None."""

@@ -68,7 +68,7 @@ def test_normalize_strips_inlined_reasoning():
 
 
 def test_run_creates_the_session_triple(cfg):
-    """One identifier reaches the thread, the run directory and the log."""
+    """One identifier reaches the thread, the session directory and the log."""
     start(cfg, "sess123")
     agent = StubAgent("<think>done</think>\n\n42")
     result = run(
@@ -80,14 +80,17 @@ def test_run_creates_the_session_triple(cfg):
 
     assert isinstance(result, RunResult)
     assert result.answer == "42"
-    assert result.run_dir == cfg.workspace / "sessions" / "sess123" / "runs" / result.turn_id
-    assert result.run_dir.is_dir()
+    assert result.session_dir == cfg.workspace / "sessions" / "sess123"
+    assert result.session_dir.is_dir()
     assert result.log_path.exists()
     assert agent.config["configurable"]["thread_id"] == "sess123"
 
 
-def test_run_tells_the_agent_its_run_directory_in_the_task(cfg):
-    """Run-scoped, so it goes in the message -- never the cached system prompt."""
+def test_run_tells_the_agent_where_to_work_in_the_task(cfg):
+    """Said per turn rather than in the cached system prompt, because saying it there
+    was measured as not enough: the agent passed the virtual path to `execute` 4 times
+    in 10.
+    """
     start(cfg, "abc")
     agent = StubAgent("ok")
     run(
@@ -98,7 +101,7 @@ def test_run_tells_the_agent_its_run_directory_in_the_task(cfg):
     )
 
     message = agent.state["messages"][0]["content"]
-    assert "/runs/t001" in message
+    assert "/scratch" in message
     assert "do a thing" in message
     assert str(cfg.workspace) not in message  # virtual path only
 
@@ -141,68 +144,6 @@ def test_a_turn_disposes_of_nothing(cfg):
         assert (cfg.workspace / "sessions" / name).is_dir(), name
 
 
-def test_a_second_turn_does_not_overwrite_the_first(cfg):
-    """The defect this tier exists to fix: two turns in one session shared a directory,
-    so turn two clobbered turn one's report and result.
-    """
-    start(cfg, "sess")
-    ck = StubCheckpointer()
-    first = run(
-        Request("turn one", session_id="sess"), cfg=cfg, graph=StubAgent("a"), checkpointer=ck
-    )
-    (first.run_dir / "report.md").write_text("FROM TURN ONE")
-
-    second = run(
-        Request("turn two", session_id="sess"), cfg=cfg, graph=StubAgent("b"), checkpointer=ck
-    )
-    (second.run_dir / "report.md").write_text("FROM TURN TWO")
-
-    assert first.turn_id == "t001"
-    assert second.turn_id == "t002"
-    assert first.run_dir != second.run_dir
-    assert (first.run_dir / "report.md").read_text() == "FROM TURN ONE"
-    # Both turns live under one session, so expiring the conversation takes
-    # both with it and no lookup is needed.
-    assert first.run_dir.parent == second.run_dir.parent
-
-
-def test_request_inputs_land_in_the_turn_not_in_data(cfg, tmp_path):
-    """Files supplied with a request are not project data: they arrive fresh each round
-    and leave with the turn.
-    """
-    start(cfg, "s")
-    supplied = tmp_path / "upload.csv"
-    supplied.write_text("a,b\n1,2\n")
-
-    agent = StubAgent("ok")
-    result = run(
-        Request("summarise it", session_id="s", inputs=(supplied,)),
-        cfg=cfg,
-        graph=agent,
-        checkpointer=StubCheckpointer(),
-    )
-
-    assert (result.run_dir / "input" / "upload.csv").read_text() == "a,b\n1,2\n"
-    assert not (cfg.workspace / "sessions" / "s" / "data" / "upload.csv").exists()
-    # The agent is told where they are, by virtual path, in the task message.
-    message = agent.state["messages"][0]["content"]
-    assert f"/runs/{result.turn_id}/input" in message
-
-
-def test_no_inputs_means_no_input_directory_and_no_mention(cfg):
-    start(cfg, "s")
-    agent = StubAgent("ok")
-    result = run(
-        Request("just answer", session_id="s"),
-        cfg=cfg,
-        graph=agent,
-        checkpointer=StubCheckpointer(),
-    )
-
-    assert not (result.run_dir / "input").exists()
-    assert "input" not in agent.state["messages"][0]["content"]
-
-
 def test_a_bare_task_string_still_works(cfg):
     """`run("do a thing")` must stay readable; Request is for when you need it."""
     result = run("just this", cfg=cfg, graph=StubAgent("ok"), checkpointer=StubCheckpointer())
@@ -218,15 +159,6 @@ def test_request_rejects_an_empty_task():
             Request(bad)
 
 
-def test_request_normalises_inputs_to_paths():
-    from pathlib import Path as _Path
-
-    # Off-contract on purpose: strings and a list, both normalised away.
-    request = Request("t", inputs=["/tmp/a.csv", _Path("/tmp/b.csv")])  # ty: ignore[invalid-argument-type]
-    assert all(isinstance(p, _Path) for p in request.inputs)
-    assert isinstance(request.inputs, tuple)
-
-
 def test_coerce_is_idempotent():
     original = Request("t", session_id="s")
     assert Request.coerce(original) is original
@@ -238,7 +170,7 @@ def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
     from kingfisher.domain.capabilities import Capabilities, CapabilityError
 
     workspace = cfg.workspace
-    old = workspace / "runs" / "ancient"
+    old = workspace / "scratch" / "ancient"
     old.mkdir(parents=True)
     (old / "t001").mkdir()
 
@@ -261,10 +193,10 @@ def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
 def test_the_framework_never_asks_for_files_of_its_own(cfg):
     """Wanting a written report is one kind of task among many."""
     quiet = StubAgent("ok")
-    result = run(Request("say hello"), cfg=cfg, graph=quiet, checkpointer=StubCheckpointer())
+    run(Request("say hello"), cfg=cfg, graph=quiet, checkpointer=StubCheckpointer())
     sent = quiet.state["messages"][0]["content"]
 
-    assert result.run_dir.name in sent  # the turn directory is a fact, and reaches it
+    assert "/scratch" in sent  # where to work is a fact, and reaches it
     assert "report.md" not in sent
     assert "result.json" not in sent
 
@@ -301,32 +233,10 @@ def test_supplied_data_is_still_there_on_the_next_turn(cfg):
         checkpointer=ck,
     )
 
-    session = first.run_dir.parent.parent
+    session = first.session_dir
     assert (session / "data" / "sales.csv").read_text() == "a,b\n1,2\n"
-    assert second.run_dir.parent.parent == session  # same session, second turn
-    assert not (second.run_dir / "input").exists()  # nothing was re-supplied
-
-
-def test_data_and_inputs_go_to_different_places(cfg):
-    """One flag with two lifetimes would be a mode. Two flags, two homes."""
-    durable = cfg.workspace / "keep.csv"
-    durable.write_text("keep")
-    transient = cfg.workspace / "once.csv"
-    transient.write_text("once")
-
-    start(cfg, "split")
-    result = run(
-        Request("go", session_id="split", inputs=(transient,), data=(durable,)),
-        cfg=cfg,
-        graph=StubAgent("ok"),
-        checkpointer=StubCheckpointer(),
-    )
-    session = result.run_dir.parent.parent
-
-    assert (session / "data" / "keep.csv").is_file()
-    assert (result.run_dir / "input" / "once.csv").is_file()
-    assert not (session / "data" / "once.csv").exists()
-    assert not (result.run_dir / "input" / "keep.csv").exists()
+    assert second.session_dir == session  # same session, second turn
+    assert not (second.session_dir / "input").exists()  # nothing was re-supplied
 
 
 def test_the_agent_is_told_what_arrived_in_data(cfg):
@@ -354,18 +264,6 @@ def test_the_agent_is_told_what_arrived_in_data(cfg):
 # has to be legible -- the alternative is every API author deciding it again.
 
 
-def test_the_result_names_the_turn_the_way_the_agent_does(cfg):
-    """Machine-independent, and the same string the agent was given, so a caller reading
-    the answer and a caller reading the files agree.
-    """
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    start(cfg, "s")
-
-    result = service.run(Request("go", session_id="s"))
-
-    assert result.virtual_dir == f"/runs/{result.turn_id}"
-
-
 def test_everything_but_the_host_paths_is_json(cfg):
     """The half a server sends."""
     import dataclasses
@@ -376,10 +274,12 @@ def test_everything_but_the_host_paths_is_json(cfg):
 
     sendable = {
         k: v for k, v in dataclasses.asdict(result).items()
-        if k not in ("run_dir", "log_path")
+        if k not in ("session_dir", "log_path")
     }
 
-    assert json.loads(json.dumps(sendable))["virtual_dir"] == result.virtual_dir
+    # `artifacts` is the half that locates a file for a caller elsewhere: it is
+    # relative to the session root, so it needs no host path to be useful.
+    assert json.loads(json.dumps(sendable))["turn_id"] == result.turn_id
 
 
 def test_the_host_paths_refuse_to_serialise(cfg):
@@ -392,18 +292,6 @@ def test_the_host_paths_refuse_to_serialise(cfg):
 
     with pytest.raises(TypeError, match="not JSON serializable"):
         json.dumps(dataclasses.asdict(result))
-
-
-def test_the_virtual_directory_and_the_artifacts_share_a_root(cfg):
-    """Both are rooted at the session, so they read together."""
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    start(cfg, "s")
-
-    result = service.run(Request("go", session_id="s"))
-
-    assert result.virtual_dir.startswith("/")
-    assert all(not a.startswith("/") for a in result.artifacts)
-    assert result.virtual_dir.lstrip("/").startswith("runs/")
 
 
 # -- what counts as having finished ---------------------------------------

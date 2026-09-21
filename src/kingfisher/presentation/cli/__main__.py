@@ -180,22 +180,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="which agent runs this, from the workspace's agents/ (`kingfisher list` shows them)",
     )
     doing.add_argument("--session", metavar="ID", help="continue an existing session")
-    # Two flags for one idea, and the difference is how long the file lives.
-    # `--data` is not a convenience: /data is read-only to the agent, so this is
-    # the only supported way to put a file where the next turn still finds it.
-    doing.add_argument(
-        "--input",
-        metavar="PATH",
-        action="append",
-        default=[],
-        help="a file for this turn only, in /runs/<turn>/input; repeatable",
-    )
+    # One flag, where there were two. `--input` put a file in the turn's own
+    # directory and `--data` in the session's; the turn directory is gone, so
+    # every caller-supplied file lives the length of the session and a name sent
+    # twice replaces the first, which `place_data` reports.
     doing.add_argument(
         "--data",
         metavar="PATH",
         action="append",
         default=[],
-        help="a file kept for the whole session, in /data (read-only); repeatable",
+        help="a file for the agent to read, in /data (read-only); repeatable",
     )
     # Unlike `list --as`, an absent one is not the operator's view. A listing is
     # read-only and whoever runs it is on the host with the policy in front of
@@ -400,7 +394,7 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
 
 def _run(args: argparse.Namespace) -> int:
     """Run one task, and say how it ended in the only channel that is left."""
-    missing = [p for p in (*args.input, *args.data) if not Path(p).expanduser().is_file()]
+    missing = [p for p in args.data if not Path(p).expanduser().is_file()]
     if missing:
         # Before the model, because this is the one mistake that would otherwise
         # cost money to discover.
@@ -418,7 +412,6 @@ def _run(args: argparse.Namespace) -> int:
         task=args.task,
         agent=args.agent,
         session_id=args.session,
-        inputs=tuple(Path(p).expanduser() for p in args.input),
         data=tuple(Path(p).expanduser() for p in args.data),
     )
     result = show(kf.stream(request, source_ids=args.held), sys.stdout, sys.stderr)
@@ -432,7 +425,7 @@ def _run(args: argparse.Namespace) -> int:
     if not result.completed:
         print(
             f"stopped: {result.stop_reason} -- the answer above is what was "
-            f"reached, and what it wrote is in {result.virtual_dir}",
+            f"reached, and what it wrote is in /derived and /memory",
             file=sys.stderr,
         )
         if args.delete_session:

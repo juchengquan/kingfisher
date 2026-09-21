@@ -112,7 +112,7 @@ def sweep(workspace, keep, checkpointer):
     import time
 
     dirs = LocalSessionDirs()
-    runs = workspace / "runs"
+    runs = workspace / "scratch"
     plan = retention.expired(dirs.listing(runs), older_than_seconds=keep, now=time.time())
     return retention.apply(plan, runs, dirs, checkpointer)
 
@@ -125,7 +125,7 @@ def test_sweep_keeps_the_newest_and_deletes_thread_with_directory(workspace):
 
     now = time.time()
     for name, age in (("oldest", 10_000), ("middle", 20), ("newest", 1)):
-        d = workspace / "runs" / name
+        d = workspace / "scratch" / name
         d.mkdir(parents=True)
         os.utime(d, (now - age, now - age))
 
@@ -133,13 +133,13 @@ def test_sweep_keeps_the_newest_and_deletes_thread_with_directory(workspace):
     result = sweep(workspace, keep=100, checkpointer=ckpt)  # idle over 100s goes
 
     assert result.removed == ("oldest",)
-    assert not (workspace / "runs" / "oldest").exists()
-    assert (workspace / "runs" / "newest").exists()
+    assert not (workspace / "scratch" / "oldest").exists()
+    assert (workspace / "scratch" / "newest").exists()
     assert ckpt.deleted == ["oldest"]
 
 
 def test_sweep_is_a_noop_when_under_the_limit(workspace):
-    (workspace / "runs" / "only").mkdir(parents=True)
+    (workspace / "scratch" / "only").mkdir(parents=True)
     result = sweep(workspace, keep=10_000, checkpointer=StubCheckpointer())
     assert result.removed == ()
 
@@ -162,7 +162,7 @@ def test_sweep_deletes_the_thread_before_the_directory(workspace):
         def delete_thread(self, thread_id: str) -> None:
             order.append("thread")
 
-    d = workspace / "runs" / "old"
+    d = workspace / "scratch" / "old"
     d.mkdir(parents=True)
     (d / "scratch.txt").write_text("x")
 
@@ -186,7 +186,7 @@ def test_a_failed_thread_delete_leaves_the_session_whole(workspace):
     next sweep retries an intact session rather than finding a thread that points at
     files which are gone.
     """
-    d = workspace / "runs" / "old"
+    d = workspace / "scratch" / "old"
     d.mkdir(parents=True)
 
     result = sweep(workspace, keep=0, checkpointer=BrokenCheckpointer())
@@ -202,7 +202,7 @@ def test_sweep_failures_are_reported_not_swallowed(workspace):
     every single run.
     """
     for name in ("a", "b"):
-        (workspace / "runs" / name).mkdir(parents=True)
+        (workspace / "scratch" / name).mkdir(parents=True)
 
     result = sweep(workspace, keep=0, checkpointer=BrokenCheckpointer())
 
@@ -246,7 +246,7 @@ def test_turn_names_are_claimed_exclusively(workspace):
     from concurrent.futures import ThreadPoolExecutor
 
     dirs = LocalSessionDirs()
-    runs = workspace / "runs"
+    runs = workspace / "scratch"
     runs.mkdir(parents=True, exist_ok=True)
 
     with ThreadPoolExecutor(max_workers=8) as pool:

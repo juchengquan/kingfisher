@@ -23,7 +23,6 @@ from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import (
     AGENT_HOME,
-    AGENT_TMP,
     BUNDLED_SKILLS_ROUTE,
     DATA,
     DATA_ROUTE,
@@ -32,6 +31,7 @@ from kingfisher.layout import (
     MEMORY,
     MEMORY_ROUTE,
     RESERVED_SKILL_FOLDER,
+    SCRATCH,
     SESSION_DIRS,
     SESSION_PLUMBING,
     SKILLS_ROUTE,
@@ -69,7 +69,7 @@ def shell_env(
         "HOME": str(agent_home(session_dir)),
         "LANG": "en_US.UTF-8",
         "LC_ALL": "en_US.UTF-8",
-        "TMPDIR": str(session_dir / AGENT_TMP),
+        "TMPDIR": str(session_dir / SCRATCH),
     }
     env["KINGFISHER_SKILLS"] = str((catalogue or Definitions.from_config(cfg)).skills.root)
     return env

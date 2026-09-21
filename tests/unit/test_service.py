@@ -19,7 +19,6 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.workspace.placement import DataError
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.infrastructure.workspace.snapshots import agent_snapshot
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
@@ -70,7 +69,7 @@ def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
 
     asked = Request("go", agent="only", session_id="s")
     turns = [service.run(asked).turn_id for _ in range(3)]
-    assert turns == ["t001", "t002", "t003"]
+    assert len(set(turns)) == 3, "three turns, three names"
 
 
 def test_construction_prepares_only_what_sessions_share(cfg):
@@ -174,12 +173,6 @@ def test_the_module_level_helpers_are_unchanged(cfg):
 # only assertion on either was one substring, through a stubbed agent.
 
 
-class FakeTurn:
-    virtual_dir = "/runs/t001"
-    shell_dir = "runs/t001"
-    virtual_input_dir = "/runs/t001/input"
-
-
 class FakePlacement:
     def __init__(self, placed=(), replaced=()):
         self.placed = placed
@@ -187,23 +180,23 @@ class FakePlacement:
 
 
 def test_a_quiet_turn_opens_with_only_run_start():
-    events = opening_events("/runs/t001", (), FakePlacement())
+    events = opening_events("t001", (), FakePlacement())
 
-    assert [(e.kind, e.text) for e in events] == [("run_start", "/runs/t001")]
+    assert [(e.kind, e.text) for e in events] == [("run_start", "t001")]
 
 
 def test_replacing_durable_data_is_counted_not_just_listed():
     """Durable data silently overwritten is the one dangerous case, so the count is
     named.
     """
-    events = opening_events("/runs/t001", (), FakePlacement(("a.csv", "b.csv"), ("a.csv",)))
+    events = opening_events("t001", (), FakePlacement(("a.csv", "b.csv"), ("a.csv",)))
 
     (placed,) = [e for e in events if e.kind == "data_placed"]
     assert placed.text == "a.csv, b.csv (1 replaced)"
 
 
 def test_placing_without_replacing_says_nothing_about_replacement():
-    events = opening_events("/runs/t001", (), FakePlacement(("fresh.csv",)))
+    events = opening_events("t001", (), FakePlacement(("fresh.csv",)))
 
     (placed,) = [e for e in events if e.kind == "data_placed"]
     assert placed.text == "fresh.csv"
@@ -213,30 +206,31 @@ def test_unhardened_paths_are_reported_before_the_run_starts():
     """Order matters: the caller should know the guard is weaker before it is told the
     turn began.
     """
-    events = opening_events("/runs/t001", ("theirs.pdf: denied",), FakePlacement())
+    events = opening_events("t001", ("theirs.pdf: denied",), FakePlacement())
 
     assert [e.kind for e in events] == ["protect_failed", "run_start"]
 
 
-def test_a_bare_task_is_told_only_its_run_directory():
-    message = turn_message("do a thing", FakeTurn(), (), has_inputs=False)
+def test_a_bare_task_is_told_only_where_to_work():
+    message = turn_message("do a thing", ())
 
     assert message == (
-        "do a thing\n\nYour run directory for this task is /runs/t001 "
-        "(from the shell, runs/t001)."
+        "do a thing\n\n/scratch/ is yours to work in (from the shell, scratch)."
     )
 
 
-def test_supplied_files_and_new_data_are_both_named():
-    message = turn_message("analyse", FakeTurn(), ("fresh.csv",), has_inputs=True)
+def test_files_supplied_with_the_request_are_named():
+    """They went to a directory of the turn's own and are session data now, so the
+    one line that used to name two places names one.
+    """
+    message = turn_message("analyse", ("fresh.csv",))
 
-    assert "/runs/t001/input" in message
     assert "New files in /data: fresh.csv." in message
 
 
 def test_the_turn_message_carries_no_output_convention():
     """What the task should *produce* is the task's business."""
-    message = turn_message("say hello", FakeTurn(), (), has_inputs=False)
+    message = turn_message("say hello", ())
 
     assert "report" not in message.lower()
     assert ".md" not in message
@@ -273,22 +267,6 @@ def _refusal(how: str, tmp_path: Path) -> dict:
     return {field: (tmp_path / "a" / "same.csv", tmp_path / "b" / "same.csv")}
 
 
-def test_a_refused_request_leaves_no_turn_behind(cfg, tmp_path):
-    for n, how in enumerate(REFUSALS):
-        # A session each. Turn names are sequential within one, so a second refusal
-        # in the session the first used would be asserting about `t002`.
-        session = f"s{n}"
-        start(cfg, session)
-        service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-        service.run(Request("first", session_id=session))  # t001 is real work
-
-        with pytest.raises(DataError):
-            service.run(Request("go", session_id=session, **_refusal(how, tmp_path)))
-
-        runs = cfg.workspace / "sessions" / session / "runs"
-        assert sorted(p.name for p in runs.iterdir()) == ["t001"], how
-
-
 def test_the_admitted_request_is_what_opens_the_turn(cfg):
     """`_admit` returns; `_open_turn` takes only that."""
     import inspect
@@ -300,7 +278,7 @@ def test_a_narrowed_request_is_told_what_it_did_not_grant(cfg):
     """The silence this closes: the caller found out when the model reached for a tool
     mid-turn and was refused, not when the turn opened.
     """
-    events = opening_events("/runs/t001", (), FakePlacement(), (("tool", ("execute", "ls")),))
+    events = opening_events("t001", (), FakePlacement(), (("tool", ("execute", "ls")),))
 
     (said,) = [e for e in events if e.kind == "withheld"]
     assert said.text == "2 tool(s) not granted: execute, ls"
@@ -308,7 +286,7 @@ def test_a_narrowed_request_is_told_what_it_did_not_grant(cfg):
 
 def test_an_unrestricted_request_is_told_nothing(cfg):
     """Nothing was withheld, so there is nothing to say."""
-    events = opening_events("/runs/t001", (), FakePlacement(), ())
+    events = opening_events("t001", (), FakePlacement(), ())
 
     assert [e.kind for e in events] == ["run_start"]
 
@@ -428,7 +406,7 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
 
 def test_each_kind_gets_its_own_line(cfg):
     events = opening_events(
-        "/runs/t001",
+        "t001",
         (),
         FakePlacement(),
         (("tool", ("execute",)), ("subagent", ("extractor",))),
@@ -492,7 +470,7 @@ def test_a_turn_runs_in_the_directory_it_was_handed(cfg, tmp_path):
 
     result = service.run(Request(task="anything"))
 
-    assert result.run_dir.is_relative_to(roots.root)
+    assert result.session_dir.is_relative_to(roots.root)
     assert not (cfg.workspace / "sessions" / result.session_id).exists()
     # And nothing for `sessions()` or `reap` to see, which is what `ports.md`
     # promises a custom root: both walk `<workspace>/sessions/`.

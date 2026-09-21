@@ -56,7 +56,7 @@ def test_being_cut_short_keeps_the_work(cfg):
 
     result = kf.run(Request("go"))
 
-    assert result.run_dir.is_dir()
+    assert result.session_dir.is_dir()
     assert "memory/AGENTS.md" in result.artifacts
 
 
@@ -101,7 +101,7 @@ def test_a_turn_that_runs_out_of_steps_is_cut_short_not_crashed(cfg):
     # `max_steps`, not `max_duration` -- the distinction the boolean could not
     # carry, and the reason a reader was sent to the wrong setting.
     assert result.stop_reason == "max_steps"
-    assert result.run_dir.is_dir(), "the turn's work went with the error"
+    assert result.session_dir.is_dir(), "the turn's work went with the error"
 
 
 def test_a_turn_cut_short_for_steps_is_logged_as_having_ended(cfg):
@@ -118,7 +118,7 @@ def test_a_turn_cut_short_for_steps_is_logged_as_having_ended(cfg):
 
     result = Kingfisher(cfg, graph=RunawayAgent(), threads=StubCheckpointer()).run(Request("go"))
 
-    written = log_path(result.run_dir.parent.parent).read_text(encoding="utf-8")
+    written = log_path(result.session_dir).read_text(encoding="utf-8")
     ended = [json.loads(line) for line in written.splitlines() if line.strip()]
     ends = [record for record in ended if record["event"] == "run_end"]
     assert ends and ends[-1]["ok"] is True
@@ -173,8 +173,8 @@ def test_session_bytes_counts_everything_the_session_holds(cfg, session_dir):
     is worth keeping.
     """
     (session_dir / "derived" / "kept.bin").write_bytes(b"x" * 100)
-    (session_dir / "runs").mkdir(exist_ok=True)
-    (session_dir / "runs" / "scratch.bin").write_bytes(b"y" * 50)
+    (session_dir / "scratch").mkdir(exist_ok=True)
+    (session_dir / "scratch" / "scratch.bin").write_bytes(b"y" * 50)
 
     assert session_bytes(session_dir) >= 150
 

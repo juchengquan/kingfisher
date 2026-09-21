@@ -32,7 +32,7 @@ def _a_result() -> RunResult:
         session_id="s",
         turn_id="t001",
         answer="42",
-        run_dir=Path("/tmp/run"),
+        session_dir=Path("/tmp/run"),
         log_path=Path("/tmp/log"),
     )
 
@@ -579,7 +579,7 @@ def test_a_smoke_run_reaches_its_end(cfg, tmp_path, monkeypatch):
     run_dir.mkdir()
     (run_dir / "report.md").write_text("# smoke\n", encoding="utf-8")
     finished = SimpleNamespace(
-        session_id="smoke", run_dir=run_dir, log_path=tmp_path / "runlog.jsonl"
+        session_id="smoke", session_dir=run_dir, log_path=tmp_path / "runlog.jsonl"
     )
     monkeypatch.setattr("kingfisher.stream", lambda request, **kwargs: iter(()), raising=False)
     monkeypatch.setattr(driver, "show", lambda events, out: finished)

@@ -311,7 +311,7 @@ def _finished(stop_reason="end_turn", artifacts=()):
         kind="finished",
         result=RunResult(
             session_id="s1", turn_id="t001", answer="42",
-            virtual_dir="/runs/t001", stop_reason=stop_reason, artifacts=artifacts,
+            stop_reason=stop_reason, artifacts=artifacts,
         ),
     )
 

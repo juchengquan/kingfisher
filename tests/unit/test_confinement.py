@@ -438,7 +438,7 @@ def test_the_agent_can_still_write_everything_it_is_meant_to(cfg, session_dir):
 
     for command in (
         "echo kept > derived/report.md",
-        "mkdir -p runs/t001 && echo scratch > runs/t001/notes.txt",
+        "echo scratch > scratch/notes.txt",
     ):
         result = backend.execute(command)
         assert result.exit_code == 0, f"{command!r} was refused: {result.output}"
@@ -488,13 +488,13 @@ def workspace_in_the_home():
 def test_the_shell_can_walk_into_a_workspace_that_lives_in_the_home(cfg, workspace_in_the_home):
     """Denying the home as a subpath denies the way *in* to the workspace too."""
     session = ensure_session_layout(workspace_in_the_home / "sessions" / "s")
-    (session / "runs" / "t001").mkdir(parents=True)
+    (session / "scratch" / "t001").mkdir(parents=True)
     backend = default_backend(replace(cfg, workspace=workspace_in_the_home), session)
 
-    result = backend.execute("cd runs/t001 && pwd")
+    result = backend.execute("cd scratch && pwd")
 
     assert result.exit_code == 0, f"the shell cannot walk into the workspace: {result.output}"
-    assert str(session / "runs" / "t001") in str(result.output)
+    assert str(session / "scratch") in str(result.output)
 
 
 @macos

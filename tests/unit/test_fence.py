@@ -99,7 +99,7 @@ def test_the_shell_may_write_exactly_these_places_in_a_session(sandlock, tmp_pat
 
     assert set(policy.fs_writable) == {
         str(session / name)
-        for name in ("data", "derived", "memory", "runs", ".home", ".tmp")
+        for name in ("data", "derived", "memory", "scratch", ".home", "scratch")
     }
 
 

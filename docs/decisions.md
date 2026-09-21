@@ -1394,6 +1394,47 @@ These began as decisions in *Nothing at rest on this machine* and were built
 without the rest of it, which is what that document's N2 asked for -- the parts
 that need no memory-backed filesystem, first and separately.
 
+**`/runs` and `.tmp` became one `/scratch`, and a turn stopped being a place.**
+A session held two scratch directories with one purpose. `.tmp` was the shell's
+`TMPDIR` and the agent was never told about it; `runs/<turn>` was named in every
+task message and reached by the file tools. Neither was returned to a caller, and
+only one of them was ever swept -- a turn's directory stayed for the life of the
+session, counted against its quota, holding files whose own docstring said they
+"arrive fresh each round and leave with the turn". Nothing implemented that.
+
+**The folders were also the turn counter**, which is the part that made this more
+than a tidy-up. `allocate_turn` listed `runs/`, took the number after the highest
+and claimed the next with `create_exclusive`. So a session restored on another host
+-- where nothing restores `runs/`, because only artifacts, the transcript and the
+agent snapshot are kept -- began again at `t001`. Asked who reads the sequence, the
+answer was nobody: the id reaches a printed line, the run log and `RunResult`, and
+none of them compares two. It is generated now, a caller's own id still wins, and
+what that no longer buys is de-duplication on a retry -- which was never the id, it
+was `ensure` on the same directory.
+
+**A request's files go to `/data` with the session's.** `Request.inputs` and
+`Request.data` were two fields for one operation once the turn had nowhere of its
+own; `data` survived, because it names where they land and `place_data` is the
+half that re-hardens the directory and reports what it replaced. Two turns sending
+one name no longer keep both -- the second replaces it, visibly, which is the cost
+of the merge and is stated here rather than discovered.
+
+**What a reader should expect and not find:** `RunResult.virtual_dir`, which named
+a directory that no longer exists, and `run_dir`, which is `session_dir` now
+because that is what it points at. `kingfisher run --input` went with the field.
+
+**The three lifetimes are told apart by destination now**, which is what the split
+had been doing by convention: `/data` is the caller's and read-only, `/scratch` is
+the agent's and returned to nobody, `/derived` and `/memory` are what the caller
+gets back. The dot came off `.tmp` because its only reason was that the agent never
+named it -- `SESSION_DIRS` is "the names the agent addresses", and it is one now.
+
+The measured warning about path spellings survives unchanged and is worth keeping
+in view: told only the virtual form, the agent passed it to `execute` 4 times in 10,
+each failing and costing about three times the whole task. `/scratch` and `scratch`
+correspond the way every other route does, which is why the directory was renamed
+rather than given a prettier virtual name. *(2026-09-21.)*
+
 **A session's history is kingfisher's own records, not a framework's.**
 `domain/transcript.py` holds it, and it keeps what the agent *did* as well as
 what it said -- tool calls and results, not only human and assistant text, since

@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 
-from kingfisher.layout import AGENT_TMP
+from kingfisher.layout import SCRATCH
 
 
 def _drop_write_bits(path: Path) -> None:
@@ -56,7 +56,7 @@ def keep_tmp_private(session_dir: Path) -> None:
     running with the mode the provider chose.
     """
     with suppress(OSError):
-        (Path(session_dir) / AGENT_TMP).chmod(0o700)
+        (Path(session_dir) / SCRATCH).chmod(0o700)
 
 
 def protect_data(session_dir: Path) -> tuple[str, ...]:

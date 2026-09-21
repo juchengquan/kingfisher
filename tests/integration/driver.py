@@ -328,12 +328,11 @@ def main(argv: list[str]) -> int:
         task=task,
         agent=args.agent,
         session_id=session_id,
-        inputs=tuple(Path(p).expanduser() for p in args.input),
         data=tuple(Path(p).expanduser() for p in args.data),
         capabilities=capabilities,
     )
 
-    missing = [p for p in (*request.inputs, *request.data) if not p.is_file()]
+    missing = [p for p in request.data if not p.is_file()]
     if missing:
         print(f"no such input file(s): {', '.join(str(p) for p in missing)}", file=sys.stderr)
         return 2
@@ -351,8 +350,8 @@ def main(argv: list[str]) -> int:
                 print(f"{kind.replace('_', ' '):<14}: {', '.join(selected) or '(none)'}")
         if capabilities.memory is not None:
             print(f"{'memory':<10}: {'on' if capabilities.memory else 'off'}")
-    if request.inputs:
-        print(f"inputs    : {', '.join(p.name for p in request.inputs)}")
+    if request.data:
+        print(f"inputs    : {', '.join(p.name for p in request.data)}")
     if request.data:
         print(f"data      : {', '.join(p.name for p in request.data)}")
     print(f"task      : {task}\n")
@@ -387,11 +386,11 @@ def main(argv: list[str]) -> int:
 
     print()
     print(f"session   : {result.session_id}")
-    print(f"run_dir   : {result.run_dir}")
+    print(f"run_dir   : {result.session_dir}")
     print(f"usage     : {_usage_summary(result.log_path)}")
 
     for name in ("report.md", "result.json"):
-        path = result.run_dir / name
+        path = result.session_dir / name
         if path.exists():
             print(f"{name:<12}: written  {path}")
         elif is_smoke:
@@ -411,7 +410,7 @@ def main(argv: list[str]) -> int:
 
     # The regression signal is the structured result, not the prose: two runs
     # on identical input rewrite the report entirely while the numbers hold.
-    payload = load_result(result.run_dir)
+    payload = load_result(result.session_dir)
     if payload is None:
         print("\nresult.json missing or unparseable — cannot check", file=sys.stderr)
         return 1

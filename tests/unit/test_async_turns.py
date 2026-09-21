@@ -159,7 +159,12 @@ def test_arun_returns_what_run_returns(cfg):
 
     assert asynchronous.answer == synchronous.answer
     assert asynchronous.completed == synchronous.completed
-    assert asynchronous.turn_id == synchronous.turn_id
+    # Filled, not equal. These are two turns in two sessions, and they compared equal
+    # only while a turn id was a sequence and both were the first -- which is the kind
+    # of agreement that stops meaning anything the moment the ids are made rather than
+    # counted. What this is asking is whether `arun` fills the field at all.
+    assert asynchronous.turn_id and synchronous.turn_id
+    assert asynchronous.turn_id != synchronous.turn_id
 
 
 def test_arun_can_dispose_of_the_session_like_run(cfg):
