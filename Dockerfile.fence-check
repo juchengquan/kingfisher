@@ -1,0 +1,71 @@
+# Does the fence hold on *this* kernel? Not a second CI job -- CI answers that
+# for `ubuntu-latest`, and no deployment runs on `ubuntu-latest`. The question
+# here is the one CI cannot reach: whether the node you are about to put sessions
+# on can fence a shell at all. `compose.yaml` notes EKS nodes are commonly on
+# 6.1, where a full ruleset is unavailable and the fallback is silent.
+#
+# It runs the real escape suite rather than a probe of its own, and that is the
+# whole design. `landlock_abi()` answering 6 is a claim about the kernel;
+# `tests/linux/test_fence_escapes.py` is seven ways out of a session, each paired
+# with an unfenced control proving the escape works when nothing stops it. A
+# validator that read the ABI and stopped would report success on a host where
+# `confine` itself refuses -- which is exactly what was measured on Docker
+# Desktop, where the shell came back `[fence] the command did not run`.
+#
+# Not the shipped image, and must not be mistaken for one: it carries the test
+# suite and the dev group, neither of which belongs in a deployment.
+
+FROM python:3.12-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock README.md ./
+COPY src/ ./src/
+
+# `--dev` for pytest, which the shipped image deliberately does not carry, and
+# `--extra fence` for the thing under test. Without the extra this image would
+# faithfully report that no fence is installed, which is true and not the
+# question being asked.
+RUN uv sync --frozen --dev --extra fence
+
+# The suite is the validator. `tests/conftest.py` comes too because
+# `pyproject.toml` sets `pythonpath = ["."]` and the escape tests import through
+# it -- copying `tests/linux/` alone collects nothing and exits green.
+#
+# `evals/` is here for a reason that is not obvious and was measured: the
+# autouse `isolated_from_the_developer` fixture patches `load_dotenv` on
+# `tests.integration.driver`, which imports `evals.*` at module level. Without
+# this directory every test that would have run errors at *setup* -- including
+# the two unfenced controls and the guard that stops a vacuous green -- while
+# the container still exits 1 and reads like an honest "no fence here".
+COPY tests/ ./tests/
+COPY evals/ ./evals/
+
+# `CI=true` is what makes `test_a_fence_was_exercised.py` assert rather than skip
+# itself. Without it a kernel with no Landlock and no bwrap skips every escape
+# and the run passes having proved nothing, which is the single outcome a
+# validator must never produce.
+#
+# Set here for legibility and forced again in `fence-check.sh`, which is the one
+# that counts. Measured: `run -e CI=0` against this image reported FENCE HELD on
+# a kernel with no fence at all. An ENV is a default, and the caller wins every
+# argument with a default -- so do not delete the export in the script on the
+# grounds that this line already says it.
+ENV CI=true \
+    PATH="/app/.venv/bin:${PATH}"
+
+# Through a wrapper rather than calling pytest directly, because pytest exits 1
+# both when the fence is absent and when this image is broken, and those demand
+# opposite responses from whoever ran it. The wrapper runs `-rs`, so the log
+# still names which fence skipped and why: "16 skipped" does not say whether
+# Landlock skipped because the kernel is old or because the wheel is missing.
+COPY fence-check.sh /usr/local/bin/fence-check
+RUN chmod +x /usr/local/bin/fence-check
+
+ENTRYPOINT ["/usr/local/bin/fence-check"]

@@ -1,0 +1,36 @@
+# Point this at the kernel you are about to trust, and read the exit code:
+#
+#   docker compose -f compose.fence-check.yaml run --rm fence-check
+#
+# Zero means a fence was live and every escape on the list failed against it.
+# Non-zero means either an escape got through, or no fence was available at all
+# -- and the second is the reason to run this, because it is otherwise silent:
+# `KINGFISHER_SHELL_SANDBOX=auto` falls back to unconfined and the deployment
+# carries on serving, one warning deep in a log.
+#
+# Separate from `compose.yaml` on purpose. That file is the deployment, and its
+# tmpfs sizing rule is the whole point of it; a test service sharing it would
+# invite someone to `up` both.
+
+services:
+  fence-check:
+    build:
+      context: .
+      dockerfile: Dockerfile.fence-check
+    # Deliberately NOT `seccomp=unconfined`. The claim under test is that
+    # Landlock fences a shell under Docker's *default* seccomp profile -- that is
+    # what `fence.py` measured, and it is why Landlock was chosen over bubblewrap,
+    # which needs the profile relaxed. Turning it off here would validate an
+    # arrangement no deployment of this runs.
+    #
+    # SYS_ADMIN is added for the opposite reason. Three of the seven escapes
+    # mount something, and on a host that could never mount anything they would
+    # fail for the wrong reason and still look like the fence holding. The
+    # measured claim is stronger and is what this checks: Landlock denies the
+    # path resolution `mount(2)` needs, so a fenced process cannot spend
+    # SYS_ADMIN even where the container has it.
+    cap_add:
+      - SYS_ADMIN
+    # The suite writes sessions under pytest's tmp_path; nothing here needs to
+    # outlive the run, and a deployment's volumes are deliberately absent so this
+    # cannot be pointed at real sessions by accident.
