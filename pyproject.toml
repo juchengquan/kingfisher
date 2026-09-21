@@ -101,7 +101,11 @@ dependencies = [
 # fail on macOS, where the fence is `sandbox-exec` and this is not wanted at all.
 # The marker means `pip install kingfisher[fence]` is a no-op elsewhere rather
 # than an error, so one requirements file can serve every platform.
-fence = ["sandlock>=0.8.6; sys_platform == 'linux'"]
+# The floor is not the first version that worked. 0.8.7 and 0.8.8 fix filesystem
+# confinement itself -- `fchmodat2` went unintercepted, and a hard link could be
+# written without the authority its target required -- so a lower pin installs a
+# fence with known holes in the one thing it is here to do.
+fence = ["sandlock>=0.8.8; sys_platform == 'linux'"]
 
 [project.scripts]
 # This said "seeding a workspace and looking at one, which are the two things
