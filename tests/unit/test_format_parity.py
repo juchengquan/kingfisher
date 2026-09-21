@@ -160,12 +160,17 @@ def _outcome(kind: str, text: str) -> tuple[str, object]:
     return "read", {name: getattr(built, name) for name in SHARED_FIELDS}
 
 
-@pytest.mark.parametrize("label", sorted(DOCUMENTS))
-def test_a_shared_field_reads_the_same_in_either_file(label):
+def test_a_shared_field_reads_the_same_in_either_file():
     """A fix, a default or a refusal that reaches one reader and not the other."""
-    text = DOCUMENTS[label]
+    # Every document is compared before anything is asserted, so one run names all of
+    # them that disagree rather than stopping at the first.
+    parted = {}
+    for label, text in sorted(DOCUMENTS.items()):
+        agent, delegate = _outcome("agent", text), _outcome("subagent", text)
+        if agent != delegate:
+            parted[label] = (agent, delegate)
 
-    assert _outcome("agent", text) == _outcome("subagent", text)
+    assert not parted, f"the two readers disagree on {parted}"
 
 
 def test_the_documents_read_every_field_both_formats_define():
