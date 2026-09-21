@@ -3363,6 +3363,33 @@ If deletions are ever proposed, the gate is a mutation corpus generated *after*
 the deletion list is frozen, for the reason those 89 preserved tests give. *(Measured
 2026-09-08.)*
 
+**Asked again from the other end: the suite is not over-coupled either.** The
+second complaint was not the count but the blast radius -- folding `/runs` and
+`.tmp` into one `/scratch` changed twelve files under `src/` and fifteen under
+`tests/`, which reads as tests that know too much. Its ninety hunks say otherwise:
+19 are the claim itself changing and 12 are deletions, while 44 spell a literal and
+15 a renamed name. Ten of the fifteen files moved for spelling alone.
+
+**The cure that suggests itself prevents nothing, and the number is zero.**
+`layout.py` already exported `RUNS`, `AGENT_TMP`, `RUNS_ROUTE` and `SESSION_DIRS`
+while about sixty test files spelled those strings by hand, so the obvious move is
+to make the tests import them. It would have saved *none* of the 44 hunks: that
+commit renamed the constant along with the thing it named, `RUNS` to `SCRATCH`, so
+`workspace / RUNS` needed the same edit as `workspace / "runs"`. What constants buy
+here is a one-token rename instead of a literal hunt -- cheapness, not absence.
+
+**And the shape barely occurs.** Of the last sixty commits, the twelve touching the
+most test files are ten semantic or additive changes -- a capability removed, an
+execution path deleted, a lifecycle contract altered -- and one module move. The
+tests moved because the world moved. The move is the only cosmetic one, and 13 of
+its 23 hunks are `import` lines that no constant reaches; the remaining 8 are module
+paths written as strings, the one place here a constant could exist and does not.
+
+So a change costing fifteen test files is the suite reporting a blast radius, not a
+suite built wrong, and the entry above is why cutting it is not the answer either.
+What came of the pass is one collapse worth taking on its own merits: the parity
+documents compare in one rule now rather than fourteen. *(Measured 2026-09-21.)*
+
 ## Proposals, and what became of them
 
 What is still being argued is in `docs/design/`, and `docs/README.md` lists it.
