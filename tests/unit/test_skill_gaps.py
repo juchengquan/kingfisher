@@ -25,13 +25,12 @@ def _read(root):
 
 
 def test_a_foldered_skill_still_counts_as_taken(cfg):
-    """`SkillRepository.names` lists the root and stops, so it answered `()` for a
-    catalogue whose skills all lived in folders -- and the upload rule quietly
-    stopped applying to every one of them.
+    """Asked of the registry, because a directory listing answered `()` here -- it read
+    the root and stopped -- and the upload rule quietly stopped applying to every skill
+    a catalogue kept in folders. That listing is gone; this is what replaced it.
     """
     _skill(cfg.skills_dir, "research/lookup", "lookup")
 
-    assert LocalSkillRepository(cfg.skills_dir).names == (), "the old source, for contrast"
     assert _read(cfg.skills_dir).taken == ("lookup",)
 
 

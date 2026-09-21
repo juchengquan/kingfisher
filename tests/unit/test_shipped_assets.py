@@ -19,7 +19,7 @@ from kingfisher.infrastructure.harness.narrowing import NarrowedSkills
 from kingfisher.kinds.agents.catalogue import LocalAgentRepository
 from kingfisher.kinds.importing import load
 from kingfisher.kinds.skills import spec as skill
-from kingfisher.kinds.skills.catalogue import LocalSkillRepository
+from kingfisher.kinds.skills.catalogue import reachable
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.kinds.tools.spec import Offering
@@ -58,17 +58,16 @@ def test_every_preset_skill_parses(shipped):
     """The mirror of the subagent version, and absent until a probe went looking."""
     root = shipped / "skills"
 
-    # What sits directly under the root. A folder under it is a *source*, whose
-    # skills this listing does not reach.
-    assert set(LocalSkillRepository(root).names) == {
+    # Both shapes, named: three directly under the root, and the ones in
+    # `incident/` demonstrating that a folder is a source. A listing of the root
+    # reached only the first three, which once left the file with a structural job
+    # as the file with no check.
+    assert {found.name for found in reachable(root)} >= {
         "code-review",
         "release-notes",
         "tabular-qa",
     }
-    # So the files are found by walking for `SKILL.md` rather than by that
-    # listing. The skills in `incident/` are the ones demonstrating that a folder
-    # is a source, and a listing by name never reaches them -- which once left the
-    # file with a structural job as the file with no check.
+    # The files themselves, walked for rather than listed.
     found = sorted(root.glob(f"*/{skill.FILENAME}")) + sorted(root.glob(f"*/*/{skill.FILENAME}"))
     assert {path.parent.name for path in found} == {
         "code-review",

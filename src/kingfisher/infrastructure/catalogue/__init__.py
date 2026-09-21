@@ -77,7 +77,7 @@ class Definitions:
 
     def warm(self) -> Definitions:
         """Read all three now, so a broken definition fails here."""
-        _ = self.agents.specs, self.skills.names, self.subagents.specs, self.tools.found
+        _ = self.agents.specs, self.subagents.specs, self.tools.found
         # The fifth kind, which this read for none of the time it has existed.
         # `middlewares/*.py` is Python that has to import, exactly like `tools/*.py`,
         # and the refusal for a class that is not an `AgentMiddleware` was written

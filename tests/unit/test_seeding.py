@@ -15,7 +15,7 @@ from kingfisher.infrastructure.harness.agent import (
 )
 from kingfisher.infrastructure.workspace import seeding
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
-from kingfisher.kinds.skills.catalogue import LocalSkillRepository
+from kingfisher.kinds.skills.catalogue import LocalSkillRepository, reachable
 from tests.conftest import repository_root, subagents_dir, tools_dir
 
 #: The pack the seeding tests below use. A real one, reached the way a shipped pack is
@@ -135,7 +135,8 @@ def test_a_skill_hidden_below_the_deepest_source_is_reported_not_ignored(tmp_pat
         target.write_text("---\nname: x\ndescription: d\n---\nbody\n", encoding="utf-8")
     (tmp_path / "not-a-skill").mkdir()
 
-    assert LocalSkillRepository(tmp_path).names == ("flat",)
+    found = [str(one.relative_to(tmp_path)) for one in reachable(tmp_path)]
+    assert found == ["flat", "grouped/nested"]
     assert LocalSkillRepository(tmp_path).misplaced == ("a/b/deep",)
 
 

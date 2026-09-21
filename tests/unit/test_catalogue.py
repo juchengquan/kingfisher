@@ -24,6 +24,7 @@ from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import default_backend
 from kingfisher.infrastructure.harness.tools import workspace_tool_names
 from kingfisher.kinds.middlewares.catalogue import MiddlewareError
+from kingfisher.kinds.skills.catalogue import reachable
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.layout import SKILLS_ROUTE
 from tests.conftest import (
@@ -475,7 +476,7 @@ def test_one_kind_can_be_swapped_without_touching_the_other_two(tmp_path, cfg):
     assert swapped.subagents.names == ("from-memory",)
     # untouched, and still reading the directory they were staged in
     assert swapped.skills is staged.skills
-    assert swapped.skills.names == ("staged-only",)
+    assert [one.name for one in reachable(swapped.skills.root)] == ["staged-only"]
 
 
 def test_a_supplied_repository_needs_no_directory_to_be_accepted(cfg):

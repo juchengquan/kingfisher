@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.kinds.skills.catalogue import LocalSkillRepository
+from kingfisher.kinds.skills.catalogue import reachable
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import start, verbs
 
@@ -407,8 +407,8 @@ def test_seeding_lands_in_the_catalogue_not_the_workspace(
 
     assert main(["seed"]) == 0
 
-    assert LocalSkillRepository(catalogue / "skills").names
-    assert not LocalSkillRepository(cfg.workspace / "skills").names
+    assert reachable(catalogue / "skills")
+    assert not reachable(cfg.workspace / "skills")
     assert "seeded" in capsys.readouterr().out
 
 
@@ -420,7 +420,7 @@ def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, shipped, m
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
     assert main(["seed"]) == 0
-    assert LocalSkillRepository(cfg.skills_dir).names
+    assert reachable(cfg.skills_dir)
 
 
 def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, shipped, monkeypatch):

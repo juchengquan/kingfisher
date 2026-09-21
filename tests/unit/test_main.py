@@ -13,7 +13,7 @@ from kingfisher.domain.result import RunEvent, RunResult
 from kingfisher.infrastructure.harness import agent as main_agent_module
 from kingfisher.infrastructure.workspace import layout as workspace_layout
 from kingfisher.kinds.skills import spec as skill
-from kingfisher.kinds.skills.catalogue import LocalSkillRepository
+from kingfisher.kinds.skills.catalogue import reachable
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.presentation.cli.progress import show
 from tests.conftest import subagents_dir, tools_dir
@@ -263,7 +263,7 @@ def test_a_new_workspace_seeds_itself(cfg, tmp_path, monkeypatch):
 
     assert driver.main(["driver.py", "--list"]) == 0
 
-    assert LocalSkillRepository(fresh.skills_dir).names
+    assert reachable(fresh.skills_dir)
 
 
 def test_a_new_workspace_says_what_it_wrote(cfg, tmp_path, capsys, monkeypatch):
@@ -282,7 +282,12 @@ def test_a_new_workspace_says_what_it_wrote(cfg, tmp_path, capsys, monkeypatch):
     # The half this test is named for -- what it *wrote* -- is a loop, and an
     # empty one passes. Seeding writing no skills at all is exactly the failure
     # this would otherwise report as success.
-    seeded = LocalSkillRepository(fresh.skills_dir).names
+    # What seeding copies is a top-level entry, which for a sourced skill is the
+    # source folder rather than the skill -- so this is that part of each path and
+    # not the skill's own name.
+    seeded = sorted(
+        {found.relative_to(fresh.skills_dir).parts[0] for found in reachable(fresh.skills_dir)}
+    )
     assert seeded, "seeding wrote no skills, so the loop below checks nothing"
 
     for name in seeded:
@@ -324,7 +329,7 @@ def test_a_new_workspace_seeds_before_the_catalogue_is_read(tmp_path, capsys, mo
 
     assert driver.main(["driver.py", "--list"]) == 2  # no catalogue, as expected
 
-    assert LocalSkillRepository(workspace / "skills").names
+    assert reachable(workspace / "skills")
     assert (workspace / workspace_layout.EXAMPLE).is_file()
 
 
@@ -440,11 +445,9 @@ def test_subtracting_skills_and_subagents_too(cfg, shipped):
     from kingfisher.infrastructure.workspace import seeding
 
     seeding.seed(cfg, shipped)
-    # `_offered`, not `LocalSkillRepository.names`, and the difference is the
-    # point: the repository lists the directories directly under `skills/`,
-    # while a run is offered whatever the *registry* resolves -- which includes
-    # a skill in a source folder, `incident::postmortem`. Asking the wrong one
-    # made this a test that passed until somebody shipped a sourced skill.
+    # `_offered`, which is what the *registry* resolves -- including a skill in a
+    # source folder, `incident::postmortem`. Listing the directories under
+    # `skills/` instead made this a test that passed until somebody shipped one.
     seeded_skills = set(main._offered(cfg)["skills"])
     seeded_subagents = set(LocalSubagentRepository(subagents_dir(cfg)).specs)
     # Not vacuous: subtracting a name the catalogue does not offer would leave
