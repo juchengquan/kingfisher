@@ -139,15 +139,34 @@ def _unwrapped(command: str) -> str:
 REQUIRED_LANDLOCK_ABI = 6
 
 
+def sandlock_minimum() -> int | None:
+    """The ABI the installed `sandlock` demands, or `None` when it cannot say.
+
+    `None` covers both "not installed" and "imported, and the native half will not
+    answer", which are one fact to a caller deciding whether a fence exists: a wheel
+    that unpacked is not a fence. Asking the library is what makes this a check at
+    all -- `REQUIRED_LANDLOCK_ABI` is a number in this file, and a number cannot
+    notice the release that raised it.
+    """
+    try:
+        import sandlock  # noqa: PLC0415
+
+        return int(sandlock.min_landlock_abi())
+    except (ImportError, AttributeError, OSError, TypeError, ValueError):
+        return None
+
+
 def landlock_ready() -> bool:
     """Whether this host can actually fence a command, asked rather than assumed."""
-    if landlock_abi() is None or (landlock_abi() or 0) < REQUIRED_LANDLOCK_ABI:
+    abi = landlock_abi()
+    if abi is None or abi < REQUIRED_LANDLOCK_ABI:
         return False
-    try:
-        import sandlock  # noqa: F401, PLC0415
-    except ImportError:
-        return False
-    return True
+    # Against the installed library's own minimum rather than the constant above. A
+    # release that raises it leaves `REQUIRED_LANDLOCK_ABI` describing a version
+    # nobody has, and the failure runs the wrong way: `auto` picks Landlock, `doctor`
+    # reports a fence, and every command dies inside `confine` instead.
+    wants = sandlock_minimum()
+    return wants is not None and abi >= wants
 
 
 def _bubblewrap() -> Confinement:
@@ -204,8 +223,16 @@ def _no_landlock_here() -> str:
             f"this kernel ({platform.release()}) has Landlock ABI {abi}, below the "
             f"{REQUIRED_LANDLOCK_ABI} a full ruleset needs"
         )
+    elif (wants := sandlock_minimum()) is not None:
+        reason = (
+            f"the installed `sandlock` needs Landlock ABI {wants} and this kernel "
+            f"({platform.release()}) offers {abi}"
+        )
     else:
-        reason = "`sandlock` is not installed (pip install 'kingfisher[fence]')"
+        reason = (
+            "`sandlock` is not installed, or cannot run here "
+            "(pip install 'kingfisher[fence]')"
+        )
     return (
         f"the agent's shell is unconfined: {reason}, so it can read this host's "
         "files, including other sessions'. Run it in a container that mounts only "

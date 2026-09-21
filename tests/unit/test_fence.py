@@ -19,6 +19,7 @@ from kingfisher.infrastructure.sandbox.confinement import (
 from kingfisher.infrastructure.sandbox.fence import SYSTEM_PATHS, LandlockRunner, policy_for
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.layout import DERIVED, HARNESS
+from tests.conftest import repository_root
 
 #: A message short enough for `TRY003`, since what it says never survives
 #: `subprocess` anyway -- see the test that uses it.
@@ -43,6 +44,10 @@ def sandlock(monkeypatch):
     # Landlock. What the fence *does* is asserted against a kernel, in
     # `tests/linux/test_fence_escapes.py`.
     module.confine = lambda policy: None  # type: ignore[attr-defined]
+    # `landlock_ready` asks the library what it needs, so a stub without this is a
+    # `sandlock` that imports and cannot answer -- which the code reads, correctly, as
+    # no fence at all, and every test drawing this fixture would inherit that.
+    module.min_landlock_abi = lambda: REQUIRED_LANDLOCK_ABI  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "sandlock", module)
     return module
 
@@ -269,9 +274,12 @@ def test_a_named_mechanism_counts_as_confined_even_with_nothing_wrapped():
     assert not Confinement(wrap=_unwrapped).confined
 
 
-def test_three_things_have_to_hold_and_any_one_fails_quietly(monkeypatch):
-    """A deployment with two of the three would run unfenced while believing otherwise,
-    so they are checked together in one place rather than assumed from the platform.
+def test_every_condition_has_to_hold_and_any_one_fails_quietly(monkeypatch):
+    """A deployment with all but one would run unfenced while believing otherwise, so
+    they are checked together in one place rather than assumed from the platform.
+
+    Unnumbered on purpose: this name said "three things" while a fourth -- what the
+    installed `sandlock` demands of the kernel -- was added directly below it.
     """
     import kingfisher.infrastructure.sandbox.confinement as c
 
@@ -281,6 +289,62 @@ def test_three_things_have_to_hold_and_any_one_fails_quietly(monkeypatch):
 
     monkeypatch.setattr(c, "landlock_abi", lambda: None)
     assert not landlock_ready(), "no Landlock at all is not ready"
+
+
+def test_a_sandlock_needing_a_newer_kernel_than_this_one_is_not_ready(monkeypatch):
+    """A `sandlock` raising its own minimum above `REQUIRED_LANDLOCK_ABI` would be
+    called ready on a kernel it cannot run on: `auto` picks Landlock, `doctor` names a
+    fence, and every command then dies inside `confine`.
+
+    The control is the same kernel with a library that fits, so this cannot pass by
+    calling everything unready.
+    """
+    import kingfisher.infrastructure.sandbox.confinement as c
+
+    monkeypatch.setattr(c.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(c, "landlock_abi", lambda: REQUIRED_LANDLOCK_ABI)
+
+    monkeypatch.setattr(c, "sandlock_minimum", lambda: REQUIRED_LANDLOCK_ABI + 1)
+    assert not c.landlock_ready(), "a library needing more than the kernel offers is not ready"
+
+    monkeypatch.setattr(c, "sandlock_minimum", lambda: REQUIRED_LANDLOCK_ABI)
+    assert c.landlock_ready(), "the control: the same kernel fences when the library fits"
+
+
+def test_a_sandlock_that_imports_and_cannot_answer_is_not_a_fence(monkeypatch):
+    """`import sandlock` succeeding was the whole check, and a wheel that unpacked says
+    nothing about the native half running -- what that hid is a fence reported present
+    and refused at the moment it is applied.
+    """
+    import kingfisher.infrastructure.sandbox.confinement as c
+
+    mute = types.ModuleType("sandlock")
+    monkeypatch.setitem(sys.modules, "sandlock", mute)
+    assert c.sandlock_minimum() is None, "a module that cannot answer is not a minimum"
+
+    mute.min_landlock_abi = lambda: REQUIRED_LANDLOCK_ABI  # type: ignore[attr-defined]
+    assert c.sandlock_minimum() == REQUIRED_LANDLOCK_ABI, (
+        "the control: the same module answers once it can"
+    )
+
+
+# -- the image the fence ships in ---------------------------------------------
+
+
+def test_the_shipped_image_installs_the_fence_extra():
+    """Drop `--extra fence` from the Dockerfile and nothing else goes red: the image
+    still builds and `doctor` still runs, while a deployment setting `auto` on a kernel
+    that could fence silently gets the unconfined fallback instead.
+    """
+    dockerfile = (repository_root() / "Dockerfile").read_text(encoding="utf-8")
+    installing = [line for line in dockerfile.splitlines() if "uv sync" in line]
+
+    assert installing, "no `uv sync` line in the Dockerfile -- this rule read nothing"
+    assert all("--extra fence" in line for line in installing), (
+        "the Dockerfile installs dependencies without `--extra fence`, so the image "
+        "ships with no `sandlock` and KINGFISHER_SHELL_SANDBOX=auto falls through to "
+        "the unconfined fallback on a kernel that could have been fenced"
+    )
 
 
 def test_the_fence_follows_the_confinement_rather_than_deciding_again(sandlock, cfg, tmp_path):
