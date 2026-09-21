@@ -177,7 +177,21 @@ CITED_FROM = ("src", "tests", "service", ".github", "assets_examples")
 #: The root files, named rather than globbed: the repository root also holds a
 #: `.venv`, a `.git` and whatever a developer left there, and a rule that reads
 #: the working directory finds different things on different machines.
-CITED_FROM_FILES = ("Dockerfile", "compose.yaml", "pyproject.toml", "CLAUDE.md", "README.md")
+#:
+#: Which means a root file that is not named here is not checked at all -- there
+#: is no walk of the root to fall back on. The `fence-check` trio is named for
+#: that reason, and two of the three would be skipped by the suffix filter below
+#: even if there were: `.fence-check` and `.sh` are not in `TEXT`.
+CITED_FROM_FILES = (
+    "Dockerfile",
+    "Dockerfile.fence-check",
+    "compose.yaml",
+    "compose.fence-check.yaml",
+    "fence-check.sh",
+    "pyproject.toml",
+    "CLAUDE.md",
+    "README.md",
+)
 
 #: Suffixes worth opening. `Dockerfile` has none, which is why the files above
 #: are named individually rather than filtered.
