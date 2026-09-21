@@ -1014,6 +1014,10 @@ def test_a_kernel_that_can_fence_is_told_what_is_missing_rather_than_to_wait(cfg
     monkeypatch.setattr(health.platform, "release", lambda: "6.12.0")
     monkeypatch.setattr(health.confinement, "landlock_abi", lambda: 6)
     monkeypatch.setattr(health.confinement, "landlock_ready", lambda: False)
+    # Named rather than inherited from the machine. "Not ready" has two causes now,
+    # and on a Linux runner with the extra installed this would otherwise assert
+    # against the other one -- green here, red in CI.
+    monkeypatch.setattr(health.confinement, "sandlock_minimum", lambda: None)
 
     remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
 
@@ -1050,6 +1054,7 @@ def test_the_warning_and_the_remedy_name_the_same_missing_piece(cfg, monkeypatch
     monkeypatch.setattr(health.platform, "release", lambda: "6.12.0")
     monkeypatch.setattr(health.confinement, "landlock_abi", lambda: 6)
     monkeypatch.setattr(health.confinement, "landlock_ready", lambda: False)
+    monkeypatch.setattr(health.confinement, "sandlock_minimum", lambda: None)
     monkeypatch.setattr(bubblewrap, "bubblewrap_available", lambda: False)
 
     check = {c.name: c for c in examine(replace(cfg, shell_sandbox="auto"))}["shell"]

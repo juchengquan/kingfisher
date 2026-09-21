@@ -585,6 +585,15 @@ def _what_this_host_could_do() -> str:
             f"would be weaker than one on a newer node. {_or_bubblewrap()}"
         )
     if not confinement.landlock_ready():
+        # Installed and refusing this kernel is not the same missing half as absent,
+        # and it used to be told to `pip install` what it already had.
+        wants = confinement.sandlock_minimum()
+        if wants is not None:
+            return (
+                f"this kernel ({release}) has Landlock ABI {abi} and the installed "
+                f"`sandlock` needs {wants}: upgrade the kernel, or install a `sandlock` "
+                f"that runs here. {_or_bubblewrap()}"
+            )
         return (
             f"this kernel ({release}) has Landlock ABI {abi}, enough for a full fence, "
             "and `sandlock` is the missing half: pip install 'kingfisher[fence]', and "
