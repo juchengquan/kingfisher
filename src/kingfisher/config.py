@@ -255,11 +255,12 @@ class Config:
     recursion_limit: int = 150
     shell_path_extra: tuple[str, ...] = ()
     # Who keeps `execute` out of the rest of the host. `auto` uses whatever the
-    # platform offers, `external` says a container already does it, `off` opts
-    # out and is warned about on every start. On by default because an exposure
-    # nobody opted into is one nobody knows they have: measured unconfined, the
-    # shell could read this deployment's own API keys, `~/.aws` and the GitHub
-    # CLI's token, and `http_fetch` is one tool call away from sending them.
+    # platform offers, `bubblewrap` asks for it even where Landlock would run,
+    # `external` says a container already does it, `off` opts out and is warned
+    # about on every start. On by default because an exposure nobody opted into
+    # is one nobody knows they have: measured unconfined, the shell could read
+    # this deployment's own API keys, `~/.aws` and the GitHub CLI's token, and
+    # `http_fetch` is one tool call away from sending them.
     shell_sandbox: str = "auto"
     # Where the definitions live. `None` derives them from the workspace, and
     # what makes that worth overriding is that these hold *content a person
