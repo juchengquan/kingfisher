@@ -19,9 +19,11 @@ from kingfisher import (
     AccessError,
     CapabilityError,
     ConfigError,
+    Decision,
     Held,
     QuotaExceededError,
     Request,
+    Resume,
     SessionBusyError,
     SkillError,
     SubagentError,
@@ -216,6 +218,81 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     doing.add_argument(
+        "--as",
+        dest="held",
+        type=_held,
+        default=None,
+        metavar="SOURCE_IDS",
+        help=(
+            "who is calling: comma-separated source ids, or UNSCOPED to run "
+            "with no caller. Required where the workspace declares source ids"
+        ),
+    )
+    # A verb rather than flags on `run`, for the reason the library has a `Resume`
+    # rather than a `Request` with the task left out: answering is not asking. `run`
+    # takes a task positionally, so the alternative was making that optional, and a
+    # `kingfisher run --agent x` with nothing to do would then reach the parser.
+    deciding = sub.add_parser(
+        "decide",
+        help="answer a turn that stopped for approval",
+        description=(
+            "Answers the gated calls a turn stopped on, and runs the rest of it.\n"
+            "\n"
+            "With no decision, prints what the session is waiting on and does\n"
+            "nothing -- which is the way to get the ids back if you have lost\n"
+            "the output of the run that paused.\n"
+            "\n"
+            "Every pending call has to be answered in one go. The turn resumes\n"
+            "mid-superstep, and a half-answered gate would run the approved call\n"
+            "and leave the other hanging.\n"
+            "\n"
+            "The exit code is `run`'s, because a resumed turn ends every way an\n"
+            "asked one does -- including at a second gate:\n"
+            "\n"
+            "  0  finished\n"
+            "  1  stopped again -- at a bound, or at another gate\n"
+            "  2  never ran"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    deciding.add_argument("--session", metavar="ID", required=True, help="the waiting session")
+    deciding.add_argument(
+        "--approve",
+        metavar="CALL_ID",
+        action="append",
+        default=[],
+        help="run this call as proposed; repeatable",
+    )
+    deciding.add_argument(
+        "--reject",
+        metavar="CALL_ID",
+        action="append",
+        default=[],
+        help="do not run this call; repeatable",
+    )
+    # `respond` replaces the tool's result rather than running it, so it is the one
+    # decision that carries text -- and the text is required, which is why this is
+    # `ID=TEXT` rather than a second flag somebody could forget to pair with it.
+    deciding.add_argument(
+        "--respond",
+        metavar="CALL_ID=TEXT",
+        action="append",
+        default=[],
+        help="answer in the tool's place with TEXT, without running it; repeatable",
+    )
+    deciding.add_argument(
+        "--agent",
+        help=(
+            "refuse unless the session paused under this agent. Optional, and "
+            "checked rather than applied: a session keeps the agent it opened with"
+        ),
+    )
+    deciding.add_argument(
+        "--delete-session",
+        action="store_true",
+        help="delete the session once the turn finishes, as `run` does",
+    )
+    deciding.add_argument(
         "--as",
         dest="held",
         type=_held,
@@ -459,7 +536,23 @@ def _run(args: argparse.Namespace) -> int:
         session_id=args.session,
         data=tuple(Path(p).expanduser() for p in args.data),
     )
-    result = show(kf.stream(request, source_ids=args.held), sys.stdout, sys.stderr)
+    return _drive(kf, request, held=args.held, delete_session=args.delete_session)
+
+
+def _drive(
+    kf: Kingfisher, asked: Request | Resume, *, held: Held | None, delete_session: bool
+) -> int:
+    """Stream one turn and say how it ended, whether it was asked or answered.
+
+    Shared by `run` and `decide` rather than copied into each, because a resumed
+    turn ends every way an asked one does -- including at a *second* gate, which is
+    the case a second copy would be written without and would not report.
+
+    Takes what it reads rather than the whole `Namespace`, for the reason `HANDLERS`
+    gives: a verb that did not define a flag this reached would be an
+    `AttributeError` waiting for somebody to add one.
+    """
+    result = show(kf.stream(asked, source_ids=held), sys.stdout, sys.stderr)
     if result is None:
         # The stream ended without a terminal event, which is not a shape the
         # library produces -- said out loud rather than reported as success.
@@ -480,7 +573,7 @@ def _run(args: argparse.Namespace) -> int:
                 f"reached, and what it wrote is in /derived and /memory",
                 file=sys.stderr,
             )
-        if args.delete_session:
+        if delete_session:
             # Said rather than done quietly, because the flag was asked for and
             # this is the one ending that declines it. Both ways out are named:
             # the work is still there to pick up, and still there to remove.
@@ -490,30 +583,98 @@ def _run(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
         return 1
-    if args.delete_session:
+    if delete_session:
         _discard(kf, result)
     return 0
+
+
+def _decide(args: argparse.Namespace) -> int:
+    """Answer a waiting session, or say what it is waiting on."""
+    # Only the two that cost. `Decision` and `Resume` are frozen dataclasses in
+    # `domain`, which importing this module already loads, so deferring them would
+    # save nothing -- they are at module scope beside `Request`.
+    from kingfisher import Kingfisher, default_backend  # noqa: PLC0415
+
+    decisions: list[Decision] = [
+        *(Decision(call_id=one, action="approve") for one in args.approve),
+        *(Decision(call_id=one, action="reject") for one in args.reject),
+    ]
+    for written in args.respond:
+        call_id, sep, text = written.partition("=")
+        if not sep or not text:
+            # Refused here rather than sent on as an empty `respond`, which the
+            # library would refuse with a message about a decision the person at
+            # the terminal did not write in that form.
+            print(f"--respond wants CALL_ID=TEXT, got {written!r}", file=sys.stderr)
+            return 2
+        decisions.append(Decision(call_id=call_id, action="respond", message=text))
+
+    kf = Kingfisher(config_from_env(), backend=default_backend)
+    if not decisions:
+        return _show_pending(kf, args.session)
+    return _drive(
+        kf,
+        Resume(
+            session_id=args.session,
+            decisions=tuple(decisions),
+            agent=args.agent,
+        ),
+        held=args.held,
+        delete_session=args.delete_session,
+    )
+
+
+def _show_pending(kf: Kingfisher, session_id: str) -> int:
+    """What this session is waiting on, for somebody who has lost the ids.
+
+    Read from the mark the pause wrote rather than by starting a turn: asking what
+    is pending must not be a thing that can supersede it, and every other way into
+    the session is a turn.
+    """
+    from kingfisher.infrastructure.session_store import (  # noqa: PLC0415
+        pending_from_mark,
+        read_pause_mark,
+    )
+
+    directory = sessions_root(kf.workspace) / session_id
+    if not directory.is_dir():
+        print(f"no such session: {session_id}", file=sys.stderr)
+        return 2
+    waiting = pending_from_mark(read_pause_mark(directory) or {})
+    if not waiting:
+        print(f"session {session_id} is not waiting on a decision", file=sys.stderr)
+        return 2
+    print(f"session {session_id} is waiting on {len(waiting)} call(s):", file=sys.stderr)
+    for call in waiting:
+        whose = f" (via {call.agent})" if call.agent else ""
+        print(f"  {call.call_id}  {call.tool}{whose}  {call.args}", file=sys.stderr)
+        print(f"      takes: {', '.join(call.decisions)}", file=sys.stderr)
+    return 1
 
 
 def _awaiting(result: RunResult) -> None:
     """What a turn that stopped at an approval gate owes the person who ran it.
 
-    The ids are printed because they are the only way to answer, and this command
-    cannot do it -- a decision goes back through `Resume`, which is a library call.
-    Saying so plainly beats the generic line this replaces, which told a reader to
-    continue the session: that supersedes the gate rather than answering it.
+    The ids are printed because they are the only way to answer. The line about
+    running again is the specific falsehood this replaced: the generic ending told
+    a reader to continue the session, and continuing supersedes the gate rather
+    than answering it.
     """
     print(
         f"stopped: {result.stop_reason} -- waiting for a decision on "
-        f"{len(result.pending)} call(s), which this command cannot give:",
+        f"{len(result.pending)} call(s):",
         file=sys.stderr,
     )
     for call in result.pending:
         whose = f" (via {call.agent})" if call.agent else ""
         print(f"  {call.call_id}  {call.tool}{whose}  {call.args}", file=sys.stderr)
     print(
-        f"answer with kingfisher.Resume(session_id={result.session_id!r}, ...). "
-        f"Running again on --session {result.session_id} discards these instead",
+        f"answer with: kingfisher decide --session {result.session_id} "
+        f"--approve {result.pending[0].call_id}",
+        file=sys.stderr,
+    )
+    print(
+        f"running again on --session {result.session_id} discards these instead",
         file=sys.stderr,
     )
 
@@ -808,6 +969,7 @@ REFUSALS = (
 #: the order of this table means nothing.
 HANDLERS = {
     "run": _run,
+    "decide": _decide,
     "seed": lambda args: _seed(args.source, everything=args.everything),
     "doctor": lambda args: _doctor(as_document=args.json),
     "list": lambda args: _list(as_document=args.json, held=args.held),

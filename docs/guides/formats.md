@@ -197,6 +197,19 @@ one `Decision` per pending call — `approve` runs it, `reject` does not, and
 do; a plain request sent to it instead runs, and says so with a
 `decision_discarded` event.
 
+From a terminal that is `kingfisher decide`:
+
+    kingfisher run --agent operator "clean up the build"
+    # stopped: awaiting_decision -- waiting for a decision on 1 call(s):
+    #   4f2a91c0#0  execute  {'command': 'rm -rf build'}
+    kingfisher decide --session <id> --approve 4f2a91c0#0
+
+`--reject` and `--respond CALL_ID=TEXT` are the other two. Every pending call has
+to be answered in one go: the turn resumes mid-superstep, and a half-answered
+gate would run the approved call and leave the other hanging. `kingfisher decide
+--session ID` with no decision prints what is waiting and changes nothing, which
+is how to get the ids back if you have lost the output of the run that paused.
+
 **Whole tools, and there is no narrower rule.** Gating `execute` gates every
 shell command the agent writes, `ls` included. That is what an approval gate on
 an unrestricted shell costs: a pattern matched against the command cannot be
