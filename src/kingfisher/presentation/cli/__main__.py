@@ -452,15 +452,14 @@ def _run(args: argparse.Namespace) -> int:
     # to not paying it. `seed`, `list` and `doctor` do not build one.
     from kingfisher import Kingfisher, default_backend  # noqa: PLC0415
 
-    with _plain_warnings():
-        kf = Kingfisher(config_from_env(), backend=default_backend)
-        request = Request(
-            task=args.task,
-            agent=args.agent,
-            session_id=args.session,
-            data=tuple(Path(p).expanduser() for p in args.data),
-        )
-        result = show(kf.stream(request, source_ids=args.held), sys.stdout, sys.stderr)
+    kf = Kingfisher(config_from_env(), backend=default_backend)
+    request = Request(
+        task=args.task,
+        agent=args.agent,
+        session_id=args.session,
+        data=tuple(Path(p).expanduser() for p in args.data),
+    )
+    result = show(kf.stream(request, source_ids=args.held), sys.stdout, sys.stderr)
     if result is None:
         # The stream ended without a terminal event, which is not a shape the
         # library produces -- said out loud rather than reported as success.
@@ -801,7 +800,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        return HANDLERS[args.command](args)
+        # Around every verb rather than `run` alone: each one that reads a configuration
+        # can be warned while it does, and for `list` that warning is the only report of
+        # a missing key it gives.
+        with _plain_warnings():
+            return HANDLERS[args.command](args)
     except SessionBusyError as exc:
         # Its own branch, and the only one of these that is not the caller's
         # mistake: another turn holds the session and waiting fixes it. The code
