@@ -576,9 +576,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             msg = f"{source.name}: {required!r} is present but empty"
             raise SubagentError(msg)
 
-    wanted = fields.wanted_model(
-        document, fields.Reader(source=source.name, error=SubagentError)
-    )
+    wanted = fields.wanted_model(document, reader)
 
     # Read once, then split. A `tools:` entry may be written `where::what`, and
     # only `what` may reach the rest of kingfisher -- a grant, an allowlist and
