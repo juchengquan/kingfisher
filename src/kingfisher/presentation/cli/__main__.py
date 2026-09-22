@@ -6,11 +6,14 @@ import argparse
 import json
 import sys
 import time
+import warnings
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 
+import kingfisher
 from kingfisher import (
     UNSCOPED,
     AccessError,
@@ -47,6 +50,9 @@ from kingfisher.presentation.cli.listing import as_json, failed, origins_documen
 from kingfisher.presentation.cli.progress import show
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from typing import TextIO
+
     from kingfisher import Kingfisher, RunResult, Seeded
 
 #: Read from the working directory and nowhere else. A bare `load_dotenv()`
@@ -392,6 +398,43 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
     return 0
 
 
+#: Where kingfisher's own code is, which is what decides who a warning is for.
+_OURS = Path(kingfisher.__file__).resolve().parent
+
+
+@contextmanager
+def _plain_warnings() -> Iterator[None]:
+    """Kingfisher's own warnings as one `warning:` line each, on stderr.
+
+    Only its own. They are written for whoever runs the command and name the fix, so
+    a path into the installed package and the source of the `warnings.warn` call are
+    noise around the one sentence meant for them. A dependency's warning is about
+    code they did not write, and its file and line are the only pointer to it.
+    """
+    # Inside `catch_warnings` so the handler is put back: `main` runs in-process in
+    # the tests, and a handler left installed would reformat every later warning.
+    with warnings.catch_warnings():
+        before = warnings.showwarning
+
+        def plain(  # noqa: PLR0913, PLR0917 -- the signature `warnings.showwarning` has
+            message: Warning | str,
+            category: type[Warning],
+            filename: str,
+            lineno: int,
+            file: TextIO | None = None,
+            line: str | None = None,
+        ) -> None:
+            if Path(filename).resolve().is_relative_to(_OURS):
+                print(f"warning: {message}", file=file or sys.stderr)
+            else:
+                before(message, category, filename, lineno, file, line)
+
+        # Assigning is the hook the standard library documents. ty types the attribute
+        # as the stdlib's own function, which no replacement can be, signature and all.
+        warnings.showwarning = plain  # ty: ignore[invalid-assignment]
+        yield
+
+
 def _run(args: argparse.Namespace) -> int:
     """Run one task, and say how it ended in the only channel that is left."""
     missing = [p for p in args.data if not Path(p).expanduser().is_file()]
@@ -407,14 +450,15 @@ def _run(args: argparse.Namespace) -> int:
     # to not paying it. `seed`, `list` and `doctor` do not build one.
     from kingfisher import Kingfisher, default_backend  # noqa: PLC0415
 
-    kf = Kingfisher(config_from_env(), backend=default_backend)
-    request = Request(
-        task=args.task,
-        agent=args.agent,
-        session_id=args.session,
-        data=tuple(Path(p).expanduser() for p in args.data),
-    )
-    result = show(kf.stream(request, source_ids=args.held), sys.stdout, sys.stderr)
+    with _plain_warnings():
+        kf = Kingfisher(config_from_env(), backend=default_backend)
+        request = Request(
+            task=args.task,
+            agent=args.agent,
+            session_id=args.session,
+            data=tuple(Path(p).expanduser() for p in args.data),
+        )
+        result = show(kf.stream(request, source_ids=args.held), sys.stdout, sys.stderr)
     if result is None:
         # The stream ended without a terminal event, which is not a shape the
         # library produces -- said out loud rather than reported as success.

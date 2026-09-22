@@ -332,6 +332,51 @@ def test_the_answer_goes_to_stdout_and_the_watching_to_stderr(cfg, monkeypatch, 
     assert "forty two" not in shown.err
 
 
+def test_a_warning_of_kingfishers_own_is_one_plain_line(cfg, session_dir, monkeypatch, capsys):
+    """The unconfined-shell warning reached `run` in Python's default shape: a path into
+    the package, a line number and the `warnings.warn` source line, around the one
+    sentence addressed to the reader.
+
+    Raised by the real `default_backend` rather than a `warnings.warn` here, because a
+    warning this file raises is attributed to this file and would test the other branch.
+    """
+    from dataclasses import replace
+
+    from kingfisher import default_backend
+
+    def turn():
+        default_backend(replace(cfg, shell_sandbox="off"), session_dir)
+        yield _finished()
+
+    _ran(monkeypatch, turn(), cfg)
+    main(["run", "t", "--agent", "assistant"])
+
+    err = capsys.readouterr().err
+    assert "warning: the agent's shell is unconfined" in err
+    assert "UserWarning" not in err
+    assert "warnings.warn" not in err
+
+
+def test_a_warning_from_someone_elses_code_is_left_as_it_was(cfg, monkeypatch, capsys, recwarn):
+    """The control: a dependency's warning is about code the operator did not write, and
+    its file and line are the only pointer to it -- so it goes to whatever handled
+    warnings before, unformatted.
+    """
+    import warnings
+
+    def turn():
+        warnings.warn("from a dependency", UserWarning, stacklevel=1)
+        yield _finished()
+
+    _ran(monkeypatch, turn(), cfg)
+    handler = warnings.showwarning
+    main(["run", "t", "--agent", "assistant"])
+
+    assert "from a dependency" not in capsys.readouterr().err
+    assert "from a dependency" in [str(w.message) for w in recwarn]
+    assert warnings.showwarning is handler, "the plain handler must not outlive the run"
+
+
 def test_a_delegates_prose_is_progress_rather_than_answer(cfg, monkeypatch, capsys):
     """A reviewer's working notes are not what you asked for."""
     from kingfisher import RunEvent
