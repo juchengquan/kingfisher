@@ -86,7 +86,7 @@ def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, f
     graph = build_agent(
         cfg,
         session_dir=session_dir,
-        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")])).graph
     # Only the tools table -- the file has other tables, and scooping up their
     # first columns too is how the first draft of this test "passed" nothing.
     readme = (formats_doc).read_text(encoding="utf-8")
@@ -168,7 +168,9 @@ def test_a_workspace_tool_reaches_the_assembled_agent(cfg, fixture_pack):
 
     shutil.copytree(fixture_pack / "tools", cfg.workspace / "tools", dirs_exist_ok=True)
 
-    tools = dispatched(build_agent(cfg, session_dir=ensure_session_layout(cfg.workspace / "s")))
+    tools = dispatched(
+        build_agent(cfg, session_dir=ensure_session_layout(cfg.workspace / "s")).graph
+    )
 
     assert "probe" in tools
     assert "read_file" in tools  # and the built-ins are still there

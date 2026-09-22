@@ -232,7 +232,7 @@ def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir)
     agent = build_agent(
         cfg,
         session_dir=session_dir,
-        model=FakeToolCallingModel(responses=responses))
+        model=FakeToolCallingModel(responses=responses)).graph
     out = agent.invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
     )
@@ -280,7 +280,7 @@ def test_a_delegate_gets_the_correction_too(cfg, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=responses),
         capabilities=Capabilities(subagents=("writer",)),
-    )
+    ).graph
     out = _subagent_graphs(graph)["writer"].invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
     )

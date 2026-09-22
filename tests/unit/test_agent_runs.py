@@ -11,7 +11,7 @@ from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.prompting import system_prompt
-from tests.conftest import FakeToolCallingModel, capture_build
+from tests.conftest import FakeToolCallingModel
 
 NARROW = """name: narrow
 description: Reads and nothing else.
@@ -50,9 +50,9 @@ def _spec(cfg, name: str):
     return LocalAgentRepository(cfg.catalogue_roots["agents"]).specs[name]
 
 
-def _offered(captured) -> set[str]:
+def _offered(built) -> set[str]:
     """The tools the model will actually be offered."""
-    for middleware in captured["middleware"]:
+    for middleware in built.middleware:
         allowed = getattr(middleware, "_allowed", None)
         if allowed is not None:
             return set(allowed)
@@ -63,29 +63,27 @@ def _offered(captured) -> set[str]:
 # -- the agent decides ------------------------------------------------------
 
 
-def test_an_agent_holds_only_the_tools_its_file_names(cfg, session_dir, monkeypatch):
+def test_an_agent_holds_only_the_tools_its_file_names(cfg, session_dir):
     """The whole point of the file."""
     _agents(cfg, NARROW)
-    captured = capture_build(monkeypatch)
 
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         agent=_spec(cfg, "narrow"),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
 
-    held = _offered(captured)
+    held = _offered(built)
     assert "read_file" in held
     assert not held & {"write_file", "edit_file", "delete", "execute"}
 
 
-def test_a_request_narrows_the_agent_and_cannot_widen_it(cfg, session_dir, monkeypatch):
+def test_a_request_narrows_the_agent_and_cannot_widen_it(cfg, session_dir):
     """A caller asking for a tool the agent never held gets the overlap, which is empty."""
     _agents(cfg, NARROW)
-    captured = capture_build(monkeypatch)
 
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         agent=_spec(cfg, "narrow"),
@@ -93,7 +91,7 @@ def test_a_request_narrows_the_agent_and_cannot_widen_it(cfg, session_dir, monke
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
 
-    held = _offered(captured)
+    held = _offered(built)
     assert "read_file" in held
     assert "execute" not in held, "a request reached past what the agent declared"
 
@@ -110,16 +108,15 @@ def test_the_agents_prompt_is_added_after_the_harness_and_the_workspace(cfg):
     assert harness < house < mine
 
 
-def test_the_agent_runs_the_model_its_file_names(cfg, session_dir, monkeypatch):
+def test_the_agent_runs_the_model_its_file_names(cfg, session_dir):
     """`cheap` is bound by the deployment, not written in the file: an agent that
     travels between deployments cannot portably name a vendor's id.
     """
     _agents(cfg, CHEAP)
-    captured = capture_build(monkeypatch)
 
-    build_agent(cfg, session_dir=session_dir, agent=_spec(cfg, "cheap-one"))
+    built = build_agent(cfg, session_dir=session_dir, agent=_spec(cfg, "cheap-one"))
 
-    assert captured["model"].model == "cheap-model"
+    assert built.model.model == "cheap-model"
 
 
 # -- naming one -------------------------------------------------------------

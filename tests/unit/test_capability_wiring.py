@@ -22,7 +22,6 @@ from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllo
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from tests.conftest import (
     FakeToolCallingModel,
-    capture_build,
     declared_subagents,
     dispatched,
     subagents_dir,
@@ -62,18 +61,17 @@ def _write_subagent(workspace, text=SUBAGENT, filename="reviewer.yaml"):
     (directory / filename).write_text(text, encoding="utf-8")
 
 
-def test_no_capabilities_means_no_filtering(cfg, monkeypatch, session_dir):
+def test_no_capabilities_means_no_filtering(cfg, session_dir):
     """The default narrows nothing, which is what it has always meant."""
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
 
-    names = {type(m).__name__ for m in captured["middleware"]}
+    names = {type(m).__name__ for m in built.middleware}
     assert "ToolAllowlist" not in names
     assert "NarrowedSkills" not in names
-    assert not declared_subagents(captured)
+    assert not declared_subagents(built)
 
 
 def test_restricting_tools_removes_the_shell_from_what_the_model_sees(cfg, session_dir):
@@ -86,7 +84,7 @@ def test_restricting_tools_removes_the_shell_from_what_the_model_sees(cfg, sessi
     agent = build_agent(cfg, session_dir=session_dir,
         model=model,
         capabilities=Capabilities(builtin_tools=("read_file", "write_file")),
-    )
+    ).graph
     agent.invoke({"messages": [{"role": "user", "content": "go"}]})
 
     assert set(model.offered) == {"read_file", "write_file"}
@@ -102,35 +100,34 @@ def test_an_unrestricted_run_is_offered_the_shell(cfg, session_dir):
     build_agent(
         cfg,
         session_dir=session_dir,
-        model=model).invoke({"messages": [{"role": "user", "content": "go"}]})
+        model=model).graph.invoke({"messages": [{"role": "user", "content": "go"}]})
 
     assert "execute" in model.offered
 
 
-def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, monkeypatch, session_dir):
+def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, session_dir):
     _write_skill(cfg.workspace, "tabular-qa")
     _write_skill(cfg.workspace, "other")
 
     with_skills = replace(cfg, skills_enabled=True)
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         with_skills,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(skills=("other",)),
     )
 
-    scoped = [m for m in captured["middleware"] if isinstance(m, NarrowedSkills)]
+    scoped = [m for m in built.middleware if isinstance(m, NarrowedSkills)]
     assert len(scoped) == 1
     # Passing `skills=` would make deepagents build its own unfiltered
     # SkillsMiddleware alongside ours; ours has to be the only one.
-    assert "skills" not in captured
+    assert built.skills is None
 
     # `.harness` is denied reads unconditionally, by the layout rather than by
     # this request, so what a *granted skill list* adds is what is left over.
     denied = [
         r
-        for r in captured["permissions"]
+        for r in built.permissions
         if r.mode == "deny" and "read" in r.operations and r.paths != ["/.harness/**"]
     ]
     assert [r.paths for r in denied] == [["/skills/tabular-qa/**"]]
@@ -144,34 +141,32 @@ def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, monkeypatc
     assert "tabular-qa" not in shown, shown
 
 
-def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, monkeypatch, session_dir):
+def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, session_dir):
     """Unrestricted is not "restricted to everything": no filter, no deny rules."""
     _write_skill(cfg.workspace, "tabular-qa")
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         replace(cfg, skills_enabled=True),
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
 
-    assert captured["skills"] == skills_sources()
-    assert not any(isinstance(m, NarrowedSkills) for m in captured["middleware"])
+    assert built.skills == skills_sources()
+    assert not any(isinstance(m, NarrowedSkills) for m in built.middleware)
     # The unconditional routes and nothing skill-specific: a request that
     # granted no skills adds no per-skill denials.
-    assert {r.paths[0] for r in captured["permissions"]} == {
+    assert {r.paths[0] for r in built.permissions} == {
         "/.harness/**", "/data/**", "/skills/**",
     }
 
 
-def test_activating_a_subagent_passes_its_definition_through(cfg, monkeypatch, session_dir):
+def test_activating_a_subagent_passes_its_definition_through(cfg, session_dir):
     _write_subagent(cfg.workspace)
-    captured = capture_build(monkeypatch)
-    build_agent(cfg, session_dir=session_dir,
+    built = build_agent(cfg, session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reviewer",)),
     )
 
-    (subagent,) = declared_subagents(captured)
+    (subagent,) = declared_subagents(built)
     assert subagent["name"] == "reviewer"
     assert subagent["system_prompt"] == "You review analyses."
     # Unset in the definition, so absent here — deepagents then inherits.
@@ -179,18 +174,17 @@ def test_activating_a_subagent_passes_its_definition_through(cfg, monkeypatch, s
     assert "model" not in subagent
 
 
-def test_requesting_no_subagents_is_distinct_from_not_asking(cfg, monkeypatch, session_dir):
+def test_requesting_no_subagents_is_distinct_from_not_asking(cfg, session_dir):
     """`()` activates none where the default `ALL` activates every one the workspace
     offers -- so the reviewer written above is absent here.
     """
     _write_subagent(cfg.workspace)
-    captured = capture_build(monkeypatch)
-    build_agent(cfg, session_dir=session_dir,
+    built = build_agent(cfg, session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=()),
     )
 
-    assert declared_subagents(captured) == []
+    assert declared_subagents(built) == []
 
 
 def test_naming_something_the_workspace_lacks_fails_loudly(cfg, session_dir):
@@ -233,10 +227,12 @@ def test_an_injected_graph_cannot_honour_capabilities(cfg, session_dir):
     from kingfisher.application.run import run
     from kingfisher.domain.request import Request
 
+    # The graph itself: `graph=` is the injected-graph seam, and what a deployment
+    # supplies there is a compiled graph rather than kingfisher's own record.
     prebuilt = build_agent(
         cfg,
         session_dir=session_dir,
-        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")])).graph
 
     with pytest.raises(ValueError, match="pre-built graph"):
         run(
@@ -262,7 +258,7 @@ def test_a_disallowed_tool_is_refused_even_when_the_model_calls_it_anyway(cfg, s
     agent = build_agent(cfg, session_dir=session_dir,
         model=FakeToolCallingModel(responses=responses),
         capabilities=Capabilities(builtin_tools=("read_file", "write_file")),
-    )
+    ).graph
     out = agent.invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
     )
@@ -291,7 +287,7 @@ def test_the_registered_tool_names_are_discoverable(cfg, session_dir):
     graph = build_agent(
         cfg,
         session_dir=session_dir,
-        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")])).graph
     names = dispatched(graph)
 
     assert {"read_file", "write_file", "edit_file", "ls", "glob", "grep"} <= set(names)
@@ -327,15 +323,14 @@ def test_a_subagent_with_restricted_tools_builds_for_real(cfg, session_dir):
     )
 
 
-def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, monkeypatch, session_dir):
+def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, session_dir):
     _write_subagent(cfg.workspace, RESTRICTED_SUBAGENT, "reader.yaml")
-    captured = capture_build(monkeypatch)
-    build_agent(cfg, session_dir=session_dir,
+    built = build_agent(cfg, session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reader",)),
     )
 
-    (subagent,) = declared_subagents(captured)
+    (subagent,) = declared_subagents(built)
     assert "tools" not in subagent  # names here would raise inside ToolNode
     # By type rather than by position. A delegate carries guards it did not ask
     # for -- the host-path correction, and the workspace tools' own failures --
@@ -359,13 +354,12 @@ def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch,
     endpoint entirely.
     """
     _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.yaml")
-    captured = capture_build(monkeypatch)
-    build_agent(cfg, session_dir=session_dir,
+    built = build_agent(cfg, session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("cheap",)),
     )
 
-    (subagent,) = declared_subagents(captured)
+    (subagent,) = declared_subagents(built)
     assert not isinstance(subagent["model"], str)
     assert subagent["model"].model == "cheap-model"
     # Same gateway as the main agent, not whatever the environment suggests.
@@ -379,60 +373,56 @@ def test_the_environment_cannot_reroute_a_delegate(cfg, monkeypatch, session_dir
     _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.yaml")
     monkeypatch.setenv("KINGFISHER_MODEL_SUBAGENT", "operator-choice")
     monkeypatch.setenv("KINGFISHER_PROVIDER_SUBAGENT", "openai")
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("cheap",)),
     )
 
-    (subagent,) = declared_subagents(captured)
+    (subagent,) = declared_subagents(built)
     assert subagent["model"].model == "cheap-model"
 
 
-def test_narrowing_can_only_subtract_from_what_the_deployment_wired(cfg, monkeypatch, session_dir):
+def test_narrowing_can_only_subtract_from_what_the_deployment_wired(cfg, session_dir):
     """The rule that makes two axes safe rather than confusing: `Config` says what is
     wired and shapes the cached prompt; a request narrows within it.
     """
-    captured = capture_build(monkeypatch)
-    build_agent(cfg, session_dir=session_dir,  # memory_enabled is False
+    built = build_agent(cfg, session_dir=session_dir,  # memory_enabled is False
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(memory=True),
     )
-    assert "memory" not in captured
+    assert built.memory is None
 
 
-def test_declining_memory_drops_the_mount_and_denies_the_file(cfg, monkeypatch, session_dir):
+def test_declining_memory_drops_the_mount_and_denies_the_file(cfg, session_dir):
     """The prompt still describes memory -- it is the cached prefix and must not vary
     per request -- so a deny rule is what actually stops the read.
     """
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         replace(cfg, memory_enabled=True),
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(memory=False),
     )
 
-    assert "memory" not in captured
-    denied = [r for r in captured["permissions"] if r.paths == ["/memory/**"]]
+    assert built.memory is None
+    denied = [r for r in built.permissions if r.paths == ["/memory/**"]]
     assert len(denied) == 1
     assert denied[0].mode == "deny"
 
 
-def test_memory_is_mounted_when_wired_and_not_declined(cfg, monkeypatch, session_dir):
+def test_memory_is_mounted_when_wired_and_not_declined(cfg, session_dir):
     """The negative control: without it the two tests above would pass even if memory
     were never wired at all.
     """
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         replace(cfg, memory_enabled=True),
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
-    assert captured["memory"] == ["/memory/AGENTS.md"]
-    assert not any(r.paths == ["/memory/**"] for r in captured["permissions"])
+    assert built.memory == ["/memory/AGENTS.md"]
+    assert not any(r.paths == ["/memory/**"] for r in built.permissions)
 
 
 def test_the_catalogue_can_live_outside_the_workspace(cfg, session_dir, tmp_path):
@@ -470,23 +460,21 @@ def test_subagents_relocate_independently_of_skills(cfg, tmp_path):
     assert LocalSubagentRepository(relocated.workspace / "subagents").specs == {}
 
 
-def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir, monkeypatch):
+def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir):
     """The override wins, but only when there is one."""
     (cfg.workspace / "subagents").mkdir(parents=True, exist_ok=True)
     (cfg.workspace / "subagents" / "reviewer.yaml").write_text(
         "name: reviewer\ndescription: d\nmodel: cheap-model\nsystem_prompt: |\n  You review.\n",
         encoding="utf-8",
     )
-    captured = capture_build(monkeypatch)
-
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reviewer",)),
     )
 
-    (spec,) = [s for s in declared_subagents(captured) if s["name"] == "reviewer"]
+    (spec,) = [s for s in declared_subagents(built) if s["name"] == "reviewer"]
     assert spec["model"].model == "cheap-model"
 
 
@@ -540,7 +528,7 @@ def test_a_real_build_is_readable(cfg, session_dir):
     from kingfisher.infrastructure.harness.agent import build_agent
     from kingfisher.infrastructure.harness.tools import registered_tools
 
-    names = registered_tools(build_agent(cfg, session_dir=session_dir, model=None))
+    names = registered_tools(build_agent(cfg, session_dir=session_dir, model=None).graph)
 
     assert names is not None, "a graph we built must be readable"
     assert names, "and must dispatch something"
@@ -590,7 +578,7 @@ def test_a_plain_function_is_withheld_when_the_grant_withholds_it(cfg, session_d
         session_dir=session_dir,
         model=model,
         capabilities=Capabilities(tools=None),  # every built-in, none of ours
-    )
+    ).graph
     graph.invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 4}
     )

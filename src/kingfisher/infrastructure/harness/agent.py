@@ -9,7 +9,7 @@ and three provider SDKs. Resolving what a delegate runs with is
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -74,6 +74,47 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from langgraph.graph.state import CompiledStateGraph
+
+
+@dataclass(frozen=True)
+class Assembled:
+    """One graph, and what it was built with.
+
+    Returned instead of the graph alone so a caller can ask what a build attached
+    rather than intercepting `create_deep_agent` to find out. Twenty-two test files
+    did that by patching it under a string path and reading the kwargs back, which
+    made the argument list a contract nothing declared.
+
+    **It carries the graph rather than replacing it.** Two callers want the graph
+    itself -- `builtin_tool_names` reads a tool roster off one, and the service hands
+    one to `stream` -- and a record that made them fetch it from somewhere else would
+    buy a name and cost every use.
+
+    **Every keyword, not the ten a test happens to read.** `checkpointer` is asserted
+    on by nothing today, and `interrupt_on` was asserted on by nothing until the
+    commit that added it. A record holding only what is currently interesting is one
+    that needs a second mechanism the next time a keyword appears -- which is the
+    thing this removes.
+    """
+
+    #: What `create_deep_agent` returned. Typed under `TYPE_CHECKING` like every
+    #: other mention of it here, which `from __future__ import annotations` makes
+    #: free: a dataclass does not evaluate its annotations.
+    graph: CompiledStateGraph
+    model: Any
+    backend: Any
+    system_prompt: str
+    middleware: list[Any]
+    permissions: list[FilesystemPermission]
+    checkpointer: Any
+    tools: list[Any] | None
+    #: The four that reach `create_deep_agent` through `**extras` and are absent
+    #: unless this build wired them, so each defaults to what "not passed" means
+    #: rather than to an empty value a test could mistake for one that was.
+    memory: Any = None
+    skills: Any = None
+    interrupt_on: Mapping[str, Any] | None = None
+    subagents: list[Any] | None = None
 
 
 #: For a request that declined memory a deployment did wire. Reads are denied
@@ -299,7 +340,7 @@ def builtin_tool_names(
                 # do it would make a listing refuse the very things it is meant
                 # to report -- two definitions of a name are printed, not raised.
                 capabilities=Capabilities(subagents=None),
-            )
+            ).graph
         )
 
 
@@ -320,8 +361,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     workspace_tools: Sequence[Found] | None = None,
     agent: AgentSpec | None = None,
     held: frozenset[str] | None = None,
-) -> CompiledStateGraph:
-    """Wire model, backend and checkpointer into a deep agent."""
+) -> Assembled:
+    """Wire model, backend and checkpointer into a deep agent, and say what was wired."""
     # The agent file is the baseline and the request only ever subtracts from it. One
     # lattice, applied in the one direction it already goes: what a caller asks for
     # cannot exceed what the definition declared.
@@ -405,17 +446,22 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
 
     running = _running(agent, cfg, capabilities.endpoints, model)
 
-    def assemble(extra_tools: tuple[Any, ...]) -> CompiledStateGraph:
-        return create_deep_agent(
-            model=running,
-            backend=resolved_backend,
-            system_prompt=system_prompt(cfg, agent.system_prompt if agent else ""),
-            middleware=middleware,
-            permissions=permissions,
-            checkpointer=checkpointer,
-            tools=list(extra_tools) or None,
+    def assemble(extra_tools: tuple[Any, ...]) -> Assembled:
+        # One mapping, spent twice: it is what `create_deep_agent` is called with and
+        # what the record says it was called with. Built separately, the two could
+        # disagree -- a record that describes a build which did not happen is worse
+        # than no record, because it is asserted on.
+        attached: dict[str, Any] = {
+            "model": running,
+            "backend": resolved_backend,
+            "system_prompt": system_prompt(cfg, agent.system_prompt if agent else ""),
+            "middleware": middleware,
+            "permissions": permissions,
+            "checkpointer": checkpointer,
+            "tools": list(extra_tools) or None,
             **extras,
-        )
+        }
+        return Assembled(graph=create_deep_agent(**attached), **attached)
 
     defined, activated = _activated_subagents(cfg, capabilities, catalogue=roots)
     surface = _resolve_tools(

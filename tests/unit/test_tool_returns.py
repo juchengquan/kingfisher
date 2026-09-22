@@ -88,7 +88,7 @@ def _results(cfg, session_dir, body: str) -> list[ToolMessage]:
                 AIMessage(content="done"),
             ]
         ),
-    )
+    ).graph
     out = graph.invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 8}
     )

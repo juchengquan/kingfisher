@@ -13,7 +13,7 @@ from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.kinds.subagents import reading
-from tests.conftest import FakeToolCallingModel, StubCheckpointer, capture_build
+from tests.conftest import FakeToolCallingModel, StubCheckpointer
 
 
 class Audited(AgentMiddleware):
@@ -27,20 +27,20 @@ def define(cfg, body: str, name: str = "reviewer") -> None:
     (cfg.workspace / "subagents" / f"{name}.yaml").write_text(body, encoding="utf-8")
 
 
-def build(cfg, monkeypatch, registry=None, **caps):
-    captured = capture_build(monkeypatch)
-    build_agent(
+def build(cfg, registry=None, **caps):
+    return build_agent(
         cfg,
         session_dir=ensure_session_layout(cfg.workspace / "sessions" / "s"),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         middleware_registry=registry,
         capabilities=Capabilities(**caps),
     )
-    return captured
 
 
-def middleware_of(captured, name: str) -> list:
-    (spec,) = [s for s in captured["subagents"] if s["name"] == name]
+def middleware_of(built, name: str) -> list:
+    """One delegate's middleware. The outer read is the record; the inner one is
+    deepagents' own `SubAgent` mapping, which stays a subscript."""
+    (spec,) = [s for s in built.subagents if s["name"] == name]
     return spec.get("middleware", [])
 
 
@@ -53,10 +53,10 @@ NAMES_AUDIT = (
 # -- the registry ---------------------------------------------------------
 
 
-def test_a_definition_gets_the_middleware_it_names(cfg, session_dir, monkeypatch):
+def test_a_definition_gets_the_middleware_it_names(cfg, session_dir):
     define(cfg, NAMES_AUDIT)
 
-    captured = build(cfg, monkeypatch, registry={"audit": Audited}, subagents=("reviewer",))
+    built = build(cfg, registry={"audit": Audited}, subagents=("reviewer",))
 
     # The deployment's own, which is what this file is about. A delegate also
     # carries guards nothing in its definition mentions -- the host-path
@@ -64,7 +64,7 @@ def test_a_definition_gets_the_middleware_it_names(cfg, session_dir, monkeypatch
     # whole list would make this fail every time one is added.
     assert [
         type(m).__name__
-        for m in middleware_of(captured, "reviewer")
+        for m in middleware_of(built, "reviewer")
         if type(m).__name__ == "Audited"
     ] == ["Audited"]
 
@@ -74,14 +74,14 @@ def test_the_registry_is_empty_until_a_deployment_wires_one(cfg):
     assert Kingfisher(cfg, backend=default_backend, threads=StubCheckpointer()).middlewares == {}
 
 
-def test_an_unregistered_name_fails_loudly(cfg, session_dir, monkeypatch):
+def test_an_unregistered_name_fails_loudly(cfg, session_dir):
     """A mistake in the definition, and the alternative -- running without the
     middleware it asked for -- could mean running without an audit hook.
     """
     define(cfg, NAMES_AUDIT)
 
     with pytest.raises(CapabilityError, match="names unregistered middleware"):
-        build(cfg, monkeypatch, registry={}, subagents=("reviewer",))
+        build(cfg, registry={}, subagents=("reviewer",))
 
 
 def test_kingfisher_hands_its_registry_to_the_agent(cfg):
@@ -96,26 +96,24 @@ def test_kingfisher_hands_its_registry_to_the_agent(cfg):
 # -- the clamp ------------------------------------------------------------
 
 
-def test_registering_is_not_permitting(cfg, session_dir, monkeypatch):
+def test_registering_is_not_permitting(cfg, session_dir):
     """A deployment may register more than a given request may reach."""
     define(cfg, NAMES_AUDIT)
 
     with pytest.raises(CapabilityError, match="may not use"):
         build(
             cfg,
-            monkeypatch,
             registry={"audit": Audited},
             subagents=("reviewer",),
             middlewares=(),
         )
 
 
-def test_a_granted_name_goes_through(cfg, session_dir, monkeypatch):
+def test_a_granted_name_goes_through(cfg, session_dir):
     define(cfg, NAMES_AUDIT)
 
-    captured = build(
+    built = build(
         cfg,
-        monkeypatch,
         registry={"audit": Audited},
         subagents=("reviewer",),
         middlewares=("audit",),
@@ -127,7 +125,7 @@ def test_a_granted_name_goes_through(cfg, session_dir, monkeypatch):
     # whole list would make this fail every time one is added.
     assert [
         type(m).__name__
-        for m in middleware_of(captured, "reviewer")
+        for m in middleware_of(built, "reviewer")
         if type(m).__name__ == "Audited"
     ] == ["Audited"]
 
@@ -193,7 +191,7 @@ TOOLS = [always_fails]
 '''
 
 
-def test_what_a_delegate_carries_is_pinned_here_and_only_here(cfg, session_dir, monkeypatch):
+def test_what_a_delegate_carries_is_pinned_here_and_only_here(cfg, session_dir):
     """The exact stack, in order, for a definition that triggers every branch."""
     from tests.conftest import tools_dir
     from tests.unit.test_subagent_skills import offer_skills
@@ -207,14 +205,13 @@ def test_what_a_delegate_carries_is_pinned_here_and_only_here(cfg, session_dir, 
     # Skills on, because this stack is the one with every branch in it and a
     # delegate's index is the deployment's to switch off -- see
     # `test_a_delegate_gets_no_skills_when_the_deployment_switched_them_off`.
-    captured = build(
+    built = build(
         replace(cfg, skills_enabled=True),
-        monkeypatch,
         registry={"audit": Audited},
         subagents=("reviewer", "helper"),
     )
 
-    assert [type(m).__name__ for m in middleware_of(captured, "reviewer")] == [
+    assert [type(m).__name__ for m in middleware_of(built, "reviewer")] == [
         "HostPathGuard",
         "WorkspaceToolErrors",
         # Beside the errors guard rather than anywhere else: both are about a
@@ -228,7 +225,7 @@ def test_what_a_delegate_carries_is_pinned_here_and_only_here(cfg, session_dir, 
     ]
 
 
-def test_a_bare_definition_carries_three_of_them(cfg, session_dir, monkeypatch):
+def test_a_bare_definition_carries_three_of_them(cfg, session_dir):
     """The other end of the same pin, and it is not two."""
     from tests.conftest import tools_dir
 
@@ -236,9 +233,9 @@ def test_a_bare_definition_carries_three_of_them(cfg, session_dir, monkeypatch):
     (tools_dir(cfg) / "always_fails.py").write_text(A_TOOL, encoding="utf-8")
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n")
 
-    captured = build(cfg, monkeypatch, subagents=("reviewer",))
+    built = build(cfg, subagents=("reviewer",))
 
-    assert [type(m).__name__ for m in middleware_of(captured, "reviewer")] == [
+    assert [type(m).__name__ for m in middleware_of(built, "reviewer")] == [
         "HostPathGuard",
         "WorkspaceToolErrors",
         "WorkspaceToolPaths",

@@ -26,7 +26,7 @@ from kingfisher.kinds.subagents.spec import (
     declared,
 )
 from kingfisher.kinds.tools.spec import tool_name
-from tests.conftest import FakeToolCallingModel, capture_build
+from tests.conftest import FakeToolCallingModel
 from tests.unit.test_bundles import TOOL, only
 
 SKILL = "---\nname: sampling\ndescription: How to sample a file.\n---\n\n# Sampling\n"
@@ -78,17 +78,16 @@ def write_portable(cfg, *, extra: str = "", with_skills: bool = False) -> None:
     )
 
 
-def built(cfg, session_dir, monkeypatch, capabilities=None):
+def built(cfg, session_dir, capabilities=None):
     """`surveyor`, as deepagents received it."""
-    captured = capture_build(monkeypatch)
-    build_agent(
+    assembled = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=capabilities
         or Capabilities(subagents=("surveyor",), tools=("shared",)),
     )
-    return only(captured, "surveyor")
+    return only(assembled, "surveyor")
 
 
 # -- what it may and may not say --------------------------------------------
@@ -140,7 +139,7 @@ def test_the_shape_decides_the_rules_rather_than_where_the_entry_came_from():
 # -- the guard that would be a hole -----------------------------------------
 
 
-def test_a_portable_declaration_is_granted_no_workspace_tool(cfg, session_dir, monkeypatch):
+def test_a_portable_declaration_is_granted_no_workspace_tool(cfg, session_dir):
     """`SubagentSpec.tools` defaults to `ALL`, which means *inherit whatever the
     request granted* -- and a portable entry has no `tools:` key to say otherwise
     with. Left at the default, an imported delegate would be handed the deployment's
@@ -148,7 +147,7 @@ def test_a_portable_declaration_is_granted_no_workspace_tool(cfg, session_dir, m
     """
     write_portable(cfg)
 
-    subagent = built(cfg, session_dir, monkeypatch)
+    subagent = built(cfg, session_dir)
 
     assert {tool_name(t) for t in subagent["tools"]} == {"probe"}
 
@@ -168,7 +167,7 @@ def test_the_spec_says_none_rather_than_staying_quiet(cfg):
 
 
 def test_a_carried_tool_reaches_its_delegate_whatever_the_request_granted(
-    cfg, session_dir, monkeypatch
+    cfg, session_dir
 ):
     """What a definition carried is held, not granted: a request naming no tool at
     all still leaves the delegate the one it brought.
@@ -176,7 +175,7 @@ def test_a_carried_tool_reaches_its_delegate_whatever_the_request_granted(
     write_portable(cfg)
 
     subagent = built(
-        cfg, session_dir, monkeypatch, Capabilities(subagents=("surveyor",), tools=())
+        cfg, session_dir, Capabilities(subagents=("surveyor",), tools=())
     )
 
     assert {tool_name(t) for t in subagent["tools"]} == {"probe"}
@@ -195,9 +194,7 @@ def test_a_carried_tool_is_offered_to_nobody_else(cfg):
     assert "probe" in catalogue.bundled_tools["surveyor"].names
 
 
-def test_builtin_tools_stay_narrowed_for_a_portable_delegate(
-    cfg, session_dir, monkeypatch
-):
+def test_builtin_tools_stay_narrowed_for_a_portable_delegate(cfg, session_dir):
     """The exception to atomic, and the one that matters. Built-ins are the host's
     rather than the definition's, so `pip install` must not be a way to put back a
     shell the deployment turned off -- the declaration asks for `execute` and the
@@ -208,7 +205,6 @@ def test_builtin_tools_stay_narrowed_for_a_portable_delegate(
     subagent = built(
         cfg,
         session_dir,
-        monkeypatch,
         Capabilities(
             subagents=("surveyor",), tools=(), builtin_tools=("read_file", "grep")
         ),
@@ -221,16 +217,14 @@ def test_builtin_tools_stay_narrowed_for_a_portable_delegate(
 # -- the skills half ---------------------------------------------------------
 
 
-def test_a_carried_skill_reaches_the_delegate_that_brought_it(
-    cfg, session_dir, monkeypatch
-):
+def test_a_carried_skill_reaches_the_delegate_that_brought_it(cfg, session_dir):
     """A delegate inherits none of its parent's middleware, so a skill it is not
     given is one it has no idea exists -- and a carried bundle's skills are named by
     a path the definition resolved rather than found by walking the catalogue.
     """
     write_portable(cfg, with_skills=True)
 
-    subagent = built(cfg, session_dir, monkeypatch)
+    subagent = built(cfg, session_dir)
 
     (skills,) = [m for m in subagent["middleware"] if isinstance(m, NarrowedSkills)]
     assert any("sampling" in one for one in skills._allowed)

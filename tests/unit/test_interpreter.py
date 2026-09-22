@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.interpreter import release_interpreter
-from tests.conftest import FakeToolCallingModel, capture_build, dispatched
+from tests.conftest import FakeToolCallingModel, dispatched
 
 
 def _model():
@@ -21,14 +21,14 @@ def test_it_is_off_unless_a_deployment_wires_it(cfg, session_dir):
     """A second execution surface, and a beta dependency, should not arrive because
     someone upgraded.
     """
-    graph = build_agent(cfg, session_dir=session_dir, model=_model())
+    graph = build_agent(cfg, session_dir=session_dir, model=_model()).graph
     assert "eval" not in dispatched(graph)
 
 
 def test_wiring_it_adds_one_tool(cfg, session_dir):
     graph = build_agent(
         replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model()
-    )
+    ).graph
     assert "eval" in dispatched(graph)
 
 
@@ -41,38 +41,38 @@ def test_eval_is_an_ordinary_tool_a_request_may_withhold(cfg, session_dir):
         session_dir=session_dir,
         model=_model(),
         capabilities=Capabilities(builtin_tools=("read_file",)),
-    )
+    ).graph
     # Registered either way -- the allowlist refuses at call time, it does not
     # unregister. What matters is that the name is known to the validator.
     assert "eval" in dispatched(without)
 
 
-def test_a_request_that_withheld_the_shell_cannot_reach_it_from_code(cfg, session_dir, monkeypatch):
+def test_a_request_that_withheld_the_shell_cannot_reach_it_from_code(cfg, session_dir):
     """The whole reason for adopting this."""
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         replace(cfg, interpreter_enabled=True),
         session_dir=session_dir,
         model=_model(),
         capabilities=Capabilities(builtin_tools=("read_file", "eval")),
     )
 
-    interpreter = _interpreter_in(captured)
+    interpreter = _interpreter_in(built)
     assert interpreter is not None, "the interpreter was not wired"
     assert "execute" not in _ptc(interpreter)
     assert "read_file" in _ptc(interpreter)
 
 
-def test_an_unrestricted_request_gets_no_allowlist(cfg, session_dir, monkeypatch):
+def test_an_unrestricted_request_gets_no_allowlist(cfg, session_dir):
     """`None`, not an empty tuple."""
-    captured = capture_build(monkeypatch)
-    build_agent(replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model())
+    built = build_agent(
+        replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model()
+    )
 
-    assert _ptc(_interpreter_in(captured)) is None
+    assert _ptc(_interpreter_in(built)) is None
 
 
-def _interpreter_in(captured):
-    for middleware in captured.get("middleware", ()):
+def _interpreter_in(built):
+    for middleware in built.middleware or ():
         if type(middleware).__name__ == "CodeInterpreterMiddleware":
             return middleware
     return None
@@ -86,51 +86,48 @@ def _ptc(interpreter):
     return None
 
 
-def test_withholding_task_also_stops_dispatch_from_code(cfg, session_dir, monkeypatch):
+def test_withholding_task_also_stops_dispatch_from_code(cfg, session_dir):
     """`task()` is a top-level global in the REPL, not a `tools.*` entry, so the tool
     allowlist does not reach it.
     """
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         replace(cfg, interpreter_enabled=True),
         session_dir=session_dir,
         model=_model(),
         capabilities=Capabilities(builtin_tools=("eval", "read_file")),  # no task
     )
 
-    interpreter = _interpreter_in(captured)
+    interpreter = _interpreter_in(built)
     assert _dispatch_enabled(interpreter) is False
 
 
-def test_granting_task_allows_dispatch_from_code(cfg, session_dir, monkeypatch):
+def test_granting_task_allows_dispatch_from_code(cfg, session_dir):
     """The negative control: without it the test above would pass just as well if
     dispatch were disabled for everyone.
     """
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         replace(cfg, interpreter_enabled=True),
         session_dir=session_dir,
         model=_model(),
         capabilities=Capabilities(builtin_tools=("eval", "task")),
     )
 
-    assert _dispatch_enabled(_interpreter_in(captured)) is True
+    assert _dispatch_enabled(_interpreter_in(built)) is True
 
 
 def test_task_is_never_offered_through_the_tool_namespace(cfg, session_dir, monkeypatch):
     """The library refuses it: `task()` is the global, and routing it through `tools.*`
     as well would give two dispatch paths, the second losing `responseSchema`.
     """
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         replace(cfg, interpreter_enabled=True),
         session_dir=session_dir,
         model=_model(),
         capabilities=Capabilities(builtin_tools=("eval", "task", "read_file")),
     )
 
-    assert "task" not in _ptc(_interpreter_in(captured))
-    assert "read_file" in _ptc(_interpreter_in(captured))
+    assert "task" not in _ptc(_interpreter_in(built))
+    assert "read_file" in _ptc(_interpreter_in(built))
 
 
 def _dispatch_enabled(interpreter):
@@ -141,15 +138,16 @@ def _dispatch_enabled(interpreter):
     return None
 
 
-def test_the_vm_image_is_dropped_rather_than_checkpointed(cfg, session_dir, monkeypatch):
+def test_the_vm_image_is_dropped_rather_than_checkpointed(cfg, session_dir):
     """The library serialises the whole QuickJS heap into the checkpoint at the end of
     every turn -- measured at a constant 1,280KB, written whether or not `eval` was
     ever called.
     """
-    captured = capture_build(monkeypatch)
-    build_agent(replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model())
+    built = build_agent(
+        replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model()
+    )
 
-    interpreter = _interpreter_in(captured)
+    interpreter = _interpreter_in(built)
     cap = next(
         (getattr(interpreter, a) for a in ("_max_snapshot_bytes", "max_snapshot_bytes")
          if hasattr(interpreter, a)),
@@ -161,16 +159,17 @@ def test_the_vm_image_is_dropped_rather_than_checkpointed(cfg, session_dir, monk
     )
 
 
-def test_the_cap_is_not_the_librarys_default(cfg, session_dir, monkeypatch):
+def test_the_cap_is_not_the_librarys_default(cfg, session_dir):
     """Left unset the cap becomes `memory_limit` -- 64MB, far above any real image, so
     nothing is ever dropped.
     """
     from langchain_quickjs import CodeInterpreterMiddleware
 
-    captured = capture_build(monkeypatch)
-    build_agent(replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model())
+    built = build_agent(
+        replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model()
+    )
 
-    ours = _interpreter_in(captured)._max_snapshot_bytes
+    ours = _interpreter_in(built)._max_snapshot_bytes
     theirs = CodeInterpreterMiddleware()._max_snapshot_bytes
 
     assert ours < theirs, f"cap {ours} is no tighter than the library default {theirs}"
@@ -241,7 +240,7 @@ def test_the_runtime_is_given_back_when_a_turn_ends_by_exception(cfg, session_di
             ],
         ]
     )
-    graph = build_agent(wired, session_dir=session_dir, model=model)
+    graph = build_agent(wired, session_dir=session_dir, model=model).graph
 
     with pytest.raises(GraphRecursionError):
         graph.invoke(
@@ -269,7 +268,7 @@ def test_a_real_build_is_releasable(cfg, session_dir):
 
     graph = build_agent(
         replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model()
-    )
+    ).graph
 
     owners = [
         getattr(getattr(getattr(node, "bound", None), "func", None), "__self__", None)
@@ -285,7 +284,7 @@ def test_releasing_costs_nothing_when_the_interpreter_is_off(cfg, session_dir):
     """It runs in the teardown of every turn, including the ones on a deployment that
     never wired a sandbox.
     """
-    graph = build_agent(cfg, session_dir=session_dir, model=_model())
+    graph = build_agent(cfg, session_dir=session_dir, model=_model()).graph
 
     release_interpreter(cfg, graph)
 

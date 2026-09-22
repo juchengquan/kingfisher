@@ -19,8 +19,6 @@ from kingfisher.kinds.tools.spec import Found, Offering
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from langgraph.graph.state import CompiledStateGraph
-
     from kingfisher.config import Config
 
 
@@ -162,7 +160,11 @@ def _resolve_tools(
     where: str,
     capabilities: Capabilities,
     workspace_tools: Sequence[Found],
-    assemble: Callable[[tuple[Any, ...]], CompiledStateGraph],
+    # `Any` rather than the record it actually returns: naming that type here would
+    # make this module import `infrastructure.harness.agent`, which imports this one
+    # -- the cycle `test_no_module_in_the_package_can_reach_itself` refuses. The
+    # probe takes the graph off it below, which is all this function wants.
+    assemble: Callable[[tuple[Any, ...]], Any],
     *,
     names_needed: bool = False,
 ) -> _ToolSurface:
@@ -179,7 +181,7 @@ def _resolve_tools(
     if not names_needed and not workspace_tools and unrestricted:
         return _ToolSurface()
 
-    probe = assemble(())
+    probe = assemble(()).graph
     # Our own probe, so `None` is not reachable here; `or ()` keeps a shape
     # change upstream from becoming a crash at the one site that would.
     builtin = registered_tools(probe) or ()

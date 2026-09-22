@@ -11,7 +11,7 @@ from kingfisher.application.config import config_from_env
 from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
-from tests.conftest import FakeToolCallingModel, capture_build
+from tests.conftest import FakeToolCallingModel
 
 #: A second endpoint, on a different wire format, so a test can tell "went
 #: elsewhere" from "went to the default" by which attribute the value landed on.
@@ -50,16 +50,15 @@ def define(cfg, body: str, name: str = "reviewer") -> None:
     (cfg.workspace / "subagents" / f"{name}.yaml").write_text(body, encoding="utf-8")
 
 
-def build(cfg, session_dir, monkeypatch, *, run_on=None, **caps):
-    captured = capture_build(monkeypatch)
-    build_agent(
+def build(cfg, session_dir, *, run_on=None, **caps):
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reviewer",), **caps),
         run_on=run_on,
     )
-    (spec,) = [s for s in captured["subagents"] if s["name"] == "reviewer"]
+    (spec,) = [s for s in built.subagents or () if s["name"] == "reviewer"]
     return spec
 
 
@@ -127,16 +126,16 @@ def test_naming_a_model_the_catalogue_does_not_define_is_refused(tmp_path):
 # -- the delegate actually goes there --------------------------------------
 
 
-def test_a_delegate_runs_the_model_it_names(cfg, session_dir, monkeypatch):
+def test_a_delegate_runs_the_model_it_names(cfg, session_dir):
     define(cfg, "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
 
-    spec = build(elsewhere(cfg), session_dir, monkeypatch)
+    spec = build(elsewhere(cfg), session_dir)
 
     assert spec["model"].model_name == "gpt-5"
     assert spec["model"].openai_api_base == ELSEWHERE.base_url
 
 
-def test_omitting_the_model_builds_none_of_its_own(cfg, session_dir, monkeypatch):
+def test_omitting_the_model_builds_none_of_its_own(cfg, session_dir):
     """"Runs what the deployment runs" is expressed by building nothing here, not by
     building the default again: a top-level delegate inherits the model its parent
     was constructed with, and a second instance would only be a chance for the two to
@@ -144,21 +143,21 @@ def test_omitting_the_model_builds_none_of_its_own(cfg, session_dir, monkeypatch
     """
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  Go.\n")
 
-    spec = build(cfg, session_dir, monkeypatch)
+    spec = build(cfg, session_dir)
 
     assert "model" not in spec
 
 
-def test_naming_a_model_on_the_default_endpoint_stays_there(cfg, session_dir, monkeypatch):
+def test_naming_a_model_on_the_default_endpoint_stays_there(cfg, session_dir):
     """Naming a model is not the same as going elsewhere."""
     define(cfg, "name: reviewer\ndescription: d\nmodel: cheap-model\nsystem_prompt: |\n  Go.\n")
 
-    spec = build(cfg, session_dir, monkeypatch)
+    spec = build(cfg, session_dir)
 
     assert spec["model"].anthropic_api_url == cfg.models.resolve()[1].base_url
 
 
-def test_a_delegates_own_params_reach_its_client(cfg, session_dir, monkeypatch):
+def test_a_delegates_own_params_reach_its_client(cfg, session_dir):
     """**The guard this change exists for.**
 
     `cheap-model` carries a ceiling and a timeout that differ from the default's, so
@@ -170,24 +169,24 @@ def test_a_delegates_own_params_reach_its_client(cfg, session_dir, monkeypatch):
     """
     define(cfg, "name: reviewer\ndescription: d\nmodel: cheap-model\nsystem_prompt: |\n  Go.\n")
 
-    spec = build(cfg, session_dir, monkeypatch)
+    spec = build(cfg, session_dir)
 
     assert spec["model"].max_tokens == 321
     assert spec["model"].default_request_timeout == 45
     assert cfg.models.models["fake-model"].max_tokens != 321  # the default it must not have taken
 
 
-def test_a_delegates_params_survive_going_elsewhere(cfg, session_dir, monkeypatch):
+def test_a_delegates_params_survive_going_elsewhere(cfg, session_dir):
     """The same guard across a wire format, where the attribute names differ."""
     define(cfg, "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
 
-    spec = build(elsewhere(cfg), session_dir, monkeypatch)
+    spec = build(elsewhere(cfg), session_dir)
 
     assert spec["model"].max_tokens == 32000
     assert spec["model"].request_timeout == 90
 
 
-def test_a_delegate_naming_an_unrunnable_model_is_refused_by_name(cfg, session_dir, monkeypatch):
+def test_a_delegate_naming_an_unrunnable_model_is_refused_by_name(cfg, session_dir):
     """Refused when the delegate is *activated*, not across the catalogue up front --
     `run_on` exists so a caller can rescue a shipped definition whose model their
     credentials cannot reach, and a catalogue-wide refusal would fire before the
@@ -196,53 +195,51 @@ def test_a_delegate_naming_an_unrunnable_model_is_refused_by_name(cfg, session_d
     define(cfg, "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
 
     with pytest.raises(ConfigError, match=r"subagent 'reviewer'.*no model 'gpt-5'"):
-        build(cfg, session_dir, monkeypatch)
+        build(cfg, session_dir)
 
 
-def test_a_delegate_nobody_activated_cannot_break_the_build(cfg, session_dir, monkeypatch):
+def test_a_delegate_nobody_activated_cannot_break_the_build(cfg, session_dir):
     """Seeding a preset you cannot run costs nothing until you ask for it."""
     define(cfg, "name: unreachable\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  Go.\n")
 
-    assert build(cfg, session_dir, monkeypatch)["name"] == "reviewer"
+    assert build(cfg, session_dir)["name"] == "reviewer"
 
 
-def test_an_alias_a_deployment_did_not_bind_costs_nothing_until_activated(
-    cfg, session_dir, monkeypatch
-):
+def test_an_alias_a_deployment_did_not_bind_costs_nothing_until_activated(cfg, session_dir):
     """Seeding presets you have not bound for is free, the same rule an unrunnable
     `model:` follows.
     """
     define(cfg, "name: unbound\ndescription: d\nalias: missing\nsystem_prompt: |\n  Go.\n")
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  Go.\n")
 
-    assert build(cfg, session_dir, monkeypatch)["name"] == "reviewer"
+    assert build(cfg, session_dir)["name"] == "reviewer"
 
 
 # -- granted, like middleware ----------------------------------------------
 
 
-def test_an_endpoint_a_request_may_not_reach_is_refused(cfg, session_dir, monkeypatch):
+def test_an_endpoint_a_request_may_not_reach_is_refused(cfg, session_dir):
     define(cfg, "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
 
     with pytest.raises(CapabilityError, match="may not"):
-        build(elsewhere(cfg), session_dir, monkeypatch, endpoints=())
+        build(elsewhere(cfg), session_dir, endpoints=())
 
 
-def test_a_granted_endpoint_goes_through(cfg, session_dir, monkeypatch):
+def test_a_granted_endpoint_goes_through(cfg, session_dir):
     define(cfg, "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
 
-    spec = build(elsewhere(cfg), session_dir, monkeypatch, endpoints=("openai",))
+    spec = build(elsewhere(cfg), session_dir, endpoints=("openai",))
 
     assert spec["model"].openai_api_base == ELSEWHERE.base_url
 
 
-def test_the_grant_is_checked_against_where_the_model_resolves(cfg, session_dir, monkeypatch):
+def test_the_grant_is_checked_against_where_the_model_resolves(cfg, session_dir):
     """A definition names no endpoint, so the grant cannot be read off it."""
     define(cfg, "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
 
     with pytest.raises(CapabilityError, match="openai"):
-        build(elsewhere(cfg), session_dir, monkeypatch, endpoints=("fake",))
+        build(elsewhere(cfg), session_dir, endpoints=("fake",))
 
 
 def test_grants_clamp_endpoints_like_everything_else():
@@ -266,7 +263,7 @@ def test_the_environment_cannot_move_a_delegate_to_another_endpoint(
     monkeypatch.setenv("KINGFISHER_PROVIDER_SUBAGENT", "openai")
     monkeypatch.setenv("KINGFISHER_MODEL_SUBAGENT", "gpt-5")
 
-    spec = build(elsewhere(cfg), session_dir, monkeypatch)
+    spec = build(elsewhere(cfg), session_dir)
 
     assert spec["model"].model == "cheap-model"
     assert spec["model"].anthropic_api_url == cfg.models.resolve()[1].base_url

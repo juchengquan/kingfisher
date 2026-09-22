@@ -11,7 +11,7 @@ from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.kinds.subagents import reading
-from tests.conftest import FakeToolCallingModel, capture_build
+from tests.conftest import FakeToolCallingModel
 
 
 def define(cfg, body: str, name: str = "reviewer") -> None:
@@ -27,19 +27,19 @@ def offer_skills(cfg, *names: str) -> None:
         )
 
 
-def build(cfg, session_dir, monkeypatch, **caps):
-    captured = capture_build(monkeypatch)
-    build_agent(
+def build(cfg, session_dir, **caps):
+    return build_agent(
         replace(cfg, skills_enabled=True),
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(**caps),
     )
-    return captured
 
 
-def middleware_of(captured, name: str) -> list:
-    (spec,) = [s for s in captured["subagents"] if s["name"] == name]
+def middleware_of(built, name: str) -> list:
+    """One delegate's middleware. The outer read is the record; the inner one is
+    deepagents' own `SubAgent` mapping, which stays a subscript."""
+    (spec,) = [s for s in built.subagents if s["name"] == name]
     return spec.get("middleware", [])
 
 
@@ -47,7 +47,7 @@ def middleware_of(captured, name: str) -> list:
 
 
 def test_a_delegate_gets_no_skills_when_the_deployment_switched_them_off(
-    cfg, session_dir, monkeypatch
+    cfg, session_dir
 ):
     """`cfg` says what is wired and the request says what it wants of that, and this
     branch asked only the request. With `KINGFISHER_SKILLS_ENABLED` off the agent got no
@@ -57,49 +57,46 @@ def test_a_delegate_gets_no_skills_when_the_deployment_switched_them_off(
     offer_skills(cfg, "tabular-qa")
     define(cfg, "name: reviewer\ndescription: d\nskills: [tabular-qa]\n"
         "system_prompt: |\n  You review.\n")
-    captured = capture_build(monkeypatch)
 
-    build_agent(
+    built = build_agent(
         cfg,  # the fixture's own, with skills off
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reviewer",), skills=("tabular-qa",)),
     )
 
-    assert not [m for m in captured["middleware"] if type(m).__name__ == "NarrowedSkills"]
-    kinds = [type(m).__name__ for m in middleware_of(captured, "reviewer")]
+    assert not [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
+    kinds = [type(m).__name__ for m in middleware_of(built, "reviewer")]
     assert "NarrowedSkills" not in kinds, f"the delegate was told about skills: {kinds}"
 
 
-def test_a_delegate_still_gets_them_when_the_deployment_wired_them(
-    cfg, session_dir, monkeypatch
-):
+def test_a_delegate_still_gets_them_when_the_deployment_wired_them(cfg, session_dir):
     """The control, so the test above is the switch rather than the wiring."""
     offer_skills(cfg, "tabular-qa")
     define(cfg, "name: reviewer\ndescription: d\nskills: [tabular-qa]\n"
         "system_prompt: |\n  You review.\n")
 
-    captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",), skills=ALL)
+    built = build(cfg, session_dir, subagents=("reviewer",), skills=ALL)
 
-    kinds = [type(m).__name__ for m in middleware_of(captured, "reviewer")]
+    kinds = [type(m).__name__ for m in middleware_of(built, "reviewer")]
     assert "NarrowedSkills" in kinds, kinds
 
 
 # -- the field ------------------------------------------------------------
 
 
-def test_a_definition_can_name_the_skills_its_delegate_gets(cfg, session_dir, monkeypatch):
+def test_a_definition_can_name_the_skills_its_delegate_gets(cfg, session_dir):
     offer_skills(cfg, "tabular-qa", "code-review")
     define(cfg, "name: reviewer\ndescription: d\nskills: [tabular-qa]\n"
         "system_prompt: |\n  You review.\n")
 
-    captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
+    built = build(cfg, session_dir, subagents=("reviewer",))
 
-    (scoped,) = [m for m in middleware_of(captured, "reviewer") if isinstance(m, NarrowedSkills)]
+    (scoped,) = [m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkills)]
     assert set(scoped._allowed) == {"catalogue::tabular-qa"}
 
 
-def test_a_delegate_may_name_a_skill_by_its_full_identity(cfg, session_dir, monkeypatch):
+def test_a_delegate_may_name_a_skill_by_its_full_identity(cfg, session_dir):
     """`incident::postmortem` was refused as an unknown skill, and it is the skill's
     own identity -- the one spelling that keeps meaning this skill after somebody
     else ships a `postmortem`. The shipped `reviewer` writes it, so seeding the
@@ -112,13 +109,13 @@ def test_a_delegate_may_name_a_skill_by_its_full_identity(cfg, session_dir, monk
     define(cfg, "name: reviewer\ndescription: d\nskills: [incident::postmortem]\n"
         "system_prompt: |\n  You review.\n")
 
-    captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
+    built = build(cfg, session_dir, subagents=("reviewer",))
 
-    (scoped,) = [m for m in middleware_of(captured, "reviewer") if isinstance(m, NarrowedSkills)]
+    (scoped,) = [m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkills)]
     assert set(scoped._allowed) == {"incident::postmortem"}
 
 
-def test_a_delegate_is_actually_told_about_the_skill_it_named(cfg, session_dir, monkeypatch):
+def test_a_delegate_is_actually_told_about_the_skill_it_named(cfg, session_dir):
     """The grant reaching the index, rather than the grant being recorded.
 
     `_allowed` held what the definition wrote and the index is keyed by
@@ -131,38 +128,38 @@ def test_a_delegate_is_actually_told_about_the_skill_it_named(cfg, session_dir, 
     define(cfg, "name: reviewer\ndescription: d\nskills: [tabular-qa]\n"
         "system_prompt: |\n  You review.\n")
 
-    captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
+    built = build(cfg, session_dir, subagents=("reviewer",))
 
-    (scoped,) = [m for m in middleware_of(captured, "reviewer") if isinstance(m, NarrowedSkills)]
+    (scoped,) = [m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkills)]
     rendered = scoped._format_skills_list(scoped._qualified())
     assert "tabular-qa" in rendered
     assert "code-review" not in rendered  # and only the one it named
 
 
-def test_omitting_skills_grants_none(cfg, session_dir, monkeypatch):
+def test_omitting_skills_grants_none(cfg, session_dir):
     """Not what omitting `tools` means, and the asymmetry is the point: a delegate's
     body is already its procedure.
     """
     offer_skills(cfg, "tabular-qa")
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n")
 
-    captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
+    built = build(cfg, session_dir, subagents=("reviewer",))
 
-    assert not [m for m in middleware_of(captured, "reviewer") if isinstance(m, NarrowedSkills)]
+    assert not [m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkills)]
 
 
-def test_omitting_tools_still_inherits(cfg, session_dir, monkeypatch):
+def test_omitting_tools_still_inherits(cfg, session_dir):
     """The other half of the asymmetry, so a change to one is not read as licence to
     change the other.
     """
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n")
 
-    captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
+    built = build(cfg, session_dir, subagents=("reviewer",))
 
-    assert not [m for m in middleware_of(captured, "reviewer") if isinstance(m, ToolAllowlist)]
+    assert not [m for m in middleware_of(built, "reviewer") if isinstance(m, ToolAllowlist)]
 
 
-def test_both_can_be_named_together(cfg, session_dir, monkeypatch):
+def test_both_can_be_named_together(cfg, session_dir):
     offer_skills(cfg, "tabular-qa")
     define(
         cfg,
@@ -171,8 +168,8 @@ def test_both_can_be_named_together(cfg, session_dir, monkeypatch):
         "system_prompt: |\n  You review.\n",
     )
 
-    captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
-    middleware = middleware_of(captured, "reviewer")
+    built = build(cfg, session_dir, subagents=("reviewer",))
+    middleware = middleware_of(built, "reviewer")
 
     # The two this definition asked for, in order, ignoring the guards every
     # delegate carries whether or not its file mentions them.
@@ -187,7 +184,7 @@ def test_both_can_be_named_together(cfg, session_dir, monkeypatch):
 # -- the two refusals -----------------------------------------------------
 
 
-def test_a_definition_naming_an_unknown_skill_fails_loudly(cfg, session_dir, monkeypatch):
+def test_a_definition_naming_an_unknown_skill_fails_loudly(cfg, session_dir):
     """A mistake in the definition, so it raises -- the same way `build_agent` already
     refuses a request naming a skill nothing defines.
     """
@@ -195,10 +192,10 @@ def test_a_definition_naming_an_unknown_skill_fails_loudly(cfg, session_dir, mon
         "system_prompt: |\n  You review.\n")
 
     with pytest.raises(CapabilityError, match="names unknown skill"):
-        build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
+        build(cfg, session_dir, subagents=("reviewer",))
 
 
-def test_a_delegate_cannot_reach_past_the_request(cfg, session_dir, monkeypatch):
+def test_a_delegate_cannot_reach_past_the_request(cfg, session_dir):
     """Not a mistake -- a caller narrower than the definition -- so the skill is dropped
     rather than raised, exactly as intersect drops it for the parent.
     """
@@ -210,11 +207,9 @@ def test_a_delegate_cannot_reach_past_the_request(cfg, session_dir, monkeypatch)
         "system_prompt: |\n  You review.\n",
     )
 
-    captured = build(
-        cfg, session_dir, monkeypatch, subagents=("reviewer",), skills=("tabular-qa",)
-    )
+    built = build(cfg, session_dir, subagents=("reviewer",), skills=("tabular-qa",))
 
-    (scoped,) = [m for m in middleware_of(captured, "reviewer") if isinstance(m, NarrowedSkills)]
+    (scoped,) = [m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkills)]
     assert set(scoped._allowed) == {"catalogue::tabular-qa"}, (
         "the delegate kept a skill its caller lacked"
     )

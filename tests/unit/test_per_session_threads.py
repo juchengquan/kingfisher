@@ -76,7 +76,7 @@ def test_a_real_graph_checkpoints_into_the_session_database(cfg, session_dir):
         session_dir=session_dir,
         checkpointer=saver,
         model=FakeToolCallingModel(responses=[AIMessage(content="one"), AIMessage(content="two")]),
-    )
+    ).graph
     config: Any = {"configurable": {"thread_id": session_dir.name}, "recursion_limit": 10}
 
     graph.invoke({"messages": [("user", "remember this")]}, config=config)
@@ -285,7 +285,7 @@ def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
                 AIMessage(content="planned"),
             ]
         ),
-    ).invoke({"messages": [("user", "plan it")]}, config=config)
+    ).graph.invoke({"messages": [("user", "plan it")]}, config=config)
 
     # Asserted, so the second half cannot pass by the plan never being written.
     written = build_agent(
@@ -293,7 +293,7 @@ def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
         session_dir=session_dir,
         checkpointer=first_saver,
         model=FakeToolCallingModel(responses=[]),
-    ).get_state(config)
+    ).graph.get_state(config)
     assert written.values.get("todos") == plan, "the first turn never wrote a plan"
 
     second_saver = build_session_checkpointer(session_dir)
@@ -304,7 +304,7 @@ def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
         session_dir=session_dir,
         checkpointer=second_saver,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-    ).get_state(config)
+    ).graph.get_state(config)
 
     assert not carried.values.get("todos"), (
         "last turn's plan reached this one -- the agent resumes holding a checklist "

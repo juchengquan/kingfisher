@@ -9,7 +9,7 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.spec import EXPORT, NOT_COMPILED, SubagentError, declared
-from tests.conftest import FakeToolCallingModel, capture_build, declared_subagents
+from tests.conftest import FakeToolCallingModel, declared_subagents
 
 COMPILED = '''"""A delegate the workspace assembled."""
 
@@ -239,19 +239,18 @@ def test_a_spec_cannot_carry_both_a_prompt_and_a_builder():
 # -- building ---------------------------------------------------------------
 
 
-def test_a_compiled_delegate_reaches_deepagents_as_a_runnable(cfg, monkeypatch, session_dir):
+def test_a_compiled_delegate_reaches_deepagents_as_a_runnable(cfg, session_dir):
     """The shape deepagents wants: three keys, and the graph it will run."""
     _write(cfg.workspace / "subagents", "researcher.py", COMPILED.format(name="researcher"))
 
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("researcher",)),
     )
 
-    (delegate,) = declared_subagents(captured)
+    (delegate,) = declared_subagents(built)
     assert set(delegate) == {"name", "description", "runnable"}
     assert delegate["name"] == "researcher"
     # None of the prompted path's fields, because none of them reach a graph
@@ -260,7 +259,7 @@ def test_a_compiled_delegate_reaches_deepagents_as_a_runnable(cfg, monkeypatch, 
     assert "middleware" not in delegate
 
 
-def test_the_compiled_shape_is_deepagents_own(cfg, monkeypatch, session_dir):
+def test_the_compiled_shape_is_deepagents_own(cfg, session_dir):
     """Pinned against their declaration rather than a copy of it, so a rename upstream
     fails here instead of arriving as something confusing later.
     """
@@ -268,19 +267,18 @@ def test_the_compiled_shape_is_deepagents_own(cfg, monkeypatch, session_dir):
 
     _write(cfg.workspace / "subagents", "researcher.py", COMPILED.format(name="researcher"))
 
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("researcher",)),
     )
 
-    (delegate,) = declared_subagents(captured)
+    (delegate,) = declared_subagents(built)
     assert set(delegate) == set(CompiledSubAgent.__required_keys__)
 
 
-def test_a_build_that_returns_nothing_is_refused(cfg, monkeypatch, session_dir):
+def test_a_build_that_returns_nothing_is_refused(cfg, session_dir):
     _write(
         cfg.workspace / "subagents",
         "researcher.py",
@@ -288,7 +286,6 @@ def test_a_build_that_returns_nothing_is_refused(cfg, monkeypatch, session_dir):
         "'build': lambda model, tools: None}]\n",
     )
 
-    capture_build(monkeypatch)
     with pytest.raises(SubagentError, match="returned None"):
         build_agent(
             cfg,
@@ -312,13 +309,10 @@ SUBAGENTS = [
 """
 
 
-def test_a_class_under_build_is_refused_rather_than_constructed(
-    cfg, monkeypatch, session_dir
-):
+def test_a_class_under_build_is_refused_rather_than_constructed(cfg, session_dir):
     """`callable()` accepts a class, so this loaded and was *constructed*."""
     _write(cfg.workspace / "subagents", "researcher.py", A_CLASS)
 
-    capture_build(monkeypatch)
     with pytest.raises(SubagentError, match="not a graph"):
         build_agent(
             cfg,
@@ -328,13 +322,10 @@ def test_a_class_under_build_is_refused_rather_than_constructed(
         )
 
 
-def test_the_refusal_names_what_was_returned_and_the_class_trap(
-    cfg, monkeypatch, session_dir
-):
+def test_the_refusal_names_what_was_returned_and_the_class_trap(cfg, session_dir):
     """A reader has to know which of the two mistakes they made."""
     _write(cfg.workspace / "subagents", "researcher.py", A_CLASS)
 
-    capture_build(monkeypatch)
     with pytest.raises(SubagentError) as refused:
         build_agent(
             cfg,
@@ -428,9 +419,12 @@ def _with_probe(cfg):
     )
 
 
-def _tools_given(cfg, session_dir, monkeypatch, capabilities):
-    """The objects `build` was handed, which is what the graph will call."""
-    capture_build(monkeypatch)
+def _tools_given(cfg, session_dir, capabilities):
+    """The objects `build` was handed, which is what the graph will call.
+
+    The build's return is discarded deliberately: what this reads is what the
+    workspace's own `build` recorded in `store.SEEN`, not what reached deepagents.
+    """
     build_agent(
         cfg,
         session_dir=session_dir,
@@ -444,26 +438,22 @@ def _tools_given(cfg, session_dir, monkeypatch, capabilities):
     return tools
 
 
-def _tools_seen(cfg, session_dir, monkeypatch, capabilities):
-    return [one.name for one in _tools_given(cfg, session_dir, monkeypatch, capabilities)]
+def _tools_seen(cfg, session_dir, capabilities):
+    return [one.name for one in _tools_given(cfg, session_dir, capabilities)]
 
 
-def test_a_compiled_delegate_is_granted_the_workspace_tools_it_named(
-    cfg, monkeypatch, session_dir
-):
+def test_a_compiled_delegate_is_granted_the_workspace_tools_it_named(cfg, session_dir):
     """The one narrowing kingfisher can still apply: it hands the graph the workspace
     tools this request granted, chosen by name.
     """
     _with_probe(cfg)
 
-    seen = _tools_seen(
-        cfg, session_dir, monkeypatch, Capabilities(subagents=("researcher",))
-    )
+    seen = _tools_seen(cfg, session_dir, Capabilities(subagents=("researcher",)))
 
     assert seen == ["probe"]
 
 
-def test_a_compiled_delegates_tool_is_wired_to_this_session(cfg, monkeypatch, session_dir):
+def test_a_compiled_delegates_tool_is_wired_to_this_session(cfg, session_dir):
     """The wiring is the claim: `session_dir` has to reach `compiled` for the tools to
     be wrapped against anything, and no test of the wrapper alone would notice it
     stopping at `as_subagent`.
@@ -478,9 +468,7 @@ def test_a_compiled_delegates_tool_is_wired_to_this_session(cfg, monkeypatch, se
         RECORDING.format(extra='        "tools": ["probe"],\n'),
     )
 
-    given = _tools_given(
-        cfg, session_dir, monkeypatch, Capabilities(subagents=("researcher",))
-    )
+    given = _tools_given(cfg, session_dir, Capabilities(subagents=("researcher",)))
 
     answer = given[0].invoke(
         {"type": "tool_call", "id": "c1", "name": "probe", "args": {"path": "/data/api.log"}}
@@ -488,16 +476,14 @@ def test_a_compiled_delegates_tool_is_wired_to_this_session(cfg, monkeypatch, se
     assert answer.content == f"handed={session_dir / 'data' / 'api.log'}"
 
 
-def test_a_request_that_withheld_a_tool_withholds_it_from_the_graph(
-    cfg, monkeypatch, session_dir
-):
+def test_a_request_that_withheld_a_tool_withholds_it_from_the_graph(cfg, session_dir):
     """Not a guarantee -- the graph may ignore what it is handed, and nothing can stop
     it, because deepagents never applies an allowlist to a graph it did not build.
     """
     _with_probe(cfg)
 
     seen = _tools_seen(
-        cfg, session_dir, monkeypatch, Capabilities(subagents=("researcher",), tools=())
+        cfg, session_dir, Capabilities(subagents=("researcher",), tools=())
     )
 
     assert seen == []

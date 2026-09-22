@@ -95,7 +95,7 @@ def test_each_delegate_holds_the_tool_it_named(cfg, session_dir):
             tools=("vendor_a/fetch.py::fetch", "vendor_b/fetch.py::fetch"),
             subagents=("agent_vendor_a", "agent_vendor_b"),
         ),
-    )
+    ).graph
     delegates = _subagent_graphs(graph)
 
     assert _fetch_from(delegates["agent_vendor_a"]) == "from vendor_a"
@@ -116,7 +116,7 @@ def test_the_agent_holding_the_grant_holds_neither(cfg, session_dir):
             builtin_tools=("read_file",),
             tools=("vendor_a/fetch.py::fetch", "vendor_b/fetch.py::fetch"),
         ),
-    )
+    ).graph
 
     assert _fetch_from(graph) is None
 
@@ -148,7 +148,7 @@ def test_a_grant_of_everything_still_works(cfg, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[]),
         capabilities=Capabilities(subagents=("agent_vendor_a",)),
-    )
+    ).graph
 
     assert _fetch_from(graph) is None, "the parent cannot tell them apart"
     assert _fetch_from(_subagent_graphs(graph)["agent_vendor_a"]) == "from vendor_a"
@@ -182,7 +182,7 @@ def test_a_delegate_can_actually_call_the_one_it_named(cfg, session_dir):
             tools=("vendor_a/fetch.py::fetch", "vendor_b/fetch.py::fetch"),
             subagents=("agent_vendor_b",),
         ),
-    )
+    ).graph
 
     out = _subagent_graphs(graph)["agent_vendor_b"].invoke(
         {"messages": [{"role": "user", "content": "go"}]},
@@ -262,7 +262,7 @@ def test_a_unique_name_is_still_granted_flat(cfg, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[]),
         capabilities=Capabilities(builtin_tools=(), tools=("fetch",)),
-    )
+    ).graph
 
     assert _fetch_from(graph) == "from solo"
 
@@ -294,7 +294,7 @@ def test_a_delegate_still_cannot_reach_past_the_request(cfg, session_dir):
             tools=("vendor_a/fetch.py::fetch",),
             subagents=("agent_vendor_b",),
         ),
-    )
+    ).graph
 
     out = _subagent_graphs(graph)["agent_vendor_b"].invoke(
         {"messages": [{"role": "user", "content": "go"}]},
