@@ -406,3 +406,46 @@ def test_a_stateless_deployment_writes_no_pause(cfg):
 
     assert not (_session_dir(cfg, result.session_id) / PAUSED).exists()
     assert not (_session_dir(cfg, result.session_id) / PAUSED_PROVENANCE).exists()
+
+
+# -- and when nobody ever answers -----------------------------------------
+#
+# A pause has no expiry of its own. It ages like any idle session and leaves with
+# the retention sweep, which holds only because the checkpoint is kept *inside* the
+# session -- so these are really tests of where it lives. Put it anywhere else and
+# both go red, which is the orphan the old per-session sqlite left behind: one real
+# workspace held 132 threads and 1,894 checkpoints after every session was reaped.
+
+
+def test_a_pause_nobody_answers_is_swept_with_its_session(cfg):
+    """Nothing special-cases a waiting session, and nothing should: a second timer
+    for pending decisions is a second thing to disagree with the first.
+    """
+    import time
+
+    kf = Kingfisher(cfg, graph=_gated(calls=[_write("/derived/a.txt", "x", "c1")]))
+    paused = kf.run(Request("write it"))
+    directory = _session_dir(cfg, paused.session_id)
+    assert (directory / PAUSED).is_file(), "nothing was left waiting, so nothing is swept"
+
+    swept = kf.reap(older_than_seconds=0, now=time.time())
+
+    assert paused.session_id in swept.removed
+    assert not directory.exists()
+    assert swept.orphans == (), "the pause was reaped as residue rather than with its session"
+    assert swept.failures == ()
+
+
+def test_deleting_a_waiting_session_takes_the_pause_with_it(cfg):
+    """The explicit half of the same thing. `delete_session=True` on the turn that
+    paused declines -- the session is what the answer is for -- so this is the path
+    somebody takes once they have decided not to answer after all.
+    """
+    kf = Kingfisher(cfg, graph=_gated(calls=[_write("/derived/a.txt", "x", "c1")]))
+    paused = kf.run(Request("write it"))
+    directory = _session_dir(cfg, paused.session_id)
+
+    assert kf.delete_session(paused.session_id) is None
+
+    assert not directory.exists()
+    assert not (directory / PAUSED).exists()
