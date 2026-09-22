@@ -48,6 +48,7 @@ KNOWN: frozenset[str] = frozenset(
         "memory",
         "metadata",
         "source_ids",
+        "interrupt_on",
     }
 )
 
@@ -61,10 +62,6 @@ REFUSED: Mapping[str, str] = MappingProxyType(
             "deepagents' permissions *replace* rather than narrow, so writing this "
             "here would drop the rules an agent already has -- including the ones "
             "making /data and /skills read-only"
-        ),
-        "interrupt_on": (
-            "an agent has both a checkpointer and a caller, unlike a delegate; what "
-            "is missing is anything that surfaces an interrupt to that caller"
         ),
         "response_format": (
             "an agent answers a real caller who may well want a schema, and there is "
@@ -87,6 +84,20 @@ class AgentSpec(Definition):
     #: `None` is no opinion, which is not the same: a switch narrows like every
     #: other axis, and only `False` can subtract.
     memory: bool | None = None
+
+    #: Tools whose every call stops for a person before it runs.
+    #:
+    #: Whole tools, and there is no way to write a narrower rule. Gating `execute`
+    #: gates every shell command the agent writes, including `ls` -- which is what an
+    #: approval gate on an unrestricted shell honestly costs. The alternative, a
+    #: pattern matched against the command, cannot be made to hold: `rm -rf` and
+    #: `x=rm; $x -rf` are the same command, and a gate that can be phrased around is
+    #: worse than none because it reads as protection. An author who finds this too
+    #: coarse wants an agent that was never granted `execute`.
+    #:
+    #: Not on `Definition` and so not on a delegate: a delegate inherits its
+    #: parent's, which is `REFUSED` in that format with the reason.
+    interrupt_on: tuple[str, ...] = ()
 
     def declares(self, held: frozenset[str] | None = None) -> Capabilities:
         """What this agent holds, said as the narrowing a request is clamped by.
@@ -186,4 +197,27 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
             else read.flag(document.get("memory"), key="memory")
         ),
         metadata=read.mapping(document.get("metadata"), key="metadata"),
+        interrupt_on=_gated_tools(document.get("interrupt_on"), source),
     )
+
+
+def _gated_tools(written: object, source: Path) -> tuple[str, ...]:
+    """The tools this agent stops on, as names.
+
+    The star is refused rather than read as "gate everything". Every other list in
+    this format narrows what an agent may reach, so a star there means "no limit" --
+    here it would mean the opposite, the tightest possible setting, and one spelling
+    carrying both senses across one file is how an author ends up with whichever they
+    did not want.
+    """
+    names = fields.names(written)
+    if names is None:
+        return ()
+    if ALL in names:
+        msg = (
+            f"{source.name}: interrupt_on may not be {ALL!r} -- everywhere else in "
+            f"this file the star means 'no limit', and gating every tool is the "
+            f"opposite. Name the tools that need a person."
+        )
+        raise AgentError(msg)
+    return tuple(dict.fromkeys(names))

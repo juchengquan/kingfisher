@@ -251,11 +251,16 @@ def test_conversation_is_on_unless_a_deployment_says_otherwise(cfg):
 def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
     """What the conversation carries, and what it deliberately does not.
 
-    It holds because the saver is built per turn -- `build_session_checkpointer` at
-    `service.py:1249`, released when the turn ends -- so the next turn's graph starts
-    with nothing in its channels. That is structural rather than enforced, which is
-    why it is worth a test: a deployment injecting a persistent `threads` factory
-    takes it back, and nothing else would say so.
+    It holds because the saver is built per turn -- `build_session_checkpointer` in
+    `_checkpointer_for`, released when the turn ends -- so the next turn's graph
+    starts with nothing in its channels. That is structural rather than enforced,
+    which is why it is worth a test: a deployment injecting a persistent `threads`
+    factory takes it back, and nothing else would say so.
+
+    One turn's state *is* kept now, and only one: a turn that stopped at an approval
+    gate, so a `Resume` can continue the graph it stopped in. That is the whole of
+    the exception -- this turn ends normally and keeps nothing, which is what stops
+    the exception quietly becoming the rule.
     """
     from langchain_core.messages import AIMessage
 

@@ -149,6 +149,7 @@ true of every agent in the workspace.
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
 | `model` | optional | One entry in your `models.yaml`. Unset runs the `default:` there. A list is refused |
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
+| `interrupt_on` | optional | Tools whose every call stops for a person before it runs — see [Approval gates](#approval-gates) |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 | `source_ids` | optional | Who may open a session on this agent. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
 
@@ -176,15 +177,52 @@ refuses. **Anything below it that cannot run is left out and reported** — whic
 is what lets a freshly seeded workspace run at all when one delegate names a
 model you have not set up.
 
-### Three fields are refused
+### Approval gates
+
+`interrupt_on` names tools whose every call stops and waits for whoever is
+calling:
+
+```yaml
+interrupt_on: [execute, deploy]
+```
+
+A turn that reaches one of them ends with `stop_reason: awaiting_decision` and
+hands back the calls on `RunResult.pending`. Answer it with a `Resume` carrying
+one `Decision` per pending call — `approve` runs it, `reject` does not, and
+`respond` replaces its result with text of your own. The session waits until you
+do; a plain request sent to it instead runs, and says so with a
+`decision_discarded` event.
+
+**Whole tools, and there is no narrower rule.** Gating `execute` gates every
+shell command the agent writes, `ls` included. That is what an approval gate on
+an unrestricted shell costs: a pattern matched against the command cannot be
+made to hold — `rm -rf` and `x=rm; $x -rf` are the same command — and a gate you
+can phrase around is worse than none, because it reads as protection. If that is
+too coarse for an agent, what you want is an agent that was never granted
+`execute`.
+
+Two ways to get it wrong are refused rather than discovered later. A name no
+tool answers to is a typo, and honouring it would leave you believing a call is
+gated while it runs. Gates on a deployment with
+`KINGFISHER_CONVERSATION_ENABLED=false` cannot pause at all — there is no
+checkpointer to hold the paused turn — and would be skipped in silence.
+
+A gate on a tool *this* caller was not granted is neither of those, and is
+allowed: the grant already narrows per request, so there is simply nothing for
+the gate to fire on.
+
+Delegates inherit their parent's gates and cannot declare their own — the field
+is refused in a subagent file. The caller answering a pause is the agent's
+caller, and a delegate that could widen or narrow what stops for them would be
+deciding that on their behalf.
+
+### Two fields are refused
 
 Each with its own message rather than a generic "unknown field", because the
 generic one reads as *not supported yet* and sends you looking for a workaround:
 
 - **`permissions`** — deepagents' permissions *replace* the parent's rather than
   narrowing them, so writing this here would drop `/data` being read-only.
-- **`interrupt_on`** — what is missing is anything that surfaces an interrupt to
-  a caller.
 - **`response_format`** — it changes what a run *returns*, so the result and
   streaming both have a stake in it.
 

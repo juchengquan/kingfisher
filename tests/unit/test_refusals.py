@@ -68,6 +68,13 @@ def an_agent_missing_a_field(cfg):
     _write(_root(cfg, "agents") / "a.yaml", "name: a\n")
 
 
+def an_agent_gating_every_tool_with_a_star(cfg):
+    _write(
+        _root(cfg, "agents") / "a.yaml",
+        'name: a\ndescription: d\nsystem_prompt: |\n  Go.\ninterrupt_on: ["*"]\n',
+    )
+
+
 def a_prompt_written_so_it_reflows(cfg):
     _write(
         _root(cfg, "subagents") / "s.yaml",
@@ -233,6 +240,8 @@ REFUSALS: dict[str, Refusal] = {
         1, defect=two_agents_of_a_name),
     "kinds/agents/reading.py::read": Refusal(1, defect=an_agent_that_will_not_parse),
     "kinds/agents/spec.py::parse": Refusal(3, defect=an_agent_missing_a_field),
+    "kinds/agents/spec.py::_gated_tools": Refusal(
+        1, defect=an_agent_gating_every_tool_with_a_star),
     # Raises the error class it was handed, which is how it stayed out of the first
     # version of the rule below.
     # The walk both kinds' definition roots are read by. A subagent catalogue reaches

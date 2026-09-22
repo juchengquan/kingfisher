@@ -141,8 +141,10 @@ REFUSED: Mapping[str, str] = MappingProxyType(
             "already inherits -- including the one making /data read-only"
         ),
         "interrupt_on": (
-            "needs a checkpointer and a human to answer the interrupt, neither of "
-            "which a delegate has here"
+            "a delegate inherits its parent's gates rather than declaring its own -- "
+            "the caller answering a pause is the agent's caller, and a delegate that "
+            "could widen or narrow what stops for them would be deciding that on "
+            "their behalf"
         ),
         # Corrected 2026-09-06, and the correction is the point of the entry. This read
         # "a delegate returns prose to its caller, which is the caller's to shape --
