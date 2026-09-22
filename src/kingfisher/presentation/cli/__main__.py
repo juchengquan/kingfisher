@@ -468,11 +468,18 @@ def _run(args: argparse.Namespace) -> int:
 
     print(f"\nsession {result.session_id}  turn {result.turn_id}", file=sys.stderr)
     if not result.completed:
-        print(
-            f"stopped: {result.stop_reason} -- the answer above is what was "
-            f"reached, and what it wrote is in /derived and /memory",
-            file=sys.stderr,
-        )
+        # Two endings, and they need different words. A turn cut off at a bound
+        # reached a partial answer somebody picks up by running again on the
+        # session; a turn holding a gate reached nothing, and running again on the
+        # session is the one action that *discards* what it stopped to ask.
+        if result.pending:
+            _awaiting(result)
+        else:
+            print(
+                f"stopped: {result.stop_reason} -- the answer above is what was "
+                f"reached, and what it wrote is in /derived and /memory",
+                file=sys.stderr,
+            )
         if args.delete_session:
             # Said rather than done quietly, because the flag was asked for and
             # this is the one ending that declines it. Both ways out are named:
@@ -486,6 +493,29 @@ def _run(args: argparse.Namespace) -> int:
     if args.delete_session:
         _discard(kf, result)
     return 0
+
+
+def _awaiting(result: RunResult) -> None:
+    """What a turn that stopped at an approval gate owes the person who ran it.
+
+    The ids are printed because they are the only way to answer, and this command
+    cannot do it -- a decision goes back through `Resume`, which is a library call.
+    Saying so plainly beats the generic line this replaces, which told a reader to
+    continue the session: that supersedes the gate rather than answering it.
+    """
+    print(
+        f"stopped: {result.stop_reason} -- waiting for a decision on "
+        f"{len(result.pending)} call(s), which this command cannot give:",
+        file=sys.stderr,
+    )
+    for call in result.pending:
+        whose = f" (via {call.agent})" if call.agent else ""
+        print(f"  {call.call_id}  {call.tool}{whose}  {call.args}", file=sys.stderr)
+    print(
+        f"answer with kingfisher.Resume(session_id={result.session_id!r}, ...). "
+        f"Running again on --session {result.session_id} discards these instead",
+        file=sys.stderr,
+    )
 
 
 def _discard(kf: Kingfisher, result: RunResult) -> None:
