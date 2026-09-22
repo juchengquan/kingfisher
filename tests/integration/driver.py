@@ -47,7 +47,6 @@ from kingfisher.config import Config
 from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
 from kingfisher.domain.session import Session
 from kingfisher.infrastructure.harness.runlog import read_usage
-from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.workspace import seeding
 from kingfisher.infrastructure.workspace.layout import is_new_workspace
 from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs, ensure_session_layout
@@ -106,19 +105,6 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     for line in render(found):
         print(line)
     return 1 if failed(found) else 0
-
-
-def warn_if_unconfined(cfg: Config) -> None:
-    """Say once, on every start, when nothing is keeping `execute` off the host.
-
-    Printed rather than logged because the person who can act on it is the one
-    reading this output. Silence means confined -- an unconfined shell that announced
-    nothing would look exactly like a confined one, which is how this went unnoticed
-    until it was measured.
-    """
-    confined = confinement.shell_confinement(cfg)
-    if confined.warning:
-        print(f"WARNING   : {confined.warning}", file=sys.stderr)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -339,7 +325,6 @@ def main(argv: list[str]) -> int:
 
     print(f"workspace : {workspace}")
     print(f"model     : {cfg.models.default} via {cfg.models.resolve()[0].endpoint}")
-    warn_if_unconfined(cfg)
     if not capabilities.is_unrestricted:
         for kind in GRANTS:
             selected = getattr(capabilities, kind)

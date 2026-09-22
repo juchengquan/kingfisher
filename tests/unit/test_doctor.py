@@ -209,6 +209,22 @@ def test_an_unconfined_shell_warns_and_does_not_fail(cfg, capsys, monkeypatch):
     assert worst(tuple(checks.values())) == "warn"
 
 
+def test_an_unconfined_shell_is_reported_once_rather_than_warned_about_too(cfg):
+    """The graph `doctor` assembles to read the built-in tool set had an unconfined
+    shell of its own, so the exposure its `shell` check reports arrived a second
+    time above it, as a bare `UserWarning`, from a shell nothing ran.
+    """
+    import warnings
+    from dataclasses import replace
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        checks = {check.name: check for check in examine(replace(cfg, shell_sandbox="off"))}
+
+    assert checks["shell"].verdict == "warn", "the control: the report itself stays"
+    assert not [w for w in caught if "unconfined" in str(w.message)]
+
+
 def test_every_way_a_source_can_be_wrong_warns_and_says_something_different(
     cfg, tmp_path, shipped
 ):

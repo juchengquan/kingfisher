@@ -14,6 +14,7 @@ import os
 import platform
 import shutil
 import tempfile
+import warnings
 from concurrent import futures
 from dataclasses import replace
 from pathlib import Path
@@ -620,6 +621,50 @@ def test_a_supplied_runner_that_is_here_keeps_the_mechanism_and_adds_itself(cfg,
 def test_no_supplied_runner_says_nothing_new(cfg, session_dir):
     """The case every existing deployment is in."""
     assert not default_backend(cfg, session_dir).default.confinement.supplied
+
+
+# -- saying so --------------------------------------------------------------
+
+
+def test_an_unconfined_shell_is_warned_about_when_its_backend_is_built(cfg, session_dir):
+    """`off` was documented as warned about on every start while only `doctor` and the
+    test driver ever said it -- `kingfisher run` started unconfined and silent, and
+    `test_off_is_warned_about_on_every_start` stayed green because it checks the text
+    exists, not that anything says it.
+    """
+    with pytest.warns(UserWarning, match="unconfined"):
+        default_backend(replace(cfg, shell_sandbox=confinement.OFF), session_dir)
+
+
+def test_the_warning_is_said_once_however_many_places_build_a_backend(cfg, session_dir):
+    """A server builds a backend every turn, and a warning per turn is a log nobody reads.
+
+    Two call sites rather than a loop: a loop is one location, and would stay green
+    with the warning attributed to the caller, which repeats it for every site.
+    """
+    off = replace(cfg, shell_sandbox=confinement.OFF)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("default")
+        default_backend(off, session_dir)
+        default_backend(off, session_dir)
+
+    assert len([w for w in caught if "unconfined" in str(w.message)]) == 1
+
+
+@pytest.mark.parametrize(
+    ("mode", "runner"),
+    [(confinement.EXTERNAL, None), (confinement.OFF, Elsewhere())],
+    ids=["external", "a runner that is not here"],
+)
+def test_a_shell_confined_elsewhere_is_not_warned_about(cfg, session_dir, mode, runner):
+    """The control beside the warning: a deployment told its host is exposed when
+    nothing runs on it learns to ignore the one line that matters.
+    """
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        default_backend(replace(cfg, shell_sandbox=mode), session_dir, runner=runner)
+
+    assert not [w for w in caught if "unconfined" in str(w.message)]
 
 
 # -- the definition roots are not the agent's to edit ---------------------
