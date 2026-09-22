@@ -12,7 +12,7 @@ from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.kinds.subagents.spec import RunOn
-from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
+from tests.conftest import FakeToolCallingModel, subagents_dir
 
 ELSEWHERE = Endpoint("openai_responses", "https://api.openai.com/v1", "sk-test")
 
@@ -38,26 +38,23 @@ def _define(cfg, *definitions: str) -> None:
         (directory / f"{name}.yaml").write_text(body, encoding="utf-8")
 
 
-def _built(  # noqa: PLR0913 -- one per thing a request can say about where a
-    # delegate runs, and a fixture each for the workspace, session and patcher.
+def _built(
     cfg,
     session_dir,
-    monkeypatch,
     *,
     granted_models=ALL,
     run_on=None,
     subagents=("second-opinion",),
 ):
     """The specs kingfisher handed deepagents, by delegate name."""
-    captured = capture_build(monkeypatch)
-    build_agent(
+    assembled = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=subagents, models=granted_models),
         run_on=run_on,
     )
-    return {spec["name"]: spec for spec in captured["subagents"]}
+    return {spec["name"]: spec for spec in assembled.subagents or ()}
 
 
 def _model_of(specs, name: str) -> str:
@@ -69,7 +66,7 @@ def _model_of(specs, name: str) -> str:
 # -- it is off unless granted ---------------------------------------------
 
 
-def test_a_request_cannot_name_a_model_by_default(cfg, session_dir, monkeypatch):
+def test_a_request_cannot_name_a_model_by_default(cfg, session_dir):
     """The default is `None`, and that is the whole safety story: a caller who was
     granted nothing can choose nothing, so nothing changes for a deployment that
     never opts in.
@@ -82,7 +79,6 @@ def test_a_request_cannot_name_a_model_by_default(cfg, session_dir, monkeypatch)
         _built(
             cfg,
             session_dir,
-            monkeypatch,
             granted_models=None,
             run_on={"second-opinion": RunOn("expensive-model")},
         )
@@ -98,19 +94,17 @@ def test_only_the_models_a_deployment_granted(cfg, session_dir, monkeypatch):
         _built(
             cfg,
             session_dir,
-            monkeypatch,
             granted_models=("MiniMax-M2.5",),
             run_on={"second-opinion": RunOn("expensive-model")},
         )
 
 
-def test_a_granted_model_goes_through(cfg, session_dir, monkeypatch):
+def test_a_granted_model_goes_through(cfg, session_dir):
     _define(cfg, PINNED)
 
     specs = _built(
         cfg,
         session_dir,
-        monkeypatch,
         granted_models=("cheap-model",),
         run_on={"second-opinion": RunOn("cheap-model")},
     )
@@ -130,7 +124,7 @@ def test_the_deployment_clamps_what_a_request_asks_for():
 # -- it replaces the endpoint, never half of it ---------------------------
 
 
-def test_naming_a_model_replaces_the_file_wholesale(cfg, session_dir, monkeypatch):
+def test_naming_a_model_replaces_the_file_wholesale(cfg, session_dir):
     """`second-opinion` names `gpt-5`, which this deployment's catalogue does not define
     -- so without the override it would not build at all.
     """
@@ -139,7 +133,6 @@ def test_naming_a_model_replaces_the_file_wholesale(cfg, session_dir, monkeypatc
     specs = _built(
         cfg,
         session_dir,
-        monkeypatch,
         granted_models=("cheap-model",),
         run_on={"second-opinion": RunOn("cheap-model")},
     )
@@ -147,7 +140,7 @@ def test_naming_a_model_replaces_the_file_wholesale(cfg, session_dir, monkeypatc
     assert _model_of(specs, "second-opinion") == "cheap-model"
 
 
-def test_an_override_reaches_another_endpoint(cfg, session_dir, monkeypatch):
+def test_an_override_reaches_another_endpoint(cfg, session_dir):
     routed = replace(
         cfg,
         models=replace(
@@ -161,7 +154,6 @@ def test_an_override_reaches_another_endpoint(cfg, session_dir, monkeypatch):
     specs = _built(
         routed,
         session_dir,
-        monkeypatch,
         granted_models=("gpt-5",),
         run_on={"reviewer": RunOn("gpt-5")},
         subagents=("reviewer",),
@@ -198,7 +190,7 @@ def test_an_endpoint_the_request_may_not_reach_is_still_refused(cfg, session_dir
 # -- and it has to name something real ------------------------------------
 
 
-def test_naming_a_delegate_the_request_did_not_activate_is_refused(cfg, session_dir, monkeypatch):
+def test_naming_a_delegate_the_request_did_not_activate_is_refused(cfg, session_dir):
     """A quietly ignored override is the failure this exists to prevent: the caller
     asked for the cheap model and would have been billed for the other.
 
@@ -212,7 +204,6 @@ def test_naming_a_delegate_the_request_did_not_activate_is_refused(cfg, session_
         _built(
             cfg,
             session_dir,
-            monkeypatch,
             granted_models=ALL,
             subagents=("reviewer",),
             run_on={"second-opinion": RunOn("cheap-model")},

@@ -120,40 +120,36 @@ TOOLS = [probe_one]
 '''
 
 
-def _guard_in(captured) -> WorkspaceToolErrors | None:
+def _guard_in(built) -> WorkspaceToolErrors | None:
     """The guard the build handed to `create_deep_agent`, if it added one."""
-    for entry in captured.get("middleware") or ():
+    for entry in built.middleware or ():
         if isinstance(entry, WorkspaceToolErrors):
             return entry
     return None
 
 
-def test_the_build_guards_the_names_the_workspace_defined(cfg, session_dir, monkeypatch):
+def test_the_build_guards_the_names_the_workspace_defined(cfg, session_dir):
     """A middleware nobody installs guards nothing."""
     from kingfisher.infrastructure.harness.agent import build_agent
-    from tests.conftest import capture_build, tools_dir
+    from tests.conftest import tools_dir
 
-    captured = capture_build(monkeypatch)
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "probe.py").write_text(A_TOOL, encoding="utf-8")
 
-    build_agent(cfg, session_dir=session_dir, model=_a_model())
+    built = build_agent(cfg, session_dir=session_dir, model=_a_model())
 
-    guard = _guard_in(captured)
+    guard = _guard_in(built)
     assert guard is not None, "the build installed no WorkspaceToolErrors"
     assert "probe_one" in guard.names
 
 
-def test_a_workspace_with_no_tools_installs_no_guard(cfg, session_dir, monkeypatch):
+def test_a_workspace_with_no_tools_installs_no_guard(cfg, session_dir):
     """Nothing to guard, so nothing added."""
     from kingfisher.infrastructure.harness.agent import build_agent
-    from tests.conftest import capture_build
 
-    captured = capture_build(monkeypatch)
+    built = build_agent(cfg, session_dir=session_dir, model=_a_model())
 
-    build_agent(cfg, session_dir=session_dir, model=_a_model())
-
-    assert _guard_in(captured) is None
+    assert _guard_in(built) is None
 
 
 def _a_model():
@@ -203,7 +199,7 @@ def _graph_with_a_failing_tool(cfg, session_dir):
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=_calls("always_fails")),
-    )
+    ).graph
 
 
 def test_a_failing_workspace_tool_does_not_stop_a_run(cfg, session_dir):
@@ -256,7 +252,7 @@ def _delegate_with_a_failing_tool(cfg, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=_calls("always_fails")),
         capabilities=Capabilities(subagents=("helper",)),
-    )
+    ).graph
     return _subagent_graphs(graph)["helper"]
 
 
@@ -322,7 +318,7 @@ def test_a_helper_below_a_delegate_is_guarded_too(cfg, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=_calls("always_fails")),
         capabilities=Capabilities(subagents=("helper", "deeper")),
-    )
+    ).graph
     nested = _subagent_graphs(_subagent_graphs(graph)["helper"])["deeper"]
 
     out = nested.invoke(

@@ -83,7 +83,7 @@ def test_a_plain_function_is_offered_to_the_model_and_dispatches(cfg, session_di
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=_calls("shout", {"text": "hi"})),
         capabilities=Capabilities(tools=("shout",)),
-    )
+    ).graph
 
     assert "shout" in (registered_tools(graph) or ())
     out = graph.invoke(
@@ -105,7 +105,7 @@ def test_the_docstring_and_the_annotations_are_what_the_model_gets(cfg, session_
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-    )
+    ).graph
     node = getattr(graph, "nodes", {}).get("tools")
     wrapped = getattr(getattr(node, "bound", None), "tools_by_name", {})["shout"]
 
@@ -124,7 +124,7 @@ def test_a_plain_function_fails_the_way_a_decorated_one_does(cfg, session_dir):
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=_calls("bare_boom", {"path": "/x"})),
-    )
+    ).graph
     out = graph.invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 8}
     )
@@ -178,7 +178,7 @@ def test_a_basetool_subclass_is_named_by_its_own_field(cfg, session_dir):
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=_calls("shout", {"text": "hi"})),
-    )
+    ).graph
     out = graph.invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 8}
     )

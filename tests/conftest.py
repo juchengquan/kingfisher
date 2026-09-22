@@ -4,15 +4,21 @@ import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
-from deepagents import create_deep_agent
 from dotenv import load_dotenv
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
 from kingfisher.config import Config, Endpoint, ModelProfile, Models
 from kingfisher.infrastructure.workspace.layout import ensure_layout
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+
+if TYPE_CHECKING:
+    # Type-only, and deliberately: naming the record at runtime would pull
+    # deepagents into every collection of this file for one annotation, which is
+    # the 1.4s the lazy front door exists to avoid paying.
+    from kingfisher.infrastructure.harness.agent import Assembled
 
 
 class FakeToolCallingModel(FakeMessagesListChatModel):
@@ -125,27 +131,14 @@ def pin(kf, session_id: str, name: str) -> None:
     remember_agent(kf.workspace / "sessions" / session_id, document)
 
 
-def declared_subagents(captured: dict) -> list:
-    """The delegate specs a build activated, without the built-in one."""
-    return [s for s in captured.get("subagents") or () if s.get("name") != "general-purpose"]
+def declared_subagents(built: Assembled) -> list:
+    """The delegate specs a build activated, without the built-in one.
 
-
-def capture_build(monkeypatch) -> dict:
-    """Record the arguments `create_deep_agent` was called with -- and let the call
-    through.
-
-    Calling through costs about 30ms per test and removes the whole category. A test
-    that genuinely wants no construction can still patch it directly.
+    The specs stay plain dicts: `Assembled` records what `create_deep_agent` was
+    handed, and what it is handed for a delegate is deepagents' own `SubAgent`
+    mapping. Only the outer record gained a type.
     """
-    captured: dict = {}
-    real = create_deep_agent
-
-    def spy(**kwargs):
-        captured.update(kwargs)
-        return real(**kwargs)
-
-    monkeypatch.setattr("kingfisher.infrastructure.harness.agent.create_deep_agent", spy)
-    return captured
+    return [s for s in built.subagents or () if s.get("name") != "general-purpose"]
 
 
 def repository_root(start: Path | None = None) -> Path:

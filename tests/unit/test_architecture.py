@@ -2533,8 +2533,9 @@ def test_no_test_stubs_out_agent_construction():
                 offenders.append(f"{path.name}:{number}")
 
     assert not offenders, (
-        f"patch create_deep_agent directly at {offenders} — use conftest.capture_build, "
-        "which records the call and still lets deepagents validate it"
+        f"patch create_deep_agent directly at {offenders} — read what the build "
+        "attached off the `Assembled` record `build_agent` returns, which needs no "
+        "patching and still lets deepagents validate the call"
     )
 
 

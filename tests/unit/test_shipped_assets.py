@@ -23,7 +23,7 @@ from kingfisher.kinds.skills.catalogue import reachable
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.kinds.tools.spec import Offering
-from tests.conftest import FakeToolCallingModel, capture_build, repository_root
+from tests.conftest import FakeToolCallingModel, repository_root
 from tests.unit.test_subagent_helpers import _delegate, _tools_of
 
 
@@ -409,7 +409,7 @@ def test_every_preset_names_skills_this_distribution_actually_offers(
 
 
 def test_the_preset_that_grants_a_skill_is_told_about_it(
-    workspace_with_presets, session_dir, monkeypatch, fake_model
+    workspace_with_presets, session_dir, fake_model
 ):
     """Resolving is not being offered, and only one of the two was ever checked.
 
@@ -419,16 +419,15 @@ def test_the_preset_that_grants_a_skill_is_told_about_it(
     nothing behind it.
     """
     cfg = replace(workspace_with_presets, skills_enabled=True)
-    captured = capture_build(monkeypatch)
 
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=fake_model,
         capabilities=Capabilities(subagents=("reviewer",)),
     )
 
-    (spec,) = [s for s in captured["subagents"] if s["name"] == "reviewer"]
+    (spec,) = [s for s in built.subagents or () if s["name"] == "reviewer"]
     (scoped,) = [m for m in spec.get("middleware", []) if isinstance(m, NarrowedSkills)]
     rendered = scoped._format_skills_list(scoped._qualified())
     # Both the spellings `reviewer.yaml` writes, which is why it writes two.
@@ -451,7 +450,7 @@ def test_the_shipped_delegate_consults_its_helper_under_the_agent_that_ships_it(
         session_dir=session_dir,
         model=fake_model,
         capabilities=Capabilities(subagents=declared),
-    )
+    ).graph
 
     assert "task" in _tools_of(_delegate(graph, "reviewer")), "reviewer lost its helper"
 
@@ -467,7 +466,7 @@ def test_a_caller_naming_the_delegate_alone_gets_it_without_its_helper(
         session_dir=session_dir,
         model=fake_model,
         capabilities=Capabilities(subagents=("reviewer",)),
-    )
+    ).graph
 
     assert "task" not in _tools_of(_delegate(graph, "reviewer"))
 
@@ -993,8 +992,7 @@ def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
     seed(cfg, shipped, everything=True)
     spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["assistant"]
     offered = set(LocalMiddlewareRepository(cfg.catalogue_roots["middlewares"]).names)
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         replace(cfg, skills_enabled=True),
         agent=spec,
         session_dir=session_dir,
@@ -1003,7 +1001,7 @@ def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
 
     # By name, not by class: a `middlewares/` file is imported afresh each time the
     # catalogue is read, so the classes loaded here are not the ones built there.
-    worn = {m.name for m in captured["middleware"]} & offered
+    worn = {m.name for m in built.middleware} & offered
     assert spec.middlewares, "assistant names no middleware"
     assert spec.middlewares != ALL, "assistant takes whatever is offered again"
     assert worn == set(spec.middlewares), f"assistant runs under {sorted(worn)}"
@@ -1033,7 +1031,7 @@ def test_the_middleware_example_caps_a_turn(shipped, cfg, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=responses),
         middleware_registry={"call-cap-strict": lambda: cap(2)},
-    )
+    ).graph
     out = graph.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
         config={"configurable": {"thread_id": "cap"}, "recursion_limit": 30},
@@ -1067,7 +1065,7 @@ def test_the_note_example_reaches_a_real_tool_result(shipped, cfg, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=responses),
         middleware_registry={"tool-note": note.ToolNote},
-    )
+    ).graph
     out = graph.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
         config={"configurable": {"thread_id": "note"}, "recursion_limit": 30},
@@ -1600,12 +1598,11 @@ def test_the_compaction_example_stops_rather_than_lose_the_note(shipped):
 # -- an agent in a folder, and the delegates it reaches -----------------------
 
 
-def _scribe_delegates(cfg, session_dir, shipped, monkeypatch) -> dict:
+def _scribe_delegates(cfg, session_dir, shipped) -> dict:
     """`scribe`, built from the shipped catalogue alone, as the delegates it handed on."""
     from kingfisher.infrastructure.catalogue import Definitions
 
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         replace(cfg, skills_enabled=True),
         agent=LocalAgentRepository(shipped / "agents").specs["scribe"],
         catalogue=Definitions.from_roots(
@@ -1617,7 +1614,7 @@ def _scribe_delegates(cfg, session_dir, shipped, monkeypatch) -> dict:
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
-    return {spec["name"]: spec for spec in captured["subagents"]}
+    return {spec["name"]: spec for spec in built.subagents or ()}
 
 
 def test_an_agent_in_a_folder_is_named_by_its_field(shipped):
@@ -1661,7 +1658,7 @@ def test_every_shipped_delegate_is_named_by_some_agent(shipped):
 
 
 def test_the_nested_agent_hands_the_compiled_delegate_its_own_grant(
-    cfg, session_dir, shipped, monkeypatch
+    cfg, session_dir, shipped
 ):
     """`show-your-work` writes no `tools:`, so it is handed exactly what `scribe` was
     granted -- three tools that read a log, and nothing that reaches the network.
@@ -1669,7 +1666,7 @@ def test_the_nested_agent_hands_the_compiled_delegate_its_own_grant(
     Driven through a build, because what a compiled delegate is handed is decided when
     the agent is assembled, and shows in no definition.
     """
-    delegates = _scribe_delegates(cfg, session_dir, shipped, monkeypatch)
+    delegates = _scribe_delegates(cfg, session_dir, shipped)
 
     assert {"redactor", "show-your-work"} <= set(delegates)
     answering = delegates["show-your-work"]["runnable"].nodes["answer"].bound

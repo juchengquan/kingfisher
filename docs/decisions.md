@@ -3734,6 +3734,57 @@ path claim that a mapping would have caught passes in silence. Publishing the ty
 would also put a name through the front door under a rule that has removed eleven.
 *(2026-09-18.)*
 
+**Taken after all: a build says what it attached.** *Not taken: splitting the build
+plan* above declined this, and the decline was right on the evidence it had. What it
+lacked was a benefit: it weighed the cost against "no behaviour change", and a
+rearrangement that changes no behaviour is not worth 21 files. The benefit arrived
+from the other direction. Six functions were defined inside `build_agent` and no test
+could call any of them, while `declared_middleware` -- which left this file under the
+same criterion -- is called directly by twenty-six. Three of the six came out first;
+this is the other half, and `build_agent` returns `Assembled` rather than a graph.
+
+**The cost that entry quoted was an undercount, and the corrected figure is the
+useful part of this one.** It said 21 test files and a return type 29 call sites
+consume. Measured before starting: 22 files reach the spy, 34 files call
+`build_agent` at all, and 58 of 148 call sites consume the return -- of which two are
+in `src/`. The rest is tests, which is the shape that made it affordable: the tests
+were being edited anyway, because deleting the spy is the point.
+
+**What `capture_build` was is why it had to go.** It monkeypatched
+`create_deep_agent` by string path and read the kwargs back, which made
+`create_deep_agent`'s argument list a contract that nothing declared and that three
+separate helpers restated by hand -- `_shipped_provisions`, and the hand-built
+mappings in `test_middleware_settings`. `Assembled` holds every keyword, not the ten
+a test happens to read: `checkpointer` is asserted on by nothing, and `interrupt_on`
+was asserted on by nothing until the commit that added it, which is exactly the case
+a record of only-what-is-interesting fails on the next time.
+
+**`_graph_for` returns two shapes, and that is the design rather than an oversight.**
+This was settled the other way first -- the service would unwrap and `Assembled` would
+stay inside the harness -- and it was reopened during the work, when three tests
+turned out to be unwritable under it. One asserts that what the backend factory
+returned is what the agent was built on, and says in its own docstring that it reads
+the arguments because *a service that computed the backend and then dropped it would
+satisfy every other test in this file*; the other two need the middleware list. All
+three are about the service's wiring, so reproducing a direct `build_agent` call in
+them would not weaken the tests, it would delete them. So a build kingfisher made
+comes back as `Assembled` and a graph the deployment supplied comes back as itself.
+Returning the record for both would mean inventing one with every field empty -- a
+record asserting a build that never ran, and one that would then be asserted on.
+`_admitted` is the only caller in `src/` and unwraps with `isinstance`, not
+`getattr(x, "graph", x)`: a duck test there would accept anything carrying a `graph`
+attribute, which is how the backend seam lost its shell once already.
+
+*Mutation-tested, and one of the two mutations is weaker than it looks. Making the
+record report a backend the graph never got reddens exactly one test -- the factory
+one above -- which is the drift guard working: `assemble` builds one mapping and
+spends it twice, on the call and on the record, so the two cannot disagree. Dropping
+`interrupt_on` from the record reddens all six gate tests rather than the two that
+assert on it, because the field's absence breaks construction for any build that
+gates. That proves the field is load-bearing and proves nothing about the individual
+assertions, which is worth saying rather than counting it as specificity it does not
+have. (2026-09-22.)*
+
 *`nothing-at-rest-on-this-machine` went on 2026-09-04 -- several more have gone
 since, and `docs/README.md` names them -- and its removal is the sharpest example
 this file has of why a status line is not evidence. It was audited decision by decision on 2026-09-01 and still reported

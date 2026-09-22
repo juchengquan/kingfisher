@@ -12,7 +12,7 @@ from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.rules import refuse_cycles
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
-from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
+from tests.conftest import FakeToolCallingModel, subagents_dir
 
 REVIEWER = """name: reviewer
 description: Checks figures.
@@ -61,12 +61,15 @@ def _define(cfg, *definitions: str) -> None:
 
 
 def _build(cfg, session_dir, *, subagents=("reviewer", "second-opinion")):
+    # `.graph` here rather than inside the accessors below: every one of them walks
+    # `.nodes`, so pushing the unwrap down would work and hide which layer holds a
+    # record -- and each returns something truthy either way, so nothing would say so.
     return build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=subagents),
-    )
+    ).graph
 
 
 def _delegate(graph, name: str):
@@ -286,7 +289,7 @@ def test_a_delegate_consults_its_helper_end_to_end(cfg, session_dir):
             ]
         ),
         capabilities=Capabilities(subagents=("reviewer", "second-opinion")),
-    )
+    ).graph
 
     out = graph.invoke(
         {"messages": [{"role": "user", "content": "go"}]}, {"recursion_limit": 20}
@@ -484,45 +487,41 @@ def _helper_specs(spec) -> dict:
     return {}
 
 
-def test_a_helper_runs_the_model_of_the_delegate_that_summoned_it(
-    cfg, session_dir, monkeypatch
-):
+def test_a_helper_runs_the_model_of_the_delegate_that_summoned_it(cfg, session_dir):
     """A definition naming no model runs whatever reached it, and one level down that is
     the delegate above -- not the main agent.
     """
     _define(cfg, CHEAP_REVIEWER, HELPER)
-    captured = capture_build(monkeypatch)
     main = FakeToolCallingModel(responses=[AIMessage(content="ok")])
 
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=main,
         capabilities=Capabilities(subagents=("reviewer", "second-opinion")),
     )
 
-    parent = {spec["name"]: spec for spec in captured["subagents"]}["reviewer"]
+    parent = {spec["name"]: spec for spec in built.subagents or ()}["reviewer"]
     helper = _helper_specs(parent)["second-opinion"]
 
     assert helper["model"] is not main, "the helper inherited the main agent's model"
     assert helper["model"].model == "cheap-model"
 
 
-def test_one_helper_under_two_parents_is_two_delegates(cfg, session_dir, monkeypatch):
+def test_one_helper_under_two_parents_is_two_delegates(cfg, session_dir):
     """A helper naming no model runs whatever reached it, so the same name under two
     differently-pinned parents is two different agents.
     """
     _define(cfg, CHEAP_REVIEWER, ELSEWHERE_REVIEWER, HELPER)
-    captured = capture_build(monkeypatch)
 
-    build_agent(
+    assembled = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reviewer", "auditor", "second-opinion")),
     )
 
-    built = {spec["name"]: spec for spec in captured["subagents"]}
+    built = {spec["name"]: spec for spec in assembled.subagents or ()}
     under_cheap = _helper_specs(built["reviewer"])["second-opinion"]
     under_elsewhere = _helper_specs(built["auditor"])["second-opinion"]
 
@@ -531,19 +530,18 @@ def test_one_helper_under_two_parents_is_two_delegates(cfg, session_dir, monkeyp
 
 
 def test_a_helper_under_an_unpinned_delegate_still_runs_the_agents_model(
-    cfg, session_dir, monkeypatch
+    cfg, session_dir
 ):
     """The other half, and the one that must not have changed."""
     _define(cfg, REVIEWER, HELPER)
-    captured = capture_build(monkeypatch)
     main = FakeToolCallingModel(responses=[AIMessage(content="ok")])
 
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=main,
         capabilities=Capabilities(subagents=("reviewer", "second-opinion")),
     )
 
-    parent = {spec["name"]: spec for spec in captured["subagents"]}["reviewer"]
+    parent = {spec["name"]: spec for spec in built.subagents or ()}["reviewer"]
     assert _helper_specs(parent)["second-opinion"]["model"] is main

@@ -7,7 +7,7 @@ import pytest
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
-from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
+from tests.conftest import FakeToolCallingModel, subagents_dir
 
 SPEC = """
 name: {name}
@@ -142,16 +142,15 @@ def test_two_different_names_are_not_a_clash(cfg, session_dir):
 # -- what the model is handed ---------------------------------------------
 
 
-def test_the_activated_delegate_keeps_its_plain_name(cfg, session_dir, monkeypatch):
+def test_the_activated_delegate_keeps_its_plain_name(cfg, session_dir):
     """A reference is how a *request* says which; the model reaches a delegate by
     `subagent_type`, and that stays `surveyor`.
     """
     _two_vendors(cfg)
-    captured = capture_build(monkeypatch)
 
-    _build(cfg, session_dir, ("team/surveyor.yaml::surveyor",))
+    built = _build(cfg, session_dir, ("team/surveyor.yaml::surveyor",))
 
-    named = [spec["name"] for spec in captured["subagents"]]
+    named = [spec["name"] for spec in built.subagents or ()]
 
     assert "surveyor" in named, named
     assert "team/surveyor.yaml::surveyor" not in named, (

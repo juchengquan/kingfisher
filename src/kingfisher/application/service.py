@@ -85,6 +85,7 @@ from kingfisher.infrastructure.harness.activation import (
     indistinct_delegates,
 )
 from kingfisher.infrastructure.harness.agent import (
+    Assembled,
     build_agent,
     builtin_tool_names,
 )
@@ -454,7 +455,17 @@ class Kingfisher(Sessions, Disposal):
         *,
         source_ids: Held | None = None,
     ) -> Any:
-        """The graph that serves one request, rooted at its session."""
+        """What serves one request, rooted at its session.
+
+        **Two shapes, and the asymmetry is the point rather than an oversight.** A
+        build kingfisher made comes back as `Assembled`, carrying what was attached;
+        a graph the deployment supplied comes back as itself, because there is no
+        record of a build that did not happen here. Returning the record either way
+        would mean inventing one with every field empty -- a record asserting a build
+        that never ran, which is worse than the union, since it would be asserted on.
+        Callers take `.graph` where they need the graph; `_admitted` is the only one
+        in `src/`.
+        """
         if self._graph is not None:
             if not request.capabilities.is_unrestricted:
                 msg = "cannot honour request.capabilities against a pre-built graph"
@@ -721,13 +732,18 @@ class Kingfisher(Sessions, Disposal):
         # answering it and dropped where this turn supersedes it. Before the graph is
         # built, because a resume runs on a saver that already holds the pause.
         checkpointer, resume, discarded = self._take_pause(request, session, checkpointer)
-        graph = self._graph_for(
+        built = self._graph_for(
             request,
             session.directory,
             capabilities=allowed,
             checkpointer=checkpointer,
             source_ids=source_ids,
         )
+        # `isinstance` rather than `getattr(built, "graph", built)`: the two shapes
+        # `_graph_for` returns are named types, and a duck test here would also
+        # accept anything else carrying a `graph` attribute -- which is how the
+        # backend seam lost its shell once already.
+        graph = built.graph if isinstance(built, Assembled) else built
 
         return Admitted(
             request=request,

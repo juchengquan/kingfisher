@@ -12,8 +12,9 @@ from kingfisher.application.service import Kingfisher
 from kingfisher.domain.access import UNSCOPED, AccessError, parse
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
+from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
-from tests.conftest import an_agent, capture_build, tools_dir
+from tests.conftest import an_agent, tools_dir
 
 TOOL = '''
 def line_count(path: str) -> str:
@@ -62,18 +63,28 @@ def session_at(kf, name: str):
     return session
 
 
-def built(kf, monkeypatch, source_ids, name: str):
-    """The tool names handed to `create_deep_agent` for this caller."""
-    captured = capture_build(monkeypatch)
+def built(kf, source_ids, name: str):
+    """The tool names handed to `create_deep_agent` for this caller.
+
+    `build_agent` directly rather than through `_graph_for`, because the record is
+    the harness's own and the service hands back the graph alone -- there being no
+    record for the pre-built graph its other branch returns. Nothing is lost here
+    that this helper had: it already supplied its own session and resolved the
+    grant itself, so what the service adds around that is not what these assert on.
+    """
     held = tuple(source_ids) if source_ids is not UNSCOPED else source_ids
-    kf._graph_for(
-        Request(task="t", agent="surveyor"),
-        session_at(kf, name),
+    session = session_at(kf, name)
+    assembled = build_agent(
+        kf.cfg,
+        agent=kf.agent_named("surveyor", source_ids=held),
+        held=kf.held_for(held),
+        backend=default_backend(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf._effective_grants(held),
+        session_dir=session,
+        catalogue=kf.catalogue,
         checkpointer=None,
-        source_ids=held,
     )
-    return [getattr(t, "name", getattr(t, "__name__", "")) for t in captured["tools"] or ()]
+    return [getattr(t, "name", getattr(t, "__name__", "")) for t in assembled.tools or ()]
 
 
 # -- who is calling ---------------------------------------------------------
@@ -188,20 +199,20 @@ def test_the_deployments_own_grants_still_bound_a_caller(policied):
 # -- what the graph is built from -------------------------------------------
 
 
-def test_a_caller_the_audience_admits_gets_the_tool(policied, monkeypatch):
-    assert "line_count" in built(policied_kf(policied), monkeypatch, ["A"], "s1")
+def test_a_caller_the_audience_admits_gets_the_tool(policied):
+    assert "line_count" in built(policied_kf(policied), ["A"], "s1")
 
 
-def test_a_caller_the_audience_excludes_does_not(policied, monkeypatch):
+def test_a_caller_the_audience_excludes_does_not(policied):
     """Not filtered after the fact -- never attached."""
-    assert "line_count" not in built(policied_kf(policied), monkeypatch, ["B"], "s2")
+    assert "line_count" not in built(policied_kf(policied), ["B"], "s2")
 
 
-def test_unscoped_still_gets_everything(policied, monkeypatch):
+def test_unscoped_still_gets_everything(policied):
     """No caller means no narrowing, which is what keeps `declares(None)` the exact
     answer it was before audiences existed.
     """
-    assert "line_count" in built(policied_kf(policied), monkeypatch, UNSCOPED, "s3")
+    assert "line_count" in built(policied_kf(policied), UNSCOPED, "s3")
 
 
 def policied_kf(cfg):
@@ -270,7 +281,7 @@ def reported(kf, source_ids, name: str):
         capabilities=kf._effective_grants(held_names),
         checkpointer=None,
         source_ids=held_names,
-    )
+    ).graph
     return withheld_by_kind(
         kf._effective_grants(held_names),
         kf.cfg,
@@ -305,7 +316,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         capabilities=grants,
         checkpointer=None,
         source_ids=held,
-    )
+    ).graph
     from kingfisher.application.reporting import withheld_by_kind
 
     kinds = dict(
@@ -368,19 +379,18 @@ def test_a_skill_audience_narrows_the_selection(with_skills):
     ).skills == ("review",)
 
 
-def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills, monkeypatch):
+def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
     """The half a selection alone does not prove."""
-    captured = capture_build(monkeypatch)
     kf = Kingfisher(with_skills, backend=default_backend)
     held = ("B",)
-    kf._graph_for(
+    built = kf._graph_for(
         Request(task="t", agent="skilled"),
         session_at(kf, "sk1"),
         capabilities=kf._effective_grants(held),
         checkpointer=None,
         source_ids=held,
     )
-    narrowed = [m for m in captured["middleware"] if type(m).__name__ == "NarrowedSkills"]
+    narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
     advertised = {name for m in narrowed for name in m._allowed}
 
     assert not any(name.endswith("::audit") for name in advertised)
@@ -398,7 +408,7 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
         capabilities=grants,
         checkpointer=None,
         source_ids=held,
-    )
+    ).graph
     report = withheld_by_kind(
         grants,
         kf.cfg,
@@ -446,19 +456,18 @@ def test_a_skill_audience_written_qualified_hides_the_bare_name_too(with_skills)
     assert "audit" in skills_withheld(kf, ("A",), ("review",))
 
 
-def test_a_caller_the_audience_admits_is_told_about_both(with_skills, monkeypatch):
+def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
     """So the assertion above is not passing because nothing was advertised."""
-    captured = capture_build(monkeypatch)
     kf = Kingfisher(with_skills, backend=default_backend)
     held = ("A",)
-    kf._graph_for(
+    built = kf._graph_for(
         Request(task="t", agent="skilled"),
         session_at(kf, "sk2"),
         capabilities=kf._effective_grants(held),
         checkpointer=None,
         source_ids=held,
     )
-    narrowed = [m for m in captured["middleware"] if type(m).__name__ == "NarrowedSkills"]
+    narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
     advertised = {name for m in narrowed for name in m._allowed}
 
     assert any(name.endswith("::audit") for name in advertised)

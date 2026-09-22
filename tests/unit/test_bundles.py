@@ -19,7 +19,7 @@ from kingfisher.kinds.tools.spec import Offering, tool_name
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
 from kingfisher.presentation.cli.health import examine, worst
 from kingfisher.presentation.cli.listing import _catalogue, failed
-from tests.conftest import FakeToolCallingModel, capture_build
+from tests.conftest import FakeToolCallingModel
 
 DEFINITION = "name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
 
@@ -372,67 +372,71 @@ def workspace_with_bundle(cfg, definition=PRIVATE_OWNER, private="probe"):
     )
 
 
-def only(captured, name):
-    """The delegate we are asking about, as deepagents received it."""
-    (found,) = [s for s in captured["subagents"] if s["name"] == name]
+def only(built, name):
+    """The delegate we are asking about, as deepagents received it.
+
+    Takes the record and returns one of deepagents' `SubAgent` mappings, so the
+    outer read is an attribute and everything the callers do with the result stays
+    a subscript. Imported by `test_portable_subagents` too, which is why the
+    parameter moved rather than the call sites.
+    """
+    (found,) = [s for s in built.subagents if s["name"] == name]
     return found
 
 
-def built_subagent(cfg, session_dir, monkeypatch):
+def built_subagent(cfg, session_dir):
     """The one delegate this workspace defines, as deepagents received it."""
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("surveyor",), tools=("shared",)),
     )
-    return only(captured, "surveyor")
+    return only(built, "surveyor")
 
 
-def test_a_delegate_holds_the_tool_from_its_own_folder(cfg, session_dir, monkeypatch):
+def test_a_delegate_holds_the_tool_from_its_own_folder(cfg, session_dir):
     """The request granted `shared` and never heard of `probe`."""
     workspace_with_bundle(cfg)
 
-    subagent = built_subagent(cfg, session_dir, monkeypatch)
+    subagent = built_subagent(cfg, session_dir)
 
     assert {tool_name(t) for t in subagent["tools"]} == {"probe", "shared"}
 
 
-def test_a_private_tool_survives_a_request_that_granted_no_tools(cfg, session_dir, monkeypatch):
+def test_a_private_tool_survives_a_request_that_granted_no_tools(cfg, session_dir):
     """The decision, stated as a test."""
     workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
-    captured = capture_build(monkeypatch)
 
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("surveyor",), tools=()),
     )
 
-    subagent = only(captured, "surveyor")
+    subagent = only(built, "surveyor")
     assert {tool_name(t) for t in subagent["tools"]} == {"probe"}
 
 
-def test_a_private_tool_is_in_the_delegates_allowlist(cfg, session_dir, monkeypatch):
+def test_a_private_tool_is_in_the_delegates_allowlist(cfg, session_dir):
     """The failure this would otherwise have been is silent rather than absent."""
     workspace_with_bundle(cfg)
 
-    subagent = built_subagent(cfg, session_dir, monkeypatch)
+    subagent = built_subagent(cfg, session_dir)
 
     (allowlist,) = [m for m in subagent["middleware"] if isinstance(m, ToolAllowlist)]
     assert "probe" in allowlist._allowed
     assert "shared" in allowlist._allowed
 
 
-def test_the_bundle_wins_a_name_the_catalogue_also_defines(cfg, session_dir, monkeypatch):
+def test_the_bundle_wins_a_name_the_catalogue_also_defines(cfg, session_dir):
     """One candidate answers each name, so `duplicated` still holds and nothing is
     silently replaced -- the order is stated before the lookup.
     """
     workspace_with_bundle(cfg, private="shared")
 
-    subagent = built_subagent(cfg, session_dir, monkeypatch)
+    subagent = built_subagent(cfg, session_dir)
 
     (held,) = subagent["tools"]
     assert tool_name(held) == "shared"
@@ -440,22 +444,19 @@ def test_the_bundle_wins_a_name_the_catalogue_also_defines(cfg, session_dir, mon
     assert held() == "from the bundle"
 
 
-def test_the_main_agent_never_holds_another_delegates_private_tool(
-    cfg, session_dir, monkeypatch
-):
+def test_the_main_agent_never_holds_another_delegates_private_tool(cfg, session_dir):
     """The point of the whole feature."""
     workspace_with_bundle(cfg)
-    captured = capture_build(monkeypatch)
 
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("surveyor",)),
     )
 
-    assert "probe" not in {tool_name(t) for t in captured["tools"]}
-    assert "shared" in {tool_name(t) for t in captured["tools"]}
+    assert "probe" not in {tool_name(t) for t in built.tools or ()}
+    assert "shared" in {tool_name(t) for t in built.tools or ()}
 
 
 # -- the skills half --------------------------------------------------------
@@ -475,7 +476,7 @@ def with_private_skill(cfg, name="sampling"):
     )
 
 
-def test_a_delegate_is_told_about_the_skill_in_its_own_folder(cfg, session_dir, monkeypatch):
+def test_a_delegate_is_told_about_the_skill_in_its_own_folder(cfg, session_dir):
     """`skills:` defaults to none, so a delegate saying nothing gets no index at all.
 
     Rendered rather than read off `_allowed`, and that is the whole guard: the
@@ -486,7 +487,7 @@ def test_a_delegate_is_told_about_the_skill_in_its_own_folder(cfg, session_dir, 
     workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
     with_private_skill(cfg)
 
-    subagent = built_subagent(cfg, session_dir, monkeypatch)
+    subagent = built_subagent(cfg, session_dir)
 
     (narrowed,) = [m for m in subagent["middleware"] if isinstance(m, NarrowedSkills)]
     assert any(key.endswith("sampling") for key in narrowed._allowed)
@@ -1002,23 +1003,20 @@ def dispatched_by(subagent) -> tuple[str, ...]:
     return tuple(sorted(getattr(getattr(node, "bound", None), "tools_by_name", None) or {}))
 
 
-def test_a_compiled_delegate_is_handed_the_tools_in_its_own_folder(
-    cfg, session_dir, monkeypatch
-):
+def test_a_compiled_delegate_is_handed_the_tools_in_its_own_folder(cfg, session_dir):
     """`compiled` took every parameter `as_subagent` resolves except this one, so a
     compiled delegate's bundle reached the listing and never the graph: `probe
     [private tool]` printed under a delegate that dispatched nothing.
     """
     compiled_bundle(cfg)
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("surveyor",)),
     )
 
-    assert "probe" in dispatched_by(only(captured, "surveyor"))
+    assert "probe" in dispatched_by(only(built, "surveyor"))
 
 
 def test_a_compiled_delegates_bundle_wins_a_name_the_catalogue_also_defines(cfg, tmp_path):
@@ -1230,15 +1228,14 @@ def test_the_shipped_bundles_tool_loads_and_masks(tmp_path, shipped):
 
 
 def test_the_shipped_bundle_takes_nothing_from_the_catalogue(
-    workspace_with_presets, session_dir, monkeypatch
+    workspace_with_presets, session_dir
 ):
     """`redactor.yaml` writes `tools: []`, so it holds its own tool and no shared one.
 
     Without the line it held every catalogue tool, `sql_query` and `http_fetch` among
     them, on the delegate whose job is being careful with what it returns.
     """
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         workspace_with_presets,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
@@ -1246,6 +1243,6 @@ def test_the_shipped_bundle_takes_nothing_from_the_catalogue(
     )
 
     (allowlist,) = [
-        m for m in only(captured, "redactor")["middleware"] if isinstance(m, ToolAllowlist)
+        m for m in only(built, "redactor")["middleware"] if isinstance(m, ToolAllowlist)
     ]
     assert set(allowlist._allowed) == {"ls", "glob", "grep", "mask_secrets"}

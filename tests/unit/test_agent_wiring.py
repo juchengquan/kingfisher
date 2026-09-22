@@ -19,7 +19,6 @@ from kingfisher.infrastructure.prompting import system_prompt
 from kingfisher.kinds.agents.spec import AgentSpec
 from tests.conftest import (
     FakeToolCallingModel,
-    capture_build,
     declared_subagents,
     repository_root,
 )
@@ -56,7 +55,7 @@ def test_agent_runs_shell_and_writes_files(cfg, session_dir):
     agent = build_agent(
         cfg,
         session_dir=session_dir,
-        model=FakeToolCallingModel(responses=responses))
+        model=FakeToolCallingModel(responses=responses)).graph
     out = agent.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
         config={"recursion_limit": 12},
@@ -68,15 +67,14 @@ def test_agent_runs_shell_and_writes_files(cfg, session_dir):
     assert (session_dir / "out.txt").read_text().strip() == "42"
 
 
-def test_planning_and_permissions_are_wired(cfg, monkeypatch, session_dir):
+def test_planning_and_permissions_are_wired(cfg, session_dir):
     """deepagents 0.7.6 ships no planning tool, and /data must be write-denied."""
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
 
-    middleware_names = {type(m).__name__ for m in captured["middleware"]}
+    middleware_names = {type(m).__name__ for m in built.middleware}
     assert "TodoListMiddleware" in middleware_names
 
     # Two routes are read-only for every request, whatever it was granted:
@@ -85,35 +83,35 @@ def test_planning_and_permissions_are_wired(cfg, monkeypatch, session_dir):
     # this and a *removed* one still does.
     # `delete` maps to the `write` operation, so one rule covers write/edit/delete.
     read_only = {
-        rule.paths[0] for rule in captured["permissions"]
+        rule.paths[0] for rule in built.permissions
         if rule.mode == "deny" and "write" in rule.operations
     }
     assert read_only == {"/.harness/**", "/data/**", "/skills/**"}
 
-    assert captured["system_prompt"] == system_prompt(cfg)
-    # M2 capabilities are off by default, so neither is passed through.
-    assert "skills" not in captured
-    assert "memory" not in captured
+    assert built.system_prompt == system_prompt(cfg)
+    # M2 capabilities are off by default, so neither is passed through. `is None`
+    # rather than a key check: the record declares every keyword, so "not passed"
+    # is the default value rather than an absent entry.
+    assert built.skills is None
+    assert built.memory is None
 
 
 def test_enabling_a_capability_wires_the_middleware_not_just_the_prompt(
     cfg,
-    monkeypatch,
     session_dir,
 ):
     """One switch drives both, so the prompt cannot describe a missing capability."""
     from dataclasses import replace
 
-    captured = capture_build(monkeypatch)
-    build_agent(
+    built = build_agent(
         replace(cfg, skills_enabled=True, memory_enabled=True),
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
 
-    assert captured["skills"] == skills_sources()
-    assert captured["memory"] == ["/memory/AGENTS.md"]
-    assert "/skills" in captured["system_prompt"]
+    assert built.skills == skills_sources()
+    assert built.memory == ["/memory/AGENTS.md"]
+    assert "/skills" in built.system_prompt
 
 
 def test_system_prompt_carries_no_host_paths_or_session_ids():
@@ -134,7 +132,7 @@ def test_the_agent_exposes_the_expected_tool_surface(cfg, session_dir):
     agent = build_agent(
         cfg,
         session_dir=session_dir,
-        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")])).graph
 
     names = set()
     for node in agent.nodes.values():
@@ -167,7 +165,7 @@ def _named(spec_middleware, **kwargs) -> AgentSpec:
     )
 
 
-def test_an_agents_own_middleware_is_wrapped_around_the_agent(cfg, monkeypatch, session_dir):
+def test_an_agents_own_middleware_is_wrapped_around_the_agent(cfg, session_dir):
     """`middlewares:` in an agent file did nothing to the agent.
 
     Measured before it was fixed, one build, same registry, same name: the delegate's
@@ -175,9 +173,7 @@ def test_an_agents_own_middleware_is_wrapped_around_the_agent(cfg, monkeypatch, 
     that covers the cheap half of a run and not the expensive half is worse than
     none, because it looks like coverage.
     """
-    captured = capture_build(monkeypatch)
-
-    build_agent(
+    built = build_agent(
         cfg,
         agent=_named(("audit",)),
         session_dir=session_dir,
@@ -185,19 +181,17 @@ def test_an_agents_own_middleware_is_wrapped_around_the_agent(cfg, monkeypatch, 
         middleware_registry={"audit": _Audit},
     )
 
-    assert "_Audit" in {type(m).__name__ for m in captured["middleware"]}
+    assert "_Audit" in {type(m).__name__ for m in built.middleware}
 
 
 def test_the_agents_middleware_runs_after_the_narrowing_kingfisher_applied(
-    cfg, monkeypatch, session_dir
+    cfg, session_dir
 ):
     """Last, for the reason `as_subagent` already gives for a delegate's: a deployment's
     middleware should see the tool and skill narrowing rather than running ahead of
     it.
     """
-    captured = capture_build(monkeypatch)
-
-    build_agent(
+    built = build_agent(
         cfg,
         agent=_named(("audit",)),
         session_dir=session_dir,
@@ -206,7 +200,7 @@ def test_the_agents_middleware_runs_after_the_narrowing_kingfisher_applied(
         capabilities=Capabilities(builtin_tools=("read_file",)),
     )
 
-    names = [type(m).__name__ for m in captured["middleware"]]
+    names = [type(m).__name__ for m in built.middleware]
     assert names[-1] == "_Audit", f"the deployment's middleware is not last: {names}"
     assert "ToolAllowlist" in names, "nothing narrowed, so this proves nothing"
 
@@ -241,13 +235,11 @@ def test_a_request_may_not_quietly_drop_the_agents_middleware(cfg, session_dir):
         )
 
 
-def test_an_agent_that_names_none_wires_none(cfg, monkeypatch, session_dir):
+def test_an_agent_that_names_none_wires_none(cfg, session_dir):
     """Omission grants nothing here, like `skills` and `subagents` -- so a deployment
     with a registry does not wrap every agent in it by default.
     """
-    captured = capture_build(monkeypatch)
-
-    build_agent(
+    built = build_agent(
         cfg,
         agent=_named(None),
         session_dir=session_dir,
@@ -255,7 +247,7 @@ def test_an_agent_that_names_none_wires_none(cfg, monkeypatch, session_dir):
         middleware_registry={"audit": _Audit},
     )
 
-    assert "_Audit" not in {type(m).__name__ for m in captured["middleware"]}
+    assert "_Audit" not in {type(m).__name__ for m in built.middleware}
 
 
 # -- middleware that replaces deepagents' own ------------------------------
@@ -305,12 +297,10 @@ def test_deepagents_own_middleware_is_discovered_across_the_package():
     assert "AgentMiddleware" not in found, "the base class is not one of deepagents' own"
 
 
-def test_replacing_deepagents_filesystem_warns_and_still_runs(cfg, monkeypatch, session_dir):
+def test_replacing_deepagents_filesystem_warns_and_still_runs(cfg, session_dir):
     """The whole point: said, not forbidden."""
-    captured = capture_build(monkeypatch)
-
     with pytest.warns(UserWarning, match="deepagents merges by name"):
-        build_agent(
+        built = build_agent(
             cfg,
             agent=_named(("audit",)),
             session_dir=session_dir,
@@ -318,7 +308,7 @@ def test_replacing_deepagents_filesystem_warns_and_still_runs(cfg, monkeypatch, 
             middleware_registry={"audit": FilesystemMiddleware},
         )
 
-    assert "FilesystemMiddleware" in {m.name for m in captured["middleware"]}
+    assert "FilesystemMiddleware" in {m.name for m in built.middleware}
 
 
 def test_the_warning_names_both_of_the_deployments_two_names():
@@ -353,13 +343,11 @@ def test_replacing_one_deepagents_needs_says_so_more_loudly():
     assert "deepagents merges by name" in ordinary, "still said, just not as loudly"
 
 
-def test_a_middleware_named_its_own_thing_warns_about_nothing(cfg, monkeypatch, session_dir):
+def test_a_middleware_named_its_own_thing_warns_about_nothing(cfg, session_dir):
     """The quiet path, which is every deployment that named its classes normally."""
-    captured = capture_build(monkeypatch)
-
     with warnings.catch_warnings(record=True) as recorded:
         warnings.simplefilter("always")
-        build_agent(
+        built = build_agent(
             cfg,
             agent=_named(("audit",)),
             session_dir=session_dir,
@@ -368,7 +356,7 @@ def test_a_middleware_named_its_own_thing_warns_about_nothing(cfg, monkeypatch, 
         )
 
     assert _replacement_warnings(recorded) == []
-    assert "_Audit" in {m.name for m in captured["middleware"]}
+    assert "_Audit" in {m.name for m in built.middleware}
 
 
 def test_a_registered_instance_is_refused_rather_than_called(cfg, session_dir):
@@ -411,7 +399,7 @@ def test_the_sweep_refuses_anything_uncallable_not_only_a_middleware(cfg):
     assert "a dict" in str(raised.value)
 
 
-def test_a_registered_class_is_built_again_for_every_graph(cfg, monkeypatch, session_dir):
+def test_a_registered_class_is_built_again_for_every_graph(cfg, session_dir):
     """The lifecycle the refusal above gives as its reason, held to it.
 
     The message says a middleware is built again for every graph, and that is the
@@ -421,19 +409,18 @@ def test_a_registered_class_is_built_again_for_every_graph(cfg, monkeypatch, ses
     already describes the cache that would end that as the thing to reach for above
     roughly 150 concurrent turns.
     """
-    built = []
+    seen = []
     for _ in range(2):
-        captured = capture_build(monkeypatch)
-        build_agent(
+        assembled = build_agent(
             cfg,
             agent=_named(("audit",)),
             session_dir=session_dir,
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             middleware_registry={"audit": _Audit},
         )
-        built.append(next(m for m in captured["middleware"] if type(m) is _Audit))
+        seen.append(next(m for m in assembled.middleware if type(m) is _Audit))
 
-    first, second = built
+    first, second = seen
     assert first is not second, (
         "two graphs shared one middleware object, so a counter in it would carry "
         "across them -- which is the thing the instance refusal promises cannot happen"
@@ -465,13 +452,12 @@ class _WantsEverything(AgentMiddleware):
         super().__init__()
 
 
-def _with_a_delegate(cfg, monkeypatch, session_dir, injected):
+def _with_a_delegate(cfg, session_dir, injected):
     """One build in which an agent and its delegate both name the same middleware."""
     (cfg.workspace / "subagents").mkdir(exist_ok=True)
     (cfg.workspace / "subagents" / "reviewer.yaml").write_text(_DELEGATE, encoding="utf-8")
-    captured = capture_build(monkeypatch)
 
-    build_agent(
+    built = build_agent(
         cfg,
         agent=_named(("wants",), subagents=("reviewer",)),
         session_dir=session_dir,
@@ -479,16 +465,17 @@ def _with_a_delegate(cfg, monkeypatch, session_dir, injected):
         middleware_registry={"wants": _WantsEverything},
     )
 
-    delegate = next(s for s in declared_subagents(captured) if s["name"] == "reviewer")
+    # `delegate["middleware"]` stays a subscript: the record types what
+    # `create_deep_agent` was handed, and what it is handed for a delegate is
+    # deepagents' own `SubAgent` mapping. Only the outer record gained a type.
+    delegate = next(s for s in declared_subagents(built) if s["name"] == "reviewer")
     return (
-        next(m for m in captured["middleware"] if type(m) is _WantsEverything),
+        next(m for m in built.middleware if type(m) is _WantsEverything),
         next(m for m in delegate["middleware"] if type(m) is _WantsEverything),
     )
 
 
-def test_a_delegate_is_handed_its_own_model_rather_than_the_agents(
-    cfg, monkeypatch, session_dir
-):
+def test_a_delegate_is_handed_its_own_model_rather_than_the_agents(cfg, session_dir):
     """The bug this would have shipped with: a delegate's middleware running the
     agent's model.
 
@@ -500,14 +487,14 @@ def test_a_delegate_is_handed_its_own_model_rather_than_the_agents(
     """
     injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
 
-    mine, theirs = _with_a_delegate(cfg, monkeypatch, session_dir, injected)
+    mine, theirs = _with_a_delegate(cfg, session_dir, injected)
 
     assert mine.model is injected, "the agent's own middleware runs the agent's model"
     assert theirs.model is not injected
     assert theirs.model.max_tokens == 321, "`cheap-model`'s ceiling, not the default's"
 
 
-def test_both_kinds_are_handed_the_same_things_to_want(cfg, monkeypatch, session_dir):
+def test_both_kinds_are_handed_the_same_things_to_want(cfg, session_dir):
     """A key provisioned where the agent is assembled and not where a delegate is.
 
     Both sites go through one builder, so they cannot differ by accident today; this
@@ -518,7 +505,7 @@ def test_both_kinds_are_handed_the_same_things_to_want(cfg, monkeypatch, session
     """
     injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
 
-    mine, theirs = _with_a_delegate(cfg, monkeypatch, session_dir, injected)
+    mine, theirs = _with_a_delegate(cfg, session_dir, injected)
 
     # Every want filled on both sides, or one of these would have raised rather
     # than arrived: an unprovided want is refused when the agent is built.

@@ -17,7 +17,7 @@ from kingfisher.kinds.agents.spec import AgentSpec
 from kingfisher.kinds.skills.registry import Listed, SkillRegistry
 from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.spec import SubagentError
-from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
+from tests.conftest import FakeToolCallingModel, subagents_dir
 
 HELPER = """name: helper
 description: Declares no tools, so it inherits whatever it is given.
@@ -99,7 +99,7 @@ def test_a_delegate_may_not_use_what_its_caller_was_denied(cfg, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=responses),
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
-    )
+    ).graph
 
     delegate = _subagent_graphs(graph).get("helper")
     assert delegate is not None, "the declared subagent was not compiled"
@@ -147,7 +147,7 @@ def test_a_delegate_that_withheld_a_tool_itself_is_the_one_named(cfg, session_di
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=responses),
         capabilities=Capabilities(subagents=("reader",)),
-    )
+    ).graph
 
     delegate = _subagent_graphs(graph).get("reader")
     assert delegate is not None, "the declared subagent was not compiled"
@@ -181,7 +181,7 @@ def test_the_builtin_delegate_arrives_with_the_ceiling_on(cfg, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=responses),
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
-    )
+    ).graph
 
     delegate = _subagent_graphs(graph).get("general-purpose")
     assert delegate is not None, "the built-in delegate should still be reachable"
@@ -204,7 +204,7 @@ def test_the_builtin_survives_when_no_delegates_are_named(cfg, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(builtin_tools=("read_file", "task")),
-    )
+    ).graph
 
     delegate = _subagent_graphs(graph).get("general-purpose")
     assert delegate is not None
@@ -239,7 +239,7 @@ def test_an_unnamed_delegate_is_still_refused(cfg, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=responses),
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
-    )
+    ).graph
 
     out = graph.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
@@ -270,7 +270,7 @@ def test_an_unrestricted_request_delegates_as_before(cfg, session_dir):
         _with_helper(cfg),
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=responses),
-    )
+    ).graph
 
     out = graph.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
@@ -563,7 +563,7 @@ def _build(cfg, session_dir, definition):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("helper",)),
-    )
+    ).graph
 
 
 def test_a_misspelled_tool_is_refused_not_dropped(cfg, session_dir):
@@ -619,7 +619,7 @@ def test_a_tool_the_request_withheld_is_still_dropped(cfg, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
-    )
+    ).graph
 
     delegate = _subagent_graphs(graph).get("helper")
     assert delegate is not None  # built, not refused
@@ -696,24 +696,28 @@ class _Audit(AgentMiddleware):
     name = "_Audit"
 
 
-def _declared(captured, name: str) -> list:
-    """One named delegate's middleware, as it was handed to deepagents."""
-    supplied = [s for s in captured.get("subagents", ()) if s.get("name") == name]
+def _declared(built, name: str) -> list:
+    """One named delegate's middleware, as it was handed to deepagents.
+
+    The record's `subagents` is a list of deepagents' own `SubAgent` mappings, so
+    the outer read is an attribute and the inner ones stay subscripts. Only what
+    `create_deep_agent` was *called with* gained a type.
+    """
+    supplied = [s for s in built.subagents or () if s.get("name") == name]
     assert supplied, f"no {name!r} delegate was supplied"
     return list(supplied[0].get("middleware") or [])
 
 
-def _gp(captured) -> dict:
+def _gp(built) -> dict:
     """The `general-purpose` spec handed to deepagents, or `{}` if absent."""
-    for spec in captured.get("subagents", ()):
+    for spec in built.subagents or ():
         if spec.get("name") == "general-purpose":
             return spec
     return {}
 
 
-def _audited_build(cfg, monkeypatch, session_dir, **caps):
-    captured = capture_build(monkeypatch)
-    build_agent(
+def _audited_build(cfg, session_dir, **caps):
+    return build_agent(
         _with_helper(cfg),
         agent=AgentSpec(
             name="probed",
@@ -727,7 +731,6 @@ def _audited_build(cfg, monkeypatch, session_dir, **caps):
         middleware_registry={"audit": _Audit},
         capabilities=Capabilities(**caps),
     )
-    return captured
 
 
 A_WORKSPACE_TOOL = '''
@@ -751,7 +754,7 @@ def _with_a_tool(cfg):
 
 
 def test_every_graph_holding_the_workspace_tools_carries_the_same_guards(
-    cfg, monkeypatch, session_dir
+    cfg, session_dir
 ):
     """deepagents fills a delegate spec that names no tools from the parent, so the
     built-in one holds the agent's own tool objects. It was handed the ceiling and the
@@ -761,59 +764,59 @@ def test_every_graph_holding_the_workspace_tools_carries_the_same_guards(
     each was composed where it was built and the one built last got none of it.
     """
     _with_a_tool(cfg)
-    captured = _audited_build(
-        cfg, monkeypatch, session_dir, subagents=("helper",), builtin_tools=("task",)
+    built = _audited_build(
+        cfg, session_dir, subagents=("helper",), builtin_tools=("task",)
     )
     guards = ["HostPathGuard", "WorkspaceToolErrors", "WorkspaceToolPaths"]
 
     for where, stack in (
-        ("the agent", captured["middleware"]),
-        ("general-purpose", _gp(captured).get("middleware", ())),
-        ("helper", _declared(captured, "helper")),
+        ("the agent", built.middleware),
+        ("general-purpose", _gp(built).get("middleware", ())),
+        ("helper", _declared(built, "helper")),
     ):
         kinds = [type(m).__name__ for m in stack]
         assert [k for k in kinds if k in guards] == guards, f"{where} carries {kinds}"
 
 
-def test_the_builtin_delegate_carries_the_deployments_middleware(cfg, monkeypatch, session_dir):
+def test_the_builtin_delegate_carries_the_deployments_middleware(cfg, session_dir):
     """An audit hook that can be stepped around by naming one delegate is not an audit
     hook.
     """
-    captured = _audited_build(cfg, monkeypatch, session_dir, builtin_tools=("read_file", "task"))
+    built = _audited_build(cfg, session_dir, builtin_tools=("read_file", "task"))
 
-    kinds = [type(m).__name__ for m in _gp(captured).get("middleware", ())]
+    kinds = [type(m).__name__ for m in _gp(built).get("middleware", ())]
     assert "_Audit" in kinds, f"the built-in delegate runs unaudited: {kinds}"
     assert "ToolAllowlist" in kinds, "the ceiling it already had must survive"
 
 
-def test_the_builtin_delegate_is_supplied_when_nothing_was_narrowed(cfg, monkeypatch, session_dir):
+def test_the_builtin_delegate_is_supplied_when_nothing_was_narrowed(cfg, session_dir):
     """The replacement used to happen only for a request that narrowed something,
     because it was written to carry a ceiling.
     """
-    captured = _audited_build(cfg, monkeypatch, session_dir)
+    built = _audited_build(cfg, session_dir)
 
-    kinds = [type(m).__name__ for m in _gp(captured).get("middleware", ())]
+    kinds = [type(m).__name__ for m in _gp(built).get("middleware", ())]
     assert "_Audit" in kinds, f"an unrestricted request runs it unaudited: {kinds}"
     assert "ToolAllowlist" not in kinds, "nothing was narrowed, so nothing to narrow it by"
 
 
-def test_the_backstop_is_on_an_unrestricted_request_too(cfg, monkeypatch, session_dir):
+def test_the_backstop_is_on_an_unrestricted_request_too(cfg, session_dir):
     """`DeclaredDelegatesOnly` exists so a delegate deepagents adds in a future version
     does not arrive unnoticed.
     """
-    captured = _audited_build(cfg, monkeypatch, session_dir)
+    built = _audited_build(cfg, session_dir)
 
-    assert "DeclaredDelegatesOnly" in {type(m).__name__ for m in captured["middleware"]}
+    assert "DeclaredDelegatesOnly" in {type(m).__name__ for m in built.middleware}
 
 
-def test_the_builtin_delegate_gets_its_own_instances(cfg, monkeypatch, session_dir):
+def test_the_builtin_delegate_gets_its_own_instances(cfg, session_dir):
     """Built per graph, like every declared delegate's -- `as_subagent` calls the
     factory again for each one rather than sharing.
     """
-    captured = _audited_build(cfg, monkeypatch, session_dir)
+    built = _audited_build(cfg, session_dir)
 
-    on_agent = [m for m in captured["middleware"] if type(m).__name__ == "_Audit"]
-    on_builtin = [m for m in _gp(captured).get("middleware", ()) if type(m).__name__ == "_Audit"]
+    on_agent = [m for m in built.middleware if type(m).__name__ == "_Audit"]
+    on_builtin = [m for m in _gp(built).get("middleware", ()) if type(m).__name__ == "_Audit"]
 
     assert on_agent and on_builtin
     assert on_agent[0] is not on_builtin[0], "one instance is shared between two graphs"

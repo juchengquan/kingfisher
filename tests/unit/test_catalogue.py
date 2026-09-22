@@ -29,7 +29,6 @@ from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.layout import SKILLS_ROUTE
 from tests.conftest import (
     FakeToolCallingModel,
-    capture_build,
     middlewares_dir,
     subagents_dir,
     tools_dir,
@@ -282,13 +281,11 @@ def test_a_workspace_with_no_tools_never_assembles_the_probe(cfg, monkeypatch):
     Kingfisher(cfg, backend=default_backend)
 
 
-def test_a_delegate_is_activated_from_the_supplied_catalogue(tmp_path, cfg, monkeypatch,
-                                                             session_dir):
+def test_a_delegate_is_activated_from_the_supplied_catalogue(tmp_path, cfg, session_dir):
     """The subagent half, through `build_agent` rather than beside it."""
     roots = _staged(tmp_path / "staged", subagent=SUBAGENT)
-    captured = capture_build(monkeypatch)
 
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[]),
@@ -296,7 +293,7 @@ def test_a_delegate_is_activated_from_the_supplied_catalogue(tmp_path, cfg, monk
         catalogue=roots,
     )
 
-    names = [spec["name"] for spec in captured["subagents"]]
+    names = [spec["name"] for spec in built.subagents or ()]
     assert "reviewer" in names, "the staged catalogue's delegate was not wired"
 
 
@@ -310,7 +307,7 @@ def test_the_agent_it_builds_offers_the_staged_definitions(tmp_path, cfg, sessio
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[]),
         catalogue=roots,
-    )
+    ).graph
 
     assert graph is not None
     assert available_skills(enabled, catalogue=roots) == ("staged-only",)

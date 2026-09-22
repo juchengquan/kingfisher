@@ -13,7 +13,7 @@ from kingfisher.infrastructure.harness.backend import default_backend, skills_so
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills
 from kingfisher.kinds.skills import registry as skill_registry
 from kingfisher.kinds.skills.catalogue import LocalSkillRepository
-from tests.conftest import FakeToolCallingModel, capture_build
+from tests.conftest import FakeToolCallingModel
 
 SKILL = "---\nname: {name}\ndescription: {desc}\n---\nBody of the skill.\n"
 
@@ -198,14 +198,13 @@ def test_only_the_activated_one_reaches_the_model(cfg, session_dir):
 # -- the boundary that was failing open ------------------------------------
 
 
-def test_a_nested_skill_is_denied_at_the_path_it_actually_has(cfg, session_dir, monkeypatch):
+def test_a_nested_skill_is_denied_at_the_path_it_actually_has(cfg, session_dir):
     """`_skill_denials` wrote `/skills/{name}/**`, which is where a skill sits only
     while every skill sits at the top level.
     """
     _two_parties(cfg)
-    captured = capture_build(monkeypatch)
 
-    build_agent(
+    built = build_agent(
         replace(cfg, skills_enabled=True),
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[]),
@@ -215,7 +214,7 @@ def test_a_nested_skill_is_denied_at_the_path_it_actually_has(cfg, session_dir, 
     # Minus `.harness`, which every request is denied whatever it activates.
     denied = [
         p
-        for r in captured["permissions"]
+        for r in built.permissions
         if r.mode == "deny" and "read" in r.operations
         for p in r.paths
         if p != "/.harness/**"

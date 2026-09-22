@@ -234,7 +234,7 @@ def ran(cfg, session_dir, argument: str) -> str:
     ]
     agent = build_agent(
         cfg, session_dir=session_dir, model=FakeToolCallingModel(responses=responses)
-    )
+    ).graph
     out = agent.invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
     )
@@ -306,7 +306,7 @@ def test_a_file_argument_with_another_name_cannot_read_another_session(cfg, sess
         model=FakeToolCallingModel(
             responses=[AIMessage(content="", tool_calls=[call]), AIMessage(content="done")]
         ),
-    )
+    ).graph
     out = agent.invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
     )
@@ -369,7 +369,7 @@ def test_a_link_inside_the_session_does_not_widen_it(cfg, session_dir):
                 AIMessage(content="done"),
             ]
         ),
-    )
+    ).graph
     out = agent.invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
     )

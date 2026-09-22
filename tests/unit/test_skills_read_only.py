@@ -41,7 +41,7 @@ def _drive(cfg, session_dir, tool, args):
         session_dir=session_dir,
         capabilities=Capabilities(builtin_tools=("write_file", "edit_file", "read_file")),
         model=FakeToolCallingModel(responses=[call, AIMessage(content="done")]),
-    )
+    ).graph
     result = graph.invoke(
         {"messages": [("user", "go")]},
         config={"configurable": {"thread_id": "t"}, "recursion_limit": 8},

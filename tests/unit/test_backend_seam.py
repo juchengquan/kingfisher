@@ -18,7 +18,7 @@ from kingfisher.infrastructure.harness.backend import (
     default_backend,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
-from tests.conftest import StubCheckpointer, an_agent, capture_build
+from tests.conftest import StubCheckpointer, an_agent
 from tests.unit.test_run import StubAgent
 
 
@@ -150,16 +150,13 @@ def test_the_factory_is_handed_the_catalogue_and_the_runner_this_deployment_wire
     assert seen[0]["runner"] is runner
 
 
-def test_what_the_factory_returns_is_what_the_agent_is_built_on(
-    cfg, session_dir, monkeypatch
-):
-    """Without this the seam does nothing. Read off the arguments `create_deep_agent`
-    was actually called with rather than from anything kingfisher reports about
-    itself: a service that computed the backend and then dropped it would satisfy
-    every other test in this file.
+def test_what_the_factory_returns_is_what_the_agent_is_built_on(cfg, session_dir):
+    """Without this the seam does nothing. Read off the record of what the build
+    attached rather than from anything kingfisher reports about itself: a service
+    that computed the backend and then dropped it would satisfy every other test in
+    this file, and the record is what `create_deep_agent` was called with.
     """
     an_agent(cfg)
-    captured = capture_build(monkeypatch)
     made: list[Substitute] = []
 
     def mine(
@@ -174,9 +171,9 @@ def test_what_the_factory_returns_is_what_the_agent_is_built_on(
         )
         return made[-1]
 
-    Kingfisher(cfg, backend=mine)._graph_for(Request("go", agent="only"), session_dir)
+    built = Kingfisher(cfg, backend=mine)._graph_for(Request("go", agent="only"), session_dir)
 
-    assert captured["backend"] is made[0]
+    assert built.backend is made[0]
 
 
 def test_a_backend_deepagents_will_not_give_a_shell_is_refused(cfg, session_dir):

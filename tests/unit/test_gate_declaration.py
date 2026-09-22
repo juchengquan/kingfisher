@@ -66,7 +66,7 @@ def _run(cfg, session_dir, spec, *, checkpointer: Any = _DEFAULT, **kwargs: Any)
         model=FakeToolCallingModel(responses=list(WRITES)),
         checkpointer=InMemorySaver() if checkpointer is _DEFAULT else checkpointer,
         **kwargs,
-    )
+    ).graph
     return agent.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
         config={"configurable": {"thread_id": session_dir.name}, "recursion_limit": 12},
@@ -132,7 +132,7 @@ def test_an_agent_with_no_gates_needs_no_checkpointer(cfg, session_dir):
 
 
 def test_the_gates_reach_deepagents_as_the_argument_a_delegate_inherits(
-    cfg, session_dir, monkeypatch
+    cfg, session_dir
 ):
     """A delegate cannot declare `interrupt_on` -- the field is `REFUSED` in the
     subagent format -- so what it stops on has to arrive from its parent, or a
@@ -144,16 +144,13 @@ def test_the_gates_reach_deepagents_as_the_argument_a_delegate_inherits(
     means scripting a model the delegate resolves for itself -- so a change in how
     deepagents propagates the argument would pass here.
     """
-    from tests.conftest import capture_build
-
     directory = cfg.workspace / "subagents"
     directory.mkdir(exist_ok=True)
     (directory / "scribe.yaml").write_text(
         "name: scribe\ndescription: Writes.\nsystem_prompt: |\n  Write.\n", encoding="utf-8"
     )
-    captured = capture_build(monkeypatch)
 
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         agent=_agent(interrupt_on="[write_file]", subagents="[scribe]"),
@@ -161,18 +158,14 @@ def test_the_gates_reach_deepagents_as_the_argument_a_delegate_inherits(
         checkpointer=InMemorySaver(),
     )
 
-    assert captured.get("interrupt_on") == {"write_file": True}
+    assert built.interrupt_on == {"write_file": True}
 
 
-def test_an_agent_that_gates_nothing_passes_no_gate_argument(cfg, session_dir, monkeypatch):
+def test_an_agent_that_gates_nothing_passes_no_gate_argument(cfg, session_dir):
     """Passing an empty mapping would make deepagents install the middleware for every
     agent in every workspace, for gates that are not there.
     """
-    from tests.conftest import capture_build
-
-    captured = capture_build(monkeypatch)
-
-    build_agent(
+    built = build_agent(
         cfg,
         session_dir=session_dir,
         agent=_agent(),
@@ -180,7 +173,9 @@ def test_an_agent_that_gates_nothing_passes_no_gate_argument(cfg, session_dir, m
         checkpointer=InMemorySaver(),
     )
 
-    assert "interrupt_on" not in captured
+    # `is None` rather than a key check: the record declares every keyword, so
+    # "not passed" is the default value rather than an absent entry.
+    assert built.interrupt_on is None
 
 
 def test_a_gate_on_a_tool_this_caller_was_not_granted_is_allowed(cfg, session_dir):
