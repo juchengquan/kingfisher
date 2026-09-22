@@ -377,6 +377,35 @@ def test_a_warning_from_someone_elses_code_is_left_as_it_was(cfg, monkeypatch, c
     assert warnings.showwarning is handler, "the plain handler must not outlive the run"
 
 
+def test_a_verb_other_than_run_says_a_warning_plainly_too(cfg, tmp_path, monkeypatch, capsys):
+    """Only `run` had the plain line, and `list` loads the model catalogue as well: its
+    warning about a missing key -- the only report of one `list` gives -- still came out
+    as a path, a line number and `UserWarning`.
+    """
+    models = tmp_path / "models.yaml"
+    models.write_text(
+        "endpoints:\n"
+        "  here:\n    api: anthropic\n    base_url: http://127.0.0.1:9/never-called\n"
+        "    key_env: HERE_KEY\n"
+        "  there:\n    api: anthropic\n    base_url: http://127.0.0.1:9/never-called\n"
+        "    key_env: THERE_KEY\n"
+        "default: here-model\n"
+        "models:\n  here-model:\n    endpoint: here\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(models))
+    monkeypatch.setenv("HERE_KEY", "not-a-real-key")
+    monkeypatch.delenv("THERE_KEY", raising=False)
+
+    main(["list"])
+
+    err = capsys.readouterr().err
+    assert [line for line in err.splitlines()
+            if line.startswith("warning: ") and "THERE_KEY is not set" in line]
+    assert "UserWarning" not in err
+
+
 def test_a_delegates_prose_is_progress_rather_than_answer(cfg, monkeypatch, capsys):
     """A reviewer's working notes are not what you asked for."""
     from kingfisher import RunEvent
