@@ -320,6 +320,11 @@ def _delegate_behind(task: Any, snapshot: Any) -> str | None:
     than a guess: the tool and arguments are right either way, and naming the wrong
     delegate beside a call somebody is about to approve is worse than naming none.
     """
+    # Which task the pause came from, before reading any name off the parent. One
+    # message may both gate a call of the agent's own and start a delegate, and the
+    # search below would then find that `task` call and hand the agent's own call
+    # its delegate's name. Exactly one delegate is in flight there, so the refusal
+    # to guess further down does not catch it.
     if getattr(task, "name", "") != TOOLS_NODE:
         return None
     for message in reversed(list(getattr(snapshot, "values", {}).get("messages", ()))):
