@@ -1601,6 +1601,15 @@ WITNESSES: dict[str, str] = {
     "RunEvent": "embedder",
     # What `Kingfisher.sessions()` and `session()` return.
     "SessionInfo": "embedder",
+    # The four an approval gate needs. A turn that stops at one hands back
+    # `PendingDecision`s on its result and cannot be continued without a `Resume`
+    # carrying `Decision`s -- so a consumer that cannot name all three cannot answer
+    # a gate at all, and one that cannot catch `DecisionError` cannot tell a bad
+    # answer from a broken session.
+    "PendingDecision": "embedder",
+    "Resume": "embedder",
+    "Decision": "embedder",
+    "DecisionError": "embedder",
     # What they raise. A caller has to be able to catch, by name, what the
     # library raises at it without reaching past the door.
     "AccessError": "embedder",
@@ -2161,10 +2170,15 @@ def test_importing_kingfisher_does_not_pull_in_deepagents():
 LIGHT_EXPORTS = frozenset({
     "Capabilities", "Config", "ConfigError", "Request", "RunEvent", "RunOn",
     "RunResult", "SessionInfo",
+    # Answering an approval gate. Light, and it has to stay light for the reason
+    # the contracts below are: these are frozen dataclasses in `domain`, and a
+    # consumer deciding whether to approve a call should not load an agent runtime
+    # to read what the call was.
+    "PendingDecision", "Resume", "Decision",
     # The errors a caller must tell apart. Public so a consumer outside the package can
     # catch them by name -- the server being the first such consumer.
-    "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
-    "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
+    "CapabilityError", "DecisionError", "QuotaExceededError", "SessionBusyError",
+    "SkillError", "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
     # The `SessionStore` contract, for a deployment checking its own adapter.
     # Light, and it has to stay light: a deployment runs this from its own test
     # suite, and a kit that pulled three provider SDKs in to check four methods
@@ -2832,8 +2846,8 @@ def test_every_record_this_package_hands_out_is_frozen():
 
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
-    "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
-    "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
+    "CapabilityError", "DecisionError", "QuotaExceededError", "SessionBusyError",
+    "SkillError", "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.
@@ -3064,7 +3078,19 @@ def test_the_event_kinds_are_what_the_package_emits():
 
 def test_the_stop_reasons_are_what_the_package_assigns():
     """`STOP_REASONS` is a contract with a caller like `KINDS`, and pinned the same way."""
-    from kingfisher.domain.result import END_TURN, STOP_REASONS
+    from kingfisher.domain import result as result_module
+    from kingfisher.domain.result import STOP_REASONS
+
+    # Every module-level name in `domain/result.py` whose value is a stop reason, so
+    # that assigning one by its constant counts as producing it. This resolved only
+    # `END_TURN`, by name, and the second constant to be assigned that way --
+    # `AWAITING` -- then looked like a reason no turn produces. Resolved against the
+    # module rather than listed here, so a third cannot repeat it.
+    by_name = {
+        name: value
+        for name, value in vars(result_module).items()
+        if isinstance(value, str) and value in set(STOP_REASONS)
+    }
 
     assigned = set()
     for path in sorted(SRC.rglob("*.py")):
@@ -3090,11 +3116,11 @@ def test_the_stop_reasons_are_what_the_package_assigns():
                 continue
             if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 assigned.add(node.value.value)
-            # `END_TURN` by name, which is the spelling `domain/result.py` asks
-            # for and the one a dataclass default uses. Reading only literals
-            # made the *better* spelling look like a reason no turn produces.
-            elif isinstance(node.value, ast.Name) and node.value.id == "END_TURN":
-                assigned.add(END_TURN)
+            # Or by its constant, which is the spelling `domain/result.py` asks for
+            # and the one a dataclass default uses. Reading only literals made the
+            # *better* spelling look like a reason no turn produces.
+            elif isinstance(node.value, ast.Name) and node.value.id in by_name:
+                assigned.add(by_name[node.value.id])
 
     assert assigned == set(STOP_REASONS), (
         "STOP_REASONS and the reasons actually assigned have diverged — the value "

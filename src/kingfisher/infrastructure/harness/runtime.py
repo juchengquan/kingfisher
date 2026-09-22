@@ -8,9 +8,10 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from langgraph.errors import GraphRecursionError
-from langgraph.types import StreamMode
+from langgraph.types import Command, StreamMode
 
-from kingfisher.domain.result import RunEvent
+from kingfisher.domain.request import Decision, DecisionError
+from kingfisher.domain.result import DECISIONS, PendingDecision, RunEvent
 from kingfisher.domain.transcript import Message, Role, ToolCall
 
 #: What langgraph raises out of `stream` when a turn uses up `recursion_limit`.
@@ -259,3 +260,132 @@ def answer_in(namespace: Any, mode: str, chunk: Any) -> str | None:
     if not messages:
         return None
     return getattr(messages[-1], "text", None) or ""
+
+
+#: The graph node a delegate's pause arrives on: it stopped inside the tool call that
+#: runs it, so the task belongs to the tool node rather than to any gate.
+TOOLS_NODE = "tools"
+
+#: The tool a parent calls to start a delegate, and the argument naming which one.
+DELEGATE_TOOL = "task"
+DELEGATE_ARG = "subagent_type"
+
+#: Separates the interrupt a gated call belongs to from its place within it.
+#:
+#: The pair is the address because neither half is one alone. langgraph gives an
+#: `Interrupt` a stable id and nothing smaller -- one interrupt covers every gated
+#: call in a message -- and the tool call's own id is not in the pause at all: the
+#: payload carries names and arguments, and for a delegate's pause the tool calls
+#: belong to a nested state this snapshot cannot reach.
+CALL_SEPARATOR = "#"
+
+
+def pending_in(snapshot: Any) -> tuple[PendingDecision, ...]:
+    """Every gated call a paused turn is waiting on; nothing for a turn that ran on."""
+    found: list[PendingDecision] = []
+    for task in getattr(snapshot, "tasks", ()) or ():
+        delegate = _delegate_behind(task, snapshot)
+        for pause in getattr(task, "interrupts", ()) or ():
+            value = pause.value
+            if not isinstance(value, dict):
+                continue
+            requests = list(value.get("action_requests") or ())
+            configs = list(value.get("review_configs") or ())
+            for index, request in enumerate(requests):
+                review = configs[index] if index < len(configs) else {}
+                allowed = review.get("allowed_decisions", ())
+                found.append(
+                    PendingDecision(
+                        call_id=f"{pause.id}{CALL_SEPARATOR}{index}",
+                        tool=str(request.get("name") or ""),
+                        args=dict(request.get("args") or {}),
+                        agent=delegate,
+                        # Narrowed to what kingfisher accepts rather than passed on
+                        # as the middleware declared it: a bare `True` gate says all
+                        # four, `edit` included, and offering a caller a decision the
+                        # resume path will refuse is worse than not offering it.
+                        decisions=tuple(d for d in allowed if d in DECISIONS),
+                    )
+                )
+    return tuple(found)
+
+
+def _delegate_behind(task: Any, snapshot: Any) -> str | None:
+    """Which delegate proposed this, where the pause can say so without guessing.
+
+    A delegate's pause arrives on the tool node and its nested state is unreachable
+    from here, so the name is not in the pause. It is in the parent's own last
+    message -- the `subagent_type` of the `task` call that started it -- and that is
+    unambiguous only while one delegate is in flight. With two, this is `None` rather
+    than a guess: the tool and arguments are right either way, and naming the wrong
+    delegate beside a call somebody is about to approve is worse than naming none.
+    """
+    if getattr(task, "name", "") != TOOLS_NODE:
+        return None
+    for message in reversed(list(getattr(snapshot, "values", {}).get("messages", ()))):
+        calls = getattr(message, "tool_calls", None)
+        if not calls:
+            continue
+        started = [
+            str(call["args"][DELEGATE_ARG])
+            for call in calls
+            if call.get("name") == DELEGATE_TOOL and DELEGATE_ARG in (call.get("args") or {})
+        ]
+        return started[0] if len(started) == 1 else None
+    return None
+
+
+def resume_payload(answers: Iterable[Decision], pending: Iterable[PendingDecision]) -> Any:
+    """The caller's answers as a graph is driven with them: per interrupt, in order.
+
+    Returns the `Command` rather than the mapping inside it, so that the one place
+    naming langgraph stays this one -- `application/` reaches the runtime through
+    this module and the dependency table is what holds that.
+
+    Keyed by interrupt id rather than handed over as one list, which is what lets a
+    turn paused in two places be answered in one resume. Within an interrupt the order
+    is the order the gate asked in, and the caller never sees it -- they answer the
+    ids they were given, and a wrong or missing one is named here rather than counted
+    by langgraph two frames later.
+    """
+    waiting = {item.call_id: item for item in pending}
+    answered: dict[str, Decision] = {}
+    for answer in answers:
+        if answer.call_id not in waiting:
+            msg = f"no pending decision with id {answer.call_id!r}"
+            raise DecisionError(msg)
+        allowed = waiting[answer.call_id].decisions
+        if allowed and answer.action not in allowed:
+            msg = (
+                f"{answer.call_id} ({waiting[answer.call_id].tool}) takes "
+                f"{', '.join(allowed)} -- not {answer.action!r}"
+            )
+            raise DecisionError(msg)
+        if answer.action == "respond" and not answer.message:
+            msg = f"{answer.call_id} was answered 'respond' with nothing to respond"
+            raise DecisionError(msg)
+        answered[answer.call_id] = answer
+    if unanswered := sorted(set(waiting) - set(answered)):
+        msg = f"still waiting on {', '.join(unanswered)}"
+        raise DecisionError(msg)
+
+    grouped: dict[str, list[Any]] = {}
+    for call_id, answer in sorted(
+        answered.items(), key=lambda pair: int(pair[0].rsplit(CALL_SEPARATOR, 1)[1])
+    ):
+        where = call_id.rsplit(CALL_SEPARATOR, 1)[0]
+        grouped.setdefault(where, []).append(_as_langgraph_decision(answer))
+    return Command(
+        resume={where: {"decisions": decisions} for where, decisions in grouped.items()}
+    )
+
+
+def _as_langgraph_decision(answer: Decision) -> dict[str, Any]:
+    """One answer in the shape `HumanInTheLoopMiddleware` reads."""
+    if answer.action == "approve":
+        return {"type": "approve"}
+    # `reject` may carry nothing and the middleware writes its own refusal; `respond`
+    # may not, and is refused above rather than sent on as an empty tool result.
+    if answer.message:
+        return {"type": answer.action, "message": answer.message}
+    return {"type": answer.action}

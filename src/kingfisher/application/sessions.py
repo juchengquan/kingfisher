@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from kingfisher.application.access import caller_holds
 from kingfisher.domain.access import reaches
-from kingfisher.domain.request import Request
+from kingfisher.domain.request import Request, Resume
 from kingfisher.domain.session import (
     QuotaExceededError,
     Session,
@@ -50,7 +50,7 @@ class Sessions:
     _claims: Path
     _shared: Any
 
-    def _session_id_for(self, request: Request, root: Path) -> str:
+    def _session_id_for(self, request: Request | Resume, root: Path) -> str:
         """Mint an id, or accept one that already names a session."""
         if request.session_id is None:
             return uuid4().hex
@@ -139,7 +139,7 @@ class Sessions:
         return session
 
     @contextmanager
-    def _held_session(self, request: Request) -> Iterator[Session]:
+    def _held_session(self, request: Request | Resume) -> Iterator[Session]:
         """This turn's session, in a directory held for exactly as long."""
         session_id = self._session_id_for(request, sessions_root(self.workspace))
         with self.session_root.hold(session_id) as directory:

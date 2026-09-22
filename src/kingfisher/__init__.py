@@ -80,6 +80,14 @@ _EXPORTS = {
     "Kingfisher": "kingfisher.application.service",
     "ConfigError": "kingfisher.config",
     "Request": "kingfisher.domain.request",
+    # The four a caller needs to answer a gated call: what it was asked, how
+    # to answer, the answer itself, and the refusal for an answer that does
+    # not fit. All public for the reason `CapabilityError` is -- a consumer
+    # holding a paused session has to be able to branch on this.
+    "Resume": "kingfisher.domain.request",
+    "Decision": "kingfisher.domain.request",
+    "DecisionError": "kingfisher.domain.request",
+    "PendingDecision": "kingfisher.domain.result",
     "RunOn": "kingfisher.kinds.subagents.spec",
     "RunEvent": "kingfisher.domain.result",
     "RunResult": "kingfisher.domain.result",
@@ -115,14 +123,18 @@ __all__ = [
     "CommandResult",
     "Config",
     "ConfigError",
+    "Decision",
+    "DecisionError",
     "Held",
     "Inventory",
     "Kingfisher",
     "LocalSessionStore",
     "Origin",
     "Origins",
+    "PendingDecision",
     "QuotaExceededError",
     "Request",
+    "Resume",
     "RunEvent",
     "RunOn",
     "RunResult",
@@ -169,7 +181,11 @@ if TYPE_CHECKING:
     from kingfisher.domain.capabilities import CapabilityError as CapabilityError
     from kingfisher.domain.ports import CommandResult as CommandResult
     from kingfisher.domain.references import UnsafeReferenceError as UnsafeReferenceError
+    from kingfisher.domain.request import Decision as Decision
+    from kingfisher.domain.request import DecisionError as DecisionError
     from kingfisher.domain.request import Request as Request
+    from kingfisher.domain.request import Resume as Resume
+    from kingfisher.domain.result import PendingDecision as PendingDecision
     from kingfisher.domain.result import RunEvent as RunEvent
     from kingfisher.domain.result import RunResult as RunResult
     from kingfisher.domain.session import QuotaExceededError as QuotaExceededError

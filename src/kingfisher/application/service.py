@@ -46,6 +46,8 @@ from kingfisher.application.turn import (
     Admitted,
     Prepared,
     consume,
+    decision_discarded,
+    decision_needed,
     out_of_steps,
     overrun,
     turn_message,
@@ -64,8 +66,15 @@ from kingfisher.domain.capabilities import (
     CapabilityError,
 )
 from kingfisher.domain.ports import SessionStore
-from kingfisher.domain.request import Request
-from kingfisher.domain.result import END_TURN, RunEvent, RunResult, normalize_answer
+from kingfisher.domain.request import DecisionError, Request, Resume
+from kingfisher.domain.result import (
+    AWAITING,
+    END_TURN,
+    PendingDecision,
+    RunEvent,
+    RunResult,
+    normalize_answer,
+)
 from kingfisher.domain.session import (
     Session,
 )
@@ -82,7 +91,10 @@ from kingfisher.infrastructure.harness.agent import (
 from kingfisher.infrastructure.harness.backend import BackendFactory
 from kingfisher.infrastructure.harness.checkpointing import (
     build_session_checkpointer,
+    harness_mark,
+    read_paused_state,
     release_checkpointer,
+    write_paused_state,
 )
 from kingfisher.infrastructure.harness.interpreter import release_interpreter
 from kingfisher.infrastructure.harness.middleware import (
@@ -91,10 +103,18 @@ from kingfisher.infrastructure.harness.middleware import (
 )
 from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.session_store import (
+    AGENT_MARK,
+    PENDING_MARK,
     TRANSCRIPT,
     LocalSessionStore,
+    clear_pause,
     keep_from,
+    paused_path,
+    pending_as_mark,
+    pending_from_mark,
+    read_pause_mark,
     read_transcript,
+    write_pause_mark,
     write_transcript,
 )
 from kingfisher.infrastructure.wiring import store_named
@@ -145,11 +165,19 @@ class _Turn:
     #: What the lifecycle produced and the loop still owes its caller: a context
     #: manager cannot yield into the generator around it.
     pending: list[RunEvent] = field(default_factory=list)
+    #: Gated calls this turn stopped on, filled by the lifecycle from the one state
+    #: read it already makes. Non-empty is what makes `stop_reason` `awaiting_decision`.
+    awaiting: tuple[PendingDecision, ...] = ()
 
 
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
 #: run without a checkpointer at all.
 _UNSET: Any = object()
+
+
+def _asked(value: str | Request | Resume) -> Request | Resume:
+    """Whatever a caller handed in, as one of the two things a turn starts from."""
+    return value if isinstance(value, Request | Resume) else Request.coerce(value)
 
 
 def _session_store(supplied: SessionStore | None, cfg: Config) -> SessionStore | None:
@@ -419,7 +447,7 @@ class Kingfisher(Sessions, Disposal):
 
     def _graph_for(
         self,
-        request: Request,
+        request: Request | Resume,
         session_dir: Path,
         capabilities: Capabilities | None = None,
         checkpointer: Any = _UNSET,
@@ -481,7 +509,7 @@ class Kingfisher(Sessions, Disposal):
             remember_agent(session_dir, text)
 
     def _agent_for(
-        self, request: Request, session_dir: Path, *, source_ids: Held | None = None
+        self, request: Request | Resume, session_dir: Path, *, source_ids: Held | None = None
     ) -> AgentSpec | None:
         """The agent this turn runs, which is the one its session opened with."""
         kept = agent_started_with(session_dir)
@@ -532,7 +560,7 @@ class Kingfisher(Sessions, Disposal):
 
     def _prepare(
         self,
-        request: Request,
+        request: Request | Resume,
         session: Session,
         *,
         source_ids: Held | None = None,
@@ -543,6 +571,67 @@ class Kingfisher(Sessions, Disposal):
         of which 9.2ms is the agent.
         """
         return self._open_turn(self._admit(request, session, source_ids=source_ids))
+
+    def _take_pause(
+        self, request: Request | Resume, session: Session, checkpointer: Any
+    ) -> tuple[Any, dict[str, Any] | None, tuple[str, ...]]:
+        """Deal with whatever an earlier turn left waiting, before this turn starts.
+
+        Both ways out of a pause meet here, because both have to happen before the
+        graph exists: an answer needs the saver holding the state it answers, and a
+        supersede needs the state gone before a turn runs on a saver still holding it.
+        """
+        directory = session.directory
+        held = read_pause_mark(directory)
+        if not isinstance(request, Resume):
+            if held is None:
+                return checkpointer, None, ()
+            # Superseded. The transcript this turn replays ends at the unanswered
+            # call, and `PatchToolCallsMiddleware` tells the model it was cancelled
+            # -- so the agent learns the gated call never ran rather than silently
+            # losing it. What the caller is told is `decision_discarded`.
+            waiting = tuple(item.tool for item in pending_from_mark(held))
+            clear_pause(directory)
+            return checkpointer, None, waiting
+        if held is None:
+            msg = f"session {session.id} is not waiting on a decision"
+            raise DecisionError(msg)
+        self._refuse_stale_pause(session, held, request)
+        restored = read_paused_state(paused_path(directory))
+        if restored is None:
+            msg = f"session {session.id} recorded a pause whose state is missing"
+            raise DecisionError(msg)
+        # Read back rather than derived again from the restored state. These are the
+        # very ids the caller was handed, so answering them cannot drift from being
+        # asked them -- and re-deriving would need the graph, which does not exist
+        # until after this runs.
+        return restored, runtime.resume_payload(request.decisions, pending_from_mark(held)), ()
+
+    def _refuse_stale_pause(
+        self, session: Session, held: Mapping[str, str], request: Resume
+    ) -> None:
+        """Refuse a resume the paused graph would not be the same graph for.
+
+        Checked rather than attempted. A paused session outliving a deploy is
+        ordinary, and the difference between these two sentences and what a failed
+        deserialise says -- a traceback about a node nobody has heard of -- is the
+        whole reason the mark is written beside the state.
+        """
+        was = held.get(AGENT_MARK) or None
+        if request.agent is not None and was != request.agent:
+            msg = (
+                f"session {session.id} paused under agent {was or 'none'!r}, "
+                f"and this resume names {request.agent!r}"
+            )
+            raise DecisionError(msg)
+        now = harness_mark()
+        if moved := sorted(k for k, v in now.items() if k in held and held[k] != v):
+            msg = (
+                f"session {session.id} paused before {', '.join(moved)} moved "
+                f"({', '.join(f'{k} {held[k]}->{now[k]}' for k in moved)}); "
+                "the pause did not survive the upgrade and the turn must be asked again"
+            )
+            raise DecisionError(msg)
 
     def _checkpointer_for(self, session_dir: Path) -> tuple[Any, Any]:
         """The saver this turn runs on, and how to release it when the turn ends."""
@@ -558,7 +647,7 @@ class Kingfisher(Sessions, Disposal):
 
     def _admit(
         self,
-        request: Request,
+        request: Request | Resume,
         session: Session,
         *,
         source_ids: Held | None = None,
@@ -591,7 +680,7 @@ class Kingfisher(Sessions, Disposal):
 
     def _admitted(
         self,
-        request: Request,
+        request: Request | Resume,
         session: Session,
         cfg: Config,
         *,
@@ -612,7 +701,11 @@ class Kingfisher(Sessions, Disposal):
         # Before the turn exists, and before anything is destroyed: a request
         # naming a file that is not there must fail without having placed the
         # ones that were. `place_data` re-hardens `/data` on its way out.
-        placement = place_data(request.data, session.directory)
+        #
+        # A resume places nothing. It is finishing work already proposed rather
+        # than asking for something, so there is no `data` on it to place -- see
+        # `Resume`, where the absence of the field carries the reason.
+        placement = place_data(getattr(request, "data", ()), session.directory)
 
         # What this deployment permits, narrowed by what the request asked for.
         allowed = self._effective_grants(source_ids).intersect(request.capabilities)
@@ -624,6 +717,10 @@ class Kingfisher(Sessions, Disposal):
         # Resolved here rather than in `__init__`, because a saver is built per
         # session and there is no session until now.
         checkpointer, release = self._checkpointer_for(session.directory)
+        # What an earlier turn stopped on, loaded into that saver where this turn is
+        # answering it and dropped where this turn supersedes it. Before the graph is
+        # built, because a resume runs on a saver that already holds the pause.
+        checkpointer, resume, discarded = self._take_pause(request, session, checkpointer)
         graph = self._graph_for(
             request,
             session.directory,
@@ -639,6 +736,9 @@ class Kingfisher(Sessions, Disposal):
             unprotected=unprotected,
             placement=placement,
             release=release,
+            saver=checkpointer,
+            resume=resume,
+            discarded=discarded,
             # Tools come off the assembled graph rather than a list kept
             # somewhere: the surface includes whatever the workspace defined, so
             # the only honest answer to "what was offered" is what was wired.
@@ -687,13 +787,25 @@ class Kingfisher(Sessions, Disposal):
             endpoint=cfg.models.resolve()[0].endpoint,
             session_id=session_id,
         )
-        logger.run_start(request.task, str(session.directory))
+        # What this turn is: a task, or the answers to one already asked. The log
+        # line says which, because a resume with a task-shaped line in the run log
+        # reads as a second request for work that was never re-requested.
+        asked = getattr(request, "task", "")
+        started = asked or f"resuming {len(getattr(request, 'decisions', ()))} decision(s)"
+        logger.run_start(started, str(session.directory))
 
         return Prepared(
             graph=admitted.graph,
             release=admitted.release,
+            saver=admitted.saver,
+            resume=admitted.resume,
+            discarded=admitted.discarded,
+            agent_name=getattr(request, "agent", None),
             history=read_transcript(session.directory),
-            message=turn_message(request.task, admitted.placement.placed),
+            # A resume adds no message: it continues a superstep that already has
+            # everything it needs, and a new user turn appended there would be one
+            # the model never saw asked.
+            message=turn_message(asked, admitted.placement.placed) if asked else "",
             session=session,
             turn=turn,
             logger=logger,
@@ -702,21 +814,27 @@ class Kingfisher(Sessions, Disposal):
                 "callbacks": [logger],
                 "recursion_limit": cfg.recursion_limit,
             },
-            events=opening_events(
-                turn.id,
-                admitted.unprotected,
-                admitted.placement,
-                admitted.withheld,
-                admitted.indistinct,
-                admitted.delegate_only,
+            events=(
+                *opening_events(
+                    turn.id,
+                    admitted.unprotected,
+                    admitted.placement,
+                    admitted.withheld,
+                    admitted.indistinct,
+                    admitted.delegate_only,
+                ),
+                # At the start of the turn that did the superseding, which is where
+                # it belongs: it is a fact about *this* turn, not the terminal state
+                # of the one it replaced.
+                *((decision_discarded(admitted.discarded),) if admitted.discarded else ()),
             ),
             deadline=monotonic() + cfg.turn_timeout_s,
             timeout_s=cfg.turn_timeout_s,
         )
 
-    def _keep(self, prepared: Prepared) -> tuple[str, ...]:
+    def _keep(self, prepared: Prepared, snapshot: Any) -> tuple[str, ...]:
         """Persist what this turn produced, and name it."""
-        self._record(prepared)
+        self._record(prepared, snapshot)
         kept = collect_artifacts(prepared.session.directory)
         if self.sessions_store is not None:
             # Two names beyond what `collect_artifacts` walks, which is `/derived`
@@ -746,14 +864,25 @@ class Kingfisher(Sessions, Disposal):
             )
         return kept
 
-    def _finished(
-        self, prepared: Prepared, answer: str, kept: tuple[str, ...], *, stop_reason: str
+    def _finished(  # noqa: PLR0913 -- one terminal event, assembled from the four
+        # things a turn ends holding. A parameter object here would exist only to
+        # be unpacked one line later.
+        self,
+        prepared: Prepared,
+        answer: str,
+        kept: tuple[str, ...],
+        *,
+        stop_reason: str,
+        waiting: tuple[PendingDecision, ...] = (),
+        discarded: tuple[str, ...] = (),
     ) -> RunEvent:
         """The terminal event, built the same way whichever loop produced it."""
         return RunEvent(
             kind="finished",
             text=answer,
             result=RunResult(
+                pending=waiting,
+                discarded=discarded,
                 session_id=prepared.session.id,
                 turn_id=prepared.turn.id,
                 answer=answer,
@@ -767,41 +896,89 @@ class Kingfisher(Sessions, Disposal):
             ),
         )
 
-    def _record(self, prepared: Prepared) -> None:
-        """Write what was said this turn, as records this package owns."""
-        if not self.cfg.conversation_enabled:
-            return
+    def _settled(self, prepared: Prepared) -> Any:
+        """This turn's final graph state, read once, or `None` where there is none.
+
+        One read feeding both the transcript and the pause. Two would pass every test
+        in this tree and come apart the first time one of them learned something the
+        other did not -- which is the shape `test_no_surface_decides_for_itself_what_a
+        _finished_turn_is` already exists to prevent one layer up.
+        """
         read = getattr(prepared.graph, "get_state", None)
         if read is None:
-            return
+            return None
         try:
-            snapshot = read(prepared.config)
+            # A paused turn's own state, so the pause has to be visible here rather
+            # than only on the stream chunk `run` never sees.
+            return read(prepared.config)
         except ValueError:
             # `No checkpointer set` -- an injected graph that keeps no state
             # between supersteps. Structural, like the missing method above, and
             # not a conversation that failed to be read. Caught by name rather
             # than by suppressing everything, so a graph that genuinely cannot
             # answer still says so.
+            return None
+
+    def _record(self, prepared: Prepared, snapshot: Any) -> None:
+        """Write what was said this turn, as records this package owns."""
+        if not self.cfg.conversation_enabled:
             return
         if snapshot is None:
-            # What the paragraph above describes, now that persistence runs at
-            # the end of *every* turn rather than only a completed one: a graph
-            # that died before its first superstep has no state to hand back.
-            # Reading `.values` off it raised, which turned "nothing to add"
-            # into a second failure on top of the first.
+            # A graph that keeps no state, or one that died before its first
+            # superstep -- persistence runs at the end of *every* turn rather than
+            # only a completed one, and reading `.values` off nothing raised, which
+            # turned "nothing to add" into a second failure on top of the first.
             return
         messages = snapshot.values.get("messages")
         if messages:
             write_transcript(prepared.session.directory, runtime.as_transcript(messages))
 
+    def _settle_pause(self, prepared: Prepared, snapshot: Any) -> tuple[PendingDecision, ...]:
+        """Keep a paused turn's graph state, or clear a pause this turn finished.
+
+        Written here and nowhere else, which is what keeps the file's presence a
+        truthful mark. Every path out of a turn arrives at this one: answered,
+        refused, cut short at a bound -- and each of those is a turn that is no
+        longer waiting, so each of them clears.
+        """
+        directory = prepared.session.directory
+        waiting = runtime.pending_in(snapshot) if snapshot is not None else ()
+        if not waiting or prepared.saver is None:
+            # Including the turn that was just resumed and ran to the end. A saver
+            # this service did not open cannot be written out either -- an injected
+            # store is the deployment's, and holding its state in a file of ours
+            # would be a second copy nobody asked for.
+            clear_pause(directory)
+            return ()
+        write_paused_state(prepared.saver, paused_path(directory))
+        # The state first, then the mark. The mark is what every other path tests to
+        # decide a session is waiting, so writing it second means a write that dies
+        # between the two leaves a session that is simply not paused -- rather than
+        # one that claims to be and has nothing to resume into.
+        write_pause_mark(
+            directory,
+            {
+                AGENT_MARK: prepared.agent_name or "",
+                PENDING_MARK: pending_as_mark(waiting),
+                **harness_mark(),
+            },
+        )
+        return waiting
+
     def stream(
-        self, request: str | Request, *, source_ids: Held | None = None
+        self, request: str | Request | Resume, *, source_ids: Held | None = None
     ) -> Iterator[RunEvent]:
-        """Run one task, yielding progress as it happens."""
+        """Run one task, yielding progress as it happens.
+
+        A `Resume` answers a turn that stopped at an approval gate. It goes through
+        the same door rather than a method of its own: the admission it faces is the
+        same admission, and a second entry point would be a second place for those
+        checks to be forgotten.
+        """
         # Coerced here rather than only in `_prepare`, because holding the
         # session now happens first and a bare task string has no session id to
         # read.
-        request = Request.coerce(request)
+        request = _asked(request)
         with self._held_session(request) as session:
             yield from self._stream_turn(request, session, source_ids=source_ids)
 
@@ -840,8 +1017,22 @@ class Kingfisher(Sessions, Disposal):
             # store which is unreachable does not also leak the claim. Ending
             # the turn is the only moment that happens whether the caller read
             # the last event or walked away after the answer.
+            # One read, before anything is let go of: the saver still holds the
+            # paused state, and `_settle_pause` is what writes it out.
+            snapshot = self._settled(prepared)
+            turn.awaiting = self._settle_pause(prepared, snapshot)
+            if turn.awaiting:
+                turn.pending.append(decision_needed(turn.awaiting))
+                # A bound that already fired keeps the reason it gave. Both are true
+                # -- the gate is real and the checkpoint is written either way -- and
+                # `stop_reason` answers why the turn *ended*, which for a turn cut
+                # off at its deadline is the deadline and not the question it was
+                # holding. The pending calls are reported regardless, so a caller is
+                # never left guessing what was in flight.
+                if turn.stop_reason == END_TURN:
+                    turn.stop_reason = AWAITING
             try:
-                turn.kept = self._keep(prepared)
+                turn.kept = self._keep(prepared, snapshot)
             finally:
                 # The slot goes back however the turn ended -- answered, refused
                 # mid-stream, or cut short by its deadline.
@@ -859,7 +1050,15 @@ class Kingfisher(Sessions, Disposal):
         turn.answer, events = consume(namespace, mode, chunk, turn.answer, turn.delegates)
         return events
 
-    def _payload(self, turn: _Turn) -> dict[str, Any]:
+    def _payload(self, turn: _Turn) -> Any:
+        """What the graph is driven with: a conversation, or answers to resume into.
+
+        The two are alternatives. A resume re-enters the node that stopped rather
+        than starting a superstep, which is the whole difference between answering a
+        gate and asking the same question over again.
+        """
+        if turn.prepared.resume is not None:
+            return turn.prepared.resume
         return runtime.user_payload(turn.prepared.message, turn.prepared.history)
 
     def _driving(self, turn: _Turn) -> dict[str, Any]:
@@ -886,12 +1085,17 @@ class Kingfisher(Sessions, Disposal):
         return (
             *turn.pending,
             self._finished(
-                turn.prepared, turn.answer, turn.kept, stop_reason=turn.stop_reason
+                turn.prepared,
+                turn.answer,
+                turn.kept,
+                stop_reason=turn.stop_reason,
+                waiting=turn.awaiting,
+                discarded=turn.prepared.discarded,
             ),
         )
 
     def _stream_turn(
-        self, request: Request, session: Session, *, source_ids: Held | None = None
+        self, request: Request | Resume, session: Session, *, source_ids: Held | None = None
     ) -> Iterator[RunEvent]:
         """One turn, with its directory already held."""
         turn = _Turn(self._prepare(request, session, source_ids=source_ids))
@@ -909,7 +1113,7 @@ class Kingfisher(Sessions, Disposal):
         yield from self._ending(turn)
 
     async def _astream_turn(
-        self, request: Request, session: Session, *, source_ids: Held | None = None
+        self, request: Request | Resume, session: Session, *, source_ids: Held | None = None
     ) -> AsyncGenerator[RunEvent, None]:
         """The same turn on the graph's own async stream, its directory held.
 
@@ -937,7 +1141,7 @@ class Kingfisher(Sessions, Disposal):
 
     def run(
         self,
-        request: str | Request,
+        request: str | Request | Resume,
         *,
         source_ids: Held | None = None,
         delete_session: bool = False,
@@ -976,7 +1180,7 @@ class Kingfisher(Sessions, Disposal):
         return result
 
     async def astream(
-        self, request: str | Request, *, source_ids: Held | None = None
+        self, request: str | Request | Resume, *, source_ids: Held | None = None
     ) -> AsyncIterator[RunEvent]:
         """`stream`, for a caller already on an event loop. Cancelling is immediate.
 
@@ -986,7 +1190,7 @@ class Kingfisher(Sessions, Disposal):
         passed as `threads=` needs `aget_tuple` and `aput`. Both refusals are
         loud, and neither reaches a caller of `stream`.
         """
-        request = Request.coerce(request)  # for the reason `stream` gives
+        request = _asked(request)  # for the reason `stream` gives
         with self._held_session(request) as session:
             turn = self._astream_turn(request, session, source_ids=source_ids)
             try:
@@ -1001,7 +1205,7 @@ class Kingfisher(Sessions, Disposal):
 
     async def arun(
         self,
-        request: str | Request,
+        request: str | Request | Resume,
         *,
         source_ids: Held | None = None,
         delete_session: bool = False,
