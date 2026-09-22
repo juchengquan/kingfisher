@@ -1514,7 +1514,7 @@ def test_the_operator_stops_before_running_a_command(cfg, session_dir, shipped):
                 AIMessage(content="done"),
             ]
         ),
-    )
+    ).graph
     config: Any = {"configurable": {"thread_id": session_dir.name}, "recursion_limit": 12}
 
     out = graph.invoke({"messages": [("user", "clean up")]}, config=config)
