@@ -9,6 +9,7 @@ and three provider SDKs. Resolving what a delegate runs with is
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -63,6 +64,7 @@ from kingfisher.infrastructure.harness.tools import (
     registered_tools,
 )
 from kingfisher.infrastructure.prompting import system_prompt
+from kingfisher.infrastructure.sandbox.confinement import EXTERNAL
 from kingfisher.kinds.agents.spec import AgentSpec
 from kingfisher.kinds.subagents.spec import RunOn
 from kingfisher.kinds.tools.spec import Found
@@ -194,7 +196,10 @@ def builtin_tool_names(
     with tempfile.TemporaryDirectory(prefix="kingfisher-builtin-") as scratch:
         return registered_tools(
             build_agent(
-                cfg,
+                # `EXTERNAL` because this shell never runs a command, and any other
+                # mode warns that it is unconfined -- which `doctor` and `list` would
+                # then print on top of their own report, for a shell nothing uses.
+                replace(cfg, shell_sandbox=EXTERNAL),
                 session_dir=ensure_session_layout(Path(scratch)),
                 catalogue=catalogue,
                 workspace_tools=workspace_tools,

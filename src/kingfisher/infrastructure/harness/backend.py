@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import sys
+import warnings
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -405,6 +406,13 @@ def default_backend(
         confined = confinement.with_supplied_runner(
             confined, local=getattr(runner, "local", True)
         )
+    if confined.warning:
+        # After the runner is settled, not beside `shell_confinement`: a runner that
+        # is not local withdraws the warning, and saying it earlier would tell that
+        # deployment its host is exposed when nothing runs on it. This line rather
+        # than the caller's, so the default filter says it once per process instead
+        # of once per place that builds a backend.
+        warnings.warn(confined.warning, stacklevel=1)
     shell = ConfinedLocalShellBackend(
         confined,
         runner=chosen,
