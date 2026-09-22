@@ -559,6 +559,51 @@ def test_a_missing_credential_is_a_warning_not_a_failure(cfg, tmp_path):
     assert checks["credentials"].verdict == "warn"
 
 
+def test_an_endpoint_no_model_uses_is_not_called_keyed(cfg, tmp_path):
+    """With every model's endpoint keyed, the check said every endpoint had a key while
+    the loader warned that one had none -- wrong on exactly the case the loader's
+    warning exists for, a typo in a `key_env` nothing uses yet.
+    """
+    import pytest
+
+    from kingfisher.config import MissingCredentialsWarning
+    from kingfisher.infrastructure.model_catalogue import load
+
+    path = tmp_path / "idle.yaml"
+    path.write_text(TWO_ENDPOINTS.replace("  far-model:\n    endpoint: elsewhere\n", ""))
+    with pytest.warns(MissingCredentialsWarning):
+        models = load(path, {"GATEWAY_KEY": "sk-gateway"})
+    assert not models.unreachable, "the premise: no model sits on the dropped endpoint"
+
+    from dataclasses import replace
+
+    checks = {check.name: check for check in examine(replace(cfg, models=models))}
+
+    assert checks["credentials"].verdict == "warn"
+    assert "ELSEWHERE_KEY" in checks["credentials"].detail
+
+
+def test_doctor_says_a_missing_key_once_and_inside_its_report(cfg, tmp_path, monkeypatch, capsys):
+    """`doctor` printed the loader's `UserWarning` about a missing key above its report,
+    and then its `credentials` check said the same thing again inside it.
+    """
+    import warnings
+
+    path = tmp_path / "half.yaml"
+    path.write_text(TWO_ENDPOINTS, encoding="utf-8")
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(path))
+    monkeypatch.setenv("GATEWAY_KEY", "sk-gateway")
+    monkeypatch.delenv("ELSEWHERE_KEY", raising=False)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        main(["doctor"])
+
+    assert not [w for w in caught if "ELSEWHERE_KEY" in str(w.message)]
+    assert "ELSEWHERE_KEY" in capsys.readouterr().out, "the control: the check still says it"
+
+
 def test_a_definition_that_cannot_run_is_named(cfg, tmp_path):
     """The check nothing else does."""
     half = _half_keyed(cfg, tmp_path)
