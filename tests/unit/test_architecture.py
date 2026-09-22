@@ -2208,6 +2208,11 @@ LIGHT_EXPORTS = frozenset({
     # -- paying for three provider SDKs to find out where `skills/` goes would
     # be the wrong shape entirely.
     "paths_from_env", "WorkspacePaths",
+    # How `decide` answers "what is this session waiting on?" without starting a
+    # turn. Light, and it has to stay light for the same reason `paths_from_env`
+    # does: reading a file a pause already wrote should not load an agent runtime,
+    # and asking what is pending must not be the thing that supersedes it.
+    "read_pause_mark", "pending_from_mark",
     # Seeding, and asking what a workspace offers. Measured at 21-50ms and 148-192
     # modules with no SDK loaded -- heavier than `system_prompt` at 90, because `yaml`
     # and `importlib.metadata` come with them, and nowhere near the 3,100 a provider

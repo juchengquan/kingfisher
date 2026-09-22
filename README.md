@@ -72,6 +72,13 @@ deletes the ones it is finished with. A run that should leave nothing behind can
 say so at the time: `kingfisher run --delete-session`, or
 `Kingfisher.run(..., delete_session=True)` from Python.
 
+An agent can be written to stop before a tool runs and wait for you — see
+*Approval gates* in [`formats.md`](docs/guides/formats.md), and
+`assets_examples/agents/operator.yaml` for one that does. A turn that stops says
+what it is holding and prints the command that answers it; `kingfisher decide
+--session ID` on its own says the same thing again for anyone who has lost the
+output.
+
 ## What ships separately
 
 **The definitions ship nowhere.** They were their own distribution once, found

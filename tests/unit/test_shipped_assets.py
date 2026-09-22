@@ -354,7 +354,15 @@ def test_every_preset_agent_parses(shipped):
     # `test_seed_leaves_behind_a_definition_that_names_middleware`. Left behind
     # is not unread: they are definitions of this kind, in this kind's folder,
     # and they parse like the rest.
-    assert set(specs) == {"analyst", "assistant", "general", "researcher", "scribe", "surveyor"}
+    assert set(specs) == {
+        "analyst",
+        "assistant",
+        "general",
+        "operator",
+        "researcher",
+        "scribe",
+        "surveyor",
+    }
     for spec in specs.values():
         assert spec.description.strip()
         assert len(spec.system_prompt) > 200  # a real prompt, not a stub
@@ -1445,10 +1453,73 @@ def test_the_other_presets_still_restrict_nobody(shipped):
     assert {name for name, spec in agents.items() if spec.source_ids == ALL} == {
         "assistant",
         "general",
+        "operator",
         "researcher",
         "scribe",
         "surveyor",
     }
+
+
+def test_the_operator_gates_a_tool_it_actually_holds(shipped):
+    """A gate on a tool the agent was not granted is a silent no-op -- correct
+    behaviour, and useless as an example.
+
+    So the one thing this file has to keep true is the pairing: `execute` is in the
+    `builtin_tools:` line *and* in the `interrupt_on:` line. Drop it from either and
+    the definition still parses, still builds, and demonstrates nothing -- which is
+    exactly the failure nothing else here would report.
+    """
+    from kingfisher.domain.capabilities import ALL
+
+    spec = LocalAgentRepository(shipped / "agents").specs["operator"]
+
+    assert spec.interrupt_on == ("execute",)
+    # `builtin_tools` unset means every built-in, so holding `execute` is either the
+    # star or a list naming it. Both are legitimate ways to write this example, and
+    # asserting only the second would refuse the file for being rewritten correctly.
+    holds = spec.builtin_tools == ALL or "execute" in (spec.builtin_tools or ())
+    assert holds, "the example gates a tool it does not hold"
+
+
+def test_the_operator_stops_before_running_a_command(cfg, session_dir, shipped):
+    """The curriculum, run rather than read -- the rule this file is built on.
+
+    Parsing the definition shows the line is *written*; only driving it shows the
+    line is *wired*. Both were true of the middleware pairing below, and it was
+    broken for as long as it existed.
+    """
+    from langchain_core.messages import AIMessage
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    from kingfisher.infrastructure.catalogue import Definitions
+    from tests.conftest import FakeToolCallingModel
+
+    roots = Definitions.from_roots(
+        {kind: shipped / kind for kind in ("agents", "skills", "subagents", "tools", "middlewares")}
+    )
+    graph = build_agent(
+        cfg,
+        agent=LocalAgentRepository(shipped / "agents").specs["operator"],
+        catalogue=roots,
+        session_dir=session_dir,
+        checkpointer=InMemorySaver(),
+        model=FakeToolCallingModel(
+            responses=[
+                AIMessage(
+                    content="Remove the build directory.",
+                    tool_calls=[
+                        {"name": "execute", "args": {"command": "rm -rf build"}, "id": "c1"}
+                    ],
+                ),
+                AIMessage(content="done"),
+            ]
+        ),
+    )
+    config: Any = {"configurable": {"thread_id": session_dir.name}, "recursion_limit": 12}
+
+    out = graph.invoke({"messages": [("user", "clean up")]}, config=config)
+
+    assert "__interrupt__" in out, "the example ran a shell command without stopping"
 
 
 def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir, shipped):

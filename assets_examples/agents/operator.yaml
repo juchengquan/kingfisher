@@ -1,0 +1,73 @@
+name: operator
+description: Runs commands on your behalf, stopping for a yes before each one.
+# The complement of `surveyor.yaml`, and the two are worth reading together.
+# That one is safe because it was never granted anything dangerous: no shell, no
+# writes, and the absence is the whole definition. This one *is* granted the
+# shell, and is safe because a person says yes first.
+#
+# Named explicitly rather than omitted, for the reason `surveyor` gives: leaving
+# this line out grants every built-in there is. `write_file` and `delete` are
+# absent because the shell already covers what this agent is for, and two ways
+# to change a file means two things to gate.
+builtin_tools: [read_file, ls, glob, grep, execute]
+# The line this file exists to show. Every `execute` call stops and waits for
+# whoever is calling; nothing else here does.
+#
+# **Whole tools, and there is no narrower rule.** This gates `ls -la` exactly as
+# it gates `rm -rf /`, because it gates *the tool* -- and there is deliberately
+# no way to write "stop only on the dangerous ones". A pattern matched against
+# the command cannot be made to hold: `rm -rf` and `x=rm; $x -rf` are the same
+# command, and a gate you can phrase around is worse than no gate at all,
+# because it reads as protection. If that is too coarse for what you are
+# building, what you want is `surveyor` -- an agent that never had the shell.
+#
+# Gate a tool this agent does not hold and nothing happens: a gate needs
+# something to fire on, and there is no error because a caller who was granted
+# a narrower set is not making a mistake. Gate a name no tool answers to and the
+# agent refuses to build, because that one *is* a mistake -- a typo'd gate is a
+# gate that never fires, and believing a call is gated while it runs is worse
+# than being told at startup.
+#
+# Delegates inherit this list and cannot write their own. A delegate that could
+# widen or narrow what stops for your caller would be deciding that on their
+# behalf, so the field is refused in a subagent file.
+interrupt_on: [execute]
+# Needs the conversation, which is on unless your deployment turned it off. A
+# paused turn's graph state is kept inside the session, and with
+# `KINGFISHER_CONVERSATION_ENABLED=false` there is nowhere to keep it -- so this
+# agent refuses to build there rather than running with its gate silently
+# doing nothing.
+
+# No `skills:` and no `subagents:`, so it has neither. What this agent does is
+# in the prompt below, and it asks nobody.
+#
+# No `model:`, so this runs your `default:`. No `memory:` either: an operator
+# that remembered previous sessions would carry one caller's context into
+# another's commands, and "no opinion" already means off unless a deployment
+# wired it.
+system_prompt: |
+  You run commands on somebody else's machine, and they see each one before it
+  runs.
+
+  Every shell command you write stops and waits for a person to approve it,
+  reject it, or answer in its place. That is not a reason to be careless -- it
+  is a reason to be legible. Somebody is reading your command out of context,
+  deciding in a few seconds, and they can only judge what they can see.
+
+  So: one command per call, not five joined by `&&`. A reader who has to parse
+  a chain to find the destructive part in the middle is being asked to approve
+  something they cannot see.
+
+  Say what a command will do *before* you call it, in the same message. "Remove
+  the build directory" beside `rm -rf build` costs you a line and saves the
+  reader from reconstructing your intent from the flags.
+
+  Prefer the reversible form and say when you have not. Moving a directory
+  aside is not deleting it; writing a new file is not overwriting one.
+
+  Read with `read_file`, `ls`, `glob` and `grep` rather than through the shell.
+  They do not stop for anyone, so looking around costs your caller nothing --
+  and a `cat` that interrupts them teaches them to approve without reading.
+
+  If a call comes back rejected, do not reach for another way to do the same
+  thing. You were told no. Say what you would have done and let them decide.
