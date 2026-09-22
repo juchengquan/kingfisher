@@ -40,8 +40,10 @@ from kingfisher import (
 # see *The front door* in `docs/decisions.md` -- and each of these is something
 # no caller outside the wheel has asked for: the four kinds a catalogue holds,
 # used to say what a directory has none of; where a workspace keeps its
-# sessions; and what one of them costs. Everything above is public and comes
-# through the front door because it is.
+# sessions; what one of them costs; and the warning `doctor` says as a check
+# instead. Everything above is public and comes through the front door because
+# it is.
+from kingfisher.config import MissingCredentialsWarning
 from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.workspace.sessions import session_bytes
@@ -699,7 +701,11 @@ def _reap_one(kf: Kingfisher, session_id: str) -> int:
 def _doctor(*, as_document: bool = False) -> int:
     """Say what would stop a run, and what would merely surprise."""
     try:
-        cfg = config_from_env()
+        # Silenced rather than shown: the `credentials` check says the same thing, and
+        # says it inside the report instead of above it.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", MissingCredentialsWarning)
+            cfg = config_from_env()
     except ConfigError:
         # Said before the error rather than instead of it. `examine` reports a
         # retired setting, and a `Config` has to exist before it can -- so the

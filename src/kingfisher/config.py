@@ -134,6 +134,14 @@ class ConfigError(RuntimeError):
     """Raised when required configuration is missing or invalid."""
 
 
+class MissingCredentialsWarning(UserWarning):
+    """An endpoint in `models.yaml` whose key is not set here, so it was dropped.
+
+    A class of its own so `doctor`, which reports the same thing as a check, can
+    silence this warning by name rather than by matching its wording.
+    """
+
+
 @dataclass(frozen=True)
 class Models:
     """What this deployment can run, where, and under which names."""
@@ -152,6 +160,10 @@ class Models:
     #: Models this file defines that this machine cannot reach, and why -- keyed by
     #: model name, valued as the clause `resolve` drops into its refusal.
     unreachable: Mapping[str, str] = field(default_factory=dict)
+    #: Endpoints this file defines that were dropped for want of a key, valued by
+    #: the variable each one names -- including one no model uses, which nothing in
+    #: `unreachable` would mention.
+    dropped: Mapping[str, str] = field(default_factory=dict)
     #: Where all of it was read from. Informational, so a refusal can name the
     #: file that should have defined what it could not find.
     source: Path | None = None

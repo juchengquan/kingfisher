@@ -2177,6 +2177,10 @@ LIGHT_EXPORTS = frozenset({
     # library, and `CommandResult` is a frozen dataclass in `domain.ports`.
     "SESSION_ROOT_CONTRACT", "COMMAND_RUNNER_CONTRACT", "CommandResult",
     "ensure_layout", "config_from_env",
+    # What `doctor` silences while it loads a configuration, because its own
+    # `credentials` check says the same thing. Beside `ConfigError` in
+    # `kingfisher.config`, and as light: a `UserWarning` subclass and nothing else.
+    "MissingCredentialsWarning",
     # Asking the host what it can fence with, either way round.
     "bubblewrap_available",
     # The fence's own module, which `doctor` asks what the kernel can fence with

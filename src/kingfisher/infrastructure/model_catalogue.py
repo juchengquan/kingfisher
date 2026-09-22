@@ -8,7 +8,13 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from kingfisher.config import ConfigError, Endpoint, ModelProfile, Models
+from kingfisher.config import (
+    ConfigError,
+    Endpoint,
+    MissingCredentialsWarning,
+    ModelProfile,
+    Models,
+)
 from kingfisher.domain import fields
 from kingfisher.infrastructure.harness.models import ADAPTERS
 from kingfisher.infrastructure.workspace.layout import EXAMPLE
@@ -224,6 +230,7 @@ def load(path: Path, environ: Mapping[str, str]) -> Models:
         warnings.warn(
             f"{path}: no credentials for endpoint(s) {named}; "
             f"models on them are unavailable here",
+            MissingCredentialsWarning,
             stacklevel=2,
         )
     models, unreachable = _models(document, endpoints, dropped, path)
@@ -250,5 +257,6 @@ def load(path: Path, environ: Mapping[str, str]) -> Models:
         endpoints=endpoints,
         default=default,
         unreachable=unreachable,
+        dropped=dropped,
         source=path,
     )

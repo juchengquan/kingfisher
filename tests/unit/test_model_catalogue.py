@@ -9,7 +9,14 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.config import Config, ConfigError, Endpoint, ModelProfile, Models
+from kingfisher.config import (
+    Config,
+    ConfigError,
+    Endpoint,
+    MissingCredentialsWarning,
+    ModelProfile,
+    Models,
+)
 from kingfisher.infrastructure.model_catalogue import load
 
 GOOD = """
@@ -129,12 +136,15 @@ def test_an_endpoint_without_its_key_is_dropped_with_its_models(tmp_path):
         "    key_env: OTHER_API_KEY\n\ndefault: main-model",
     ).replace("  tuned:\n    endpoint: gateway", "  tuned:\n    endpoint: other")
 
-    with pytest.warns(UserWarning, match="OTHER_API_KEY"):
+    # By its own class, which is what `doctor` silences it by -- so this is also what
+    # says everyone outside `doctor` still hears it.
+    with pytest.warns(MissingCredentialsWarning, match="OTHER_API_KEY"):
         catalogue = loaded(tmp_path, body)
         endpoints, models = catalogue.endpoints, catalogue.models
 
     assert set(endpoints) == {"gateway"}
     assert set(models) == {"main-model"}
+    assert catalogue.dropped == {"other": "OTHER_API_KEY"}
 
 
 def test_an_api_kingfisher_cannot_build_is_refused_as_the_file_loads(tmp_path):

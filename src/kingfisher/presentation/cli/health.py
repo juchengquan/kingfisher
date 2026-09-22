@@ -93,12 +93,24 @@ def _catalogue(cfg: Config) -> Iterator[Check]:
     # -- "one reviewed file works across a fleet holding different subsets of keys" --
     # so failing here would fail on the arrangement the format encourages. It becomes a
     # failure through the definitions check, when something actually names one.
-    if models.unreachable:
-        named = ", ".join(f"{name} ({why})" for name, why in sorted(models.unreachable.items()))
+    #
+    # By endpoint rather than by model, because `doctor` silences the loader's warning
+    # and this is what says it instead: an endpoint no model uses has no entry in
+    # `unreachable`, and a report built from that alone would call it keyed.
+    if models.dropped:
+        named = ", ".join(
+            f"{name} ({key} is not set)" for name, key in sorted(models.dropped.items())
+        )
+        riding = (
+            f"{len(models.unreachable)} model(s) this file defines cannot be reached: "
+            f"{', '.join(sorted(models.unreachable))}"
+            if models.unreachable
+            else "no model this file defines runs on them"
+        )
         yield Check(
             "credentials",
             "warn",
-            f"{len(models.unreachable)} model(s) this file defines cannot be reached: {named}",
+            f"no key for endpoint(s) {named}; {riding}",
             "set the variable each one names, or ignore this if no definition wants them",
         )
     else:
