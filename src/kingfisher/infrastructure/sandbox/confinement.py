@@ -57,13 +57,11 @@ AUTO = "auto"
 #: workspace. Nothing is wrapped and nothing is warned about, because the
 #: deployment has asserted the boundary exists somewhere this code cannot see.
 EXTERNAL = "external"
-#: bubblewrap: a mount namespace with no network, for kernels Landlock cannot
-#: reach. Named explicitly and never chosen by `AUTO`, for the same reason
-#: `EXTERNAL` is: it depends on the container having been started with its
-#: syscall filter relaxed, which is a fact about the deployment and not about
-#: this host. `AUTO` selecting it would mean kingfisher betting on something it
-#: cannot check, and losing that bet looks like a shell that reports confined
-#: and fails at its first command. See `infrastructure/sandbox/bubblewrap.py`.
+#: bubblewrap: a mount namespace with no network. `AUTO` falls back to it where
+#: Landlock cannot run; naming it chooses it even where Landlock would, which is
+#: how a deployment closes the shell's network. Probed rather than trusted either
+#: way, because it works only in a container whose seccomp profile permits user
+#: namespaces. See `infrastructure/sandbox/bubblewrap.py`.
 BUBBLEWRAP = "bubblewrap"
 #: Deliberately unconfined. Warned about on every start, because an exposure
 #: nobody is reminded of is one nobody fixes.

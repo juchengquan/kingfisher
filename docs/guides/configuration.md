@@ -97,7 +97,7 @@ prompt rewritten, for the same reason.
 
 | Variable | What it does | Default |
 | --- | --- | --- |
-| `KINGFISHER_SHELL_SANDBOX` | `auto` uses whatever the platform offers, `external` says the runtime already confines this process, `off` opts out and warns on every start. | `auto` |
+| `KINGFISHER_SHELL_SANDBOX` | `auto` uses whatever the platform offers, `bubblewrap` asks for bubblewrap even where Landlock would run, `external` says the runtime already confines this process, `off` opts out and warns on every start. | `auto` |
 | `KINGFISHER_SHELL_PATH_EXTRA` | Extra directories on the agent's `PATH`, which is how it reaches something like `/opt/homebrew/bin`. | empty |
 
 `execute` reaches the whole host filesystem regardless of the virtual paths the
@@ -117,8 +117,13 @@ runs unfenced and proves the escape works without it.
 
 On Linux `auto` reaches Landlock only where `sandlock` is installed and the
 kernel offers ABI 6; `pip install 'kingfisher[fence]'` supplies the first, and
-the shipped image does. `kingfisher doctor` names the mechanism it settled on and
-says why when it settled on nothing.
+the shipped image does. Where Landlock cannot run, `auto` falls back to
+bubblewrap, which needs a seccomp profile permitting user namespaces — Docker's
+default denies them. bubblewrap also closes the shell's network, so a script the
+agent runs through `execute` can no longer download anything; `http_fetch` is a
+registered tool and is unaffected. Set `bubblewrap` to get that closed network
+even where Landlock would run. `kingfisher doctor` names the mechanism it settled
+on and says why when it settled on nothing.
 
 Whatever you add to `PATH` is granted to the fence as readable, so a directory
 named here is one the agent can run from.
