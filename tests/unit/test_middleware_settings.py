@@ -9,6 +9,11 @@ import yaml
 from langchain.agents.middleware import AgentMiddleware
 
 from kingfisher.domain.capabilities import ALL, CapabilityError
+from kingfisher.infrastructure.harness.agent import (
+    _deployment_middleware,
+    _model_named,
+    _provisions,
+)
 from kingfisher.infrastructure.harness.middleware import ByName, declared_middleware
 from kingfisher.kinds.agents import spec as agent_format
 from kingfisher.kinds.agents.spec import AgentError
@@ -552,3 +557,104 @@ def test_a_factory_declaring_wants_is_refused_rather_than_built_without_them():
             kind="agent",
             provisions={"model": ByName(object(), resolve=_never_resolved)},
         )
+
+
+# -- the builder behind those provisions -----------------------------------
+#
+# Every test above hands `declared_middleware` a mapping it wrote by hand, and so
+# does `_shipped_provisions` in `test_shipped_assets.py`. Neither checks that the
+# harness builds that shape, so the keys were kept in step by eye across three
+# spellings. These drive the harness's own builder instead.
+
+
+def test_the_builder_fills_the_three_keys_a_want_may_name(cfg):
+    """A key added here and not to `wants`' vocabulary is a want no class can ask for.
+
+    Asserted as the whole set rather than key by key: the failure this catches is a
+    key going *missing*, and a per-key assertion passes while the mapping shrinks.
+    """
+    definition = agent_spec(written("middlewares: [fs]\n"))
+    backend = object()
+    running = object()
+
+    provisions = _provisions(
+        running, definition, cfg=cfg, endpoints=ALL, backend=backend
+    )
+
+    assert set(provisions) == {"model", "backend", "definition"}
+    assert provisions["backend"] is backend
+    assert provisions["definition"] is definition
+    assert provisions["model"].fallback is running
+
+
+def test_the_builder_resolves_a_named_model_through_the_requests_ceiling(cfg):
+    """The `resolve` half, which a hand-built `ByName` in the tests above stubs out.
+
+    Driven rather than inspected: a `ByName` carrying a resolver that resolves
+    nothing would satisfy an `isinstance` check and still hand a middleware the
+    string it was written to be spared.
+    """
+    definition = agent_spec(written("middlewares: [needs-model]\n"))
+
+    provisions = _provisions(
+        object(), definition, cfg=cfg, endpoints=ALL, backend=object()
+    )
+
+    assert provisions["model"].resolve("cheap-model", "subject").model == "cheap-model"
+
+
+def test_a_model_named_beside_a_middleware_is_held_to_the_endpoints_granted(cfg):
+    """The ceiling the wrapper exists to apply, and the reason it is not
+    `model_named` itself at the call site.
+
+    `elsewhere-model` resolves to a second endpoint, so a build permitted only
+    `fake` must refuse it here rather than at the provider. The subject travels
+    with the refusal because it is the only thing saying *who asked*.
+    """
+    with pytest.raises(CapabilityError, match="may not reach") as raised:
+        _model_named("elsewhere-model", "middleware 'compact'", cfg, ("fake",))
+
+    assert "middleware 'compact'" in str(raised.value)
+
+
+def test_a_model_on_a_granted_endpoint_still_builds(cfg):
+    """The control on the refusal above: a ceiling that refused everything would
+    pass that test while making every `model:` beside a middleware unusable.
+    """
+    assert _model_named("cheap-model", "middleware 'compact'", cfg, ("fake",)).model == (
+        "cheap-model"
+    )
+
+
+# -- what a deployment's own middleware is built from ----------------------
+
+
+def test_a_build_with_no_agent_owes_the_deployment_nothing():
+    """`build_agent` takes capabilities rather than a definition for `--list` and for
+    every test that builds one, so this is the ordinary path rather than an edge.
+    """
+    assert _deployment_middleware(None, {"audit": Audit}, ALL, provisions={}) == []
+
+
+def test_each_graph_gets_middleware_of_its_own(cfg):
+    """Two graphs sharing one instance would share its state, which is what a cap
+    counting calls stops counting correctly.
+
+    This is why the agent's middleware is built at each call site rather than bound
+    once to a variable -- the provisions mapping *is* hoisted and shared, and the
+    difference between the two is the thing this pins.
+    """
+    definition = agent_spec(written("middlewares: [audit]\n"))
+    provisions = _provisions(
+        object(), definition, cfg=cfg, endpoints=ALL, backend=object()
+    )
+
+    (first,) = _deployment_middleware(
+        definition, {"audit": Audit}, ALL, provisions=provisions
+    )
+    (second,) = _deployment_middleware(
+        definition, {"audit": Audit}, ALL, provisions=provisions
+    )
+
+    assert first is not second, "one instance reached two graphs"
+    assert first.level == second.level == "INFO", "and both were built the same way"

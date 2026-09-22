@@ -217,6 +217,50 @@ def _running(
     return injected or mine or build_model(*cfg.models.resolve())
 
 
+def _model_named(written: str, subject: str, cfg: Config, endpoints: Selection) -> Any:
+    """A model named beside a middleware, under one request's ceiling."""
+    return model_named(written, cfg, endpoints=endpoints, subject=subject)
+
+
+def _provisions(
+    runs: Any, definition: Any, *, cfg: Config, endpoints: Selection, backend: Any
+) -> dict[str, Any]:
+    """What a class that declared `wants` is filled in from, for one graph.
+
+    Both call sites hand over the same keys and different values -- a delegate's
+    model is its own, not this agent's -- so a `middlewares:` line means the same
+    thing in an agent file and a subagent file. One builder rather than two, so
+    they cannot drift; a second mapping written inline at one of them is what
+    `test_both_kinds_are_handed_the_same_things_to_want` would catch.
+    """
+    return {
+        "model": ByName(runs, resolve=lambda w, s: _model_named(w, s, cfg, endpoints)),
+        "backend": backend,
+        "definition": definition,
+    }
+
+
+def _deployment_middleware(
+    agent: AgentSpec | None,
+    registry: Mapping[str, MiddlewareFactory],
+    allowed: Selection,
+    *,
+    provisions: Mapping[str, Any],
+) -> list[Any]:
+    """What this deployment's registry owes one graph, freshly built.
+
+    Called per graph rather than bound to a variable: `declared_middleware` builds
+    the middleware instances, and two graphs sharing one would share its state.
+    `provisions` is the input those instances are filled from and holds none, which
+    is why it may be built once and handed to both callers.
+    """
+    if agent is None:
+        return []
+    return declared_middleware(
+        agent, registry, allowed, kind="agent", provisions=provisions
+    )
+
+
 def builtin_tool_names(
     cfg: Config, catalogue: Definitions, workspace_tools: Sequence[Found] | None = None
 ) -> tuple[str, ...] | None:
@@ -361,25 +405,6 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
 
     running = _running(agent, cfg, capabilities.endpoints, model)
 
-    def _model_named(written: str, subject: str) -> Any:
-        """A model named beside a middleware, under this request's ceiling."""
-        return model_named(written, cfg, endpoints=capabilities.endpoints, subject=subject)
-
-    def _provisions(runs: Any, definition: Any) -> dict[str, Any]:
-        """What a class that declared `wants` is filled in from, for one graph.
-
-        Both call sites hand over the same keys and different values -- a delegate's
-        model is its own, not this agent's -- so a `middlewares:` line means the same
-        thing in an agent file and a subagent file. One builder rather than two, so
-        they cannot drift; a second mapping written inline at one of them is what
-        `test_both_kinds_are_handed_the_same_things_to_want` would catch.
-        """
-        return {
-            "model": ByName(runs, resolve=_model_named),
-            "backend": resolved_backend,
-            "definition": definition,
-        }
-
     def assemble(extra_tools: tuple[Any, ...]) -> CompiledStateGraph:
         return create_deep_agent(
             model=running,
@@ -502,7 +527,13 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                     registry,
                     capabilities.middlewares,
                     kind="subagent",
-                    provisions=_provisions(runs, defined[name]),
+                    provisions=_provisions(
+                        runs,
+                        defined[name],
+                        cfg=cfg,
+                        endpoints=capabilities.endpoints,
+                        backend=resolved_backend,
+                    ),
                 ),
             )
 
@@ -564,17 +595,20 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             _with_helpers(n, nested=False) for n in activated
         ]
 
-    def deployment_middleware() -> list[Any]:
-        """What this deployment's registry owes one graph, freshly built."""
-        if agent is None:
-            return []
-        return declared_middleware(
+    # Built once and handed to both callers below. What must not be shared between
+    # graphs is the middleware instances, which `_deployment_middleware` builds
+    # afresh each call; this is the input they are filled from and holds no state.
+    agent_provisions = (
+        {}
+        if agent is None
+        else _provisions(
+            running,
             agent,
-            registry,
-            capabilities.middlewares,
-            kind="agent",
-            provisions=_provisions(running, agent),
+            cfg=cfg,
+            endpoints=capabilities.endpoints,
+            backend=resolved_backend,
         )
+    )
 
     if permitted is not None:
         middleware.append(ToolAllowlist(permitted))
@@ -594,7 +628,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             "middleware": (
                 tool_guards(held, session_dir)
                 + ([ToolAllowlist(permitted)] if permitted is not None else [])
-                + deployment_middleware()
+                + _deployment_middleware(
+                    agent, registry, capabilities.middlewares, provisions=agent_provisions
+                )
             ),
         }
     )
@@ -609,6 +645,10 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # The agent's own, and last -- the same placement `as_subagent` gives a delegate's,
     # for the same reason: a deployment's middleware should see the tool and skill
     # narrowing kingfisher applied rather than run ahead of it.
-    middleware.extend(deployment_middleware())
+    middleware.extend(
+        _deployment_middleware(
+            agent, registry, capabilities.middlewares, provisions=agent_provisions
+        )
+    )
 
     return assemble(surface.carried)
