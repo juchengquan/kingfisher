@@ -3409,6 +3409,53 @@ suite built wrong, and the entry above is why cutting it is not the answer eithe
 What came of the pass is one collapse worth taking on its own merits: the parity
 documents compare in one rule now rather than fourteen. *(Measured 2026-09-21.)*
 
+**Asked a third time, at the words.** With the count still reading as too high and
+the blast radius healthy, the question became which of the suite's categories earn
+their place. Of 2,002 items, 1,249 drive library code; the rest is refusal text
+(308), architecture (139), config and CLI (133), shipped assets (97), prose and
+docs (60), and the suite's checks on itself (16). Deleting every one of those
+categories lands at 1,249, so a target below that is a statement about the product
+rather than about the tests.
+
+**The wording bill is real, and it is only error messages.** Scrambling every word
+of every error message in `src` -- placeholders and punctuation kept, so behaviour
+is unchanged -- turns 218 items red. Scrambling every docstring turns none.
+Scrambling every comment turns none. The prose rules bite on *shape* -- an
+unfinished sentence, a cited line number, a module named that is not there -- not on
+wording, and the shipped-asset tests are immune at 1 of 97.
+
+**Rejected: deleting the tests that only assert wording.** 176 candidates, cut to
+51 by coverage arcs and by the concrete message each `raises` block saw, and to
+roughly nothing by reading the docstrings. A list where a tuple was expected once
+opened an agent restricted to somebody else, and the test holding that is
+indistinguishable by arc from the one beside it, because a list and a tuple take
+the same branches. The docstring is the only thing that separates them. The rule
+that a test's docstring names the failure it catches is what makes an automated
+deletion criterion unusable here, which is the same finding as *Neither coverage
+nor kill-set can authorise a cut* above, arrived at from the other side. Three
+candidates carried no docstring; those need one written, not deleting.
+
+**And the matches cannot be narrowed, for a reason worth keeping.** Of 215 prose
+`match=` patterns, 51 already pin a quoted name or a syntax fragment and survive a
+reword; five belong to a class raised in one place and could drop the match. The
+other 159 cannot. `CapabilityError` is raised from 30 places, `ConfigError` from
+34, `SubagentError` from 27 -- so the sentence is the only thing saying which
+refusal fired. The suite matches on prose because prose is the error code.
+
+**What would actually free the wording** is a discriminator in `src` that is not a
+sentence: narrower classes, or a code carried on the error, after which a test pins
+the code and the message is free to improve. That is a change across thirty-odd
+raise sites and it is not costed here.
+
+**The carve-out, for whoever needs it.** Six message spans reach a model's context,
+all through `infrastructure/harness/`: `HostPathError` and `UnsafeReferenceError`,
+plus three literals written inline in `narrowing.py`. Both classes subclass
+`ValueError` and the tests guarding them catch the base, so a rule keyed on the
+exception name exempts nothing. Wording is behaviour there, twice measured: told
+only the virtual spelling, an agent passed it to `execute` 4 times in 10, and a
+model that read "None is not a delegate this request may use" reported the tool as
+broken and answered around it. *(Measured 2026-09-21.)*
+
 ## Proposals, and what became of them
 
 What is still being argued is in `docs/design/`, and `docs/README.md` lists it.
