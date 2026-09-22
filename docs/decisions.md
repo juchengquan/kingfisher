@@ -1472,6 +1472,30 @@ to do the same job: a checkpoint preserves resumable graph state, and kingfisher
 resumes a graph -- no `checkpoint_id`, no `interrupt()` anywhere. What is left
 for a saver is one turn's supersteps.
 
+**Narrowed once, for approval gates.** kingfisher resumes a graph now, in exactly
+one case: a turn that stopped at an `interrupt_on` gate writes what its saver
+holds into `.harness/paused.state`, and a `Resume` reads it back and continues
+that graph. Everything above still holds for every other turn -- nothing is kept
+unless a turn stopped to ask, and it is dropped the moment one is answered or
+superseded, so an ordinary turn still starts with empty channels and no agent
+resumes into a checklist it does not remember writing.
+
+What that file is, is a consequence of where it lives. `.harness` is refused to
+the file tools, but `execute` bypasses those entirely and what refuses the shell
+is `confinement._harness_denial` -- a macOS profile, on one platform, that a
+deployment can switch off. So the checkpoint is msgpack through langgraph's own
+serialiser, which neither writes nor reads a pickle. That is also why it is not
+`InMemorySaver(factory=PersistentDict)`, the persistence seam langgraph ships
+for this and the obvious thing to reach for: it is unconditionally pickle, and a
+tampered pickle read back is arbitrary code at resume time where a tampered
+msgpack is only bad graph state.
+
+The pending writes go with the checkpoint, which is the half worth writing down.
+A turn can stop on one gated call while a sibling in the same superstep has
+already run; drop those writes and the sibling runs *again* on resume, which for
+an approval gate means a tool firing twice for one decision. Both paths end in
+identical state, so nothing but a side effect can tell them apart. *(2026-09-22.)*
+
 The three things the old per-session sqlite bought all survive by another route,
 which was measured rather than assumed. A conversation deleted with its directory
 (one workspace held 132 orphaned threads after every session had been reaped), a

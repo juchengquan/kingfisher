@@ -73,7 +73,7 @@ the workspace around it is on a disk.
 | `KINGFISHER_SKILLS_ENABLED` | Skills the agent may read and run. Costs ~450 tokens of preamble on every turn before a single skill is named, which is why it is a switch. | `false` |
 | `KINGFISHER_MEMORY_ENABLED` | The memory directory a session carries between turns. On means runs stop being repeatable: the agent writes notes that come back. | `false` |
 | `KINGFISHER_INTERPRETER_ENABLED` | A JavaScript sandbox the agent can compute in: no filesystem, no network, capped memory and time. | `false` |
-| `KINGFISHER_CONVERSATION_ENABLED` | Whether a session remembers earlier turns. **The one flag that is on unless you turn it off.** | `true` |
+| `KINGFISHER_CONVERSATION_ENABLED` | Whether a session remembers earlier turns. **The one flag that is on unless you turn it off.** Also what an approval gate pauses into, so an agent with `interrupt_on` refuses to build where this is off. | `true` |
 
 A flag reads as true for `1`, `true`, `yes` or `on`. **Anything else is false**,
 including a value that looks entirely deliberate: `y`, `enabled` and a path are

@@ -128,11 +128,35 @@ def test_an_agent_may_name_every_subagent_and_a_subagent_may_not():
 def test_each_declined_field_says_why_it_is_declined():
     for field, expected in [
             ("permissions: [x]", "replace"),
-            ("interrupt_on: [x]", "surfaces an interrupt"),
             ("response_format: {}", "what a .run returns"),
         ]:
         with pytest.raises(AgentError, match=expected):
             _read(MINIMAL.rstrip() + f"\n{field}\n", "plain.yaml")
+
+
+def test_gates_are_read_as_names():
+    """`interrupt_on` was declined here, with the reason that nothing surfaced a pause
+    to the caller. Something does now, so the entry went rather than being reworded --
+    and this is what would catch it coming back as a refusal nobody meant to keep.
+    """
+    spec = _read(MINIMAL.rstrip() + "\ninterrupt_on: [execute, write_file]\n", "plain.yaml")
+
+    assert spec.interrupt_on == ("execute", "write_file")
+
+
+def test_a_gate_list_refuses_the_star():
+    """Every other list in this format reads `*` as "no limit"; here it would mean the
+    tightest setting there is, and one spelling cannot carry both senses in one file.
+    """
+    with pytest.raises(AgentError, match="the star means 'no limit'"):
+        _read(MINIMAL.rstrip() + '\ninterrupt_on: ["*"]\n', "plain.yaml")
+
+
+def test_an_agent_that_gates_nothing_says_so_as_an_empty_tuple():
+    """Absent and empty are the same posture here, unlike `memory` -- there is no
+    third state a gate list could be in, so neither needs to be `None`.
+    """
+    assert _read(MINIMAL, "plain.yaml").interrupt_on == ()
 
 
 def test_an_unknown_field_is_refused_and_a_near_miss_is_named():

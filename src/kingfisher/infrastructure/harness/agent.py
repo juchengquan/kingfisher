@@ -65,7 +65,7 @@ from kingfisher.infrastructure.harness.tools import (
 )
 from kingfisher.infrastructure.prompting import system_prompt
 from kingfisher.infrastructure.sandbox.confinement import EXTERNAL
-from kingfisher.kinds.agents.spec import AgentSpec
+from kingfisher.kinds.agents.spec import AgentError, AgentSpec
 from kingfisher.kinds.subagents.spec import RunOn
 from kingfisher.kinds.tools.spec import Found
 from kingfisher.layout import denied_read_scopes, denied_scopes
@@ -107,6 +107,52 @@ def read_only_permissions() -> list[FilesystemPermission]:
         FilesystemPermission(operations=["read"], paths=[scope], mode="deny")
         for scope in denied_read_scopes()
     ]
+
+
+def _gates_for(agent: AgentSpec | None, checkpointer: Any) -> tuple[str, ...]:
+    """Which tools this agent stops on, refusing gates that could never pause.
+
+    Asked of the checkpointer rather than of `conversation_enabled`, because the
+    saver is the thing a pause actually needs and the flag is only the usual reason
+    there is none. Without one, langgraph's `GraphInterrupt` is *"suppressed by the
+    root graph, never surfaced to the user"* -- so the turn would end with the gated
+    call not run and nothing anywhere saying so, which is the outcome the author
+    wrote `interrupt_on` to prevent.
+    """
+    wanted = agent.interrupt_on if agent is not None else ()
+    if not wanted or agent is None or checkpointer is not None:
+        return wanted
+    msg = (
+        f"agent {agent.name!r} gates {', '.join(wanted)} behind a person, and this "
+        f"deployment keeps no conversation (KINGFISHER_CONVERSATION_ENABLED is "
+        f"false), so there is no checkpointer for a gated call to pause into. It "
+        f"would be skipped without a word. Turn the conversation on, or drop "
+        f"interrupt_on from the agent"
+    )
+    raise AgentError(msg)
+
+
+def _refuse_unknown_gates(
+    agent: AgentSpec | None, gated: tuple[str, ...], offers: Any
+) -> None:
+    """Refuse a gate on a name no tool in this workspace answers to.
+
+    Checked against what the workspace *offers* rather than what this caller was
+    granted, and the difference is the whole point: a grant narrows per request, so
+    an agent gating a tool a particular caller did not ask for is a gate with nothing
+    to fire on and is fine. A name that matches nothing at all is a typo, and
+    honouring it silently leaves an author believing a call is gated while it runs.
+    """
+    if not gated or agent is None:
+        return
+    known = set(offers.builtin) | set(offers.workspace)
+    if unknown := tuple(name for name in gated if name not in known):
+        msg = (
+            f"{agent.name}: interrupt_on names {', '.join(unknown)}, which no tool "
+            f"here answers to -- a gate on a name nothing matches never fires. "
+            f"Offered: {', '.join(sorted(known))}"
+        )
+        raise AgentError(msg)
 
 
 def _backend_for(
@@ -305,6 +351,14 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         interpreter_at = len(middleware)
         middleware.append(_interpreter(cfg, None))
 
+    gated = _gates_for(agent, checkpointer)
+    if gated:
+        # `True` rather than an `InterruptOnConfig`: the config's `when` predicate is
+        # the narrowing this format deliberately does not offer, and its
+        # `allowed_decisions` default is all four -- `edit` included, which is
+        # narrowed where a pause is read rather than here, so one place decides it.
+        extras["interrupt_on"] = dict.fromkeys(gated, True)
+
     running = _running(agent, cfg, capabilities.endpoints, model)
 
     def _model_named(written: str, subject: str) -> Any:
@@ -349,13 +403,20 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         # Either tool list naming anything needs the offered sets. A delegate
         # naming a helper needs the built tool *objects*, which come off the
         # same probe -- so wanting one is equally a reason to run it.
-        names_needed=any(
+        names_needed=bool(gated)
+        or any(
             defined[n].tools not in (ALL, None)
             or defined[n].builtin_tools not in (ALL, None)
             or defined[n].subagents is not None
             for n in activated
         ),
     )
+    # After the probe, because what a workspace offers is only knowable from an
+    # assembled graph -- `builtin_tool_names` builds one to answer it, so asking it
+    # from inside this function would recurse. `gated` forces the probe above for
+    # this: without it, an agent that names only a gate would skip the probe and the
+    # check would have nothing to check against.
+    _refuse_unknown_gates(agent, gated, surface.offers)
     permitted = surface.permitted
 
     if interpreter_at is not None and permitted is not None:
