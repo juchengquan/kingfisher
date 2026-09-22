@@ -8,14 +8,16 @@ cost nobody has measured yet.
 
 from __future__ import annotations
 
+import json
 import shutil
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.references import within
+from kingfisher.domain.result import PendingDecision
 from kingfisher.domain.transcript import Message, as_json, from_json
-from kingfisher.layout import HARNESS, TRANSCRIPT_FILE
+from kingfisher.layout import HARNESS, PAUSED_MARK, PAUSED_STATE, TRANSCRIPT_FILE
 
 if TYPE_CHECKING:
     from kingfisher.domain.ports import SessionStore
@@ -110,3 +112,86 @@ def write_transcript(directory: Path, messages: tuple[Message, ...]) -> None:
     path = Path(directory) / TRANSCRIPT
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(as_json(messages), encoding="utf-8")
+
+
+#: Where a paused turn's graph state and its provenance live. Under `.harness` for
+#: the reasons the transcript is: deleted with the session, counted by
+#: `session_bytes`, carried by whatever carries the rest, and out of reach of the
+#: file tools. Out of the *shell's* reach only where the sandbox profile is running,
+#: which is why what goes here is msgpack and never a pickle.
+PAUSED = f"{HARNESS}/{PAUSED_STATE}"
+PAUSED_PROVENANCE = f"{HARNESS}/{PAUSED_MARK}"
+
+#: Which agent the paused graph was built from. Kept for *checking* a resume, never
+#: for granting one: capabilities are re-presented every time, and a different agent
+#: is a different graph shape that this checkpoint's nodes do not belong to.
+AGENT_MARK = "agent"
+
+#: The gated calls the pause is waiting on, as the caller was told them.
+#:
+#: Kept rather than read back out of the checkpoint, and the ids are the reason: a
+#: caller answers what it was handed, so the two must be the same list rather than
+#: two derivations of one. Deriving them again would also need a compiled graph,
+#: which the admission path does not have until after it has dealt with the pause.
+PENDING_MARK = "pending"
+
+
+def paused_path(directory: Path) -> Path:
+    """Where this session's paused graph state goes, whether or not it is there."""
+    return Path(directory) / PAUSED
+
+
+def pending_from_mark(mark: Mapping[str, Any]) -> tuple[PendingDecision, ...]:
+    """The gated calls a mark records, or nothing where it records none."""
+    return tuple(
+        PendingDecision(
+            call_id=str(item.get("call_id") or ""),
+            tool=str(item.get("tool") or ""),
+            args=dict(item.get("args") or {}),
+            agent=item.get("agent") or None,
+            decisions=tuple(item.get("decisions") or ()),
+        )
+        for item in (mark.get(PENDING_MARK) or ())
+        if isinstance(item, Mapping)
+    )
+
+
+def pending_as_mark(waiting: Sequence[PendingDecision]) -> list[dict[str, Any]]:
+    """Those calls as the mark stores them."""
+    return [
+        {
+            "call_id": item.call_id,
+            "tool": item.tool,
+            "args": dict(item.args),
+            "agent": item.agent,
+            "decisions": list(item.decisions),
+        }
+        for item in waiting
+    ]
+
+
+def read_pause_mark(directory: Path) -> dict[str, Any] | None:
+    """What the paused checkpoint beside this was built against, or `None`."""
+    path = Path(directory) / PAUSED_PROVENANCE
+    if not path.is_file():
+        return None
+    try:
+        held = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        # Unreadable is the same answer as absent, and deliberately: this file
+        # exists to refuse a resume, so a damaged one refusing it too is right.
+        return None
+    return held if isinstance(held, dict) else None
+
+
+def write_pause_mark(directory: Path, mark: Mapping[str, Any]) -> None:
+    """Record what the checkpoint written beside this was built against."""
+    path = Path(directory) / PAUSED_PROVENANCE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(dict(mark), sort_keys=True), encoding="utf-8")
+
+
+def clear_pause(directory: Path) -> None:
+    """Drop a pause, answered or superseded. Safe where there was never one."""
+    for name in (PAUSED, PAUSED_PROVENANCE):
+        (Path(directory) / name).unlink(missing_ok=True)

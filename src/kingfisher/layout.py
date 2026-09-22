@@ -78,9 +78,9 @@ SKILLS = "skills"
 #: tools, and a rule in the sandbox profile for the shell, which bypasses them.
 HARNESS = ".harness"
 
-#: The four things it holds. Named here rather than by the modules that write
-#: them, because `.harness` is a layout decision and those modules were each
-#: spelling a path of their own under `state_dir` before this.
+#: What it holds. Named here rather than by the modules that write them, because
+#: `.harness` is a layout decision and those modules were each spelling a path of
+#: their own under `state_dir` before this.
 PINNED_AGENT = "agent.yaml"
 TRANSCRIPT_FILE = "transcript.jsonl"
 CLAIM = "claim"
@@ -88,6 +88,16 @@ CLAIM = "claim"
 #: and two things called "runs" in one session directory is how the last pair of
 #: names in this file drifted apart.
 RUNLOG = "runlog.jsonl"
+#: Written only by a turn that stopped at an approval gate, and deleted the moment
+#: one is answered or superseded. Its presence *is* the mark that a session is
+#: waiting -- a second file saying so is a second thing to keep in step, and the
+#: two would disagree the first time a write failed between them.
+PAUSED_STATE = "paused.state"
+#: What the checkpoint beside it was built against, which a resume checks before
+#: loading it. Apart from the state because it has to be readable when the state
+#: is not: a checkpoint written by libraries that have since moved is exactly the
+#: case this answers, and answering it means reading this without reading that.
+PAUSED_MARK = "paused.json"
 
 SESSION_PLUMBING: tuple[str, ...] = (
     AGENT_HOME,

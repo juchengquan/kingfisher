@@ -25,6 +25,11 @@ def normalize_answer(text: str) -> str:
 #: `RunResult.completed` is where that question is allowed to be asked.
 END_TURN = "end_turn"
 
+#: The turn stopped at an approval gate and is waiting for an answer. Unlike the two
+#: bounds below it, this one is resumable: `RunResult.pending` says what it stopped
+#: on, and a `Resume` carrying those answers continues the same graph.
+AWAITING = "awaiting_decision"
+
 #: Why a turn stopped, and the whole of it.
 STOP_REASONS: tuple[str, ...] = (
     END_TURN,
@@ -32,7 +37,35 @@ STOP_REASONS: tuple[str, ...] = (
     "max_duration",
     # `KINGFISHER_RECURSION_LIMIT`, enforced inside langgraph's own loop.
     "max_steps",
+    AWAITING,
 )
+
+#: What a caller may answer a gated call with, and the whole of it.
+#:
+#: `edit` is deliberately absent. deepagents offers it, and it is the one decision
+#: that lets the answering caller *author* a call rather than judge the one proposed
+#: -- which the admission path is built to prevent everywhere else. Adding it later
+#: breaks nobody; having shipped it and narrowed it would.
+DECISIONS: tuple[str, ...] = ("approve", "reject", "respond")
+
+
+@dataclass(frozen=True)
+class PendingDecision:
+    """One gated call a turn stopped on, and what may be answered about it."""
+
+    #: The tool call's own id, which is what a `Resume` answers by. Position would
+    #: be thinner and is a bug waiting for its first two-gate turn: the answer
+    #: crosses a process boundary and possibly a restart before it comes back.
+    call_id: str
+    tool: str
+    args: Mapping[str, Any] = field(default_factory=dict)
+    #: Which delegate proposed it, or `None` for the agent the caller asked. The
+    #: caller answers either way -- a delegate has no one else to ask.
+    agent: str | None = None
+    #: What this call will accept, as the middleware declared it. Reported rather
+    #: than assumed: a caller that guessed from `DECISIONS` would offer a choice
+    #: the gate may refuse.
+    decisions: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -67,6 +100,15 @@ class RunResult:
     #: or `None`. A turn stopped at a bound keeps its session on purpose, which is not
     #: a failure and leaves this empty -- `stop_reason` already says so.
     deletion_failure: str | None = None
+    #: What this turn stopped to ask, empty for every turn that stopped for another
+    #: reason. Non-empty exactly when `stop_reason` is `awaiting_decision`, and the
+    #: session is still there to resume into -- `_drained` declines to delete a turn
+    #: that did not complete, so `delete_session=True` already keeps it.
+    pending: tuple[PendingDecision, ...] = ()
+    #: A gate that stopped being a gate: the tools an unanswered turn was waiting on
+    #: when this turn superseded it. Reported rather than swallowed, because a human
+    #: decision quietly dropped is the one failure here that leaves no other trace.
+    discarded: tuple[str, ...] = ()
 
     @property
     def completed(self) -> bool:
@@ -125,6 +167,11 @@ KINDS: tuple[str, ...] = (
     "model_call",
     "tool_result",
     "token",
+    # An approval gate. `decision_needed` precedes `finished` the way `cut_short`
+    # does; `decision_discarded` says an *earlier* turn's gate was superseded by
+    # this one, so it arrives at the start of the turn that superseded it.
+    "decision_needed",
+    "decision_discarded",
     # Terminal. `cut_short` precedes `finished` rather than replacing it.
     "cut_short",
     "finished",

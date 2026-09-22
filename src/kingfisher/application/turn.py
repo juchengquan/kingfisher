@@ -6,13 +6,13 @@ from dataclasses import dataclass
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.domain.result import RunEvent
+from kingfisher.domain.result import PendingDecision, RunEvent
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.layout import SCRATCH, SCRATCH_ROUTE
 
 if TYPE_CHECKING:
     from kingfisher.config import Config
-    from kingfisher.domain.request import Request
+    from kingfisher.domain.request import Request, Resume
     from kingfisher.domain.transcript import Message
 
 
@@ -20,7 +20,10 @@ if TYPE_CHECKING:
 class Admitted:
     """A request that has passed everything able to reject it."""
 
-    request: Request
+    #: What this turn was started by: something new, or answers to a turn that
+    #: stopped for them. Both reach admission, because both build a graph and both
+    #: are refusable -- a resume is not exempt from the checks a request faces.
+    request: Request | Resume
     session: Any
     graph: Any
     #: Paths `protect_data` could not harden. Reported to the caller rather
@@ -30,6 +33,14 @@ class Admitted:
     #: The saver this service opened for the turn, or None when it opened
     #: nothing -- an injected instance is the deployment's to close.
     release: Any = None
+    #: The saver itself, which `release` is only sometimes.
+    saver: Any = None
+    #: Answers this turn resumes into, already translated, or `None`.
+    resume: dict[str, Any] | None = None
+    #: Tools an earlier turn was waiting on that this one superseded. Carried to the
+    #: end of the turn as well as announced at its start, because `run` drains the
+    #: stream for a result and would otherwise be the one caller never told.
+    discarded: tuple[str, ...] = ()
     #: `(what, names)` for each thing this workspace offers that the request did
     #: not grant -- tools, skills, subagents. Crosses rather than stopping: a
     #: withheld name is a fact about the run, not a refusal.
@@ -58,9 +69,21 @@ class Prepared:
     timeout_s: float
     #: Closed when the turn ends. See `_checkpointer_for`.
     release: Any = None
+    #: The saver itself, which `release` is only sometimes. A turn that stops at a
+    #: gate has to write what this holds before the lifecycle lets go of it.
+    saver: Any = None
     #: What was said in this session before now. The graph's saver holds one
     #: turn and nothing after it, so this is where a conversation comes from.
     history: tuple[Message, ...] = ()
+    #: Answers to a turn that stopped for them, in langgraph's own shape, or `None`
+    #: for a turn that is asking something new. The two are alternatives rather than
+    #: additions: a resume continues a graph mid-superstep and has no message to add.
+    resume: dict[str, Any] | None = None
+    #: Which agent this turn's graph was built from, written beside a pause so a
+    #: resume can refuse one that names a different agent.
+    agent_name: str | None = None
+    #: Tools an earlier turn was waiting on that this one superseded.
+    discarded: tuple[str, ...] = ()
 
 
 def turn_message(task: str, placed: tuple[str, ...]) -> str:
@@ -97,6 +120,31 @@ def consume(
     if (text := runtime.answer_in(namespace, mode, chunk)) is not None:
         answer = text
     return answer, tuple(runtime.events_in(namespace, mode, chunk, delegates))
+
+
+def decision_needed(waiting: tuple[PendingDecision, ...]) -> RunEvent:
+    """The event a turn that stopped at a gate owes its caller.
+
+    Carries the calls on `tools`/`args`, which is the shape `model_call` already
+    publishes -- a consumer rendering one can render this. The ids are not on the
+    event: they are on `RunResult.pending`, which is what a resume is built from, and
+    a second copy on the event is a second thing to keep parallel.
+    """
+    return RunEvent(
+        kind="decision_needed",
+        text=f"waiting on {', '.join(sorted({item.tool for item in waiting}))}",
+        tools=tuple(item.tool for item in waiting),
+        args=tuple(item.args for item in waiting),
+    )
+
+
+def decision_discarded(tools: tuple[str, ...]) -> RunEvent:
+    """The event a turn owes for the gate it superseded."""
+    return RunEvent(
+        kind="decision_discarded",
+        text=f"a pending decision on {', '.join(tools)} was dropped by this turn",
+        tools=tools,
+    )
 
 
 def overrun(prepared: Prepared) -> RunEvent | None:
