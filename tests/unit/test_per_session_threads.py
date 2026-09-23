@@ -16,7 +16,7 @@ from kingfisher import Kingfisher
 from kingfisher.config import Config
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.session_store import TRANSCRIPT
-from kingfisher.infrastructure.workspace.sessions import session_bytes
+from kingfisher.infrastructure.workspace import session_bytes
 from tests.conftest import StubCheckpointer
 from tests.unit.test_run import StubAgent
 

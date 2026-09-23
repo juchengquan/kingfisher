@@ -453,7 +453,7 @@ def test_the_starter_agent_the_refusal_prints_actually_loads(cfg):
 
     import yaml
 
-    from kingfisher.infrastructure.workspace.seeding import STARTER_AGENT
+    from kingfisher.infrastructure.workspace import STARTER_AGENT
     from kingfisher.kinds.agents.spec import parse
 
     block = STARTER_AGENT.split("A minimal one:\n\n", 1)[1].split("\n\nOmitting", 1)[0]

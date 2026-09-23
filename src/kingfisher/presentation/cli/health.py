@@ -27,8 +27,7 @@ from kingfisher.infrastructure.sandbox.confinement import (
     Confinement,
     shell_confinement,
 )
-from kingfisher.infrastructure.workspace.backing import MemoryBacking, memory_backing
-from kingfisher.infrastructure.workspace.seeding import destination_hint
+from kingfisher.infrastructure.workspace import MemoryBacking, destination_hint, memory_backing
 
 #: `fail` means this deployment will not run. `warn` means it will, and
 #: something about it is worth knowing -- an unconfined shell runs fine.

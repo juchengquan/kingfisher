@@ -12,7 +12,7 @@ from kingfisher.infrastructure.harness.backend import (
     shell_env,
 )
 from kingfisher.infrastructure.harness.runlog import log_path
-from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
     ROUTES,
@@ -296,7 +296,7 @@ def test_a_delegate_gets_the_correction_too(cfg, session_dir):
 
 def test_what_tools_cache_under_home_is_disposed_of_with_the_session(cfg, session_dir):
     """`reap` removes session directories and nothing else."""
-    from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs
+    from kingfisher.infrastructure.workspace import LocalSessionDirs
 
     home = Path(shell_env(cfg, session_dir)["HOME"])
     home.mkdir(parents=True, exist_ok=True)
@@ -309,7 +309,7 @@ def test_what_tools_cache_under_home_is_disposed_of_with_the_session(cfg, sessio
 
 def test_what_tools_cache_counts_against_the_session_quota(cfg, session_dir):
     """`session_max_bytes` measures a session."""
-    from kingfisher.infrastructure.workspace.sessions import session_bytes
+    from kingfisher.infrastructure.workspace import session_bytes
 
     before = session_bytes(session_dir)
     home = Path(shell_env(cfg, session_dir)["HOME"])
@@ -321,7 +321,7 @@ def test_what_tools_cache_counts_against_the_session_quota(cfg, session_dir):
 
 def test_home_is_not_shared_between_two_sessions(cfg, workspace):
     """One session's cached tokens or tool config must not be another's."""
-    from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+    from kingfisher.infrastructure.workspace import ensure_session_layout
 
     first = ensure_session_layout(workspace / "sessions" / "one")
     second = ensure_session_layout(workspace / "sessions" / "two")

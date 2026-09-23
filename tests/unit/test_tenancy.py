@@ -106,7 +106,7 @@ def test_grants_are_unrestricted_by_default(cfg):
 
 def _claim(cfg, session_id: str) -> Path:
     """One session's turn slot, which lives inside the session it guards."""
-    from kingfisher.infrastructure.workspace.sessions import claim_path
+    from kingfisher.infrastructure.workspace import claim_path
 
     return claim_path(cfg.workspace / "sessions" / session_id)
 

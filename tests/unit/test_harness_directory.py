@@ -22,9 +22,7 @@ from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import default_backend
 from kingfisher.infrastructure.harness.runlog import log_path
-from kingfisher.infrastructure.workspace.layout import ensure_layout
-from kingfisher.infrastructure.workspace.sessions import claim_path
-from kingfisher.infrastructure.workspace.snapshots import agent_snapshot
+from kingfisher.infrastructure.workspace import agent_snapshot, claim_path, ensure_layout
 from kingfisher.layout import LAYOUT_VERSION, MARKER
 from tests.conftest import FakeToolCallingModel, pin, start
 
@@ -138,7 +136,7 @@ def test_one_session_s_harness_is_not_denied_by_naming_another(cfg, workspace):
     """The profile is one static text covering every session, so the rule has to be a
     pattern -- and a pattern that matched too much would deny a path with `.harness`
     somewhere in the middle of it."""
-    from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+    from kingfisher.infrastructure.workspace import ensure_session_layout
 
     session = ensure_session_layout(workspace / "sessions" / "second")
     decoy = session / "derived" / ".harness"

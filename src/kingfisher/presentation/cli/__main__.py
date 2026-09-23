@@ -48,8 +48,8 @@ from kingfisher import (
 from kingfisher.config import MissingCredentialsWarning
 from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+from kingfisher.infrastructure.workspace import session_bytes
 from kingfisher.infrastructure.workspace.seeding import REMEDY, UNCONSULTED
-from kingfisher.infrastructure.workspace.sessions import session_bytes
 from kingfisher.presentation.cli.health import _retired, examine, worst
 from kingfisher.presentation.cli.listing import as_json, failed, origins_document, render
 from kingfisher.presentation.cli.progress import show

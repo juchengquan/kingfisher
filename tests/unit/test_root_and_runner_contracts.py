@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher.domain.ports import CommandResult, CommandRunner
-from kingfisher.infrastructure.workspace.sessions import LocalSessionRoot
+from kingfisher.infrastructure.workspace import LocalSessionRoot
 from kingfisher.testing import COMMAND_RUNNER_CONTRACT, SESSION_ROOT_CONTRACT
 
 

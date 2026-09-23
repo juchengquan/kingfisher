@@ -17,7 +17,7 @@ from kingfisher.infrastructure.sandbox.confinement import (
     landlock_ready,
 )
 from kingfisher.infrastructure.sandbox.fence import SYSTEM_PATHS, LandlockRunner, policy_for
-from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.layout import DERIVED, HARNESS
 from tests.conftest import repository_root
 

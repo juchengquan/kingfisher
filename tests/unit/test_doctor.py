@@ -273,7 +273,7 @@ def test_the_unset_remedy_says_where_your_own_definitions_go(cfg, tmp_path, monk
     """
     from dataclasses import replace
 
-    from kingfisher.infrastructure.workspace.seeding import DESTINATION
+    from kingfisher.infrastructure.workspace import DESTINATION
 
     unset = replace(cfg, assets=None)
 
@@ -771,7 +771,7 @@ def _backing(monkeypatch, sessions=None, **fields):
     sessions tree, which is the thing these tests are here to hold.
     """
     from kingfisher.domain.session import sessions_root
-    from kingfisher.infrastructure.workspace.backing import MemoryBacking
+    from kingfisher.infrastructure.workspace import MemoryBacking
 
     on_the_workspace = MemoryBacking(**fields)
     on_the_sessions = MemoryBacking(**sessions) if sessions is not None else on_the_workspace
@@ -856,7 +856,7 @@ def test_a_workspace_nobody_has_seeded_still_reports_a_size(tmp_path):
     unknown-limit branch -- on the one run that matters most, `doctor` before
     `kingfisher seed`, which is when a tmpfs is being sized.
     """
-    from kingfisher.infrastructure.workspace.backing import memory_backing
+    from kingfisher.infrastructure.workspace import memory_backing
 
     bare = tmp_path / "unseeded"
     bare.mkdir()

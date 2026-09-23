@@ -18,12 +18,13 @@ from kingfisher.domain.session import (
     sessions_root,
 )
 from kingfisher.infrastructure.session_store import restore_into
-from kingfisher.infrastructure.workspace.sessions import (
+from kingfisher.infrastructure.workspace import (
+    agent_snapshot,
+    agent_started_with,
     make_session_dirs,
     scaffold_memory,
     session_bytes,
 )
-from kingfisher.infrastructure.workspace.snapshots import agent_snapshot, agent_started_with
 from kingfisher.kinds.agents.reading import read
 
 if TYPE_CHECKING:

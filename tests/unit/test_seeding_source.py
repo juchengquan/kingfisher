@@ -54,7 +54,7 @@ def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(cfg, tm
     """It is kingfisher's own, not a definition, so it does not come from the source --
     and a caller's own directory has no reason to hold one.
     """
-    from kingfisher.infrastructure.workspace.layout import EXAMPLE, ensure_layout
+    from kingfisher.infrastructure.workspace import EXAMPLE, ensure_layout
 
     mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
     ensure_layout(cfg.workspace)
@@ -65,7 +65,7 @@ def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(cfg, tm
 
 def test_seeding_writes_no_source_ids_file_at_all(cfg, tmp_path):
     """Neither a policy nor an example, and the second half is the newer half."""
-    from kingfisher.infrastructure.workspace.layout import ensure_layout
+    from kingfisher.infrastructure.workspace import ensure_layout
 
     mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
     ensure_layout(cfg.workspace)
@@ -137,7 +137,7 @@ def test_the_refusal_names_a_worked_set_only_when_there_is_one(cfg, tmp_path, mo
     """The advice has to be true from where the reader is standing."""
     from dataclasses import replace
 
-    from kingfisher.infrastructure.workspace.seeding import SUGGESTION
+    from kingfisher.infrastructure.workspace import SUGGESTION
 
     nowhere = replace(cfg, assets=None)
 
@@ -158,7 +158,7 @@ def test_the_refusal_says_where_your_own_definitions_go(cfg, tmp_path, monkeypat
     """The half of the advice these messages never gave."""
     from dataclasses import replace
 
-    from kingfisher.infrastructure.workspace.seeding import DESTINATION
+    from kingfisher.infrastructure.workspace import DESTINATION
 
     nowhere = replace(cfg, assets=None)
 

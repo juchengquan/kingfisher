@@ -320,7 +320,7 @@ def builtin_tool_names(
     """
     import tempfile  # noqa: PLC0415 -- one caller, and only on the branch that probes
 
-    from kingfisher.infrastructure.workspace.sessions import (  # noqa: PLC0415
+    from kingfisher.infrastructure.workspace import (  # noqa: PLC0415
         ensure_session_layout,
     )
 

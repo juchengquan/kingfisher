@@ -12,7 +12,7 @@ from kingfisher.domain.session import (
     SessionBusyError,
     still_held,
 )
-from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs
+from kingfisher.infrastructure.workspace import LocalSessionDirs
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 

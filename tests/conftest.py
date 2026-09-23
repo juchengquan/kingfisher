@@ -11,8 +11,7 @@ from dotenv import load_dotenv
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
 from kingfisher.config import Config, Endpoint, ModelProfile, Models
-from kingfisher.infrastructure.workspace.layout import ensure_layout
-from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+from kingfisher.infrastructure.workspace import ensure_layout, ensure_session_layout
 
 if TYPE_CHECKING:
     # Type-only, and deliberately: naming the record at runtime would pull
@@ -41,7 +40,7 @@ class StubCheckpointer:
 @pytest.fixture
 def dirs():
     """The real `SessionDirs`."""
-    from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs
+    from kingfisher.infrastructure.workspace import LocalSessionDirs
 
     return LocalSessionDirs()
 
@@ -111,7 +110,7 @@ def cfg(workspace):
 
 def start(cfg, session_id: str) -> str:
     """Create a named session, as a service would before serving a turn."""
-    from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+    from kingfisher.infrastructure.workspace import ensure_session_layout
 
     ensure_session_layout(cfg.workspace / "sessions" / session_id)
     return session_id
@@ -125,7 +124,7 @@ def pin(kf, session_id: str, name: str) -> None:
     resolves an agent at all, so a test whose subject is the pin cannot get one by
     running a turn.
     """
-    from kingfisher.infrastructure.workspace.snapshots import remember_agent
+    from kingfisher.infrastructure.workspace import remember_agent
 
     document = kf.catalogue.agents.documents[name]
     remember_agent(kf.workspace / "sessions" / session_id, document)
