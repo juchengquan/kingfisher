@@ -235,7 +235,6 @@ def test_every_known_field_still_parses(tmp_path):
 REFUSE_THE_STAR = {
     "skills": "arrives as none",
     "subagents": "always a loop",
-    "bundle": "true of every bundle",
 }
 
 
@@ -249,11 +248,8 @@ def test_a_field_that_refuses_the_star_says_so_however_it_was_written(field, spe
     forbidden. `skills:` and `subagents:` both did that for as long as either has
     refused it, and nothing was red: no test read the message.
     """
-    written = f"  tools: {spelling}" if field == "bundle" else f"{field}: {spelling}"
-    body = f"{field}:\n{written}\n" if field == "bundle" else f"{written}\n"
-
     with pytest.raises(SubagentError) as raised:
-        reading.read(MINIMAL + body, Path("reviewer.yaml"))
+        reading.read(MINIMAL + f"{field}: {spelling}\n", Path("reviewer.yaml"))
 
     assert REFUSE_THE_STAR[field] in str(raised.value)
     assert "write" not in str(raised.value), "the bracket advice is for a field that takes it"

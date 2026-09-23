@@ -55,11 +55,10 @@ def _declared_in(directory: Path) -> list[tuple[SubagentSpec, str]]:
 class Holdings:
     """The tools and skills that belong to one subagent and to nothing else.
 
-    Named for the goods rather than for the bundle, because `SubagentSpec.bundle` is
-    the other half of the pair and is not these: it is a *claim* about what a folder
-    holds, checked against this and never used to decide anything. One word would put
-    the claim and the goods a line apart in `rules.miscounted`, which exists to tell
-    them apart.
+    Named for the goods rather than for the bundle, because `SubagentSpec.bundled` is
+    the other half of the pair and is not these: it is what the definition lists from
+    the folder, checked against this. One word would put the list and the goods a line
+    apart in `rules.miscounted`, which exists to tell them apart.
     """
 
     name: str

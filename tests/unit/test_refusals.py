@@ -201,18 +201,8 @@ def a_subagent_naming_a_tool_that_moved(cfg):
 
 
 def a_subagent_miscounting_its_own_folder(cfg):
-    _write(
-        _root(cfg, "subagents") / "s" / "s.yaml",
-        SUBAGENT.format(name="s") + "bundle:\n  tools: [probe]\n",
-    )
-    _write(_root(cfg, "subagents") / "s" / "tools" / "t.py", TOOL.format(n="other"))
-
-
-def a_subagent_describing_a_bundle_it_has_not_got(cfg):
-    _write(
-        _root(cfg, "subagents") / "s.yaml",
-        SUBAGENT.format(name="s") + "bundle: {}\n",
-    )
+    _write(_root(cfg, "subagents") / "s" / "s.yaml", SUBAGENT.format(name="s"))
+    _write(_root(cfg, "subagents") / "s" / "tools" / "t.py", TOOL.format(n="unlisted"))
 
 
 @dataclass(frozen=True)
@@ -263,8 +253,6 @@ REFUSALS: dict[str, Refusal] = {
         1, defect=a_bundle_holding_two_definitions),
     "kinds/subagents/spec.py::_refuse_unknown": Refusal(
         1, defect=a_subagent_with_a_field_nobody_reads),
-    "kinds/subagents/spec.py::_bundle": Refusal(
-        3, defect=a_subagent_describing_a_bundle_it_has_not_got),
     "kinds/subagents/spec.py::_carried": Refusal(
         4, defect=a_portable_subagent_carrying_tools_that_are_not_a_list),
     "kinds/subagents/spec.py::_portable": Refusal(

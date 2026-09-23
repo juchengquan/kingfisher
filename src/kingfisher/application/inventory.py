@@ -127,7 +127,7 @@ class Inventory:
     #: agent simply runs without the tool it was granted.
     moved_tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
 
-    #: Definitions whose `bundle:` has stopped describing their own folder, by the
+    #: Definitions whose `source: bundled` entries and own folder disagree, by the
     #: name a grant uses, each with how the two differ.
     #: Carried for the reason `moved_tools` is: startup refuses this, and `doctor`
     #: promises to say in advance what startup will refuse.
@@ -141,10 +141,11 @@ class Inventory:
     middlewares_error: str | None = None
 
     #: What each subagent brings itself, by name: the tools and skills in the
-    #: folder named after it. Reported because they are the one capability a
-    #: listing could not otherwise reveal -- an agent omitting `tools:` holds
-    #: every tool there is, so a bundled one is the only kind the top-level
-    #: agent does *not* get, and a reader has no other way to find that out.
+    #: folder named after it, which it lists as `source: bundled`. Reported
+    #: because they are the one capability a listing could not otherwise reveal
+    #: -- an agent omitting `tools:` holds every tool there is, so a bundled one
+    #: is the only kind the top-level agent does *not* get, and a reader has no
+    #: other way to find that out.
     bundled_tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
     bundled_skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
     #: Skills in a bundle whose owner is a compiled delegate, by subagent. They
@@ -352,7 +353,7 @@ def _moved_tools(resolved: Definitions) -> Mapping[str, tuple[str, ...]]:
 
 
 def _miscounted_bundles(resolved: Definitions) -> Mapping[str, str]:
-    """Definitions whose echo of their own folder no longer matches it.
+    """Definitions whose bundled entries no longer match their own folder.
 
     Through the same rule `warm` refuses with, not a second reading of the same
     fields: two walks that can disagree would let a listing call a catalogue fine

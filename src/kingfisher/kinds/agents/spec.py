@@ -120,6 +120,13 @@ class AgentSpec(Definition):
         )
 
 
+_NO_FOLDER = (
+    "an agent has no folder of its own for it to come from. Put the file in the "
+    "workspace's catalogue and name it plainly, or hand it to a subagent, whose own "
+    "folder keeps it from every agent"
+)
+
+
 def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     """One definition, from its decoded fields."""
     read = fields.Reader(source=source.name, error=AgentError)
@@ -144,11 +151,13 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     # Read once, then split. A `tools:` entry may be written `where::what`, and
     # only `what` may reach the rest of kingfisher; where it claims to live
     # travels beside it, for whoever checks the claim.
-    written_tools, tool_audiences = read.audienced(
-        document.get("tools"), absent=ALL, key="tools"
+    # `source: shared` is taken so an entry reads the same in either file; `bundled`
+    # is refused, because only a subagent has a folder of its own to take it from.
+    written_tools, tool_audiences, _ = read.sourced(
+        document.get("tools"), absent=ALL, key="tools", refuse_bundled=_NO_FOLDER
     )
-    written_skills, skill_audiences = read.audienced(
-        document.get("skills"), absent=None, key="skills"
+    written_skills, skill_audiences, _ = read.sourced(
+        document.get("skills"), absent=None, key="skills", refuse_bundled=_NO_FOLDER
     )
     written_delegates, delegate_audiences = read.audienced(
         # No `refuse_all` here. A *subagent* naming every subagent names itself,

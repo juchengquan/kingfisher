@@ -108,9 +108,9 @@ class Definitions:
         offers = Offering.of(self.tools.found)
         for spec in self.subagents.specs.values():
             offers.refuse_moved(spec.tool_sources, subject=f"subagent {spec.name!r}")
-        # And a definition saying what its own folder holds, checked here for the
-        # same reason and against the two readings above: both halves are now in
-        # hand, and neither half alone can tell whether the claim is still true.
+        # And what a definition lists from its own folder, checked here for the same
+        # reason and against the two readings above: both halves are now in hand,
+        # and neither alone can tell whether the list still matches the folder.
         for name, spec in self.subagents.specs.items():
             where, tools, skills = self.bundled(name)
             refuse_miscounted(spec, where=where, tools=tools, skills=skills)

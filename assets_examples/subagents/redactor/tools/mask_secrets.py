@@ -1,9 +1,10 @@
 """Return a file's text with anything that looks like a credential masked.
 
 **This tool ships inside a bundle, and that is the example.** It sits in
-`subagents/redactor/tools/` rather than in the catalogue's `tools/`, so it
-reaches the `redactor` delegate and nothing else -- not the agent that summoned
-it, not another delegate, not a request that names it.
+`subagents/redactor/tools/` rather than in the catalogue's `tools/`, and
+`redactor` lists it as `source: bundled`, so it reaches that delegate and
+nothing else -- not the agent that summoned it, not another delegate, not a
+request that names it.
 
 The reason is the shape of the tool rather than a policy someone chose. It
 returns file contents, which is a bulk read wearing a safety feature: handed to

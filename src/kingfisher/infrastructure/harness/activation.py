@@ -124,6 +124,16 @@ def _private_skills(
     registry = catalogue.bundled_skills.get(name)
     if registry is None or not registry.offered:
         return None
+    spec = catalogue.subagents.specs.get(name)
+    offered = tuple(registry.offered)
+    if spec is not None and not spec.carried:
+        # Filtered for the reason `_private_tools` gives: only what is listed arrives.
+        listed = set(spec.bundled.get("skills", ()))
+        offered = tuple(
+            key for key in offered if skill_registry.split_qualified(key)[1] in listed
+        )
+        if not offered:
+            return None
     where = catalogue.subagents.bundles[name].where
     # Re-labelled from the source it was *read* under to the one it is *mounted*
     # under. `skill_registry.read` calls a root source `catalogue`, and a bundle
@@ -132,7 +142,7 @@ def _private_skills(
     return (
         tuple(
             skill_registry.qualified(where, skill_registry.split_qualified(key)[1])
-            for key in registry.offered
+            for key in offered
         ),
         (bundled_skills_route(where), where),
     )

@@ -504,11 +504,10 @@ on the spot, so every entry after the first would be unreachable.
 | `description` | required | Single line. This is what the parent agent sees when deciding whether to delegate, so write it as a trigger, not a title |
 | `system_prompt` | required | The delegate's whole instruction, written after `\|` |
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table above. Unset means all of them; `[]` means none |
-| `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none |
-| `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it |
+| `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none. An entry written `{name: x, source: bundled}` comes from this delegate's own folder instead — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
+| `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it. `source: bundled` works here too |
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
 | `subagents` | optional | Delegates this one may consult mid-job. Unset grants **none**. One level — see below |
-| `bundle` | optional | `tools:` and `skills:`, naming what this delegate's own folder holds. Checked against the folder, never used to select — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
 | `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the delegate runs whatever summoned it |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 | `source_ids` | optional | Who may reach this delegate, wherever it is used. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
@@ -776,16 +775,17 @@ this format has to refuse below.
 | `middlewares` | middleware wraps a graph deepagents builds; this one is already built |
 | `subagents` | delegation arrives through middleware, which a compiled graph is not given |
 
-`name`, `description`, `build`, `tools`, `bundle`, `model` and `metadata` are
-what remain. `bundle:` is checked against the folder here exactly as it is in a
-document — see below for the half of one a compiled delegate gets.
+`name`, `description`, `build`, `tools`, `model` and `metadata` are what
+remain.
 
 **A compiled delegate can own a bundle, and gets half of one.** Put
-`surveyor.py` in `subagents/surveyor/` and its `tools/` reach the graph like any
-other bundle's — `build` is handed one list, its own tools first. Its `skills/`
-reach nothing, for the reason the table above gives: an index arrives through
-middleware and a compiled graph is given none. `kingfisher list` says so on the
-line, and `doctor` warns. Keep a compiled delegate's procedure inside the graph.
+`surveyor.py` in `subagents/surveyor/`, list its tools in `"tools"` with
+`"source": "bundled"`, and they reach the graph like any other bundle's —
+`build` is handed one list, its own tools first. A `skills/` folder beside it is
+refused: it cannot be listed, for the reason the table above gives — an index
+arrives through middleware and a compiled graph is given none — and an unlisted
+file in a delegate's folder stops the catalogue loading. Keep a compiled
+delegate's procedure inside the graph.
 
 A *package* named after the definition — `subagents/surveyor/__init__.py` — is
 not a bundle. That folder is the package, and what is under it is importable as
@@ -885,7 +885,7 @@ format for it anyway.
 
 #### What it carries is its own
 
-`bundle` here holds the things rather than naming them — a folder's contents, for
+`bundle` here holds the things themselves — a folder's contents, for
 a definition that has no folder. They reach that delegate and nothing else: its
 tools are in no catalogue, so no agent can be granted them and no request can
 narrow them away. That is what an imported subagent being **atomic** means. You
@@ -945,8 +945,8 @@ subagents/
       redaction/SKILL.md
 ```
 
-That is the whole rule: **a folder is a bundle when it holds a definition whose
-`name` matches the folder.** A folder that names no definition is ordinary
+That is the rule for which folder is whose: **a folder is a bundle when it holds a
+definition whose `name` matches the folder.** A folder that names no definition is ordinary
 grouping — `subagents/analysis/profiler.yaml` is unchanged by any of this.
 
 **Why you would.** An agent that omits `tools:` gets *every* tool the catalogue
@@ -954,65 +954,65 @@ holds, so anything in `tools/` is something the top-level agent can call. A
 bundle is the only place a capability can sit that it cannot. It is how a
 delegate comes to be trusted with something its caller is not.
 
-**The delegate holds them whatever the request granted.** Activating `redactor`
-is what grants its parts — a caller never names them, which is the point, since
-naming them would mean knowing they exist. `--without-subagents redactor`
-declines the whole delegate; there is no finer lever, deliberately.
-
-**They come automatically.** `redactor.yaml` above writes no `tools:` and no
-`skills:` line, and still holds both. The file being in the folder is the
-declaration; listing it again in the definition would be a second place to keep
-in step with the first. A `tools:` line still governs which *catalogue* tools it
-also gets.
-
-**If you want, you can write down what is in there and be held to it.**
-Optional — every bundle above works without it, and most should. `bundle:` names
-what the folder holds, selects nothing, and is refused when it and the folder
-stop matching, in either direction:
+**List what it takes from the folder, and only that arrives.** Each entry says
+where it comes from:
 
 ```yaml
 name: redactor
 description: Quotes from files that may hold credentials, with secrets masked first. Use before quoting an untrusted file.
-tools: []             # a grant: no catalogue tool
-bundle:               # a description: what subagents/redactor/ holds
-  tools: [mask_secrets]
-  skills: [redaction]
+tools:
+  - name: mask_secrets
+    source: bundled       # subagents/redactor/tools/
+skills:
+  - name: redaction
+    source: bundled       # subagents/redactor/skills/
 system_prompt: |
   You quote from files that may contain credentials. Follow the `redaction`
   skill; it is the whole procedure.
 ```
 
-It is nested for a reason worth knowing before you copy it. Every other list in
-a definition grants something, and this one grants nothing — so it is written in
-a shape none of them have, because a description sitting flat among grants gets
-read as a grant, and then as a bug when it grants nothing.
+`source` takes `shared`, the workspace's own `tools/` or `skills/`, and
+`bundled`, this delegate's folder. A plain name means `shared`, so every other
+line you have written keeps its meaning. `redactor` lists nothing shared, so it
+gets no catalogue tool; to keep every catalogue tool as well, write
+`tools: ["*", {name: mask_secrets, source: bundled}]`.
 
-What it buys is the change that otherwise leaves no trace. Dropping a file into
-`redactor/tools/` hands that delegate a capability with no line in any file
-altered, and renaming `redactor` takes every one away just as quietly — neither
-shows up in a diff of the definition, because without this key the definition
-does not mention them. With it both are a failure: `kingfisher list` prints it
-under the delegate, `doctor` fails on `bundle claims`, and building the
-deployment raises.
+**The list and the folder must match, in both directions.** A file in
+`redactor/tools/` that the definition does not list stops the catalogue loading,
+and so does a listed name the folder does not hold:
 
-The match is exact rather than a subset, because a subset would let through the
-one case the key exists to surface — the tool that arrived without being asked
-for. `["*"]` is refused for the same reason: it would say only that this
-delegate gets its own folder, which is true of every bundle. So is an empty
-`bundle: {}`, which describes nothing and so cannot be wrong.
+```
+subagent 'redactor': redactor/tools/ holds later, which tools: does not list --
+add each as {name: <it>, source: bundled}, or move it out of the folder. Only what
+is listed reaches the delegate, so the list and the folder have to match
+```
 
-Writing it also changes what a rename costs. Without it, renaming the folder or
-the `name:` is the warning below; with it that is a refusal, because the
-definition is still naming things nothing can hand it.
+That is what makes the folder safe to change. Dropping a file into it cannot
+hand the delegate a capability with no line in any file altered, and renaming
+`redactor` cannot take every one away without a word: the definition still lists
+entries from a folder it no longer owns, and that is refused too. `kingfisher
+list` prints the mismatch under the delegate and `doctor` fails on
+`bundled entries`, so both say it before startup does.
+
+**The delegate holds them whatever the request granted.** Activating `redactor`
+is what grants its parts — a caller never names them, which is the point, since
+naming them would mean knowing they exist. `--without-subagents redactor`
+declines the whole delegate; there is no finer lever, deliberately. For the same
+reason a bundled entry takes no `source_ids`: it reaches whoever reaches the
+delegate.
+
+**Only a subagent has a folder.** `source: bundled` in an agent file is refused,
+and so is the path form `file::name` on a bundled entry — the folder already says
+where it is. `source: shared` is accepted in either file.
 
 **A compiled delegate gets the tools half only.** Its `tools/` reach the graph;
-its `skills/` cannot be mounted on one, and `bundle:` describes the folder
-either way. [A subagent that builds itself](#a-subagent-that-builds-itself--subagentsmodulepy)
-has the detail, and `kingfisher list` prints it on the line.
+a `skills/` folder beside it is refused. [A subagent that builds
+itself](#a-subagent-that-builds-itself--subagentsmodulepy) has the detail.
 
-**A bundle wins a name the catalogue also uses.** If `redactor/tools/` defines a
-`fetch` and so does `tools/`, the delegate gets its own — permanently, whatever
-the catalogue grows later. `kingfisher list` prints that as
+**A bundled tool answers for its name.** A definition inheriting the catalogue
+with `"*"` and listing its own `fetch` gets its own, whatever the catalogue grows
+later. Listing `fetch` both as shared and as bundled is refused, since a delegate
+dispatches by name. `kingfisher list` prints the inherited case as
 `fetch  [private tool, shadowing the catalogue's]`, because shadowing is only
 acceptable while it is visible.
 
@@ -1020,18 +1020,17 @@ acceptable while it is visible.
 `redactor/redactor.yaml` is refused: whether `helper` is inside the bundle has
 no honest answer, and the two answers differ in what `helper` may call.
 
-**A folder nobody is named for is reported, not refused.** Rename the folder or
-the `name:` inside it and the two stop being paired: the delegate still loads
-and holds none of what is beside it. That is legal — a grouping folder may have
-directories in it — so `kingfisher list` prints
+**A folder nobody is named for is reported, not refused.** A grouping folder may
+have directories in it, so a `tools/` or `skills/` under a folder that names no
+definition is legal. It is usually a renamed bundle, and the definition that
+walked away is refused from its own side if it listed anything — so
+`kingfisher list` prints
 
 ```
   ! redactor/ holds tools/ or skills/ that reach no delegate — nothing in it is named redactor
 ```
 
-and `doctor` warns on `delegate bundles`, neither of them failing. It is the
-only symptom: a bundle that reaches nobody costs the delegate its tools and its
-skills without a word at any point in a run.
+and `doctor` warns on `delegate bundles`, neither of them failing.
 
 **`tools` and `skills` are reserved directory names** anywhere under
 `subagents/`, so a skill's own `config.yaml` is never read as a subagent

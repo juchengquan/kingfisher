@@ -38,9 +38,9 @@ called *Sessions and storage*.
 
 ## The definition format
 
-**An entry is a name, or a mapping of `name` and the one thing that field lets a
-name carry.** `source_ids` for `tools`, `skills` and `subagents`; `settings` for
-`middlewares`. One long form, whichever field it belongs to, read through one
+**An entry is a name, or a mapping of `name` and what that field lets a name
+carry.** `source_ids` for `tools`, `skills` and `subagents`, with `source` beside it
+on `tools` and `skills`; `settings` for `middlewares`. One long form, whichever field it belongs to, read through one
 loop -- so a reader who has met one has met the other.
 
 It replaced a field-level mapping keyed by name, and not for tidiness. **That
@@ -377,6 +377,48 @@ of it.
 `documents` now reads `kinds.importing.skipped`, so the Layering entry saying four
 kind catalogues are that module's only readers names one reader short.
 *(2026-09-18.)*
+
+**A delegate lists what it takes from its own folder, and only that arrives.** Each
+`tools:` and `skills:` entry may say `source: shared` (the catalogue, which is what a
+plain name means) or `source: bundled` (the subagent's own folder). The folder used
+to grant by itself: every file in `subagents/<name>/tools/` reached the delegate
+with no line naming it, and an optional `bundle:` key could describe the folder and
+be checked against it while granting nothing.
+
+That had two silent failures and one misleading key. A file dropped into the folder
+was granted with nothing in the definition changing; renaming the folder or the
+`name:` took everything away, reported only as a warning; and `bundle:` sat among
+fields that grant, granted nothing, and needed a paragraph in the guide explaining
+why it was nested. Listing as the grant removes all three: the list is the claim, so
+there is nothing separate to keep in step.
+
+**`bundled` names where the file is, not who may use it.** The alternative was a
+label on a file in the shared `tools/`. That makes privacy something any
+definition can put on or take off, and two subagents claiming one tool would need a
+rule of their own. With the location reading, a tool is private because of where
+its file sits.
+
+**An unlisted file in a delegate's folder is refused, not ignored.** Every
+deployment upgrading has exactly these files, granted by being there, and ignoring
+them would lose each one silently -- the failure the change exists to remove. It is
+the old `bundle:` check, now always on: `rules.miscounted` compares the list and the
+folder in both directions, `warm` refuses, and `doctor` fails on `bundled entries`.
+The build filters to the list as well, so a caller that skipped `warm` is still
+handed only what is listed. A compiled delegate cannot list skills, so a `skills/`
+folder beside one is refused by the same rule rather than warned about.
+
+**Subagents only.** `source: bundled` in an agent file is refused: an agent has no
+folder, and the folder exists so a delegate can hold something its caller cannot.
+A bundled entry also takes no `source_ids` -- it reaches whoever reaches the
+delegate -- and no `file::name` path, since the folder is where it is.
+
+**What was kept.** The shadowing rule stays: a delegate inheriting the catalogue
+with `"*"` and listing its own `fetch` gets its own, and `list` still marks it,
+because the catalogue's `fetch` is still dropped for that delegate. A folder named
+after no definition stays a warning; the renamed definition that left it is refused
+from its own side when it listed anything. A portable `SUBAGENTS` entry still
+carries objects under `bundle`, since it has no folder for `bundled` to name.
+*(2026-09-23.)*
 
 ## Agents and delegation
 
