@@ -19,7 +19,7 @@ from deepagents.backends import CompositeBackend
 from deepagents.backends.protocol import SandboxBackendProtocol
 
 from kingfisher.config import ConfigError
-from kingfisher.infrastructure.harness.backend import HostPathError
+from kingfisher.infrastructure.harness.host_paths import HostPathError
 from kingfisher.layout import denied_read_scopes, denied_scopes
 
 if TYPE_CHECKING:
@@ -148,7 +148,7 @@ def host_path_refusal(make: Callable[[], Any]) -> None:
             f"reading a host path was refused with {type(refused).__name__}, which "
             "HostPathGuard does not catch -- it catches HostPathError and turns it "
             "into a correction the model can act on. Raise "
-            "kingfisher.infrastructure.harness.backend.HostPathError, or do not "
+            "kingfisher.HostPathError, or do not "
             f"refuse. Got: {refused}"
         )
         raise AssertionError(msg) from refused

@@ -39,6 +39,7 @@ _EXPORTS = {
     "SkillError": "kingfisher.kinds.skills.spec",
     "SubagentError": "kingfisher.kinds.subagents.spec",
     "UnsafeReferenceError": "kingfisher.domain.references",
+    "HostPathError": "kingfisher.infrastructure.harness.host_paths",
     "LocalSessionStore": "kingfisher.infrastructure.session_store",
     # The port's contract, for a deployment checking its own adapter against it.
     # Public because it is the one thing in `testing` anybody outside this
@@ -126,6 +127,7 @@ __all__ = [
     "Decision",
     "DecisionError",
     "Held",
+    "HostPathError",
     "Inventory",
     "Kingfisher",
     "LocalSessionStore",
@@ -198,6 +200,7 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.harness.backend_contract import (
         BACKEND_CONTRACT as BACKEND_CONTRACT,
     )
+    from kingfisher.infrastructure.harness.host_paths import HostPathError as HostPathError
     from kingfisher.infrastructure.session_store import (
         LocalSessionStore as LocalSessionStore,
     )

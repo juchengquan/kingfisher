@@ -1593,6 +1593,9 @@ WITNESSES: dict[str, str] = {
     # `ports.md` tells an adapter to raise this one, imported from `kingfisher`,
     # because a caller tells a bad session id from a broken store by the class.
     "UnsafeReferenceError": "document",
+    # `ports.md` tells a backend that refuses host paths to refuse them with this,
+    # because it is the type `HostPathGuard` turns into a correction.
+    "HostPathError": "document",
     # What those documented calls take and hand back -- `Kingfisher` takes a
     # `Config`, `run` returns a `RunResult`, `stream` yields `RunEvent`s. The
     # type of a documented call's answer cannot be private.
@@ -2054,6 +2057,9 @@ SDK_LOADING: frozenset[str] = frozenset({
     # spelling: `SandboxBackendProtocol` is an abstract base class and the answer
     # is `isinstance` against it.
     "kingfisher.infrastructure.harness.backend_contract",
+    # The two halves `backend` was split into, which build langchain middleware.
+    "kingfisher.infrastructure.harness.host_paths",
+    "kingfisher.infrastructure.harness.tool_guards",
     "kingfisher.infrastructure.harness.checkpointing",
     "kingfisher.infrastructure.harness.middleware",
     "kingfisher.infrastructure.harness.narrowing",
@@ -2287,6 +2293,10 @@ HEAVY_EXPORTS = frozenset({
     # deployment satisfies without knowing deepagents exists, and this one checks
     # an object deepagents has to accept.
     "BACKEND_CONTRACT",
+    # Beside `HostPathGuard`, which is langchain middleware: 250ms and ~970 modules,
+    # measured, though no deepagents. Paid by nobody new -- the one who raises it is
+    # writing a backend deepagents has to accept, and has loaded deepagents for that.
+    "HostPathError",
     # It builds a `CompositeBackend` over a confined shell, so it is deepagents by
     # definition. Every consumer that names it was already paying for `Kingfisher`
     # on the same line, so nothing new arrives with it.
