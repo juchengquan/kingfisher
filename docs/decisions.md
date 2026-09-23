@@ -499,6 +499,28 @@ went together. `distinct: true` turned `indistinct`'s report into a refusal, and
 can come back if that delegate does. This entry kept describing both until
 2026-09-17.
 
+**A turn resolves its agent once.** Admission asked `_agent_for` twice, and down
+different branches of the same function: the first resolved from the catalogue and
+wrote the session's pin, the second read that pin back and parsed it. Counted rather
+than reasoned about, because both answers agreed and nothing was ever wrong --
+measured at two calls, two snapshot reads and two parses per turn under a policy,
+one of each without.
+
+`_admitted` resolves it and hands it to both readers, so `_graph_for` takes the spec
+rather than deriving it, along with the source ids it was also resolving a second
+time. Both are required keywords: this method has one caller in `src/`, and a
+default meaning "work it out yourself" would have been a branch alive only in tests.
+
+**It is resolved only where something will read it**, and that guard is behaviour
+rather than economy. A deployment that supplied its own graph and declares no policy
+has no reader for the spec: the build never asks, and the withheld report only
+filters by an agent's audience where a vocabulary is in force. Resolving anyway
+would make such a session start refusing a request that names a different agent
+mid-conversation, which today it does not. Both halves of that condition are driven
+-- a supplied graph with no policy reads the snapshot never, and one under a policy
+reads it once, because the report still wants what the agent declares.
+*(2026-09-23, from an architecture review, whose count of three reads was two.)*
+
 ## Packaging: where the definitions live
 
 This reversed twice. The current answer is the third one.

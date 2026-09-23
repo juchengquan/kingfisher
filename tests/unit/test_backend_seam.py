@@ -115,7 +115,11 @@ def test_the_factory_is_called_per_turn_with_the_session_it_is_for(cfg, session_
         seen.append(where)
         return default_backend(cfg_, where, catalogue=catalogue, runner=runner)
 
-    Kingfisher(cfg, backend=mine)._graph_for(Request("go", agent="only"), session_dir)
+    asked = Request("go", agent="only")
+    service = Kingfisher(cfg, backend=mine)
+    service._graph_for(
+        asked, session_dir, agent=service._agent_for(asked, session_dir), held=None
+    )
 
     assert seen == [session_dir]
 
@@ -144,7 +148,10 @@ def test_the_factory_is_handed_the_catalogue_and_the_runner_this_deployment_wire
         return default_backend(cfg_, where, catalogue=catalogue)
 
     service = Kingfisher(cfg, backend=mine, runner=lambda _where: runner)
-    service._graph_for(Request("go", agent="only"), session_dir)
+    asked = Request("go", agent="only")
+    service._graph_for(
+        asked, session_dir, agent=service._agent_for(asked, session_dir), held=None
+    )
 
     assert seen[0]["catalogue"] is service.catalogue
     assert seen[0]["runner"] is runner
@@ -171,7 +178,11 @@ def test_what_the_factory_returns_is_what_the_agent_is_built_on(cfg, session_dir
         )
         return made[-1]
 
-    built = Kingfisher(cfg, backend=mine)._graph_for(Request("go", agent="only"), session_dir)
+    asked = Request("go", agent="only")
+    service = Kingfisher(cfg, backend=mine)
+    built = service._graph_for(
+        asked, session_dir, agent=service._agent_for(asked, session_dir), held=None
+    )
 
     assert built.backend is made[0]
 

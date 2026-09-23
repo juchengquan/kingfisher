@@ -90,11 +90,16 @@ def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
     agent = StubAgent("ok")
     service = Kingfisher(cfg, graph=agent, threads=StubCheckpointer())
 
-    assert service._graph_for(Request("go"), session_dir) is agent
+    # No spec and no source ids: a supplied graph is handed back before either is
+    # looked at, which is the thing this asserts.
+    assert service._graph_for(Request("go"), session_dir, agent=None, held=None) is agent
 
     with pytest.raises(ValueError, match="pre-built graph"):
         service._graph_for(
-            Request("go", capabilities=Capabilities(builtin_tools=("read_file",))), session_dir
+            Request("go", capabilities=Capabilities(builtin_tools=("read_file",))),
+            session_dir,
+            agent=None,
+            held=None,
         )
 
 
@@ -108,9 +113,11 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     service = Kingfisher(cfg, backend=default_backend)
     asked = Request("go", agent="only")
 
-    assert service._graph_for(asked, session_dir) is not service._graph_for(
-        asked, session_dir
-    )
+    built = service._agent_for(asked, session_dir)
+
+    assert service._graph_for(
+        asked, session_dir, agent=built, held=None
+    ) is not service._graph_for(asked, session_dir, agent=built, held=None)
 
 
 def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
@@ -842,6 +849,110 @@ def test_a_turn_translates_a_rejected_key_rather_than_raising_the_providers_erro
         service.run(Request(task="anything"))
 
 
+def _snapshot_reads(monkeypatch) -> list[Path]:
+    """Every read of a session's pinned agent, as they happen."""
+    from kingfisher.application import service as service_module
+
+    seen: list[Path] = []
+    real = service_module.agent_started_with
+
+    def counting(session_dir):
+        seen.append(session_dir)
+        return real(session_dir)
+
+    monkeypatch.setattr(service_module, "agent_started_with", counting)
+    return seen
+
+
+def _policied(cfg):
+    """A deployment with a vocabulary, which is the only case that resolved twice."""
+    import yaml
+
+    from kingfisher.domain.access import parse
+
+    an_agent(cfg, "only", source_ids="[A]")
+    return replace(cfg, access=parse(yaml.safe_load("source_ids: [A]\n"), source="s.yaml"))
+
+
+def test_a_turn_resolves_its_agent_once(cfg, monkeypatch):
+    """Measured at two, and down different branches of the same function: the first
+    call resolved from the catalogue and wrote the pin, the second read that pin back
+    and parsed it. Counted here rather than reasoned about, because the second call
+    was invisible -- both answers agreed, so nothing was ever wrong.
+
+    Under a policy, because that is the one deployment where the second reader --
+    the withheld report -- asks for the spec at all. Without one it never did, so a
+    turn here would count one either way and this would pass against the defect.
+    """
+    from kingfisher.application import service as service_module
+
+    service = Kingfisher(_policied(cfg), backend=default_backend)
+    reads = _snapshot_reads(monkeypatch)
+    reported: list[object] = []
+    real = service_module.withheld_by_kind
+
+    def spying(*args, **kwargs):
+        reported.append(kwargs.get("agent"))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(service_module, "withheld_by_kind", spying)
+
+    # The first event is everything before the model is reached, which is where
+    # admission happens and the only part of a turn this is about.
+    events = service.stream(Request("go", agent="only"), source_ids=("A",))
+    try:
+        next(events)
+    finally:
+        events.close()
+
+    assert len(reads) == 1, f"the pinned agent was read {len(reads)} times in one turn"
+    # And the one resolution reached the second reader. Handing it `None` would leave
+    # the report measured against the whole catalogue, which is what it filters.
+    assert reported and reported[0] is not None
+
+
+def test_a_supplied_graph_with_no_policy_is_never_asked_which_agent(cfg, monkeypatch):
+    """The condition the single resolution is guarded by, and it is not an
+    optimisation: such a deployment has no reader for the spec, and resolving one
+    anyway would make a session start refusing a request that names a different agent
+    mid-conversation -- which for a supplied graph it does not.
+    """
+    an_agent(cfg, "only")
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    reads = _snapshot_reads(monkeypatch)
+
+    service.run(Request("go", agent="only"))
+
+    assert reads == []
+
+
+def test_a_supplied_graph_under_a_policy_still_resolves_one(cfg, monkeypatch):
+    """The other half of that condition, and the half with a reader. A supplied graph
+    is handed back without an agent being resolved for it -- but the withheld report
+    still filters by what the agent declares, so under a policy the spec is asked for
+    even though no build wanted it.
+    """
+    from kingfisher.application import service as service_module
+
+    service = Kingfisher(
+        _policied(cfg), graph=StubAgent("ok"), threads=StubCheckpointer()
+    )
+    reads = _snapshot_reads(monkeypatch)
+    reported: list[object] = []
+    real = service_module.withheld_by_kind
+
+    def spying(*args, **kwargs):
+        reported.append(kwargs.get("agent"))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(service_module, "withheld_by_kind", spying)
+
+    service.run(Request("go", agent="only"), source_ids=("A",))
+
+    assert len(reads) == 1
+    assert reported and reported[0] is not None
+
+
 def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     """The pin was written to `<workspace>/sessions/<id>` whatever `session_root` said.
 
@@ -851,8 +962,9 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     guarantee `_agent_for` raises for -- a session is fixed to the agent it opened
     with -- held on the default root and silently failed on every other.
 
-    Driven through `_graph_for` rather than `run`, because a supplied graph is
-    returned before an agent is resolved and would pin nothing at all.
+    Driven through `_agent_for` rather than `run`, because that is what resolves a
+    turn's agent and writes the pin -- and a supplied graph never reaches it, so a
+    deployment with one would pin nothing at all.
     """
     an_agent(cfg, "only")
     an_agent(cfg, "other")
@@ -861,7 +973,7 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     elsewhere = ensure_session_layout(tmp_path / "for-one-turn" / "a-session")
     service = Kingfisher(cfg, backend=default_backend)
 
-    service._graph_for(Request("go", agent="only"), elsewhere)
+    service._agent_for(Request("go", agent="only"), elsewhere)
 
     assert agent_snapshot(elsewhere).is_file(), "the pin is not where the turn ran"
     assert not (cfg.workspace / "sessions" / elsewhere.name).exists(), (
@@ -869,7 +981,7 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     )
 
     with pytest.raises(CapabilityError, match="cannot be changed"):
-        service._graph_for(Request("again", agent="other"), elsewhere)
+        service._agent_for(Request("again", agent="other"), elsewhere)
 
 
 def test_a_session_opened_as_one_agent_cannot_run_as_another_somewhere_else(cfg, tmp_path):
@@ -900,7 +1012,7 @@ def test_a_session_opened_as_one_agent_cannot_run_as_another_somewhere_else(cfg,
     asked = Request("go", agent="other", session_id="s")
     with pytest.raises(CapabilityError, match="cannot be changed"), \
             service._held_session(asked) as session:
-        service._graph_for(asked, session.directory)
+        service._agent_for(asked, session.directory)
 
 
 def test_a_session_kept_only_in_a_store_is_not_swept_out_of_it(cfg, tmp_path):
