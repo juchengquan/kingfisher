@@ -275,19 +275,25 @@ def reported(kf, source_ids, name: str):
     session = session_at(kf, name)
     held_names = tuple(source_ids) if source_ids is not UNSCOPED else source_ids
     held = kf.held_for(held_names)
+    request = Request(task="t", agent="surveyor")
+    # Once, and handed to both, which is what a turn does: the build and the report
+    # are the two readers of it, and resolving separately for each is what this
+    # stopped doing.
+    agent = kf._agent_for(request, session, source_ids=held_names)
     graph = kf._graph_for(
-        Request(task="t", agent="surveyor"),
+        request,
         session,
         capabilities=kf._effective_grants(held_names),
         checkpointer=None,
-        source_ids=held_names,
+        agent=agent,
+        held=held,
     ).graph
     return withheld_by_kind(
         kf._effective_grants(held_names),
         kf.cfg,
         graph,
         kf.catalogue,
-        agent=kf.agent_named("surveyor", source_ids=held_names),
+        agent=agent,
         held=held,
     )
 
@@ -310,12 +316,14 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
     session = session_at(kf, "w2")
     held = ("A",)
     grants = replace(kf._effective_grants(held), builtin_tools=("read_file",))
+    request = Request(task="t", agent="surveyor")
     graph = kf._graph_for(
-        Request(task="t", agent="surveyor"),
+        request,
         session,
         capabilities=grants,
         checkpointer=None,
-        source_ids=held,
+        agent=kf._agent_for(request, session, source_ids=held),
+        held=kf.held_for(held),
     ).graph
     from kingfisher.application.reporting import withheld_by_kind
 
@@ -383,12 +391,15 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
     """The half a selection alone does not prove."""
     kf = Kingfisher(with_skills, backend=default_backend)
     held = ("B",)
+    session = session_at(kf, "sk1")
+    request = Request(task="t", agent="skilled")
     built = kf._graph_for(
-        Request(task="t", agent="skilled"),
-        session_at(kf, "sk1"),
+        request,
+        session,
         capabilities=kf._effective_grants(held),
         checkpointer=None,
-        source_ids=held,
+        agent=kf._agent_for(request, session, source_ids=held),
+        held=kf.held_for(held),
     )
     narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
     advertised = {name for m in narrowed for name in m._allowed}
@@ -402,19 +413,23 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
     from kingfisher.application.reporting import withheld_by_kind
 
     grants = replace(kf._effective_grants(held), skills=granted)
+    session = session_at(kf, "withheld-" + "-".join(held))
+    request = Request(task="t", agent="skilled")
+    agent = kf._agent_for(request, session, source_ids=held)
     graph = kf._graph_for(
-        Request(task="t", agent="skilled"),
-        session_at(kf, "withheld-" + "-".join(held)),
+        request,
+        session,
         capabilities=grants,
         checkpointer=None,
-        source_ids=held,
+        agent=agent,
+        held=kf.held_for(held),
     ).graph
     report = withheld_by_kind(
         grants,
         kf.cfg,
         graph,
         kf.catalogue,
-        agent=kf.agent_named("skilled", source_ids=held),
+        agent=agent,
         held=kf.held_for(held),
     )
     return dict(report).get("skill", ())
@@ -460,12 +475,15 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
     """So the assertion above is not passing because nothing was advertised."""
     kf = Kingfisher(with_skills, backend=default_backend)
     held = ("A",)
+    session = session_at(kf, "sk2")
+    request = Request(task="t", agent="skilled")
     built = kf._graph_for(
-        Request(task="t", agent="skilled"),
-        session_at(kf, "sk2"),
+        request,
+        session,
         capabilities=kf._effective_grants(held),
         checkpointer=None,
-        source_ids=held,
+        agent=kf._agent_for(request, session, source_ids=held),
+        held=kf.held_for(held),
     )
     narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
     advertised = {name for m in narrowed for name in m._allowed}

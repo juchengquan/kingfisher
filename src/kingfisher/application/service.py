@@ -445,14 +445,18 @@ class Kingfisher(Sessions, Disposal):
         access.caller_holds(self.access, source_ids)
         return self.grants
 
-    def _graph_for(
+    def _graph_for(  # noqa: PLR0913 -- one keyword per thing a build needs and
+        # cannot work out for itself. The two at the end were derived here until a
+        # turn was measured resolving each of them twice; deriving them again would
+        # be the shorter signature and the second answer.
         self,
         request: Request | Resume,
         session_dir: Path,
         capabilities: Capabilities | None = None,
         checkpointer: Any = _UNSET,
         *,
-        source_ids: Held | None = None,
+        agent: AgentSpec | None,
+        held: frozenset[str] | None,
     ) -> Any:
         """What serves one request, rooted at its session.
 
@@ -478,8 +482,12 @@ class Kingfisher(Sessions, Disposal):
 
         return build_agent(
             self.cfg,
-            agent=self._agent_for(request, session_dir, source_ids=source_ids),
-            held=self.held_for(source_ids),
+            # Resolved by the caller, which is the only one there is: `_admitted`
+            # needs the same spec for the withheld report, and asking twice meant the
+            # first call resolving it from the catalogue and writing the pin while
+            # the second read that pin back and parsed it.
+            agent=agent,
+            held=held,
             # Both called here rather than passed down, because this is where a turn
             # first has a session directory and neither can be built without one. The
             # runner goes into the factory rather than alongside it: a deployment that
@@ -731,12 +739,28 @@ class Kingfisher(Sessions, Disposal):
         # answering it and dropped where this turn supersedes it. Before the graph is
         # built, because a resume runs on a saver that already holds the pause.
         checkpointer, resume, discarded = self._take_pause(request, session, checkpointer)
+        # Once, here, where both readers of it are in view: the build below, and the
+        # withheld report at the bottom. Measured before this moved: a turn under a
+        # policy resolved the agent twice and down different branches of the same
+        # function -- the first writing the pin, the second reading it back and
+        # parsing it again.
+        #
+        # Not resolved at all where neither reader wants it. A deployment that
+        # supplied its own graph and declares no policy never asked for one, and
+        # asking anyway would make such a session start refusing a request that names
+        # a different agent, which today it does not.
+        agent = (
+            self._agent_for(request, session.directory, source_ids=source_ids)
+            if self._graph is None or held is not None
+            else None
+        )
         built = self._graph_for(
             request,
             session.directory,
             capabilities=allowed,
             checkpointer=checkpointer,
-            source_ids=source_ids,
+            agent=agent,
+            held=held,
         )
         # `isinstance` rather than `getattr(built, "graph", built)`: the two shapes
         # `_graph_for` returns are named types, and a duck test here would also
@@ -770,11 +794,7 @@ class Kingfisher(Sessions, Disposal):
                 # no-op -- so the spec is not merely unused, it is unavailable:
                 # an injected graph never resolves one, which is exactly the
                 # case every test that hands in its own graph is.
-                agent=(
-                    self._agent_for(request, session.directory, source_ids=source_ids)
-                    if held is not None
-                    else None
-                ),
+                agent=agent if held is not None else None,
                 held=held,
             ),
             delegate_only=delegate_only(allowed, cfg, catalogue=self.catalogue),
