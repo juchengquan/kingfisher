@@ -118,10 +118,6 @@ def a_declared_subagent_with_no_name(cfg):
     _write(_root(cfg, "subagents") / "m.py", "SUBAGENTS = [{'description': 'd'}]\n")
 
 
-def a_subagent_that_will_not_parse(cfg):
-    _write(_root(cfg, "subagents") / "bad.yaml", "name: [unclosed\n")
-
-
 def a_subagent_missing_a_field(cfg):
     _write(_root(cfg, "subagents") / "thin.yaml", "description: A subagent.\n")
 
@@ -228,7 +224,6 @@ class Refusal:
 REFUSALS: dict[str, Refusal] = {
     "kinds/agents/catalogue.py::LocalAgentRepository._defined": Refusal(
         1, defect=two_agents_of_a_name),
-    "kinds/agents/reading.py::read": Refusal(1, defect=an_agent_that_will_not_parse),
     "kinds/agents/spec.py::parse": Refusal(3, defect=an_agent_missing_a_field),
     "kinds/agents/spec.py::_gated_tools": Refusal(
         1, defect=an_agent_gating_every_tool_with_a_star),
@@ -238,6 +233,10 @@ REFUSALS: dict[str, Refusal] = {
     # it here because that call passes `skipping` and the agent one does not, so the
     # defect filed covers the shape with the extra branch in it.
     "kinds/documents.py::documents_in": Refusal(1, defect=a_subagent_filed_as_yml),
+    # Both kinds' readers reach this one: it is everything they do to a document
+    # before their own format looks at it. An agent's defect is filed here and a
+    # subagent's below, so each kind still drives one refusal in this module.
+    "kinds/documents.py::fields_of": Refusal(1, defect=an_agent_that_will_not_parse),
     "kinds/documents.py::require_literal_prompt": Refusal(
         1, defect=a_prompt_written_so_it_reflows),
     "kinds/importing.py::load": Refusal(2, defect=a_tool_module_that_will_not_import),
@@ -264,7 +263,6 @@ REFUSALS: dict[str, Refusal] = {
     # one missing a key, so the old defect reaches `_portable` and never gets here.
     "kinds/subagents/spec.py::declared": Refusal(
         5, defect=a_compiled_subagent_whose_build_is_not_callable),
-    "kinds/subagents/reading.py::read": Refusal(1, defect=a_subagent_that_will_not_parse),
     "kinds/subagents/spec.py::parse": Refusal(2, defect=a_subagent_missing_a_field),
     "kinds/tools/catalogue.py::CarriedTools.found": Refusal(
         1, defect=a_portable_subagent_carrying_two_tools_of_a_name),

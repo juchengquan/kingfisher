@@ -378,6 +378,19 @@ of it.
 kind catalogues are that module's only readers names one reader short.
 *(2026-09-18.)*
 
+**And the union it answers is discriminated once.** `decode` says *fields, or a line
+saying why not*, which only means anything together with the sentence that reports
+it -- so both readers wrote the same five lines: the call, the `isinstance`, the
+message naming the file, the raise, and the prompt-style check on the line after.
+Five of each reader's six. `fields_of` is those five, and each `read` is now one
+line: its own format parsing what this module handed back.
+
+The message was the part worth a rule. *"YAML says why; we say which file"* is a
+comment in `test_subagent.py` beside a table that matches on the reason and never on
+the file name -- so dropping `{source.name}` from the refusal left the suite green,
+and the one thing both copies agreed on word for word was held by neither. It is
+driven for both kinds now, because there is one function to drive. *(2026-09-24.)*
+
 **A delegate lists what it takes from its own folder, and only that arrives.** Each
 `tools:` and `skills:` entry may say `source: shared` (the catalogue, which is what a
 plain name means) or `source: bundled` (the subagent's own folder). The folder used

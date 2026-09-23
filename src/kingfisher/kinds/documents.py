@@ -92,6 +92,23 @@ def decode(text: str) -> dict[str, object] | str:
     return {str(key): value for key, value in parsed.items()}
 
 
+def fields_of(text: str, source: Path, error: type[ValueError]) -> dict[str, object]:
+    """A definition's fields, or the refusal naming the file and what stopped it.
+
+    Everything both kinds do to a document before their own format looks at it, which
+    is what this module is for. `decode` answers fields *or* a line saying why not,
+    and that union only means anything together with the sentence reporting it -- so
+    both readers wrote the same five lines, down to the wording, and the check below
+    on the line after.
+    """
+    document = decode(text)
+    if isinstance(document, str):
+        msg = f"{source.name}: cannot read definition ({document})"
+        raise error(msg)
+    require_literal_prompt(text, source, error)
+    return document
+
+
 def require_literal_prompt(text: str, source: Path, error: type[ValueError]) -> None:
     """Refuse a `system_prompt` written in a style that reflows it."""
     node = yaml.compose(text)

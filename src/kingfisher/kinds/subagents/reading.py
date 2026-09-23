@@ -18,9 +18,4 @@ if TYPE_CHECKING:
 
 def read(text: str, source: Path) -> SubagentSpec:
     """One definition, from its document. Raises `SubagentError` on anything malformed."""
-    document = documents.decode(text)
-    if isinstance(document, str):
-        msg = f"{source.name}: cannot read definition ({document})"
-        raise SubagentError(msg)
-    documents.require_literal_prompt(text, source, SubagentError)
-    return subagent.parse(document, source)
+    return subagent.parse(documents.fields_of(text, source, SubagentError), source)

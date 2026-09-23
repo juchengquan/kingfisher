@@ -18,9 +18,4 @@ if TYPE_CHECKING:
 
 def read(text: str, source: Path) -> AgentSpec:
     """One agent definition. Raises `AgentError` on anything malformed."""
-    document = documents.decode(text)
-    if isinstance(document, str):
-        msg = f"{source.name}: cannot read definition ({document})"
-        raise AgentError(msg)
-    documents.require_literal_prompt(text, source, AgentError)
-    return agent.parse(document, source)
+    return agent.parse(documents.fields_of(text, source, AgentError), source)
