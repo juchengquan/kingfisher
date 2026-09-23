@@ -358,18 +358,10 @@ def failed(found: Inventory) -> bool:
     """
     if found.moved_tools or found.miscounted_bundles:
         return True
-    return any(
-        error is not None
-        for error in (
-            found.agents_error,
-            found.tools_error,
-            found.subagents_error,
-            # A bundle's tools are tools: Python that has to import, and a
-            # deployment that starts and fails on the first request activating
-            # that delegate is the shape this predicate already exists to stop.
-            found.bundles_error,
-            # The fifth kind, which nothing here read until it was the last one
-            # a deployment could break without being told.
-            found.middlewares_error,
-        )
-    )
+    if any(kind.error is not None for kind in found.by_kind()):
+        return True
+    # Not a kind, and the one error here that a walk of them does not reach. A
+    # bundle's tools are tools -- Python that has to import -- and a deployment that
+    # starts and fails on the first request activating that delegate is the shape
+    # this predicate exists to stop.
+    return found.bundles_error is not None

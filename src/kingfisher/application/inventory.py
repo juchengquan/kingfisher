@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 
 from kingfisher.application import access
-from kingfisher.application.origins import Origins
+from kingfisher.application.origins import Origin, Origins
 from kingfisher.config import Config
 from kingfisher.domain.access import AccessReport, SourceIds, Stated, reaches
 from kingfisher.domain.capabilities import ALL, CapabilityError, Selection
@@ -27,6 +27,40 @@ _NOTHING: Mapping[str, str] = MappingProxyType({})
 _NO_NAMES: Mapping[str, tuple[str, ...]] = MappingProxyType({})
 #: The same, for the nested audience record.
 _NO_AUDIENCES: Mapping[str, Mapping[str, Stated]] = MappingProxyType({})
+
+
+@dataclass(frozen=True)
+class Catalogued:
+    """One definition kind's catalogue, as this walk found it.
+
+    Named away from `kind` because `origins.Kind` is already a word here and means
+    what sort of *place* something was read from.
+
+    Every consumer used to spell the kinds out: four near-identical blocks in
+    `doctor`, the same errors again in the listing's `failed`, and the two that
+    remained were reached by `getattr(found, kind)` where a type checker cannot see
+    them. The record kept a note of the drift twice -- `doctor` read three of the
+    five kinds, then four -- which is what a hand-written list of a growing set does.
+    """
+
+    name: str
+    #: What stopped the directory being read, or `None`. `skills` has none and that
+    #: is not an omission: a skill fails one at a time, and which ones is
+    #: `skills_unloadable`, `skills_misplaced` and `skills_misfiled` -- so `doctor`
+    #: gives them a check of their own rather than a line saying the catalogue
+    #: loaded.
+    error: str | None
+    #: How many the agent can reach. Zero is a fact about the workspace rather than
+    #: a failure, which is why it is a count and not a second error.
+    defined: int
+    #: Where this kind was read from, and whether that is where the configuration
+    #: says. Carried here so a consumer walking the kinds does not reach for it by
+    #: name off a second record.
+    origin: Origin
+    #: What one of these is on disk, for a message telling somebody to go and fix
+    #: it: a document for the kinds written in YAML, a module for the two that are
+    #: Python. The same split `documents.py` and `importing.py` draw.
+    written_as: str
 
 
 @dataclass(frozen=True)
@@ -173,6 +207,35 @@ class Inventory:
     #: caller reaches -- so the printer never filters and the two views cannot
     #: come apart.
     held: frozenset[str] | None = None
+
+    def by_kind(self) -> tuple[Catalogued, ...]:
+        """Every definition kind, in the order a listing shows them.
+
+        Spelled out rather than read off this record by name: the fields are then
+        ones a type checker follows, and a kind that loses its error field fails
+        here rather than at whichever consumer got to it first.
+        `test_the_per_kind_view_covers_every_kind_there_is` holds the list total
+        against `DEFINITION_KINDS`, which is the half a reader cannot check.
+        """
+        return (
+            Catalogued("agents", self.agents_error, len(self.agents), self.origins.agents, "file"),
+            Catalogued("skills", None, len(self.skills), self.origins.skills, "file"),
+            Catalogued(
+                "subagents",
+                self.subagents_error,
+                len(self.subagents),
+                self.origins.subagents,
+                "file",
+            ),
+            Catalogued("tools", self.tools_error, len(self.tools), self.origins.tools, "module"),
+            Catalogued(
+                "middlewares",
+                self.middlewares_error,
+                len(self.middlewares),
+                self.origins.middlewares,
+                "module",
+            ),
+        )
 
     @property
     def offered(self) -> dict[str, tuple[str, ...]]:

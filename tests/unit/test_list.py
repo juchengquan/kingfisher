@@ -764,3 +764,69 @@ def test_the_listing_is_clean_when_every_source_id_is_declared(cfg, monkeypatch,
 
     assert main(["list"]) == 0
     assert "cannot load" not in capsys.readouterr().out
+
+
+# -- every kind, rather than the ones somebody listed ------------------------
+
+#: Why an error this record carries is not one of the kinds. A `*_error` in neither
+#: this table nor the per-kind view is one `failed` can miss, which is how
+#: `middlewares_error` came to be computed and read by nothing for a release.
+ERRORS_OUTSIDE_THE_KINDS = {
+    "bundles_error": "a bundle is one delegate's own folder, not a catalogue",
+}
+
+
+def _errors_carried() -> tuple[str, ...]:
+    from dataclasses import fields
+
+    from kingfisher.application.inventory import Inventory
+
+    return tuple(sorted(f.name for f in fields(Inventory) if f.name.endswith("_error")))
+
+
+def test_the_per_kind_view_covers_every_kind_there_is():
+    """`doctor` read three of the five kinds, then four, and the listing read the
+    errors it happened to know about. The view is what those two walk now, so the
+    thing that has to be total is the view.
+    """
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from tests.conftest import an_inventory
+
+    named = {kind.name for kind in an_inventory().by_kind()}
+
+    assert named == set(DEFINITION_KINDS)
+
+
+@pytest.mark.parametrize("field_name", _errors_carried())
+def test_every_error_the_inventory_carries_makes_a_listing_non_zero(field_name):
+    """Driven one error at a time, because that is how one goes missing: a kind gains
+    an error, every other check keeps passing, and the deployment that breaks on it
+    is the one nobody told.
+    """
+    from kingfisher.presentation.cli.listing import failed
+    from tests.conftest import an_inventory
+
+    broken = an_inventory(**{field_name: "something is wrong here"})
+
+    assert failed(broken), f"{field_name} is carried and nothing reads it"
+
+
+def test_an_inventory_with_nothing_wrong_is_not_reported_as_broken():
+    """The control: the rule above passes for every field if `failed` is always true."""
+    from kingfisher.presentation.cli.listing import failed
+    from tests.conftest import an_inventory
+
+    assert not failed(an_inventory())
+
+
+def test_every_error_is_a_kind_or_says_why_it_is_not():
+    """The other half: an error reaching `failed` through the table below rather than
+    through a kind has to say what it is instead.
+    """
+    from tests.conftest import an_inventory
+
+    of_kinds = {f"{kind.name}_error" for kind in an_inventory().by_kind()}
+    carried = set(_errors_carried())
+
+    assert carried <= of_kinds | set(ERRORS_OUTSIDE_THE_KINDS)
+    assert set(ERRORS_OUTSIDE_THE_KINDS) <= carried, "an exception for an error that is gone"
