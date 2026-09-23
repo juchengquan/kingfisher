@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.kinds.subagents.spec import RunOn, SubagentError, SubagentSpec
+from kingfisher.kinds.subagents.spec import BUNDLE_KEYS, RunOn, SubagentError, SubagentSpec
 from kingfisher.kinds.tools.spec import split_reference
 
 
@@ -156,7 +156,7 @@ def miscounted(
     held = {"tools": tools, "skills": skills}
     differences = [
         found
-        for half in sorted(held)
+        for half in BUNDLE_KEYS
         if (found := _differs(listed.get(half, ()), held[half], half=half, where=where))
         is not None
     ]
