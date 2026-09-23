@@ -141,7 +141,7 @@ CARRYING = (
     "@tool\ndef one(x: str) -> str:\n"
     '    """Do one."""\n    return x\n\n\n'
     "SUBAGENTS = [{{'name': 'p', 'description': 'd', 'system_prompt': 'Go.', "
-    "'bundle': {{'tools': {tools}}}}}]\n"
+    "'tools': {tools}}}]\n"
 )
 
 
@@ -159,14 +159,14 @@ def a_portable_subagent_naming_a_model(cfg):
 def a_portable_subagent_carrying_tools_that_are_not_a_list(cfg):
     _write(
         _root(cfg, "subagents") / "p.py",
-        PORTABLE.format(extra=", 'bundle': {'tools': 'nope'}"),
+        PORTABLE.format(extra=", 'tools': 'nope'"),
     )
 
 
 def a_portable_subagent_whose_skills_are_a_relative_path(cfg):
     _write(
         _root(cfg, "subagents") / "p.py",
-        PORTABLE.format(extra=", 'bundle': {'skills': 'skills'}"),
+        PORTABLE.format(extra=", 'skills': 'skills'"),
     )
 
 
@@ -254,7 +254,7 @@ REFUSALS: dict[str, Refusal] = {
     "kinds/subagents/spec.py::_refuse_unknown": Refusal(
         1, defect=a_subagent_with_a_field_nobody_reads),
     "kinds/subagents/spec.py::_carried": Refusal(
-        4, defect=a_portable_subagent_carrying_tools_that_are_not_a_list),
+        2, defect=a_portable_subagent_carrying_tools_that_are_not_a_list),
     "kinds/subagents/spec.py::_portable": Refusal(
         4, defect=a_declared_subagent_with_no_name),
     "kinds/subagents/spec.py::_skills_directory": Refusal(

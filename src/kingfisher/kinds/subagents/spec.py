@@ -70,9 +70,9 @@ class SubagentSpec(Definition):
         default_factory=dict, metadata={"derived": True}
     )
     #: The same two halves, brought rather than listed: tool objects, and the
-    #: directory a package resolved for its own skills. This *is* the folder for a
-    #: definition that has none, which is why a spec may hold this or `bundled` and
-    #: never both.
+    #: directory a package resolved for its own skills, written in a portable
+    #: entry's `tools` and `skills`. This *is* the folder for a definition that has
+    #: none, which is why a spec may hold this or `bundled` and never both.
     #:
     #: Derived, because no document writes a key called `carried`. A YAML definition
     #: could not: the objects do not survive being written down, which is the whole
@@ -251,8 +251,10 @@ PORTABLE: frozenset[str] = frozenset(
         # narrowed by the request: they are the host's tools rather than this
         # definition's, so a request that withheld `execute` withholds it here.
         "builtin_tools",
-        # Carried rather than described, for a definition that has no folder.
-        "bundle",
+        # The things themselves rather than names, for a definition that has no
+        # folder and has never seen the deployment's catalogue.
+        "tools",
+        "skills",
         "metadata",
     }
 )
@@ -263,15 +265,9 @@ PORTABLE: frozenset[str] = frozenset(
 #: knows, so a definition written elsewhere cannot mean anything by it.
 NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
     {
-        "tools": (
-            "a name here is a lookup in the deployment's own catalogue, which a "
-            "definition written somewhere else has never seen -- on one machine it "
-            "finds nothing and on the next a different tool wearing the name. Carry "
-            "the tools themselves under 'bundle'"
-        ),
-        "skills": (
-            "the same lookup in the same catalogue, with the same two ways to be "
-            "wrong. Carry them under 'bundle' instead, as the directory they are in"
+        "bundle": (
+            "a portable entry carries its own under the plain fields: the tool "
+            "objects in 'tools', and the absolute directory of its skills in 'skills'"
         ),
         "subagents": (
             "a helper has to be a catalogue entry, and an imported delegate is "
@@ -412,58 +408,46 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
         # be handed the deployment's entire catalogue. An imported delegate holds
         # what it carried and nothing else.
         tools=None,
-        carried=_carried(entry.get("bundle"), read),
+        carried=_carried(entry, read),
         metadata=read.mapping(entry.get("metadata"), key="metadata"),
     )
 
 
-def _carried(value: object, reader: fields.Reader) -> Mapping[str, Any]:
-    """What `bundle:` brought, for a definition with no folder to describe.
+#: Why a portable entry's `tools` holds no names. A name is a lookup in the
+#: deployment's own catalogue, which a definition written somewhere else has never
+#: seen -- on one machine it finds nothing and on the next a different tool wearing
+#: the name.
+NO_NAMES_HERE = (
+    "a portable entry's tools are the tool objects themselves; a name would be a "
+    "lookup in a catalogue this definition has never seen, finding nothing on one "
+    "machine and a different tool wearing the name on the next"
+)
 
-    A document lists what it takes from its folder so the two can be checked against
-    each other; a declaration with no folder hands over the things themselves, and
-    there is nothing left to check -- which is why a spec carrying these lists
-    nothing, and `miscounted` has nothing to say about it.
+
+def _carried(entry: Mapping[str, object], reader: fields.Reader) -> Mapping[str, Any]:
+    """What a portable entry brought in `tools` and `skills`, for a definition with no
+    folder: the objects, and the directory its skills are in.
     """
-    if value is None:
-        return {}
-    if not isinstance(value, Mapping):
-        msg = (
-            f"{reader.source}: bundle is {type(value).__name__}; it takes "
-            f"{' and/or '.join(BUNDLE_KEYS)} -- the tools themselves, and the "
-            f"directory holding the skills"
-        )
-        raise SubagentError(msg)
-    written = dict(value)
-    if unknown := sorted(set(written) - set(BUNDLE_KEYS)):
-        msg = (
-            f"{reader.source}: bundle names {unknown}, and a bundle holds "
-            f"{list(BUNDLE_KEYS)}"
-        )
-        raise SubagentError(msg)
-    if not written:
-        msg = (
-            f"{reader.source}: bundle is empty; it takes "
-            f"{' and/or '.join(BUNDLE_KEYS)}. Leave the key out to carry nothing"
-        )
-        raise SubagentError(msg)
-
     carried: dict[str, Any] = {}
-    if "tools" in written:
-        tools = written["tools"]
+    if (tools := entry.get("tools")) is not None:
         # A list or a tuple, and nothing looser -- the rule `TOOLS` and `SUBAGENTS`
         # both make, for the reason they both give: a single tool is a pydantic
         # model, and a pydantic model is iterable, so `tools: my_tool` would pass a
         # duck test and then loop over the tool's own fields.
         if not isinstance(tools, (list, tuple)):
             msg = (
-                f"{reader.source}: bundle tools is {type(tools).__name__}; it takes a "
+                f"{reader.source}: tools is {type(tools).__name__}; it takes a "
                 f"list of the tools themselves -- write tools: [my_tool]"
             )
             raise SubagentError(msg)
+        # A mapping is the long form a document writes, `{name: x, source: ...}`,
+        # and is refused for the reason a string is: it names rather than carries.
+        if named := [one for one in tools if isinstance(one, (str, Mapping))]:
+            msg = f"{reader.source}: tools names {named!r} -- {NO_NAMES_HERE}"
+            raise SubagentError(msg)
         carried["tools"] = tuple(tools)
-    if "skills" in written:
-        carried["skills"] = _skills_directory(written["skills"], reader)
+    if (skills := entry.get("skills")) is not None:
+        carried["skills"] = _skills_directory(skills, reader)
     return carried
 
 
@@ -477,14 +461,14 @@ def _skills_directory(value: object, reader: fields.Reader) -> Path:
     """
     if not isinstance(value, (str, Path)):
         msg = (
-            f"{reader.source}: bundle skills is {type(value).__name__}; it takes the "
+            f"{reader.source}: skills is {type(value).__name__}; it takes the "
             f"directory the skills are in, as a path"
         )
         raise SubagentError(msg)
     found = Path(value)
     if not found.is_absolute():
         msg = (
-            f"{reader.source}: bundle skills is {str(found)!r}, which is relative -- "
+            f"{reader.source}: skills is {str(found)!r}, which is relative -- "
             f"it would be resolved against whatever directory kingfisher was started "
             f"in. Write an absolute path, which for a definition beside its own "
             f"skills is Path(__file__).parent / 'skills'"
@@ -492,9 +476,9 @@ def _skills_directory(value: object, reader: fields.Reader) -> Path:
         raise SubagentError(msg)
     if not found.is_dir():
         msg = (
-            f"{reader.source}: bundle skills is {str(found)!r}, which is not a "
-            f"directory. A carried bundle is checked here because there is nowhere "
-            f"else it could be: nothing walks a catalogue to find it"
+            f"{reader.source}: skills is {str(found)!r}, which is not a "
+            f"directory. A portable entry's skills are checked here because there is "
+            f"nowhere else they could be: nothing walks a catalogue to find them"
         )
         raise SubagentError(msg)
     return found

@@ -416,8 +416,9 @@ delegate -- and no `file::name` path, since the folder is where it is.
 with `"*"` and listing its own `fetch` gets its own, and `list` still marks it,
 because the catalogue's `fetch` is still dropped for that delegate. A folder named
 after no definition stays a warning; the renamed definition that left it is refused
-from its own side when it listed anything. A portable `SUBAGENTS` entry still
-carries objects under `bundle`, since it has no folder for `bundled` to name.
+from its own side when it listed anything. A portable `SUBAGENTS` entry carries
+objects instead, in its plain `tools` and `skills`, since it has no folder for
+`bundled` to name.
 *(2026-09-23.)*
 
 ## Agents and delegation
@@ -578,10 +579,18 @@ everything else, because it is where a deployment puts content it did not write.
 **A subagent can travel, and kingfisher discovers nothing.** A `SUBAGENTS` entry
 with no `build` is a declaration kingfisher assembles, restricted to what a
 definition can answer without seeing the deployment it lands in: `name`,
-`description`, `system_prompt`, `builtin_tools`, `bundle`, `metadata`. The six it
-may not write -- `tools` and `skills` as names, `subagents`, `middlewares`,
-`model`, `source_ids` -- each name something only one deployment knows, and each
-is refused with that reason rather than as an unknown key.
+`description`, `system_prompt`, `builtin_tools`, `tools`, `skills`, `metadata`.
+`tools` holds the tool objects and `skills` an absolute directory, never names. The
+four it may not write -- `subagents`, `middlewares`, `model`, `source_ids` -- each
+name something only one deployment knows, and each is refused with that reason
+rather than as an unknown key.
+
+**What it carries goes in the plain fields, not under `bundle`.** It was written
+`bundle: {tools: [...], skills: ...}`, the same key a document used to describe its
+folder, so one word meant a claim in one format and the goods in the other. The
+nesting only said *these are not names*, which the objects already say. A string or a `{name: ...}` entry in
+a portable `tools` is refused as a name, and `bundle` is refused with the two plain
+fields in the message. *(2026-09-23.)*
 
 **This is not the entry above, and the difference is who does the finding.** That
 reversal was about *discovery*: assets leaving the repository and being found
