@@ -18,7 +18,7 @@ from kingfisher.domain import retention
 from kingfisher.domain.retention import SweepResult
 from kingfisher.domain.session import Session, sessions_root, still_held
 from kingfisher.infrastructure.harness.checkpointing import thread_ids
-from kingfisher.infrastructure.workspace.sessions import claim_path
+from kingfisher.infrastructure.workspace import claim_path
 from kingfisher.layout import CLAIM
 
 if TYPE_CHECKING:

@@ -3097,6 +3097,12 @@ repository distrusts everywhere else -- so they are held to each other in both
 directions, on the module string as well as the name. Only `application/` has
 one, because only it was asked for. *(2026-09-03.)*
 
+`infrastructure/workspace/` has one since, asked for so its callers name the
+package rather than six modules, and lazy for the same kind of cost: `seeding`
+loads `yaml` and the catalogue, which a caller wanting only `permissions` should
+not pay for. It joined `LAZY_TABLES`, so the same three-way agreement holds it.
+*(2026-09-23.)*
+
 ## Splitting a file
 
 

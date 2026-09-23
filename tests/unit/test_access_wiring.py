@@ -13,7 +13,7 @@ from kingfisher.domain.access import UNSCOPED, AccessError, parse
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+from kingfisher.infrastructure.workspace import ensure_session_layout
 from tests.conftest import an_agent, tools_dir
 
 TOOL = '''

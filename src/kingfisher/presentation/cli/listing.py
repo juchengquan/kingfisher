@@ -16,7 +16,7 @@ from kingfisher import Inventory, Origins
 # same in both. Shared for that reason, not promised for it.
 from kingfisher.domain.access import AUDIENCED, Audience, spell
 from kingfisher.domain.capabilities import ALL
-from kingfisher.infrastructure.workspace.seeding import SEED_HINT
+from kingfisher.infrastructure.workspace import SEED_HINT
 from kingfisher.kinds.skills.catalogue import SKILL_LAYOUT
 from kingfisher.kinds.tools.spec import offered, split_reference
 

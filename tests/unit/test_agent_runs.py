@@ -31,7 +31,7 @@ system_prompt: |
 def _session(cfg, session_id: str):
     """One session's directory, made. `_agent_for` takes the directory now: the pin
     lives inside the session rather than in a directory keyed by its name."""
-    from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+    from kingfisher.infrastructure.workspace import ensure_session_layout
 
     return ensure_session_layout(cfg.workspace / "sessions" / session_id)
 
@@ -226,7 +226,7 @@ def test_a_snapshot_is_written_once_and_not_overwritten(tmp_path):
     would reintroduce exactly what the file exists to prevent, and every test above
     would still pass.
     """
-    from kingfisher.infrastructure.workspace.snapshots import agent_started_with, remember_agent
+    from kingfisher.infrastructure.workspace import agent_started_with, remember_agent
 
     remember_agent(tmp_path, "name: first\ndescription: One.\n")
     remember_agent(tmp_path, "name: second\ndescription: Two.\n")

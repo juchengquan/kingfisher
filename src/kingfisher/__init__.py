@@ -92,11 +92,11 @@ _EXPORTS = {
     "RunEvent": "kingfisher.domain.result",
     "RunResult": "kingfisher.domain.result",
     "SessionInfo": "kingfisher.domain.session",
-    "definitions_source": "kingfisher.infrastructure.workspace.seeding",
-    "ensure_layout": "kingfisher.infrastructure.workspace.layout",
-    "kinds_at": "kingfisher.infrastructure.workspace.seeding",
-    "seed": "kingfisher.infrastructure.workspace.seeding",
-    "Seeded": "kingfisher.infrastructure.workspace.seeding",
+    "definitions_source": "kingfisher.infrastructure.workspace",
+    "ensure_layout": "kingfisher.infrastructure.workspace",
+    "kinds_at": "kingfisher.infrastructure.workspace",
+    "seed": "kingfisher.infrastructure.workspace",
+    "Seeded": "kingfisher.infrastructure.workspace",
     "inventory": "kingfisher.application.inventory",
     "Inventory": "kingfisher.application.inventory",
     # Where this deployment reads from, as against what it offers. Public
@@ -201,13 +201,13 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.session_store import (
         LocalSessionStore as LocalSessionStore,
     )
-    from kingfisher.infrastructure.workspace.layout import ensure_layout as ensure_layout
-    from kingfisher.infrastructure.workspace.seeding import Seeded as Seeded
-    from kingfisher.infrastructure.workspace.seeding import (
+    from kingfisher.infrastructure.workspace import Seeded as Seeded
+    from kingfisher.infrastructure.workspace import (
         definitions_source as definitions_source,
     )
-    from kingfisher.infrastructure.workspace.seeding import kinds_at as kinds_at
-    from kingfisher.infrastructure.workspace.seeding import seed as seed
+    from kingfisher.infrastructure.workspace import ensure_layout as ensure_layout
+    from kingfisher.infrastructure.workspace import kinds_at as kinds_at
+    from kingfisher.infrastructure.workspace import seed as seed
     from kingfisher.kinds.skills.spec import SkillError as SkillError
     from kingfisher.kinds.subagents.spec import RunOn as RunOn
     from kingfisher.kinds.subagents.spec import SubagentError as SubagentError

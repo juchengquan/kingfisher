@@ -36,7 +36,7 @@ def two_sessions(tmp_path):
     policy that grants nothing, and every escape below would fail for that reason
     instead of the one being tested.
     """
-    from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+    from kingfisher.infrastructure.workspace import ensure_session_layout
 
     mine = tmp_path / "sessions" / "a"
     theirs = tmp_path / "sessions" / "b"

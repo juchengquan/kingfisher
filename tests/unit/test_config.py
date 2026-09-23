@@ -467,7 +467,7 @@ def test_a_config_is_a_seeding_destination(tmp_path):
     either being told about it.
     """
     from kingfisher.config import WorkspacePaths
-    from kingfisher.infrastructure.workspace.seeding import Destination
+    from kingfisher.infrastructure.workspace import Destination
 
     assert isinstance(WorkspacePaths(workspace=tmp_path), Destination)
 

@@ -842,7 +842,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     Driven against the real tree rather than asserted over it, because what could
     regress is the copying rather than the wording.
     """
-    from kingfisher.infrastructure.workspace.seeding import seed
+    from kingfisher.infrastructure.workspace import seed
 
     class Destination:
         workspace = tmp_path
@@ -898,7 +898,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
 
 def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_path):
     """The deployment that already registered the names wants its own examples."""
-    from kingfisher.infrastructure.workspace.seeding import seed
+    from kingfisher.infrastructure.workspace import seed
 
     class Destination:
         workspace = tmp_path
@@ -933,7 +933,7 @@ def test_seed_copies_the_middleware_examples_into_a_workspace(shipped, tmp_path)
     `DEFINITION_KINDS` was pinned; the copying that membership buys was not, so
     nothing went red.
     """
-    from kingfisher.infrastructure.workspace.seeding import seed
+    from kingfisher.infrastructure.workspace import seed
 
     class Destination:
         workspace = tmp_path
@@ -957,7 +957,7 @@ def test_seed_copies_the_middleware_examples_into_a_workspace(shipped, tmp_path)
 
 def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_path):
     """The property the rule exists for, checked over the result rather than the inputs."""
-    from kingfisher.infrastructure.workspace.seeding import middleware_named, seed
+    from kingfisher.infrastructure.workspace import middleware_named, seed
 
     class Destination:
         workspace = tmp_path
@@ -994,7 +994,7 @@ def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
     workspace that resolves it. The test the star had checked it against an empty
     registry, which is the one registry a seeded workspace never has.
     """
-    from kingfisher.infrastructure.workspace.seeding import seed
+    from kingfisher.infrastructure.workspace import seed
     from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository
 
     seed(cfg, shipped, everything=True)
@@ -1301,7 +1301,7 @@ def test_the_containing_source_id_reaches_what_it_contains(shipped):
 
 def test_every_source_id_the_presets_name_is_declared(shipped):
     """The assertion that keeps this set honest."""
-    from kingfisher.infrastructure.workspace.seeding import source_ids_named
+    from kingfisher.infrastructure.workspace import source_ids_named
 
     declared = set(_vocabulary(shipped).names)
     named = {

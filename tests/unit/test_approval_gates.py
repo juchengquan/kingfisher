@@ -25,7 +25,7 @@ from kingfisher.infrastructure.session_store import (
     read_pause_mark,
     write_pause_mark,
 )
-from kingfisher.infrastructure.workspace.sessions import session_bytes
+from kingfisher.infrastructure.workspace import session_bytes
 from tests.conftest import FakeToolCallingModel
 
 

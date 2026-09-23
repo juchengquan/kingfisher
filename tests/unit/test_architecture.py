@@ -1475,9 +1475,11 @@ def test_the_public_api_list_matches_the_lazy_export_table():
     """`__all__` is a literal so a linter can see it, and `_EXPORTS` drives the lazy
     loading.
     """
-    import kingfisher
+    import importlib
 
-    assert sorted(kingfisher.__all__) == sorted(kingfisher._EXPORTS)
+    for package in sorted(LAZY_TABLES):
+        module = importlib.import_module(package)
+        assert sorted(module.__all__) == sorted(module._EXPORTS), package
 
 
 #: Every package that re-exports through a `__getattr__` table, and the file
@@ -1486,6 +1488,7 @@ def test_the_public_api_list_matches_the_lazy_export_table():
 LAZY_TABLES: dict[str, Path] = {
     "kingfisher": SRC / "__init__.py",
     "kingfisher.application": SRC / "application" / "__init__.py",
+    "kingfisher.infrastructure.workspace": SRC / "infrastructure" / "workspace" / "__init__.py",
 }
 
 

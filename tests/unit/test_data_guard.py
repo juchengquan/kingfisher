@@ -5,9 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.infrastructure.workspace.permissions import protect_data, writable_data
-from kingfisher.infrastructure.workspace.placement import DataError, place_data
-from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs
+from kingfisher.infrastructure.workspace import (
+    DataError,
+    LocalSessionDirs,
+    place_data,
+    protect_data,
+    writable_data,
+)
 
 
 def test_data_becomes_read_only_to_the_os(workspace):

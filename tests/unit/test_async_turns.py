@@ -25,7 +25,7 @@ def service(cfg, graph=None):
 
 
 def _claim(cfg, session_id: str) -> Path:
-    from kingfisher.infrastructure.workspace.sessions import claim_path
+    from kingfisher.infrastructure.workspace import claim_path
 
     return claim_path(cfg.workspace / "sessions" / session_id)
 

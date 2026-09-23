@@ -6,8 +6,12 @@ import shutil
 import pytest
 
 from kingfisher.domain import retention
-from kingfisher.infrastructure.workspace.layout import EXAMPLE, ensure_layout
-from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs, ensure_session_layout
+from kingfisher.infrastructure.workspace import (
+    EXAMPLE,
+    LocalSessionDirs,
+    ensure_layout,
+    ensure_session_layout,
+)
 from kingfisher.layout import (
     AGENT_HOME,
     LAYOUT_DIRS,

@@ -19,8 +19,7 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
-from kingfisher.infrastructure.workspace.snapshots import agent_snapshot
+from kingfisher.infrastructure.workspace import agent_snapshot, ensure_session_layout
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from tests.conftest import (
     FAKE_ENDPOINT,
@@ -883,7 +882,7 @@ def test_a_session_opened_as_one_agent_cannot_run_as_another_somewhere_else(cfg,
     the default root were refused.
     """
     from kingfisher import LocalSessionStore
-    from kingfisher.infrastructure.workspace.snapshots import AGENT_SNAPSHOT
+    from kingfisher.infrastructure.workspace import AGENT_SNAPSHOT
 
     an_agent(cfg, "only")
     an_agent(cfg, "other")

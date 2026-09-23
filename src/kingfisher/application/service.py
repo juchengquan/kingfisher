@@ -119,20 +119,19 @@ from kingfisher.infrastructure.session_store import (
     write_transcript,
 )
 from kingfisher.infrastructure.wiring import store_named
-from kingfisher.infrastructure.workspace.layout import ensure_layout
-from kingfisher.infrastructure.workspace.permissions import protect_data
-from kingfisher.infrastructure.workspace.placement import place_data
-from kingfisher.infrastructure.workspace.seeding import SEED_HINT, STARTER_AGENT
-from kingfisher.infrastructure.workspace.sessions import (
+from kingfisher.infrastructure.workspace import (
+    AGENT_SNAPSHOT,
+    SEED_HINT,
+    STARTER_AGENT,
     LocalSessionDirs,
     LocalSessionRoot,
-    claim_path,
-    collect_artifacts,
-)
-from kingfisher.infrastructure.workspace.snapshots import (
-    AGENT_SNAPSHOT,
     agent_snapshot,
     agent_started_with,
+    claim_path,
+    collect_artifacts,
+    ensure_layout,
+    place_data,
+    protect_data,
     remember_agent,
 )
 from kingfisher.kinds.agents.reading import read

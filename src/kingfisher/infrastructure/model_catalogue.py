@@ -17,7 +17,7 @@ from kingfisher.config import (
 )
 from kingfisher.domain import fields
 from kingfisher.infrastructure.harness.models import ADAPTERS
-from kingfisher.infrastructure.workspace.layout import EXAMPLE
+from kingfisher.infrastructure.workspace import EXAMPLE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
