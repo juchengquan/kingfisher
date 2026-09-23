@@ -161,7 +161,12 @@ def test_the_example_script_reports_what_it_left(tmp_path, assets_examples, caps
     assert code == 0
     assert "seeded agents/general.yaml" in printed
     assert "skipped " in printed, "the example stopped reporting what it left behind"
-    assert "run again with --all" in printed, "a skip with no remedy is half a message"
+    assert "seed again with --all" in printed, "a skip with no remedy is half a message"
+    # The remedy this script used to get wrong, and the reason it prints the
+    # record's own lines now: these names are declared in a file, and it said to
+    # register them.
+    assert "Declare the source ids in source_ids.yaml" in printed
+    assert "register those" not in printed
 
 
 def test_the_example_script_refuses_with_no_source_configured(tmp_path, monkeypatch, capsys):

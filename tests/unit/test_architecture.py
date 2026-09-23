@@ -2218,6 +2218,11 @@ LIGHT_EXPORTS = frozenset({
     # and `importlib.metadata` come with them, and nowhere near the 3,100 a provider
     # costs.
     "seed", "definitions_source", "kinds_at", "Seeded", "inventory", "Inventory",
+    # The two tables behind a skipped definition's sentence. Two dicts of strings,
+    # so light by construction. `Seeded.report` writes the sentence and three
+    # callers print it; the command reaches for the tables directly because it
+    # says one more thing with them -- what `nothing seeded` means.
+    "UNCONSULTED", "REMEDY",
     # Where a deployment reads from. Light for the reason `paths_from_env` is:
     # the question "which directories?" must not cost three provider SDKs, and
     # this one is asked by `doctor`, by a listing, and by anybody debugging a
@@ -2568,6 +2573,37 @@ def test_only_one_module_decides_what_a_skill_is():
     assert not offenders, (
         f"{offenders} decide what a skill is; use kinds.skills.spec.FILENAME and "
         "`reachable`, or the registry, so no two readers of the catalogue disagree"
+    )
+
+
+def test_only_the_record_says_what_a_skipped_definition_needs():
+    """Three callers printed this and two of them got it wrong.
+
+    `seed` leaves a definition behind for one of two reasons, and the remedies are
+    opposite: middleware is registered in code, a source id is declared in a file.
+    The command said so; the integration driver and the example script each wrote
+    their own line saying "register those" for both. Nothing bound the three, and the
+    one people copy was one of the wrong ones.
+    """
+    repo = REPO
+    owner = SRC / "infrastructure" / "workspace" / "seeding.py"
+
+    searched = [
+        *SRC.rglob("*.py"),
+        repo / "tests" / "integration" / "driver.py",
+        repo / "tests" / "integration" / "seed_example.py",
+        *(repo / "evals").glob("*.py"),
+    ]
+    offenders = [
+        path.relative_to(repo)
+        for path in searched
+        if path != owner and 'f"skipped ' in path.read_text(encoding="utf-8")
+    ]
+
+    assert not offenders, (
+        f"{offenders} build their own line for a skipped definition; print "
+        "`Seeded.report()`, which knows that a source id is declared rather than "
+        "registered"
     )
 
 

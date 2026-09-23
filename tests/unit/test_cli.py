@@ -48,6 +48,21 @@ def test_seeding_puts_the_example_where_the_catalogue_is_read_from(
     assert (elsewhere / "models.yaml.example").is_file()
 
 
+def test_the_skip_line_says_which_of_the_two_reasons_it_was(cfg, monkeypatch, capsys, shipped):
+    """The word that tells a reader which file to open. Both halves of the sentence
+    are per-kind -- what seed did not consult, and what to do -- and the remedy alone
+    reads as advice about nothing in particular until the line says what was named.
+    """
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
+
+    assert main(["seed"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "names source_ids (" in printed
+    assert "seed does not check your source_ids.yaml" in printed
+
+
 def test_the_skip_message_carries_the_line_to_write(cfg, monkeypatch, capsys, shipped):
     """A remedy is only actionable if it is about the source ids you are missing."""
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))

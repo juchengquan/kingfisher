@@ -61,24 +61,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"configuration error: {exc}", file=sys.stderr)
         return 2
 
-    for name in done.written:
-        print(f"seeded {name}")
-
-    # The half a caller forgets, and the reason this script exists rather than
-    # the README snippet alone. A definition naming middleware or source ids this
-    # deployment has not registered is refused when it is built, so `seed`
-    # leaves it -- and a workspace quietly missing an agent you can see in the
-    # source directory is worse than one that says why.
-    for left in done.skipped:
-        print(
-            f"skipped {left.label} — needs {', '.join(left.names)}; "
-            f"register those, then run again with --all"
-        )
-
-    # Last, so it survives being skimmed: the point of seeding is that you edit
-    # your copy, and this is the line saying you just lost an edit.
-    for name in done.overwritten:
-        print(f"warning: overwrote your edited {name}")
+    # The half a caller forgets, and the reason this script exists rather than the
+    # README snippet alone: a definition naming middleware or source ids this
+    # deployment has not got is left behind, and a workspace quietly missing an
+    # agent you can see in the source directory is worse than one that says why.
+    # `report` is what to copy -- writing these lines by hand is what this script
+    # used to do, and it told a reader to *register* a source id.
+    for line in done.report():
+        print(line)
 
     if not done.written:
         print("nothing seeded", file=sys.stderr)

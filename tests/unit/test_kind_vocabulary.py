@@ -179,7 +179,7 @@ def _kinds_the_seeder_can_report() -> set[str]:
 
 def test_every_reason_a_definition_is_skipped_has_a_remedy():
     """A skipped definition is reported in two halves, and both are lookups."""
-    from kingfisher.presentation.cli.__main__ import REMEDY, UNCONSULTED
+    from kingfisher.infrastructure.workspace.seeding import REMEDY, UNCONSULTED
 
     reported = _kinds_the_seeder_can_report()
 

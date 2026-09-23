@@ -106,6 +106,27 @@ class Skipped:
     wants: str = "middlewares"
 
 
+#: What `seed` did *not* look at before leaving a definition behind, per kind.
+UNCONSULTED = {
+    "middlewares": "what this deployment registered",
+    "source_ids": "your source_ids.yaml",
+}
+
+#: And what to do about it. The half a reader acts on, and the half that would be
+#: wrong if one sentence served both: middleware is registered in code, a source id
+#: is declared in a file.
+REMEDY = {
+    "middlewares": "Register the names",
+    # No file named here any more. It used to say `groups.yaml.example is beside
+    # it`, and that example could not be the one you wanted: it shipped one
+    # vocabulary and a workspace needs whichever names its own definitions ask for.
+    # Seeding this repository's own set named three source ids and pointed at a file
+    # declaring five others, none of them the same. `Seeded.report` prints what to
+    # write instead, using the names that are actually missing.
+    "source_ids": "Declare the source ids in source_ids.yaml",
+}
+
+
 @dataclass(frozen=True)
 class Seeded:
     """What `seed` did. `overwritten` names files, where `written` names entries."""
@@ -113,6 +134,50 @@ class Seeded:
     written: tuple[str, ...] = ()
     overwritten: tuple[str, ...] = ()
     skipped: tuple[Skipped, ...] = ()
+
+    def report(self) -> tuple[str, ...]:
+        """Every line a person is owed about this, in the order to print them.
+
+        On the record rather than in the command, because the command was not the
+        only thing printing it. The driver and the example script each wrote their
+        own version and both said *register those* for a source id -- which is the
+        one mistake `Skipped.wants` exists to stop, and neither of them offered the
+        `source_ids.yaml` that would unblock the run. A sentence three callers write
+        separately is a sentence two of them get wrong.
+        """
+        lines = [f"seeded {name}" for name in self.written]
+        lines += [
+            # Named with what to do about it, because "skipped" on its own reads as
+            # a failure and this is a choice. The names are the actionable half, and
+            # `wants` is what makes them actionable.
+            f"skipped {left.label} — names {left.wants} ({', '.join(left.names)}), "
+            f"and seed does not check {UNCONSULTED[left.wants]}. "
+            f"{REMEDY[left.wants]}, then seed again with --all"
+            for left in self.skipped
+        ]
+        lines += self._declaration()
+        # After the list, not beside each entry: the point is that you edit your
+        # copy, so losing one is the line that has to survive being skimmed.
+        lines += [f"warning: overwrote your edited {name}" for name in self.overwritten]
+        return tuple(lines)
+
+    def _declaration(self) -> tuple[str, ...]:
+        """The `source_ids.yaml` to write, or nothing when no source id was missing."""
+        wanted = sorted(
+            {name for left in self.skipped if left.wants == "source_ids" for name in left.names}
+        )
+        if not wanted:
+            return ()
+        return (
+            "",
+            # The artifact rather than the instruction. Each skipped line already
+            # says to declare them and to seed again; a third copy of that sentence
+            # would be the noise, and what none of those lines can give is the one
+            # list that covers all of them.
+            "the source_ids.yaml that unblocks every one of them:",
+            "",
+            f"    source_ids: [{', '.join(wanted)}]",
+        )
 
 
 def source_ids_named(text: str) -> tuple[str, ...]:

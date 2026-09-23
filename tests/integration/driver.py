@@ -258,23 +258,13 @@ def main(argv: list[str]) -> int:
             print(f"configuration error: {exc}", file=sys.stderr)
             return 2
         result = seeding.seed(paths, source)
-        for name in result.written:
-            print(f"seeded {name}")
-        for left in result.skipped:
-            # The reason `--agent researcher` would otherwise fail with nothing
-            # to go on. A definition naming middleware or source ids this deployment
-            # has not registered is refused when it is built, so `seed` leaves it
-            # behind -- and a driver that printed only what it wrote would send
-            # you looking for a file it decided not to copy.
-            print(
-                f"skipped {left.label} — needs {', '.join(left.names)}; "
-                f"register those, then `kingfisher seed --all`"
-            )
-        for name in result.overwritten:
-            # After the list, not beside each entry: the point is that you edit
-            # your copy, so losing one is the line that has to survive being
-            # skimmed.
-            print(f"warning: overwrote your edited {name}")
+        # `report` rather than a loop of this driver's own. What it prints about a
+        # skipped definition is the reason `--agent researcher` would otherwise fail
+        # with nothing to go on, and the sentence is the record's because this
+        # driver's own version said *register those* for a source id -- which is
+        # declared in a file.
+        for line in result.report():
+            print(line)
 
     try:
         cfg = config_from_env()
