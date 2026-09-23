@@ -294,6 +294,22 @@ def test_a_new_workspace_says_what_it_wrote(cfg, tmp_path, capsys, monkeypatch):
         assert f"seeded skills/{name}" in printed
 
 
+def test_the_driver_says_what_to_do_about_what_it_left(cfg, tmp_path, capsys, monkeypatch):
+    """The shipped set names source ids, so a driver seeding it leaves definitions
+    behind -- and its own version of this line said to *register* them, which is what
+    you do with middleware. A source id is declared in a file, and the sentence now
+    comes from the record rather than from whichever caller is printing it.
+    """
+    driver = _driver_on(monkeypatch, _unused(cfg, tmp_path))
+
+    driver.main(["driver.py", "--list"])
+
+    printed = capsys.readouterr().out
+    assert "skipped " in printed, "nothing was left behind, so this asserts nothing"
+    assert "Declare the source ids in source_ids.yaml" in printed
+    assert "register those" not in printed
+
+
 def test_a_workspace_that_already_exists_does_not_reseed(cfg, tmp_path, capsys, monkeypatch):
     """The half that makes the other half safe."""
     fresh = _unused(cfg, tmp_path)

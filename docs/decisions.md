@@ -2108,6 +2108,24 @@ a model, which six tests covering workspace creation and first-run seeding are
 built on. Written into the flag, because from outside it looks exactly as
 removable as the three that went. *(2026-09-04, same document.)*
 
+**`Seeded` says what it left behind, because three callers said it and two were
+wrong.** `seed` leaves a definition alone for one of two reasons, and the remedies
+are opposite: middleware is registered in code, a source id is declared in a file.
+That is why the command keeps `UNCONSULTED` and `REMEDY` and a rule holding them
+total against the kinds seeding can report. The integration driver and
+`seed_example.py` each wrote their own line instead, and both told a reader to
+*register* a source id -- the one mistake the two tables exist to prevent. Neither
+offered the `source_ids.yaml` that would unblock the run, and the example script is
+the one people copy.
+
+The lines are on the record now. `Seeded.report()` is every line a person is owed
+about a seeding, in order, and all three callers print it. On the record rather than
+in the command because the command was never the only caller; the tables moved with
+it, so what a skip means and what to do about it are in the module that decided to
+skip. `test_only_the_record_says_what_a_skipped_definition_needs` is what stops a
+fourth copy: nothing outside `seeding.py` composes a `skipped …` line, and the
+driver, the example and `evals/` are searched along with the package. *(2026-09-23.)*
+
 ## What doctor promises
 
 **`kingfisher doctor` exiting zero means nothing in the catalogue will break** --

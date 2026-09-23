@@ -48,6 +48,7 @@ from kingfisher import (
 from kingfisher.config import MissingCredentialsWarning
 from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+from kingfisher.infrastructure.workspace.seeding import REMEDY, UNCONSULTED
 from kingfisher.infrastructure.workspace.sessions import session_bytes
 from kingfisher.presentation.cli.health import _retired, examine, worst
 from kingfisher.presentation.cli.listing import as_json, failed, origins_document, render
@@ -57,53 +58,13 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from typing import TextIO
 
-    from kingfisher import Kingfisher, RunResult, Seeded
+    from kingfisher import Kingfisher, RunResult
 
 #: Read from the working directory and nowhere else. A bare `load_dotenv()`
 #: walks up looking for one, which is the behaviour this deliberately does not
 #: have -- a command should not pick up a file two directories above the one you
 #: are standing in.
 ENV_FILE = ".env"
-
-#: What `seed` did *not* look at before leaving a definition behind, per kind.
-UNCONSULTED = {
-    "middlewares": "what this deployment registered",
-    "source_ids": "your source_ids.yaml",
-}
-
-#: And what to do about it. The half a reader acts on, and the half that would
-#: be wrong if one sentence served both: middleware is registered in code, a
-#: source id is declared in a file.
-REMEDY = {
-    "middlewares": "Register the names",
-    # No file named here any more. It used to say `groups.yaml.example is
-    # beside it`, and that example could not be the one you wanted: it shipped
-    # one vocabulary and a workspace needs whichever names its own definitions
-    # ask for. Seeding this repository's own set named three source ids and pointed
-    # at a file declaring five others, none of them the same. `_declare` below
-    # prints what to write instead, using the names that are actually missing.
-    "source_ids": "Declare the source ids in source_ids.yaml",
-}
-
-
-def _declare(written: Seeded) -> tuple[str, ...]:
-    """The `source_ids.yaml` to write, or nothing when no source id was missing."""
-    wanted = sorted(
-        {name for left in written.skipped if left.wants == "source_ids" for name in left.names}
-    )
-    if not wanted:
-        return ()
-    return (
-        "",
-        # The artifact rather than the instruction. Each skipped line already
-        # says to declare them and to seed again; a third copy of that sentence
-        # would be the noise, and what none of those lines can give is the one
-        # list that covers all of them.
-        "the source_ids.yaml that unblocks every one of them:",
-        "",
-        f"    source_ids: [{', '.join(wanted)}]",
-    )
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -433,26 +394,8 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
 
     tree = definitions_source(paths, source)
     written = seed(paths, tree, everything=everything)
-    for name in written.written:
-        print(f"seeded {name}")
-    for left in written.skipped:
-        # Named with what to do about it, because "skipped" on its own reads as
-        # a failure and this is a choice. The names are the actionable half, and
-        # `wants` is what makes them actionable: middleware is registered in
-        # code and a source id is declared in `source_ids.yaml`, so one sentence for
-        # both would send half its readers to the wrong file.
-        print(
-            f"skipped {left.label} — names {left.wants} "
-            f"({', '.join(left.names)}), and seed does not check "
-            f"{UNCONSULTED[left.wants]}. "
-            f"{REMEDY[left.wants]}, then seed again with --all"
-        )
-    for line in _declare(written):
+    for line in written.report():
         print(line)
-    for name in written.overwritten:
-        # After the list, not beside each entry: the point is that you edit your
-        # copy, so losing one is the line that has to survive being skimmed.
-        print(f"warning: overwrote your edited {name}")
 
     # Non-zero, and this changed with the definitions leaving the wheel. It was nearly
     # unreachable before -- the shipped set always held all four kinds -- and is now one
