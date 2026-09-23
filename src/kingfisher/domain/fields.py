@@ -8,7 +8,7 @@ from difflib import get_close_matches
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from kingfisher.domain.capabilities import ALL, Selection
+from kingfisher.domain.capabilities import ALL, SEPARATOR, Selection
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable
@@ -24,9 +24,22 @@ if TYPE_CHECKING:
 SIMILARITY = 0.7
 
 
-def entry_fields(extra: str) -> tuple[str, ...]:
+#: Where one `tools:` or `skills:` entry comes from. `shared` is the workspace's own
+#: catalogue and is what a plain name means; `bundled` is the delegate's own folder,
+#: `subagents/<name>/tools/` or `skills/`, which is the one place a capability can sit
+#: that an agent leaving out `tools:` does not receive.
+SHARED = "shared"
+BUNDLED = "bundled"
+SOURCES: tuple[str, ...] = (SHARED, BUNDLED)
+
+
+def entry_fields(*extra: str) -> tuple[str, ...]:
     """The keys one long-form entry may write, for a field carrying `extra`."""
-    return ("name", extra)
+    return ("name", *extra)
+
+
+def _spelled(extra: tuple[str, ...]) -> str:
+    return " and/or ".join(repr(one) for one in extra)
 
 
 def unrecognised(
@@ -176,7 +189,7 @@ class Reader:
             # answer or the refusal for each.
             return self.selection(value, absent=absent, key=key), MappingProxyType({})
 
-        written, carried = self._entries(value, key=key, extra="settings")
+        written, carried = self._entries(value, key=key, extra=("settings",))
         settings = {
             # Absent and empty both land as `{}`, which is the same answer: this
             # entry wrote the long form and asked for nothing by it.
@@ -189,7 +202,7 @@ class Reader:
         return self.selection(written, absent=absent, key=key), MappingProxyType(settings)
 
     def _entries(
-        self, value: Sequence[object], *, key: str, extra: str
+        self, value: Sequence[object], *, key: str, extra: tuple[str, ...]
     ) -> tuple[list[str], dict[str, Mapping[str, object]]]:
         """The names a list field wrote, and what each entry carried beside one."""
         written: list[str] = []
@@ -208,7 +221,9 @@ class Reader:
                 carried[name] = entry
         return written, carried
 
-    def _entry_name(self, entry: object, *, position: int, key: str, extra: str) -> str:
+    def _entry_name(
+        self, entry: object, *, position: int, key: str, extra: tuple[str, ...]
+    ) -> str:
         """The name one entry carries, whichever way that entry was written."""
         if isinstance(entry, str):
             return entry.strip()
@@ -216,18 +231,18 @@ class Reader:
             msg = (
                 f"{self.source}: {key} entry {position} is neither a name nor a "
                 f"mapping (got {type(entry).__name__}); an entry is a name, or a "
-                f"mapping of 'name' and {extra!r}"
+                f"mapping of 'name' and {_spelled(extra)}"
             )
             raise self.error(msg)
 
-        if (complaint := unrecognised(entry, known=entry_fields(extra), noun="key")) is not None:
+        if (complaint := unrecognised(entry, known=entry_fields(*extra), noun="key")) is not None:
             msg = f"{self.source}: {key} entry {position} has {complaint}"
             raise self.error(msg)
         if "name" not in entry:
             msg = (
                 f"{self.source}: {key} entry {position} is a mapping with no "
-                f"'name'. Written long, an entry is {{name: <a name>, {extra}: ...}} "
-                f"-- the {extra} are for the name, so there is nothing to attach "
+                f"'name'. Written long, an entry is {{name: <a name>, {extra[0]}: ...}} "
+                f"-- the {extra[0]} are for the name, so there is nothing to attach "
                 f"them to without one"
             )
             raise self.error(msg)
@@ -241,7 +256,7 @@ class Reader:
                 f"{self.source}: {key} entry {position} writes name {ALL!r}, which "
                 f"the long form does not take. {ALL!r} says something about the "
                 f"whole field rather than about an entry, so there is nothing for "
-                f"{extra} beside it to be about. Write {key}: [{ALL!r}] on its own "
+                f"{extra[0]} beside it to be about. Write {key}: [{ALL!r}] on its own "
                 f"for all of them, or name the one you meant"
             )
             raise self.error(msg)
@@ -321,7 +336,14 @@ class Reader:
             raise self.error(msg)
         return named
 
-    def _audience(self, raw: object, *, key: str, entry: str) -> Audience | None:
+    def _audience(
+        self,
+        raw: object,
+        *,
+        key: str,
+        entry: str,
+        known: tuple[str, ...] = entry_fields("source_ids"),
+    ) -> Audience | None:
         """One entry's audience, written `{source_ids: [...]}`, or `None` for none."""
         where = f"{self.source}: {key} entry {entry!r}"
         if raw is None:
@@ -341,7 +363,7 @@ class Reader:
         # before this sees it. Named here rather than stripped there, because
         # stripping would hand this a mapping the file does not contain and put
         # the two readers one edit apart from disagreeing about which keys exist.
-        if complaint := unrecognised(raw, known=set(entry_fields("source_ids")), noun="key"):
+        if complaint := unrecognised(raw, known=set(known), noun="key"):
             msg = f"{where}: {complaint}"
             raise self.error(msg)
         if "source_ids" not in raw:
@@ -376,7 +398,7 @@ class Reader:
             # audience, and `selection` already has the answer or the refusal.
             return self.selection(value, absent=absent, key=key, refuse_all=refuse_all), {}
 
-        written, carried = self._entries(value, key=key, extra="source_ids")
+        written, carried = self._entries(value, key=key, extra=("source_ids",))
         stated = {
             name: self._audience(entry, key=key, entry=name) for name, entry in carried.items()
         }
@@ -389,6 +411,83 @@ class Reader:
         # fallback a plain name gets -- so the two spellings agree about an
         # unrestricted name.
         return chosen, {n: a for n, a in stated.items() if a is not None}
+
+    def sourced(
+        self,
+        value: object,
+        *,
+        absent: Selection,
+        key: str,
+        refuse_all: str | None = None,
+        refuse_bundled: str | None = None,
+    ) -> tuple[Selection, Mapping[str, Audience], tuple[str, ...]]:
+        """What `audienced` answers for the shared entries, and the bundled ones apart.
+
+        Apart because nothing narrows a bundled entry: it arrives with the delegate
+        whatever the request granted, so folding it into the selection would let a
+        grant that omits it read as having removed it.
+        """
+        if not isinstance(value, (list, tuple)):
+            # A mapping, a bare `"*"`, one unbracketed name, or nothing. None can say
+            # where it comes from, and `audienced` already refuses or answers each.
+            return (
+                *self.audienced(value, absent=absent, key=key, refuse_all=refuse_all),
+                (),
+            )
+
+        extra = ("source_ids", "source")
+        # Through `_entries` with both kinds together, so a name written once shared
+        # and once bundled is the "names it twice" refusal: a delegate dispatches by
+        # name, and two entries for one would leave which one it calls unsaid.
+        written, carried = self._entries(value, key=key, extra=extra)
+        bundled = tuple(
+            name for name, entry in carried.items() if self._source(entry, key=key) == BUNDLED
+        )
+        for name in bundled:
+            where = f"{self.source}: {key} entry {name!r}"
+            if refuse_bundled is not None:
+                msg = f"{where} is source: {BUNDLED} -- {refuse_bundled}"
+                raise self.error(msg)
+            if "source_ids" in carried[name]:
+                msg = (
+                    f"{where} is source: {BUNDLED} and says who reaches it, and a "
+                    f"bundled entry reaches whoever reaches this delegate. Put the "
+                    f"source_ids on the delegate itself"
+                )
+                raise self.error(msg)
+            if SEPARATOR in name:
+                msg = (
+                    f"{where} is source: {BUNDLED} and says which file it is in, and "
+                    f"a bundled entry is always in this delegate's own folder. Write "
+                    f"the name alone"
+                )
+                raise self.error(msg)
+        stated = {
+            name: self._audience(entry, key=key, entry=name, known=entry_fields(*extra))
+            for name, entry in carried.items()
+            if name not in bundled
+        }
+        chosen = self.selection(
+            [name for name in written if name not in bundled],
+            absent=absent,
+            key=key,
+            refuse_all=refuse_all,
+        )
+        return chosen, {n: a for n, a in stated.items() if a is not None}, bundled
+
+    def _source(self, entry: Mapping[str, object], *, key: str) -> str:
+        """Where one long-form entry says it comes from, `shared` when it does not say."""
+        written = entry.get("source")
+        if written is None:
+            return SHARED
+        if (found := text(written)) not in SOURCES:
+            msg = (
+                f"{self.source}: {key} entry {text(entry.get('name'))!r} has source "
+                f"{written!r}; it takes {SHARED!r}, the workspace's own {key}/, or "
+                f"{BUNDLED!r}, this delegate's own folder subagents/<name>/{key}/"
+            )
+            raise self.error(msg)
+        return found
 
     def flag(self, value: object, *, key: str) -> bool:
         """A yes/no field, refusing the spellings YAML would quietly accept."""

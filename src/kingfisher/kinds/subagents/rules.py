@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.kinds.subagents.spec import RunOn, SubagentError, SubagentSpec
+from kingfisher.kinds.subagents.spec import BUNDLE_KEYS, RunOn, SubagentError, SubagentSpec
 from kingfisher.kinds.tools.spec import split_reference
 
 
@@ -98,27 +98,30 @@ def refuse_cycles(specs: Mapping[str, SubagentSpec]) -> None:
                     stack.append((helper, False))
 
 
-def _differs(written: Sequence[str], held: Sequence[str], *, half: str, where: str) -> str | None:
-    """How one half of a `bundle:` claim and the folder it names disagree, or `None`.
+def _differs(listed: Sequence[str], held: Sequence[str], *, half: str, where: str) -> str | None:
+    """How one half of what a definition lists as bundled and its folder disagree.
 
-    Both directions, because they are different mistakes with the same cure and only
-    one of them is the one anybody expects. A name the folder lost is a definition
-    gone stale; a name the folder gained is a capability that arrived on this delegate
-    without a line in any file changing -- which is the one the key exists for, and
-    the one a subset check would let through.
+    Both directions, because they are different mistakes with the same cure. A name
+    the folder lost is a definition gone stale; a file the folder holds and the
+    definition does not list is a capability that would arrive, or on upgrading from
+    when the folder granted by itself would vanish, with no line in any file to show
+    it -- and a subset check would let that one through.
     """
-    missing = sorted(set(written) - set(held))
-    arrived = sorted(set(held) - set(written))
+    missing = sorted(set(listed) - set(held))
+    arrived = sorted(set(held) - set(listed))
     if not missing and not arrived:
         return None
     said = []
     if missing:
         said.append(
-            f"bundle.{half} names {', '.join(missing)}, which {where}/{half}/ does not hold"
+            f"{half}: lists {', '.join(missing)} as source: bundled, which "
+            f"{where}/{half}/ does not hold"
         )
     if arrived:
         said.append(
-            f"{where}/{half}/ holds {', '.join(arrived)}, which bundle.{half} does not name"
+            f"{where}/{half}/ holds {', '.join(arrived)}, which {half}: does not list "
+            f"-- add each as {{name: <it>, source: bundled}}, or move it out of the "
+            f"folder"
         )
     return "; ".join(said)
 
@@ -130,27 +133,32 @@ def miscounted(
     tools: Sequence[str] = (),
     skills: Sequence[str] = (),
 ) -> str | None:
-    """How a definition's `bundle:` differs from the folder it describes, or `None`.
+    """How a definition's bundled entries differ from the folder they come from.
 
     Asked as well as refused, for the reason `Offering.moved` gives: startup refuses
     this and `doctor` has to report what startup refuses, and a check reachable only
     through the constructor is one a listing cannot see.
     """
-    if not spec.bundle:
-        return None  # it made no claim, which is every definition that has not opted in
+    if spec.carried:
+        return None  # it brought its own, and there is no folder to compare them with
+    listed = {half: names for half, names in spec.bundled.items() if names}
     if where is None:
+        if not listed:
+            return None
         # The rename, caught from the side the definition is on. `orphaned_assets`
         # reports the folder left behind; this reports the file that walked away
         # from it, and only this one knows what the file thought it had.
         return (
-            f"owns no folder, so the bundle written here reaches nothing -- a bundle "
-            f"is subagents/{spec.name}/ holding this definition"
+            f"lists entries as source: bundled and owns no folder to take them from "
+            f"-- a delegate's own folder is subagents/{spec.name}/, holding this "
+            f"definition"
         )
     held = {"tools": tools, "skills": skills}
     differences = [
         found
-        for half, written in sorted(spec.bundle.items())
-        if (found := _differs(written, held[half], half=half, where=where)) is not None
+        for half in BUNDLE_KEYS
+        if (found := _differs(listed.get(half, ()), held[half], half=half, where=where))
+        is not None
     ]
     return "; ".join(differences) or None
 
@@ -162,13 +170,12 @@ def refuse_miscounted(
     tools: Sequence[str] = (),
     skills: Sequence[str] = (),
 ) -> None:
-    """Refuse a definition that has stopped describing its own folder."""
+    """Refuse a definition whose bundled entries and its own folder disagree."""
     found = miscounted(spec, where=where, tools=tools, skills=skills)
     if found is not None:
         msg = (
-            f"subagent {spec.name!r}: {found}. `bundle:` is checked and never used "
-            f"-- the folder decides what the delegate holds -- so bring the two "
-            f"into line, or drop the key and let the folder speak for itself"
+            f"subagent {spec.name!r}: {found}. Only what is listed reaches the "
+            f"delegate, so the list and the folder have to match"
         )
         raise SubagentError(msg)
 

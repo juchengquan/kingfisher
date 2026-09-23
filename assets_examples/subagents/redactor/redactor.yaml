@@ -3,15 +3,9 @@ description: Quotes from files that may contain credentials, with secrets masked
 # **This definition is a bundle, and the folder is what makes it one.**
 #
 # `subagents/redactor/` holds a definition whose `name` is `redactor`, so the
-# folder belongs to it: what is in `redactor/tools/` and `redactor/skills/`
-# reaches this delegate and nothing else. Rename either the folder or the field
-# and they stop being paired -- `kingfisher list` reports the orphan rather than
-# failing, because a renamed definition is the likeliest cause.
-#
-# A folder that names no definition is still just organisation, which is what
-# `analysis/profiler.yaml` next door is. The two shapes live side by side and
-# the rule between them is one sentence: a folder is a bundle when it holds the
-# definition it is named after.
+# folder belongs to it: what is in `redactor/tools/` and `redactor/skills/` can
+# reach this delegate and nothing else. A folder that names no definition is
+# just organisation, which is what `analysis/profiler.yaml` next door is.
 #
 # A bundle folder holds exactly one definition. `redactor/helper.yaml` would be
 # refused, because "is `helper` inside the bundle or beside it" has no honest
@@ -21,34 +15,21 @@ builtin_tools: [ls, glob, grep]
 # text never enters the transcript, and a delegate holding both tools would have
 # the careful path and the careless one side by side.
 #
-# `tools: []` grants no catalogue tool, and `mask_secrets` arrives all the same:
-# a bundle is held by its owner whatever this line or a request says, so the
-# line governs only what the shared `tools/` adds. Left out, that would be every
-# catalogue tool -- `sql_query` returning rows unmasked among them -- on the one
-# delegate whose job is being careful with what it returns.
-tools: []
-# The same goes for `skills:`, which usually defaults to none. `redaction/` is
-# in this folder, so this delegate is told about it without a line saying so.
+# `source: bundled` is what takes a tool from this folder rather than from the
+# shared `tools/`, and only what is listed arrives. The list and the folder must
+# match: a file added to `redactor/tools/` and not listed here stops the
+# catalogue loading, and so does renaming `redactor` out from under the folder.
 #
-# Which leaves nothing above naming either of the two things this delegate
-# actually works with. `bundle:` does, and it is checked rather than used: the
-# folder still decides what arrives, and a list that stops matching it in either
-# direction refuses this definition as the catalogue is read.
-#
-# It is indented on purpose. Every other list in this file grants something
-# and this one grants nothing, so it is written in a shape none of them have --
-# `tools: []` above is a decision about what reaches this delegate, and these two
-# lines are a description of a directory.
-#
-# What it buys is the change nobody would otherwise see. Dropping a file into
-# `redactor/tools/` hands this delegate a capability with no line in any file
-# altered, and renaming `redactor` above takes every one away just as quietly --
-# neither shows in a diff of this file, because without this key it does not
-# mention them. Optional, and every other bundle in this tree does without; the
-# delegate that handles credentials is where it earns its keep.
-bundle:
-  tools: [mask_secrets]
-  skills: [redaction]
+# Nothing shared is listed, so this delegate gets no catalogue tool. Left out
+# entirely, the line would be every catalogue tool -- `sql_query` returning rows
+# unmasked among them -- on the one delegate whose job is being careful with
+# what it returns.
+tools:
+  - name: mask_secrets
+    source: bundled
+skills:
+  - name: redaction
+    source: bundled
 # Keys of your own, which nothing in a run reads. A script checking that every
 # delegate names an owner does, and a delegate handling credentials is the one
 # that check exists for.

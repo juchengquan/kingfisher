@@ -53,40 +53,34 @@ class SubagentSpec(Definition):
     """One subagent, as the workspace defines it.
 
     What it shares with an agent is on `Definition`; what is here is what only a
-    delegate has -- the graph it may bring instead of a prompt, and the bundle that
-    comes with it.
+    delegate has -- the graph it may bring instead of a prompt, and the tools and
+    skills of its own that come with it.
     """
 
-    #: What this delegate's own folder holds, written down so the definition says it.
-    #: `tools` and `skills`, each present only where the file wrote that half; empty
-    #: is the ordinary case, since a bundle reaches its owner whether this names it
-    #: or not and nothing here decides what is granted.
+    #: The `tools:` and `skills:` entries written `source: bundled`, by half: what this
+    #: delegate takes from its own folder, `subagents/<name>/tools/` and `skills/`.
+    #: Kept out of `tools` and `skills` because no grant narrows them -- activating
+    #: the delegate is what grants its parts.
     #:
-    #: Nested under one key rather than two fields beside `tools:` and `skills:`,
-    #: and the indent is the point: every other list in a definition grants
-    #: something, so one that describes instead has to look unlike them or it will
-    #: be read as a grant and then as a bug when it grants nothing.
-    #:
-    #: Checked and never used, which is the whole of what it is for. A definition
-    #: renamed out from under its folder, or a tool added to the folder and nowhere
-    #: else, changes what a delegate holds with no line in any file to show it -- so
-    #: a definition that has written this is refused once the two stop matching. The
-    #: match is exact: a subset would let through the addition it exists to surface.
-    bundle: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
-    #: The same two halves, brought rather than described: tool objects, and the
-    #: directory a package resolved for its own skills. Written under `bundle:` like
-    #: the claim above and kept in a field of its own, because the two are answers to
-    #: one question and not one answer -- a claim is checked against a folder, and this
-    #: *is* the folder for a definition that has none.
+    #: The folder and this have to match exactly, and the catalogue refuses to load
+    #: when they do not. A file in the folder that is not listed would otherwise be
+    #: a capability nobody can see granted, or, on upgrading from when the folder
+    #: granted by itself, one silently lost.
+    bundled: Mapping[str, tuple[str, ...]] = field(
+        default_factory=dict, metadata={"derived": True}
+    )
+    #: The same two halves, brought rather than listed: tool objects, and the
+    #: directory a package resolved for its own skills. This *is* the folder for a
+    #: definition that has none, which is why a spec may hold this or `bundled` and
+    #: never both.
     #:
     #: Derived, because no document writes a key called `carried`. A YAML definition
     #: could not: the objects do not survive being written down, which is the whole
     #: reason a bundle is a folder there.
     #:
-    #: Empty for every definition that owns a folder, and `__post_init__` refuses a
-    #: spec holding both -- a delegate whose tools came from two places would have no
-    #: rule saying which wins, and `miscounted` would check the claim against the
-    #: wrong half.
+    #: `__post_init__` refuses a spec holding both -- a delegate whose tools came from
+    #: two places would have no rule saying which wins, and `miscounted` would check
+    #: the list against the wrong half.
     carried: Mapping[str, Any] = field(default_factory=dict, metadata={"derived": True})
     #: What assembles this delegate, when a workspace declared it in Python rather than
     #: YAML. Called with a model and the tools it was granted, and it returns a graph
@@ -99,11 +93,11 @@ class SubagentSpec(Definition):
             written = "both a system_prompt and a build" if self.system_prompt else "neither"
             msg = f"subagent {self.name!r} has {written}; a delegate is one or the other"
             raise ValueError(msg)
-        if self.bundle and self.carried:
+        if any(self.bundled.values()) and self.carried:
             msg = (
-                f"subagent {self.name!r} both describes a folder and carries a bundle; "
-                "a delegate owns one or the other, since a claim is checked against a "
-                "folder and carried tools are the folder"
+                f"subagent {self.name!r} both lists entries from its folder and carries "
+                "its own; a delegate owns one or the other, since a list is checked "
+                "against a folder and carried tools are the folder"
             )
             raise ValueError(msg)
 
@@ -122,11 +116,19 @@ KNOWN: frozenset[str] = frozenset(
         "skills",
         "middlewares",
         "subagents",
-        "bundle",
         "model",
         "metadata",
         "source_ids",
     }
+)
+
+#: Why `bundle:` is refused in a document and a compiled declaration. Worded as the
+#: spelling to use instead, because whoever writes the key meant a folder's contents.
+NO_BUNDLE_KEY = (
+    "a delegate's own tools and skills are listed where the rest are, written "
+    "{name: mask_secrets, source: bundled} in tools: or skills:. Only what is "
+    "listed there reaches the delegate, so add '*' to tools: as well if it should "
+    "keep every catalogue tool it had"
 )
 
 #: Fields deepagents' `SubAgent` understands that this format deliberately does
@@ -159,6 +161,7 @@ REFUSED: Mapping[str, str] = MappingProxyType(
             "parent reads text either way and there is nothing for kingfisher to "
             "carry"
         ),
+        "bundle": NO_BUNDLE_KEY,
     }
 )
 
@@ -187,11 +190,6 @@ DECLARED: frozenset[str] = frozenset(
         "description",
         "build",
         "tools",
-        #: Written here as well as in a document, because a compiled delegate owns
-        #: a folder like any other and its tools reach the graph. This table is for
-        #: keys that would do nothing, and this one checks the folder -- which is
-        #: all it ever does, for either kind of delegate.
-        "bundle",
         "model",
         "metadata",
         "source_ids",
@@ -228,15 +226,16 @@ NOT_COMPILED: Mapping[str, str] = MappingProxyType(
             "middleware supplies, and a compiled graph is given no middleware. "
             "Build the nesting into the graph if it needs it"
         ),
+        "bundle": NO_BUNDLE_KEY,
     }
 )
 
 
-#: What `bundle:` may say: one half per directory a bundle can hold, which is the
-#: same two names `catalogue.ASSET_DIRECTORIES` keeps the walk out of.
+#: The halves a delegate's own folder holds, which is the same two names
+#: `catalogue.ASSET_DIRECTORIES` keeps the walk out of.
 #: `test_the_bundle_key_covers_every_directory_a_bundle_holds` is what stops the two
 #: drifting -- a third asset kind added to the walk and not here would be a folder a
-#: definition could never describe, and nothing else would say so.
+#: definition could never list from, and nothing else would say so.
 BUNDLE_KEYS: tuple[str, ...] = ("tools", "skills")
 
 
@@ -346,7 +345,9 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     where = Path(source)
     read = fields.Reader(source=where.name, error=SubagentError)
     wanted = fields.wanted_model(entry, read)
-    written_tools, tool_audiences = read.audienced(entry.get("tools"), absent=ALL, key="tools")
+    written_tools, tool_audiences, own_tools = read.sourced(
+        entry.get("tools"), absent=ALL, key="tools"
+    )
     # Only `tools` here: `skills` and `subagents` are refused for a compiled
     # delegate by `NOT_COMPILED`, so there is nothing else to carry an audience.
     audiences = {"tools": tool_audiences} if tool_audiences else {}
@@ -366,64 +367,12 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         builtin_tools=None,
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),
-        bundle=_bundle(entry.get("bundle"), read),
+        bundled={"tools": own_tools, "skills": ()},
         wanted=wanted,
         metadata=read.mapping(entry.get("metadata"), key="metadata"),
         source_ids=source_ids,
         audiences=audiences,
     )
-
-
-def _bundle(value: object, reader: fields.Reader) -> Mapping[str, tuple[str, ...]]:
-    """What `bundle:` claims its folder holds, by half, for the halves it wrote."""
-    if value is None:
-        return {}
-    # Not `reader.mapping`, whose refusal says "a mapping of your own keys" -- true
-    # of `metadata:` and the opposite of true here, where the keys are the two the
-    # format names. Someone reaching for `bundle: [mask_secrets]` needs to be told
-    # which half they meant, not that they may write whatever they like.
-    if not isinstance(value, Mapping):
-        msg = (
-            f"{reader.source}: bundle is {type(value).__name__}; it takes "
-            f"{' and/or '.join(BUNDLE_KEYS)}, each naming what that folder holds:\n"
-            f"    bundle:\n      tools: [mask_secrets]"
-        )
-        raise SubagentError(msg)
-    written = dict(value)
-    if unknown := sorted(set(written) - set(BUNDLE_KEYS)):
-        msg = (
-            f"{reader.source}: bundle names {unknown}, and a bundle holds "
-            f"{list(BUNDLE_KEYS)} -- those are the folders under "
-            f"subagents/<name>/ that reach the delegate"
-        )
-        raise SubagentError(msg)
-    if not written:
-        # An empty mapping describes nothing, so it cannot be wrong, so it checks
-        # nothing -- which is the one thing this key must never be.
-        msg = (
-            f"{reader.source}: bundle is empty; it takes "
-            f"{' and/or '.join(BUNDLE_KEYS)}, naming what the folder holds. "
-            f"Leave the key out to say nothing"
-        )
-        raise SubagentError(msg)
-    claimed: dict[str, tuple[str, ...]] = {}
-    for half in BUNDLE_KEYS:
-        if half not in written:
-            continue  # said nothing about this half, which is not the same as none
-        # `*` would mean "whatever the folder holds", a claim that cannot be wrong,
-        # in the one key whose whole job is to be wrong when the folder changes.
-        names = reader.selection(
-            written[half],
-            absent=(),
-            key=f"bundle {half}",
-            refuse_all=(
-                f"it would say only that this delegate gets the {half} in its own "
-                f"folder, which is true of every bundle. Name them, or leave the "
-                f"line out"
-            ),
-        )
-        claimed[half] = tuple(names or ())
-    return claimed
 
 
 def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
@@ -471,10 +420,10 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
 def _carried(value: object, reader: fields.Reader) -> Mapping[str, Any]:
     """What `bundle:` brought, for a definition with no folder to describe.
 
-    The other reading of the same key. A document names what its folder holds so the
-    two can be checked against each other; a declaration with no folder hands over the
-    things themselves, and there is nothing left to check -- which is why a spec
-    carrying these makes no claim, and `miscounted` has nothing to say about it.
+    A document lists what it takes from its folder so the two can be checked against
+    each other; a declaration with no folder hands over the things themselves, and
+    there is nothing left to check -- which is why a spec carrying these lists
+    nothing, and `miscounted` has nothing to say about it.
     """
     if value is None:
         return {}
@@ -584,7 +533,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     # only `what` may reach the rest of kingfisher -- a grant, an allowlist and
     # the dictionary the agent dispatches through all key on the plain name.
     # Where it claims to live travels beside it, for whoever checks the claim.
-    written_tools, tool_audiences = reader.audienced(
+    written_tools, tool_audiences, own_tools = reader.sourced(
         document.get("tools"), absent=ALL, key="tools"
     )
     # Same two-in-one read as the agent format, and the same field: a
@@ -592,7 +541,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     written_middleware, middleware_settings = reader.selection_with_settings(
         document.get("middlewares"), absent=None, key="middlewares"
     )
-    written_skills, skill_audiences = reader.audienced(
+    written_skills, skill_audiences, own_skills = reader.sourced(
         document.get("skills"),
         absent=None,
         key="skills",
@@ -639,7 +588,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         middlewares=written_middleware,
         middleware_settings=middleware_settings,
         subagents=written_delegates,
-        bundle=_bundle(document.get("bundle"), reader),
+        bundled={"tools": own_tools, "skills": own_skills},
         wanted=wanted,
         metadata=reader.mapping(document.get("metadata"), key="metadata"),
         source_ids=source_ids,

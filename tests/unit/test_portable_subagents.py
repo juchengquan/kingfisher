@@ -251,7 +251,7 @@ def test_a_relative_skills_path_is_refused(cfg):
 
 
 def test_a_carried_bundle_makes_no_claim_to_check(cfg):
-    """`bundle:` in a document names what a folder holds so the two can be checked
+    """A document lists what it takes from its folder so the two can be checked
     against each other. A carried bundle *is* the contents, so there is nothing to
     drift from -- and `miscounted` firing on one would refuse every portable
     definition there is.
@@ -262,20 +262,20 @@ def test_a_carried_bundle_makes_no_claim_to_check(cfg):
     spec = catalogue.subagents.specs["surveyor"]
     where, tools, skills = catalogue.bundled("surveyor")
 
-    assert spec.bundle == {}
+    assert not any(spec.bundled.values())
     assert miscounted(spec, where=where, tools=tools, skills=skills) is None
 
 
 def test_a_spec_cannot_both_describe_a_folder_and_carry_one():
     """Two sources for what a delegate holds, with no rule saying which wins -- and
-    `miscounted` would be checking the claim against the wrong half.
+    `miscounted` would be checking the list against the wrong half.
     """
     with pytest.raises(ValueError, match="one or the other"):
         SubagentSpec(
             name="s",
             description="d",
             system_prompt="Go.",
-            bundle={"tools": ("probe",)},
+            bundled={"tools": ("probe",)},
             carried={"tools": ()},
         )
 
@@ -290,7 +290,9 @@ def test_every_field_the_documents_define_is_portable_or_refused_with_a_reason()
     defined is a field only one reader could ever produce, and a refusal for a key
     that no longer exists is a reason nobody can trigger.
     """
-    assert PORTABLE | set(NOT_PORTABLE) == KNOWN
+    # `bundle` is the one key only a portable entry writes: what it carries has no
+    # folder for a `source: bundled` entry to name.
+    assert PORTABLE | set(NOT_PORTABLE) == KNOWN | {"bundle"}
 
 
 def test_every_portable_key_reaches_a_field_the_spec_has():

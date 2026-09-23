@@ -240,9 +240,9 @@ def _subagents(found: Inventory) -> Iterator[str]:
                 reaches = "  (a compiled graph is told about no skills)" if own in stranded else ""
                 yield f"      {own}  [private {kind[:-1]}{carried}]{reaches}"
         if (miscounted := found.miscounted_bundles.get(name)) is not None:
-            # Under the delegate rather than in a section of its own: the two lines
-            # above say what it holds, and this says the definition disagrees with
-            # them. A reader comparing the three is the point.
+            # Under the delegate rather than in a section of its own: the lines above
+            # say what its folder holds, and this says the definition's list disagrees
+            # with them. A reader comparing the two is the point.
             yield f"      ! {miscounted}"
         for hidden in found.shadowed.get(name, ()):
             # Said out loud because shadowing is only acceptable while it is
@@ -352,7 +352,7 @@ def failed(found: Inventory) -> bool:
     runs without the tool, which is not the same fault and is worse to find out
     about later -- so the predicate covers both and is named for what they share.
 
-    A definition that has stopped describing its own folder is the first sort: the
+    A definition whose bundled entries and folder disagree is the first sort: the
     catalogue refuses it, so a listing that exited zero over one would be promising
     a deployment that cannot start.
     """

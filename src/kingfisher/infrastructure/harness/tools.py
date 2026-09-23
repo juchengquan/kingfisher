@@ -142,7 +142,15 @@ class _ToolSurface:
 def _private_tools(catalogue: Definitions, name: str) -> tuple[Found, ...]:
     """The tools a delegate brings itself, or none."""
     repository = catalogue.bundled_tools.get(name)
-    return tuple(repository.found) if repository is not None else ()
+    if repository is None:
+        return ()
+    spec = catalogue.subagents.specs.get(name)
+    if spec is None or spec.carried:
+        return tuple(repository.found)
+    # Filtered here as well as refused at load, so a build that skipped `warm` still
+    # hands a delegate only what its definition lists from the folder.
+    listed = set(spec.bundled.get("tools", ()))
+    return tuple(one for one in repository.found if one.name in listed)
 
 
 def _tool_objects(graph: Any) -> Mapping[str, Any]:
