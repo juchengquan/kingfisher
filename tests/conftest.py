@@ -3,10 +3,12 @@ from __future__ import annotations
 import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
+import yaml
 from dotenv import load_dotenv
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
@@ -58,10 +60,16 @@ def session_dir(workspace):
 
 #: The endpoint every fixture builds against. Port 9 is discard: a test that
 #: accidentally makes a real call hangs on connect rather than reaching anyone.
+#: The variable the fake endpoints read their key from. Named once, because the
+#: command reads the catalogue as a *file* -- and a file has to say which variable
+#: rather than carry the key -- so the two forms of this catalogue agree on it.
+FAKE_KEY_VAR = "FAKE_KEY"
+
 FAKE_ENDPOINT = Endpoint(
     api="anthropic",
     base_url="http://127.0.0.1:9/never-called",
     api_key="test-key-not-real",
+    key_env=FAKE_KEY_VAR,
 )
 
 #: A second host, so "somewhere else" is expressible. `indistinct` compares
@@ -71,6 +79,7 @@ OTHER_ENDPOINT = Endpoint(
     api="anthropic",
     base_url="http://127.0.0.2:9/never-called",
     api_key="test-key-not-real",
+    key_env=FAKE_KEY_VAR,
 )
 
 #: Two models on one endpoint, which is the shape the catalogue exists to allow
@@ -98,6 +107,48 @@ FAKE_CATALOGUE = Models(
 )
 
 
+#: Everything `ModelProfile` fills in for itself, so writing the catalogue out can
+#: say only what a test actually chose. Read off the type rather than listed, or this
+#: file would carry a second copy of those defaults to drift from.
+_MODEL_DEFAULTS = {f.name: f.default for f in fields(ModelProfile)}
+
+
+def models_document() -> dict[str, object]:
+    """`FAKE_CATALOGUE`, in the shape `models.yaml` is written in.
+
+    Derived from the record rather than written out beside it. The two used to be
+    separate declarations and had already come apart: the file every command test
+    pointed at named one endpoint and one model where the record has two and three,
+    so a test that ran the command saw a different deployment from one that used
+    `cfg`, and a model added to `FAKE_MODELS` reached only half the suite.
+    """
+    return {
+        "endpoints": {
+            name: {"api": e.api, "base_url": e.base_url, "key_env": e.key_env}
+            for name, e in FAKE_CATALOGUE.endpoints.items()
+        },
+        "default": FAKE_CATALOGUE.default,
+        "models": {
+            # The key *is* the model's name -- the format defines no `model:` -- and
+            # everything else only where this fixture chose something.
+            name: {
+                field: value
+                for field, value in vars(profile).items()
+                if field != "model" and value != _MODEL_DEFAULTS.get(field)
+            }
+            for name, profile in FAKE_CATALOGUE.models.items()
+        },
+    }
+
+
+def models_file(workspace: Path) -> Path:
+    """Write that catalogue where a command will read it, and say where."""
+    path = Path(workspace) / "models.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(models_document(), sort_keys=False), encoding="utf-8")
+    return path
+
+
 @pytest.fixture
 def cfg(workspace):
     return Config(
@@ -106,6 +157,26 @@ def cfg(workspace):
         turn_timeout_s=3600,
         execution_timeout_s=30,
     )
+
+
+@pytest.fixture
+def at_the_command_line(cfg, monkeypatch):
+    """The `cfg` fixture, with the environment pointing a command at it.
+
+    `kingfisher` reads the environment and nothing else, so a test that drives the
+    command has to wire it. These three lines were written out eighteen times, each
+    calling a `_catalogue` helper that two files held byte-identical copies of --
+    and that helper wrote a catalogue naming one endpoint and one model, where the
+    record beside it has two and three.
+
+    Returns the `cfg` it wired, though most callers take `cfg` as well and use this
+    for the wiring alone. Tests pointing the command at some *other* workspace still
+    say so themselves: that is a different arrangement, not this one written out.
+    """
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(models_file(cfg.workspace)))
+    monkeypatch.setenv(FAKE_KEY_VAR, "not-a-real-key")
+    return cfg
 
 
 def start(cfg, session_id: str) -> str:

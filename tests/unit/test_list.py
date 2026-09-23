@@ -8,11 +8,8 @@ from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import subagents_dir
 
 
-def test_listing_reports_a_workspace_that_will_not_load(cfg, monkeypatch, capsys):
+def test_listing_reports_a_workspace_that_will_not_load(cfg, at_the_command_line, capsys):
     """Non-zero, because a listing gets read by scripts."""
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")  # or the endpoint is dropped
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
 
@@ -21,16 +18,13 @@ def test_listing_reports_a_workspace_that_will_not_load(cfg, monkeypatch, capsys
     assert "cannot load" in capsys.readouterr().out
 
 
-def test_a_workspace_with_no_agents_says_so_and_says_what_to_do(cfg, monkeypatch, capsys):
+def test_a_workspace_with_no_agents_says_so_and_says_what_to_do(at_the_command_line, capsys):
     """The empty listing for agents, which the ones for skills and subagents had
     and this did not -- a mutation removing it went unnoticed.
 
     It carries the seed hint because a workspace with no agents cannot serve a
     request at all: every other emptiness here is survivable.
     """
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
 
     assert main(["list"]) == 0
 
@@ -39,14 +33,11 @@ def test_a_workspace_with_no_agents_says_so_and_says_what_to_do(cfg, monkeypatch
     assert "a request must name one" in printed
 
 
-def test_a_workspace_holding_an_agent_does_not_say_none(cfg, monkeypatch, capsys):
+def test_a_workspace_holding_an_agent_does_not_say_none(cfg, at_the_command_line, capsys):
     """So the rule above is not passing on a listing that says it whatever it holds."""
     from tests.conftest import an_agent
 
     an_agent(cfg, "analyst")
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
 
     assert main(["list"]) == 0
 
@@ -68,19 +59,6 @@ def test_a_missing_catalogue_is_reported_rather_than_raised(tmp_path, monkeypatc
     # theirs is told about a variable that is set, just not here.
     assert "the environment and" in printed
     assert ".env" in printed
-
-
-def _catalogue(cfg) -> object:
-    """A minimal `models.yaml` beside the workspace, so `list` gets past config."""
-    path = cfg.workspace / "models.yaml"
-    path.write_text(
-        "endpoints:\n  fake:\n    api: anthropic\n"
-        "    base_url: http://127.0.0.1:9/never-called\n    key_env: FAKE_KEY\n"
-        "default: fake-model\n"
-        "models:\n  fake-model:\n    endpoint: fake\n",
-        encoding="utf-8",
-    )
-    return path
 
 
 def test_both_drivers_render_through_the_same_code(cfg, capsys):
@@ -189,14 +167,11 @@ def test_the_json_carries_the_kind_and_a_path_a_script_can_open(cfg, tmp_path):
     assert origins["source_ids"]["kind"] == "unset"
 
 
-def test_json_and_the_human_form_describe_the_same_workspace(cfg, monkeypatch, capsys):
+def test_json_and_the_human_form_describe_the_same_workspace(cfg, at_the_command_line, capsys):
     """Two formats, one answer."""
     import json
 
     _seed_something(cfg)
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
 
     assert main(["list"]) == 0
     printed = capsys.readouterr().out
@@ -214,15 +189,12 @@ def test_json_and_the_human_form_describe_the_same_workspace(cfg, monkeypatch, c
         assert name in printed
 
 
-def test_a_broken_workspace_is_non_zero_in_either_format(cfg, monkeypatch, capsys):
+def test_a_broken_workspace_is_non_zero_in_either_format(cfg, at_the_command_line, capsys):
     """The exit code does not depend on the format, and the reason is in the document
     too -- so a script can find out either way round.
     """
     import json
 
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
 
@@ -231,11 +203,8 @@ def test_a_broken_workspace_is_non_zero_in_either_format(cfg, monkeypatch, capsy
     assert json.loads(capsys.readouterr().out)["subagents_error"]
 
 
-def test_json_is_asked_for_rather_than_assumed(cfg, monkeypatch, capsys):
+def test_json_is_asked_for_rather_than_assumed(cfg, at_the_command_line, capsys):
     """A listing whose default output is JSON is a listing nobody reads."""
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
 
     assert main(["list"]) == 0
 
@@ -346,7 +315,12 @@ def test_the_json_listing_carries_it_too(cfg):
     assert as_json(inventory(cfg))["compiled_subagents"] == ["researcher"]
 
 
-def test_a_skill_offered_under_another_name_is_named_in_the_listing(cfg, monkeypatch, capsys):
+def test_a_skill_offered_under_another_name_is_named_in_the_listing(
+    cfg,
+    at_the_command_line,
+    monkeypatch,
+    capsys,
+):
     """`--list` is where somebody goes *because* a grant was refused for a skill they
     can see in the tree.
     """
@@ -356,9 +330,6 @@ def test_a_skill_offered_under_another_name_is_named_in_the_listing(cfg, monkeyp
         "---\nname: find-company\ndescription: Looks a company up.\n---\nBody.\n",
         encoding="utf-8",
     )
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")  # or the endpoint is dropped
     monkeypatch.setenv("KINGFISHER_SKILLS_ENABLED", "1")
 
     assert main(["list"]) == 0, "a misfiled skill loads, so this is not a failure"
@@ -368,13 +339,10 @@ def test_a_skill_offered_under_another_name_is_named_in_the_listing(cfg, monkeyp
     assert "rename the directory to match" in printed
 
 
-def test_an_unloadable_agent_catalogue_is_non_zero_too(cfg, monkeypatch, capsys):
+def test_an_unloadable_agent_catalogue_is_non_zero_too(cfg, at_the_command_line, capsys):
     """The kind that arrived last, and the one `failed` did not name."""
     import json
 
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
     agents = cfg.catalogue_roots["agents"]
     agents.mkdir(parents=True, exist_ok=True)
     (agents / "broken.yaml").write_text("name: broken\ndescription: d\nnope: 1\n", encoding="utf-8")
@@ -384,7 +352,7 @@ def test_an_unloadable_agent_catalogue_is_non_zero_too(cfg, monkeypatch, capsys)
     assert json.loads(capsys.readouterr().out)["agents_error"]
 
 
-def test_an_unloadable_middleware_module_is_non_zero_too(cfg, monkeypatch, capsys):
+def test_an_unloadable_middleware_module_is_non_zero_too(cfg, at_the_command_line, capsys):
     """The fifth kind, and the one `failed` named last.
 
     `middlewares/*.py` is Python that has to import, exactly like `tools/*.py`, and a
@@ -393,9 +361,6 @@ def test_an_unloadable_middleware_module_is_non_zero_too(cfg, monkeypatch, capsy
     """
     import json
 
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
     middlewares = cfg.catalogue_roots["middlewares"]
     middlewares.mkdir(parents=True, exist_ok=True)
     (middlewares / "wrong.py").write_text(
@@ -408,7 +373,12 @@ def test_an_unloadable_middleware_module_is_non_zero_too(cfg, monkeypatch, capsy
     assert json.loads(capsys.readouterr().out)["middlewares_error"]
 
 
-def test_a_definition_naming_a_moved_tool_is_non_zero_too(cfg, monkeypatch, capsys, shipped):
+def test_a_definition_naming_a_moved_tool_is_non_zero_too(
+    cfg,
+    at_the_command_line,
+    capsys,
+    shipped,
+):
     """`failed` stopped meaning "will not load" here, and this is the case that
     changed it: a subagent naming a moved tool will not load, an agent naming one
     loads and runs without it. Both are a workspace that does not mean what it says.
@@ -417,9 +387,6 @@ def test_a_definition_naming_a_moved_tool_is_non_zero_too(cfg, monkeypatch, caps
 
     from kingfisher import seed
 
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
     seed(cfg, shipped)
     (cfg.catalogue_roots["tools"] / "csv_profile").rename(
         cfg.catalogue_roots["tools"] / "analysis"
@@ -430,13 +397,14 @@ def test_a_definition_naming_a_moved_tool_is_non_zero_too(cfg, monkeypatch, caps
     assert json.loads(capsys.readouterr().out)["moved_tools"]
 
 
-def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(cfg, monkeypatch, capsys):
+def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(
+    cfg,
+    at_the_command_line,
+    capsys,
+):
     """One unloadable catalogue must not take the others down with it, which is this
     record's own rule and was not true of tools.
     """
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "helper.yaml").write_text(
         "name: helper\ndescription: A delegate.\nsystem_prompt: |\n  x\n", encoding="utf-8"
@@ -487,8 +455,12 @@ system_prompt: |
 """
 
 
-def _workspace(cfg, monkeypatch, *agents: str, vocabulary: str = "source_ids: [A, B]\n"):
-    """A workspace with one tool and whichever agents the test names."""
+def _workspace(cfg, *agents: str, vocabulary: str = "source_ids: [A, B]\n"):
+    """A workspace with one tool and whichever agents the test names.
+
+    Fills the workspace and nothing else: pointing the command at it is
+    `at_the_command_line`'s job, which every caller here takes.
+    """
     from tests.conftest import tools_dir
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
@@ -499,15 +471,12 @@ def _workspace(cfg, monkeypatch, *agents: str, vocabulary: str = "source_ids: [A
         name = document.split("name: ", 1)[1].split("\n", 1)[0]
         (directory / f"{name}.yaml").write_text(document, encoding="utf-8")
     (cfg.workspace / "source_ids.yaml").write_text(vocabulary, encoding="utf-8")
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
     return cfg
 
 
 @pytest.fixture
-def policied(cfg, monkeypatch):
-    return _workspace(cfg, monkeypatch, NARROW)
+def policied(cfg, at_the_command_line):
+    return _workspace(cfg, NARROW)
 
 
 def test_the_operator_sees_audiences_per_definition(policied, capsys):
@@ -529,9 +498,9 @@ def test_the_operator_sees_a_roll_up_by_asset(policied, capsys):
     assert "line_count" in shown.split("by tool", 1)[1]
 
 
-def test_the_roll_up_shows_one_tool_at_two_audiences(cfg, monkeypatch, capsys):
+def test_the_roll_up_shows_one_tool_at_two_audiences(cfg, at_the_command_line, capsys):
     """The case it exists for: a call site quietly wider than its neighbour."""
-    _workspace(cfg, monkeypatch, NARROW, WIDE)
+    _workspace(cfg, NARROW, WIDE)
 
     assert main(["list"]) == 0
 
@@ -559,23 +528,27 @@ system_prompt: |
 """
 
 
-def test_an_inline_requirement_reads_as_the_set_it_is_written_as(cfg, monkeypatch, capsys):
+def test_an_inline_requirement_reads_as_the_set_it_is_written_as(cfg, at_the_command_line, capsys):
     """The listing prints what a reader would write in the file. It printed `A+B` when
     the file said `all_of`, which was a third spelling of the same idea and ambiguous
     besides -- a source id may legally contain a `+`.
     """
-    _workspace(cfg, monkeypatch, BOTH)
+    _workspace(cfg, BOTH)
 
     assert main(["list"]) == 0
 
     assert "agent both  [{A, B}]" in capsys.readouterr().out
 
 
-def test_a_conjunction_is_spelled_the_same_way_wherever_it_appears(cfg, monkeypatch, capsys):
+def test_a_conjunction_is_spelled_the_same_way_wherever_it_appears(
+    cfg,
+    at_the_command_line,
+    capsys,
+):
     """The by-definition view and the roll-up print the same audience, and a reader
     comparing the two should not have to translate.
     """
-    _workspace(cfg, monkeypatch, BOTH)
+    _workspace(cfg, BOTH)
 
     shown = capsys.readouterr().out if main(["list"]) == 0 else ""
     before, after = shown.split("by tool", 1)
@@ -583,14 +556,11 @@ def test_a_conjunction_is_spelled_the_same_way_wherever_it_appears(cfg, monkeypa
     assert "both  [A, B]" in after
 
 
-def test_a_named_compound_says_what_it_requires(cfg, monkeypatch, capsys):
+def test_a_named_compound_says_what_it_requires(cfg, at_the_command_line, capsys):
     """A name tells a reader nothing on the line it appears on, and every line it
     appears on needs it -- so it is said once, above.
     """
-    _workspace(
-        cfg,
-        monkeypatch,
-        NAMED,
+    _workspace(cfg, NAMED,
         vocabulary="source_ids:\n  A:\n  B:\n  ab: {A, B}\n",
     )
 
@@ -609,7 +579,7 @@ def test_a_vocabulary_with_no_compounds_gets_no_such_section(policied, capsys):
     assert "source ids that require others" not in capsys.readouterr().out
 
 
-def test_a_conjunction_survives_the_json_round_trip(cfg, monkeypatch):
+def test_a_conjunction_survives_the_json_round_trip(cfg, at_the_command_line):
     """`json` holds neither a set nor a tuple, so this is not a formality: an audience
     carrying a conjunction used to be unencodable outright.
     """
@@ -618,8 +588,7 @@ def test_a_conjunction_survives_the_json_round_trip(cfg, monkeypatch):
     from kingfisher import config_from_env, inventory
     from kingfisher.presentation.cli.listing import as_json
 
-    _workspace(
-        cfg, monkeypatch, BOTH, NAMED,
+    _workspace(cfg, BOTH, NAMED,
         vocabulary="source_ids:\n  A:\n  B:\n  ab: {A, B}\n",
     )
 
@@ -645,9 +614,9 @@ system_prompt: |
 """
 
 
-def test_an_entry_narrowing_past_its_definition_is_reported(cfg, monkeypatch, capsys):
+def test_an_entry_narrowing_past_its_definition_is_reported(cfg, at_the_command_line, capsys):
     """It used to be refused."""
-    _workspace(cfg, monkeypatch, NARROWED, vocabulary="source_ids: [A, B, C]\n")
+    _workspace(cfg, NARROWED, vocabulary="source_ids: [A, B, C]\n")
 
     assert main(["list"]) == 0
 
@@ -656,13 +625,13 @@ def test_an_entry_narrowing_past_its_definition_is_reported(cfg, monkeypatch, ca
     assert "agent narrowed: tool line_count  [C]" in shown
 
 
-def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, monkeypatch):
+def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, at_the_command_line):
     """The report is not the point -- this is."""
     from kingfisher import config_from_env
     from kingfisher.domain.access import reaches
     from kingfisher.kinds.agents.catalogue import LocalAgentRepository
 
-    _workspace(cfg, monkeypatch, NARROWED, vocabulary="source_ids: [A, B, C]\n")
+    _workspace(cfg, NARROWED, vocabulary="source_ids: [A, B, C]\n")
     reach = config_from_env().access
     assert reach is not None
     spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["narrowed"]
@@ -683,28 +652,28 @@ def test_a_callers_view_carries_no_audiences(policied, capsys):
     assert "by tool" not in shown
 
 
-def test_a_callers_view_drops_an_agent_they_cannot_open(cfg, monkeypatch, capsys):
-    _workspace(cfg, monkeypatch, NARROW, vocabulary="source_ids: [A, B, C]\n")
+def test_a_callers_view_drops_an_agent_they_cannot_open(cfg, at_the_command_line, capsys):
+    _workspace(cfg, NARROW, vocabulary="source_ids: [A, B, C]\n")
 
     assert main(["list", "--as", "C"]) == 0
 
     assert "narrow" not in capsys.readouterr().out
 
 
-def test_the_operator_still_sees_it(cfg, monkeypatch, capsys):
+def test_the_operator_still_sees_it(cfg, at_the_command_line, capsys):
     """So the assertion above is not passing because the agent vanished."""
-    _workspace(cfg, monkeypatch, NARROW, vocabulary="source_ids: [A, B, C]\n")
+    _workspace(cfg, NARROW, vocabulary="source_ids: [A, B, C]\n")
 
     assert main(["list"]) == 0
 
     assert "narrow" in capsys.readouterr().out
 
 
-def test_listing_names_a_definition_that_restricts_nobody(cfg, monkeypatch, capsys):
+def test_listing_names_a_definition_that_restricts_nobody(cfg, at_the_command_line, capsys):
     """Default-open, said where somebody will see it."""
     from tests.conftest import an_agent
 
-    _workspace(cfg, monkeypatch)
+    _workspace(cfg)
     an_agent(cfg, "open_to_all")
 
     assert main(["list"]) == 0
@@ -720,19 +689,20 @@ def test_naming_a_source_id_that_does_not_exist_is_refused(policied, capsys):
     assert "unknown source id" in capsys.readouterr().err
 
 
-def test_no_vocabulary_means_no_access_section(cfg, monkeypatch, capsys):
+def test_no_vocabulary_means_no_access_section(cfg, at_the_command_line, capsys):
     from tests.conftest import an_agent
 
     an_agent(cfg, "plain")
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
 
     assert main(["list"]) == 0
     assert "access —" not in capsys.readouterr().out
 
 
-def test_the_listing_reports_a_definition_naming_an_undeclared_source_id(cfg, monkeypatch, capsys):
+def test_the_listing_reports_a_definition_naming_an_undeclared_source_id(
+    cfg,
+    at_the_command_line,
+    capsys,
+):
     """The listing is where somebody diagnosing this looks, and it goes through
     `inventory` rather than `Kingfisher` -- so the check has to be in both or the one
     place a reader would check shows a broken definition as ordinary.
@@ -741,9 +711,6 @@ def test_the_listing_reports_a_definition_naming_an_undeclared_source_id(cfg, mo
 
     an_agent(cfg, "analyst", source_ids="[analists]")
     (cfg.workspace / "source_ids.yaml").write_text("source_ids: [analysts]\n", encoding="utf-8")
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
 
     assert main(["list"]) == 1, "a workspace that will not build is a non-zero listing"
 
@@ -752,15 +719,12 @@ def test_the_listing_reports_a_definition_naming_an_undeclared_source_id(cfg, mo
     assert "analysts" in printed, "and the spelling that would have worked"
 
 
-def test_the_listing_is_clean_when_every_source_id_is_declared(cfg, monkeypatch, capsys):
+def test_the_listing_is_clean_when_every_source_id_is_declared(cfg, at_the_command_line, capsys):
     """So the rule above is not passing because every listing says that."""
     from tests.conftest import an_agent
 
     an_agent(cfg, "analyst", source_ids="[analysts]")
     (cfg.workspace / "source_ids.yaml").write_text("source_ids: [analysts]\n", encoding="utf-8")
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
 
     assert main(["list"]) == 0
     assert "cannot load" not in capsys.readouterr().out

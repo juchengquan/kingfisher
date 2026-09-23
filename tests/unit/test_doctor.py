@@ -320,11 +320,8 @@ def test_nothing_here_calls_a_model(cfg, monkeypatch):
     assert examine(cfg)  # it still answered
 
 
-def test_the_command_prints_a_remedy_for_what_it_can_fix(cfg, monkeypatch, capsys):
+def test_the_command_prints_a_remedy_for_what_it_can_fix(cfg, at_the_command_line, capsys):
     """A diagnosis without an instruction sends the reader back to the docs."""
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
 
@@ -335,11 +332,7 @@ def test_the_command_prints_a_remedy_for_what_it_can_fix(cfg, monkeypatch, capsy
     assert "->" in printed
 
 
-def test_the_json_form_carries_the_same_checks(cfg, monkeypatch, capsys):
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
-
+def test_the_json_form_carries_the_same_checks(cfg, at_the_command_line, capsys):
     assert main(["doctor", "--json"]) == 0
 
     document = json.loads(capsys.readouterr().out)
@@ -349,13 +342,10 @@ def test_the_json_form_carries_the_same_checks(cfg, monkeypatch, capsys):
         assert set(entry) == {"name", "verdict", "detail", "remedy"}
 
 
-def test_both_forms_of_doctor_say_where_it_read_from(cfg, monkeypatch, capsys):
+def test_both_forms_of_doctor_say_where_it_read_from(cfg, at_the_command_line, capsys):
     """An object where this was a bare list of checks, because the two forms of one
     command must not show different things.
     """
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
 
     assert main(["doctor", "--json"]) == 0
     document = json.loads(capsys.readouterr().out)
@@ -492,18 +482,6 @@ def test_the_json_form_stays_a_document_when_the_config_will_not_load(
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "KINGFISHER_API_STYLE" in captured.err
-
-
-def _catalogue(cfg):
-    path = cfg.workspace / "models.yaml"
-    path.write_text(
-        "endpoints:\n  fake:\n    api: anthropic\n"
-        "    base_url: http://127.0.0.1:9/never-called\n    key_env: FAKE_KEY\n"
-        "default: fake-model\n"
-        "models:\n  fake-model:\n    endpoint: fake\n",
-        encoding="utf-8",
-    )
-    return path
 
 
 # -- a credential that is absent, and what it takes down -------------------
