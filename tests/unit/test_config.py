@@ -572,3 +572,26 @@ def test_a_reader_with_no_mapping_reads_the_process(monkeypatch, tmp_path):
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
 
     assert Environment.current().paths().workspace == (tmp_path / "ws").resolve()
+
+
+def test_the_two_forms_of_the_test_catalogue_agree(tmp_path):
+    """One is the `Models` record the `cfg` fixture holds; the other is the file a
+    command test points at, because the command reads a file and nothing else.
+
+    They were separate declarations and had already come apart -- the file named one
+    endpoint and one model where the record has two and three -- so a model added to
+    the fixture reached only half the suite, and the halves disagreed about what this
+    deployment can run.
+    """
+    from kingfisher.infrastructure.model_catalogue import load
+    from tests.conftest import FAKE_CATALOGUE, FAKE_KEY_VAR, models_file
+
+    loaded = load(models_file(tmp_path), {FAKE_KEY_VAR: "not-a-real-key"})
+
+    assert loaded.models == FAKE_CATALOGUE.models
+    assert loaded.default == FAKE_CATALOGUE.default
+    # Everything but the key itself, which differs by construction and only there: a
+    # file names the variable to read, a record holds what was read from it.
+    assert {n: (e.api, e.base_url, e.key_env) for n, e in loaded.endpoints.items()} == {
+        n: (e.api, e.base_url, e.key_env) for n, e in FAKE_CATALOGUE.endpoints.items()
+    }

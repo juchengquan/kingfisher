@@ -3571,6 +3571,31 @@ only the virtual spelling, an agent passed it to `execute` 4 times in 10, and a
 model that read "None is not a delegate this request may use" reported the tool as
 broken and answered around it. *(Measured 2026-09-21.)*
 
+**One fixture for pointing a command at a workspace.** The command reads the
+environment and nothing else, so a test that drives it has to wire it, and three
+lines -- the workspace, the models file, the key -- were written out eighteen times.
+Each called a `_catalogue` helper that `test_list` and `test_doctor` held
+byte-identical copies of. `at_the_command_line` is those three lines, and the two
+copies are gone.
+
+**The duplication was hiding a disagreement**, which is why this is more than
+tidying. That helper wrote a catalogue naming one endpoint and one model, where the
+`FAKE_CATALOGUE` record the `cfg` fixture holds names two and three -- so a test
+that ran the command saw a different deployment from one that called the library,
+and a model added to the fixture reached only half the suite. The file is derived
+from the record now, and `test_the_two_forms_of_the_test_catalogue_agree` loads it
+back and compares: everything but the key itself, which differs by construction
+because a file names the variable to read and a record holds what was read from it.
+
+Making them agree cost nothing -- measured before building anything, by writing the
+full catalogue into the old helper and running both files green. What it would have
+cost later is the question: dropping the second endpoint again now fails 33 tests.
+
+The fixture covers that arrangement and no other. A test pointing the command at
+some *other* workspace -- a fresh one, a relocated catalogue -- still says so
+itself, because that is a different arrangement rather than this one written out.
+*(2026-09-23, from an architecture review.)*
+
 ## Proposals, and what became of them
 
 What is still being argued is in `docs/design/`, and `docs/README.md` lists it.
