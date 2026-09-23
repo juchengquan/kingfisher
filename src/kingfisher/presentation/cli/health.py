@@ -293,31 +293,27 @@ def _catalogues(found: Inventory) -> Iterator[Check]:
     was invisible to every check a deployment has, and surfaced on the first request
     activating an agent that named it.
     """
-    if found.agents_error is not None:
-        yield Check("agents", "fail", found.agents_error, "fix or remove the file it names")
-    else:
-        yield Check("agents", "ok", f"{len(found.agents)} defined")
-
-    if found.tools_error is not None:
-        yield Check("tools", "fail", found.tools_error, "fix or remove the module it names")
-    else:
-        yield Check(
-            "tools",
-            "ok",
-            f"{len(found.tools)} in the workspace, {len(found.builtin_tools)} built in",
+    for kind in found.by_kind():
+        # Skills are the one kind with no single error to report, so `_skills` gives
+        # them a check of their own -- see `Kind.error`. Here that would be a line
+        # saying the catalogue loaded, about a catalogue that loads one skill at a
+        # time.
+        if kind.name == "skills":
+            continue
+        if kind.error is not None:
+            yield Check(
+                kind.name, "fail", kind.error, f"fix or remove the {kind.written_as} it names"
+            )
+            continue
+        # The built-ins beside the kind rather than as one of their own: they are
+        # not a catalogue, they come with deepagents, and a reader counting what a
+        # request may grant wants both numbers in one line.
+        detail = (
+            f"{kind.defined} in the workspace, {len(found.builtin_tools)} built in"
+            if kind.name == "tools"
+            else f"{kind.defined} defined"
         )
-
-    if found.subagents_error is not None:
-        yield Check("subagents", "fail", found.subagents_error, "fix or remove the file it names")
-    else:
-        yield Check("subagents", "ok", f"{len(found.subagents)} defined")
-
-    if found.middlewares_error is not None:
-        yield Check(
-            "middlewares", "fail", found.middlewares_error, "fix or remove the module it names"
-        )
-    else:
-        yield Check("middlewares", "ok", f"{len(found.middlewares)} defined")
+        yield Check(kind.name, "ok", detail)
 
 def _tool_references(found: Inventory) -> Iterator[Check]:
     """A definition naming a tool by a path it no longer lives at.
@@ -469,15 +465,15 @@ def _delegate_tools(found: Inventory) -> Iterator[Check]:
 
 def _where(cfg: Config, found: Inventory) -> Iterator[Check]:
     """Two ways a catalogue is somewhere other than you think."""
-    for kind in DEFINITION_KINDS:
-        origin = getattr(found.origins, kind)
+    for kind in found.by_kind():
+        origin = kind.origin
 
         if origin.kind == "overridden":
             yield Check(
-                f"{kind} directory",
+                f"{kind.name} directory",
                 "warn",
                 f"read from {origin.path}, while the configuration names "
-                f"{cfg.catalogue_roots[kind]} — a catalogue was supplied when this "
+                f"{cfg.catalogue_roots[kind.name]} — a catalogue was supplied when this "
                 f"kingfisher was built, and the setting does nothing",
                 "drop the setting, or point it at what is actually read",
             )
@@ -488,20 +484,15 @@ def _where(cfg: Config, found: Inventory) -> Iterator[Check]:
         # a path somebody *typed* is the other thing entirely -- and the two
         # look identical, because resolving a catalogue creates the directory it
         # was pointed at rather than refusing an absent one.
-        if origin.kind == "relocated" and not _holds(found, kind):
+        if origin.kind == "relocated" and not kind.defined:
             yield Check(
-                f"{kind} directory",
+                f"{kind.name} directory",
                 "warn",
-                f"{origin.path} is where this deployment points {kind}, and it holds "
+                f"{origin.path} is where this deployment points {kind.name}, and it holds "
                 f"none — a mistyped path is created rather than refused, so this "
                 f"reads the same as a workspace nobody has seeded",
                 "check the path, or seed it",
             )
-
-
-def _holds(found: Inventory, kind: str) -> bool:
-    """Whether a catalogue produced anything the agent can reach."""
-    return bool(getattr(found, kind))
 
 
 def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:

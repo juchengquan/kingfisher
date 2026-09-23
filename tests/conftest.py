@@ -4,7 +4,7 @@ import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from dotenv import load_dotenv
@@ -282,3 +282,31 @@ def verbs(parser) -> dict:
         for action in parser._actions
         for name, subparser in (getattr(action, "choices", None) or {}).items()
     }
+
+
+def an_inventory(**wrong: Any) -> Any:
+    """An `Inventory` describing a workspace with nothing in it and nothing wrong.
+
+    For the rules that break one thing at a time: an error reaching no consumer is
+    how `middlewares_error` came to be computed and read by nothing, and driving that
+    needs a record whose *other* fields are all quiet.
+    """
+    from kingfisher.application.inventory import Inventory
+    from kingfisher.application.origins import Origin, Origins
+
+    nowhere = Origin(kind="default")
+    return Inventory(
+        origins=Origins(
+            workspace=Path("/nowhere"),
+            agents=nowhere,
+            middlewares=nowhere,
+            skills=nowhere,
+            subagents=nowhere,
+            tools=nowhere,
+            models=nowhere,
+            source_ids=nowhere,
+            seed=nowhere,
+            sessions=nowhere,
+        ),
+        **wrong,
+    )

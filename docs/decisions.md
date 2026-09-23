@@ -2196,6 +2196,33 @@ missing. The advice now reads `landlock_abi`, `landlock_ready` and
 the two cannot disagree and a test fakes the kernel once for both.
 *(2026-09-15.)*
 
+**The inventory answers by kind, so a consumer walks rather than lists.** Every
+reader of it spelled the kinds out: four near-identical blocks in `doctor`, the
+errors again in the listing's `failed`, and the two remaining reads by
+`getattr(found, kind)` and `getattr(found.origins, kind)`, where a checker cannot
+follow them. That is a hand-written list of a set that keeps growing, and this file
+already recorded it going wrong twice -- `doctor` read three of the five kinds, then
+four, and `middlewares_error` was computed on every walk and read by nothing for a
+release.
+
+`Inventory.by_kind()` answers a `Catalogued` per kind: its name, its error, how many
+it holds, where it was read from, and whether one of them is a file or a module --
+which is the whole of what those consumers were spelling out, including the noun in
+"fix or remove the *module* it names". The list is written out rather than derived,
+so the attributes stay ones a checker follows, and
+`test_the_per_kind_view_covers_every_kind_there_is` holds it total against
+`DEFINITION_KINDS` -- the half a reader cannot check.
+
+Two things stay outside it and say so. `skills` has no single error, because a skill
+fails one at a time and `doctor` gives them a check of their own; `bundles_error` is
+not a kind at all, a bundle being one delegate's folder rather than a catalogue.
+Each `*_error` the record carries is now driven one at a time through `failed`,
+which is how one goes missing: a kind gains an error, every other check keeps
+passing, and the deployment that breaks on it is the one nobody told.
+
+Named `Catalogued` rather than `Kind` because `origins.Kind` is already a word in
+this layer and means what sort of *place* something was read from. *(2026-09-23.)*
+
 ## Where a deployment reads from
 
 **The capability flags are `KINGFISHER_*_ENABLED`, and the old names are read
