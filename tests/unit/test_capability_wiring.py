@@ -585,3 +585,83 @@ def test_a_plain_function_is_withheld_when_the_grant_withholds_it(cfg, session_d
 
     assert "read_file" in model.offered, "the built-ins should be untouched"
     assert "shout" not in model.offered
+
+
+# -- the deployment's own ceiling, at the turn that has to respect it ---------
+
+A_TOOL = '''
+from langchain_core.tools import tool
+
+
+@tool
+def {name}(x: str) -> str:
+    """Do {name}."""
+    return x
+
+
+TOOLS = [{name}]
+'''
+
+
+def _two_tools(cfg) -> None:
+    """One the deployment will grant and one it will not."""
+    from tests.conftest import tools_dir
+
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    for name in ("granted", "withheld"):
+        (tools_dir(cfg) / f"{name}.py").write_text(A_TOOL.format(name=name), encoding="utf-8")
+
+
+def _handed_to_the_build(monkeypatch) -> list[Capabilities]:
+    """What each build a turn makes is told it may use.
+
+    Read at the seam the turn crosses, rather than by calling the builder with
+    capabilities the test worked out for itself -- which is the one thing this cannot
+    do and still be checking anything. The intersection is what is under test; a test
+    that computes it and compares agrees with itself.
+    """
+    from kingfisher.application import service as service_module
+
+    handed: list[Capabilities] = []
+    real = service_module.build_agent
+
+    def recording(*args, **kwargs):
+        handed.append(kwargs["capabilities"])
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(service_module, "build_agent", recording)
+    return handed
+
+
+def test_a_turn_is_built_inside_the_deployments_ceiling(cfg, monkeypatch):
+    """The escalation nothing watched: a caller asking for a tool the deployment never
+    granted, and a build that was handed the request's own capabilities instead of the
+    grants narrowed by them.
+
+    Measured by making `_admitted` pass `request.capabilities` straight through: the
+    withheld tool reached the graph and the whole suite stayed green, because every
+    other fixture here leaves the deployment unrestricted, where the two are equal.
+    """
+    from kingfisher import default_backend as backend
+    from kingfisher.application.service import Kingfisher
+    from kingfisher.domain.request import Request
+    from tests.conftest import an_agent
+
+    an_agent(cfg, "only")
+    _two_tools(cfg)
+    kf = Kingfisher(cfg, backend=backend, grants=Capabilities(tools=("granted",)))
+    handed = _handed_to_the_build(monkeypatch)
+
+    events = kf.stream(
+        Request("go", agent="only", capabilities=Capabilities(tools=("granted", "withheld")))
+    )
+    try:
+        next(events)
+    finally:
+        events.close()
+
+    assert handed, "no build was made, so this asserts nothing"
+    offered = handed[0].tools or ()
+    assert "withheld" not in offered, "a caller reached past what the deployment granted"
+    # And the control, or the assertion above passes on a build offered nothing at all.
+    assert "granted" in offered

@@ -661,6 +661,24 @@ middleware name got no such exemption because it selects code the deployment wro
 *(2026-08-18, `agents-as-definitions.md`, and the middleware work of 2026-08-31.)*
 Uploads were removed on 2026-09-16, and nothing widens now.
 
+**And a turn is built inside the ceiling, which nothing checked.** `_admitted`
+narrows the deployment's grants by what the request asked for and hands the result
+to the build. Handing the request's own capabilities instead -- one line -- let a
+caller reach a workspace tool the deployment never granted, and the whole suite
+stayed green: 2,083 tests, because every fixture but two leaves the deployment
+unrestricted, and there the two are equal.
+
+`_graph_for` took `capabilities` as an optional keyword defaulting to
+`request.capabilities`, which is that escalation written into a signature. It is
+required now, so there is no way to build a turn's graph without saying what it may
+use, and `test_a_turn_is_built_inside_the_deployments_ceiling` drives a real turn on
+a deployment that grants one tool against a request asking for two. It reads what
+the build was handed at the seam rather than computing the intersection and
+comparing -- a test that works out the expected answer the same way the code does
+agrees with itself and checks nothing, which is how this stayed uncovered.
+*(2026-09-23, from an architecture review, whose own card was about something
+else.)*
+
 **The axes are read off the dataclass.** They were written three times -- as fields,
 again in `__post_init__` to be normalised, again in `intersect` to be narrowed --
 with nothing holding the three lists together. Measured, by adding a ninth axis and
