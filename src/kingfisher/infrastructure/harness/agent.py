@@ -36,7 +36,6 @@ from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
     default_backend,
     skills_sources,
-    tool_guards,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
 from kingfisher.infrastructure.harness.interpreter import _interpreter
@@ -58,6 +57,7 @@ from kingfisher.infrastructure.harness.subagents import (
     subagent_helpers,
     subagent_skills,
 )
+from kingfisher.infrastructure.harness.tool_guards import tool_guards
 from kingfisher.infrastructure.harness.tools import (
     _private_tools,
     _resolve_tools,

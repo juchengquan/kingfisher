@@ -21,9 +21,9 @@ from kingfisher.domain.capabilities import (
     narrowed,
     refuse_unoffered,
 )
-from kingfisher.infrastructure.harness.backend import guarded_tools, tool_guards
 from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.infrastructure.harness.tool_guards import guarded_tools, tool_guards
 from kingfisher.infrastructure.prompting import with_user_prompt
 from kingfisher.kinds.agents.spec import AgentSpec
 from kingfisher.kinds.subagents.rules import resolved_model

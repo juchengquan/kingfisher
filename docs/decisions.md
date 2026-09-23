@@ -3164,6 +3164,24 @@ three do not appear in its history at all: they have never been edited since
 they landed. Moving them relocates 250 lines nobody touches and leaves
 `default_backend`, at 25 commits, exactly where it was.
 
+**Reversed for `backend.py` two weeks later, by the same test.** *(2026-09-23.)*
+The premise was that the guards were never edited, and #507, #516 and #529 then
+edited nothing else in the file. Measured over its 42 commits, with each hunk
+mapped to the definitions it lands in: 29 touch only the backend, 6 only the
+guards, 1 only the host-path refusal, and none does real work on both. The one
+cluster the whole file still forms is glued by the two commits that moved it and
+the repository-wide comment cut -- the hunk-header trap again, since `git log`
+names `default_backend` on #507 and the hunks never touch it.
+
+So it is three modules. `backend` builds backends. `tool_guards` is what every
+graph holding workspace tools is wrapped in. `host_paths` is `reject_host_path`
+and `HostPathGuard`, which were already written down as one mechanism -- the one
+raises what the other catches -- and are the only thing both of the others need,
+so neither has to import the other. `HostPathError` is exported from the root,
+because `ports.md` tells an adapter to raise it and the address it had given was
+a module that has stopped being where it lives; `backend` still re-exports it for
+anybody who copied that address.
+
 **A cluster that size means two different things and this one is the harmless
 one.** Everything joined to everything is what a cohesive unit and a rippling
 one both produce, so the co-change test alone does not settle `service.py` --
