@@ -9,7 +9,7 @@ from kingfisher.infrastructure.prompting import (
     render_system_prompt,
     system_prompt,
 )
-from kingfisher.kinds.subagents import reading
+from tests.conftest import a_subagent
 
 
 def test_base_prompt_names_no_dataset_and_no_domain():
@@ -176,7 +176,7 @@ system_prompt: |
 
 
 def _delegate(cfg):
-    spec = reading.read(DELEGATE, Path("reviewer.yaml"))
+    spec = a_subagent(DELEGATE, "reviewer.yaml")
     return as_subagent(spec, cfg)["system_prompt"]
 
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from pathlib import Path
 
 from kingfisher.application.service import opening_events
 from kingfisher.config import Endpoint, ModelProfile
@@ -11,9 +10,8 @@ from kingfisher.domain.capabilities import ALL, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.activation import indistinct_delegates
 from kingfisher.infrastructure.harness.subagents import model_for
-from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.spec import RunOn
-from tests.conftest import an_agent, start, subagents_dir
+from tests.conftest import a_subagent, an_agent, start, subagents_dir
 
 ASKED = """name: second-opinion
 description: Answers again, elsewhere.
@@ -282,7 +280,7 @@ system_prompt: |
 
 
 def _spec_from(text):
-    return reading.read(text, Path("elsewhere.yaml"))
+    return a_subagent(text, "elsewhere.yaml")
 
 
 def test_naming_the_same_model_is_reported_and_never_refused(cfg, session_dir):

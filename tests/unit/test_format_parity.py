@@ -15,15 +15,15 @@ from kingfisher.kinds.agents import reading as agents
 from kingfisher.kinds.agents import spec as agent_spec
 from kingfisher.kinds.agents.spec import KNOWN as AGENT_KNOWN
 from kingfisher.kinds.agents.spec import AgentError, AgentSpec
-from kingfisher.kinds.subagents import reading as subagents
 from kingfisher.kinds.subagents import spec as subagent_spec
 from kingfisher.kinds.subagents.spec import KNOWN as SUBAGENT_KNOWN
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
+from tests.conftest import a_subagent
 
 #: Each format as a check needs it: its reader, the keys it defines, the spec it builds.
 FORMATS = {
-    "agent": (agents.read, AGENT_KNOWN, AgentSpec),
-    "subagent": (subagents.read, SUBAGENT_KNOWN, SubagentSpec),
+    "agent": (lambda text, name: agents.read(text, Path(name)), AGENT_KNOWN, AgentSpec),
+    "subagent": (a_subagent, SUBAGENT_KNOWN, SubagentSpec),
 }
 
 #: The module each format's vocabulary and parsing live in, which is the thing
@@ -154,7 +154,7 @@ def _outcome(kind: str, text: str) -> tuple[str, object]:
     """What one format made of a document: the shared fields it read, or its refusal."""
     read, _, _ = FORMATS[kind]
     try:
-        built = read(text, Path("n.yaml"))
+        built = read(text, "n.yaml")
     except (AgentError, SubagentError) as refused:
         return "refused", str(refused)
     return "read", {name: getattr(built, name) for name in SHARED_FIELDS}
@@ -214,7 +214,7 @@ def test_the_star_is_the_only_place_the_formats_part():
 
 
 @pytest.mark.parametrize("kind", sorted(FORMATS))
-def test_a_document_that_will_not_parse_names_the_file_it_is(kind, tmp_path):
+def test_a_document_that_will_not_parse_names_the_file_it_is(kind):
     """"YAML says why; we say which file" is what the refusal is for, and it was the
     one thing both readers agreed on word for word -- asserted by neither. Dropping
     the file name from it left every test that matches on the reason still passing.
@@ -226,7 +226,7 @@ def test_a_document_that_will_not_parse_names_the_file_it_is(kind, tmp_path):
     errors = {"agent": AgentError, "subagent": SubagentError}
 
     with pytest.raises(errors[kind]) as refused:
-        read("name x\ndescription: d\n", tmp_path / "unreadable.yaml")
+        read("name x\ndescription: d\n", "unreadable.yaml")
 
     assert "unreadable.yaml" in str(refused.value)
     assert "cannot read definition" in str(refused.value)

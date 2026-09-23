@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.rules import refuse_cycles
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
-from tests.conftest import FakeToolCallingModel, subagents_dir
+from tests.conftest import FakeToolCallingModel, a_subagent, subagents_dir
 
 REVIEWER = """name: reviewer
 description: Checks figures.
@@ -109,20 +106,20 @@ def _tools_of(graph) -> set[str]:
 # -- the format ------------------------------------------------------------
 
 
-def test_a_definition_may_name_delegates(tmp_path):
+def test_a_definition_may_name_delegates():
     """It was refused, with a reason that turned out to be wrong about what the format
     could express.
     """
-    spec = reading.read(REVIEWER, tmp_path / "reviewer.yaml")
+    spec = a_subagent(REVIEWER, "reviewer.yaml")
 
     assert spec.subagents == ("second-opinion",)
 
 
-def test_naming_none_is_the_default(tmp_path):
+def test_naming_none_is_the_default():
     """Like `skills` and unlike `tools`: a delegate that needed the whole catalogue
     would not have been worth defining.
     """
-    spec = reading.read(HELPER, tmp_path / "second-opinion.yaml")
+    spec = a_subagent(HELPER, "second-opinion.yaml")
 
     assert spec.subagents is None
 
@@ -165,9 +162,9 @@ def test_the_refusal_names_the_whole_loop(cfg, session_dir):
 def test_a_definition_reached_twice_is_not_a_cycle():
     """The distinction the check exists to draw."""
     specs = {
-        "reviewer": reading.read(REVIEWER, Path("reviewer.yaml")),
-        "second-opinion": reading.read(NESTING_HELPER, Path("second-opinion.yaml")),
-        "checker": reading.read(CHECKER, Path("checker.yaml")),
+        "reviewer": a_subagent(REVIEWER, "reviewer.yaml"),
+        "second-opinion": a_subagent(NESTING_HELPER, "second-opinion.yaml"),
+        "checker": a_subagent(CHECKER, "checker.yaml"),
     }
 
     refuse_cycles(specs)  # no raise
@@ -178,7 +175,7 @@ def test_a_definition_naming_itself_is_a_cycle():
     body = HELPER.replace("system_prompt:", "subagents: [second-opinion]\nsystem_prompt:")
 
     with pytest.raises(SubagentError, match="second-opinion -> second-opinion"):
-        refuse_cycles({"second-opinion": reading.read(body, Path("second-opinion.yaml"))})
+        refuse_cycles({"second-opinion": a_subagent(body, "second-opinion.yaml")})
 
 
 def test_a_helper_is_built_without_a_task_tool(cfg, session_dir):
@@ -358,7 +355,7 @@ def _spec(name, subagents=None):
     body = f"name: {name}\ndescription: A delegate.\nsystem_prompt: |\n  x\n"
     if subagents is not None:
         body += f"subagents: {subagents}\n"
-    return reading.read(body, Path(f"{name}.yaml"))
+    return a_subagent(body, f"{name}.yaml")
 
 
 def test_a_definition_may_not_ask_for_every_delegate():
@@ -382,10 +379,10 @@ def test_tools_still_takes_a_star():
     `subagents` refusal was scoped to one field. It was, until the star on
     `skills` was measured rather than assumed -- see the two tests below.
     """
-    spec = reading.read(
+    spec = a_subagent(
         "name: broad\ndescription: A delegate.\nsystem_prompt: |\n  x\n"
         'tools: ["*"]\n',
-        Path("broad.yaml"),
+        "broad.yaml",
     )
 
     assert spec.tools == ALL
@@ -407,7 +404,7 @@ def test_a_delegate_may_not_ask_for_every_skill():
     )
 
     with pytest.raises(SubagentError, match=r"skills may not be"):
-        reading.read(body, Path("broad.yaml"))
+        a_subagent(body, "broad.yaml")
 
 
 def test_the_skills_refusal_says_what_to_write_instead():
@@ -421,7 +418,7 @@ def test_the_skills_refusal_says_what_to_write_instead():
     )
 
     with pytest.raises(SubagentError, match="Name the procedures this one uses"):
-        reading.read(body, Path("broad.yaml"))
+        a_subagent(body, "broad.yaml")
 
 
 def test_the_cycle_walk_still_reads_a_star_as_every_edge():

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from langchain_core.tools import tool
 
@@ -13,10 +11,9 @@ from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
 from kingfisher.infrastructure.harness.subagents import as_subagent
 from kingfisher.infrastructure.harness.tools import _ToolSurface
 from kingfisher.infrastructure.workspace import seeding
-from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.tools.catalogue import LocalToolRepository
 from kingfisher.kinds.tools.spec import Found, Offering, reference, split_reference, tool_name
-from tests.conftest import tools_dir
+from tests.conftest import a_subagent, tools_dir
 
 TOOL = """from langchain_core.tools import tool
 
@@ -46,9 +43,7 @@ def _offering(sources):
 
 
 def _spec(name="d", tools="csv_columns"):
-    return reading.read(
-        SUBAGENT.format(name=name, tools=tools, body="x" * 220), Path(f"{name}.yaml")
-    )
+    return a_subagent(SUBAGENT.format(name=name, tools=tools, body="x" * 220), f"{name}.yaml")
 
 
 # -- how a reference is written and read ----------------------------------
@@ -117,10 +112,7 @@ def test_a_selection_naming_nothing_carries_no_claims():
 def test_the_derived_field_cannot_be_written_by_hand():
     """It is read out of `tools`."""
     with pytest.raises(Exception, match="unknown field 'tool_sources'"):
-        reading.read(
-            "name: a\ndescription: d\ntool_sources: {}\nsystem_prompt: |\n  b\n",
-            Path("a.yaml"),
-        )
+        a_subagent("name: a\ndescription: d\ntool_sources: {}\nsystem_prompt: |\n  b\n", "a.yaml")
 
 
 # -- the check -------------------------------------------------------------

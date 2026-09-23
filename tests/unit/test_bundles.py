@@ -16,7 +16,6 @@ from kingfisher.infrastructure.harness.backend import default_backend, skills_so
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.kinds.agents import reading as agent_reading
 from kingfisher.kinds.agents.spec import AgentError
-from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.kinds.tools.catalogue import ToolError
@@ -24,7 +23,7 @@ from kingfisher.kinds.tools.spec import Offering, tool_name
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
 from kingfisher.presentation.cli.health import examine, worst
 from kingfisher.presentation.cli.listing import _catalogue, failed
-from tests.conftest import FakeToolCallingModel
+from tests.conftest import FakeToolCallingModel, a_subagent
 
 DEFINITION = "name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
 
@@ -891,9 +890,9 @@ def test_a_definition_with_an_empty_folder_is_not_asked_to_list_anything(cfg):
 
 def read_surveyor(tools_line):
     """One definition with the given `tools:` line, read without a catalogue."""
-    return reading.read(
+    return a_subagent(
         f"name: surveyor\ndescription: d\n{tools_line}\nsystem_prompt: |\n  x\n",
-        Path("surveyor.yaml"),
+        "surveyor.yaml",
     )
 
 

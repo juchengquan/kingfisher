@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
 from langchain.agents.middleware import AgentMiddleware
@@ -15,9 +14,8 @@ from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
 from kingfisher.infrastructure.harness.subagents import as_subagent, subagent_skills
 from kingfisher.kinds.agents.spec import AgentSpec
 from kingfisher.kinds.skills.registry import Listed, SkillRegistry
-from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.spec import SubagentError
-from tests.conftest import FakeToolCallingModel, subagents_dir
+from tests.conftest import FakeToolCallingModel, a_subagent, subagents_dir
 
 HELPER = """name: helper
 description: Declares no tools, so it inherits whatever it is given.
@@ -345,7 +343,7 @@ def test_a_delegate_is_narrowed_by_it(cfg):
     """
     for selection, cap, expected in NARROWING:
         spec = replace(
-            reading.read(HELPER, Path("helper.md")), tools=selection, builtin_tools=selection
+            a_subagent(HELPER, "helper.md"), tools=selection, builtin_tools=selection
         )
 
         built = as_subagent(spec, cfg, tools=cap, builtin_tools=cap)
@@ -372,7 +370,7 @@ def test_naming_a_workspace_tool_costs_a_delegate_no_builtin():
     for a *request*; this is the same fix one level in.
     """
     spec = replace(
-        reading.read(HELPER, Path("helper.md")), tools=("http_fetch",), builtin_tools=ALL
+        a_subagent(HELPER, "helper.md"), tools=("http_fetch",), builtin_tools=ALL
     )
 
     ceiling = tool_ceiling(spec, builtin=("read_file", "ls"), workspace=("http_fetch", "sql_query"))
@@ -384,7 +382,7 @@ def test_naming_a_workspace_tool_costs_a_delegate_no_builtin():
 def test_naming_a_builtin_costs_a_delegate_no_workspace_tool():
     """And the mirror, which is the direction the presets go."""
     spec = replace(
-        reading.read(HELPER, Path("helper.md")), builtin_tools=("read_file",), tools=ALL
+        a_subagent(HELPER, "helper.md"), builtin_tools=("read_file",), tools=ALL
     )
 
     ceiling = tool_ceiling(spec, builtin=("read_file", "ls"), workspace=("http_fetch",))
@@ -395,7 +393,7 @@ def test_naming_a_builtin_costs_a_delegate_no_workspace_tool():
 
 def test_an_empty_list_is_how_a_delegate_says_none_of_them():
     """`tools: []` is none; omitting the line is all."""
-    spec = replace(reading.read(HELPER, Path("helper.md")), builtin_tools=("read_file",), tools=())
+    spec = replace(a_subagent(HELPER, "helper.md"), builtin_tools=("read_file",), tools=())
 
     ceiling = tool_ceiling(spec, builtin=("read_file", "ls"), workspace=("http_fetch",))
 
@@ -405,7 +403,7 @@ def test_an_empty_list_is_how_a_delegate_says_none_of_them():
 
 def test_one_axis_unresolved_is_refused_rather_than_guessed():
     """`ALL` is the string `"*"`."""
-    spec = replace(reading.read(HELPER, Path("helper.md")), builtin_tools=ALL, tools=("a",))
+    spec = replace(a_subagent(HELPER, "helper.md"), builtin_tools=ALL, tools=("a",))
 
     with pytest.raises(ValueError, match="one tool axis resolved"):
         tool_ceiling(spec, builtin=ALL, workspace=("a",))
@@ -444,7 +442,7 @@ def test_a_delegates_skills_are_narrowed_by_it():
     assert DECLARED, "no declared cases -- this walks nothing and passes"
     wrong = []
     for selection, cap, expected in DECLARED:
-        spec = replace(reading.read(HELPER, Path("helper.yaml")), skills=selection)
+        spec = replace(a_subagent(HELPER, "helper.yaml"), skills=selection)
         got = subagent_skills(spec, offering("a", "b", "c"), cap)
         if got != as_identities(expected):
             wrong.append(f"skills={selection!r} under {cap!r} gave {got}, wanted {expected!r}")
@@ -454,7 +452,7 @@ def test_a_delegates_skills_are_narrowed_by_it():
 
 def test_undeclared_skills_mean_none_and_undeclared_tools_inherit():
     """Where `tools` inherits, `skills` does not."""
-    parsed = reading.read(HELPER, Path("helper.yaml"))
+    parsed = a_subagent(HELPER, "helper.yaml")
 
     assert parsed.skills is None  # declared none, so none
     assert parsed.tools == ALL  # declared nothing, so whatever the caller has
@@ -590,7 +588,7 @@ def test_the_wildcard_means_everything(cfg, session_dir):
     delegate = _subagent_graphs(graph).get("helper")
     assert delegate is not None
 
-    spec = reading.read(STAR, Path("helper.yaml"))
+    spec = a_subagent(STAR, "helper.yaml")
     assert spec.builtin_tools == ALL
     assert spec.tools == ALL
 
@@ -598,7 +596,7 @@ def test_the_wildcard_means_everything(cfg, session_dir):
 def test_the_bare_star_is_refused_by_name(cfg, session_dir):
     """A request spells this `"*"`, so someone will carry the habit across."""
     with pytest.raises(SubagentError, match=r"write \['\*'\] instead"):
-        reading.read(BARE_STAR, Path("helper.yaml"))
+        a_subagent(BARE_STAR, "helper.yaml")
 
 
 def test_mixing_the_wildcard_with_a_name_is_refused(cfg, session_dir):
@@ -607,7 +605,7 @@ def test_mixing_the_wildcard_with_a_name_is_refused(cfg, session_dir):
     quietly meant `[read_file]`.
     """
     with pytest.raises(SubagentError, match="mixes"):
-        reading.read(MIXED, Path("helper.yaml"))
+        a_subagent(MIXED, "helper.yaml")
 
 
 def test_a_tool_the_request_withheld_is_still_dropped(cfg, session_dir):

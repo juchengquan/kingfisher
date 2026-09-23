@@ -17,8 +17,8 @@ from kingfisher.infrastructure.harness.agent import (
 from kingfisher.infrastructure.harness.middleware import ByName, declared_middleware
 from kingfisher.kinds.agents import spec as agent_format
 from kingfisher.kinds.agents.spec import AgentError
-from kingfisher.kinds.subagents import reading as subagent_format
 from kingfisher.kinds.subagents.spec import SubagentError
+from tests.conftest import a_subagent
 
 
 class Audit(AgentMiddleware):
@@ -88,7 +88,7 @@ def agent_spec(body: str):
 def subagent_spec(body: str):
     # The document rather than decoded fields: reading one is a single call now,
     # and the YAML step this used to do by hand is inside it.
-    return subagent_format.read(body, Path("sweeper.yaml"))
+    return a_subagent(body, "sweeper.yaml")
 
 
 def written(middleware: str) -> str:
