@@ -452,7 +452,7 @@ class Kingfisher(Sessions, Disposal):
         self,
         request: Request | Resume,
         session_dir: Path,
-        capabilities: Capabilities | None = None,
+        capabilities: Capabilities,
         checkpointer: Any = _UNSET,
         *,
         agent: AgentSpec | None,
@@ -499,7 +499,12 @@ class Kingfisher(Sessions, Disposal):
                 catalogue=self.catalogue,
                 runner=self._runner(session_dir) if self._runner is not None else None,
             ),
-            capabilities=capabilities if capabilities is not None else request.capabilities,
+            # What the deployment permits, narrowed by what the request asked for,
+            # and never the request's own: they are equal only where the deployment
+            # restricts nothing, which is why defaulting to them here looked
+            # harmless. A caller asking for a tool the deployment withheld was
+            # handed it -- measured, and the whole suite stayed green.
+            capabilities=capabilities,
             session_dir=session_dir,
             run_on=request.run_on,
             middleware_registry=self.middlewares,

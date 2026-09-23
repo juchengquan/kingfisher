@@ -92,14 +92,15 @@ def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
 
     # No spec and no source ids: a supplied graph is handed back before either is
     # looked at, which is the thing this asserts.
-    assert service._graph_for(Request("go"), session_dir, agent=None, held=None) is agent
+    asked = Request("go")
+    assert service._graph_for(
+        asked, session_dir, asked.capabilities, agent=None, held=None
+    ) is agent
 
     with pytest.raises(ValueError, match="pre-built graph"):
+        narrowed = Request("go", capabilities=Capabilities(builtin_tools=("read_file",)))
         service._graph_for(
-            Request("go", capabilities=Capabilities(builtin_tools=("read_file",))),
-            session_dir,
-            agent=None,
-            held=None,
+            narrowed, session_dir, narrowed.capabilities, agent=None, held=None
         )
 
 
@@ -115,9 +116,12 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
 
     built = service._agent_for(asked, session_dir)
 
-    assert service._graph_for(
-        asked, session_dir, agent=built, held=None
-    ) is not service._graph_for(asked, session_dir, agent=built, held=None)
+    def once():
+        return service._graph_for(
+            asked, session_dir, service.grants, agent=built, held=None
+        )
+
+    assert once() is not once()
 
 
 def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
