@@ -64,7 +64,7 @@ def write_portable(cfg, *, extra: str = "", with_skills: bool = False) -> None:
             '    "description": "Surveys files.",',
             '    "system_prompt": "You survey.",',
             '    "builtin_tools": ["read_file", "grep", "execute"],',
-            f"    \"bundle\": {{{carried}}},",
+            f"    {carried},",
             extra,
             "}]",
         ]
@@ -239,12 +239,40 @@ def test_a_relative_skills_path_is_refused(cfg):
     root.mkdir(parents=True, exist_ok=True)
     (root / "s.py").write_text(
         "SUBAGENTS = [{'name': 's', 'description': 'd', 'system_prompt': 'Go.', "
-        "'bundle': {'skills': 'skills'}}]\n",
+        "'skills': 'skills'}]\n",
         encoding="utf-8",
     )
 
     with pytest.raises(SubagentError, match="relative"):
         _ = LocalSubagentRepository(root).specs
+
+
+@pytest.mark.parametrize("named", ["'sql_query'", "{'name': 'probe', 'source': 'bundled'}"])
+def test_a_portable_entry_carries_tools_and_names_none(cfg, named):
+    """A name is a lookup in a catalogue this definition has never seen, and the long
+    form a document writes is a name too -- so both are refused, with the reason.
+    """
+    root = cfg.workspace / "subagents"
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "s.py").write_text(
+        "SUBAGENTS = [{'name': 's', 'description': 'd', 'system_prompt': 'Go.', "
+        f"'tools': [{named}]}}]\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SubagentError, match="tool objects themselves"):
+        _ = LocalSubagentRepository(root).specs
+
+
+def test_the_old_bundle_key_says_what_to_write_instead():
+    """Every package shipping a portable entry meets this line on upgrading."""
+    entry = {"name": "s", "description": "d", "system_prompt": "Go.", "bundle": {}}
+
+    with pytest.raises(SubagentError) as raised:
+        declared(entry, "acme.py")
+
+    assert "'tools'" in str(raised.value)
+    assert "'skills'" in str(raised.value)
 
 
 # -- the claim and the goods -------------------------------------------------
@@ -290,8 +318,8 @@ def test_every_field_the_documents_define_is_portable_or_refused_with_a_reason()
     defined is a field only one reader could ever produce, and a refusal for a key
     that no longer exists is a reason nobody can trigger.
     """
-    # `bundle` is the one key only a portable entry writes: what it carries has no
-    # folder for a `source: bundled` entry to name.
+    # `bundle` is outside `KNOWN` because a document refuses it too, and refused here
+    # with a reason of its own: it is where a portable entry used to carry its tools.
     assert PORTABLE | set(NOT_PORTABLE) == KNOWN | {"bundle"}
 
 
@@ -302,9 +330,9 @@ def test_every_portable_key_reaches_a_field_the_spec_has():
     """
     fields = set(SubagentSpec.__dataclass_fields__)
 
-    # `bundle` is the one that lands somewhere else: a portable entry's is carried,
-    # so it reaches `carried` rather than the field of its own name.
-    assert (PORTABLE - {"bundle"}) <= fields
+    # `tools` and `skills` are the ones that land somewhere else: a portable entry's
+    # are carried, so they reach `carried` rather than the fields of their own names.
+    assert (PORTABLE - {"tools", "skills"}) <= fields
     assert "carried" in fields
 
 
@@ -327,7 +355,7 @@ def test_a_carried_skills_folder_is_not_reported_as_abandoned(cfg):
         "HERE = Path(__file__).parent\n\n"
         "SUBAGENTS = [{'name': 'surveyor', 'description': 'd', "
         "'system_prompt': 'Go.', "
-        "'bundle': {'skills': HERE / 'assets' / 'skills'}}]\n",
+        "'skills': HERE / 'assets' / 'skills'}]\n",
         encoding="utf-8",
     )
 

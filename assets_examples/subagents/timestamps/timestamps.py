@@ -8,9 +8,11 @@ no `build`, carrying its own tool and its own skill.
 It exists because of what it *cannot* say. A portable definition may not name a
 tool, a skill, a delegate, a middleware, a model or a source id -- every one of
 those is a lookup in some particular deployment's catalogue, and a definition
-that travels has never seen the deployment it will be installed into. What is
-left is what a definition can answer on its own: who it is, what it does, which
-of deepagents' own tools it wants, and what it brought with it.
+that travels has never seen the deployment it will be installed into. So its
+`tools` holds the tool objects rather than names, and its `skills` the directory
+they are in. What is left is what a definition can answer on its own: who it
+is, what it does, which of deepagents' own tools it wants, and what it brought
+with it.
 
 That constraint is the feature. Copy this module into an installed package,
 export `SUBAGENTS` from it, and a deployment reaches it by writing one file:
@@ -91,15 +93,13 @@ SUBAGENTS = [
         # Reading and searching, and nothing that writes: this delegate reports on
         # what it found and changes nothing.
         "builtin_tools": ["read_file", "ls", "glob", "grep"],
-        "bundle": {
-            # The tools themselves, not their names. A name would be a lookup in the
-            # deployment's catalogue, which this definition has never seen.
-            "tools": [iso_timestamp],
-            # The directory, which deepagents mounts. Skills are files it reads, so
-            # this half stays a path for a carried bundle exactly as for a folder --
-            # what differs is who resolved it.
-            "skills": HERE / "skills",
-        },
+        # The tools themselves, not their names. A name would be a lookup in the
+        # deployment's catalogue, which this definition has never seen.
+        "tools": [iso_timestamp],
+        # The directory, which deepagents mounts. Skills are files it reads, so this
+        # stays a path -- resolved by the definition, since nothing else knows where
+        # an installed package keeps its files.
+        "skills": HERE / "skills",
         # Keys of your own, which nothing in a run reads. A package shipping
         # delegates is the case this is most useful for: the deployment installing
         # it did not write the definition and has no other way to record where it

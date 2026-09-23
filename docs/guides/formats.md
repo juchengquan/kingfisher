@@ -842,19 +842,19 @@ SUBAGENTS = [
         "description": "Normalises the dates in a file, and flags the ambiguous ones.",
         "system_prompt": "You normalise dates. ...",
         "builtin_tools": ["read_file", "ls", "glob", "grep"],
-        "bundle": {
-            "tools": [iso_timestamp],        # the tools themselves, not their names
-            "skills": HERE / "skills",       # resolved by this definition
-        },
+        "tools": [iso_timestamp],        # the tools themselves, not their names
+        "skills": HERE / "skills",       # resolved by this definition
         "metadata": {"ships_with": "acme-agents"},
     }
 ]
 ```
 
-**It may write `name`, `description`, `system_prompt`, `builtin_tools`, `bundle`
-and `metadata`, and nothing else.** Every other field this format defines names
-something only one deployment knows — `tools` and `skills` are lookups in *your*
-catalogue, `subagents` names *your* delegates, `middlewares` selects code *you*
+**It may write `name`, `description`, `system_prompt`, `builtin_tools`, `tools`,
+`skills` and `metadata`, and nothing else.** `tools` and `skills` mean something
+different here: they hold what the definition brought, never names, because a name
+is a lookup in *your* catalogue and a string or `{name: ...}` entry in `tools` is
+refused. Every other field this format defines names something only one
+deployment knows — `subagents` names *your* delegates, `middlewares` selects code *you*
 registered, `model` a profile in *your* `models.yaml`, `source_ids` ids in *your*
 `source_ids.yaml`. A definition written somewhere else cannot mean anything by
 them, so each is refused with that reason rather than a generic "unknown key".
@@ -885,10 +885,10 @@ format for it anyway.
 
 #### What it carries is its own
 
-`bundle` here holds the things themselves — a folder's contents, for
-a definition that has no folder. They reach that delegate and nothing else: its
-tools are in no catalogue, so no agent can be granted them and no request can
-narrow them away. That is what an imported subagent being **atomic** means. You
+`tools` and `skills` here hold the things rather than naming them — a folder's
+contents, for a definition that has no folder. They reach that delegate and nothing
+else: its tools are in no catalogue, so no agent can be granted them and no request
+can narrow them away. That is what an imported subagent being **atomic** means. You
 use it, or you do not; there is no third option where you take it apart.
 
 `skills` is still a directory, because deepagents mounts a skills source by path.
