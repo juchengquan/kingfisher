@@ -452,10 +452,16 @@ class _WantsEverything(AgentMiddleware):
         super().__init__()
 
 
-def _with_a_delegate(cfg, session_dir, injected):
+#: The same delegate, naming no model, so it runs whatever summoned it. Its
+#: middleware has to be told that model rather than nothing, which is the half
+#: `_with_helpers` spells out and the half nothing held.
+_INHERITING_DELEGATE = _DELEGATE.replace("model: cheap-model\n", "")
+
+
+def _with_a_delegate(cfg, session_dir, injected, definition: str = _DELEGATE):
     """One build in which an agent and its delegate both name the same middleware."""
     (cfg.workspace / "subagents").mkdir(exist_ok=True)
-    (cfg.workspace / "subagents" / "reviewer.yaml").write_text(_DELEGATE, encoding="utf-8")
+    (cfg.workspace / "subagents" / "reviewer.yaml").write_text(definition, encoding="utf-8")
 
     built = build_agent(
         cfg,
@@ -473,6 +479,63 @@ def _with_a_delegate(cfg, session_dir, injected):
         next(m for m in built.middleware if type(m) is _WantsEverything),
         next(m for m in delegate["middleware"] if type(m) is _WantsEverything),
     )
+
+
+def test_a_delegate_that_inherits_tells_its_middleware_what_it_will_run(cfg, session_dir):
+    """The other half of the rule above, and the one nothing held: a delegate naming
+    no model runs whatever summoned it, and its middleware is owed that model rather
+    than `None`.
+
+    `as_subagent` leaves `model` off such a delegate's spec and deepagents hands it
+    the caller's, so nothing about the delegate itself says what it runs -- which is
+    why the value handed to the middleware has to be filled in here. Dropping that
+    fallback left every suite green.
+    """
+    injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
+
+    mine, theirs = _with_a_delegate(cfg, session_dir, injected, _INHERITING_DELEGATE)
+
+    assert theirs.model is injected, "the delegate's middleware was told nothing it runs"
+    assert mine.model is injected, "and the agent's own is unchanged by that"
+
+
+def test_a_delegate_that_inherits_is_given_no_model_of_its_own(cfg, session_dir):
+    """Why the rule above has to fill the value in: the spec carries no model at all,
+    so deepagents is what gives the delegate its caller's. A `model` here would pin
+    the delegate to whatever this build resolved, and "runs whatever summoned it"
+    would stop being true one level down.
+    """
+    injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
+    (cfg.workspace / "subagents").mkdir(exist_ok=True)
+    (cfg.workspace / "subagents" / "reviewer.yaml").write_text(
+        _INHERITING_DELEGATE, encoding="utf-8"
+    )
+
+    built = build_agent(
+        cfg,
+        agent=_named(("wants",), subagents=("reviewer",)),
+        session_dir=session_dir,
+        model=injected,
+        middleware_registry={"wants": _WantsEverything},
+    )
+
+    delegate = next(s for s in declared_subagents(built) if s["name"] == "reviewer")
+    assert "model" not in delegate
+    # Not vacuous: one that names a model does carry it.
+    assert "model" in _a_pinned_delegate(cfg, session_dir, injected)
+
+
+def _a_pinned_delegate(cfg, session_dir, injected) -> dict:
+    """The same delegate, pinned, as the control for the rule above."""
+    (cfg.workspace / "subagents" / "reviewer.yaml").write_text(_DELEGATE, encoding="utf-8")
+    built = build_agent(
+        cfg,
+        agent=_named(("wants",), subagents=("reviewer",)),
+        session_dir=session_dir,
+        model=injected,
+        middleware_registry={"wants": _WantsEverything},
+    )
+    return next(s for s in declared_subagents(built) if s["name"] == "reviewer")
 
 
 def test_a_delegate_is_handed_its_own_model_rather_than_the_agents(cfg, session_dir):

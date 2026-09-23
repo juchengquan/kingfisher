@@ -535,6 +535,29 @@ caller's. A list there is refused rather than read. `indistinct` reports a
 delegate that named a model and did not end up anywhere different.
 *(2026-08-18, `compiled-subagents.md`, `agents-as-definitions.md`.)*
 
+**What a delegate inherits is now held rather than commented.** Two lines beside
+`_with_helpers` explain that a delegate naming no model gets no `model` on its spec
+-- deepagents hands it the caller's -- and that its middleware must therefore be
+told the model it will actually run. Both carried the reasoning for a bug measured
+once: a helper under a delegate pinned to the cheap model quietly ran the expensive
+one. Only the helper half was held. Dropping the other, so a middleware on an
+inheriting delegate is handed `None`, left all 2,084 tests green.
+
+**The duplication that occasioned this was left alone, and that is the decision.** A
+delegate's model is resolved twice per build -- once for what its middleware is
+told, once for its spec -- and the two are equal answers in separate objects. The
+review card called for collapsing them. Measured first: a model costs **0.010ms** to
+build, against an admit at 15-46ms, so there is no saving to claim; the two sites
+always resolve from the same inputs, so they cannot disagree; and the case the card
+named -- a top-level call carrying an inherited model -- cannot arise, because
+`default_model` is `None` there by construction.
+
+Worth recording for whoever reads that construction next: `default_model=inherited
+if nested else None` is the same expression as `default_model=inherited` given the
+one caller, since a top-level call passes no `inherited` at all. It guards a caller
+that does not exist, which is why no test can hold it and why removing it changes
+nothing. *(2026-09-23, from an architecture review.)*
+
 **Reversed on 2026-08-19: a list of models, and `distinct: true`.** `model` took a
 list tried in order, and `alias` was the only thing that could use one, so the two
 went together. `distinct: true` turned `indistinct`'s report into a refusal, and
