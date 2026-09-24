@@ -258,6 +258,7 @@ CHECKED_SNIPPETS: dict[str, bool] = {
     "docs/guides/middleware.md": True,
     "docs/guides/ports.md": True,
     "docs/guides/tools.md": True,
+    "docs/design/2026-09-23-an-agent-a-delegate-can-be.md": False,
 }
 
 
