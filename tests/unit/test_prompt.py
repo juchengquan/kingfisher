@@ -9,6 +9,7 @@ from kingfisher.infrastructure.prompting import (
     render_system_prompt,
     system_prompt,
 )
+from kingfisher.layout import DATA, DERIVED, SCRATCH
 from tests.conftest import a_subagent
 
 
@@ -45,6 +46,20 @@ def test_structural_contract_survives_every_combination():
             text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
             assert "/data" in text
             assert "/derived" in text
+
+
+def test_the_prompt_s_path_table_spells_the_directories_the_session_has():
+    """A renamed directory whose old name the prompt still teaches: every write the
+    agent makes there is refused, or lands where nothing looks.
+
+    The names come from `layout` rather than being written out here, since a literal
+    copy would be renamed along with the prompt, or not at all, and pass either way.
+    """
+    text = render_system_prompt()
+
+    for name in (DATA, DERIVED, SCRATCH):
+        assert f"| `/{name}/<name>` | `{name}/<name>` |" in text, name
+
 
 
 def test_user_prompt_is_appended_when_the_workspace_has_one(cfg):

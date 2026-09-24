@@ -82,7 +82,7 @@ class RunResult:
     #: prints `session_dir` to say where your files landed.
     #:
     #: The session's, not the turn's. A turn had a directory of its own until
-    #: `/scratch` and `/derived` took over what it held, and `artifacts` below is
+    #: `/scratchpad` and `/derived` took over what it held, and `artifacts` below is
     #: relative to this root.
     session_dir: Path = Path()
     log_path: Path = Path()

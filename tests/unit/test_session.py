@@ -81,7 +81,7 @@ def test_discard_will_not_report_success_without_a_way_to_delete(workspace, dirs
 def test_the_turn_message_names_both_forms_of_the_scratch_path(workspace, dirs):
     """Measured over ten runs of one task: told only the virtual path, the agent passed
     it to `execute` 4 times in 10, each failing and costing about three times the whole
-    task to recover. It was a per-turn directory then and is the session's `/scratch`
+    task to recover. It was a per-turn directory then and is the session's `/scratchpad`
     now, which changes nothing about the measurement -- what was measured is the
     agent's handling of the two spellings.
     """
@@ -89,11 +89,11 @@ def test_the_turn_message_names_both_forms_of_the_scratch_path(workspace, dirs):
 
     message = turn_message("count the rows", ())
 
-    assert "/scratch" in message
+    assert "/scratchpad" in message
     # Not a plain `in`: the virtual path *contains* the shell form as a substring, so
     # that assertion passed even with the shell form removed. Caught by mutation-testing
     # this test rather than by reading it.
-    without_virtual = message.replace("/scratch", "")
-    assert "scratch" in without_virtual, (
-        "the shell form is only present as part of '/scratch'"
+    without_virtual = message.replace("/scratchpad", "")
+    assert "scratchpad" in without_virtual, (
+        "the shell form is only present as part of '/scratchpad'"
     )

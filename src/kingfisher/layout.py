@@ -64,7 +64,7 @@ MEMORY = "memory"
 #: scratch directories with one purpose, and the per-turn one accumulated for the
 #: life of a session because nothing ever swept it. The dot went with the silence:
 #: a name the agent addresses belongs in this tuple rather than beside the lock.
-SCRATCH = "scratch"
+SCRATCH = "scratchpad"
 
 SESSION_DIRS: tuple[str, ...] = (DATA, DERIVED, MEMORY, SCRATCH)
 
@@ -106,7 +106,7 @@ PAUSED_STATE = "paused.state"
 PAUSED_MARK = "paused.json"
 
 #: What a run produces and would lose. `/data` is read-only and came from the
-#: caller; `/scratch` is disposable and says so. These two are the ones the agent
+#: caller; `/scratchpad` is disposable and says so. These two are the ones the agent
 #: is told will outlive the run, so these are what a reaped session takes with it
 #: unless the caller is handed a list.
 ARTIFACT_DIRS: tuple[str, ...] = (DERIVED, MEMORY)
@@ -132,7 +132,7 @@ BUNDLED_SKILLS_ROUTE = _route(SKILLS, RESERVED_SKILL_FOLDER)
 #: reader asking "what happens to /derived" should find the answer here rather
 #: than by noticing an absence.
 #:
-#: `/scratch` is among them, and that is what lets the shell and the file tools
+#: `/scratchpad` is among them, and that is what lets the shell and the file tools
 #: write the same place: `TMPDIR` points at it on disk, and the virtual path is
 #: the same name with a slash.
 DERIVED_ROUTE = _route(DERIVED)
