@@ -17,5 +17,11 @@ if TYPE_CHECKING:
 
 
 def read(text: str, source: Path) -> AgentSpec:
-    """One agent definition. Raises `AgentError` on anything malformed."""
+    """One agent definition. Raises `AgentError` on anything malformed.
+
+    The text rather than the path, unlike the subagent reader: the catalogue pins the
+    document it parsed into the session, and reading the file again to get it would let
+    an edit land in between -- the first turn and every later one running different
+    agents.
+    """
     return agent.parse(documents.fields_of(text, source, AgentError), source)
