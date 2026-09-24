@@ -19,7 +19,6 @@ from kingfisher.domain.session import (
 )
 from kingfisher.infrastructure.session_store import restore_into
 from kingfisher.infrastructure.workspace import (
-    agent_snapshot,
     agent_started_with,
     make_session_dirs,
     scaffold_memory,
@@ -79,7 +78,7 @@ class Sessions:
         kept = agent_started_with(directory)
         if kept is None:
             return True
-        return reaches(read(kept, agent_snapshot(directory)).source_ids, held)
+        return reaches(read(kept).source_ids, held)
 
     def _exists(self, session_id: str, root: Path) -> bool:
         """Whether this id names a session, by directory or by store."""

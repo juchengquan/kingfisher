@@ -19,6 +19,7 @@ seeding that is their only reader.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import yaml
@@ -92,7 +93,25 @@ def decode(text: str) -> dict[str, object] | str:
     return {str(key): value for key, value in parsed.items()}
 
 
-def fields_of(text: str, source: Path, error: type[ValueError]) -> dict[str, object]:
+@dataclass(frozen=True)
+class DefinitionText:
+    """A definition as written, and the file it is named after in a refusal.
+
+    One value rather than a path, so a caller that keeps the text keeps what was parsed:
+    the agent catalogue pins it into a session, and opening the file a second time for
+    that would let an edit land in between -- the first turn and every later one
+    running different agents.
+    """
+
+    text: str
+    source: Path
+
+    @classmethod
+    def at(cls, path: Path) -> DefinitionText:
+        return cls(path.read_text(encoding="utf-8"), path)
+
+
+def fields_of(definition: DefinitionText, error: type[ValueError]) -> dict[str, object]:
     """A definition's fields, or the refusal naming the file and what stopped it.
 
     Everything both kinds do to a document before their own format looks at it, which
@@ -101,11 +120,11 @@ def fields_of(text: str, source: Path, error: type[ValueError]) -> dict[str, obj
     both readers wrote the same five lines, down to the wording, and the check below
     on the line after.
     """
-    document = decode(text)
+    document = decode(definition.text)
     if isinstance(document, str):
-        msg = f"{source.name}: cannot read definition ({document})"
+        msg = f"{definition.source.name}: cannot read definition ({document})"
         raise error(msg)
-    require_literal_prompt(text, source, error)
+    require_literal_prompt(definition.text, definition.source, error)
     return document
 
 

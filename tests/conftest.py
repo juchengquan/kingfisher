@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import fields
@@ -204,15 +203,11 @@ def pin(kf, session_id: str, name: str) -> None:
 
 
 def a_subagent(text: str, name: str) -> SubagentSpec:
-    """A subagent definition written to a file called `name`, read the way the catalogue
-    reads one.
-    """
+    """A subagent definition as if read from a file called `name`."""
+    from kingfisher.kinds.documents import DefinitionText
     from kingfisher.kinds.subagents import reading
 
-    with tempfile.TemporaryDirectory() as directory:
-        path = Path(directory) / name
-        path.write_text(text, encoding="utf-8")
-        return reading.read(path)
+    return reading.read(DefinitionText(text, Path(name)))
 
 
 def declared_subagents(built: Assembled) -> list:

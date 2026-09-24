@@ -231,4 +231,4 @@ def test_a_snapshot_is_written_once_and_not_overwritten(tmp_path):
     remember_agent(tmp_path, "name: first\ndescription: One.\n")
     remember_agent(tmp_path, "name: second\ndescription: Two.\n")
 
-    assert agent_started_with(tmp_path).startswith("name: first")
+    assert agent_started_with(tmp_path).text.startswith("name: first")

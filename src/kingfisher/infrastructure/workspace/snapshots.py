@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from kingfisher.kinds.documents import DefinitionText
 from kingfisher.layout import HARNESS, PINNED_AGENT
 
 #: Where a session keeps the agent it opened with: inside the session, under
@@ -44,11 +45,11 @@ def remember_agent(session_dir: Path, document: str) -> None:
     path.write_text(document, encoding="utf-8")
 
 
-def agent_started_with(session_dir: Path) -> str | None:
+def agent_started_with(session_dir: Path) -> DefinitionText | None:
     """The agent document this session opened with, or `None` if it kept none.
 
     `None` covers two ordinary cases: a session that named no agent, and a
     deployment whose repository cannot hand over the document it parsed.
     """
     path = agent_snapshot(session_dir)
-    return path.read_text(encoding="utf-8") if path.is_file() else None
+    return DefinitionText.at(path) if path.is_file() else None

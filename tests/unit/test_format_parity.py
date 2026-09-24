@@ -15,6 +15,7 @@ from kingfisher.kinds.agents import reading as agents
 from kingfisher.kinds.agents import spec as agent_spec
 from kingfisher.kinds.agents.spec import KNOWN as AGENT_KNOWN
 from kingfisher.kinds.agents.spec import AgentError, AgentSpec
+from kingfisher.kinds.documents import DefinitionText
 from kingfisher.kinds.subagents import spec as subagent_spec
 from kingfisher.kinds.subagents.spec import KNOWN as SUBAGENT_KNOWN
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
@@ -22,7 +23,9 @@ from tests.conftest import a_subagent
 
 #: Each format as a check needs it: its reader, the keys it defines, the spec it builds.
 FORMATS = {
-    "agent": (lambda text, name: agents.read(text, Path(name)), AGENT_KNOWN, AgentSpec),
+    "agent": (
+        lambda text, name: agents.read(DefinitionText(text, Path(name))), AGENT_KNOWN, AgentSpec
+    ),
     "subagent": (a_subagent, SUBAGENT_KNOWN, SubagentSpec),
 }
 

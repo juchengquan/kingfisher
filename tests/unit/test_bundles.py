@@ -16,6 +16,7 @@ from kingfisher.infrastructure.harness.backend import default_backend, skills_so
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.kinds.agents import reading as agent_reading
 from kingfisher.kinds.agents.spec import AgentError
+from kingfisher.kinds.documents import DefinitionText
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.kinds.tools.catalogue import ToolError
@@ -948,9 +949,11 @@ def test_an_agent_may_not_list_a_bundled_entry():
     """An agent has no folder of its own, so `bundled` there could only mean nothing."""
     with pytest.raises(AgentError) as raised:
         agent_reading.read(
-            "name: a\ndescription: d\ntools: [{name: probe, source: bundled}]\n"
-            "system_prompt: |\n  x\n",
-            Path("a.yaml"),
+            DefinitionText(
+                "name: a\ndescription: d\ntools: [{name: probe, source: bundled}]\n"
+                "system_prompt: |\n  x\n",
+                Path("a.yaml"),
+            )
         )
 
     assert "no folder of its own" in str(raised.value)
@@ -959,9 +962,11 @@ def test_an_agent_may_not_list_a_bundled_entry():
 def test_an_agent_may_say_an_entry_is_shared():
     """The control: the key reads the same in either file, and only `bundled` parts."""
     spec = agent_reading.read(
-        "name: a\ndescription: d\ntools: [{name: shared, source: shared}]\n"
-        "system_prompt: |\n  x\n",
-        Path("a.yaml"),
+        DefinitionText(
+            "name: a\ndescription: d\ntools: [{name: shared, source: shared}]\n"
+            "system_prompt: |\n  x\n",
+            Path("a.yaml"),
+        )
     )
 
     assert spec.tools == ("shared",)

@@ -13,10 +13,9 @@ from kingfisher.kinds.subagents import spec as subagent
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from kingfisher.kinds.documents import DefinitionText
 
 
-def read(source: Path) -> SubagentSpec:
-    """One definition, from its file. Raises `SubagentError` on anything malformed."""
-    text = source.read_text(encoding="utf-8")
-    return subagent.parse(documents.fields_of(text, source, SubagentError), source)
+def read(definition: DefinitionText) -> SubagentSpec:
+    """One definition. Raises `SubagentError` on anything malformed."""
+    return subagent.parse(documents.fields_of(definition, SubagentError), definition.source)

@@ -125,7 +125,6 @@ from kingfisher.infrastructure.workspace import (
     STARTER_AGENT,
     LocalSessionDirs,
     LocalSessionRoot,
-    agent_snapshot,
     agent_started_with,
     claim_path,
     collect_artifacts,
@@ -541,7 +540,7 @@ class Kingfisher(Sessions, Disposal):
             self._pin_agent_in(session_dir, request.agent)
             return spec
 
-        started = read(kept, agent_snapshot(session_dir))
+        started = read(kept)
         if request.agent is not None and request.agent != started.name:
             msg = (
                 f"this session is running {started.name!r}; it was fixed when the "

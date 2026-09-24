@@ -10,6 +10,7 @@ from kingfisher.domain.capabilities import ALL, CapabilityError
 from kingfisher.kinds.agents.catalogue import LocalAgentRepository
 from kingfisher.kinds.agents.reading import read
 from kingfisher.kinds.agents.spec import AgentError
+from kingfisher.kinds.documents import DefinitionText
 from kingfisher.kinds.subagents.spec import SubagentError
 from tests.conftest import a_subagent
 
@@ -35,7 +36,7 @@ MINIMAL = "".join(REQUIRED.values())
 
 
 def _read(text: str, name: str = "surveyor.yaml"):
-    return read(text, Path(name))
+    return read(DefinitionText(text, Path(name)))
 
 
 # -- what a definition says -------------------------------------------------
