@@ -208,3 +208,25 @@ def test_the_star_is_the_only_place_the_formats_part():
     }
 
     assert parted == PART_ON_THE_STAR
+
+
+# -- what both readers do before either format looks -------------------------
+
+
+@pytest.mark.parametrize("kind", sorted(FORMATS))
+def test_a_document_that_will_not_parse_names_the_file_it_is(kind, tmp_path):
+    """"YAML says why; we say which file" is what the refusal is for, and it was the
+    one thing both readers agreed on word for word -- asserted by neither. Dropping
+    the file name from it left every test that matches on the reason still passing.
+
+    Both kinds here because they are one function now: the reader no longer writes
+    this sentence, `documents.fields_of` does.
+    """
+    read, _known, _spec = FORMATS[kind]
+    errors = {"agent": AgentError, "subagent": SubagentError}
+
+    with pytest.raises(errors[kind]) as refused:
+        read("name x\ndescription: d\n", tmp_path / "unreadable.yaml")
+
+    assert "unreadable.yaml" in str(refused.value)
+    assert "cannot read definition" in str(refused.value)
