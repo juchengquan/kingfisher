@@ -36,7 +36,6 @@ _EXPORTS = {
     "CapabilityError": "kingfisher.domain.capabilities",
     "QuotaExceededError": "kingfisher.domain.session",
     "SessionBusyError": "kingfisher.domain.session",
-    "SkillError": "kingfisher.kinds.skills.spec",
     "SubagentError": "kingfisher.kinds.subagents.spec",
     "UnsafeReferenceError": "kingfisher.domain.references",
     "HostPathError": "kingfisher.infrastructure.harness.host_paths",
@@ -149,7 +148,6 @@ __all__ = [
     "Seeded",
     "SessionBusyError",
     "SessionInfo",
-    "SkillError",
     "SubagentError",
     "UnknownSessionError",
     "UnsafeReferenceError",
@@ -219,7 +217,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace import kinds_at as kinds_at
     from kingfisher.infrastructure.workspace import seed as seed
-    from kingfisher.kinds.skills.spec import SkillError as SkillError
     from kingfisher.kinds.subagents.spec import RunOn as RunOn
     from kingfisher.kinds.subagents.spec import SubagentError as SubagentError
     from kingfisher.testing import COMMAND_RUNNER_CONTRACT as COMMAND_RUNNER_CONTRACT

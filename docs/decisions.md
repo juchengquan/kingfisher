@@ -2468,6 +2468,37 @@ passing, and the deployment that breaks on it is the one nobody told.
 Named `Catalogued` rather than `Kind` because `origins.Kind` is already a word in
 this layer and means what sort of *place* something was read from. *(2026-09-23.)*
 
+**The inventory's seven `try` blocks keep their six catch-sets.** The review read
+them as one rule written six ways. They are not: each set is exactly the kinds its
+block reads, and every type beyond the obvious one carries the incident that put it
+there -- `CapabilityError` in `_tools` because assembling the tool probe refuses a
+workspace tool shadowing a built-in, `SubagentError` in the agents walk because
+resolving what each agent delegates to reads the subagent catalogue. One catch-set
+would say that each block might fail in any way, which is the thing they were
+narrowed to stop saying.
+
+Five of the six were held. **The sixth was not**: the agents walk could be narrowed
+to `AgentError` alone with all 2,104 tests green, and a broken delegate would then
+reach `doctor` and `list` as a traceback over a workspace whose agents are fine --
+which is the incident three of the comments in that file record.
+`test_a_broken_delegate_does_not_take_the_agents_half_down` holds it now.
+
+**Removed on the way: `SkillError`.** Defined, exported as one of "the errors a
+caller must tell apart", listed among the command's refusals -- and raised nowhere
+since #483 took `kinds/skills/reading.py::name_from` out with the upload path on
+2026-09-16. A skill's failures are carried, not raised: `unloadable`, `misplaced`,
+`misfiled`. The class said otherwise for eight days.
+
+Gone with no compatibility window, on the precedent the export table set at 0.1.0 --
+a caller writing `except SkillError` gets an `ImportError` rather than a handler
+that silently never fires. **What let it survive is worth more than the removal**:
+the export rules hold `__all__` against the lazy table and the table against the
+modules, and *neither asks whether a published error can occur*, so a name
+consistently exported everywhere passes them all.
+`test_every_error_this_table_names_can_actually_happen` asks that -- counting a
+`raise` and a class handed to somebody who raises what they are given, since four
+kinds refuse only that second way. *(2026-09-24, from an architecture review.)*
+
 ## Where a deployment reads from
 
 **The capability flags are `KINGFISHER_*_ENABLED`, and the old names are read

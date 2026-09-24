@@ -29,7 +29,7 @@ AREAS = ("kinds", "infrastructure/catalogue")
 #: version of this rule -- it looked for `raise <Kind>Error` and they raise a parameter.
 KIND_ERRORS = frozenset({
     "AgentError", "CapabilityError", "MiddlewareError",
-    "SkillError", "SubagentError", "ToolError",
+    "SubagentError", "ToolError",
 })
 
 AGENT = "name: {name}\ndescription: An agent.\nsystem_prompt: |\n  Do the thing.\n"
@@ -349,6 +349,51 @@ def _raised_by(exc: BaseException) -> str:
         frame = frame.tb_next
     assert deepest is not None, "nothing in the package raised it"
     return f"{deepest[0]}::{deepest[1]}"
+
+
+def _errors_that_can_occur() -> set[str]:
+    """Every error class something in the package actually produces.
+
+    A `raise` of it, or it handed to somebody who raises what they are given --
+    `load`, `fields_of`, `documents_in` and `require_literal_prompt` all take the
+    class from their caller, so looking only for `raise` would miss four kinds.
+    """
+    import ast
+
+    found: set[str] = set()
+    for path in sorted(SRC.rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Raise):
+                name = getattr(getattr(node.exc, "func", None), "id", None)
+                if name:
+                    found.add(name)
+            elif isinstance(node, ast.Call):
+                for word in node.keywords:
+                    if word.arg == "error" and isinstance(word.value, ast.Name):
+                        found.add(word.value.id)
+                for argument in node.args:
+                    if isinstance(argument, ast.Name) and argument.id.endswith("Error"):
+                        found.add(argument.id)
+    return found
+
+
+def test_every_error_this_table_names_can_actually_happen():
+    """An error class nothing produces is a promise the package cannot keep.
+
+    `SkillError` was one for eight days: exported as an error a caller must tell
+    apart, listed among the command's refusals, and raised nowhere after the reader
+    that raised it went with the upload path. The export rules hold the table
+    against `__all__` and neither asks whether a published error can occur, which is
+    how it survived being consistently exported.
+    """
+    produced = _errors_that_can_occur()
+
+    assert produced, "nothing was parsed, so this asserts nothing"
+    impossible = sorted(KIND_ERRORS - produced)
+    assert not impossible, (
+        f"{impossible} are named here and raised by nothing -- delete the class, or "
+        "the table is describing a refusal that cannot happen"
+    )
 
 
 def test_every_refusal_in_the_catalogue_is_named():

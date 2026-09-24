@@ -25,7 +25,6 @@ from kingfisher import (
     Request,
     Resume,
     SessionBusyError,
-    SkillError,
     SubagentError,
     UnknownSessionError,
     UnsafeReferenceError,
@@ -898,7 +897,6 @@ def _doctor(*, as_document: bool = False) -> int:
 REFUSALS = (
     CapabilityError,
     QuotaExceededError,
-    SkillError,
     SubagentError,
     UnknownSessionError,
     UnsafeReferenceError,
