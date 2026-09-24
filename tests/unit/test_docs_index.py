@@ -254,6 +254,7 @@ PYTHON_FENCE = re.compile(r"^```python\n(.*?)^```", re.M | re.S)
 #: proposal will need it.
 CHECKED_SNIPPETS: dict[str, bool] = {
     "README.md": True,
+    "docs/guides/configuration.md": True,
     "docs/guides/formats.md": True,
     "docs/guides/middleware.md": True,
     "docs/guides/ports.md": True,
@@ -336,6 +337,7 @@ def test_the_snippet_collector_finds_the_fences_it_claims_to() -> None:
     collected = {name for name, _, _ in _snippets()}
     assert collected == {
         "README.md",
+        "docs/guides/configuration.md",
         "docs/guides/formats.md",
         "docs/guides/middleware.md",
         "docs/guides/ports.md",

@@ -17,6 +17,7 @@ from kingfisher.config import (
     ModelProfile,
     Models,
 )
+from kingfisher.infrastructure.harness.models import ADAPTERS
 from kingfisher.infrastructure.model_catalogue import load
 
 GOOD = """
@@ -223,7 +224,11 @@ def test_a_profile_keyed_by_another_name_is_refused():
     with pytest.raises(ConfigError, match="the two cannot differ"):
         Models(
             models={"main-model": ModelProfile("something-else", "gateway")},
-            endpoints={"gateway": Endpoint("anthropic", "https://example.invalid", "sk")},
+            endpoints={
+                "gateway": Endpoint(
+                    "anthropic", "https://example.invalid", "sk", adapter=ADAPTERS["anthropic"]
+                )
+            },
             default="main-model",
         )
 

@@ -127,7 +127,14 @@ class Environment:
 
         return Config(
             workspace=paths.workspace,
-            models=model_catalogue.load(models_file, self.values),
+            # Resolved here, beside the catalogue, rather than handed to `Kingfisher`:
+            # `api` is checked as the file loads, and `kingfisher doctor` and `run`
+            # build their own instance with nowhere to pass an argument.
+            models=model_catalogue.load(
+                models_file,
+                self.values,
+                model_catalogue.adapters(self.optional_text("KINGFISHER_ADAPTERS_FACTORY")),
+            ),
             access=access_policy.load(access_file),
             # The path as well as what was found there. `load` answers `None`
             # for a file that is not present, which is the ordinary case -- so

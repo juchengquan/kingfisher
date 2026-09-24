@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from importlib import import_module
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -20,6 +21,45 @@ NO_EXTRA: Mapping[str, Any] = MappingProxyType({})
 
 
 @dataclass(frozen=True)
+class Landing:
+    """The attribute a chat class keeps each value in, once constructed.
+
+    The classes agree on the keyword and disagree on the attribute: `base_url` is
+    `anthropic_api_url` on one and `openai_api_base` on the other. `build_model` reads
+    every value back through these after construction.
+
+    `temperature` and `top_p` are absent deliberately: a class may drop them on purpose
+    -- `ChatOpenAI` discards `temperature` for `gpt-5`, which rejects it -- and
+    checking them would refuse a model the vendor's own client builds correctly.
+    """
+
+    model: str
+    base_url: str
+    api_key: str
+    max_tokens: str
+    timeout: str
+
+
+@dataclass(frozen=True)
+class Adapter:
+    """One wire format: which class speaks it, and what it needs to be told.
+
+    kingfisher targets **gateway-shaped** endpoints — one base URL, one key. A wire
+    format without that shape (Bedrock wants a region and a credentials profile) is a
+    new field on `Endpoint`, not a new row.
+    """
+
+    chat_class: str
+    lands: Landing
+    extra: Mapping[str, Any] = NO_EXTRA
+
+    def resolve(self) -> Any:
+        """Import the chat class this row names."""
+        module_name, _, class_name = self.chat_class.partition(":")
+        return getattr(import_module(module_name), class_name)
+
+
+@dataclass(frozen=True)
 class Endpoint:
     """One place to send a model call, and the credentials for it."""
 
@@ -32,6 +72,10 @@ class Endpoint:
     #: variable sends someone to the file where everything already looks right.
     #: Defaulted, so an endpoint built in a test need not carry one.
     key_env: str = ""
+    #: The row `api` named, resolved as the catalogue loaded. Carried rather than
+    #: looked up again by name when a model is built, because a deployment's own
+    #: rows exist only in the table that load was handed.
+    adapter: Adapter = field(kw_only=True)
 
 
 @dataclass(frozen=True)

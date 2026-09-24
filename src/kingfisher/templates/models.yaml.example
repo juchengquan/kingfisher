@@ -13,9 +13,10 @@
 
 # --- endpoints: where traffic can go ----------------------------------------
 #
-# `api` picks a wire format from the closed set kingfisher ships. It is not a
-# name you invent -- adding one needs a LangChain chat class and a kingfisher
-# release, which is why it is not open data like the rest of this file:
+# `api` picks a wire format. It is not a name you invent here: kingfisher ships
+# the two below, and a deployment adds its own in Python through
+# KINGFISHER_ADAPTERS_FACTORY -- see docs/guides/configuration.md. It is code
+# rather than data because a row names a class to import:
 #
 #   anthropic         Anthropic's wire format. This is the gateway path;
 #                     MiniMax and anything else imitating it goes here.
