@@ -1257,9 +1257,26 @@ the machine that holds the key.
 **No Chat-Completions row was added**, though it is the wire format those
 gateways actually speak. Nothing needs one: MiniMax and every gateway worth
 pointing at publish an Anthropic-compatible endpoint, which is the recommended
-path and where the example sends them. Adding a row means an adapter, a
-`LANDING_SITES` entry and a release, and the table is built to take one the day
-something measures the need. *(2026-09-04.)*
+path and where the example sends them. Adding a row means an adapter and a
+release, and the table is built to take one the day something measures the
+need. *(2026-09-04.)*
+
+**A row says where its class keeps each value, and a model that did not keep one
+is refused as it is built.** A chat class handed a keyword it does not know moves
+it into `model_kwargs` with a warning and builds anyway. For `base_url` that
+leaves the URL unset, and the request goes to the vendor's default host carrying
+the gateway's key -- measured on `ChatOpenAI`, not supposed. What stood between
+a row and that was a table in `test_models.py`, which covered only the rows
+kingfisher ships. `Adapter.lands` puts the same knowledge on the row, and
+`build_model` reads every value back through it, so the check holds for a row
+from anywhere. It is the half of opening the table to a deployment that is worth
+having whether or not the table is ever opened.
+
+`temperature` and `top_p` are not read back: `ChatOpenAI` drops `temperature` for
+`gpt-5`, which rejects it, and checking it would refuse a model the vendor's own
+client builds correctly. A refusal names the value and never quotes a key -- a
+class that loses the endpoint's key falls back to one from the environment, and
+the message goes to a log. *(2026-09-24.)*
 
 **`doctor` answers "why will this not start?" and nothing else.** It never makes a
 model call: no probe, and it points at the caller's own task as the end-to-end
