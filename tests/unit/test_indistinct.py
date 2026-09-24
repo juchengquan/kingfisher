@@ -216,7 +216,7 @@ def test_the_caller_is_told_before_the_turn_starts(cfg, session_dir):
     assert "same host" in why
 
     # And it reaches the caller as an event, before the run starts.
-    told = opening_events("/runs/t001", (), _NoPlacement(), (), admitted.indistinct)
+    told = opening_events("t001", (), _NoPlacement(), (), admitted.indistinct)
     kinds = [e.kind for e in told]
     assert kinds.index("indistinct") < kinds.index("run_start")
 
@@ -242,7 +242,7 @@ def test_a_run_with_nothing_to_say_says_nothing(cfg, session_dir):
     assert admitted.indistinct == ()
     assert not [
         e
-        for e in opening_events("/runs/t001", (), _NoPlacement(), (), admitted.indistinct)
+        for e in opening_events("t001", (), _NoPlacement(), (), admitted.indistinct)
         if e.kind == "indistinct"
     ]
 

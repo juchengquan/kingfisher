@@ -151,7 +151,7 @@ def test_the_shell_mapping_the_prompt_promises_is_the_one_the_backend_implements
     backend = default_backend(cfg, session_dir)
     cwd = Path(backend.default.cwd).resolve()
 
-    for virtual in ("/runs/t001/input/x.txt", "/derived/x.txt", "/data/x.txt"):
+    for virtual in ("/scratchpad/x.txt", "/derived/x.txt", "/data/x.txt"):
         backend.write(virtual, "x")
         landed = (cwd / virtual.lstrip("/")).resolve()
         assert landed.is_file(), (

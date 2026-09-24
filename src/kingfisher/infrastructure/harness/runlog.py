@@ -60,8 +60,8 @@ def log_path(session_dir: Path) -> Path:
     session went: a workspace kept one per session that had ever existed. Inside,
     `reap` takes it with the rest and `session_bytes` counts what it costs.
 
-    Under `.harness` rather than beside `/runs`, which is per-turn scratch the
-    agent addresses -- and what a turn spent is not a turn's to edit.
+    Under `.harness` rather than in `/scratchpad`, which the agent writes to --
+    and what a turn spent is not the agent's to edit.
     """
     return Path(session_dir) / HARNESS / RUNLOG
 

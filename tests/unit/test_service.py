@@ -619,12 +619,13 @@ def test_a_turn_hands_what_it_produced_to_the_store(cfg, tmp_path):
     directory = cfg.workspace / "sessions" / result.session_id
     (directory / "derived").mkdir(parents=True, exist_ok=True)
     (directory / "derived" / "report.md").write_text("forty rows", encoding="utf-8")
+    (directory / "scratchpad" / "working.md").write_text("half", encoding="utf-8")
     service.run(Request(task="again", session_id=result.session_id))
 
     held = kept.fetch(result.session_id)
     assert held["derived/report.md"] == b"forty rows"
     assert "memory/AGENTS.md" in held
-    assert not any(name.startswith(("runs/", "data/")) for name in held), (
+    assert not any(name.startswith(("scratchpad/", "data/")) for name in held), (
         "scratch and uploads are not the store's to keep -- see `keep_from`"
     )
 

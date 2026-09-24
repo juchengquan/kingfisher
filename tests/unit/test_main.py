@@ -40,13 +40,13 @@ def _a_result() -> RunResult:
 def test_structural_events_render_one_per_line():
     text, _ = _render(
         [
-            RunEvent(kind="run_start", text="/runs/s/t001"),
+            RunEvent(kind="run_start", text="t001"),
             RunEvent(kind="model_call", tools=("execute",), args=({"command": "ls"},)),
         ]
     )
 
     assert text.splitlines() == [
-        "[start] /runs/s/t001",
+        "[start] t001",
         "[model] → execute(command=ls)  (in=0 cached=0)",
     ]
 
@@ -124,7 +124,7 @@ def test_the_models_own_formatting_survives():
 
 def test_no_result_when_the_stream_never_finishes():
     """A stream cut short must not look like a successful run."""
-    text, result = _render([RunEvent(kind="run_start", text="/runs/s/t001")])
+    text, result = _render([RunEvent(kind="run_start", text="t001")])
 
     assert result is None
     assert "[start]" in text
