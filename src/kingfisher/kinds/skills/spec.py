@@ -8,6 +8,3 @@ FILENAME = "SKILL.md"
 #: `kingfisher.layout` declares it -- `SKILLS` -- and readers ask it directly
 #: rather than through this module.
 
-
-class SkillError(ValueError):
-    """Raised when a skill definition cannot be read."""

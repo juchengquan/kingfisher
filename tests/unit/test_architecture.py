@@ -1627,7 +1627,6 @@ WITNESSES: dict[str, str] = {
     "ConfigError": "embedder",
     "QuotaExceededError": "embedder",
     "SessionBusyError": "embedder",
-    "SkillError": "embedder",
     "SubagentError": "embedder",
     "UnknownSessionError": "embedder",
     # `README.md` opens on these four and the package docstring on `run`. A
@@ -2191,7 +2190,7 @@ LIGHT_EXPORTS = frozenset({
     # The errors a caller must tell apart. Public so a consumer outside the package can
     # catch them by name -- the server being the first such consumer.
     "CapabilityError", "DecisionError", "QuotaExceededError", "SessionBusyError",
-    "SkillError", "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
+    "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
     # The `SessionStore` contract, for a deployment checking its own adapter.
     # Light, and it has to stay light: a deployment runs this from its own test
     # suite, and a kit that pulled three provider SDKs in to check four methods
@@ -2909,7 +2908,7 @@ def test_every_record_this_package_hands_out_is_frozen():
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
     "CapabilityError", "DecisionError", "QuotaExceededError", "SessionBusyError",
-    "SkillError", "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
+    "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.

@@ -12,7 +12,7 @@ from kingfisher.application.service import Kingfisher
 from kingfisher.presentation.cli import health
 from kingfisher.presentation.cli.__main__ import main
 from kingfisher.presentation.cli.health import examine, worst
-from tests.conftest import middlewares_dir, subagents_dir, tools_dir, verbs
+from tests.conftest import an_agent, middlewares_dir, subagents_dir, tools_dir, verbs
 
 BROKEN_TOOL = '''
 from langchain_core.tools import tool
@@ -64,6 +64,31 @@ def test_a_catalogue_that_will_not_load_is_a_failure(cfg):
     # And the other catalogues still answered, which is the half a raised
     # exception used to take away.
     assert checks["tools"].verdict == "ok"
+
+
+def test_a_broken_delegate_does_not_take_the_agents_half_down(cfg):
+    """Resolving what each agent delegates to reads the subagent catalogue, so a
+    broken delegate makes the agents half unanswerable -- and it is carried there
+    rather than raised, like every other kind's error in this record.
+
+    Left to escape it would reach `doctor` and `list` as a traceback over a
+    workspace whose agents are fine, which is the incident three of the comments in
+    `inventory` record. Nothing held it: the catch could be narrowed to `AgentError`
+    alone and the whole suite stayed green.
+    """
+    from kingfisher.application.inventory import inventory
+
+    an_agent(cfg, "only")
+    subagents = cfg.workspace / "subagents"
+    subagents.mkdir(parents=True, exist_ok=True)
+    (subagents / "broken.yaml").write_text("name: [unclosed\n", encoding="utf-8")
+
+    found = inventory(cfg)
+
+    assert found.agents_error is not None, "a broken delegate was raised rather than carried"
+    assert "broken.yaml" in found.agents_error
+    # And the listing still answers for everything the delegate did not break.
+    assert found.subagents_error is not None
 
 
 def test_a_broken_agent_catalogue_is_a_failure_too(cfg):
