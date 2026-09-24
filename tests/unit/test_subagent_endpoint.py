@@ -12,7 +12,7 @@ from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.models import ADAPTERS
-from tests.conftest import FakeToolCallingModel
+from tests.conftest import FakeToolCallingModel, delegate
 
 #: A second endpoint, on a different wire format, so a test can tell "went
 #: elsewhere" from "went to the default" by which attribute the value landed on.
@@ -64,8 +64,7 @@ def build(cfg, session_dir, *, run_on=None, **caps):
         capabilities=Capabilities(subagents=("reviewer",), **caps),
         run_on=run_on,
     )
-    (spec,) = [s for s in built.subagents or () if s["name"] == "reviewer"]
-    return spec
+    return delegate(built, "reviewer")
 
 
 def elsewhere(cfg):

@@ -23,7 +23,7 @@ from kingfisher.kinds.skills.catalogue import reachable
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.kinds.tools.spec import Offering
-from tests.conftest import FakeToolCallingModel, repository_root
+from tests.conftest import FakeToolCallingModel, middleware_of, repository_root
 from tests.unit.test_subagent_helpers import _delegate, _tools_of
 
 
@@ -435,8 +435,7 @@ def test_the_preset_that_grants_a_skill_is_told_about_it(
         capabilities=Capabilities(subagents=("reviewer",)),
     )
 
-    (spec,) = [s for s in built.subagents or () if s["name"] == "reviewer"]
-    (scoped,) = [m for m in spec.get("middleware", []) if isinstance(m, NarrowedSkills)]
+    (scoped,) = [m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkills)]
     rendered = scoped._format_skills_list(scoped._qualified())
     # Both the spellings `reviewer.yaml` writes, which is why it writes two.
     assert "postmortem" in rendered

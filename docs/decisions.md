@@ -3774,6 +3774,28 @@ some *other* workspace -- a fresh one, a relocated catalogue -- still says so
 itself, because that is a different arrangement rather than this one written out.
 *(2026-09-23, from an architecture review.)*
 
+**One way to reach a delegate a build made.** "The delegate called X, and its
+middleware" was written six times: twice byte-identical down to the docstring, once
+as its first half under another name and imported across files, three times inline
+-- the sixth found only because a rebase put it in front of somebody, since it went
+through `declared_subagents` rather than the field and no search for the field
+reached it. `delegate` and `middleware_of` are in `conftest` beside `declared_subagents`
+now, which was already the same read one step back.
+
+**The middleware itself was left unanswerable, which is the other half of the
+review's suggestion and the half to decline.** Tests read `ToolAllowlist._allowed`
+at eighteen sites; making it public would be production API that nothing in
+production reads, which is the shape `test_nothing_is_defined_for_tests_alone`
+exists to refuse -- and it would slip past that rule, since the walk collects a
+module's own definitions and not a class's. Reading the private name is also honest:
+`_filter` narrows on it, so a test asserting on it asserts on what is enforced
+rather than on a copy of it.
+
+Nothing was added to stop a sixth copy. Tests read `.subagents` 113 times and most
+ask a different question -- the names only, a mapping by name, a filter -- so a rule
+against reading it directly would be noise around one real duplication.
+*(2026-09-24, from an architecture review.)*
+
 ## Proposals, and what became of them
 
 What is still being argued is in `docs/design/`, and `docs/README.md` lists it.

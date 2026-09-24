@@ -12,7 +12,12 @@ from kingfisher import Kingfisher, default_backend
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.workspace import ensure_session_layout
-from tests.conftest import FakeToolCallingModel, StubCheckpointer, a_subagent
+from tests.conftest import (
+    FakeToolCallingModel,
+    StubCheckpointer,
+    a_subagent,
+    middleware_of,
+)
 
 
 class Audited(AgentMiddleware):
@@ -34,13 +39,6 @@ def build(cfg, registry=None, **caps):
         middleware_registry=registry,
         capabilities=Capabilities(**caps),
     )
-
-
-def middleware_of(built, name: str) -> list:
-    """One delegate's middleware. The outer read is the record; the inner one is
-    deepagents' own `SubAgent` mapping, which stays a subscript."""
-    (spec,) = [s for s in built.subagents if s["name"] == name]
-    return spec.get("middleware", [])
 
 
 NAMES_AUDIT = (

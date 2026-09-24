@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
-from tests.conftest import FakeToolCallingModel, a_subagent
+from tests.conftest import FakeToolCallingModel, a_subagent, middleware_of
 
 
 def define(cfg, body: str, name: str = "reviewer") -> None:
@@ -33,13 +33,6 @@ def build(cfg, session_dir, **caps):
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(**caps),
     )
-
-
-def middleware_of(built, name: str) -> list:
-    """One delegate's middleware. The outer read is the record; the inner one is
-    deepagents' own `SubAgent` mapping, which stays a subscript."""
-    (spec,) = [s for s in built.subagents if s["name"] == name]
-    return spec.get("middleware", [])
 
 
 # -- the deployment's switch ----------------------------------------------

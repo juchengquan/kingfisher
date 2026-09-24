@@ -23,6 +23,7 @@ from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from tests.conftest import (
     FakeToolCallingModel,
     declared_subagents,
+    delegate,
     dispatched,
     subagents_dir,
 )
@@ -474,8 +475,7 @@ def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir):
         capabilities=Capabilities(subagents=("reviewer",)),
     )
 
-    (spec,) = [s for s in declared_subagents(built) if s["name"] == "reviewer"]
-    assert spec["model"].model == "cheap-model"
+    assert delegate(built, "reviewer")["model"].model == "cheap-model"
 
 
 # -- none, versus could not tell -------------------------------------------
