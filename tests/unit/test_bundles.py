@@ -24,7 +24,7 @@ from kingfisher.kinds.tools.spec import Offering, tool_name
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
 from kingfisher.presentation.cli.health import examine, worst
 from kingfisher.presentation.cli.listing import _catalogue, failed
-from tests.conftest import FakeToolCallingModel, a_subagent
+from tests.conftest import FakeToolCallingModel, a_subagent, delegate
 
 DEFINITION = "name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
 
@@ -383,18 +383,6 @@ def workspace_with_bundle(cfg, definition=PRIVATE_OWNER, private="probe"):
     )
 
 
-def only(built, name):
-    """The delegate we are asking about, as deepagents received it.
-
-    Takes the record and returns one of deepagents' `SubAgent` mappings, so the
-    outer read is an attribute and everything the callers do with the result stays
-    a subscript. Imported by `test_portable_subagents` too, which is why the
-    parameter moved rather than the call sites.
-    """
-    (found,) = [s for s in built.subagents if s["name"] == name]
-    return found
-
-
 def built_subagent(cfg, session_dir):
     """The one delegate this workspace defines, as deepagents received it."""
     built = build_agent(
@@ -403,7 +391,7 @@ def built_subagent(cfg, session_dir):
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("surveyor",), tools=("shared",)),
     )
-    return only(built, "surveyor")
+    return delegate(built, "surveyor")
 
 
 def test_a_delegate_holds_the_tool_from_its_own_folder(cfg, session_dir):
@@ -426,7 +414,7 @@ def test_a_private_tool_survives_a_request_that_granted_no_tools(cfg, session_di
         capabilities=Capabilities(subagents=("surveyor",), tools=()),
     )
 
-    subagent = only(built, "surveyor")
+    subagent = delegate(built, "surveyor")
     assert {tool_name(t) for t in subagent["tools"]} == {"probe"}
 
 
@@ -1089,7 +1077,7 @@ def test_a_compiled_delegate_is_handed_the_tools_in_its_own_folder(cfg, session_
         capabilities=Capabilities(subagents=("surveyor",)),
     )
 
-    assert "probe" in dispatched_by(only(built, "surveyor"))
+    assert "probe" in dispatched_by(delegate(built, "surveyor"))
 
 
 def test_a_compiled_delegates_bundle_wins_a_name_the_catalogue_also_defines(cfg, tmp_path):
@@ -1299,6 +1287,6 @@ def test_the_shipped_bundle_takes_nothing_from_the_catalogue(
     )
 
     (allowlist,) = [
-        m for m in only(built, "redactor")["middleware"] if isinstance(m, ToolAllowlist)
+        m for m in delegate(built, "redactor")["middleware"] if isinstance(m, ToolAllowlist)
     ]
     assert set(allowlist._allowed) == {"ls", "glob", "grep", "mask_secrets"}

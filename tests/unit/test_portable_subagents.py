@@ -26,8 +26,8 @@ from kingfisher.kinds.subagents.spec import (
     declared,
 )
 from kingfisher.kinds.tools.spec import tool_name
-from tests.conftest import FakeToolCallingModel
-from tests.unit.test_bundles import TOOL, only
+from tests.conftest import FakeToolCallingModel, delegate
+from tests.unit.test_bundles import TOOL
 
 SKILL = "---\nname: sampling\ndescription: How to sample a file.\n---\n\n# Sampling\n"
 
@@ -87,7 +87,7 @@ def built(cfg, session_dir, capabilities=None):
         capabilities=capabilities
         or Capabilities(subagents=("surveyor",), tools=("shared",)),
     )
-    return only(assembled, "surveyor")
+    return delegate(assembled, "surveyor")
 
 
 # -- what it may and may not say --------------------------------------------

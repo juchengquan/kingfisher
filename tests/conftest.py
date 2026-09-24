@@ -223,6 +223,26 @@ def declared_subagents(built: Assembled) -> list:
     return [s for s in built.subagents or () if s.get("name") != "general-purpose"]
 
 
+def delegate(built: Assembled, name: str) -> dict:
+    """One delegate a build activated, as deepagents received it.
+
+    The outer read is the record and the inner one stays a subscript, because what
+    `create_deep_agent` is handed for a delegate is deepagents' own `SubAgent`
+    mapping -- only the outer record gained a type.
+    """
+    (found,) = [s for s in built.subagents or () if s["name"] == name]
+    return found
+
+
+def middleware_of(built: Assembled, name: str) -> list:
+    """One delegate's middleware, in the order it was attached.
+
+    Here rather than in each file: two of the three copies were identical down to
+    the docstring, and the third was this one's first line under another name.
+    """
+    return delegate(built, name).get("middleware", [])
+
+
 def repository_root(start: Path | None = None) -> Path:
     """The checkout this file is in, found rather than counted."""
     here = (start or Path(__file__)).resolve()
