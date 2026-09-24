@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.infrastructure.sandbox.linux import MAX_OUTPUT_BYTES, outcome, present
-from kingfisher.layout import HARNESS, SESSION_DIRS, SESSION_PLUMBING
+from kingfisher.layout import SESSION_DIRS
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -78,11 +78,7 @@ def _session_writable(session_dir: Path) -> list[Path]:
     is the session; `tests/linux/test_fence_escapes.py` holds it, so changing it
     back is a decision rather than an accident.
     """
-    return [
-        Path(session_dir) / name
-        for name in (*SESSION_DIRS, *SESSION_PLUMBING)
-        if name != HARNESS
-    ]
+    return [Path(session_dir) / name for name in SESSION_DIRS]
 
 
 def policy_for(

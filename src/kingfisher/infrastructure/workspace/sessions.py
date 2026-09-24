@@ -16,7 +16,6 @@ from kingfisher.layout import (
     HARNESS,
     MEMORY,
     SESSION_DIRS,
-    SESSION_PLUMBING,
 )
 
 
@@ -73,7 +72,7 @@ def ensure_session_layout(session_dir: Path) -> Path:
 def make_session_dirs(session_dir: Path) -> Path:
     """Every directory a session holds. Idempotent."""
     session_dir = Path(session_dir).expanduser().resolve()
-    for name in (*SESSION_DIRS, *SESSION_PLUMBING):
+    for name in (*SESSION_DIRS, HARNESS):
         (session_dir / name).mkdir(parents=True, exist_ok=True)
 
     # Asked for rather than done here: `permissions` is the one module in this

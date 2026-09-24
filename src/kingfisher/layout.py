@@ -68,12 +68,6 @@ SCRATCH = "scratch"
 
 SESSION_DIRS: tuple[str, ...] = (DATA, DERIVED, MEMORY, SCRATCH)
 
-#: The agent's HOME. Created inside every session like `SESSION_DIRS`, and kept
-#: apart from it because that tuple means "the names the agent addresses" and
-#: this is plumbing: `.home` exists so a pip cache lands inside the session that
-#: caused it and counts toward its quota.
-AGENT_HOME = ".home"
-
 #: Where skills live.
 SKILLS = "skills"
 
@@ -110,11 +104,6 @@ PAUSED_STATE = "paused.state"
 #: is not: a checkpoint written by libraries that have since moved is exactly the
 #: case this answers, and answering it means reading this without reading that.
 PAUSED_MARK = "paused.json"
-
-SESSION_PLUMBING: tuple[str, ...] = (
-    AGENT_HOME,
-    HARNESS,
-)
 
 #: What a run produces and would lose. `/data` is read-only and came from the
 #: caller; `/scratch` is disposable and says so. These two are the ones the agent

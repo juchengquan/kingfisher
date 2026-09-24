@@ -1675,6 +1675,20 @@ each failing and costing about three times the whole task. `/scratch` and `scrat
 correspond the way every other route does, which is why the directory was renamed
 rather than given a prettier virtual name. *(2026-09-21.)*
 
+**`HOME` is `scratch` too, and `.home` is gone.** The shell's `HOME` had a
+directory of its own so that whatever a tool caches under `~` would land in the
+session that caused it, be swept by `reap` and be counted by `session_bytes`.
+Asked what writes there, the answer was nothing: the harness only exports the
+path, workspace tools run in the kingfisher process and resolve `~` against the
+operator's home, and no shipped asset runs pip or anything else that caches. The
+one `.home` on disk was empty. `scratch` already has every property the job
+needs -- per session, swept, counted, writable under all three fences, and
+`TMPDIR` besides -- so `HOME` points there, and the fence grants one directory
+fewer. What a reader should not look for: `AGENT_HOME`, `agent_home()` and
+`SESSION_PLUMBING`, which held only `.harness` once `.home` left it and is spelled
+`HARNESS` where it is used. If a tool ever does cache under `~`, the agent will see
+a dot-directory in its own scratch, which is the cost this accepts. *(2026-09-24.)*
+
 **A session's history is kingfisher's own records, not a framework's.**
 `domain/transcript.py` holds it, and it keeps what the agent *did* as well as
 what it said -- tool calls and results, not only human and assistant text, since

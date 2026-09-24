@@ -13,10 +13,9 @@ from kingfisher.infrastructure.workspace import (
     ensure_session_layout,
 )
 from kingfisher.layout import (
-    AGENT_HOME,
+    HARNESS,
     LAYOUT_DIRS,
     SESSION_DIRS,
-    SESSION_PLUMBING,
 )
 from tests.conftest import StubCheckpointer
 
@@ -227,17 +226,8 @@ def test_one_pass_makes_a_whole_session(tmp_path):
     """What `default_backend` used to finish off, and the reason this exists."""
     session = ensure_session_layout(tmp_path / "s")
 
-    for name in (*SESSION_DIRS, *SESSION_PLUMBING):
+    for name in (*SESSION_DIRS, HARNESS):
         assert (session / name).is_dir(), name
-
-
-def test_the_plumbing_is_listed_apart_from_what_the_agent_addresses():
-    """`SESSION_DIRS` means "the names a prompt can refer to", which is why `.home` was
-    left out of it rather than forgotten.
-    """
-    assert not set(SESSION_DIRS) & set(SESSION_PLUMBING)
-    assert AGENT_HOME in SESSION_PLUMBING
-    assert AGENT_HOME.startswith("."), "the agent's home is plumbing, not a name it types"
 
 
 def test_turn_names_are_claimed_exclusively(workspace):

@@ -25,7 +25,6 @@ from kingfisher.infrastructure.harness.host_paths import reject_host_path
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import (
-    AGENT_HOME,
     BUNDLED_SKILLS_ROUTE,
     DATA,
     DATA_ROUTE,
@@ -36,24 +35,11 @@ from kingfisher.layout import (
     RESERVED_SKILL_FOLDER,
     SCRATCH,
     SESSION_DIRS,
-    SESSION_PLUMBING,
     SKILLS_ROUTE,
     routed_paths,
 )
 
 _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
-
-
-def agent_home(session_dir: Path) -> Path:
-    """`HOME` for the agent's shell: per session, and disposable.
-
-    Inside the session so that no new janitor is needed: `reap` already removes
-    session directories, and `session_bytes` already counts everything in one, so a
-    session that caches a gigabyte says so. Above the session, caches accumulated
-    beside `skills/` with nothing sweeping them -- 59MB in one real workspace -- and
-    counted toward no quota.
-    """
-    return Path(session_dir) / AGENT_HOME
 
 
 def shell_env(
@@ -69,7 +55,10 @@ def shell_env(
     path_parts = [str(Path(sys.executable).parent), *cfg.shell_path_extra, *_BASE_PATH]
     env = {
         "PATH": ":".join(path_parts),
-        "HOME": str(agent_home(session_dir)),
+        # Inside the session, so `reap` sweeps what tools cache under `~` and
+        # `session_bytes` counts it; above the session such caches reached 59MB
+        # in one workspace with nothing sweeping them.
+        "HOME": str(session_dir / SCRATCH),
         "LANG": "en_US.UTF-8",
         "LC_ALL": "en_US.UTF-8",
         "TMPDIR": str(session_dir / SCRATCH),
@@ -281,7 +270,7 @@ def _require_layout(session_dir: Path) -> None:
     """Refuse a session directory that has not been made yet."""
     missing = [
         name
-        for name in (*SESSION_DIRS, *SESSION_PLUMBING)
+        for name in (*SESSION_DIRS, HARNESS)
         if not (session_dir / name).is_dir()
     ]
     if missing:
