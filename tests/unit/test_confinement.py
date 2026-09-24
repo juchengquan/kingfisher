@@ -431,8 +431,8 @@ def test_redirecting_to_dev_null_still_works(cfg, session_dir):
 @macos
 def test_the_agent_can_still_write_everything_it_is_meant_to(cfg, session_dir):
     """Confinement that broke the deliverable would be reverted, so this is the other
-    half of the bargain: `/derived` survives the turn, the run directory holds
-    scratch, and both are the agent's to write.
+    half of the bargain: `/derived` survives the turn, the working-files directory
+    holds scratch, and both are the agent's to write.
     """
     backend = default_backend(cfg, session_dir)
 

@@ -53,14 +53,14 @@ The two views do not mix, in either direction:
 Where these instructions give host path mappings for particular mounts, use those with
 the shell when you need an absolute path.
 
-Scratch files go in one of two places, and never anywhere else:
+What you write while working goes in one of two places, and never anywhere else:
 
 - Anything you want to survive the turn — a script you want reviewed, an intermediate
-  table worth keeping — goes in your run directory.
-- Anything genuinely throwaway goes under `$TMPDIR`, which the shell exports for you.
-  Write `"$TMPDIR/name.py"`, never a literal `/tmp/name.py`: `$TMPDIR` is configured
-  per workspace, so a hardcoded `/tmp` scatters files somewhere nothing will clean up
-  and nothing will find.
+  table worth keeping — goes in `/derived`.
+- Anything genuinely throwaway goes in the working-files directory above, which the
+  shell also exports as `$TMPDIR`. Write `"$TMPDIR/name.py"`, never a literal
+  `/tmp/name.py`: `$TMPDIR` is set per session, so a hardcoded `/tmp` scatters files
+  somewhere nothing will clean up and nothing will find.
 
 <!-- capabilities -->
 

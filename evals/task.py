@@ -1,11 +1,8 @@
 """The smoke task text.
 
-It names its own output files *and where they go*. Both halves matter: the
-framework stopped telling every task to write `report.md` and `result.json`,
-on the principle that wanting files is one kind of request among many. This
-task wants them, so this task says so -- and a run that put them in `/derived`
-instead, with every figure correct, is what proved that saying "write
-result.json" without saying where is not enough.
+It names its own output files *and where they go*, and the driver reads them
+from that same place: a run that wrote every figure correctly somewhere else
+fails the smoke exactly as a wrong figure does.
 
 Task-specific instructions live in the task, never in the system prompt: a
 general agent's base prompt should read the same whatever the project is.
@@ -24,7 +21,7 @@ ISSUE_KINDS = ("duplicate_rows", "missing_values", "outlier", "inconsistent_casi
 SMOKE_TASK = f"""\
 Analyse /data/{SAMPLE_NAME}.
 
-Write result.json into your run directory, as a whole file in exactly this
+Write result.json into /derived, as a whole file in exactly this
 shape — note that the findings go inside "answer", alongside the usual
 top-level keys:
 
@@ -56,4 +53,4 @@ The issue kinds mean:
   capitalisation or surrounding whitespace.
 
 Include one entry per kind you actually find; omit kinds that do not apply.
-Report the same findings in prose in report.md, in your run directory too."""
+Report the same findings in prose in report.md, in /derived too."""

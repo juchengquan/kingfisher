@@ -53,6 +53,7 @@ from kingfisher.infrastructure.workspace import (
     is_new_workspace,
     seeding,
 )
+from kingfisher.layout import DERIVED
 from kingfisher.presentation.cli.progress import show
 
 #: The grants this driver exposes, in the order they are listed and reported.
@@ -364,11 +365,11 @@ def main(argv: list[str]) -> int:
 
     print()
     print(f"session   : {result.session_id}")
-    print(f"run_dir   : {result.session_dir}")
+    print(f"directory : {result.session_dir}")
     print(f"usage     : {_usage_summary(result.log_path)}")
 
     for name in ("report.md", "result.json"):
-        path = result.session_dir / name
+        path = result.session_dir / DERIVED / name
         if path.exists():
             print(f"{name:<12}: written  {path}")
         elif is_smoke:
@@ -388,7 +389,7 @@ def main(argv: list[str]) -> int:
 
     # The regression signal is the structured result, not the prose: two runs
     # on identical input rewrite the report entirely while the numbers hold.
-    payload = load_result(result.session_dir)
+    payload = load_result(result.session_dir / DERIVED)
     if payload is None:
         print("\nresult.json missing or unparseable — cannot check", file=sys.stderr)
         return 1
