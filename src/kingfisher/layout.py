@@ -17,6 +17,18 @@ HARNESS_OWNED = ".kingfisher"
 #: Created once in the workspace: the definitions the sessions share, and the
 #: harness's own directory.
 LAYOUT_DIRS: tuple[str, ...] = (
+    # Every kind, and that is a rule rather than a list: resolving a catalogue
+    # creates all five anyway, so a layout naming three left a workspace with two
+    # answers to which directories it has -- one from `ensure_layout` on a fresh
+    # start and another from the first read. `agents` and `middlewares` were the
+    # two outside it, each because it arrived after this tuple did, and the habit
+    # of making them by hand spread to the three that never needed it.
+    #
+    # No `LAYOUT_VERSION` bump: that number refuses a workspace laid out
+    # differently, and nothing here moves. An existing workspace gains two empty
+    # directories on its next start, which is what `mkdir(exist_ok=True)` is for.
+    "agents",
+    "middlewares",
     "skills",
     "subagents",
     # Python this process imports, not content the agent reads. Created here so

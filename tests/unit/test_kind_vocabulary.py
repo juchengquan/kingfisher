@@ -26,6 +26,36 @@ from tests.integration import driver
 #: sentence and cannot drift from the type it asks.
 AXES: tuple[str, ...] = tuple(f.name for f in fields(Capabilities))
 
+#: What the workspace layout creates that is not a definition kind, and what each
+#: one is instead. A directory in neither this table nor `DEFINITION_KINDS` is one
+#: the layout makes and nothing reads.
+NOT_A_KIND_DIRECTORY = {
+    "sessions": "the unit of isolation; one backend root per session",
+    ".kingfisher": "the harness's own, and the one directory the agent is never told about",
+}
+
+
+def test_the_layout_names_every_kind_a_catalogue_reads():
+    """It named three of the five, so a workspace had two answers to which directories
+    it has: the layout's on a fresh start, and resolving a catalogue's on the first
+    read -- which creates all five.
+
+    `agents` and `middlewares` were the two outside it, each because it arrived after
+    the tuple did. What that cost was not a failure but a habit: tests made the
+    missing two by hand, and the same call spread to the three that already existed,
+    69 times across 28 files.
+    """
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from kingfisher.layout import LAYOUT_DIRS
+
+    assert set(DEFINITION_KINDS) <= set(LAYOUT_DIRS), (
+        "a kind a catalogue reads is a directory a fresh workspace should already have"
+    )
+    assert set(LAYOUT_DIRS) == set(DEFINITION_KINDS) | set(NOT_A_KIND_DIRECTORY), (
+        "the layout makes a directory that is neither a kind nor written down here"
+    )
+
+
 #: Why a kind is not read from the catalogue directories.
 NOT_ON_DISK = {
     "builtin_tools": "deepagents brings them",
