@@ -61,6 +61,16 @@ def test_the_prompt_s_path_table_spells_the_directories_the_session_has():
         assert f"| `/{name}/<name>` | `{name}/<name>` |" in text, name
 
 
+def test_nothing_the_agent_is_told_sends_it_to_a_run_directory():
+    """The run directory went when a turn stopped being a place, and the prompt and the
+    smoke task went on sending files there for days: a place the agent cannot find is
+    one it guesses at, and the smoke's driver never read where it guessed.
+    """
+    from evals.task import SMOKE_TASK
+
+    for text in (render_system_prompt(skills_enabled=True, memory_enabled=True), SMOKE_TASK):
+        assert "run directory" not in text
+
 
 def test_user_prompt_is_appended_when_the_workspace_has_one(cfg):
     (cfg.workspace / USER_PROMPT_FILE).write_text(

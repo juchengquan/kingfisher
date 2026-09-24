@@ -10,8 +10,8 @@ import json
 from pathlib import Path
 
 
-def load_result(run_dir: Path) -> dict | None:
-    path = Path(run_dir) / "result.json"
+def load_result(directory: Path) -> dict | None:
+    path = Path(directory) / "result.json"
     if not path.is_file():
         return None
     try:
