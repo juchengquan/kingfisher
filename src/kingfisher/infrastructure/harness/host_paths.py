@@ -9,6 +9,8 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
+from kingfisher.layout import SCRATCH_ROUTE
+
 #: Absolute prefixes that can never name a workspace directory, so a file-tool
 #: path starting with one is a host path that was passed to the wrong kind of
 #: tool. Deliberately a short, explicit list rather than a rule inferred from
@@ -53,7 +55,7 @@ def reject_host_path(key: str, workspace: Path) -> None:
             f"{key!r} is a host path, and file tools take virtual paths rooted at the "
             f"workspace — it would have been created inside the workspace, not where "
             f"you meant. Use the shell for host paths, or a virtual path such as "
-            f"/runs/<session>/<turn>/ for files that belong to this task."
+            f"{SCRATCH_ROUTE}<name> for files that belong to this task."
         )
         raise HostPathError(msg)
 

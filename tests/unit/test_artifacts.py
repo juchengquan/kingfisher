@@ -33,16 +33,16 @@ def test_memory_is_reported_too(cfg):
 
 
 def test_run_scratch_is_not_reported(cfg):
-    """`/runs` is disposable by design, and the prompt tells the agent so."""
+    """`/scratchpad` is disposable by design, and the prompt tells the agent so."""
     start(cfg, "s")
     result = run(Request("t", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
                  checkpointer=StubCheckpointer())
-    (result.session_dir / "scratch.txt").write_text("intermediate")
+    (result.session_dir / "scratchpad" / "scratch.txt").write_text("intermediate")
 
     again = run(Request("t2", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
                 checkpointer=StubCheckpointer())
 
-    assert not any("runs/" in path for path in again.artifacts)
+    assert not any(path.startswith("scratchpad/") for path in again.artifacts)
 
 
 def test_inputs_are_not_reported(cfg):

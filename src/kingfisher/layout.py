@@ -90,9 +90,6 @@ HARNESS = ".harness"
 PINNED_AGENT = "agent.yaml"
 TRANSCRIPT_FILE = "transcript.jsonl"
 CLAIM = "claim"
-#: Not `runs.jsonl`: `/runs` already means per-turn scratch the agent addresses,
-#: and two things called "runs" in one session directory is how the last pair of
-#: names in this file drifted apart.
 RUNLOG = "runlog.jsonl"
 #: Written only by a turn that stopped at an approval gate, and deleted the moment
 #: one is answered or superseded. Its presence *is* the mark that a session is

@@ -28,7 +28,7 @@ def test_a_task_keeps_its_own_alphabet_in_the_log(tmp_path):
     """
     logger = _logger(tmp_path)
 
-    logger.run_start("Résume le rapport trimestriel", "runs/t001")
+    logger.run_start("Résume le rapport trimestriel", "sessions/s1")
 
     written = (tmp_path / "session.jsonl").read_text(encoding="utf-8")
     assert "Résume" in written
@@ -60,7 +60,7 @@ def test_usage_survives_the_round_trip(tmp_path):
 
 def test_a_log_with_no_model_calls_totals_zero(tmp_path):
     logger = _logger(tmp_path)
-    logger.run_start("a task", "/runs/t001")
+    logger.run_start("a task", "/sessions/s1")
 
     usage = read_usage(tmp_path / "session.jsonl")
     assert usage.calls == 0

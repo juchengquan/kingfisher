@@ -16,6 +16,7 @@ from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
     ROUTES,
+    SCRATCH_ROUTE,
     denied_read_scopes,
     denied_scopes,
     routed_paths,
@@ -128,7 +129,7 @@ def test_derived_is_unrouted_and_the_table_says_so(cfg, session_dir):
 def test_a_host_path_to_a_file_tool_is_refused_not_mirrored(cfg, session_dir):
     """The observed bug: it succeeded, and the file was not where it looked."""
     backend = default_backend(cfg, session_dir)
-    host_path = f"{cfg.workspace}/runs/s1/t001/report.md"
+    host_path = f"{cfg.workspace}/sessions/s1/scratchpad/report.md"
 
     with pytest.raises(ValueError, match="is a host path"):
         backend.write(host_path, "content")
@@ -141,8 +142,8 @@ def test_the_refusal_names_the_path_that_was_meant(cfg, session_dir):
     """An error the model can act on beats one it can only apologise for."""
     backend = default_backend(cfg, session_dir)
 
-    with pytest.raises(ValueError, match=r"Use '/runs/t001/report\.md' instead"):
-        backend.write(f"{session_dir}/runs/t001/report.md", "content")
+    with pytest.raises(ValueError, match=r"Use '/scratchpad/report\.md' instead"):
+        backend.write(f"{session_dir}/scratchpad/report.md", "content")
 
 
 def test_other_host_roots_are_refused_too(cfg, session_dir):
@@ -154,15 +155,19 @@ def test_other_host_roots_are_refused_too(cfg, session_dir):
     backend = default_backend(cfg, session_dir)
 
     for host_path in ("/tmp/scratch.py", "/Users/someone/notes.md", "/etc/passwd", "/var/log/x"):
-        with pytest.raises(ValueError, match="is a host path"):
+        with pytest.raises(ValueError, match="is a host path") as refused:
             backend.write(host_path, "content")
+
+        # The path it offers has to be one the agent can write to. It named
+        # `/runs/<session>/<turn>/` for as long as that directory was gone.
+        assert f"{SCRATCH_ROUTE}<name>" in str(refused.value), host_path
 
 
 def test_virtual_paths_still_work(cfg, session_dir):
     """The guard must not cost the agent its ordinary vocabulary."""
     backend = default_backend(cfg, session_dir)
 
-    for virtual_path in ("/runs/s1/t001/report.md", "/derived/x.csv"):
+    for virtual_path in ("/scratchpad/report.md", "/derived/x.csv"):
         backend.write(virtual_path, "content")
 
         assert backend.read(virtual_path), virtual_path
@@ -218,7 +223,7 @@ def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir)
     from kingfisher.infrastructure.harness.agent import build_agent
     from tests.conftest import FakeToolCallingModel
 
-    host_path = f"{cfg.workspace}/runs/s1/t001/notes.md"
+    host_path = f"{cfg.workspace}/sessions/s1/scratchpad/notes.md"
     responses = [
         AIMessage(
             content="",
@@ -239,7 +244,9 @@ def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir)
 
     transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
     assert "is a host path" in transcript  # the correction reached the model
-    assert "/runs/s1/t001/notes.md" in transcript  # including what to use instead
+    # Not the host path's own tail: that is echoed back in the refusal, and
+    # asserting on it passes whatever the correction says.
+    assert f"{SCRATCH_ROUTE}<name>" in transcript  # including what to use instead
     assert out["messages"][-1].content == "retried and finished"  # the run survived
 
 
@@ -264,7 +271,7 @@ def test_a_delegate_gets_the_correction_too(cfg, session_dir):
         encoding="utf-8",
     )
 
-    host_path = f"{cfg.workspace}/runs/s1/t001/notes.md"
+    host_path = f"{cfg.workspace}/sessions/s1/scratchpad/notes.md"
     responses = [
         AIMessage(
             content="",
@@ -287,7 +294,7 @@ def test_a_delegate_gets_the_correction_too(cfg, session_dir):
 
     transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
     assert "is a host path" in transcript  # the correction reached the delegate
-    assert "/runs/s1/t001/notes.md" in transcript  # including what to use instead
+    assert f"{SCRATCH_ROUTE}<name>" in transcript  # including what to use instead
     assert out["messages"][-1].content == "retried and finished"  # the run survived
 
 

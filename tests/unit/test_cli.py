@@ -335,7 +335,7 @@ def test_the_answer_goes_to_stdout_and_the_watching_to_stderr(cfg, monkeypatch, 
     """What makes the verb compose."""
     from kingfisher import RunEvent
 
-    _ran(monkeypatch, [RunEvent(kind="run_start", text="/runs/t001"),
+    _ran(monkeypatch, [RunEvent(kind="run_start", text="t001"),
                        RunEvent(kind="token", text="forty two"),
                        _finished()], cfg)
 
@@ -343,7 +343,7 @@ def test_the_answer_goes_to_stdout_and_the_watching_to_stderr(cfg, monkeypatch, 
 
     shown = capsys.readouterr()
     assert shown.out == "forty two"
-    assert "/runs/t001" in shown.err
+    assert "[start] t001" in shown.err
     assert "forty two" not in shown.err
 
 
@@ -741,8 +741,8 @@ def test_a_run_not_told_to_keeps_its_session(cfg, monkeypatch):
 def test_a_turn_stopped_at_a_bound_keeps_its_session_and_says_so(cfg, monkeypatch, capsys):
     """The one ending whose leftovers are worth something: the partial work is real and
     the conversation is what a retry on the same session is rebuilt from. Deleting here
-    would also make the line printed just above it -- what it wrote is in /runs/t001 --
-    a lie about a directory that had already gone.
+    would also make the line printed just above it -- what it wrote is in /derived and
+    /memory -- a lie about a directory that had already gone.
     """
     stub = _ran(monkeypatch, [_finished(stop_reason="max_steps")], cfg)
 
