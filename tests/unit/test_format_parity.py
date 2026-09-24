@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from kingfisher.domain.fields import SOURCES
 from kingfisher.kinds.agents import reading as agents
 from kingfisher.kinds.agents import spec as agent_spec
 from kingfisher.kinds.agents.spec import KNOWN as AGENT_KNOWN
@@ -143,6 +144,11 @@ DOCUMENTS = {
     "a number where names go": HEAD + "tools: 3\n",
     "one name twice": HEAD + "tools: [fetch, fetch]\n",
     "an entry key misspelled": HEAD + "tools:\n  - name: fetch\n    sourceids: [A]\n",
+    "entries saying they are shared": HEAD + (
+        "tools:\n  - name: fetch\n    source: shared\n    source_ids: [A]\n"
+        "skills:\n  - name: tabular-qa\n    source: shared\n"
+    ),
+    "a source that is neither": HEAD + "tools:\n  - name: fetch\n    source: private\n",
     "settings that are not a mapping": HEAD + (
         "middlewares:\n  - name: audit\n    settings: 3\n"
     ),
@@ -211,6 +217,39 @@ def test_the_star_is_the_only_place_the_formats_part():
     }
 
     assert parted == PART_ON_THE_STAR
+
+
+#: Where the two formats part on an entry's `source`: a subagent has a folder of its
+#: own to take a `bundled` entry from, and an agent has none.
+PART_ON_THE_SOURCE = frozenset({("tools", "bundled"), ("skills", "bundled")})
+
+
+def test_bundled_is_the_only_source_the_formats_part_on():
+    """Every shared key and every source is tried rather than the two pairs above, so
+    a reader that starts taking `bundled` on another field, or an agent that starts
+    taking it at all, fails here instead of passing as the rule.
+    """
+    assert SOURCES, "no sources to try -- this checks nothing"
+
+    def written(key: str, source: str) -> str:
+        return HEAD + f"{key}:\n  - name: x\n    source: {source}\n"
+
+    outcomes = {
+        (key, source): (
+            _outcome("agent", written(key, source)),
+            _outcome("subagent", written(key, source)),
+        )
+        for key in SHARED_KEYS - REQUIRED
+        for source in SOURCES
+    }
+    parted = {pair for pair, (agent, delegate) in outcomes.items() if agent != delegate}
+
+    assert parted == PART_ON_THE_SOURCE
+    # Which way, too: two refusals worded differently also part, so a subagent that
+    # stopped taking `bundled` would pass the line above on the wording alone.
+    for pair in PART_ON_THE_SOURCE:
+        agent, delegate = outcomes[pair]
+        assert (agent[0], delegate[0]) == ("refused", "read"), pair
 
 
 # -- what both readers do before either format looks -------------------------
