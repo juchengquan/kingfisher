@@ -104,13 +104,6 @@ class _ToolSurface:
         )
 
     @property
-    def ambiguous(self) -> tuple[str, ...]:
-        """Names granted to this run that only a delegate can ask for."""
-        if self.offering is None:
-            return ()
-        return self.offering.ambiguous(self.granted_workspace, self.found)
-
-    @property
     def offers(self) -> Offering:
         """The offering, or an empty one for the callers that only read names."""
         return self.offering or Offering()

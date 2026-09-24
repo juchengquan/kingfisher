@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from kingfisher.config import Config
-    from kingfisher.domain.ports import SessionRoot, SessionStore
+    from kingfisher.domain.ports import SessionStore
 
 
 class Disposal:
@@ -38,7 +38,6 @@ class Disposal:
     dirs: Any
     workspace: Path
     sessions_store: SessionStore | None
-    session_root: SessionRoot
     _shared: Any
 
     def delete_session(self, session_id: str, *, forget: bool = True) -> str | None:
