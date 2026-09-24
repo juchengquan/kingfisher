@@ -24,7 +24,7 @@ macos = pytest.mark.skipif(
 SKILL = "---\nname: demo\ndescription: A skill.\n---\n\nDo the thing.\n"
 
 
-def _catalogue(cfg):
+def _a_skill(cfg):
     directory = cfg.skills_dir / "demo"
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "SKILL.md").write_text(SKILL, encoding="utf-8")
@@ -56,7 +56,7 @@ def _drive(cfg, session_dir, tool, args):
 
 def test_a_file_tool_cannot_create_a_file_in_the_catalogue(cfg, session_dir):
     """Driven through a compiled graph rather than asserted on the rules list."""
-    _catalogue(cfg)
+    _a_skill(cfg)
 
     said = _drive(
         cfg, session_dir, "write_file",
@@ -71,7 +71,7 @@ def test_a_file_tool_cannot_rewrite_an_existing_skill(cfg, session_dir):
     """The one that matters most: not a new file beside the instructions, but the
     instructions themselves.
     """
-    _catalogue(cfg)
+    _a_skill(cfg)
 
     said = _drive(
         cfg, session_dir, "write_file",
@@ -87,7 +87,7 @@ def test_an_edit_is_refused_as_well_as_a_write(cfg, session_dir):
     three -- stated here because that is a fact about deepagents rather than about
     this rule, and it is what makes a single rule enough.
     """
-    _catalogue(cfg)
+    _a_skill(cfg)
 
     said = _drive(
         cfg, session_dir, "edit_file",
@@ -101,7 +101,7 @@ def test_an_edit_is_refused_as_well_as_a_write(cfg, session_dir):
 
 def test_reading_a_skill_still_works(cfg, session_dir):
     """The point is read-only, not unreachable."""
-    _catalogue(cfg)
+    _a_skill(cfg)
 
     said = _drive(cfg, session_dir, "read_file", {"file_path": "/skills/demo/SKILL.md"})
 
@@ -115,7 +115,7 @@ def test_reading_a_skill_still_works(cfg, session_dir):
 @macos
 def test_the_shell_cannot_write_into_the_catalogue(cfg, session_dir):
     """The half the tool rule cannot reach."""
-    directory = _catalogue(cfg)
+    directory = _a_skill(cfg)
     shell = default_backend(cfg, session_dir)
 
     assert shell.execute(f"echo pwned > {directory}/PWNED.md").exit_code != 0
@@ -127,7 +127,7 @@ def test_the_shell_cannot_write_into_the_catalogue(cfg, session_dir):
 @macos
 def test_the_shell_can_still_read_a_skill_and_write_elsewhere(cfg, session_dir):
     """The carve-out is a carve-out."""
-    directory = _catalogue(cfg)
+    directory = _a_skill(cfg)
     shell = default_backend(cfg, session_dir)
 
     assert shell.execute(f"cat {directory}/SKILL.md").exit_code == 0

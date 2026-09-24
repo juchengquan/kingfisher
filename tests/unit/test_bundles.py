@@ -23,7 +23,7 @@ from kingfisher.kinds.tools.catalogue import ToolError
 from kingfisher.kinds.tools.spec import Offering, tool_name
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
 from kingfisher.presentation.cli.health import examine, worst
-from kingfisher.presentation.cli.listing import _catalogue, failed
+from kingfisher.presentation.cli.listing import _skills_and_subagents, failed
 from tests.conftest import FakeToolCallingModel, a_subagent, delegate
 
 DEFINITION = "name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
@@ -604,7 +604,7 @@ def test_a_listing_prints_private_assets_under_their_owner(cfg):
 
     assert found.bundled_tools["surveyor"] == ("probe",)
     assert found.bundled_skills["surveyor"] == ("sampling",)
-    printed = "\n".join(_catalogue(found))
+    printed = "\n".join(_skills_and_subagents(found))
     assert "probe  [private tool]" in printed
     assert "sampling  [private skill]" in printed
 
@@ -616,7 +616,7 @@ def test_a_listing_says_when_a_bundle_shadows_the_catalogue(cfg):
     found = inventory(cfg)
 
     assert found.shadowed["surveyor"] == ("shared",)
-    assert "shadowing the catalogue's" in "\n".join(_catalogue(found))
+    assert "shadowing the catalogue's" in "\n".join(_skills_and_subagents(found))
 
 
 def renamed(cfg):
@@ -643,7 +643,7 @@ def test_a_listing_names_the_folder_whose_definition_was_renamed(cfg):
     assert "surveys" in found.subagents
     assert found.bundled_tools == {}
     assert found.orphaned_assets == ("surveyor",)
-    assert "surveyor/ holds tools/ or skills/" in "\n".join(_catalogue(found))
+    assert "surveyor/ holds tools/ or skills/" in "\n".join(_skills_and_subagents(found))
 
 
 def test_a_listing_does_not_report_a_grouping_folder_that_holds_no_assets(cfg):
@@ -656,7 +656,7 @@ def test_a_listing_does_not_report_a_grouping_folder_that_holds_no_assets(cfg):
     found = inventory(cfg)
 
     assert found.orphaned_assets == ()
-    assert "holds tools/ or skills/" not in "\n".join(_catalogue(found))
+    assert "holds tools/ or skills/" not in "\n".join(_skills_and_subagents(found))
 
 
 def orphaned_folder(cfg):
@@ -983,7 +983,7 @@ def test_a_listing_names_the_delegate_whose_list_has_gone_stale(cfg):
     found = inventory(cfg)
 
     assert "gone" in found.miscounted_bundles["surveyor"]
-    assert "gone" in "\n".join(_catalogue(found))
+    assert "gone" in "\n".join(_skills_and_subagents(found))
     assert failed(found), "the catalogue refuses this, so a zero exit would be a lie"
 
 
@@ -1146,7 +1146,7 @@ def test_a_compiled_delegates_bundled_skill_is_reported_as_reaching_nothing(cfg)
     found = inventory(cfg)
 
     assert found.stranded_skills == {"surveyor": ("sampling",)}
-    assert "told about no skills" in "\n".join(_catalogue(found))
+    assert "told about no skills" in "\n".join(_skills_and_subagents(found))
 
 
 def test_an_assembled_delegates_bundled_skill_is_not_reported_as_stranded(cfg):
@@ -1159,7 +1159,7 @@ def test_an_assembled_delegates_bundled_skill_is_not_reported_as_stranded(cfg):
     found = inventory(cfg)
 
     assert found.stranded_skills == {}
-    assert "told about no skills" not in "\n".join(_catalogue(found))
+    assert "told about no skills" not in "\n".join(_skills_and_subagents(found))
 
 
 def test_a_compiled_delegate_with_a_skill_in_its_folder_is_refused(cfg):

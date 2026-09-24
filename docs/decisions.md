@@ -763,6 +763,25 @@ Inside `application/config.py` the old name read well because the module
 qualified it, and that one call site now stutters; fifty-two others got clearer.
 *(2026-09-01.)*
 
+**"Catalogue" means a definition catalogue, and the two functions that meant
+something else are renamed.** The word carries two senses here -- `models.yaml` is
+the model catalogue, and a definition directory is a catalogue too -- and four
+functions were called `_catalogue` across the command, the listing, `origins` and a
+test. Two of them were neither sense: one printed the skills and subagents sections,
+one wrote a skill into a workspace.
+
+The sharp one was inside `doctor`: `_catalogue` checked `models.yaml` and
+`_catalogues`, two hundred lines below, checked the definition directories. One
+letter between two names about different subjects, in one file. `_models` and
+`_catalogues` now, so the plural is the plural of the singular above it.
+
+**No rule against a singular beside its plural**, which is what a check for this
+would have to forbid. There is no other such pair in the tree, and the hazard was
+never the spelling: `_agent` beside `_agents` rendering one and many is exactly what
+a reader expects. What made this one a trap is that the two names had different
+subjects, and no rule keyed on the letters can tell that apart. *(2026-09-24, from
+an architecture review.)*
+
 **Seeding keeps its own tolerant reader, and the spellings it covers are held.**
 `source_ids_named` and `middleware_named` read one field out of a document that may
 not parse, because seeding runs before there is a catalogue and cannot refuse

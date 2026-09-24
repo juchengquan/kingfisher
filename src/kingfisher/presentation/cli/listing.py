@@ -63,7 +63,7 @@ def render(found: Inventory) -> Iterator[str]:
         # the other two down with it", and worst for the person most likely to
         # be running the command, who is looking at a broken workspace.
         yield ""
-        yield from _catalogue(found)
+        yield from _skills_and_subagents(found)
         return
 
     # Two headings, because they are two grants. Printed as one pile, this
@@ -80,7 +80,7 @@ def render(found: Inventory) -> Iterator[str]:
     yield "\nworkspace tools — grant with --tools"
     yield offered(dict(found.tool_sources), found.tools)
 
-    yield from _catalogue(found)
+    yield from _skills_and_subagents(found)
     yield from _access(found)
 
 
@@ -150,9 +150,11 @@ def _rollup(found: Inventory) -> Iterator[str]:
                 yield f"      {name}  {_who(audience)}"
 
 
-def _catalogue(found: Inventory) -> Iterator[str]:
-    """The skills and subagents sections, which are the same whether or not the tools
-    catalogue loaded.
+def _skills_and_subagents(found: Inventory) -> Iterator[str]:
+    """The two sections that are the same whether or not the tools catalogue loaded.
+
+    Named for what it prints. It was `_catalogue`, which is the word this codebase
+    uses for a definition directory and for `models.yaml`, and it is neither.
     """
     yield from _skills(found)
     yield from _subagents(found)

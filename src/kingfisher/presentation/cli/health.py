@@ -77,8 +77,14 @@ class Check:
     remedy: str = ""
 
 
-def _catalogue(cfg: Config) -> Iterator[Check]:
-    """The model catalogue: that it loaded, and that its names can be reached."""
+def _models(cfg: Config) -> Iterator[Check]:
+    """The model catalogue: that it loaded, and that its names can be reached.
+
+    Named for what it checks rather than for the word `models.yaml` shares with the
+    definition directories: `_catalogues` two hundred lines below is about those, and
+    one letter between two names meaning different things is a reader's problem
+    rather than a writer's.
+    """
     models = cfg.models
     yield Check(
         "catalogue",
@@ -678,7 +684,7 @@ def examine(cfg: Config, found: Inventory | None = None) -> tuple[Check, ...]:
         # First, because it is the one check that explains another being wrong:
         # a setting that stopped being read looks exactly like one nobody set.
         checks += _retired()
-        checks += _catalogue(cfg)
+        checks += _models(cfg)
         checks += _packs(cfg)
         checks += _at_rest(cfg)
         if found is None:
