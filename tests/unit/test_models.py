@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import inspect
 import re
-from dataclasses import replace
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
 
 import pytest
 
 from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.infrastructure.harness.models import ADAPTERS, Adapter, build_model
+
+if TYPE_CHECKING:
+    from typing import Any
 
 OPENAI = Endpoint("openai_responses", "https://api.openai.com/v1", "sk-not-real")
 
@@ -23,7 +27,8 @@ def test_openai_uses_the_responses_api(cfg):
 
 def test_an_adapter_row_cannot_overrule_a_configured_value(cfg, monkeypatch):
     """`extra` is additive: it may not name a value the profile carries."""
-    colliding = Adapter("langchain_openai:ChatOpenAI", {"max_tokens": 1})
+    shipped = ADAPTERS["openai_responses"]
+    colliding = replace(shipped, extra={"max_tokens": 1})
     monkeypatch.setitem(ADAPTERS, "openai_responses", colliding)
 
     with pytest.raises(TypeError, match="multiple values for keyword argument"):
@@ -82,45 +87,81 @@ def test_every_param_kwargs_omits_is_named_above():
     )
 
 
-#: Where each value lands, per adapter. The classes do not agree on the names —
-#: which is exactly why this is a table and not a loop over one set of
-#: attributes, and why adding an adapter means adding a row here too.
-LANDING_SITES = {
-    "anthropic": {
-        "model": "model",
-        "base_url": "anthropic_api_url",
-        "api_key": "anthropic_api_key",
-        "max_tokens": "max_tokens",
-        "timeout_s": "default_request_timeout",
-    },
-    "openai_responses": {
-        "model": "model_name",
-        "base_url": "openai_api_base",
-        "api_key": "openai_api_key",
-        "max_tokens": "max_tokens",
-        "timeout_s": "request_timeout",
-    },
-}
-
-
 def test_every_value_reaches_the_client():
-    """A dropped kwarg is invisible until the endpoint rejects the request."""
-    for api in sorted(ADAPTERS):
+    """A shipped row whose `lands` names the wrong attribute.
+
+    Read back here as well as inside `build_model`, so deleting that check leaves
+    something red besides the test written for it.
+    """
+    for api, adapter in sorted(ADAPTERS.items()):
         endpoint = Endpoint(api, "https://example.invalid/v1", "sk-not-real")
         profile = ModelProfile("a-model", "somewhere", max_tokens=321, timeout_s=45)
         model = build_model(profile, endpoint)
-        sites = LANDING_SITES[api]
+        sites = adapter.lands
 
-        assert getattr(model, sites["model"]) == profile.model
-        assert getattr(model, sites["base_url"]) == endpoint.base_url
-        assert getattr(model, sites["api_key"]).get_secret_value() == endpoint.api_key
-        assert getattr(model, sites["max_tokens"]) == 321
-        assert getattr(model, sites["timeout_s"]) == 45
+        assert getattr(model, sites.model) == profile.model
+        assert getattr(model, sites.base_url) == endpoint.base_url
+        assert getattr(model, sites.api_key).get_secret_value() == endpoint.api_key
+        assert getattr(model, sites.max_tokens) == 321
+        assert getattr(model, sites.timeout) == 45
 
 
-def test_every_adapter_has_landing_sites():
-    """Guards the table above, which is the per-adapter edit site."""
-    assert set(LANDING_SITES) == set(ADAPTERS)
+@dataclass(frozen=True)
+class _Renames(Adapter):
+    """A row whose class calls one keyword something else, as most vendors' own do."""
+
+    keyword: str = "base_url"
+
+    def resolve(self) -> Any:
+        chat_openai = super().resolve()
+
+        def build(**kwargs: Any) -> Any:
+            kwargs[f"gateway_{self.keyword}"] = kwargs.pop(self.keyword)
+            return chat_openai(**kwargs)
+
+        return build
+
+
+def test_a_url_the_class_did_not_keep_is_refused(cfg):
+    """A class that does not know `base_url` builds anyway, with the URL unset, and
+    sends the endpoint's key to the vendor's default host.
+
+    Driven through the real `ChatOpenAI` rather than a stub model, because what makes
+    this dangerous is that class's own habit of moving an unknown keyword into
+    `model_kwargs` and carrying on.
+    """
+    shipped = ADAPTERS["openai_responses"]
+    row = _Renames(shipped.chat_class, shipped.lands, shipped.extra)
+
+    with (
+        pytest.warns(UserWarning, match="gateway_base_url"),
+        pytest.raises(ConfigError, match=r"did not keep 'base_url' at 'openai_api_base'"),
+    ):
+        _build_with(row, cfg.models.models["fake-model"])
+
+
+def test_a_refusal_never_quotes_the_key_it_found(cfg, monkeypatch):
+    """A class that loses the endpoint's key falls back to one from the environment,
+    and the refusal goes to a log.
+    """
+    ambient = "sk-ambient-not-real"
+    monkeypatch.setenv("OPENAI_API_KEY", ambient)
+    shipped = ADAPTERS["openai_responses"]
+    row = _Renames(shipped.chat_class, shipped.lands, shipped.extra, keyword="api_key")
+
+    with (
+        pytest.warns(UserWarning, match="gateway_api_key"),
+        pytest.raises(ConfigError, match="did not keep 'api_key'") as refused,
+    ):
+        _build_with(row, cfg.models.models["fake-model"])
+    assert ambient not in str(refused.value)
+
+
+def _build_with(row: Adapter, profile: ModelProfile) -> Any:
+    """`build_model` on `OPENAI`, with `row` standing in for its shipped adapter."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setitem(ADAPTERS, "openai_responses", row)
+        return build_model(profile, OPENAI)
 
 
 def test_an_unbuildable_api_fails_with_a_readable_error(cfg):
@@ -154,7 +195,7 @@ def test_a_row_naming_an_absent_class_fails_where_it_is_built():
     """Deferring the import defers the error too, so it has to still be a clear one -- a
     typo'd row must not surface as a mysterious attribute failure.
     """
-    row = Adapter("langchain_openai:NoSuchModel")
+    row = replace(ADAPTERS["openai_responses"], chat_class="langchain_openai:NoSuchModel")
     with pytest.raises(AttributeError, match="NoSuchModel"):
         row.resolve()
 

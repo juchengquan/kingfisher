@@ -19,6 +19,26 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
+class Landing:
+    """The attribute a chat class keeps each value in, once constructed.
+
+    The classes agree on the keyword and disagree on the attribute: `base_url` is
+    `anthropic_api_url` on one and `openai_api_base` on the other. `build_model` reads
+    every value back through these after construction.
+
+    `temperature` and `top_p` are absent deliberately: a class may drop them on purpose
+    -- `ChatOpenAI` discards `temperature` for `gpt-5`, which rejects it -- and
+    checking them would refuse a model the vendor's own client builds correctly.
+    """
+
+    model: str
+    base_url: str
+    api_key: str
+    max_tokens: str
+    timeout: str
+
+
+@dataclass(frozen=True)
 class Adapter:
     """One wire format: which class speaks it, and what it needs to be told.
 
@@ -28,6 +48,7 @@ class Adapter:
     """
 
     chat_class: str
+    lands: Landing
     extra: Mapping[str, Any] = NO_EXTRA
 
     def resolve(self) -> type[BaseChatModel]:
@@ -38,8 +59,7 @@ class Adapter:
 
 #: The one place a wire format is described. `models.yaml` picks from these by
 #: name through an endpoint's `api`; `build_model` constructs through
-#: `chat_class`. Adding a row is a kingfisher release, and needs a matching
-#: `LANDING_SITES` entry in `test_models.py`.
+#: `chat_class`. Adding a row is a kingfisher release.
 #:
 #: A row names its package as a string and `resolve` imports it by name, so neither
 #: provider is an import anywhere in `src/` and neither belongs in `THIRD_PARTY` --
@@ -49,7 +69,16 @@ class Adapter:
 ADAPTERS: Mapping[str, Adapter] = {
     # The gateway path. MiniMax and anything else imitating Anthropic's wire
     # format lives here — see models.yaml.example, which recommends this style.
-    "anthropic": Adapter("langchain_anthropic:ChatAnthropic"),
+    "anthropic": Adapter(
+        "langchain_anthropic:ChatAnthropic",
+        Landing(
+            model="model",
+            base_url="anthropic_api_url",
+            api_key="anthropic_api_key",
+            max_tokens="max_tokens",
+            timeout="default_request_timeout",
+        ),
+    ),
     # OpenAI proper, on the Responses API. This adapter is *not* a general
     # OpenAI-compatible client: `/v1/responses` is what we target, and virtually no
     # gateway imitating OpenAI implements it. Point a gateway at the anthropic adapter
@@ -57,6 +86,13 @@ ADAPTERS: Mapping[str, Adapter] = {
     # this one.
     "openai_responses": Adapter(
         "langchain_openai:ChatOpenAI",
+        Landing(
+            model="model_name",
+            base_url="openai_api_base",
+            api_key="openai_api_key",
+            max_tokens="max_tokens",
+            timeout="request_timeout",
+        ),
         MappingProxyType({"use_responses_api": True}),
     ),
 }
@@ -73,7 +109,7 @@ def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
         )
         raise ConfigError(msg) from None
 
-    return adapter.resolve()(
+    model = adapter.resolve()(
         model=profile.model,
         base_url=endpoint.base_url,
         api_key=endpoint.api_key,
@@ -81,6 +117,41 @@ def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
         **profile.extra,
         **adapter.extra,
     )
+    _refuse_what_did_not_land(model, adapter, profile, endpoint)
+    return model
+
+
+def _refuse_what_did_not_land(
+    model: BaseChatModel, adapter: Adapter, profile: ModelProfile, endpoint: Endpoint
+) -> None:
+    """Refuse a model that did not keep a value it was built with.
+
+    A chat class that does not know a keyword moves it to `model_kwargs` with a warning
+    and builds anyway. For `base_url` that leaves the URL unset, and the request -- with
+    this endpoint's key -- goes to the vendor's default host instead of the gateway.
+    """
+    sent = {
+        "model": profile.model,
+        "base_url": endpoint.base_url,
+        "api_key": endpoint.api_key,
+        "max_tokens": profile.max_tokens,
+        "timeout": profile.timeout_s,
+    }
+    for value, expected in sent.items():
+        site = getattr(adapter.lands, value)
+        landed = getattr(model, site, None)
+        if hasattr(landed, "get_secret_value"):
+            landed = landed.get_secret_value()
+        if landed != expected:
+            # The key is named and never quoted: this message goes to a log.
+            found = "something else" if value == "api_key" else repr(landed)
+            msg = (
+                f"endpoint {profile.endpoint!r} names api {endpoint.api!r}, whose "
+                f"{adapter.chat_class} did not keep {value!r} at {site!r} (found "
+                f"{found}); refusing to build a model that would send its requests "
+                "somewhere nobody chose"
+            )
+            raise ConfigError(msg)
 
 
 def model_named(
