@@ -12,6 +12,7 @@ from kingfisher.domain.ports import (
     SubagentRepository,
     ToolRepository,
 )
+from kingfisher.kinds.agents import catalogue as agent_store
 from kingfisher.kinds.agents.catalogue import LocalAgentRepository
 from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository
 from kingfisher.kinds.skills.catalogue import LocalSkillRepository
@@ -173,9 +174,9 @@ def test_a_subagent_repository_parses_each_definition_once_for_both_views(catalo
     # into its own namespace is no longer the thing that runs.
     real = store.reading.read
 
-    def counting(path):
-        parsed.append(path)
-        return real(path)
+    def counting(definition):
+        parsed.append(definition.source)
+        return real(definition)
 
     monkeypatch.setattr(store.reading, "read", counting)
 
@@ -185,6 +186,32 @@ def test_a_subagent_repository_parses_each_definition_once_for_both_views(catalo
     assert subagents.names == ("alpha",)
 
     assert len(parsed) == 1, "the definition was parsed more than once"
+
+
+def test_an_agent_repository_pins_the_text_it_parsed_not_the_file_as_it_is_now(
+    tmp_path, monkeypatch
+):
+    """A catalogue that opened the file again for the pin, so an edit landing between the
+    parse and that read gave a session's first turn one agent and every later turn another.
+
+    Driven by editing the file mid-parse rather than by counting reads: a second read
+    after the parse is the bug, whatever reads it.
+    """
+    written = DEFINITION.format(name="assistant")
+    (tmp_path / "assistant.yaml").write_text(written, encoding="utf-8")
+    real = agent_store.reading.read
+
+    def edited_meanwhile(definition):
+        spec = real(definition)
+        definition.source.write_text(written.replace("x\n", "edited\n"), encoding="utf-8")
+        return spec
+
+    monkeypatch.setattr(agent_store.reading, "read", edited_meanwhile)
+
+    agents = LocalAgentRepository(tmp_path)
+
+    assert agents.specs["assistant"].system_prompt.startswith("x")
+    assert agents.documents["assistant"] == written
 
 
 def test_a_skill_repository_walks_once_for_the_question_it_answers(catalogue, monkeypatch):

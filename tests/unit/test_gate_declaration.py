@@ -20,6 +20,7 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.kinds.agents.reading import read
 from kingfisher.kinds.agents.spec import AgentError
+from kingfisher.kinds.documents import DefinitionText
 from tests.conftest import FakeToolCallingModel, tools_dir
 
 WRITES = [
@@ -53,8 +54,10 @@ _DEFAULT: Any = object()
 def _agent(**fields: str) -> Any:
     written = "".join(f"{key}: {value}\n" for key, value in fields.items())
     return read(
-        f"name: gatekeeper\ndescription: An agent.\n{written}system_prompt: |\n  Go.\n",
-        Path("gatekeeper.yaml"),
+        DefinitionText(
+            f"name: gatekeeper\ndescription: An agent.\n{written}system_prompt: |\n  Go.\n",
+            Path("gatekeeper.yaml"),
+        )
     )
 
 

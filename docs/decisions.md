@@ -391,6 +391,15 @@ the file name -- so dropping `{source.name}` from the refusal left the suite gre
 and the one thing both copies agreed on word for word was held by neither. It is
 driven for both kinds now, because there is one function to drive. *(2026-09-24.)*
 
+**Both readers take a `DefinitionText`, the text and the file it came from.** The
+subagent reader took a path, since its text parameter only ever served tests; the
+agent reader kept `(text, source)`, because its catalogue pins the exact document it
+parsed into a session. A path alone cannot serve that catalogue: it would open the
+file again for the pin, and an edit landing between the two reads runs a session's
+first turn on one agent and every later turn on another. One value carrying both is
+read once, keeps what was parsed, and is what a test hands `read` too, so neither
+reader bends to the other. *(2026-09-24.)*
+
 **A delegate lists what it takes from its own folder, and only that arrives.** Each
 `tools:` and `skills:` entry may say `source: shared` (the catalogue, which is what a
 plain name means) or `source: bundled` (the subagent's own folder). The folder used

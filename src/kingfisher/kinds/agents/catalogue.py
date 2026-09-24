@@ -16,7 +16,7 @@ from kingfisher.kinds.agents.spec import AgentError, AgentSpec
 # The walk comes from the format that already names what a document is called,
 # rather than being restated here: both kinds read the same YAML out of the same
 # shape of directory, and a second copy is a second thing to keep in step.
-from kingfisher.kinds.documents import documents_in
+from kingfisher.kinds.documents import DefinitionText, documents_in
 
 
 @dataclass(frozen=True)
@@ -36,8 +36,8 @@ class LocalAgentRepository:
         read: list[tuple[AgentSpec, str, str]] = []
         for path in documents_in(directory, error=AgentError):
             where = str(path.relative_to(directory))
-            text = path.read_text(encoding="utf-8")
-            read.append((reading.read(text, path), where, text))
+            definition = DefinitionText.at(path)
+            read.append((reading.read(definition), where, definition.text))
 
         # Two of a name is refused here rather than reported, which is the one
         # place this differs from subagents. A request names exactly one agent,
