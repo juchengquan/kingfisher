@@ -153,7 +153,7 @@ class LocalSubagentRepository:
             # Relative to the catalogue: `reviewer.yaml` stops identifying a
             # file once two folders may each hold one.
             where = str(path.relative_to(directory))
-            read.append((reading.read(path.read_text(encoding="utf-8"), path), where))
+            read.append((reading.read(path), where))
         # The Python half, keyed and counted with the documents rather than
         # beside them: the two kinds share one namespace, so two definitions
         # claiming `reviewer` are told apart the same way whichever formats they

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def read(text: str, source: Path) -> SubagentSpec:
-    """One definition, from its document. Raises `SubagentError` on anything malformed."""
+def read(source: Path) -> SubagentSpec:
+    """One definition, from its file. Raises `SubagentError` on anything malformed."""
+    text = source.read_text(encoding="utf-8")
     return subagent.parse(documents.fields_of(text, source, SubagentError), source)

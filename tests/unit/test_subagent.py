@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from kingfisher.domain.capabilities import ALL
-from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.rules import resolved_model
 from kingfisher.kinds.subagents.spec import KNOWN, REFUSED, RunOn, SubagentError, SubagentSpec
+from tests.conftest import a_subagent
 
 MINIMAL = """name: reviewer
 description: Checks an analysis for arithmetic errors.
@@ -30,7 +28,7 @@ system_prompt: |
 
 
 def test_minimal_definition_parses():
-    spec = reading.read(MINIMAL, Path("reviewer.yaml"))
+    spec = a_subagent(MINIMAL, "reviewer.yaml")
 
     assert spec.name == "reviewer"
     assert spec.description == "Checks an analysis for arithmetic errors."
@@ -41,7 +39,7 @@ def test_minimal_definition_parses():
 
 
 def test_optional_fields_and_quoting():
-    spec = reading.read(FULL, Path("reviewer.yaml"))
+    spec = a_subagent(FULL, "reviewer.yaml")
 
     assert spec.tools == ("read_file", "glob", "grep")
     assert spec.wanted == "MiniMax-M2.5"
@@ -66,7 +64,7 @@ def test_malformed_definitions_are_rejected():
             ("- not\n- a mapping\n", "expected a mapping of fields"),
         ]:
         with pytest.raises(SubagentError, match=because):
-            reading.read(text, Path("broken.yaml"))
+            a_subagent(text, "broken.yaml")
 
 
 def test_specs_are_empty_when_the_directory_is_absent(tmp_path):
@@ -95,7 +93,7 @@ def test_two_files_claiming_one_name_are_told_apart_by_file(tmp_path):
     ]
 
 
-def test_folded_and_block_list_fields_are_accepted(tmp_path):
+def test_folded_and_block_list_fields_are_accepted():
     """Two parsers read one format, and ours was the stricter."""
     definition = (
         "name: extractor\n"
@@ -109,7 +107,7 @@ def test_folded_and_block_list_fields_are_accepted(tmp_path):
         "  You extract.\n"
     )
 
-    spec = reading.read(definition, tmp_path / "extractor.yaml")
+    spec = a_subagent(definition, "extractor.yaml")
 
     assert spec.name == "extractor"
     assert spec.tools == ("read_file", "grep")
@@ -124,32 +122,32 @@ def _definition(*extra_lines: str) -> str:
     return f"{header}\nsystem_prompt: |\n  You review analyses.\n"
 
 
-def test_a_typo_of_an_optional_field_is_refused_not_ignored(tmp_path):
+def test_a_typo_of_an_optional_field_is_refused_not_ignored():
     """The bug this closes."""
     with pytest.raises(SubagentError, match="tolls") as raised:
-        reading.read(_definition("tolls: [read_file]"), tmp_path / "reviewer.yaml")
+        a_subagent(_definition("tolls: [read_file]"), "reviewer.yaml")
 
     assert "did you mean 'tools'?" in str(raised.value)
 
 
-def test_a_typo_of_a_required_field_names_the_typo(tmp_path):
+def test_a_typo_of_a_required_field_names_the_typo():
     """Not "missing required field 'name'", which sends the author looking for something
     they can plainly see they wrote.
     """
     body = "nmae: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n"
 
     with pytest.raises(SubagentError, match="nmae") as raised:
-        reading.read(body, tmp_path / "reviewer.yaml")
+        a_subagent(body, "reviewer.yaml")
 
     assert "did you mean 'name'?" in str(raised.value)
 
 
-def test_an_unrecognisable_field_is_refused_and_lists_what_is_allowed(tmp_path):
+def test_an_unrecognisable_field_is_refused_and_lists_what_is_allowed():
     """No near match, so no guess -- just the field set, which is the only honest thing
     to offer.
     """
     with pytest.raises(SubagentError, match="additional_abc") as raised:
-        reading.read(_definition("additional_abc: 1"), tmp_path / "reviewer.yaml")
+        a_subagent(_definition("additional_abc: 1"), "reviewer.yaml")
 
     message = str(raised.value)
     assert "did you mean" not in message
@@ -157,12 +155,12 @@ def test_an_unrecognisable_field_is_refused_and_lists_what_is_allowed(tmp_path):
         assert field in message
 
 
-def test_every_unaccepted_field_is_reported_at_once(tmp_path):
+def test_every_unaccepted_field_is_reported_at_once():
     """Not just the first."""
     with pytest.raises(SubagentError) as raised:
-        reading.read(
+        a_subagent(
             _definition("tolls: [read_file]", "temperature: 0.2", "permissions: [deny]"),
-            tmp_path / "reviewer.yaml",
+            "reviewer.yaml",
         )
 
     message = str(raised.value)
@@ -172,33 +170,33 @@ def test_every_unaccepted_field_is_reported_at_once(tmp_path):
     assert "did you mean 'tools'?" in message  # and each is explained in its own terms
 
 
-def test_a_deliberately_unexposed_field_says_why(tmp_path):
+def test_a_deliberately_unexposed_field_says_why():
     """These are not "not yet"."""
     for field in sorted(REFUSED):
         with pytest.raises(SubagentError, match=field) as raised:
-            reading.read(_definition(f"{field}: something"), tmp_path / "reviewer.yaml")
+            a_subagent(_definition(f"{field}: something"), "reviewer.yaml")
 
         message = str(raised.value)
         assert "did you mean" not in message
         assert REFUSED[field].split()[0] in message
 
 
-def test_permissions_explains_the_direction_it_gets_wrong(tmp_path):
+def test_permissions_explains_the_direction_it_gets_wrong():
     """The one worth a test of its own: it is written to *tighten* a delegate and
     silently did nothing, so the definition read stricter than the agent it produced.
     """
     with pytest.raises(SubagentError) as raised:
-        reading.read(_definition("permissions: [deny]"), tmp_path / "reviewer.yaml")
+        a_subagent(_definition("permissions: [deny]"), "reviewer.yaml")
 
     message = str(raised.value)
     assert "replace" in message
     assert "read-only" in message
 
 
-def test_response_format_does_not_claim_deepagents_has_nowhere_to_put_one(tmp_path):
+def test_response_format_does_not_claim_deepagents_has_nowhere_to_put_one():
     """The other one worth its own test, and for the opposite reason."""
     with pytest.raises(SubagentError) as raised:
-        reading.read(_definition("response_format: {}"), tmp_path / "reviewer.yaml")
+        a_subagent(_definition("response_format: {}"), "reviewer.yaml")
 
     message = str(raised.value)
     assert "nothing here to hand a schema to" not in message, (
@@ -209,7 +207,7 @@ def test_response_format_does_not_claim_deepagents_has_nowhere_to_put_one(tmp_pa
     )
 
 
-def test_every_known_field_still_parses(tmp_path):
+def test_every_known_field_still_parses():
     """The negative control: strictness that rejected a valid definition would be a
     worse bug than the one it fixes.
     """
@@ -222,7 +220,7 @@ def test_every_known_field_still_parses(tmp_path):
         "model: gpt-5\n"
         "system_prompt: |\n  You review.\n"
     )
-    spec = reading.read(body, tmp_path / "reviewer.yaml")
+    spec = a_subagent(body, "reviewer.yaml")
 
     assert spec.tools == ("read_file",)
     assert spec.middlewares == ("audit",)
@@ -249,7 +247,7 @@ def test_a_field_that_refuses_the_star_says_so_however_it_was_written(field, spe
     refused it, and nothing was red: no test read the message.
     """
     with pytest.raises(SubagentError) as raised:
-        reading.read(MINIMAL + f"{field}: {spelling}\n", Path("reviewer.yaml"))
+        a_subagent(MINIMAL + f"{field}: {spelling}\n", "reviewer.yaml")
 
     assert REFUSE_THE_STAR[field] in str(raised.value)
     assert "write" not in str(raised.value), "the bracket advice is for a field that takes it"
@@ -267,7 +265,7 @@ def test_a_field_that_takes_the_star_still_does(field):
     """
     assert TAKES_THE_STAR, "no fields listed -- this parametrizes over nothing"
 
-    spec = reading.read(MINIMAL + f'{field}: ["*"]\n', Path("reviewer.yaml"))
+    spec = a_subagent(MINIMAL + f'{field}: ["*"]\n', "reviewer.yaml")
 
     assert getattr(spec, field) == ALL
 
@@ -283,23 +281,23 @@ def test_no_field_is_in_both_star_tables():
     )
 
 
-def test_a_prompt_that_begins_indented_still_loads(tmp_path):
+def test_a_prompt_that_begins_indented_still_loads():
     """`system_prompt: |` takes its indentation from the first line, so a prompt opening
     with a code example *fails to parse*.
     """
     lines = "      ls -la /data\n  Then report what you found.\n"
     header = "name: reviewer\ndescription: d\nsystem_prompt: "
 
-    spec = reading.read(header + "|2\n" + lines, tmp_path / "reviewer.yaml")
+    spec = a_subagent(header + "|2\n" + lines, "reviewer.yaml")
     assert "ls -la /data" in spec.system_prompt
     assert "Then report what you found." in spec.system_prompt
 
     # The same document without the indicator does not load at all.
     with pytest.raises(SubagentError, match="cannot read definition"):
-        reading.read(header + "|\n" + lines, tmp_path / "reviewer.yaml")
+        a_subagent(header + "|\n" + lines, "reviewer.yaml")
 
 
-def test_indentation_inside_a_prompt_is_preserved(tmp_path):
+def test_indentation_inside_a_prompt_is_preserved():
     """Only the outer edges are stripped."""
     definition = (
         "name: reviewer\n"
@@ -309,7 +307,7 @@ def test_indentation_inside_a_prompt_is_preserved(tmp_path):
         "     Do not reuse the caller's script.\n"
     )
 
-    spec = reading.read(definition, tmp_path / "reviewer.yaml")
+    spec = a_subagent(definition, "reviewer.yaml")
 
     assert "\n   Do not reuse" in spec.system_prompt
 
@@ -320,39 +318,39 @@ HEAD = "name: reviewer\ndescription: d\n"
 STEPS = "  1. Recompute the figure.\n  2. Say which definition you applied.\n"
 
 
-def test_every_literal_block_is_accepted(tmp_path):
+def test_every_literal_block_is_accepted():
     """The indicator and the chomping marker are none of this check's business -- they
     are all the same style, and all of them keep the line breaks.
     """
     for style in ["|", "|2", "|-", "|+"]:
-        spec = reading.read(HEAD + f"system_prompt: {style}\n" + STEPS, tmp_path / "reviewer.yaml")
+        spec = a_subagent(HEAD + f"system_prompt: {style}\n" + STEPS, "reviewer.yaml")
 
         assert "Recompute the figure.\n2. Say" in spec.system_prompt
 
 
-def test_a_folded_prompt_is_refused(tmp_path):
+def test_a_folded_prompt_is_refused():
     """`>` joins consecutive lines, so two numbered steps reach the delegate as one
     run-on line -- valid YAML, correct-looking file, odd-behaving agent.
     """
     for style in [">", ">-", ">2"]:
         with pytest.raises(SubagentError, match="reflows it") as raised:
-            reading.read(HEAD + f"system_prompt: {style}\n" + STEPS, tmp_path / "reviewer.yaml")
+            a_subagent(HEAD + f"system_prompt: {style}\n" + STEPS, "reviewer.yaml")
 
         assert "system_prompt: |" in str(raised.value)
 
 
-def test_a_plain_prompt_is_refused(tmp_path):
+def test_a_plain_prompt_is_refused():
     """The same damage, without even a marker to notice."""
     with pytest.raises(SubagentError, match="a plain scalar"):
-        reading.read(HEAD + "system_prompt: Recompute the figure.\n", tmp_path / "reviewer.yaml")
+        a_subagent(HEAD + "system_prompt: Recompute the figure.\n", "reviewer.yaml")
 
 
-def test_a_quoted_prompt_is_refused(tmp_path):
+def test_a_quoted_prompt_is_refused():
     with pytest.raises(SubagentError, match="reflows it"):
-        reading.read(HEAD + 'system_prompt: "Recompute the figure."\n', tmp_path / "reviewer.yaml")
+        a_subagent(HEAD + 'system_prompt: "Recompute the figure."\n', "reviewer.yaml")
 
 
-def test_folding_is_what_the_refusal_is_about(tmp_path):
+def test_folding_is_what_the_refusal_is_about():
     """The negative control, so the rule is justified rather than asserted: this is what
     a folded prompt would have handed the delegate.
     """
@@ -363,7 +361,7 @@ def test_folding_is_what_the_refusal_is_about(tmp_path):
     assert folded == "1. Recompute the figure. 2. Say which definition you applied.\n"
 
 
-def test_the_description_may_still_be_folded(tmp_path):
+def test_the_description_may_still_be_folded():
     """Only the prompt is checked."""
     definition = (
         "name: reviewer\n"
@@ -373,7 +371,7 @@ def test_the_description_may_still_be_folded(tmp_path):
         "system_prompt: |\n  You review.\n"
     )
 
-    spec = reading.read(definition, tmp_path / "reviewer.yaml")
+    spec = a_subagent(definition, "reviewer.yaml")
 
     assert spec.description == "Checks an analysis for arithmetic errors, one claim at a time."
 
@@ -412,7 +410,7 @@ def test_a_request_replaces_what_the_file_said():
 # -- metadata --------------------------------------------------------------
 
 
-def test_metadata_is_carried_verbatim(tmp_path):
+def test_metadata_is_carried_verbatim():
     """Kingfisher does not interpret it."""
     definition = (
         "name: reviewer\ndescription: d\n"
@@ -420,21 +418,21 @@ def test_metadata_is_carried_verbatim(tmp_path):
         "system_prompt: |\n  You review.\n"
     )
 
-    spec = reading.read(definition, tmp_path / "reviewer.yaml")
+    spec = a_subagent(definition, "reviewer.yaml")
 
     assert spec.metadata == {"tier": "gold", "retries": 3, "tags": ["a", "b"]}
 
 
-def test_metadata_defaults_to_empty(tmp_path):
+def test_metadata_defaults_to_empty():
     """Absent is the common case, and an empty mapping saves every reader a `None` check
     for a field that means "nothing extra".
     """
-    spec = reading.read(MINIMAL, tmp_path / "reviewer.yaml")
+    spec = a_subagent(MINIMAL, "reviewer.yaml")
 
     assert spec.metadata == {}
 
 
-def test_metadata_must_be_a_mapping(tmp_path):
+def test_metadata_must_be_a_mapping():
     """A bag with no shape cannot be looked up by key, which is the only thing anyone
     will do with it.
     """
@@ -442,16 +440,16 @@ def test_metadata_must_be_a_mapping(tmp_path):
         definition = f"name: reviewer\ndescription: d\n{written}\nsystem_prompt: |\n  You review.\n"
 
         with pytest.raises(SubagentError, match="metadata"):
-            reading.read(definition, tmp_path / "reviewer.yaml")
+            a_subagent(definition, "reviewer.yaml")
 
 
-def test_empty_metadata_is_allowed(tmp_path):
+def test_empty_metadata_is_allowed():
     """`metadata:` with nothing under it is not the same mistake as a blank required
     field -- it is a caller who has none, spelled out.
     """
     definition = "name: reviewer\ndescription: d\nmetadata:\nsystem_prompt: |\n  You review.\n"
 
-    assert reading.read(definition, tmp_path / "reviewer.yaml").metadata == {}
+    assert a_subagent(definition, "reviewer.yaml").metadata == {}
 
 
 def test_metadata_survives_loading_the_catalogue(tmp_path):
@@ -476,7 +474,7 @@ def test_metadata_survives_loading_the_catalogue(tmp_path):
     assert owners == {"reviewer": "platform-team", "namer": "unowned"}
 
 
-def test_provider_is_no_longer_a_field(tmp_path):
+def test_provider_is_no_longer_a_field():
     """It named an endpoint by style, and moved in lockstep with `model` -- naming one
     without the other was refused, because a model sent somewhere that has never
     heard of it is a 404 if you are lucky.
@@ -491,16 +489,16 @@ def test_provider_is_no_longer_a_field(tmp_path):
     )
 
     with pytest.raises(SubagentError, match="provider"):
-        reading.read(definition, tmp_path / "reviewer.yaml")
+        a_subagent(definition, "reviewer.yaml")
 
 
-def test_a_model_names_where_it_runs_by_naming_what_it_runs(tmp_path):
+def test_a_model_names_where_it_runs_by_naming_what_it_runs():
     """One field, where there were two."""
     definition = (
         "name: reviewer\ndescription: d\nmodel: cheap-one\nsystem_prompt: |\n  You review.\n"
     )
 
-    spec = reading.read(definition, tmp_path / "reviewer.yaml")
+    spec = a_subagent(definition, "reviewer.yaml")
 
     assert spec.wanted == "cheap-one"
 
@@ -518,14 +516,14 @@ def _runs(*lines: str) -> str:
     return _definition(*lines)
 
 
-def test_one_model_reads_as_a_list_of_one(tmp_path):
+def test_one_model_reads_as_a_list_of_one():
     """The shape every definition written so far has, and it does not change."""
-    spec = reading.read(_runs("model: gpt-5"), tmp_path / "r.yaml")
+    spec = a_subagent(_runs("model: gpt-5"), "r.yaml")
 
     assert spec.wanted == "gpt-5"
 
 
-def test_naming_several_models_is_refused_rather_than_stringified(tmp_path):
+def test_naming_several_models_is_refused_rather_than_stringified():
     """`model:` took a list while an `alias:` beside it could be passed over for being
     unbound, and #243 removed both -- leaving a shape that parsed and meant nothing.
 
@@ -541,13 +539,13 @@ def test_naming_several_models_is_refused_rather_than_stringified(tmp_path):
     )
 
     with pytest.raises(SubagentError, match=r"model names 2 things"):
-        reading.read(definition, tmp_path / "reviewer.yaml")
+        a_subagent(definition, "reviewer.yaml")
 
 
-def test_one_model_written_plainly_is_untouched(tmp_path):
+def test_one_model_written_plainly_is_untouched():
     """The half that says this refuses a *list* and not a name."""
     definition = (
         "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  You review.\n"
     )
 
-    assert reading.read(definition, tmp_path / "reviewer.yaml").wanted == "gpt-5"
+    assert a_subagent(definition, "reviewer.yaml").wanted == "gpt-5"

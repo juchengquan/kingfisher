@@ -173,9 +173,9 @@ def test_a_subagent_repository_parses_each_definition_once_for_both_views(catalo
     # into its own namespace is no longer the thing that runs.
     real = store.reading.read
 
-    def counting(text, path):
+    def counting(path):
         parsed.append(path)
-        return real(text, path)
+        return real(path)
 
     monkeypatch.setattr(store.reading, "read", counting)
 

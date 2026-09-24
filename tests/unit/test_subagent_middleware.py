@@ -12,8 +12,7 @@ from kingfisher import Kingfisher, default_backend
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.workspace import ensure_session_layout
-from kingfisher.kinds.subagents import reading
-from tests.conftest import FakeToolCallingModel, StubCheckpointer
+from tests.conftest import FakeToolCallingModel, StubCheckpointer, a_subagent
 
 
 class Audited(AgentMiddleware):
@@ -141,21 +140,20 @@ def test_grants_clamp_middleware_like_everything_else():
 # -- the format -----------------------------------------------------------
 
 
-def test_the_field_parses_in_both_yaml_forms(tmp_path):
-    inline = reading.read(
-        "name: r\ndescription: d\nmiddlewares: [a, b]\n"
-        "system_prompt: |\n  Body.\n", tmp_path / "r.md"
+def test_the_field_parses_in_both_yaml_forms():
+    inline = a_subagent(
+        "name: r\ndescription: d\nmiddlewares: [a, b]\nsystem_prompt: |\n  Body.\n", "r.md"
     )
-    block = reading.read(
+    block = a_subagent(
         "name: r\ndescription: d\nmiddlewares:\n  - a\n  - b\nsystem_prompt: |\n  Body.\n",
-        tmp_path / "r.md",
+        "r.md",
     )
 
     assert inline.middlewares == block.middlewares == ("a", "b")
 
 
-def test_omitting_it_means_none(tmp_path):
-    spec = reading.read("name: r\ndescription: d\nsystem_prompt: |\n  Body.\n", tmp_path / "r.md")
+def test_omitting_it_means_none():
+    spec = a_subagent("name: r\ndescription: d\nsystem_prompt: |\n  Body.\n", "r.md")
 
     assert spec.middlewares is None
 

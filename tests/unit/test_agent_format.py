@@ -10,8 +10,8 @@ from kingfisher.domain.capabilities import ALL, CapabilityError
 from kingfisher.kinds.agents.catalogue import LocalAgentRepository
 from kingfisher.kinds.agents.reading import read
 from kingfisher.kinds.agents.spec import AgentError
-from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.spec import SubagentError
+from tests.conftest import a_subagent
 
 WHOLE = """name: surveyor
 description: Reads and profiles data without changing anything.
@@ -122,7 +122,7 @@ def test_an_agent_may_name_every_subagent_and_a_subagent_may_not():
 
     delegate = 'name: d\ndescription: A delegate.\nsubagents: ["*"]\nsystem_prompt: |\n  Go.\n'
     with pytest.raises(SubagentError, match="always a loop"):
-        reading.read(delegate, Path("d.yaml"))
+        a_subagent(delegate, "d.yaml")
 
 
 def test_each_declined_field_says_why_it_is_declined():
@@ -509,9 +509,8 @@ def test_the_two_kinds_declare_the_unaudienced_axes_differently():
     the whole suite still green.
     """
     agent = _read(MINIMAL.rstrip() + "\nmemory: false\n", "plain.yaml")
-    delegate = reading.read(
-        "name: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n",
-        Path("reviewer.yaml"),
+    delegate = a_subagent(
+        "name: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n", "reviewer.yaml"
     )
 
     for held in (None, frozenset({"A"})):

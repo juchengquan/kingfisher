@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import fields
@@ -20,6 +21,7 @@ if TYPE_CHECKING:
     # deepagents into every collection of this file for one annotation, which is
     # the 1.4s the lazy front door exists to avoid paying.
     from kingfisher.infrastructure.harness.agent import Assembled
+    from kingfisher.kinds.subagents.spec import SubagentSpec
 
 
 class FakeToolCallingModel(FakeMessagesListChatModel):
@@ -199,6 +201,18 @@ def pin(kf, session_id: str, name: str) -> None:
 
     document = kf.catalogue.agents.documents[name]
     remember_agent(kf.workspace / "sessions" / session_id, document)
+
+
+def a_subagent(text: str, name: str) -> SubagentSpec:
+    """A subagent definition written to a file called `name`, read the way the catalogue
+    reads one.
+    """
+    from kingfisher.kinds.subagents import reading
+
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / name
+        path.write_text(text, encoding="utf-8")
+        return reading.read(path)
 
 
 def declared_subagents(built: Assembled) -> list:
