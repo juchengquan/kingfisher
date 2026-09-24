@@ -223,6 +223,27 @@ it refuses one inside a session. A workspace that
 keeps a populated `middleware/` gets an empty `middlewares/` made beside it and
 offers nothing, with nothing said.
 
+*(`middlewares/` is inside `LAYOUT_DIRS` since 2026-09-24; see below.)*
+
+**The layout names every kind.** It made three of the five, and resolving a
+catalogue makes all five, so a workspace had two answers to which directories it
+has: the layout's on a fresh start and the first read's thereafter. `agents` and
+`middlewares` were the two outside it, each because it arrived after that tuple did.
+
+What the gap cost was not a failure but a habit. Tests made the missing two by hand,
+and the same call spread to the three that already existed: 69 `mkdir` calls across
+28 files that do nothing, against 8 that were required. Those are left where they
+are -- idempotent, and removing them is churn across 28 files for no behaviour --
+but the rule that made them look necessary is gone.
+
+No `LAYOUT_VERSION` bump. That number refuses a workspace laid out *differently*,
+and nothing here moves; an existing workspace gains two empty directories on its
+next start, which is what `mkdir(exist_ok=True)` is for. A version bump would have
+refused every workspace in existence in order to add a folder.
+`test_the_layout_names_every_kind_a_catalogue_reads` holds the tuple total in both
+directions -- every kind is in it, and everything in it that is not a kind says what
+it is instead. *(2026-09-24, from an architecture review.)*
+
 **The mass noun stays wherever it is still a mass noun.** `middlewares` names the
 kind -- a directory, a field, a key, a table row. `MiddlewareRepository`,
 `approved_middleware`, `harness/middleware.py` and every sentence about *a
