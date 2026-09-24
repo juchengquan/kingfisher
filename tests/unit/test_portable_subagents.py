@@ -377,9 +377,9 @@ def test_the_listing_says_a_carried_tool_is_not_in_this_workspace(
     catalogue rather than a fixture, so it is the output a reader actually gets.
     """
     from kingfisher.application.inventory import inventory
-    from kingfisher.presentation.cli.listing import _catalogue
+    from kingfisher.presentation.cli.listing import _skills_and_subagents
 
-    printed = list(_catalogue(inventory(workspace_with_presets)))
+    printed = list(_skills_and_subagents(inventory(workspace_with_presets)))
 
     assert "      iso_timestamp  [private tool, carried]" in printed
     assert "      iso-8601  [private skill, carried]" in printed
