@@ -38,7 +38,7 @@ def test_shell_env_supplies_a_usable_toolchain(cfg, session_dir):
 
 def test_home_points_at_this_session_not_the_real_home(cfg, session_dir):
     """So ~/.aws, ~/.ssh and ~/.config are not where the agent's tooling looks."""
-    assert shell_env(cfg, session_dir)["HOME"] == str(session_dir / ".home")
+    assert shell_env(cfg, session_dir)["HOME"] == str(session_dir / "scratch")
     assert shell_env(cfg, session_dir)["HOME"] != str(cfg.workspace)
 
 
@@ -61,7 +61,7 @@ def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
     bare.mkdir()
     (bare / "data").mkdir()
 
-    wanted = r"missing derived, memory, scratch, \.home, \.harness"
+    wanted = r"missing derived, memory, scratch, \.harness"
     with pytest.raises(ValueError, match=wanted):
         default_backend(cfg, bare)
 
@@ -341,11 +341,11 @@ def test_the_home_directory_exists_before_a_command_runs(cfg, session_dir):
     """A `HOME` that does not exist is worse than none: tools fall back to somewhere
     unpredictable rather than failing.
     """
-    from kingfisher.infrastructure.harness.backend import agent_home, default_backend
+    from kingfisher.infrastructure.harness.backend import default_backend
 
     default_backend(cfg, session_dir)
 
-    assert agent_home(session_dir).is_dir()
+    assert Path(shell_env(cfg, session_dir)["HOME"]).is_dir()
 
 
 # -- one file, listed once ------------------------------------------------
