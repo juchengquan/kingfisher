@@ -173,8 +173,8 @@ def test_session_bytes_counts_everything_the_session_holds(cfg, session_dir):
     is worth keeping.
     """
     (session_dir / "derived" / "kept.bin").write_bytes(b"x" * 100)
-    (session_dir / "scratch").mkdir(exist_ok=True)
-    (session_dir / "scratch" / "scratch.bin").write_bytes(b"y" * 50)
+    (session_dir / "scratchpad").mkdir(exist_ok=True)
+    (session_dir / "scratchpad" / "scratch.bin").write_bytes(b"y" * 50)
 
     assert session_bytes(session_dir) >= 150
 

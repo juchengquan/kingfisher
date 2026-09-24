@@ -99,7 +99,7 @@ def turn_message(task: str, placed: tuple[str, ...]) -> str:
     # recover. The 6 that used the shell form first never failed.
     #
     # It said this about a per-turn `/runs/<turn>`; the directory is the session's
-    # `/scratch` now and the sentence is unchanged in kind, because what was
+    # `/scratchpad` now and the sentence is unchanged in kind, because what was
     # measured was the agent's handling of the two spellings rather than anything
     # about which directory it was being handed.
     return (

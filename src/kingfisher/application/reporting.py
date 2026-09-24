@@ -196,7 +196,7 @@ def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning
             RunEvent(kind="data_placed", text=f"{', '.join(placement.placed)}{replaced}")
         )
     # The turn's name, where this used to be its directory. A turn has none now --
-    # it works in the session's `/scratch` like every other turn -- so the one fact
+    # it works in the session's `/scratchpad` like every other turn -- so the one fact
     # left worth opening with is which turn a caller is watching.
     events.append(RunEvent(kind="run_start", text=turn_id))
     return tuple(events)

@@ -12,7 +12,7 @@ same thing in every session and on every machine:
   and it is reported back to whoever asked for the work when the turn ends. There is
   no separate place for reports; whatever should be kept goes here, whatever it is
   called.
-- `/scratch` — working files: intermediates, downloads, anything you need while you
+- `/scratchpad` — working files: intermediates, downloads, anything you need while you
   think. Nothing here is reported back and old sessions are swept, so anything you
   want kept belongs in `/derived` instead. It is also where the shell's `TMPDIR`
   points, so both halves of your toolkit write the same place.
@@ -33,7 +33,7 @@ leading slash, and nothing in the workspace is out of the shell's reach:
 | --- | --- |
 | `/data/<name>` | `data/<name>` |
 | `/derived/<name>` | `derived/<name>` |
-| `/scratch/<name>` | `scratch/<name>` |
+| `/scratchpad/<name>` | `scratchpad/<name>` |
 
 All four already exist when a turn starts, so do not go searching for them — `find`
 will not locate one any faster than dropping the slash will.

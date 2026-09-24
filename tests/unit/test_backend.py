@@ -38,7 +38,7 @@ def test_shell_env_supplies_a_usable_toolchain(cfg, session_dir):
 
 def test_home_points_at_this_session_not_the_real_home(cfg, session_dir):
     """So ~/.aws, ~/.ssh and ~/.config are not where the agent's tooling looks."""
-    assert shell_env(cfg, session_dir)["HOME"] == str(session_dir / "scratch")
+    assert shell_env(cfg, session_dir)["HOME"] == str(session_dir / "scratchpad")
     assert shell_env(cfg, session_dir)["HOME"] != str(cfg.workspace)
 
 
@@ -61,7 +61,7 @@ def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
     bare.mkdir()
     (bare / "data").mkdir()
 
-    wanted = r"missing derived, memory, scratch, \.harness"
+    wanted = r"missing derived, memory, scratchpad, \.harness"
     with pytest.raises(ValueError, match=wanted):
         default_backend(cfg, bare)
 
@@ -121,7 +121,7 @@ def test_derived_is_unrouted_and_the_table_says_so(cfg, session_dir):
     backend = default_backend(cfg, session_dir)
     unrouted = {r.path for r in ROUTES if not r.routed}
 
-    assert unrouted == {"/derived/", "/scratch/"}
+    assert unrouted == {"/derived/", "/scratchpad/"}
     assert not (unrouted & set(backend.routes)), "an unrouted path was mounted"
 
 
@@ -183,7 +183,7 @@ def test_scratch_is_the_session_s_own(cfg, session_dir):
     readable by every other session's shell. Per session, `reap` and `session_bytes`
     already cover it and neither fence has to grant anything extra.
     """
-    assert shell_env(cfg, session_dir)["TMPDIR"] == str(session_dir / "scratch")
+    assert shell_env(cfg, session_dir)["TMPDIR"] == str(session_dir / "scratchpad")
 
 
 def test_two_sessions_do_not_share_a_tmpdir(cfg, session_dir, workspace):
@@ -200,7 +200,7 @@ def test_scratch_is_created_private(cfg, session_dir):
     Not a boundary on its own -- `derived/` sits beside it at whatever the umask gave
     it -- and `ensure_session_layout` says so where it does this.
     """
-    assert (session_dir / "scratch").stat().st_mode & 0o077 == 0
+    assert (session_dir / "scratchpad").stat().st_mode & 0o077 == 0
 
 
 def test_the_run_log_is_the_session_s_own(session_dir):

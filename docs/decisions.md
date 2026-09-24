@@ -1689,6 +1689,16 @@ fewer. What a reader should not look for: `AGENT_HOME`, `agent_home()` and
 `HARNESS` where it is used. If a tool ever does cache under `~`, the agent will see
 a dot-directory in its own scratch, which is the cost this accepts. *(2026-09-24.)*
 
+**`/scratch` is `/scratchpad`.** The name the agent types, in both spellings, and
+the shell's `HOME` and `TMPDIR` with it. One constant moved; the rest was the
+prompt, which no test tied to the layout until this change added one -- the table
+in `system.md` could have kept teaching `/scratch` with everything green. A session
+made before the rename keeps its old `scratch/` beside a new empty `scratchpad/`
+until it is reaped; nothing in it was ever returned to a caller, so nothing is lost,
+and a resumed conversation that reaches for `/scratch` is refused or writes a file
+no later turn is told about. Entries above that say `scratch` meant this directory
+under its old name. *(2026-09-24.)*
+
 **A session's history is kingfisher's own records, not a framework's.**
 `domain/transcript.py` holds it, and it keeps what the agent *did* as well as
 what it said -- tool calls and results, not only human and assistant text, since
