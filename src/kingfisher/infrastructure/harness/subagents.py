@@ -101,13 +101,6 @@ def _subject(spec: SubagentSpec | AgentSpec) -> str:
     return f"{kind} {spec.name!r}"
 
 
-def model_for(
-    spec: SubagentSpec | AgentSpec, *, override: RunOn | None = None
-) -> str | None:
-    """The model this delegate will actually run, or `None` for the deployment's."""
-    return resolved_model(spec.wanted, override=override)
-
-
 def model_object(  # five things decide which model a delegate
     # runs, and each is a separate rule: what the file names, what the deployment
     # binds, which endpoints this request may reach, what the request overrode,
@@ -123,7 +116,7 @@ def model_object(  # five things decide which model a delegate
     inherited: Any = None,
 ) -> Any | None:
     """The model instance this delegate runs, or `None` to leave it inheriting."""
-    model_id = model_for(spec, override=run_on)
+    model_id = resolved_model(spec.wanted, override=run_on)
     if model_id is None:
         return inherited
     return model_named(model_id, cfg, endpoints=endpoints, subject=_subject(spec))

@@ -10,7 +10,7 @@ from kingfisher.domain.capabilities import ALL, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.activation import indistinct_delegates
 from kingfisher.infrastructure.harness.models import ADAPTERS
-from kingfisher.infrastructure.harness.subagents import model_for
+from kingfisher.kinds.subagents.rules import resolved_model
 from kingfisher.kinds.subagents.spec import RunOn
 from tests.conftest import a_subagent, an_agent, start, subagents_dir
 
@@ -295,5 +295,5 @@ def test_naming_the_same_model_is_reported_and_never_refused(cfg, session_dir):
         ELSEWHERE_BY_MODEL.format(model=cfg.models.default)
     )
 
-    assert model_for(spec) == cfg.models.default
+    assert resolved_model(spec.wanted) == cfg.models.default
     assert "cheap" in _found(cfg, ("cheap",))

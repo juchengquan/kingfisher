@@ -3593,6 +3593,44 @@ named in a `HARNESS_EDGES` note saying which edge a move closed, and excused in
 `PROSE_GONE` beside the deliberate mentions already there -- and one named an attribute
 path rather than a module, which no rooting could resolve. *(2026-09-10.)*
 
+**A third rule for the same blind spot: what a class body declares.** Two rules ask
+whether anything reads a definition -- one over a module's functions and classes, one
+over its constants, the second written because the first collected neither. Neither
+can see a bare annotation in a class body, and three lived there: `Disposal`
+declaring a `session_root` it never reads, `Sessions` declaring `_shared` the same
+way, and `Sessions` declaring `_claims: Path` where **nothing anywhere sets
+`_claims`**. That last one is why this is more than tidying -- written out, the call
+it invites type-checks and does not run:
+
+    ty:     All checks passed!
+    pytest: 28 failed -- AttributeError: 'Kingfisher' object has no attribute '_claims'
+
+A mixin's declarations are its statement of what it needs from the instance it is
+mixed into, so one it does not read is either a requirement that moved or one that
+was never there. `test_no_mixin_declares_what_it_does_not_read` asks that of every
+class whose annotations are a requirement rather than a shape -- a dataclass's are
+its constructor and a Protocol's are its contract, so both are out.
+
+**What that rule still does not see is a property**, which is a function in a class
+body and invisible to all three. `Surface.ambiguous` was one: no caller anywhere,
+while the run report asked `Offering.ambiguous` directly. It is deleted rather than
+guarded, because the rule that would catch the next one has to decide about a
+property read only by tests -- and that question was answered the other way for
+`ToolAllowlist._allowed` on 2026-09-24, where a public accessor with no production
+caller was refused.
+
+Two more the same review named were measured and left alone: the macOS deny rule for
+a session's harness directory already builds from `HARNESS` rather than a literal,
+and *Splitting a file*'s claim that the backend's guards had never been edited was
+re-measured and reversed on 2026-09-23. *(2026-09-24, from an architecture review.)*
+
+**And one resolver where there were two.** `model_for(spec, override=...)` read
+`spec.wanted` and handed it to `resolved_model`, whose only caller it was; both
+docstrings described the same answer. The adapter is gone and its four callers pass
+`spec.wanted`, which says which field the answer comes from. The rule itself stays in
+`kinds.subagents.rules`, where what a definition means belongs.
+*(2026-09-24, same review.)*
+
 ## How much a comment says
 
 **Reversed: "match the surrounding density".** The convention asked every comment

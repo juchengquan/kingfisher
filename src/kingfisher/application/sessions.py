@@ -47,8 +47,6 @@ class Sessions:
     workspace: Path
     sessions_store: SessionStore | None
     session_root: SessionRoot
-    _claims: Path
-    _shared: Any
 
     def _session_id_for(self, request: Request | Resume, root: Path) -> str:
         """Mint an id, or accept one that already names a session."""

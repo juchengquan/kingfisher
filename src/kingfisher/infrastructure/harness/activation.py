@@ -10,10 +10,14 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import ALL, Capabilities, refuse_unoffered
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.backend import bundled_skills_route
-from kingfisher.infrastructure.harness.subagents import indistinct, model_for
+from kingfisher.infrastructure.harness.subagents import indistinct
 from kingfisher.kinds.skills import registry as skill_registry
 from kingfisher.kinds.skills.registry import SkillRegistry
-from kingfisher.kinds.subagents.rules import refuse_cycles, refuse_two_of_a_name
+from kingfisher.kinds.subagents.rules import (
+    refuse_cycles,
+    refuse_two_of_a_name,
+    resolved_model,
+)
 from kingfisher.kinds.subagents.spec import RunOn, SubagentSpec
 from kingfisher.layout import SKILLS_ROUTE
 
@@ -49,7 +53,7 @@ def unrunnable_delegates(
     found: list[tuple[str, str]] = []
     for name, spec in sorted(defined_subagents(cfg, catalogue=catalogue).items()):
         try:
-            model = model_for(spec)
+            model = resolved_model(spec.wanted)
             if model is not None:
                 cfg.models.resolve(model)
         except ConfigError as exc:
@@ -79,7 +83,7 @@ def indistinct_delegates(
         if spec is None:
             continue  # `build_agent` refuses this; reporting is not its job
         try:
-            model = model_for(spec, override=wanted.get(name))
+            model = resolved_model(spec.wanted, override=wanted.get(name))
         except ConfigError:
             # A model this deployment cannot run. The build
             # refuses it with the message worth reading; reporting is not

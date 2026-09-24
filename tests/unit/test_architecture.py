@@ -3523,6 +3523,57 @@ def _unread(found: dict[str, Path], read: set[str], public: frozenset[str]) -> d
     }
 
 
+#: Class shapes whose bare annotations are the point rather than a requirement: a
+#: dataclass's are its constructor, a Protocol's are its contract, and the others
+#: build their members out of them too.
+DECLARED_BY_SHAPE = frozenset({"Protocol", "TypedDict", "Enum", "StrEnum", "NamedTuple"})
+
+
+def test_no_mixin_declares_what_it_does_not_read():
+    """A mixin says what it needs from the instance it is mixed into. One that names
+    something it never reads is either a requirement that moved or one that was never
+    there -- and the second is worse than untidy.
+
+    `Sessions` declared `_claims: Path` and nothing anywhere set `_claims`, so
+    `self._claims.exists()` type-checked cleanly and raised `AttributeError` on every
+    turn that reached it. Two rules already ask this of a module's own definitions
+    and of its constants; neither can see a bare annotation in a class body, which is
+    where that one lived.
+    """
+    import ast
+
+    offenders: dict[str, list[str]] = {}
+    for path in sorted(SRC.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for klass in [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]:
+            decorated = {getattr(d, "id", getattr(d, "attr", "")) for d in klass.decorator_list}
+            decorated |= {
+                getattr(getattr(d, "func", None), "id", "") for d in klass.decorator_list
+            }
+            inherits = {getattr(b, "id", getattr(b, "attr", "")) for b in klass.bases}
+            if "dataclass" in decorated or inherits & DECLARED_BY_SHAPE:
+                continue
+            declared = [
+                node.target.id
+                for node in klass.body
+                if isinstance(node, ast.AnnAssign) and node.value is None
+            ]
+            read = {
+                node.attr
+                for node in ast.walk(klass)
+                if isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "self"
+            }
+            if dead := [name for name in declared if name not in read]:
+                offenders[f"{path.relative_to(SRC)}::{klass.name}"] = dead
+
+    assert not offenders, (
+        f"{offenders} are declared and never read by the class declaring them -- "
+        "delete the line, or read it where the requirement actually is"
+    )
+
+
 def test_no_constant_is_published_for_tests_alone():
     """A constant nothing reads is a claim about the code the code does not make."""
     import kingfisher
