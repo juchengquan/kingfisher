@@ -733,6 +733,30 @@ Inside `application/config.py` the old name read well because the module
 qualified it, and that one call site now stutters; fifty-two others got clearer.
 *(2026-09-01.)*
 
+**Seeding keeps its own tolerant reader, and the spellings it covers are held.**
+`source_ids_named` and `middleware_named` read one field out of a document that may
+not parse, because seeding runs before there is a catalogue and cannot refuse
+anything: a file it will not copy has to be one it decided about, not one it choked
+on. The review called that a second reader to be replaced by the format's own.
+
+**Measured, and the replacement is what would cause the bug.** A definition naming
+source ids *and* carrying an unrelated fault -- no `description` -- is refused by the
+format and read fine by this one, so today it is correctly left behind. Asked of the
+format, it would read as a document that cannot be read, and be copied into a
+workspace where its names are not declared. That is precisely the failure the
+proposal names.
+
+What the two readers do agree on was measured rather than assumed: every definition
+in `assets_examples/`, and every legal spelling of an audience -- a bare name, a
+list, a requirement set, an entry's own `source_ids:`. On all of them the tolerant
+reader finds what the format finds.
+
+**Two of those four spellings were held by nothing.** Stop reading a requirement set,
+or a source id written as a bare string, and the whole suite stayed green while a
+definition naming somebody read as naming nobody. `test_every_way_of_naming_a_source_id_is_left_behind`
+drives each through `seed` itself, since what goes wrong is the copying rather than
+the reading. *(2026-09-24, from an architecture review.)*
+
 ## Capabilities
 
 **One refusal, with the caller naming itself.** Tool-name rules live in a value
