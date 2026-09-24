@@ -11,11 +11,17 @@ from kingfisher.application.config import config_from_env
 from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.harness.models import ADAPTERS
 from tests.conftest import FakeToolCallingModel
 
 #: A second endpoint, on a different wire format, so a test can tell "went
 #: elsewhere" from "went to the default" by which attribute the value landed on.
-ELSEWHERE = Endpoint("openai_responses", "https://api.openai.com/v1", "sk-elsewhere")
+ELSEWHERE = Endpoint(
+    "openai_responses",
+    "https://api.openai.com/v1",
+    "sk-elsewhere",
+    adapter=ADAPTERS["openai_responses"],
+)
 
 CATALOGUE = """
 endpoints:

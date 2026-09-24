@@ -1603,6 +1603,10 @@ WITNESSES: dict[str, str] = {
     # `Config`, `run` returns a `RunResult`, `stream` yields `RunEvent`s. The
     # type of a documented call's answer cannot be private.
     "Config": "embedder",
+    # `configuration.md` writes a `KINGFISHER_ADAPTERS_FACTORY` out, and it returns
+    # these.
+    "Adapter": "document",
+    "Landing": "document",
     "RunResult": "embedder",
     "RunEvent": "embedder",
     # What `Kingfisher.sessions()` and `session()` return.
@@ -2200,6 +2204,9 @@ LIGHT_EXPORTS = frozenset({
     # library, and `CommandResult` is a frozen dataclass in `domain.ports`.
     "SESSION_ROOT_CONTRACT", "COMMAND_RUNNER_CONTRACT", "CommandResult",
     "ensure_layout", "config_from_env",
+    # What a `KINGFISHER_ADAPTERS_FACTORY` returns. Light because the setting is read
+    # by `config_from_env`, and a row names its class as a string for exactly this.
+    "Adapter", "Landing",
     # What `doctor` silences while it loads a configuration, because its own
     # `credentials` check says the same thing. Beside `ConfigError` in
     # `kingfisher.config`, and as light: a `UserWarning` subclass and nothing else.

@@ -11,10 +11,16 @@ from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.harness.models import ADAPTERS
 from kingfisher.kinds.subagents.spec import RunOn
 from tests.conftest import FakeToolCallingModel, subagents_dir
 
-ELSEWHERE = Endpoint("openai_responses", "https://api.openai.com/v1", "sk-test")
+ELSEWHERE = Endpoint(
+    "openai_responses",
+    "https://api.openai.com/v1",
+    "sk-test",
+    adapter=ADAPTERS["openai_responses"],
+)
 
 PINNED = """name: second-opinion
 description: Answers again, elsewhere.

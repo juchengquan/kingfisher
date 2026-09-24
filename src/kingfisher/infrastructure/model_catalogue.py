@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 import yaml
 
 from kingfisher.config import (
+    Adapter,
     ConfigError,
     Endpoint,
     MissingCredentialsWarning,
@@ -17,17 +19,17 @@ from kingfisher.config import (
 )
 from kingfisher.domain import fields
 from kingfisher.infrastructure.harness.models import ADAPTERS
+from kingfisher.infrastructure.wiring import store_named
 from kingfisher.infrastructure.workspace import EXAMPLE
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
     from pathlib import Path
 
 #: Top-level keys. `default` names a model; the other two are the tables.
 KNOWN_TOP: frozenset[str] = frozenset({"endpoints", "models", "default"})
 
-#: What an endpoint entry may say. `api` picks a wire format from
-#: `models.ADAPTERS`; `base_url` is literal because it is topology, not a
+#: What an endpoint entry may say. `api` picks a wire format from `adapters`
+#: below; `base_url` is literal because it is topology, not a
 #: secret, and because two gateways speaking one wire format cannot both be
 #: described by a single conventional variable name -- which is the whole reason
 #: this table exists apart from the adapter table.
@@ -71,6 +73,35 @@ def _refuse_unknown(document: Mapping[str, Any], known: frozenset[str], where: s
         raise ConfigError(msg)
 
 
+SETTING = "KINGFISHER_ADAPTERS_FACTORY"
+
+
+def adapters(spec: str | None) -> Mapping[str, Adapter]:
+    """The wire formats this deployment can build: kingfisher's, and its own."""
+    if spec is None:
+        return ADAPTERS
+    theirs = store_named(spec, setting=SETTING, port=Mapping)
+    for name, row in theirs.items():
+        if not isinstance(row, Adapter):
+            msg = (
+                f"{SETTING} names {spec!r}, whose {name!r} is a "
+                f"{type(row).__name__} -- every value has to be a kingfisher Adapter"
+            )
+            raise ConfigError(msg)
+    # Refused rather than letting the deployment's row win: every endpoint already
+    # written as `api: anthropic` would move to a class its author never chose, and
+    # nothing in `models.yaml` would show it.
+    taken = sorted(set(theirs) & set(ADAPTERS))
+    if taken:
+        msg = (
+            f"{SETTING} names {spec!r}, which redefines {', '.join(map(repr, taken))} -- "
+            "a wire format kingfisher ships. Give yours a name of its own and point "
+            "the endpoints that want it there"
+        )
+        raise ConfigError(msg)
+    return MappingProxyType({**ADAPTERS, **theirs})
+
+
 def _mapping(value: Any, where: str) -> Mapping[str, Any]:
     if value is None:
         return {}
@@ -81,7 +112,10 @@ def _mapping(value: Any, where: str) -> Mapping[str, Any]:
 
 
 def _endpoints(
-    document: Mapping[str, Any], environ: Mapping[str, str], source: Path
+    document: Mapping[str, Any],
+    environ: Mapping[str, str],
+    source: Path,
+    buildable: Mapping[str, Adapter],
 ) -> tuple[dict[str, Endpoint], dict[str, str]]:
     """Every endpoint whose key is actually present, and the names dropped."""
     resolved: dict[str, Endpoint] = {}
@@ -94,7 +128,7 @@ def _endpoints(
                 msg = f"{source}: endpoint {name!r} is missing required key {required!r}"
                 raise ConfigError(msg)
         api = str(entry["api"]).strip()
-        if api not in ADAPTERS:
+        if api not in buildable:
             # Refused here rather than in `build_model`, which is where it used to
             # happen -- meaning a wire format kingfisher cannot speak loaded without
             # complaint and failed when a turn started, from inside a request. Every
@@ -103,7 +137,7 @@ def _endpoints(
             # neither is refused. `api` was the one that was not.
             msg = (
                 f"{source}: endpoint {name!r} names api {api!r}, which kingfisher "
-                f"cannot build; known: {tuple(sorted(ADAPTERS))}"
+                f"cannot build; known: {tuple(sorted(buildable))}"
             )
             raise ConfigError(msg)
         key = (environ.get(str(entry["key_env"])) or "").strip()
@@ -121,6 +155,7 @@ def _endpoints(
             base_url=str(entry["base_url"]),
             api_key=key,
             key_env=str(entry["key_env"]),
+            adapter=buildable[api],
         )
     return resolved, dropped
 
@@ -183,7 +218,9 @@ def _models(
     )
 
 
-def load(path: Path, environ: Mapping[str, str]) -> Models:
+def load(
+    path: Path, environ: Mapping[str, str], buildable: Mapping[str, Adapter] = ADAPTERS
+) -> Models:
     """Read `path` into what this deployment can run, where, and under which names."""
     try:
         text = path.read_text(encoding="utf-8")
@@ -221,7 +258,7 @@ def load(path: Path, environ: Mapping[str, str]) -> Models:
     document = _mapping(parsed, str(path))
     _refuse_unknown(document, KNOWN_TOP, str(path))
 
-    endpoints, dropped = _endpoints(document, environ, path)
+    endpoints, dropped = _endpoints(document, environ, path, buildable)
     if dropped:
         # Warned even when nothing names them. A shared catalogue listing an
         # endpoint this machine cannot reach is the normal case, but silence

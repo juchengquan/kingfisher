@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
 from kingfisher.config import Config, Endpoint, ModelProfile, Models
+from kingfisher.infrastructure.harness.models import ADAPTERS
 from kingfisher.infrastructure.workspace import ensure_layout, ensure_session_layout
 
 if TYPE_CHECKING:
@@ -71,6 +72,7 @@ FAKE_ENDPOINT = Endpoint(
     base_url="http://127.0.0.1:9/never-called",
     api_key="test-key-not-real",
     key_env=FAKE_KEY_VAR,
+    adapter=ADAPTERS["anthropic"],
 )
 
 #: A second host, so "somewhere else" is expressible. `indistinct` compares
@@ -81,6 +83,7 @@ OTHER_ENDPOINT = Endpoint(
     base_url="http://127.0.0.2:9/never-called",
     api_key="test-key-not-real",
     key_env=FAKE_KEY_VAR,
+    adapter=ADAPTERS["anthropic"],
 )
 
 #: Two models on one endpoint, which is the shape the catalogue exists to allow

@@ -1266,9 +1266,8 @@ the machine that holds the key.
 **No Chat-Completions row was added**, though it is the wire format those
 gateways actually speak. Nothing needs one: MiniMax and every gateway worth
 pointing at publish an Anthropic-compatible endpoint, which is the recommended
-path and where the example sends them. Adding a row means an adapter and a
-release, and the table is built to take one the day something measures the
-need. *(2026-09-04.)*
+path and where the example sends them. A deployment that does need one adds it
+itself; see below. *(2026-09-04.)*
 
 **A row says where its class keeps each value, and a model that did not keep one
 is refused as it is built.** A chat class handed a keyword it does not know moves
@@ -1278,14 +1277,38 @@ the gateway's key -- measured on `ChatOpenAI`, not supposed. What stood between
 a row and that was a table in `test_models.py`, which covered only the rows
 kingfisher ships. `Adapter.lands` puts the same knowledge on the row, and
 `build_model` reads every value back through it, so the check holds for a row
-from anywhere. It is the half of opening the table to a deployment that is worth
-having whether or not the table is ever opened.
+from anywhere, which is what let the table be opened.
 
 `temperature` and `top_p` are not read back: `ChatOpenAI` drops `temperature` for
 `gpt-5`, which rejects it, and checking it would refuse a model the vendor's own
 client builds correctly. A refusal names the value and never quotes a key -- a
 class that loses the endpoint's key falls back to one from the environment, and
 the message goes to a log. *(2026-09-24.)*
+
+**A deployment adds a wire format through a setting, in Python.**
+`KINGFISHER_ADAPTERS_FACTORY` names a zero-argument factory returning `Adapter`
+rows, the convention `KINGFISHER_SESSION_STORE_FACTORY` already set. The rows are
+merged over the two kingfisher ships as the catalogue loads, and each endpoint
+carries the row its `api` resolved to, so building a model never looks a name up
+again in a table that might not hold it.
+
+**Considered and rejected: a `Kingfisher(adapters=...)` argument**, which was the
+first design. `api` is checked as `models.yaml` loads, and that happens in
+`config_from_env`, before the constructor has seen an argument -- so the check
+would have had to move later, keeping the `api` of every endpoint dropped for want
+of a key so the file still failed on every machine. And `kingfisher doctor` and
+`run` build their own instance with nowhere to pass one: a catalogue naming a
+deployment's wire format would load in its own program and be refused by the
+commands meant to diagnose it.
+
+**Considered and rejected: rows in `models.yaml`.** A row names a class to import,
+and that file is meant to be shared across a fleet and reviewed as data -- "it says
+where your prompts go". A setting keeps the code in the deployment's own package
+and the catalogue free of it.
+
+**A shipped name is refused, not replaced.** Letting a deployment's `anthropic`
+win would move every endpoint already written `api: anthropic` to a class its
+author never chose, with nothing in `models.yaml` to show it. *(2026-09-24.)*
 
 **`doctor` answers "why will this not start?" and nothing else.** It never makes a
 model call: no probe, and it points at the caller's own task as the end-to-end

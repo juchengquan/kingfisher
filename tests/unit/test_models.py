@@ -9,13 +9,18 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from kingfisher.config import ConfigError, Endpoint, ModelProfile
-from kingfisher.infrastructure.harness.models import ADAPTERS, Adapter, build_model
+from kingfisher.config import Adapter, ConfigError, Endpoint, ModelProfile
+from kingfisher.infrastructure.harness.models import ADAPTERS, build_model
 
 if TYPE_CHECKING:
     from typing import Any
 
-OPENAI = Endpoint("openai_responses", "https://api.openai.com/v1", "sk-not-real")
+OPENAI = Endpoint(
+    "openai_responses",
+    "https://api.openai.com/v1",
+    "sk-not-real",
+    adapter=ADAPTERS["openai_responses"],
+)
 
 
 def test_openai_uses_the_responses_api(cfg):
@@ -25,14 +30,12 @@ def test_openai_uses_the_responses_api(cfg):
     assert model.use_responses_api is True
 
 
-def test_an_adapter_row_cannot_overrule_a_configured_value(cfg, monkeypatch):
+def test_an_adapter_row_cannot_overrule_a_configured_value(cfg):
     """`extra` is additive: it may not name a value the profile carries."""
-    shipped = ADAPTERS["openai_responses"]
-    colliding = replace(shipped, extra={"max_tokens": 1})
-    monkeypatch.setitem(ADAPTERS, "openai_responses", colliding)
+    colliding = replace(ADAPTERS["openai_responses"], extra={"max_tokens": 1})
 
     with pytest.raises(TypeError, match="multiple values for keyword argument"):
-        build_model(cfg.models.models["fake-model"], OPENAI)
+        _build_with(colliding, cfg.models.models["fake-model"])
 
 
 def test_a_model_entrys_extra_cannot_overrule_its_own_params(cfg):
@@ -94,7 +97,7 @@ def test_every_value_reaches_the_client():
     something red besides the test written for it.
     """
     for api, adapter in sorted(ADAPTERS.items()):
-        endpoint = Endpoint(api, "https://example.invalid/v1", "sk-not-real")
+        endpoint = Endpoint(api, "https://example.invalid/v1", "sk-not-real", adapter=adapter)
         profile = ModelProfile("a-model", "somewhere", max_tokens=321, timeout_s=45)
         model = build_model(profile, endpoint)
         sites = adapter.lands
@@ -159,17 +162,7 @@ def test_a_refusal_never_quotes_the_key_it_found(cfg, monkeypatch):
 
 def _build_with(row: Adapter, profile: ModelProfile) -> Any:
     """`build_model` on `OPENAI`, with `row` standing in for its shipped adapter."""
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setitem(ADAPTERS, "openai_responses", row)
-        return build_model(profile, OPENAI)
-
-
-def test_an_unbuildable_api_fails_with_a_readable_error(cfg):
-    """An endpoint naming a wire format kingfisher does not ship."""
-    endpoint = Endpoint("gemini", "https://example.invalid", "sk-not-real")
-
-    with pytest.raises(ConfigError, match="names api 'gemini'"):
-        build_model(cfg.models.models["fake-model"], endpoint)
+    return build_model(profile, replace(OPENAI, adapter=row))
 
 
 def test_describing_an_adapter_does_not_import_its_sdk():

@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from importlib import import_module
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from kingfisher.config import NO_EXTRA, ConfigError
+from kingfisher.config import Adapter, ConfigError, Landing
 from kingfisher.domain.capabilities import ALL, Selection, refuse_ungranted_endpoint
 
 if TYPE_CHECKING:
@@ -18,48 +16,9 @@ if TYPE_CHECKING:
     from kingfisher.config import Config, Endpoint, ModelProfile
 
 
-@dataclass(frozen=True)
-class Landing:
-    """The attribute a chat class keeps each value in, once constructed.
-
-    The classes agree on the keyword and disagree on the attribute: `base_url` is
-    `anthropic_api_url` on one and `openai_api_base` on the other. `build_model` reads
-    every value back through these after construction.
-
-    `temperature` and `top_p` are absent deliberately: a class may drop them on purpose
-    -- `ChatOpenAI` discards `temperature` for `gpt-5`, which rejects it -- and
-    checking them would refuse a model the vendor's own client builds correctly.
-    """
-
-    model: str
-    base_url: str
-    api_key: str
-    max_tokens: str
-    timeout: str
-
-
-@dataclass(frozen=True)
-class Adapter:
-    """One wire format: which class speaks it, and what it needs to be told.
-
-    kingfisher targets **gateway-shaped** endpoints — one base URL, one key. A wire
-    format without that shape (Bedrock wants a region and a credentials profile) is a
-    new field on `Endpoint`, not a new row in this table.
-    """
-
-    chat_class: str
-    lands: Landing
-    extra: Mapping[str, Any] = NO_EXTRA
-
-    def resolve(self) -> type[BaseChatModel]:
-        """Import the chat class this row names."""
-        module_name, _, class_name = self.chat_class.partition(":")
-        return getattr(import_module(module_name), class_name)
-
-
-#: The one place a wire format is described. `models.yaml` picks from these by
-#: name through an endpoint's `api`; `build_model` constructs through
-#: `chat_class`. Adding a row is a kingfisher release.
+#: The wire formats kingfisher ships. `models.yaml` picks from these by name
+#: through an endpoint's `api`, together with any a deployment adds through
+#: `KINGFISHER_ADAPTERS_FACTORY`.
 #:
 #: A row names its package as a string and `resolve` imports it by name, so neither
 #: provider is an import anywhere in `src/` and neither belongs in `THIRD_PARTY` --
@@ -100,15 +59,7 @@ ADAPTERS: Mapping[str, Adapter] = {
 
 def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
     """Build a chat model from `profile`, pointed at `endpoint`."""
-    try:
-        adapter = ADAPTERS[endpoint.api]
-    except KeyError:
-        msg = (
-            f"endpoint {profile.endpoint!r} names api {endpoint.api!r}, which kingfisher "
-            f"cannot build; known: {tuple(ADAPTERS)}"
-        )
-        raise ConfigError(msg) from None
-
+    adapter = endpoint.adapter
     model = adapter.resolve()(
         model=profile.model,
         base_url=endpoint.base_url,

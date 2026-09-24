@@ -22,6 +22,7 @@ mentions.
 | `KINGFISHER_WORKSPACE` | The workspace. Everything below defaults inside it. | **required** |
 | `KINGFISHER_ASSETS` | Where `kingfisher seed` copies definitions from. Without it seeding lays the workspace out, writes `models.yaml.example`, and then refuses — in that order, so a deployment with nothing to seed still gets somewhere to start. | none |
 | `KINGFISHER_MODELS_FILE` | The model catalogue: which models exist, where each runs, which key it uses. | `<workspace>/models.yaml` |
+| `KINGFISHER_ADAPTERS_FACTORY` | `module:name` naming something callable with no arguments that returns wire formats of your own, for an endpoint's `api` to name. See [below](#a-wire-format-kingfisher-does-not-ship). | none — `anthropic` and `openai_responses` only |
 | `KINGFISHER_SOURCE_IDS_FILE` | The source-id vocabulary. No file means access control is off entirely. | `<workspace>/source_ids.yaml` |
 | `KINGFISHER_AGENTS_DIR` | Relocate the agents catalogue. | inside the workspace |
 | `KINGFISHER_MIDDLEWARES_DIR` | Relocate the middlewares catalogue. Code, like the tools one. | inside the workspace |
@@ -127,6 +128,61 @@ on and says why when it settled on nothing.
 
 Whatever you add to `PATH` is granted to the fence as readable, so a directory
 named here is one the agent can run from.
+
+## A wire format kingfisher does not ship
+
+An endpoint's `api` in `models.yaml` names a wire format: which LangChain chat
+class to build, and what it needs to be told. kingfisher ships `anthropic` and
+`openai_responses`. To add one, return it from a factory and name the factory:
+
+```
+KINGFISHER_ADAPTERS_FACTORY=mycompany.models:adapters
+```
+
+```python
+from kingfisher import Adapter, Landing
+
+def adapters():
+    return {
+        "chat_completions": Adapter(
+            "langchain_openai:ChatOpenAI",
+            Landing(
+                model="model_name",
+                base_url="openai_api_base",
+                api_key="openai_api_key",
+                max_tokens="max_tokens",
+                timeout="request_timeout",
+            ),
+        ),
+    }
+```
+
+```yaml
+endpoints:
+  my-gateway:
+    api: chat_completions
+    base_url: https://gateway.example/v1
+    key_env: GATEWAY_API_KEY
+```
+
+The class is named as `module:Class` and imported only when a model is built.
+Its package has to be installed; kingfisher installs only the two it ships.
+
+`Landing` is the part to get right. kingfisher passes every class the same
+keywords — `model`, `base_url`, `api_key`, `max_tokens`, `timeout` — and each
+class keeps them under its own attribute names. `Landing` says which, and a model
+that did not keep a value there is refused as it is built. That refusal is the
+point: a class handed a keyword it does not know moves it aside with a warning
+and builds anyway, so a URL it did not keep sends your prompts, and the gateway's
+key, to the vendor's default host.
+
+A name kingfisher already ships is refused rather than replaced, so an existing
+`api: anthropic` cannot quietly start meaning your class. `extra` on an `Adapter`
+is passed to every model it builds, and may not name anything the model entry
+already sets.
+
+The setting is read wherever the catalogue is, so `kingfisher doctor` and
+`kingfisher run` see your rows as well as your own program does.
 
 ## Two things that catch people
 
