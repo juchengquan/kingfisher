@@ -266,6 +266,58 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path):
     assert (tools_dir(cfg) / "csv_profile" / "__init__.py").is_file(), "and the package itself"
 
 
+#: Every way the format lets a definition name a source id, and the names each one
+#: says. Seeding reads these with a tolerant reader of its own -- it runs before
+#: there is a catalogue, so it cannot refuse a document -- and a spelling that reader
+#: stops covering does not fail: the definition reads as naming nobody and is copied
+#: into a workspace that cannot load it. Two of these four were held by nothing.
+SPELLINGS = {
+    "a bare name": ("source_ids: A\n", ("A",)),
+    "a list": ("source_ids: [A, B]\n", ("A", "B")),
+    "a requirement set": ("source_ids: [{A, B}]\n", ("A", "B")),
+    "an entry's own audience": ("tools:\n  - name: t\n    source_ids: [A]\n", ("A",)),
+}
+
+
+@pytest.mark.parametrize("spelling", sorted(SPELLINGS))
+def test_every_way_of_naming_a_source_id_is_left_behind(spelling, cfg, tmp_path):
+    """Driven through `seed` rather than through its reader, because what goes wrong
+    is the copying: a definition whose audience this cannot see is written into a
+    workspace where the names it asks for are not declared.
+    """
+    written, expected = SPELLINGS[spelling]
+    source = tmp_path / "presets"
+    (source / "agents").mkdir(parents=True)
+    (source / "agents" / "audienced.yaml").write_text(
+        f"name: audienced\ndescription: d\n{written}system_prompt: |\n  Hi.\n",
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert "agents/audienced.yaml" not in done.written
+    left = [s for s in done.skipped if s.label == "agents/audienced.yaml"]
+    assert left, f"a definition naming {expected} by {spelling} was copied anyway"
+    assert sorted(left[0].names) == sorted(expected)
+    assert left[0].wants == "source_ids"
+
+
+def test_a_definition_naming_nobody_is_copied(cfg, tmp_path):
+    """The control the rule above needs: seeding leaves a definition behind *because*
+    it names source ids, not because it leaves everything behind.
+    """
+    source = tmp_path / "presets"
+    (source / "agents").mkdir(parents=True)
+    (source / "agents" / "plain.yaml").write_text(
+        "name: plain\ndescription: d\nsystem_prompt: |\n  Hi.\n", encoding="utf-8"
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert "agents/plain.yaml" in done.written
+    assert not done.skipped
+
+
 def test_a_definition_naming_middleware_is_left_behind(cfg, tmp_path):
     """`seed` reads one field and declines to copy on it."""
     source = tmp_path / "presets"
