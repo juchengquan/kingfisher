@@ -426,7 +426,7 @@ NO_NAMES_HERE = (
 
 def _carried(entry: Mapping[str, object], reader: fields.Reader) -> Mapping[str, Any]:
     """What a portable entry brought in `tools` and `skills`, for a definition with no
-    folder: the objects, and the directory its skills are in.
+    folder: the objects, and the directories its skills are in.
     """
     carried: dict[str, Any] = {}
     if (tools := entry.get("tools")) is not None:
@@ -447,12 +447,39 @@ def _carried(entry: Mapping[str, object], reader: fields.Reader) -> Mapping[str,
             raise SubagentError(msg)
         carried["tools"] = tuple(tools)
     if (skills := entry.get("skills")) is not None:
-        carried["skills"] = _skills_directory(skills, reader)
+        carried["skills"] = _skills_directories(skills, reader)
     return carried
 
 
+def _skills_directories(value: object, reader: fields.Reader) -> tuple[Path, ...]:
+    """The directories a definition resolved for its own skills, checked here.
+
+    One path, or a list of them: the list is deepagents' own `SubAgent["skills"]`,
+    so a spec written to that TypedDict loads as it is. Each is a directory on this
+    host, never a backend path -- a definition written elsewhere cannot know this
+    deployment's routes, and kingfisher mounts each one and tells the delegate
+    where.
+    """
+    values = list(value) if isinstance(value, (list, tuple)) else [value]
+    if not values:
+        msg = f"{reader.source}: skills is empty; leave it out for a delegate with none"
+        raise SubagentError(msg)
+    found = tuple(_skills_directory(one, reader) for one in values)
+    # Either way round, a skill would be listed twice: once from each directory.
+    for i, one in enumerate(found):
+        for other in found[i + 1 :]:
+            a, b = one.resolve(), other.resolve()
+            if a.is_relative_to(b) or b.is_relative_to(a):
+                msg = (
+                    f"{reader.source}: skills names {str(one)!r} and {str(other)!r}, "
+                    f"and one holds the other, so its skills would be offered twice"
+                )
+                raise SubagentError(msg)
+    return found
+
+
 def _skills_directory(value: object, reader: fields.Reader) -> Path:
-    """The directory a definition resolved for its own skills, checked here.
+    """One directory a definition resolved for its own skills, checked here.
 
     Absolute, because a relative one resolves against the working directory: the
     package would find its skills when kingfisher happened to be started from the
@@ -461,8 +488,8 @@ def _skills_directory(value: object, reader: fields.Reader) -> Path:
     """
     if not isinstance(value, (str, Path)):
         msg = (
-            f"{reader.source}: skills is {type(value).__name__}; it takes the "
-            f"directory the skills are in, as a path"
+            f"{reader.source}: skills holds a {type(value).__name__}; it takes the "
+            f"directory the skills are in, as a path, or a list of them"
         )
         raise SubagentError(msg)
     found = Path(value)
@@ -476,9 +503,9 @@ def _skills_directory(value: object, reader: fields.Reader) -> Path:
         raise SubagentError(msg)
     if not found.is_dir():
         msg = (
-            f"{reader.source}: skills is {str(found)!r}, which is not a "
-            f"directory. A portable entry's skills are checked here because there is "
-            f"nowhere else they could be: nothing walks a catalogue to find them"
+            f"{reader.source}: skills is {str(found)!r}, which is not a directory on "
+            f"this host. A portable entry names its skills where they sit on disk, "
+            f"not by a path inside the agent's backend such as '/skills/...'"
         )
         raise SubagentError(msg)
     return found

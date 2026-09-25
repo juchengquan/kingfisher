@@ -303,6 +303,14 @@ def _bundled(
                 if (found := tuple(sorted(catalogue.intersection(names))))
             }
         )
+        # Inside the `try` too: a delegate carrying two skills of one name is
+        # refused as its directories are read, which is here.
+        skills = MappingProxyType(
+            {
+                name: tuple(sorted(registry.names))
+                for name, registry in resolved.bundled_skills.items()
+            }
+        )
     except (ToolError, SubagentError) as exc:
         # `SubagentError` because reaching a bundle's tools reads the bundles first,
         # and a folder that is one subagent's and holds two definitions is refused
@@ -312,14 +320,6 @@ def _bundled(
         error = str(exc)
         return tools, skills, shadowed, error, orphans, carried
 
-    # Inside no `try` of its own, and that is the point: it reads the same bundles,
-    # so the only way it raises is a way the block above has already returned on.
-    skills = MappingProxyType(
-        {
-            name: tuple(sorted(registry.names))
-            for name, registry in resolved.bundled_skills.items()
-        }
-    )
     orphans = tuple(resolved.subagents.orphaned_assets)
     # Read off the same bundles, and asked of the backing rather than of the file
     # extension: a `.py` under `subagents/` may own a folder like any document, so

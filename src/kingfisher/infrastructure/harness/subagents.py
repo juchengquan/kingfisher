@@ -268,9 +268,9 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     #: deliberately does not, and `catalogue` is the half that still does.
     private: Sequence[Found] = (),
     #: This delegate's own skills: the `source::name` keys deepagents will list
-    #: them under, and the one source they are mounted at. Held whatever the
+    #: them under, and the sources they are mounted at. Held whatever the
     #: request granted, for the reason `private` is.
-    private_skills: tuple[tuple[str, ...], tuple[str, str]] | None = None,
+    private_skills: tuple[tuple[str, ...], tuple[tuple[str, str], ...]] | None = None,
     skill_sources: list[Any] | None = None,
     #: Passed on to a compiled delegate, whose tools carry their own translation.
     #: An assembled one resolves paths through the middleware built below instead.
@@ -371,11 +371,11 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # gets no skills index at all -- and a delegate that ships a skill of its
     # own and is told about none of it is the silent emptiness this package
     # keeps refusing.
-    own_names, own_source = private_skills or ((), None)
+    own_names, own_sources = private_skills or ((), ())
     if own_names:
         granted = () if skills in (None, ALL) else tuple(skills)
         skills = tuple(dict.fromkeys((*granted, *own_names)))
-        skill_sources = [*(skill_sources or []), own_source]
+        skill_sources = [*(skill_sources or []), *own_sources]
     if skills is not None and skills != ALL and backend is not None:
         # The same sources the parent got, so a delegate reads a folder's skills
         # under the label its parent granted them by. Passed in rather than

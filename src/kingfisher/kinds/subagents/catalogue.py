@@ -68,8 +68,8 @@ class Holdings:
     #: package does: it has no folder under this catalogue to be named after.
     root: Path | None = None
     #: What it carried, by the same two halves a folder has. Tools arrive as the
-    #: objects; skills as the directory the definition resolved for itself, since a
-    #: skill is files deepagents mounts and there is nothing else to hand it.
+    #: objects; skills as the directories the definition resolved for itself, since
+    #: a skill is files deepagents mounts and there is nothing else to hand it.
     carried: Mapping[str, Any] = field(default_factory=dict)
 
     @property
@@ -87,18 +87,19 @@ class Holdings:
         return None if found is None else LocalToolRepository(found)
 
     @property
-    def skills(self) -> Path | None:
-        """This subagent's skill directory, when it has one.
+    def skills(self) -> tuple[Path, ...]:
+        """This subagent's skill directories: empty for none, one for a folder.
 
-        A path for either backing, and not for want of symmetry with `tools`:
-        deepagents mounts a skills source by path, so a carried bundle has to name a
-        real directory too. What differs is who resolved it -- the catalogue walk, or
-        the definition itself.
+        Paths for either backing, and not for want of symmetry with `tools`:
+        deepagents mounts a skills source by path, so a carried bundle has to name
+        real directories too. What differs is who resolved them -- the catalogue
+        walk, or the definition itself -- and only a definition may name several.
         """
         carried = self.carried.get("skills")
         if carried is not None:
-            return Path(carried)
-        return self._asset("skills")
+            return tuple(carried)
+        found = self._asset("skills")
+        return () if found is None else (found,)
 
     def _asset(self, kind: str) -> Path | None:
         if self.root is None:
@@ -226,11 +227,11 @@ class LocalSubagentRepository:
         # this walk can see -- and an example arranged the way a package is would be
         # reported as abandoned while the delegate reading it works.
         for bundle in self.bundles.values():
-            skills = bundle.skills
-            if bundle.root is not None or skills is None:
+            if bundle.root is not None:
                 continue
-            if skills.is_relative_to(directory):
-                owned.add(str(skills.parent.relative_to(directory)))
+            for skills in bundle.skills:
+                if skills.is_relative_to(directory):
+                    owned.add(str(skills.parent.relative_to(directory)))
         return tuple(
             sorted(
                 str(entry.relative_to(directory))
