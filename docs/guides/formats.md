@@ -912,6 +912,27 @@ withholds it. A package cannot grant itself a shell.
 
 `kingfisher seed` ships `timestamps/` as a worked example.
 
+#### Written to deepagents' `SubAgent`
+
+A package written for deepagents, by somebody who has never heard of kingfisher,
+types its delegate as deepagents' `SubAgent` TypedDict. Most of one loads as it is:
+
+| `SubAgent` key | Here |
+|---|---|
+| `name`, `description`, `system_prompt` | as written |
+| `tools` | a tool or a plain function; a `dict` is refused, since it names a tool rather than carrying one |
+| `skills` | directories on this host, as above — not deepagents' `/skills/...` routes |
+| `model`, `middleware`, `interrupt_on`, `permissions`, `response_format` | refused, and the spec does not load |
+
+The type also cannot say two things this format can. With no `builtin_tools`, the
+delegate gets every built-in the request granted — still narrowed by the request,
+but a delegate that should only read has only its prompt asking it to. With no
+`metadata`, it cannot record where it came from. Needing either is the point to
+add the key and stop annotating the dict as a `SubAgent`.
+
+`kingfisher seed` ships `versions/` as a worked example, annotated as a `SubAgent`
+so that `ty` refuses any key the TypedDict does not define.
+
 #### When it wants a helper of its own
 
 `subagents:` is refused here, so a portable definition cannot delegate to another.

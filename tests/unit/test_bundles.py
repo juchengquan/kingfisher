@@ -1220,10 +1220,11 @@ def test_the_shipped_bundle_is_a_bundle(shipped):
     bundles = repository.bundles
 
     # Both shapes ship, and the pair is the assertion: `redactor` owns a folder named
-    # after it, `timestamps` carries what a folder would have held. A reader meets the
-    # two side by side, and dropping either would leave the other looking like the
-    # only way a subagent can own anything.
-    assert set(bundles) == {"redactor", "timestamps"}
+    # after it, `timestamps` carries what a folder would have held (as does `versions`,
+    # written to deepagents' own type). A reader meets the two side by side, and
+    # dropping either would leave the other looking like the only way a subagent can
+    # own anything.
+    assert set(bundles) == {"redactor", "timestamps", "versions"}
     assert bundles["redactor"].tools is not None
     assert bundles["redactor"].skills
     assert bundles["redactor"].root is not None

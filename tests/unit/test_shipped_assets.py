@@ -6,10 +6,11 @@ import re
 import subprocess
 import sys
 from dataclasses import fields, replace
-from typing import Any
+from typing import Any, get_type_hints
 
 import pytest
 import yaml
+from deepagents import SubAgent
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
@@ -23,7 +24,7 @@ from kingfisher.kinds.skills.catalogue import reachable
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.kinds.tools.spec import Offering
-from tests.conftest import FakeToolCallingModel, middleware_of, repository_root
+from tests.conftest import FakeToolCallingModel, delegate, middleware_of, repository_root
 from tests.unit.test_subagent_helpers import _delegate, _tools_of
 
 
@@ -39,6 +40,7 @@ def test_every_preset_subagent_parses(shipped):
         "extractor",
         "profiler",
         "timestamps",
+        "versions",
         "redactor",
         "show-your-work",
         "sweeper",
@@ -600,6 +602,86 @@ def test_the_compiled_presets_imports_stay_out_of_module_scope(shipped):
     }
 
     assert not module_level & {"langchain", "langchain_core", "langgraph", "deepagents"}
+
+
+# -- the preset written to deepagents' `SubAgent` -----------------------------
+
+
+def typed_preset(shipped):
+    """`versions` as a module, loaded the way the catalogue loads it."""
+    return load(shipped / "subagents" / "versions" / "versions.py", declares="SUBAGENTS")
+
+
+def test_the_typed_preset_writes_only_what_deepagents_types(shipped):
+    """`versions` ships to show a spec written for deepagents loading as written, and a
+    key of kingfisher's -- `builtin_tools`, `metadata` -- would load just as well and
+    leave it showing nothing.
+
+    Read off the TypedDict here as well as by `ty`, because deleting the annotation
+    silences `ty` and the file still loads.
+    """
+    (spec,) = typed_preset(shipped).SUBAGENTS
+
+    assert set(spec) <= set(get_type_hints(SubAgent))
+    assert SubAgent.__required_keys__ <= set(spec)
+    assert all(isinstance(one, str) for one in spec["skills"])
+
+
+def test_the_typed_preset_is_handed_its_tool_and_shown_its_skill(
+    workspace_with_presets, session_dir, fake_model
+):
+    """Read through the index the delegate is actually given, because `skills` as
+    deepagents writes it -- a list of strings -- can load, build, and mount nothing.
+    """
+    built = build_agent(
+        replace(workspace_with_presets, skills_enabled=True),
+        session_dir=session_dir,
+        model=fake_model,
+        capabilities=Capabilities(subagents=("versions",)),
+    )
+    (index,) = [
+        m for m in delegate(built, "versions")["middleware"] if isinstance(m, NarrowedSkills)
+    ]
+
+    shown = index._format_skills_list(index.before_agent({}, None, {})["skills_metadata"])
+
+    assert "semver" in shown
+    assert "order_versions" in _tools_of(_delegate(built.graph, "versions"))
+
+
+def test_the_typed_presets_tool_orders_by_precedence_rather_than_as_text(shipped):
+    """Each ordering a string sort gets wrong, once: `1.10.0` below `1.9.0`, a release
+    below its own pre-release, and `alpha.10` below `alpha.2`.
+    """
+    said = typed_preset(shipped).order_versions(
+        ["1.10.0", "1.0.0", "1.9.0", "1.0.0-rc.1", "1.0.0-alpha.10", "1.0.0-alpha.2",
+         "1.0.0-alpha.beta", "1.0.0-alpha"]
+    )
+
+    assert [line.strip() for line in said.splitlines()[1:]] == [
+        "1.0.0-alpha",
+        "1.0.0-alpha.2",
+        "1.0.0-alpha.10",
+        "1.0.0-alpha.beta",
+        "1.0.0-rc.1",
+        "1.0.0",
+        "1.9.0",
+        "1.10.0",
+    ]
+
+
+def test_the_typed_presets_tool_reports_rather_than_repairs(shipped):
+    """A tie left tied, and near-versions listed as written -- `1.2` padded into
+    `1.2.0`, or a digit from another script read by `int`, is the confident wrong
+    answer the preset exists to refuse.
+    """
+    said = typed_preset(shipped).order_versions(
+        ["1.4.0+build.9", "1.4.0+build.7", "1.2", "1.1\u0663.0"]
+    )
+
+    assert "1.4.0+build.7  (same precedence as the line above)" in said
+    unread = said.split("not versions:\n", 1)[1]
+    assert unread.split() == ["'1.2'", repr("1.1\u0663.0")]
 
 
 def test_every_shipped_tool_taking_a_path_says_it_is_a_session_path(shipped):
