@@ -138,6 +138,42 @@ what the agent will be told. `reachable` is what a caller asking "is anything he
 uses -- seeding's own tests do -- and the registry is what a caller asking for names
 uses. *(2026-09-21.)*
 
+**A skills directory can be mounted beside the catalogue, as one more folder of it.**
+`KINGFISHER_SKILLS_MOUNTS` names `label=path` pairs, and each is routed at
+`/skills/<label>/` and read as a source under its label, so the index, `source::name`,
+the deny rules and narrowing learned nothing. One level of grouping had answered
+several parties shipping into one catalogue; this is for a party that cannot write
+into it, where the answer was a deploy-time copy and the copy was what went stale.
+The copy still works, and needs no code, for anyone who can make it.
+
+A mount is one source, so it is flat: skills sit directly in it, and anything deeper
+is misplaced. The registry prefixes each of its paths with the label, and that is
+the part that fails open if dropped -- a deny rule is built from the path, and
+without the label it names `/skills/<name>/**`, which does not exist. A label that
+would hide part of the catalogue, one carrying `::` or `/`, a mount that is not
+there and one that overlaps another are refused before anything is mounted.
+
+Considered and not taken: several peer catalogues, each with its own `catalogue` and
+folders, which doubles every question the registry answers and leaves each answer a
+rule nobody has written. *(2026-09-25, `several-skills-roots.md`.)*
+
+**With a mount, the shell reads the catalogue through a view.** A skill names its
+scripts under `$KINGFISHER_SKILLS`, and the prompt teaches one rule, `/skills/X` is
+`$KINGFISHER_SKILLS/X`, which a mount has no host path to keep. So `skills_view`
+builds a directory of links in `.kingfisher/` -- each catalogue entry and each mount
+under its label -- and the variable names that. It is named for what it holds, so a
+catalogue that gained a skill gets a new view rather than a stale one, and it is
+built aside and renamed into place, so a turn never reads half of one. Views a
+changed catalogue left behind are not pruned: telling one no running turn still
+uses costs more than the links do.
+
+Considered and not taken: a variable per mount, which breaks the one rule and turns
+a label into an environment name with clashes of its own; links an operator places
+in the catalogue, which the shell is not granted the targets of; and rooting
+`/skills/` itself at the view, which would put the file tools at the mercy of how
+upstream's filesystem backend treats a link leaving its root.
+*(2026-09-25, `several-skills-roots.md`.)*
+
 **Middleware is a definition kind.** `middlewares/*.py` declaring `MIDDLEWARES`,
 read like `tools/`, seeded like everything else, and named from a definition in
 the long form that already existed. It was the one kind a workspace could not
@@ -689,6 +725,16 @@ objects on the spec for folder bundles too would have made *parsing* a definitio
 import its bundle's Python, where now the import happens when a bundle's tools are
 asked for. `kingfisher list` asks, to report them, and so does `warm`.
 *(2026-09-16.)*
+
+**A portable definition's `skills` are directories on the host, a list allowed.** The
+list is deepagents' own `SubAgent["skills"]`, so a spec typed to it is imported as
+written -- but there each entry is a path inside the backend, and a package cannot
+know a deployment's routes, so here each is a directory that must exist on this
+host, and `/skills/...` is refused naming the likely mistake. One directory keeps the
+bundle's route; several are numbered beneath it in the order listed, all under the
+bundle's one label, so a skill's identity does not depend on which directory holds
+it. Two holding one name are refused rather than merged, since the delegate could
+hold only one of them. *(2026-09-25.)*
 
 **Considered and not taken: `own_subagents`, private nested helpers.** The key was
 reserved when `subagents:` was refused, so that a portable definition wanting a
