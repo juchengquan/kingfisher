@@ -478,6 +478,10 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         or any(
             defined[n].tools not in (ALL, None)
             or defined[n].builtin_tools not in (ALL, None)
+            # One axis everything and the other nothing, which is every portable
+            # delegate's default. `ceiling` folds both into one list of names, and
+            # "every built-in" is not a list until the probe has read one.
+            or (defined[n].tools == ALL) != (defined[n].builtin_tools == ALL)
             or defined[n].subagents is not None
             for n in activated
         ),
