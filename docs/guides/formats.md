@@ -891,11 +891,20 @@ else: its tools are in no catalogue, so no agent can be granted them and no requ
 can narrow them away. That is what an imported subagent being **atomic** means. You
 use it, or you do not; there is no third option where you take it apart.
 
-`skills` is still a directory, because deepagents mounts a skills source by path.
-It must be **absolute** — a relative path would resolve against whatever directory
-kingfisher was started in, so the definition would find its skills from one
-working directory and silently offer none from the next. The definition resolves
-it, typically `Path(__file__).parent / "skills"`; kingfisher never guesses.
+`skills` is a directory, or a list of them — the list being deepagents' own
+`SubAgent["skills"]`, so a spec written to that TypedDict loads as it is. Each is a
+directory **on this host**, not a path inside the agent's backend: deepagents'
+examples write `/skills/...`, which names a route in one deployment, and a
+package cannot know another's routes. Kingfisher mounts each directory under
+`/skills/subagents/` — one directory at the bundle's own route, several numbered
+beneath it in the order listed — and tells the delegate where. Two directories
+holding a skill of one name, or one directory inside another, are refused.
+
+Each must be **absolute** — a relative path would resolve against whatever
+directory kingfisher was started in, so the definition would find its skills from
+one working directory and silently offer none from the next. The definition
+resolves it, typically `Path(__file__).parent / "skills"`; kingfisher never
+guesses.
 
 `builtin_tools` is the exception, and deliberately. Those are deepagents' tools
 rather than the definition's, so a request or agent that withheld `execute` still

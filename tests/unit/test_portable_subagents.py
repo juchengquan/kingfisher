@@ -361,7 +361,7 @@ def test_a_carried_skills_folder_is_not_reported_as_abandoned(cfg):
 
     repository = LocalSubagentRepository(root)
 
-    assert repository.bundles["surveyor"].skills == root / "assets" / "skills"
+    assert repository.bundles["surveyor"].skills == (root / "assets" / "skills",)
     assert repository.orphaned_assets == ()
 
 

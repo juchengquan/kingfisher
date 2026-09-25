@@ -24,6 +24,7 @@ from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from kingfisher.kinds.skills.registry import SkillRegistry
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.rules import refuse_miscounted
+from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.kinds.tools.catalogue import LocalToolRepository
 from kingfisher.kinds.tools.spec import Offering
 from kingfisher.layout import RESERVED_SKILL_FOLDER
@@ -73,9 +74,9 @@ class Definitions:
         if not bundles:
             return {}
         return {
-            name: skill_registry.read(LocalSkillRepository(bundle.skills))
+            name: _one_registry(name, bundle.skills)
             for name, bundle in bundles.items()
-            if bundle.skills is not None
+            if bundle.skills
         }
 
     def warm(self) -> Definitions:
@@ -257,3 +258,30 @@ def refuse_unmountable(root: Path, mounts: Mapping[str, Path]) -> None:
             if one.is_relative_to(two) or two.is_relative_to(one):
                 msg = f"{where} overlaps {name} ({other}), so its skills would be listed twice"
                 raise ConfigError(msg)
+
+
+def _one_registry(name: str, directories: tuple[Path, ...]) -> SkillRegistry:
+    """One bundle's skills, read from each of its directories and held as one."""
+    read = [skill_registry.read(LocalSkillRepository(one)) for one in directories]
+    if len(read) == 1:
+        return read[0]
+    # Refused rather than merged: every directory is mounted under the bundle's one
+    # label, so two holding a name would give the delegate one skill by that name
+    # and hide the other -- whichever deepagents happened to list last.
+    seen: dict[str, Path] = {}
+    for directory, registry in zip(directories, read, strict=True):
+        for taken in registry.taken:
+            if taken in seen:
+                msg = (
+                    f"subagent {name!r} carries a skill called {taken!r} in both "
+                    f"{seen[taken]} and {directory}; a delegate can hold one skill by "
+                    f"a name, so rename one of them"
+                )
+                raise SubagentError(msg)
+            seen[taken] = directory
+    return SkillRegistry(
+        offered={k: v for registry in read for k, v in registry.offered.items()},
+        unloadable=tuple(u for registry in read for u in registry.unloadable),
+        misfiled=tuple(m for registry in read for m in registry.misfiled),
+        folders=tuple(f for registry in read for f in registry.folders),
+    )

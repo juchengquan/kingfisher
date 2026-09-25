@@ -145,8 +145,8 @@ class Bundle(Protocol):
         ...
 
     @property
-    def skills(self) -> Path | None:
-        """This subagent's skill directory, when it has one."""
+    def skills(self) -> tuple[Path, ...]:
+        """This subagent's skill directories, empty when it has none."""
         ...
 
 

@@ -166,6 +166,25 @@ def a_portable_subagent_whose_skills_are_a_relative_path(cfg):
     )
 
 
+def a_portable_subagent_whose_skills_hold_one_another(cfg):
+    outer = cfg.workspace / "carried"
+    (outer / "inner").mkdir(parents=True)
+    _write(
+        _root(cfg, "subagents") / "p.py",
+        PORTABLE.format(extra=f", 'skills': [{str(outer)!r}, {str(outer / 'inner')!r}]"),
+    )
+
+
+def a_portable_subagent_carrying_one_skill_name_twice(cfg):
+    one, two = cfg.workspace / "one", cfg.workspace / "two"
+    for directory in (one, two):
+        _write(directory / "lookup" / "SKILL.md", "---\nname: lookup\ndescription: d\n---\n")
+    _write(
+        _root(cfg, "subagents") / "p.py",
+        PORTABLE.format(extra=f", 'skills': [{str(one)!r}, {str(two)!r}]"),
+    )
+
+
 def a_portable_subagent_carrying_a_class(cfg):
     _write(_root(cfg, "subagents") / "p.py", CARRYING.format(tools="[str]"))
 
@@ -258,6 +277,10 @@ REFUSALS: dict[str, Refusal] = {
         4, defect=a_declared_subagent_with_no_name),
     "kinds/subagents/spec.py::_skills_directory": Refusal(
         3, defect=a_portable_subagent_whose_skills_are_a_relative_path),
+    "kinds/subagents/spec.py::_skills_directories": Refusal(
+        2, defect=a_portable_subagent_whose_skills_hold_one_another),
+    "infrastructure/catalogue/__init__.py::_one_registry": Refusal(
+        1, defect=a_portable_subagent_carrying_one_skill_name_twice),
     # Filed on the build rather than on a missing name, which is what it used to be:
     # an entry with no `build` is now a portable declaration rather than a compiled
     # one missing a key, so the old defect reaches `_portable` and never gets here.

@@ -198,12 +198,28 @@ def _bundles_with_skills(catalogue: Definitions) -> tuple[Any, ...]:
         # as warming inside `resolve_definitions`, and a test caught that one
         # too. `warm()` still refuses at startup, so nothing is being excused.
         return ()
-    return tuple(bundle for bundle in bundles.values() if bundle.skills is not None)
+    return tuple(bundle for bundle in bundles.values() if bundle.skills)
 
 
 def bundled_skills_route(where: str) -> str:
     """The route one bundle's skills are mounted at."""
     return f"{BUNDLED_SKILLS_ROUTE}{where}/"
+
+
+def bundled_skill_mounts(where: str, directories: tuple[Path, ...]) -> tuple[tuple[str, Path], ...]:
+    """`(route, directory)` for each of one bundle's skill directories.
+
+    One directory keeps the bundle's own route. Several are numbered beneath it in
+    the order the definition listed them, because a directory's name is no label:
+    a package's are all called `skills`. Beneath rather than beside, so each stays
+    under `/skills/` and inherits its read-only rule.
+    """
+    if len(directories) == 1:
+        return ((bundled_skills_route(where), directories[0]),)
+    return tuple(
+        (bundled_skills_route(f"{where}/{n}"), directory)
+        for n, directory in enumerate(directories, start=1)
+    )
 
 
 def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
@@ -409,8 +425,9 @@ def default_backend(
     # underneath it. Generated rather than declared: the names are not known
     # until a catalogue is read, which is what `family=True` marks.
     routes.update({
-        bundled_skills_route(bundle.where): FilesystemBackend(root_dir=str(bundle.skills))
+        route: FilesystemBackend(root_dir=str(directory))
         for bundle in _bundles_with_skills(catalogue or Definitions.from_config(cfg))
+        for route, directory in bundled_skill_mounts(bundle.where, bundle.skills)
     })
     # One per mount, under `/skills/` for the bundles' reason. The registry lists a
     # mount under this same segment, so the deny rule for a skill in it lands here.

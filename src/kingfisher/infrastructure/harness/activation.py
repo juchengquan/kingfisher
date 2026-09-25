@@ -9,7 +9,7 @@ from deepagents import FilesystemPermission
 from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import ALL, Capabilities, refuse_unoffered
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.harness.backend import bundled_skills_route
+from kingfisher.infrastructure.harness.backend import bundled_skill_mounts
 from kingfisher.infrastructure.harness.subagents import indistinct
 from kingfisher.kinds.skills import registry as skill_registry
 from kingfisher.kinds.skills.registry import SkillRegistry
@@ -123,7 +123,7 @@ def _skill_denials(activated: tuple[str, ...], registry: Any) -> list[Filesystem
 
 def _private_skills(
     catalogue: Definitions, name: str
-) -> tuple[tuple[str, ...], tuple[str, str]] | None:
+) -> tuple[tuple[str, ...], tuple[tuple[str, str], ...]] | None:
     """The skills a delegate brings itself, and where they are mounted."""
     registry = catalogue.bundled_skills.get(name)
     if registry is None or not registry.offered:
@@ -138,7 +138,8 @@ def _private_skills(
         )
         if not offered:
             return None
-    where = catalogue.subagents.bundles[name].where
+    bundle = catalogue.subagents.bundles[name]
+    where = bundle.where
     # Re-labelled from the source it was *read* under to the one it is *mounted*
     # under. `skill_registry.read` calls a root source `catalogue`, and a bundle
     # is mounted under the folder's own name -- so the two halves of this return
@@ -148,7 +149,10 @@ def _private_skills(
             skill_registry.qualified(where, skill_registry.split_qualified(key)[1])
             for key in offered
         ),
-        (bundled_skills_route(where), where),
+        # Every directory under the one label, so a skill's identity does not
+        # depend on which of them it sits in -- and `bundled_skills` has already
+        # refused two that both hold one name.
+        tuple((route, where) for route, _ in bundled_skill_mounts(where, bundle.skills)),
     )
 
 

@@ -52,7 +52,7 @@ def test_a_folder_named_after_its_definition_is_that_subagents_bundle(tmp_path):
     # `.root`, because `.tools` is the repository reading that folder rather than the
     # folder itself -- a bundle has two backings now, and only one of them is a path.
     assert bundles["surveyor"].tools.root == tmp_path / "surveyor" / "tools"
-    assert bundles["surveyor"].skills == tmp_path / "surveyor" / "skills"
+    assert bundles["surveyor"].skills == (tmp_path / "surveyor" / "skills",)
     assert bundles["surveyor"].where == "surveyor"
 
 
@@ -1225,11 +1225,11 @@ def test_the_shipped_bundle_is_a_bundle(shipped):
     # only way a subagent can own anything.
     assert set(bundles) == {"redactor", "timestamps"}
     assert bundles["redactor"].tools is not None
-    assert bundles["redactor"].skills is not None
+    assert bundles["redactor"].skills
     assert bundles["redactor"].root is not None
     assert bundles["timestamps"].root is None
     assert bundles["timestamps"].tools is not None
-    assert bundles["timestamps"].skills is not None
+    assert bundles["timestamps"].skills
     # The neighbour that is *not* one, shipped beside it on purpose: a
     # folder naming no definition is organisation and stays so.
     assert "profiler" in repository.specs
