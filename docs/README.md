@@ -67,10 +67,6 @@ slices land.
 - [An agent a delegate can be](design/2026-09-23-an-agent-a-delegate-can-be.md)
   — letting an agent file opt in to being named as a delegate, in the one
   direction that only narrows, and why the two specs stay two. Nothing built.
-- [Several skills roots](design/2026-09-25-several-skills-roots.md) — mounting
-  more than one skills directory at `/skills/<label>/`, each read as one more
-  group folder, and the view that keeps the shell's path rule true. Nothing
-  built, and it asks whether a deploy-time copy would do instead.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
@@ -83,6 +79,8 @@ agent's to edit* lasted a day and was built in one, under *Confining the shell*.
 catalogue*. *A session owns what it costs* was built in four the day after it was
 written; its decisions are split between *Confining the shell* and *Sessions:
 what persists and where*, which is where the two halves of it belonged.
+*Several skills roots* was built in two slices; its decisions are under
+*The catalogue* in `decisions.md`.
 
 A document belongs there while it is arguing for something; once it is built its
 decisions move to `decisions.md`, anything it measured about upstream moves to
