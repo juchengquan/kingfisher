@@ -445,3 +445,45 @@ def test_the_helper_refusal_points_at_a_key_that_exists():
     named = [key for key in DECLARED if f"'{key}'" in said]
 
     assert named == ["build"]
+
+
+# -- one tool axis everything, the other nothing ------------------------------
+
+#: Each leaves one axis at `ALL` and the other empty, which is every portable
+#: delegate's default: it may use the host's built-ins and holds no workspace tool.
+ONE_AXIS_OPEN = {
+    "portable, default": (
+        "surveyor.py",
+        "SUBAGENTS = [{'name': 'surveyor', 'description': 'd', 'system_prompt': 'Go.'}]\n",
+    ),
+    "document, no workspace tools": (
+        "surveyor.yaml",
+        "name: surveyor\ndescription: d\nsystem_prompt: |\n  Go.\ntools: []\n",
+    ),
+    "document, no built-ins": (
+        "surveyor.yaml",
+        "name: surveyor\ndescription: d\nsystem_prompt: |\n  Go.\nbuiltin_tools: []\n",
+    ),
+}
+
+
+@pytest.mark.parametrize("filename, text", ONE_AXIS_OPEN.values(), ids=ONE_AXIS_OPEN)
+def test_a_delegate_with_one_axis_open_builds_in_a_workspace_with_no_tools(
+    cfg, session_dir, filename, text
+):
+    """A request naming only the delegate raised `ValueError: one tool axis resolved
+    to '*'`: with no workspace tools and nothing narrowed, the names were never read
+    off the probe, and "every built-in plus none" has no spelling as an allowlist.
+    """
+    for kind in ("skills", "subagents", "tools"):
+        (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)
+    (cfg.workspace / "subagents" / filename).write_text(text, encoding="utf-8")
+
+    subagent = built(cfg, session_dir, Capabilities(subagents=("surveyor",)))
+
+    (allowlist,) = [m for m in subagent["middleware"] if isinstance(m, ToolAllowlist)]
+    if "builtin_tools: []" in text:
+        assert "read_file" not in allowlist._allowed
+    else:
+        assert {"read_file", "execute"} <= allowlist._allowed
+    assert "*" not in allowlist._allowed
