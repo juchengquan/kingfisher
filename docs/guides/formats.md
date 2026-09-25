@@ -1078,9 +1078,11 @@ subagents
 **Two limits, stated rather than discovered.**
 
 *A private skill is unadvertised, not unreadable.* Skills are mounted read-only
-under `/skills/`, and anything holding `read_file` can open anything there —
-which is already true of every skill a request did not activate. What a bundle
-buys for a skill is that no other delegate is *told* about it. A private tool is
+under `/skills/`, and anything holding `read_file` can open a bundle's skills
+there — no read of one is ever denied. The shared catalogue differs only under a
+request that names the skills it grants, which denies reads of the rest; a
+request granting every skill leaves all of it open. What a bundle buys for a
+skill is that no other delegate is *told* about it. A private tool is
 stronger: an ungranted tool is never bound into an agent, so it cannot be
 called at all. Do not put in a bundled skill anything you would mind another
 delegate reading.
