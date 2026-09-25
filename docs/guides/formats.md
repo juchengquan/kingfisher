@@ -922,7 +922,13 @@ types its delegate as deepagents' `SubAgent` TypedDict. Most of one loads as it 
 | `name`, `description`, `system_prompt` | as written |
 | `tools` | a tool or a plain function; a `dict` is refused, since it names a tool rather than carrying one |
 | `skills` | directories on this host, as above — not deepagents' `/skills/...` routes |
-| `model`, `middleware`, `interrupt_on`, `permissions`, `response_format` | refused, and the spec does not load |
+| `model` | refused: it names a profile only this deployment defines; a request pins one with `run_on` |
+| `middleware` | refused: deepagents merges it by name, so the `FilesystemMiddleware` its docs suggest would replace the one carrying this deployment's rules |
+| `permissions` | refused: deepagents' rules replace the parent's rather than narrowing them |
+| `interrupt_on` | refused: a delegate inherits its caller's gates |
+| `response_format` | refused: the parent reads a delegate's result as text either way |
+
+A refused key stops the spec loading, with the reason in the message.
 
 The type also cannot say two things this format can. With no `builtin_tools`, the
 delegate gets every built-in the request granted — still narrowed by the request,
