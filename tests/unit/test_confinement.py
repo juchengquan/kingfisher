@@ -772,7 +772,7 @@ def test_every_definition_root_is_protected(cfg):
     parametrised tests above would not notice.
     """
     protected = confinement.protected_roots(
-        cfg.workspace, cfg.skills_dir, tuple(cfg.catalogue_roots.values())
+        cfg.workspace, (cfg.skills_dir,), tuple(cfg.catalogue_roots.values())
     )
 
     missing = [
@@ -791,7 +791,7 @@ def test_a_root_named_twice_is_protected_once(cfg):
     """`skills` is passed separately *and* is a catalogue root."""
     roots = tuple(cfg.catalogue_roots.values())
 
-    protected = confinement.protected_roots(cfg.workspace, cfg.catalogue_roots["skills"], roots)
+    protected = confinement.protected_roots(cfg.workspace, (cfg.catalogue_roots["skills"],), roots)
 
     assert len(protected) == len(set(protected))
     assert len(protected) == len(roots) + 1, "a duplicate survived, or a root was dropped"
@@ -801,7 +801,7 @@ def test_a_definition_root_that_does_not_exist_is_still_named(cfg, tmp_path):
     """A profile is written once, and `seed` runs after it at least once."""
     absent = tmp_path / "not-created"
 
-    protected = confinement.protected_roots(tmp_path / "ws", None, (absent,))
+    protected = confinement.protected_roots(tmp_path / "ws", (), (absent,))
 
     assert absent.resolve() in protected
 

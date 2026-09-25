@@ -56,6 +56,14 @@ class SkillRepository(Protocol):
         ...
 
     @property
+    def mounts(self) -> Mapping[str, Path]:
+        """Further skills directories, by the label each is mounted under.
+
+        Empty for a deployment that names none, which is the ordinary case.
+        """
+        ...
+
+    @property
     def misplaced(self) -> tuple[str, ...]:
         """Skills written where deepagents will not look for them, for a listing.
 

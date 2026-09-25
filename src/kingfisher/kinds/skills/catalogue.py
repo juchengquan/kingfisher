@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
+from types import MappingProxyType
 
 from kingfisher.kinds.skills.spec import FILENAME
 
@@ -20,8 +22,12 @@ SKILL_LAYOUT = f"<skills>/<name>/{FILENAME} or <skills>/<source>/<name>/{FILENAM
 #: longer sits below the deepest source and is unreachable.
 DEEPEST = 3
 
+#: The same, for a mount. A mount is one source rather than a root that may hold
+#: sources, so only `<name>/SKILL.md` is reachable in it.
+MOUNT_DEEPEST = 2
 
-def reachable(root: Path) -> tuple[Path, ...]:
+
+def reachable(root: Path, deepest: int = DEEPEST) -> tuple[Path, ...]:
     """Every directory holding a `SKILL.md` the agent could actually open."""
     if not root.is_dir():
         return ()
@@ -29,27 +35,40 @@ def reachable(root: Path) -> tuple[Path, ...]:
         sorted(
             found.parent
             for found in root.rglob(FILENAME)
-            if len(found.relative_to(root).parts) <= DEEPEST
+            if len(found.relative_to(root).parts) <= deepest
         )
+    )
+
+
+def _below(root: Path, deepest: int) -> tuple[str, ...]:
+    """Skills under `root` deeper than anything will look, relative to it."""
+    if not root.is_dir():
+        return ()
+    return tuple(
+        str(found.parent.relative_to(root))
+        for found in root.rglob(FILENAME)
+        if len(found.relative_to(root).parts) > deepest
     )
 
 
 @dataclass(frozen=True)
 class LocalSkillRepository:
-    """The skills in one directory."""
+    """The skills in one directory, and in any mounted beside it."""
 
     root: Path
+    #: Each further directory, by the label it is mounted under.
+    mounts: Mapping[str, Path] = field(default_factory=lambda: MappingProxyType({}))
 
     @cached_property
     def misplaced(self) -> tuple[str, ...]:
         """Skills sitting below the deepest place anything will look for them."""
-        directory = Path(self.root)
-        if not directory.is_dir():
-            return ()
         return tuple(
-            sorted(
-                str(found.parent.relative_to(directory))
-                for found in directory.rglob(FILENAME)
-                if len(found.relative_to(directory).parts) > DEEPEST
-            )
+            sorted([
+                *_below(Path(self.root), DEEPEST),
+                *(
+                    f"{label}/{one}"
+                    for label, mount in self.mounts.items()
+                    for one in _below(Path(mount), MOUNT_DEEPEST)
+                ),
+            ])
         )

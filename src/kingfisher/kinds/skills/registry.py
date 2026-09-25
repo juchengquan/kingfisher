@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.capabilities import SEPARATOR, CapabilityError
 from kingfisher.kinds.skills import spec as skill
-from kingfisher.kinds.skills.catalogue import reachable
+from kingfisher.kinds.skills.catalogue import DEEPEST, MOUNT_DEEPEST, reachable
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -135,9 +135,9 @@ class SkillRegistry:
     #: header, which is the one nobody typed.
     misfiled: tuple[tuple[str, str], ...] = ()
     #: The folders under the catalogue root that hold skills, in the order they
-    #: were read. What `skills_sources` turns into one source each -- kept here
-    #: rather than recomputed there so the labels a caller types and the labels
-    #: the agent loads under come from one walk.
+    #: were read, then the label of each mount. What `skills_sources` turns into
+    #: one source each -- kept here rather than recomputed there so the labels a
+    #: caller types and the labels the agent loads under come from one walk.
     folders: tuple[str, ...] = ()
 
     @property
@@ -221,7 +221,16 @@ def read(repository: SkillRepository) -> SkillRegistry:
     from deepagents.backends import FilesystemBackend  # noqa: PLC0415
 
     root = repository.root
-    backend = FilesystemBackend(root_dir=str(root))
+    found_sources = sources(root)
+    # `(directory, prefix, sources, deepest)`: the root, then each mount as a single
+    # source at its own root.
+    places = [
+        (root, "", found_sources, DEEPEST),
+        *(
+            (mount, f"/{label}", ((label, ROOT),), MOUNT_DEEPEST)
+            for label, mount in repository.mounts.items()
+        ),
+    ]
 
     # One listing per source, kept apart. deepagents merges them by name and
     # lets the last win, which is the collapse this exists to undo: two parties
@@ -229,24 +238,35 @@ def read(repository: SkillRepository) -> SkillRegistry:
     # is worse than being told about neither.
     offered: dict[str, Listed] = {}
     loaded: list[Listed] = []
-    found_sources = sources(root)
-    for label, path in found_sources:
-        for one in listed(backend, path):
-            entry = Listed(name=one["name"], path=one["path"], description=one["description"])
-            loaded.append(entry)
-            offered[qualified(label, entry.name)] = entry
+    missing: list[str] = []
+    for directory, prefix, labelled, deepest in places:
+        backend = FilesystemBackend(root_dir=str(directory))
+        here: list[Listed] = []
+        for label, path in labelled:
+            for one in listed(backend, path):
+                # The prefix is the mount's route segment, and it is what the deny
+                # rule for an unactivated skill is built from. Without it, a mounted
+                # skill's rule names `/skills/<name>/**`, a path that does not exist,
+                # and the skill stays readable.
+                entry = Listed(
+                    name=one["name"],
+                    path=f"{prefix}{one['path']}",
+                    description=one["description"],
+                )
+                here.append(entry)
+                offered[qualified(label, entry.name)] = entry
+        loaded.extend(here)
 
-    # A directory that looked like a skill and did not come back. deepagents says why in
-    # a warning it logs; what matters here is only which ones, so a reader can go and
-    # look at the file rather than wonder why a skill they wrote is not on offer.
-    kept = {one.path for one in loaded}
-    missing = tuple(
-        sorted(
-            str(directory.relative_to(root))
-            for directory in reachable(root)
-            if not any(f"/{directory.name}/" in path for path in kept)
+        # A directory that looked like a skill and did not come back. deepagents says
+        # why in a warning it logs; what matters here is only which ones, so a reader
+        # can go and look at the file rather than wonder why a skill they wrote is not
+        # on offer.
+        kept = {one.path for one in here}
+        missing.extend(
+            str(PurePosixPath(prefix.lstrip("/")) / found.relative_to(directory))
+            for found in reachable(directory, deepest)
+            if not any(f"/{found.name}/" in path for path in kept)
         )
-    )
     # A skill whose header names something its directory does not. deepagents files it
     # under the header and logs a warning nobody reads, so `--list` shows a name that is
     # not in the tree and a caller who typed the directory name gets "unknown skill" for
@@ -260,7 +280,10 @@ def read(repository: SkillRepository) -> SkillRegistry:
     )
     return SkillRegistry(
         offered=offered,
-        unloadable=missing,
+        unloadable=tuple(sorted(missing)),
         misfiled=misfiled,
-        folders=tuple(label for label, _ in found_sources if label != CATALOGUE),
+        folders=(
+            *(label for label, _ in found_sources if label != CATALOGUE),
+            *repository.mounts,
+        ),
     )

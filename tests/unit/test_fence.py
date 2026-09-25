@@ -360,10 +360,10 @@ def test_the_fence_follows_the_confinement_rather_than_deciding_again(sandlock, 
     session = tmp_path / "sessions" / "s1"
     ensure_session_layout(session)
     unfenced = Confinement(wrap=_unwrapped, warning="nothing here")
-    assert _fence_for(cfg, session, unfenced, None, {}) is None
+    assert _fence_for(cfg, session, unfenced, (), {}) is None
 
     fenced = Confinement(wrap=_unwrapped, mechanism="Landlock")
-    runner = _fence_for(cfg, session, fenced, None, {})
+    runner = _fence_for(cfg, session, fenced, (), {})
     assert isinstance(runner, LandlockRunner)
     assert str(session / DERIVED) in runner.policy.fs_writable
 
@@ -393,7 +393,7 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
 
     for mechanism in ("bubblewrap", "Landlock"):
         _fence_for(
-            cfg, session, Confinement(wrap=_unwrapped, mechanism=mechanism), skills, {}
+            cfg, session, Confinement(wrap=_unwrapped, mechanism=mechanism), (skills,), {}
         )
 
     assert set(seen) == {"bubblewrap", "Landlock"}, f"a branch was not reached: {sorted(seen)}"
@@ -432,7 +432,7 @@ def test_every_directory_on_the_agent_s_path_is_reachable(cfg, tmp_path, monkeyp
     session.mkdir(parents=True)
     env = shell_env(cfg, session)
 
-    _fence_for(cfg, session, Confinement(wrap=_unwrapped, mechanism="Landlock"), None, env)
+    _fence_for(cfg, session, Confinement(wrap=_unwrapped, mechanism="Landlock"), (), env)
     readable, writable = seen["Landlock"]
     granted = [Path(p) for p in SYSTEM_PATHS] + readable + writable + [session]
 

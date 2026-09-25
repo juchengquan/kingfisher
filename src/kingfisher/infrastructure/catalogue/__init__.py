@@ -7,7 +7,8 @@ from dataclasses import dataclass, field, fields
 from functools import cached_property
 from pathlib import Path
 
-from kingfisher.config import Config, ConfigError
+from kingfisher.config import NO_MOUNTS, Config, ConfigError
+from kingfisher.domain.capabilities import SEPARATOR
 from kingfisher.domain.ports import (
     AgentRepository,
     MiddlewareRepository,
@@ -25,6 +26,7 @@ from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.rules import refuse_miscounted
 from kingfisher.kinds.tools.catalogue import LocalToolRepository
 from kingfisher.kinds.tools.spec import Offering
+from kingfisher.layout import RESERVED_SKILL_FOLDER
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,7 @@ class Definitions:
     @cached_property
     def registry(self) -> SkillRegistry:
         """What the agent will actually be told about, asked of deepagents."""
+        refuse_unmountable(self.skills.root, self.skills.mounts)
         return skill_registry.read(self.skills)
 
     @cached_property
@@ -134,10 +137,12 @@ class Definitions:
     @classmethod
     def from_config(cls, cfg: Config) -> Definitions:
         """The deployment's own directories, without staging anything."""
-        return cls.from_roots(cfg.catalogue_roots)
+        return cls.from_roots(cfg.catalogue_roots, skills_mounts=cfg.skills_mounts)
 
     @classmethod
-    def from_roots(cls, roots: Mapping[str, Path]) -> Definitions:
+    def from_roots(
+        cls, roots: Mapping[str, Path], *, skills_mounts: Mapping[str, Path] = NO_MOUNTS
+    ) -> Definitions:
         """Four directories on this host, as four local repositories."""
         return cls(
             agents=LocalAgentRepository(
@@ -149,7 +154,7 @@ class Definitions:
             middlewares=LocalMiddlewareRepository(
                 Path(roots.get("middlewares", Path(roots["skills"]).parent / "middlewares"))
             ),
-            skills=LocalSkillRepository(Path(roots["skills"])),
+            skills=LocalSkillRepository(Path(roots["skills"]), mounts=skills_mounts),
             subagents=LocalSubagentRepository(Path(roots["subagents"])),
             tools=LocalToolRepository(Path(roots["tools"])),
         )
@@ -201,7 +206,9 @@ def resolve_definitions(
                 "means an empty one rather than the configured one"
             )
             raise ConfigError(msg)
-        supplied = Definitions.from_roots(supplied)
+        # The mounts are the deployment's, not the catalogue's: a staged catalogue
+        # replaces the directories kingfisher would have read, not what it mounts.
+        supplied = Definitions.from_roots(supplied, skills_mounts=cfg.skills_mounts)
 
     # Checked however it arrived, and only where there is something to check: a
     # repository with a `root` of `None` has no directory that could be missing.
@@ -216,3 +223,37 @@ def resolve_definitions(
         )
         raise ConfigError(msg)
     return supplied
+
+
+def refuse_unmountable(root: Path, mounts: Mapping[str, Path]) -> None:
+    """Refuse a skills mount that would hide, repeat or misname a skill."""
+    taken = {entry.name for entry in root.iterdir()} if root.is_dir() else set()
+    for label, mount in mounts.items():
+        where = f"skills mount {label!r} ({mount})"
+        if label in {skill_registry.CATALOGUE, RESERVED_SKILL_FOLDER}:
+            msg = f"{where}: {label!r} already names part of the catalogue; pick another"
+            raise ConfigError(msg)
+        if SEPARATOR in label or "/" in label:
+            msg = (
+                f"{where}: a label is half of a skill's identity and a path segment, "
+                f"so it may not contain {SEPARATOR!r} or '/'"
+            )
+            raise ConfigError(msg)
+        # The route for a mount is longer than the catalogue's, so it wins: a folder
+        # or skill of the same name in the catalogue would vanish without a word.
+        if label in taken:
+            msg = f"{where}: the catalogue at {root} has {label!r} too, and this would hide it"
+            raise ConfigError(msg)
+        # Not created: a mount is somebody else's directory, and making an empty one
+        # would hide the failure to stage it behind an agent with no skills.
+        if not mount.is_dir():
+            msg = f"{where} is not a directory"
+            raise ConfigError(msg)
+        # Either way round lists the same skills twice, under two labels.
+        others = [("the catalogue", root)]
+        others += [(f"mount {k!r}", v) for k, v in mounts.items() if k != label]
+        for name, other in others:
+            one, two = mount.resolve(), other.resolve()
+            if one.is_relative_to(two) or two.is_relative_to(one):
+                msg = f"{where} overlaps {name} ({other}), so its skills would be listed twice"
+                raise ConfigError(msg)

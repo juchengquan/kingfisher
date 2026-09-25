@@ -239,13 +239,13 @@ def _no_landlock_here() -> str:
     )
 
 
-def shell_confinement(cfg: Config, *, skills: Path | None = None) -> Confinement:
+def shell_confinement(cfg: Config, *, skills: tuple[Path, ...] | None = None) -> Confinement:
     """The confinement this deployment will actually use, from its `Config`."""
     return resolve(
         cfg.shell_sandbox,
         workspace=cfg.workspace,
         extra=cfg.shell_path_extra,
-        skills=cfg.skills_dir if skills is None else skills,
+        skills=(cfg.skills_dir, *cfg.skills_mounts.values()) if skills is None else skills,
         definitions=tuple(cfg.catalogue_roots.values()),
         authored=tuple(cfg.authored_files.values()),
     )
@@ -401,11 +401,9 @@ def toolchain_roots(extra: tuple[str, ...] = ()) -> tuple[Path, ...]:
 
 
 def readable_roots(workspace: Path, extra: tuple[str, ...] = (),
-                   skills: Path | None = None) -> tuple[Path, ...]:
+                   skills: tuple[Path, ...] = ()) -> tuple[Path, ...]:
     """What has to stay readable for the shell to remain useful."""
-    roots = [Path(workspace), *toolchain_roots(extra)]
-    if skills is not None:
-        roots.append(Path(skills))
+    roots = [Path(workspace), *toolchain_roots(extra), *map(Path, skills)]
     return tuple(dict.fromkeys(p.resolve() for p in roots if str(p)))
 
 
@@ -432,7 +430,7 @@ def profile_path(workspace: Path) -> Path:
 
 
 def protected_roots(
-    workspace: Path, skills: Path | None, definitions: tuple[Path, ...]
+    workspace: Path, skills: tuple[Path, ...], definitions: tuple[Path, ...]
 ) -> tuple[Path, ...]:
     """Everywhere inside a writable root the shell must still not write.
 
@@ -445,7 +443,7 @@ def protected_roots(
     """
     roots = (
         Path(workspace) / HARNESS_OWNED,
-        *((Path(skills),) if skills is not None else ()),
+        *map(Path, skills),
         *definitions,
     )
     return tuple(dict.fromkeys(p.resolve() for p in roots))
@@ -464,7 +462,7 @@ def _sandbox_exec(profile_path: Path) -> Callable[[str], str]:
 def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
     # `profile` has: directories denied by `subpath` and files by `path` are not one list
     mode: str, *, workspace: Path,
-    extra: tuple[str, ...] = (), skills: Path | None = None,
+    extra: tuple[str, ...] = (), skills: tuple[Path, ...] = (),
     definitions: tuple[Path, ...] = (),
     authored: tuple[Path, ...] = (),
 ) -> Confinement:
