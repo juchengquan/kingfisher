@@ -94,10 +94,9 @@ class ConfinedLocalShellBackend(LocalShellBackend):
         # applying it to something that runs elsewhere produces a
         # `sandbox-exec -f /Users/.../shell.sb` shipped to a machine with no
         # such file -- which fails looking like a broken remote shell rather
-        # than like a wrong prefix. `local` defaults to True so a runner that
-        # says nothing keeps the fence.
+        # than like a wrong prefix.
         outcome = self.runner.run(
-            self.confinement.wrap(command) if getattr(self.runner, "local", True) else command,
+            self.confinement.wrap(command) if runs_locally(self.runner) else command,
             timeout=timeout,
         )
         return ExecuteResponse(
@@ -105,6 +104,27 @@ class ConfinedLocalShellBackend(LocalShellBackend):
             exit_code=outcome.exit_code,
             truncated=outcome.truncated,
         )
+
+
+def runs_locally(runner: Any) -> bool:
+    """Whether a supplied runner runs the command on this machine.
+
+    **The default is the safe one, and it is read here so it is one answer rather
+    than two.** `CommandRunner` declares `local` as a property answering `True`, but a
+    duck-typed runner -- the case this default exists for -- inherits nothing from a
+    Protocol, so every reader has to supply the default itself. Two readers did: this
+    module decides whether to wrap a command with it, and decides what the
+    `Confinement` beside that command claims. The second was written out separately
+    and held by nothing: flipped to `False` it left all 2,109 tests passing, while a
+    supplied local runner that says nothing got `wrap=_unwrapped` and ran with no
+    sandbox at all, under a `Confinement` reporting `confined` as false and warning
+    about nothing.
+
+    `testing.a_runner_says_where_it_runs` keeps its own reading on purpose. It is the
+    kit a deployment checks its own adapter with, and importing this module would take
+    it from 75 loaded modules to 103 -- measured -- to share one `getattr`.
+    """
+    return getattr(runner, "local", True)
 
 
 def _once(result: Any, *, key: Callable[[Any], Any]) -> Any:
@@ -345,9 +365,7 @@ def default_backend(
         # a supplied runner that is not local receives nothing this process
         # applied -- so the confinement has to stop claiming otherwise.
         chosen = runner
-        confined = confinement.with_supplied_runner(
-            confined, local=getattr(runner, "local", True)
-        )
+        confined = confinement.with_supplied_runner(confined, local=runs_locally(runner))
     if confined.warning:
         # After the runner is settled, not beside `shell_confinement`: a runner that
         # is not local withdraws the warning, and saying it earlier would tell that

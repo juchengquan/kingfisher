@@ -196,7 +196,13 @@ def test_a_runner_that_is_not_here_gets_the_command_unwrapped(cfg, session_dir):
 
 
 def test_a_runner_that_says_nothing_keeps_the_fence(cfg, session_dir):
-    """The default is the safe one on purpose."""
+    """The default is the safe one on purpose.
+
+    This half only: that `execute` wraps the command when the runner reads as local.
+    It replaces the confinement below, so it cannot see what `default_backend` decided
+    about that runner -- which is the other half, and was held by nothing until
+    `test_a_runner_that_says_nothing_is_confined_here` was written.
+    """
 
     class SaysNothing:
         def __init__(self):
@@ -219,6 +225,49 @@ def test_a_runner_that_says_nothing_keeps_the_fence(cfg, session_dir):
     backend.execute("echo hi")
 
     assert runner.seen == ["fenced(echo hi)"]
+
+
+def test_a_runner_that_says_nothing_is_confined_here(cfg, session_dir):
+    """What the build decides about a runner that declares nothing, rather than what
+    `execute` then does with it.
+
+    Measured before this existed: flipping that default to `False` left all 2,109 tests
+    passing. A supplied local runner saying nothing would then be handed
+    `Confinement(wrap=_unwrapped, elsewhere=True)` -- so `execute` still takes the wrap
+    branch and wraps with the identity, the shell runs with no sandbox, and the record
+    beside it says the boundary is somebody else's.
+
+    Asserted on `elsewhere` rather than on the wrapped text, because the text is the
+    platform's: Landlock's wrap is the identity by design, so a command that comes back
+    unchanged is correct on Linux and a failure on macOS.
+    """
+
+    class SaysNothing:
+        def run(self, command, *, timeout=None):
+            return CommandResult(output="", exit_code=0)
+
+    # `ty: ignore` for the reason the sibling above gives: the duck-typed runner is
+    # the whole case, and the checker refuses one without `local`.
+    backend = default_backend(cfg, session_dir, runner=SaysNothing())  # ty: ignore[invalid-argument-type]
+    confined = backend.default.confinement
+
+    assert confined.elsewhere is False, "a runner that said nothing was read as remote"
+    assert confined.supplied is True, "and the record should still say a runner was given"
+
+
+def test_a_runner_that_says_it_is_elsewhere_is_taken_at_its_word(cfg, session_dir):
+    """The control the rule above needs: `elsewhere` is not simply always false."""
+
+    class SaysRemote:
+        local = False
+
+        def run(self, command, *, timeout=None):
+            return CommandResult(output="", exit_code=0)
+
+    confined = default_backend(cfg, session_dir, runner=SaysRemote()).default.confinement
+
+    assert confined.elsewhere is True
+    assert confined.supplied is True
 
 
 def test_a_runner_is_given_the_command_already_confined(cfg, session_dir):
