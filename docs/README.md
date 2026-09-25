@@ -67,6 +67,10 @@ slices land.
 - [An agent a delegate can be](design/2026-09-23-an-agent-a-delegate-can-be.md)
   — letting an agent file opt in to being named as a delegate, in the one
   direction that only narrows, and why the two specs stay two. Nothing built.
+- [Several skills roots](design/2026-09-25-several-skills-roots.md) — mounting
+  more than one skills directory at `/skills/<label>/`, each read as one more
+  group folder, and the view that keeps the shell's path rule true. Nothing
+  built, and it asks whether a deploy-time copy would do instead.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
