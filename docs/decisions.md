@@ -1647,6 +1647,32 @@ each of them, which is a shell running unfenced beside a `Confinement` reporting
 `LINUX_FENCES` is the pair `_fence_for` builds a runner for, and a fourth mechanism
 has to say which half it is in. *(2026-09-20.)*
 
+**A runner that says nothing keeps the fence, and one line decides it.** `local`
+defaults to `True` so a duck-typed runner is treated as local, which is the safe
+direction -- and that default was written four times: the port's property, the two
+readers in `backend.py`, and the contract kit's validator. The two in `backend.py` ask
+the same question a hundred lines apart: whether to wrap the command, and what the
+`Confinement` beside it claims.
+
+**Only the first was held.** Flipping the second left all 2,109 tests passing. With it
+wrong, a supplied local runner that declares nothing is handed
+`Confinement(wrap=_unwrapped, elsewhere=True)` -- so `execute` still takes the wrap
+branch and wraps with the identity, the shell runs with no sandbox, and the record
+beside it reports the boundary as somebody else's while warning about nothing.
+
+The test named for the rule could not see it: it builds the backend and then
+*replaces* `backend.default.confinement` two lines later, so it pins the wrap branch
+and discards the decision. That test keeps its job, says so, and
+`test_a_runner_that_says_nothing_is_confined_here` holds the other half -- asserting on
+`elsewhere` rather than on the wrapped text, because Landlock's wrap is the identity by
+design and an unchanged command is correct on Linux and a failure on macOS.
+
+`runs_locally` is the one reading now. **The contract kit keeps its own on purpose**:
+`testing.a_runner_says_where_it_runs` validates a deployment's adapter, and importing
+`infrastructure.harness.backend` there would take the kit from 75 loaded modules to 103 -- measured --
+to share one `getattr`, against the decision that it stays light enough to run in
+somebody else's CI. *(2026-09-25, from an architecture review.)*
+
 ## Sessions: what persists and where
 
 These began as decisions in *Nothing at rest on this machine* and were built
