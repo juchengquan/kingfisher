@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import os
+import shutil
 import sys
+import uuid
 import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import replace
@@ -13,7 +17,7 @@ from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellB
 from deepagents.backends.protocol import ExecuteResponse
 
 from kingfisher.config import Config, ConfigError
-from kingfisher.domain.ports import CommandRunner
+from kingfisher.domain.ports import CommandRunner, SkillRepository
 from kingfisher.infrastructure.catalogue import Definitions, refuse_unmountable
 
 # Re-exported: `ports.md` and `BACKEND_CONTRACT` have named this path to adapter
@@ -29,6 +33,7 @@ from kingfisher.layout import (
     DATA,
     DATA_ROUTE,
     HARNESS,
+    HARNESS_OWNED,
     HARNESS_ROUTE,
     MEMORY,
     MEMORY_ROUTE,
@@ -36,6 +41,7 @@ from kingfisher.layout import (
     SCRATCH,
     SESSION_DIRS,
     SKILLS_ROUTE,
+    SKILLS_VIEW,
     routed_paths,
 )
 
@@ -63,8 +69,44 @@ def shell_env(
         "LC_ALL": "en_US.UTF-8",
         "TMPDIR": str(session_dir / SCRATCH),
     }
-    env["KINGFISHER_SKILLS"] = str((catalogue or Definitions.from_config(cfg)).skills.root)
+    skills = (catalogue or Definitions.from_config(cfg)).skills
+    env["KINGFISHER_SKILLS"] = str(skills_view(skills, cfg.workspace))
     return env
+
+
+def skills_view(skills: SkillRepository, workspace: Path) -> Path:
+    """Where the shell finds the catalogue, so `/skills/X` is `$KINGFISHER_SKILLS/X`.
+
+    The catalogue itself when nothing is mounted. With mounts, a directory of
+    symlinks: one per entry of the catalogue and one per mount under its label,
+    which `refuse_unmountable` has already made sure cannot collide.
+    """
+    if not skills.mounts:
+        return skills.root
+    root = skills.root
+    links = {e.name: e.absolute() for e in sorted(root.iterdir())} if root.is_dir() else {}
+    links.update({label: mount.absolute() for label, mount in skills.mounts.items()})
+    # Named for what it holds, so a catalogue that gained a skill gets a new view
+    # rather than a stale one, and two turns building the same view build one.
+    listing = "\n".join(f"{name}\t{target}" for name, target in sorted(links.items()))
+    view = (
+        workspace / HARNESS_OWNED / SKILLS_VIEW
+        / hashlib.sha256(listing.encode()).hexdigest()[:16]
+    )
+    if view.is_dir():
+        return view
+    # Built aside and renamed into place, so no turn ever reads a half-built view.
+    # A rename onto a directory that another turn finished first fails, and that
+    # turn's view is this one.
+    staging = view.with_name(f"{view.name}.{os.getpid()}.{uuid.uuid4().hex}")
+    staging.mkdir(parents=True)
+    for name, target in links.items():
+        (staging / name).symlink_to(target)
+    try:
+        staging.rename(view)
+    except OSError:
+        shutil.rmtree(staging)
+    return view
 
 
 class ConfinedLocalShellBackend(LocalShellBackend):
@@ -365,7 +407,6 @@ def default_backend(
     # Before anything is mounted: a label becomes a route segment below, and a bad
     # one would otherwise reach the composite as a path.
     refuse_unmountable(skills_dir, skills.mounts)
-    every_skills_dir = (skills_dir, *skills.mounts.values())
 
     _require_layout(session_dir)
     # `FilesystemBackend` wants the root to exist. A *supplied* catalogue was
@@ -373,6 +414,11 @@ def default_backend(
     # creates a derived one -- and stays here for the callers that build a
     # backend directly, without a service to have resolved anything for them.
     skills_dir.mkdir(parents=True, exist_ok=True)
+    # The view as well as what it points at: every fence checks the resolved path,
+    # so the targets need their grant, and the Linux one also has to reach the
+    # links themselves.
+    view = skills_view(skills, cfg.workspace) if skills.mounts else None
+    every_skills_dir = (skills_dir, *skills.mounts.values(), *((view,) if view else ()))
 
     confined = confinement.shell_confinement(cfg, skills=every_skills_dir)
     env = shell_env(cfg, session_dir, catalogue=catalogue)

@@ -36,18 +36,24 @@ LAYOUT_DIRS: tuple[str, ...] = (
     "tools",
     # Sessions are the unit of isolation; each one is a backend root.
     "sessions",
-    # The harness's own, and the only directory in a workspace the agent may
-    # neither write nor be told about: the marker, and the sandbox profile that
-    # says what the shell may do. It held per-session state too -- run logs,
-    # claims, pinned agents, scratch -- and `KINGFISHER_STATE_DIR` existed to
-    # move all of that somewhere else. What is left describes the workspace
-    # rather than any session in it, and there is nothing left to relocate.
+    # The harness's own, which the agent may not write: the marker, the sandbox
+    # profile that says what the shell may do, and the skills view the shell reads
+    # a mounted catalogue through -- the one thing here it is told about. It held
+    # per-session state too -- run logs, claims, pinned agents, scratch -- and
+    # `KINGFISHER_STATE_DIR` existed to move all of that somewhere else. What is
+    # left describes the workspace rather than any session in it, and there is
+    # nothing left to relocate.
     HARNESS_OWNED,
 )
 
 #: Its two contents, named so `protected_roots` and the profile writer agree on
 #: where they are without either spelling the path a second time.
 SANDBOX_PROFILE = "shell.sb"
+
+#: Where the shell's view of a catalogue with mounts is built, one directory per
+#: arrangement of it. Inside `HARNESS_OWNED` because the shell must read through it
+#: and never write it, and that directory is already both.
+SKILLS_VIEW = "skills-view"
 
 #: Created inside every session directory, which is the backend root. These are
 #: the names the agent addresses, so they mean the same thing in every session
