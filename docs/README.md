@@ -66,7 +66,8 @@ slices land.
   kept.
 - [An agent a delegate can be](design/2026-09-23-an-agent-a-delegate-can-be.md)
   — letting an agent file opt in to being named as a delegate, in the one
-  direction that only narrows, and why the two specs stay two. Nothing built.
+  direction that only narrows, and why the two specs stay two. Nothing built, and
+  deferred until a workspace needs one definition as both.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
