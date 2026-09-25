@@ -1,6 +1,7 @@
 # An agent a delegate can be
 
-**Status:** proposed, nothing built.
+**Status:** deferred, nothing built. Waiting for a workspace that needs one definition
+as both an agent and a delegate; see *Why it waits*.
 **Date:** 2026-09-23.
 **Occasion:** whether an agent and a subagent could share one YAML format. The
 syntax already nearly does, so that question has little left in it. The question
@@ -43,6 +44,27 @@ They have already drifted apart:
 
 Nothing went red, and nothing could. `test_format_parity.py` checks that the
 *readers* agree. It cannot notice two files holding the same content.
+
+### Why it waits
+
+Checked against the catalogue on 2026-09-25, the two are not one definition in the
+sense that matters. Each is the shipped example of something the other cannot show:
+
+- **`profiler` is the only helper.** `reviewer` consults it, `assistant` grants both,
+  and `guides/formats.md` uses the pair to explain that an agent has to name a
+  delegate's helper too. An agent cannot be consulted as a helper, so `surveyor`
+  cannot take this over without this proposal.
+- **`profiler` is the only grouping folder.** `subagents/analysis/profiler.yaml` is
+  how the guide shows a folder that is organisation rather than a bundle.
+- **`surveyor` is the narrow, read-only agent** that `operator.yaml` and
+  `analyst.yaml` are contrasted with.
+
+Their prompts overlap and have drifted, and the drift costs nothing: each file is
+read for what it demonstrates. So the one case this rests on is two examples doing
+different jobs, and the change it proposes -- one file with two roles that read the
+same fields differently, a name in both namespaces, and `["*"]` meaning more -- is
+too large to carry for examples. It is kept for when a real workspace needs the same
+definition as both, which is the case `decisions.md` names as reopening the question.
 
 ## The change, stated plainly
 
