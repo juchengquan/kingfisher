@@ -14,7 +14,7 @@ from deepagents.backends.protocol import ExecuteResponse
 
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.ports import CommandRunner
-from kingfisher.infrastructure.catalogue import Definitions
+from kingfisher.infrastructure.catalogue import Definitions, refuse_unmountable
 
 # Re-exported: `ports.md` and `BACKEND_CONTRACT` have named this path to adapter
 # authors, and a deployment's own backend may import it from here.
@@ -235,7 +235,7 @@ def _fence_for(
     cfg: Config,
     session_dir: Path,
     confined: confinement.Confinement,
-    skills_dir: Path | None,
+    skills: tuple[Path, ...],
     env: Mapping[str, str],
 ) -> CommandRunner | None:
     """The Linux fence, when the confinement says there is one."""
@@ -256,9 +256,7 @@ def _fence_for(
     # granting it hands every tenant back the directory this fence exists to take away
     # -- measured, before the fence: tenant B read tenant A's `derived/secret.txt` with
     # `cat ../<A>/...`, exit 0.
-    readable = [*confinement.toolchain_roots(cfg.shell_path_extra)]
-    if skills_dir is not None:
-        readable.append(skills_dir)
+    readable = [*confinement.toolchain_roots(cfg.shell_path_extra), *skills]
     # Nothing beyond the session, which both fences grant already: `TMPDIR` is
     # inside it now, so the writable set is exactly the session this turn owns.
     writable: list[Path] = []
@@ -346,7 +344,12 @@ def default_backend(
     adjusting what this built reads `default` and `routes` off it, and the protocol
     carries neither.
     """
-    skills_dir = (catalogue or Definitions.from_config(cfg)).skills.root
+    skills = (catalogue or Definitions.from_config(cfg)).skills
+    skills_dir = skills.root
+    # Before anything is mounted: a label becomes a route segment below, and a bad
+    # one would otherwise reach the composite as a path.
+    refuse_unmountable(skills_dir, skills.mounts)
+    every_skills_dir = (skills_dir, *skills.mounts.values())
 
     _require_layout(session_dir)
     # `FilesystemBackend` wants the root to exist. A *supplied* catalogue was
@@ -355,10 +358,10 @@ def default_backend(
     # backend directly, without a service to have resolved anything for them.
     skills_dir.mkdir(parents=True, exist_ok=True)
 
-    confined = confinement.shell_confinement(cfg, skills=skills_dir)
+    confined = confinement.shell_confinement(cfg, skills=every_skills_dir)
     env = shell_env(cfg, session_dir, catalogue=catalogue)
     if runner is None:
-        chosen = _fence_for(cfg, session_dir, confined, skills_dir, env)
+        chosen = _fence_for(cfg, session_dir, confined, every_skills_dir, env)
     else:
         # Said once, here, rather than left for a reader to work out from two
         # places. What confines the shell depends on what runs the command, and
@@ -408,6 +411,12 @@ def default_backend(
     routes.update({
         bundled_skills_route(bundle.where): FilesystemBackend(root_dir=str(bundle.skills))
         for bundle in _bundles_with_skills(catalogue or Definitions.from_config(cfg))
+    })
+    # One per mount, under `/skills/` for the bundles' reason. The registry lists a
+    # mount under this same segment, so the deny rule for a skill in it lands here.
+    routes.update({
+        f"{SKILLS_ROUTE}{label}/": FilesystemBackend(root_dir=str(mount))
+        for label, mount in skills.mounts.items()
     })
 
     return WorkspaceScopedBackend(default=shell, routes=routes, workspace=session_dir)

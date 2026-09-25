@@ -76,6 +76,25 @@ class Environment:
         raw = (self.values.get(key) or "").strip()
         return Path(raw).expanduser().resolve() if raw else None
 
+    def mounts(self, key: str) -> dict[str, Path]:
+        """`label=path` pairs separated by `:`, the separator `PATH` already uses."""
+        found: dict[str, Path] = {}
+        for part in (self.values.get(key) or "").split(":"):
+            if not part.strip():
+                continue
+            label, equals, raw = part.partition("=")
+            label, raw = label.strip(), raw.strip()
+            if not equals or not label or not raw:
+                msg = f"{key} takes label=path pairs separated by ':', got {part!r}"
+                raise ConfigError(msg)
+            # Refused rather than letting the later one win: the earlier is a
+            # directory somebody meant to mount, and it would vanish unreported.
+            if label in found:
+                msg = f"{key} names {label!r} twice"
+                raise ConfigError(msg)
+            found[label] = Path(raw).expanduser().resolve()
+        return found
+
     def optional_text(self, key: str) -> str | None:
         """A string this deployment may or may not have set."""
         raw = (self.values.get(key) or "").strip()
@@ -90,6 +109,7 @@ class Environment:
             tools_root=self.optional_path("KINGFISHER_TOOLS_DIR"),
             agents_root=self.optional_path("KINGFISHER_AGENTS_DIR"),
             middlewares_root=self.optional_path("KINGFISHER_MIDDLEWARES_DIR"),
+            skills_mounts=self.mounts("KINGFISHER_SKILLS_MOUNTS"),
             # Read here rather than only in `config` below for the reason the
             # definition roots are: laying a workspace out places the worked example
             # for each of these, and that happens before a catalogue can be
@@ -156,6 +176,7 @@ class Environment:
             tools_root=paths.tools_root,
             agents_root=paths.agents_root,
             middlewares_root=paths.middlewares_root,
+            skills_mounts=paths.skills_mounts,
             assets=paths.assets,
             session_store=self.optional_path("KINGFISHER_SESSION_STORE"),
             session_store_factory=self.optional_text("KINGFISHER_SESSION_STORE_FACTORY"),

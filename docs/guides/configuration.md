@@ -27,6 +27,7 @@ mentions.
 | `KINGFISHER_AGENTS_DIR` | Relocate the agents catalogue. | inside the workspace |
 | `KINGFISHER_MIDDLEWARES_DIR` | Relocate the middlewares catalogue. Code, like the tools one. | inside the workspace |
 | `KINGFISHER_SKILLS_DIR` | Relocate the skills catalogue — this is how several deployments share one reviewed set. | inside the workspace |
+| `KINGFISHER_SKILLS_MOUNTS` | Further skills directories, as `label=path` pairs separated by `:`. Each is offered at `/skills/<label>/` and granted as `<label>::<name>`, for a party that cannot write into the catalogue. Skills sit directly in each one; nothing creates or seeds it, and its scripts are not reachable from the shell yet. | none |
 | `KINGFISHER_SUBAGENTS_DIR` | Relocate the subagents catalogue. | inside the workspace |
 | `KINGFISHER_TOOLS_DIR` | Relocate the tools catalogue. | inside the workspace |
 | `KINGFISHER_SESSION_STORE` | A directory sessions are kept in, so they survive the machine that ran them. | none — the session directory is the only copy |

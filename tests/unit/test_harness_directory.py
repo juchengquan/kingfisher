@@ -236,7 +236,7 @@ def test_the_harness_owned_directory_is_protected_too(cfg):
     from kingfisher.layout import HARNESS_OWNED
 
     protected = confinement.protected_roots(
-        cfg.workspace, cfg.skills_dir, tuple(cfg.catalogue_roots.values())
+        cfg.workspace, (cfg.skills_dir,), tuple(cfg.catalogue_roots.values())
     )
 
     assert (cfg.workspace / HARNESS_OWNED).resolve() in protected

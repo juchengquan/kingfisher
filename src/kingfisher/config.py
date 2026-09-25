@@ -19,6 +19,9 @@ from kingfisher.domain.access import SourceIds
 #: pairing rather than safety.
 NO_EXTRA: Mapping[str, Any] = MappingProxyType({})
 
+#: A deployment's skills mounts when it names none: frozen, for `NO_EXTRA`'s reason.
+NO_MOUNTS: Mapping[str, Path] = MappingProxyType({})
+
 
 @dataclass(frozen=True)
 class Landing:
@@ -143,6 +146,10 @@ class WorkspacePaths:
     tools_root: Path | None = None
     agents_root: Path | None = None
     middlewares_root: Path | None = None
+    #: Skills directories beside the catalogue, each mounted at `/skills/<label>/`.
+    #: Not a definition root: a mount is somebody else's directory, so nothing
+    #: creates it and nothing seeds into it.
+    skills_mounts: Mapping[str, Path] = NO_MOUNTS
     #: The two single files, relocated. Not beside the definition roots because they
     #: are not directories and do not move together with them: one reviewed `models.yaml` shared
     #: across a fleet is the arrangement `compose.yaml` ships, and a source-id policy may
@@ -328,6 +335,7 @@ class Config:
     tools_root: Path | None = None
     agents_root: Path | None = None
     middlewares_root: Path | None = None
+    skills_mounts: Mapping[str, Path] = NO_MOUNTS
     # Where definitions are copied *from*, which is the opposite direction to
     # the definition roots. Carried here as well as on `WorkspacePaths` because
     # `doctor` is handed a whole `Config` and has to report on it -- an unset,
