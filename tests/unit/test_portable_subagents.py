@@ -8,7 +8,10 @@ hang on the shape, and these drive the shape rather than the origin.
 
 from __future__ import annotations
 
+from typing import get_type_hints
+
 import pytest
+from deepagents import SubAgent
 from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import Capabilities
@@ -320,7 +323,9 @@ def test_every_field_the_documents_define_is_portable_or_refused_with_a_reason()
     """
     # `bundle` is outside `KNOWN` because a document refuses it too, and refused here
     # with a reason of its own: it is where a portable entry used to carry its tools.
-    assert PORTABLE | set(NOT_PORTABLE) == KNOWN | {"bundle"}
+    # deepagents' `SubAgent` keys are read off the TypedDict rather than listed, so a
+    # key an upgrade adds fails this instead of reaching a reader as merely unknown.
+    assert PORTABLE | set(NOT_PORTABLE) == KNOWN | {"bundle"} | set(get_type_hints(SubAgent))
 
 
 def test_every_portable_key_reaches_a_field_the_spec_has():

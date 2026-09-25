@@ -736,6 +736,17 @@ bundle's one label, so a skill's identity does not depend on which directory hol
 it. Two holding one name are refused rather than merged, since the delegate could
 hold only one of them. *(2026-09-25.)*
 
+**deepagents' other `SubAgent` keys are refused with a reason, not as unknown.** A
+spec typed to that TypedDict is the likeliest thing to write `permissions`,
+`interrupt_on`, `response_format` or `middleware`, and "this format does not define
+it" reads as *not yet* rather than *no*. The first three take a document's reasons.
+`middleware` is refused rather than carried the way tools are: deepagents merges it
+by name, so the `FilesystemMiddleware` its own docs suggest would replace the one
+holding the deployment's backend and permission rules, and middleware otherwise
+reaches a delegate only by the deployment registering it. The drift test reads the
+keys off the TypedDict, so one a deepagents upgrade adds has to be decided here.
+*(2026-09-25.)*
+
 **Considered and not taken: `own_subagents`, private nested helpers.** The key was
 reserved when `subagents:` was refused, so that a portable definition wanting a
 helper could get one later without any file changing meaning. Costed on 2026-09-17

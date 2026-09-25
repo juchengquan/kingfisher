@@ -259,10 +259,11 @@ PORTABLE: frozenset[str] = frozenset(
     }
 )
 
-#: Keys this format defines that a portable declaration may not write, each with the
-#: reason. Named one at a time for the reason `NOT_COMPILED` is, and every reason here
-#: is one sentence of the same rule: the key names something only the deployment
-#: knows, so a definition written elsewhere cannot mean anything by it.
+#: Keys a portable declaration may not write, each with the reason, named one at a time
+#: for the reason `NOT_COMPILED` is. Two families: this format's own, each naming
+#: something only the deployment knows, and deepagents' `SubAgent` keys this format
+#: does not take -- which a spec typed to that TypedDict writes, and which would
+#: otherwise be refused as merely unknown.
 NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
     {
         "bundle": (
@@ -288,6 +289,20 @@ NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
         "source_ids": (
             "it names ids from the deployment's source_ids.yaml. The agent that "
             "grants this delegate carries the audience deciding who reaches it"
+        ),
+        "permissions": REFUSED["permissions"],
+        "interrupt_on": REFUSED["interrupt_on"],
+        "response_format": REFUSED["response_format"],
+        # Not `middlewares` misspelt, which is what a document writing it gets told: in
+        # a `SubAgent` it holds the middleware objects themselves.
+        "middleware": (
+            "deepagents merges a spec's middleware into the stack it builds by name, "
+            "so an entry sharing one replaces what was there -- and the "
+            "FilesystemMiddleware its own docs suggest here would replace the one "
+            "carrying this deployment's backend and every rule on it, /data "
+            "read-only included. Middleware reaches a delegate only by the "
+            "deployment registering it; write 'build' and wrap the graph yourself "
+            "if this one needs some"
         ),
     }
 )
