@@ -479,6 +479,88 @@ def policied(cfg, at_the_command_line):
     return _workspace(cfg, NARROW)
 
 
+#: An agent only `A` reaches, beside the `A, B` one the fixtures use, so a caller
+#: holding `B` has something to be kept from.
+A_ONLY = """name: hidden
+description: An agent.
+source_ids: [A]
+system_prompt: |
+  You do the task.
+"""
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_a_scoped_listing_carries_nothing_out_of_reach(form, cfg, at_the_command_line, capsys):
+    """Both forms, and asserted over the whole output rather than field by field.
+
+    Measured through the real command before this existed: the text form hid the
+    unreachable agent and `--json` carried its name, the file it came from, its
+    delegate chain, every definition's audience and the vocabulary itself -- so an
+    operator checking a policy got a different answer depending on the flag, and the
+    flag that answered wrongly is the one a script reads.
+
+    Searching the rendered output for the name, rather than naming the fields that
+    leaked, is deliberate: the four that did were not a closed set, and a field added
+    later would leak the same way past a field-by-field assertion.
+    """
+    _workspace(cfg, NARROW, A_ONLY)
+
+    assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
+
+    printed = capsys.readouterr().out
+    assert "hidden" not in printed, f"the {form} form named an agent this caller cannot open"
+    assert "narrow" in printed, "and it should still show the one they can"
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_the_operator_still_sees_all_of_it(form, cfg, at_the_command_line, capsys):
+    """The control both rules above need: the filtering is the caller's view, not the
+    listing losing the ability to say who reaches what.
+    """
+    _workspace(cfg, NARROW, A_ONLY)
+
+    assert main(["list"] + (["--json"] if form == "json" else [])) == 0
+
+    printed = capsys.readouterr().out
+    assert "hidden" in printed
+    assert "narrow" in printed
+
+
+def test_a_scoped_view_carries_no_policy(cfg, at_the_command_line):
+    """The vocabulary, each definition's audience, and the report of what restricts
+    nobody are the policy. A caller reading their own view is not the operator
+    checking it, and the record is where that is decided now -- the text renderer used
+    to decide it a second time and `as_json` not at all.
+    """
+    from dataclasses import replace
+
+    import yaml
+
+    from kingfisher.application.inventory import inventory
+    from kingfisher.domain.access import parse
+
+    # A definition restricting nobody, so the operator's report has something in it
+    # and the scoped view emptying it is a difference rather than two empty tuples.
+    wide_open = "name: open\ndescription: An agent.\nsystem_prompt: |\n  Go.\n"
+    _workspace(cfg, NARROW, A_ONLY, wide_open)
+    # The vocabulary on the `Config`, not only in the file: read directly, `inventory`
+    # takes the policy from `cfg.access`, and a config without one is not a scoped view
+    # at all -- which is how the first version of this test passed against the defect.
+    policied = replace(
+        cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="source_ids.yaml")
+    )
+    scoped = inventory(policied, source_ids=("B",))
+    operator = inventory(policied)
+
+    assert scoped.access is None
+    assert scoped.audiences == {}
+    assert scoped.access_report.is_clean
+    # Not vacuous: the operator's view carries all three.
+    assert operator.access is not None
+    assert operator.audiences
+    assert not operator.access_report.is_clean
+
+
 def test_the_operator_sees_audiences_per_definition(policied, capsys):
     """The unscoped listing is the operator's audit view."""
     assert main(["list"]) == 0

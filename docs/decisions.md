@@ -1111,6 +1111,33 @@ told a run had withheld the very skill their source ids hide. Skills are filtere
 and compared by the one skill each spelling means, because an audience written
 `catalogue::audit` has to hide `audit` too.
 
+**It did not hold for `--json` until 2026-09-26**, and the shape is the same one
+again: a rule implemented at a renderer rather than in the record, then implemented at
+one renderer. `Inventory` filtered `agents` and `subagents` by what the caller reaches
+and carried the rest whole, and the text form covered for it by skipping the access
+sections for a scoped view. `as_json` had no such clause. Measured through the real
+command, a caller holding one source id was handed, for every definition out of their
+reach: its name, the file it came from, and its delegate chain -- plus the vocabulary,
+every definition's audience, and the report of what restricts nobody.
+
+The record's own field said otherwise -- *"the names above have already been filtered
+to what this caller reaches, so the printer never filters and the two views cannot
+come apart"*. Both halves were false: only two fields were filtered, and the printer
+was the only thing filtering the rest.
+
+The filtering is in `inventory` now, so a scoped view is a truthful record and every
+renderer is handed the same one. What a caller reaches is computed once and the
+companion maps are filtered against it, rather than each asking again -- two answers to
+that question is how these came apart. The vocabulary, the audiences and the access
+report are the *policy*, and a caller reading their own view is not the operator
+checking it, so a scoped view carries none of the three. `_access`'s second clause is
+gone with them.
+
+**The rules search the whole rendered output for a name that should not be there**,
+in both forms, rather than naming the fields that leaked. The four that did were not a
+closed set, and a field added later would leak the same way past a field-by-field
+assertion. *(2026-09-26, from an architecture review.)*
+
 **The HTTP surface asks who is calling; it still authenticates nobody.**
 `create_app(source_ids_from=...)` takes a callable given the request and returning
 source ids, and `from_header` is shipped but never defaulted -- the header is an
