@@ -604,15 +604,33 @@ def inventory(
         cfg, source_ids, agents=defined_agents, subagents=specs
     )
     reaching = _reaching(held, stated)
+    scoped = held is not None
+    # A scoped view carries only what that caller reaches, and the policy itself is
+    # not theirs to read. Decided here rather than at each renderer: the text form
+    # already skipped the access sections for a scoped view and the JSON form did
+    # not, so one caller holding a source id was handed the name, the file and the
+    # delegate chain of every definition out of their reach -- measured through the
+    # real command -- along with the vocabulary and every definition's audience.
+    #
+    # One computed answer, which the companion maps are filtered against rather than
+    # each asking again: the field that leaked is the one whose filter was somewhere
+    # else, and two answers to what a caller reaches is how they came apart.
+    for_caller = reaching("agents", agents)
 
     return Inventory(
         # The resolved catalogue, not `cfg` -- so a deployment that staged its
         # definitions somewhere is listed as it is rather than as it was
         # configured, which is the difference the record was built for.
         origins=Origins.of(cfg, catalogue=resolved),
-        agents=MappingProxyType(dict(reaching("agents", agents))),
-        agent_sources=agent_sources,
-        agent_delegates=agent_delegates,
+        agents=MappingProxyType(dict(for_caller)),
+        agent_sources=reaching("agents", agent_sources),
+        # Membership in the names above, in both views -- the chains are keyed from
+        # the same walk as the names, so an unscoped listing keeps all of them
+        # without a branch of its own. Key these off a different walk and the
+        # unscoped view starts silently dropping chains.
+        agent_delegates=MappingProxyType(
+            {name: chain for name, chain in agent_delegates.items() if name in for_caller}
+        ),
         # `or`, not replace: a kind that already failed to load has the more
         # fundamental problem, and saying the second one instead would send a
         # reader to a source id in a file that does not parse.
@@ -626,7 +644,7 @@ def inventory(
         skills_misplaced=tuple(resolved.skills.misplaced),
         skills_misfiled=tuple(registry.misfiled),
         subagents=MappingProxyType(dict(reaching("subagents", subagents))),
-        subagent_sources=subagent_sources,
+        subagent_sources=reaching("subagents", subagent_sources),
         subagents_error=subagents_error or broken.get("subagents"),
         middlewares=middlewares,
         middlewares_error=middlewares_error,
@@ -649,8 +667,11 @@ def inventory(
         orphaned_assets=orphaned_assets,
         compiled_subagents=compiled_subagents,
         skills_enabled=cfg.skills_enabled,
-        access=cfg.access,
-        access_report=report,
+        # `None` and empty for a scoped view: the vocabulary, the per-definition
+        # audiences and the report of what restricts nobody are all the policy, and
+        # a caller reading their own view is not the operator checking it.
+        access=None if scoped else cfg.access,
+        access_report=AccessReport() if scoped else report,
         held=held,
-        audiences=stated,
+        audiences=_NO_AUDIENCES if scoped else stated,
     )

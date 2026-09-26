@@ -107,7 +107,10 @@ def _singular(field_name: str) -> str:
 
 def _access(found: Inventory) -> Iterator[str]:
     """Who reaches what, twice: as the files say it, and rolled up by asset."""
-    if found.access is None or found.held is not None:
+    # One clause, because the record decides. It used to read `or found.held is not
+    # None` as well -- the scoped view's second decider, and the half `as_json` never
+    # had, which is how a caller's `--json` came to carry the whole policy.
+    if found.access is None:
         return
     if compounds := found.access.compounds:
         # Before the audiences rather than after, because it is what makes them
