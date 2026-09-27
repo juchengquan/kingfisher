@@ -1111,6 +1111,69 @@ told a run had withheld the very skill their source ids hide. Skills are filtere
 and compared by the one skill each spelling means, because an audience written
 `catalogue::audit` has to hide `audit` too.
 
+**It did not hold for `--json` until 2026-09-26**, and the shape is the same one
+again: a rule implemented at a renderer rather than in the record, then implemented at
+one renderer. `Inventory` filtered `agents` and `subagents` by what the caller reaches
+and carried the rest whole, and the text form covered for it by skipping the access
+sections for a scoped view. `as_json` had no such clause. Measured through the real
+command, a caller holding one source id was handed, for every definition out of their
+reach: its name, the file it came from, and its delegate chain -- plus the vocabulary,
+every definition's audience, and the report of what restricts nobody.
+
+The record's own field said otherwise -- *"the names above have already been filtered
+to what this caller reaches, so the printer never filters and the two views cannot
+come apart"*. Both halves were false: only two fields were filtered, and the printer
+was the only thing filtering the rest.
+
+The filtering is in `inventory` now, so a scoped view is a truthful record and every
+renderer is handed the same one. What a caller reaches is computed once and the
+companion maps are filtered against it, rather than each asking again -- two answers to
+that question is how these came apart. The vocabulary, the audiences and the access
+report are the *policy*, and a caller reading their own view is not the operator
+checking it, so a scoped view carries none of the three. `_access`'s second clause is
+gone with them.
+
+**The rules search the whole rendered output for a name that should not be there**,
+in both forms, rather than naming the fields that leaked. The four that did were not a
+closed set, and a field added later would leak the same way past a field-by-field
+assertion. *(2026-09-26, from an architecture review.)*
+
+**It did not hold for the tool and skill catalogues at all**, and the reason is worth
+reading: those two have nowhere to *write* an audience. A tool module and a skill's own
+file carry no `source_ids:` line -- an audience for one exists only as an entry inside
+the definition that offers it -- so the filter in the listing asked a question with no
+answer. `reaching("tools", ...)` looked up audiences under a `tools` key that walk never
+builds, matched every tool at `"*"`, and filtered nothing; replacing the whole call with
+the unfiltered tuple left all 2,167 tests passing. The skills catalogue had no filter to
+be a no-op. Measured through the real command, a caller holding one source id was shown
+the tool the one agent they reach narrows away from them, the tool and the skill only an
+agent they cannot open offers, and the file each tool lives in.
+
+What a listing can ask is whether **any definition this caller reaches offers it to
+them**, which is what `_offers` does -- over the reachable agents and the reachable
+delegates alike, because a caller who reaches a delegate reaches what it holds. Three
+things about that walk are load-bearing and each was a silent mutation until a rule was
+written for it:
+
+  - **Reachable definitions, not all of them.** An entry may be written `["*"]`, which
+    means anyone who reaches *that definition*; at run time the `and` with the
+    definition's own line is held by the caller never opening it, and a listing has no
+    such gate. Reading every definition's entries hands back a tool from an agent the
+    caller cannot open, and nothing else in the suite notices -- every other audience
+    names source ids, so the definition's own line narrows the entry away a second time
+    and covers for the missing filter.
+  - **An unset field ends the walk.** `tools:` unset offers the whole catalogue, which
+    is what most definitions look like, so a filter reading it as "nothing" empties the
+    commonest deployment's listing. `ALL` is the string `"*"`, so a union that read its
+    entries would collect the character.
+  - **Skills are compared by identity, not spelling.** A grant may write `audit` or
+    `catalogue::audit` where the listing says `audit`. This is the second reader of
+    those grants to need it; the withheld report already carries the note above.
+
+`skills:` unset means *none* while `tools:` unset means *all*, and the filter needs to
+know nothing about that difference: it reads what the definition resolved to for this
+caller. *(2026-09-27, from an architecture review.)*
+
 **The HTTP surface asks who is calling; it still authenticates nobody.**
 `create_app(source_ids_from=...)` takes a callable given the request and returning
 source ids, and `from_header` is shipped but never defaulted -- the header is an
