@@ -2633,6 +2633,47 @@ passing, and the deployment that breaks on it is the one nobody told.
 Named `Catalogued` rather than `Kind` because `origins.Kind` is already a word in
 this layer and means what sort of *place* something was read from. *(2026-09-23.)*
 
+**A non-zero listing says why, to the person and not only to a script.** The exit
+code and the printed text were two hand-written lists of one set, and they had drifted
+by three entries. `middlewares_error`, `bundles_error` and `moved_tools` each made
+`kingfisher list` exit 1 with nothing in the human output saying so: the text renderer
+had no middlewares section at all, and the only hint was `(could not introspect)` under
+the *builtin tools* heading, which sends a reader to the wrong directory -- what a
+broken `middlewares/*.py` costs is the graph the built-in set is read off. `--json`
+carried the file and the `SyntaxError` all along.
+
+Every rule that proved those errors were carried asserted on `--json`. That is how
+three of them passed while the person most likely to be running the command -- somebody
+looking at a broken workspace -- was told nothing. The rule now has two halves driven
+over the same total set: each `*_error` makes the listing non-zero, **and** each one is
+said in the rendered text. The two troubles that are not a kind's error, `moved_tools`
+and `miscounted_bundles`, are held by a table pinned against `failed`'s own source, so
+a fourth cannot be added to the exit code and forgotten by the renderer.
+
+`moved_tools` was the worst of the three to be silent about, and this file already said
+why: an agent naming a tool by a path it has moved from loads, runs, and quietly does
+not have the tool its author granted.
+
+**`render` has no branch now**, which is the other half of the same bug. It used to
+return early when `tools/` would not walk, so every section written afterwards had to
+be remembered on that path too. Skills and subagents were remembered when that was
+fixed; `_access` was not -- so an operator auditing a policy on a workspace with one
+unparseable `.py` in `tools/` got no access report and no sign there was one to get.
+The tools half moved into a section of its own, which is what let the early return go,
+and `_skills_and_subagents` went with it: that helper existed only to be called from
+both paths. The nine tests that reached for it now go through `render`, which is the
+output a person actually reads -- the same lesson as the `--json` rules above.
+
+**The middlewares section prints the name and not the module.** For a class written in
+`middlewares/*.py` the `__module__` is a dynamic name made unique and nothing more, and
+a listing printing `cap_3107351676692534586` would look like it was saying where the
+code is. A class *imported* into a workspace file keeps its own package, and that one
+is printed as `(from ...)` -- the same fact the subagents section marks with `carried`,
+for the same reason: code an operator cannot open in this workspace should not print
+like code they can. `Inventory.middlewares` carries that distinction rather than the
+raw `__module__`, so `--json` gets the honest answer too. *(2026-09-27, from an
+architecture review.)*
+
 **The inventory's seven `try` blocks keep their six catch-sets.** The review read
 them as one rule written six ways. They are not: each set is exactly the kinds its
 block reads, and every type beyond the obvious one carries the incident that put it

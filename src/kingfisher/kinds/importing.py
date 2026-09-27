@@ -32,6 +32,17 @@ PACKAGE_MARKER = "__init__.py"
 _NAMESPACE = "kingfisher_workspace"
 
 
+def defined_in_a_workspace(module: str) -> bool:
+    """Whether a class with this `__module__` was written in a workspace file.
+
+    Asked because the answer is the only thing that name is good for. It is unique and
+    nothing else -- `cap_3107351676692534586` -- so a listing that printed it beside a
+    middleware would look like it was saying where the code is. A class *imported* into
+    a workspace module keeps its own package there, and that one is worth printing.
+    """
+    return module == _NAMESPACE or module.startswith(f"{_NAMESPACE}.")
+
+
 class LoadError(ValueError):
     """A workspace module could not be loaded, or should not be."""
 

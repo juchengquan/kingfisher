@@ -48,28 +48,38 @@ def _agents(found: Inventory) -> Iterator[str]:
 
 
 def render(found: Inventory) -> Iterator[str]:
-    """The listing, line by line."""
+    """The listing, line by line.
+
+    One section after another and no branch here, which is the point: this used to
+    return early when the tools catalogue would not load, and every section written
+    afterwards had to be remembered on that path too. Skills and subagents were
+    remembered; `_access` was not, so an operator auditing a policy on a workspace with
+    one unparseable `.py` in `tools/` silently got no access report at all.
+    """
     yield from found.origins.block()
     yield ""
 
     yield from _agents(found)
+    yield from _tools(found)
+    yield from _skills(found)
+    yield from _subagents(found)
+    yield from _middlewares(found)
+    yield from _bundles(found)
+    yield from _misnamed_tools(found)
+    yield from _access(found)
 
+
+def _tools(found: Inventory) -> Iterator[str]:
+    """What a request may grant, in two headings because they are two grants."""
     if found.tools_error is not None:
         yield "tools"
         yield f"  cannot load: {found.tools_error}"
-        # And on to the rest. This used to return, so one unparseable `.py` in
-        # `tools/` hid the skills and subagents listings entirely -- against
-        # this record's own rule that "one unloadable catalogue must not take
-        # the other two down with it", and worst for the person most likely to
-        # be running the command, who is looking at a broken workspace.
         yield ""
-        yield from _skills_and_subagents(found)
         return
 
-    # Two headings, because they are two grants. Printed as one pile, this
-    # listing advertised `read_file` beside `csv_profile` and left a reader to
-    # guess which flag took which -- and guessing wrong is the "that is a
-    # builtin tool" refusal.
+    # Printed as one pile, this listing advertised `read_file` beside `csv_profile` and
+    # left a reader to guess which flag took which -- and guessing wrong is the "that is
+    # a builtin tool" refusal.
     yield "builtin tools — grant with --builtin-tools"
     for name in found.builtin_tools or ("(could not introspect)",):
         yield f"  {name}"
@@ -80,8 +90,58 @@ def render(found: Inventory) -> Iterator[str]:
     yield "\nworkspace tools — grant with --tools"
     yield offered(dict(found.tool_sources), found.tools)
 
-    yield from _skills_and_subagents(found)
-    yield from _access(found)
+
+def _middlewares(found: Inventory) -> Iterator[str]:
+    """What this deployment registers, and why the directory could not be read.
+
+    The fifth kind, and the one no renderer printed. `middlewares_error` was carried
+    for it -- `_middlewares` says in as many words that a listing is where somebody
+    goes because something is broken, so the error is printed over the rest of the
+    output -- while `failed` counted it and this file printed nothing, so `list` on a
+    workspace with one unparseable `middlewares/*.py` exited 1 over output whose only
+    hint was `(could not introspect)` under a *different* heading.
+    """
+    yield "\nmiddlewares"
+    if found.middlewares_error is not None:
+        yield f"  cannot load: {found.middlewares_error}"
+        return
+    for name, module in sorted(found.middlewares.items()):
+        # The package, and only for one that came from a package -- the same reason the
+        # subagents section marks a carried bundle: a middleware installed by pip prints
+        # exactly like one a reader can open in this workspace, and where the code is is
+        # the whole of what this section is being asked.
+        yield f"  {name}" + (f"  (from {module})" if module else "")
+    if not found.middlewares:
+        yield "  (none)"
+
+
+def _bundles(found: Inventory) -> Iterator[str]:
+    """Why a delegate's own folder could not be read.
+
+    Not a kind, so nothing that walks them reaches it -- a bundle is one delegate's
+    folder rather than a catalogue. Its tools are still Python that has to import, which
+    is why `failed` counts it, and it was counted without being printed.
+    """
+    if found.bundles_error is None:
+        return
+    yield "\nbundles"
+    yield f"  cannot load: {found.bundles_error}"
+
+
+def _misnamed_tools(found: Inventory) -> Iterator[str]:
+    """Definitions naming a tool by a path it has moved from.
+
+    A section rather than a line under each definition, because the two kinds land
+    differently and the difference is what a reader needs: a subagent doing this will
+    not load and is already on its own line above, while an agent doing it loads and
+    runs without the tool it was granted. That second one is the fault this record
+    singles out as the worst to find out about later, and nothing here said it.
+    """
+    if not found.moved_tools:
+        return
+    yield "\ntools named by a path they have moved from"
+    for subject, names in sorted(found.moved_tools.items()):
+        yield f"  {subject}: {', '.join(sorted(names))}"
 
 
 def origins_document(origins: Origins) -> dict[str, object]:
@@ -151,16 +211,6 @@ def _rollup(found: Inventory) -> Iterator[str]:
             yield f"  {entry}"
             for name, audience in sites:
                 yield f"      {name}  {_who(audience)}"
-
-
-def _skills_and_subagents(found: Inventory) -> Iterator[str]:
-    """The two sections that are the same whether or not the tools catalogue loaded.
-
-    Named for what it prints. It was `_catalogue`, which is the word this codebase
-    uses for a definition directory and for `models.yaml`, and it is neither.
-    """
-    yield from _skills(found)
-    yield from _subagents(found)
 
 
 def _skills(found: Inventory) -> Iterator[str]:
