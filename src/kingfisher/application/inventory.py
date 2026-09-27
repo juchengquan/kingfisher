@@ -9,7 +9,7 @@ from types import MappingProxyType
 from kingfisher.application import access
 from kingfisher.application.origins import Origin, Origins
 from kingfisher.config import Config
-from kingfisher.domain.access import AccessReport, SourceIds, Stated, reaches
+from kingfisher.domain.access import AccessReport, SourceIds, Stated, narrowed_for, reaches
 from kingfisher.domain.capabilities import ALL, CapabilityError, Selection
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.kinds.agents.spec import AgentError
@@ -458,6 +458,39 @@ def _reaching(
     return keep
 
 
+def _offers(
+    field: str,
+    held: frozenset[str] | None,
+    specs: Iterable[object],
+    *,
+    same: Callable[[str], str | None] = lambda name: name,
+) -> Callable[[str], bool]:
+    """Whether a caller reaches one entry of a catalogue that audiences nothing itself.
+
+    Neither a tool module nor a skill's own file has anywhere to write `source_ids:` --
+    an audience for one exists only inside the definition offering it -- so what can be
+    asked is whether any definition here offers it to this caller.
+
+    A definition leaving the field unset offers the whole catalogue at its own audience,
+    which is why one of those ends the walk rather than contributing to it: `ALL` is the
+    string `"*"`, and a union that read its entries would collect the character.
+
+    `same` is how two spellings of one entry are compared, and skills need it -- a grant
+    may write `audit` or `catalogue::audit`, and an audience written one way has to keep
+    the entry the registry names the other way.
+    """
+    if held is None:
+        return lambda _name: True
+    reached: set[str | None] = set()
+    for spec in specs:
+        offered = narrowed_for(spec, held)[field]
+        if offered == ALL:
+            return lambda _name: True
+        reached |= {same(name) for name in offered or ()}
+    reached -= {None}
+    return lambda name: same(name) in reached
+
+
 def _builtin_tools(
     cfg: Config, resolved: Definitions, found: Sequence[Found] | None
 ) -> tuple[str, ...] | None:
@@ -616,6 +649,22 @@ def inventory(
     # each asking again: the field that leaked is the one whose filter was somewhere
     # else, and two answers to what a caller reaches is how they came apart.
     for_caller = reaching("agents", agents)
+    for_caller_subagents = reaching("subagents", subagents)
+    # The catalogues that audience nothing themselves, filtered by what the definitions
+    # this caller reaches offer them -- not by an audience of their own. A
+    # `reaching("tools", ...)` stood here and could filter nothing: `_access` builds
+    # audiences for agents and subagents, and no `tools` key was ever put there to find.
+    #
+    # Reachable definitions rather than all of them, which is the load-bearing half: an
+    # entry may be written `["*"]`, meaning anyone who reaches *this definition*, and at
+    # run time the `and` with the definition's own line is held by the caller never
+    # opening it. A listing has no such gate, so this is where that `and` is.
+    reached_definitions = [
+        *(spec for name, spec in defined_agents.items() if name in for_caller),
+        *(spec for name, spec in specs.items() if name in for_caller_subagents),
+    ]
+    offers_tool = _offers("tools", held, reached_definitions)
+    offers_skill = _offers("skills", held, reached_definitions, same=registry.identity)
 
     return Inventory(
         # The resolved catalogue, not `cfg` -- so a deployment that staged its
@@ -636,14 +685,18 @@ def inventory(
         # reader to a source id in a file that does not parse.
         agents_error=agents_error or broken.get("agents"),
         builtin_tools=builtin,
-        tools=tuple(reaching("tools", dict.fromkeys(workspace_tools, ""))),
-        tool_sources=sources,
+        tools=tuple(name for name in workspace_tools if offers_tool(name)),
+        tool_sources=MappingProxyType(
+            {name: where for name, where in sources.items() if offers_tool(name)}
+        ),
         tools_error=tools_error,
-        skills={name: registry.description(name) for name in registry.names},
+        skills={
+            name: registry.description(name) for name in registry.names if offers_skill(name)
+        },
         skills_unloadable=tuple(registry.unloadable),
         skills_misplaced=tuple(resolved.skills.misplaced),
         skills_misfiled=tuple(registry.misfiled),
-        subagents=MappingProxyType(dict(reaching("subagents", subagents))),
+        subagents=MappingProxyType(dict(for_caller_subagents)),
         subagent_sources=reaching("subagents", subagent_sources),
         subagents_error=subagents_error or broken.get("subagents"),
         middlewares=middlewares,
