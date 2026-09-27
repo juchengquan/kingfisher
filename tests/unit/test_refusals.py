@@ -114,8 +114,12 @@ def a_subagent_with_a_field_nobody_reads(cfg):
     _write(_root(cfg, "subagents") / "s.yaml", SUBAGENT.format(name="s") + "nope: 1\n")
 
 
-def a_declared_subagent_with_no_name(cfg):
-    _write(_root(cfg, "subagents") / "m.py", "SUBAGENTS = [{'description': 'd'}]\n")
+def a_compiled_subagent_with_a_blank_name(cfg):
+    _write(
+        _root(cfg, "subagents") / "m.py",
+        "def build(model, tools):\n    return object()\n\n\n"
+        "SUBAGENTS = [{'name': '', 'description': 'd', 'build': build}]\n",
+    )
 
 
 def a_subagent_missing_a_field(cfg):
@@ -274,7 +278,13 @@ REFUSALS: dict[str, Refusal] = {
     "kinds/subagents/spec.py::_carried": Refusal(
         2, defect=a_portable_subagent_carrying_tools_that_are_not_a_list),
     "kinds/subagents/spec.py::_portable": Refusal(
-        4, defect=a_declared_subagent_with_no_name),
+        2, defect=a_portable_subagent_naming_a_model),
+    # The required fields of both Python declarations, in one body since the compiled
+    # one had only half of it. Filed on the *blank* name rather than the missing one:
+    # that is the refusal this function added, and what this table is for is proving
+    # `doctor` reports it.
+    "kinds/subagents/spec.py::_require": Refusal(
+        2, defect=a_compiled_subagent_with_a_blank_name),
     "kinds/subagents/spec.py::_skills_directory": Refusal(
         3, defect=a_portable_subagent_whose_skills_are_a_relative_path),
     "kinds/subagents/spec.py::_skills_directories": Refusal(
@@ -285,7 +295,7 @@ REFUSALS: dict[str, Refusal] = {
     # an entry with no `build` is now a portable declaration rather than a compiled
     # one missing a key, so the old defect reaches `_portable` and never gets here.
     "kinds/subagents/spec.py::declared": Refusal(
-        5, defect=a_compiled_subagent_whose_build_is_not_callable),
+        4, defect=a_compiled_subagent_whose_build_is_not_callable),
     "kinds/subagents/spec.py::parse": Refusal(2, defect=a_subagent_missing_a_field),
     "kinds/tools/catalogue.py::CarriedTools.found": Refusal(
         1, defect=a_portable_subagent_carrying_two_tools_of_a_name),
