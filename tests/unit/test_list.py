@@ -397,6 +397,65 @@ def test_a_definition_naming_a_moved_tool_is_non_zero_too(
     assert json.loads(capsys.readouterr().out)["moved_tools"]
 
 
+def test_a_broken_middleware_module_tells_the_person_which_file(
+    cfg, at_the_command_line, capsys
+):
+    """Exit 1 over output that looked fine is what this closes. The human listing had no
+    middlewares section at all, so the only hint was `(could not introspect)` under the
+    *builtin tools* heading -- which sends a reader to the wrong directory, since what a
+    broken middleware costs is the graph the built-in set is read off.
+    """
+    middlewares = cfg.catalogue_roots["middlewares"]
+    middlewares.mkdir(parents=True, exist_ok=True)
+    (middlewares / "cap.py").write_text("this is not python(\n", encoding="utf-8")
+
+    assert main(["list"]) == 1
+
+    printed = capsys.readouterr().out
+    assert "cap.py" in printed, "the file to go and open"
+    assert "cannot load" in printed
+
+
+def test_the_middlewares_section_names_what_is_registered(cfg, at_the_command_line, capsys):
+    """So the rule above is not passing on a section that only ever says it cannot load,
+    and the fifth kind is listed like the other four rather than only when it breaks.
+    """
+    middlewares = cfg.catalogue_roots["middlewares"]
+    middlewares.mkdir(parents=True, exist_ok=True)
+    (middlewares / "cap.py").write_text(
+        "from langchain.agents.middleware import AgentMiddleware\n\n\n"
+        "class CallCap(AgentMiddleware):\n    name = 'call-cap'\n\n\n"
+        "MIDDLEWARES = [CallCap]\n",
+        encoding="utf-8",
+    )
+
+    assert main(["list"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "\nmiddlewares\n" in printed
+    assert "  call-cap\n" in printed, "the name a definition writes, and nothing else"
+    assert "kingfisher_workspace" not in printed, "never the dynamic module name"
+
+
+def test_a_middleware_that_came_from_a_package_says_which(cfg, at_the_command_line, capsys):
+    """The other half, and the one the mark means something by: a workspace file may list
+    a class it imported, and then the code is not in this workspace to be read. Without
+    this the section says the same thing about both, which is what marking one is for.
+    """
+    middlewares = cfg.catalogue_roots["middlewares"]
+    middlewares.mkdir(parents=True, exist_ok=True)
+    (middlewares / "borrowed.py").write_text(
+        "from langchain.agents.middleware import TodoListMiddleware\n\n\n"
+        "MIDDLEWARES = [TodoListMiddleware]\n",
+        encoding="utf-8",
+    )
+
+    assert main(["list"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "(from langchain" in printed, "the package it arrived from"
+
+
 def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(
     cfg,
     at_the_command_line,
@@ -800,6 +859,27 @@ def test_a_scoped_view_carries_no_policy(cfg, at_the_command_line):
     assert not operator.access_report.is_clean
 
 
+def test_a_broken_tools_catalogue_still_leaves_the_access_sections(
+    cfg, at_the_command_line, capsys
+):
+    """The half the early return dropped. `render` used to stop after the skills and
+    subagents sections when `tools/` would not walk, so an operator auditing a policy on
+    a workspace with one unparseable `.py` got no access report -- and no sign that
+    there was one to get. Skills and subagents had been added to that path; this had not.
+    """
+    _workspace(cfg, NARROW)
+    from tests.conftest import tools_dir
+
+    (tools_dir(cfg) / "broken.py").write_text("this is not python(\n", encoding="utf-8")
+
+    assert main(["list"]) == 1
+
+    printed = capsys.readouterr().out
+    assert "cannot load" in printed, "and it still says the tools catalogue is the fault"
+    assert "access — by definition" in printed
+    assert "agent narrow  [A, B]" in printed
+
+
 def test_the_operator_sees_audiences_per_definition(policied, capsys):
     """The unscoped listing is the operator's audit view."""
     assert main(["list"]) == 0
@@ -1094,6 +1174,88 @@ def test_every_error_the_inventory_carries_makes_a_listing_non_zero(field_name):
     broken = an_inventory(**{field_name: "something is wrong here"})
 
     assert failed(broken), f"{field_name} is carried and nothing reads it"
+
+
+@pytest.mark.parametrize("field_name", _errors_carried())
+def test_every_error_the_inventory_carries_is_said_in_the_human_listing(field_name):
+    """The other half of the rule above, and the half that was missing. A non-zero exit
+    tells a script something is wrong; only the text tells the person what.
+
+    `middlewares_error` and `bundles_error` were both carried, both counted by `failed`,
+    and printed by neither renderer -- so `kingfisher list` on a workspace with one
+    unparseable `middlewares/*.py` exited 1 over a listing that looked fine. Every rule
+    that proved those errors were carried asserted on `--json`, which is how.
+    """
+    from kingfisher.presentation.cli.listing import render
+    from tests.conftest import an_inventory
+
+    said = "cap.py: SyntaxError: '(' was never closed"
+    printed = "\n".join(render(an_inventory(**{field_name: said})))
+
+    assert said in printed, f"{field_name} makes the exit non-zero and tells nobody why"
+
+
+def test_a_listing_with_nothing_wrong_says_none_of_that():
+    """The control: the rule above passes for every field if the renderer prints the
+    string unconditionally, or prints every error it can think of.
+    """
+    from kingfisher.presentation.cli.listing import render
+    from tests.conftest import an_inventory
+
+    printed = "\n".join(render(an_inventory()))
+
+    assert "cannot load" not in printed
+    assert "moved from" not in printed
+
+
+#: What makes a listing non-zero besides a kind's error, each with a value that triggers
+#: it and something the printed output must then say. `moved_tools` is the one that was
+#: missing: an agent naming a tool by a path it has moved from loads, runs, and quietly
+#: does not have the tool it was granted, which this record singles out as the worst of
+#: these to find out about later.
+TROUBLES_BESIDE_THE_ERRORS = {
+    "moved_tools": ({"agent 'analyst'": ("csv_profile",)}, "csv_profile"),
+    "miscounted_bundles": ({"redactor": "its folder holds two"}, "its folder holds two"),
+}
+
+
+def test_every_trouble_failed_reads_has_a_rule_here():
+    """Read off `failed`'s own source rather than remembered. The list of what makes a
+    listing non-zero and the list of what it prints are two lists of one set, and they
+    had already drifted by two entries.
+    """
+    import inspect
+    from dataclasses import fields
+
+    from kingfisher.application.inventory import Inventory
+    from kingfisher.presentation.cli.listing import failed
+
+    source = inspect.getsource(failed)
+    named = {f.name for f in fields(Inventory) if f"found.{f.name}" in source}
+
+    assert named <= set(TROUBLES_BESIDE_THE_ERRORS) | set(_errors_carried())
+    assert set(TROUBLES_BESIDE_THE_ERRORS) <= named, "a trouble that is gone from `failed`"
+
+
+@pytest.mark.parametrize("field_name", sorted(TROUBLES_BESIDE_THE_ERRORS))
+def test_every_trouble_besides_an_error_is_said_in_the_human_listing(field_name):
+    """The same rule for the two that are not a kind's error. Driven one at a time,
+    because that is how one goes missing: a trouble is added to `failed`, the exit code
+    rule keeps passing, and the person looking at the broken workspace is told nothing.
+    """
+    from types import MappingProxyType
+
+    from kingfisher.presentation.cli.listing import render
+    from tests.conftest import an_inventory
+
+    value, said = TROUBLES_BESIDE_THE_ERRORS[field_name]
+    # A delegate for it to hang under: `miscounted_bundles` prints beneath its owner,
+    # so a record with no subagents cannot show it however the renderer is written.
+    broken = an_inventory(
+        subagents=MappingProxyType({"redactor": "Redacts."}), **{field_name: value}
+    )
+
+    assert said in "\n".join(render(broken)), f"{field_name} tells nobody why"
 
 
 def test_an_inventory_with_nothing_wrong_is_not_reported_as_broken():

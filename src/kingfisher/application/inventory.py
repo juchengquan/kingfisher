@@ -13,6 +13,7 @@ from kingfisher.domain.access import AccessReport, SourceIds, Stated, narrowed_f
 from kingfisher.domain.capabilities import ALL, CapabilityError, Selection
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.kinds.agents.spec import AgentError
+from kingfisher.kinds.importing import defined_in_a_workspace
 from kingfisher.kinds.middlewares.catalogue import MiddlewareError
 from kingfisher.kinds.subagents.rules import miscounted, refuse_cycles
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
@@ -133,7 +134,10 @@ class Inventory:
     #: promises to say in advance what startup will refuse.
     miscounted_bundles: Mapping[str, str] = _NOTHING
 
-    #: Middleware class name -> the module that defined it.
+    #: Middleware class name -> the installed module it came from, or `""` where a
+    #: workspace file defined it. Not the raw `__module__`: for a class written in
+    #: `middlewares/*.py` that is a dynamic name made unique and nothing more, and the
+    #: directory it lives in is in the origins block already.
     middlewares: Mapping[str, str] = _NOTHING
     #: A middleware module that will not import, or offering something that is
     #: not an `AgentMiddleware`. Carried like the others, for the same reason:
@@ -382,9 +386,10 @@ def _middlewares(resolved: Definitions) -> tuple[Mapping[str, str], str | None]:
     printed over the rest of the output rather than through it.
     """
     try:
-        return MappingProxyType(
-            {name: cls.__module__ for name, cls in resolved.middlewares.classes.items()}
-        ), None
+        return MappingProxyType({
+            name: "" if defined_in_a_workspace(cls.__module__) else cls.__module__
+            for name, cls in resolved.middlewares.classes.items()
+        }), None
     except MiddlewareError as exc:
         return _NOTHING, str(exc)
 
