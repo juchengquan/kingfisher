@@ -423,13 +423,21 @@ def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(
 
 # -- listing under a source-id vocabulary ---------------------------------------
 
+#: Two tools, because a tool goes out of a caller's reach two ways and the rules below
+#: need to tell them apart: `line_count` is narrowed away inside an agent they *can*
+#: open, and `secret_export` is offered only by one they cannot.
 TOOL = '''
 def line_count(path: str) -> str:
     """Count the lines in a text file."""
     return "0"
 
 
-TOOLS = [line_count]
+def secret_export(path: str) -> str:
+    """Export something."""
+    return "0"
+
+
+TOOLS = [line_count, secret_export]
 '''
 
 
@@ -455,8 +463,11 @@ system_prompt: |
 """
 
 
-def _workspace(cfg, *agents: str, vocabulary: str = "source_ids: [A, B]\n"):
-    """A workspace with one tool and whichever agents the test names.
+def _workspace(
+    cfg, *agents: str, vocabulary: str = "source_ids: [A, B]\n", skills: tuple[str, ...] = ()
+):
+    """A workspace with two tools, whichever agents the test names, and no skills
+    unless it asks for some.
 
     Fills the workspace and nothing else: pointing the command at it is
     `at_the_command_line`'s job, which every caller here takes.
@@ -464,7 +475,19 @@ def _workspace(cfg, *agents: str, vocabulary: str = "source_ids: [A, B]\n"):
     from tests.conftest import tools_dir
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
-    (tools_dir(cfg) / "line_count.py").write_text(TOOL, encoding="utf-8")
+    # Named for neither tool it defines, because the rules below search the whole
+    # rendered output for a name: a module named after one of its tools puts that name
+    # in the *path* printed beside the other one.
+    (tools_dir(cfg) / "kit.py").write_text(TOOL, encoding="utf-8")
+    for skill in skills:
+        folder = cfg.skills_dir / skill
+        folder.mkdir(parents=True, exist_ok=True)
+        # A description sharing no word with any skill name here, for the same reason:
+        # one skill's name inside another's description is a match too.
+        (folder / "SKILL.md").write_text(
+            f"---\nname: {skill}\ndescription: Something to do.\n---\nDo it.\n",
+            encoding="utf-8",
+        )
     directory = cfg.catalogue_roots["agents"]
     directory.mkdir(parents=True, exist_ok=True)
     for document in agents:
@@ -484,6 +507,7 @@ def policied(cfg, at_the_command_line):
 A_ONLY = """name: hidden
 description: An agent.
 source_ids: [A]
+tools: [secret_export]
 system_prompt: |
   You do the task.
 """
@@ -524,6 +548,221 @@ def test_the_operator_still_sees_all_of_it(form, cfg, at_the_command_line, capsy
     printed = capsys.readouterr().out
     assert "hidden" in printed
     assert "narrow" in printed
+    # The tools half of the same control, so the rules below are not passing on a
+    # listing that shows the operator nothing either.
+    assert "line_count" in printed
+    assert "secret_export" in printed
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_a_scoped_listing_carries_no_tool_out_of_reach(form, cfg, at_the_command_line, capsys):
+    """Neither the tool a reachable agent narrows away from this caller, nor the one
+    only an agent they cannot open offers, nor the file either lives in.
+
+    Measured through the real command before this existed: the filter standing here
+    looked up audiences under a `tools` key nothing builds, so every tool matched at
+    `*` -- replacing the whole call with the unfiltered tuple left all 2,167 tests
+    passing.
+    """
+    _workspace(cfg, NARROW, A_ONLY)
+
+    assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
+
+    printed = capsys.readouterr().out
+    assert "line_count" not in printed, "`narrow` narrows this one away from B"
+    assert "secret_export" not in printed, "and only `hidden` offers this one"
+    assert "narrow" in printed, "and it should still show the agent they can open"
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_a_scoped_listing_keeps_a_tool_shared_with_them(form, cfg, at_the_command_line, capsys):
+    """The control the rule above needs, and the one a filter that drops everything
+    would fail: `wide` shares `line_count` with A and B alike.
+    """
+    _workspace(cfg, WIDE, A_ONLY)
+
+    assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
+
+    printed = capsys.readouterr().out
+    assert "line_count" in printed
+    assert "secret_export" not in printed, "which only an agent out of their reach offers"
+
+
+#: An agent out of B's reach whose one tool is written `["*"]` -- "anyone who reaches
+#: this definition", which is an *and* with the definition's own line. At run time that
+#: `and` is held by the caller never opening the agent; a listing has no such gate, so it
+#: filters to the definitions the caller reaches before asking what those offer.
+A_ONLY_STAR = """name: starred
+description: An agent.
+source_ids: [A]
+tools:
+  - name: secret_export
+    source_ids: ["*"]
+system_prompt: |
+  You do the task.
+"""
+
+#: A reachable agent naming no tools at all, which is what most definitions look like.
+#: An unset `tools:` offers the whole catalogue at the definition's own audience, and
+#: `skills:` unset means none -- the one place the two fields deliberately differ.
+NAMES_NO_TOOLS = """name: unfussy
+description: An agent.
+source_ids: [A, B]
+system_prompt: |
+  You do the task.
+"""
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_a_star_entry_out_of_reach_stays_out_of_reach(form, cfg, at_the_command_line, capsys):
+    """A tool an unreachable agent offers to "anyone who reaches this definition" is
+    still absent, because this caller does not reach that definition.
+
+    Measured: reading the entries of every definition rather than only the reachable
+    ones hands `secret_export` straight back, and nothing else in the suite notices --
+    every other audience here happens to name source ids, so the definition's own line
+    narrows the entry away a second time and covers for the missing filter.
+    """
+    _workspace(cfg, WIDE, A_ONLY_STAR)
+
+    assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
+
+    printed = capsys.readouterr().out
+    assert "secret_export" not in printed
+    assert "line_count" in printed, "and the one `wide` shares with them is still there"
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_an_agent_naming_no_tools_offers_the_whole_catalogue(
+    form, cfg, at_the_command_line, capsys
+):
+    """A caller reaching an agent with no `tools:` line is shown every workspace tool,
+    because that is what the unset field grants.
+
+    The shape most deployments have, and the one a filter reading "unset" as "nothing"
+    would empty: `"*"` is a string, so a walk that unions the entries of each field
+    without stopping at it collects the character rather than the catalogue.
+    """
+    _workspace(cfg, NAMES_NO_TOOLS, A_ONLY)
+
+    assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
+
+    printed = capsys.readouterr().out
+    assert "line_count" in printed
+    assert "secret_export" in printed, "the unset field offers this one too"
+
+
+#: A delegate this caller reaches, offering a tool no agent mentions. A delegate carries
+#: its own `source_ids:`, so it is reachable on its own terms -- and a caller who reaches
+#: it reaches what it holds, through whichever agent delegates to it.
+REACHABLE_DELEGATE = """name: helper
+description: A delegate.
+source_ids: [A, B]
+tools:
+  - name: secret_export
+    source_ids: [A, B]
+system_prompt: |
+  You do the part you are given.
+"""
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_a_delegate_in_reach_offers_its_tools_to_that_caller(
+    form, cfg, at_the_command_line, capsys
+):
+    """A tool only a delegate holds is shown to a caller who reaches the delegate.
+
+    Dropping the delegates from the walk leaves the whole suite green otherwise: every
+    other tool here is named by an agent as well, so nothing measures the half of the
+    catalogue a caller reaches only by delegation.
+    """
+    _workspace(cfg, NARROW)
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "helper.yaml").write_text(REACHABLE_DELEGATE, encoding="utf-8")
+
+    assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
+
+    printed = capsys.readouterr().out
+    assert "secret_export" in printed, "the delegate they reach holds it"
+    assert "line_count" not in printed, "and `narrow` still narrows this one away"
+
+
+#: A skill an agent shares with both callers, and one only an agent out of B's reach is
+#: told about. A skill's own file has nowhere to write an audience, so those are the two
+#: states one can be in -- there is no third where the skill itself restricts somebody.
+SHARES_SKILL = """name: sharer
+description: An agent.
+source_ids: [A, B]
+skills: [routine]
+system_prompt: |
+  You do the task.
+"""
+
+KEEPS_SKILL = """name: keeper
+description: An agent.
+source_ids: [A]
+skills: [procedure]
+system_prompt: |
+  You do the task.
+"""
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_a_scoped_listing_carries_no_skill_out_of_reach(form, cfg, at_the_command_line, capsys):
+    """A skill only an agent out of this caller's reach is told about is absent, and the
+    one shared with them is not.
+
+    The same defect as the tools rule above and the same fix: a skill has no audience of
+    its own either, so the only one it has is the entry in the definition offering it --
+    and the listing was not reading those at all.
+    """
+    _workspace(cfg, SHARES_SKILL, KEEPS_SKILL, skills=("routine", "procedure"))
+
+    assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
+
+    printed = capsys.readouterr().out
+    assert "procedure" not in printed, "only `keeper` is told about this one"
+    assert "routine" in printed, "and `sharer` shares this one with them"
+
+
+def test_the_operator_sees_a_skill_no_caller_reaches(cfg, at_the_command_line, capsys):
+    """The control for the skills half: the filtering is the caller's view, not the
+    listing losing the ability to show a skill nobody but the operator can see.
+    """
+    _workspace(cfg, SHARES_SKILL, KEEPS_SKILL, skills=("routine", "procedure"))
+
+    assert main(["list"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "procedure" in printed
+    assert "routine" in printed
+
+
+QUALIFIED_SKILL = """name: qualifier
+description: An agent.
+source_ids: [A, B]
+skills: [catalogue::routine]
+system_prompt: |
+  You do the task.
+"""
+
+
+def test_a_grant_and_the_listing_may_spell_one_skill_differently(
+    cfg, at_the_command_line, capsys
+):
+    """An agent granting `catalogue::routine` reaches the skill the listing calls
+    `routine`, so a caller who reaches that agent is shown it.
+
+    Measured: comparing the two spellings as written drops the skill from the caller's
+    view although they reach it. The withheld report already carries a note about this
+    and this filter is the second reader of the same grants, which is the whole reason
+    both go through the registry's own identity rather than the string.
+    """
+    _workspace(cfg, QUALIFIED_SKILL, skills=("routine",))
+
+    assert main(["list", "--as", "B"]) == 0
+
+    assert "routine" in capsys.readouterr().out
 
 
 def test_a_scoped_view_carries_no_policy(cfg, at_the_command_line):
