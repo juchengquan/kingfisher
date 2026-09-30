@@ -328,7 +328,7 @@ kingfisher = Kingfisher(cfg, backend=my_filesystem)
 ```
 
 Starting from nothing instead is allowed and is yours to get right — which is a
-thing to do deliberately, not to discover. Two of the four contract checks below
+thing to do deliberately, not to discover. Two of the five contract checks below
 run on every backend kingfisher resolves and will tell you about the two failures
 that otherwise report nothing.
 
@@ -366,17 +366,32 @@ with `upload_files` under `/data/`, what a turn left is listed with `glob` under
 somewhere other than the directory it was handed. `/data` has to take that upload
 while refusing the agent's own writes: `default_backend` routes it to
 `DataBackend`, which lifts the permission bits for kingfisher's upload alone, and
-a backend of yours meets the same promise its own way. The rest of what kingfisher
-keeps about a session — its conversation, its pinned agent — is still read from
-that directory; [the proposal](../design/2026-09-30-a-session-is-its-backend.md)
-moving it is not finished.
+a backend of yours meets the same promise its own way.
+
+**And what it keeps about the session, under `/.harness`.** The agent the session is
+pinned to, its conversation, and a turn paused at an approval gate are all written
+and read through your backend — which means your agent's shell can reach them too,
+unless your backend keeps it out. So two things stand between the agent and
+rewriting its own pinned agent, and both are yours to get right:
+
+- **`shell_denied`**, in the kit below, drives `execute` at `/.harness` and `/data`
+  and fails if the shell can write either.
+- **`KINGFISHER_SESSION_KEY`**, which kingfisher signs those files with and checks
+  on every read. A mismatch refuses the turn with `SessionTamperedError`. With any
+  backend but `default_backend` itself — a factory wrapping it included — kingfisher
+  will not start without one; `kingfisher key` prints one.
+
+What is still read from the directory you were handed is the turn lock and the
+housekeeping `kingfisher sessions` and `reap` do;
+[the proposal](../design/2026-09-30-a-session-is-its-backend.md) moving those is not
+finished.
 
 There is no setting for this one. Build `Kingfisher` yourself; `kingfisher run`
 builds its own with the default.
 
 ### Checking what you returned
 
-**Two of the four run on their own**, against every backend kingfisher resolves,
+**Two of the five run on their own**, against every backend kingfisher resolves,
 and raise `ConfigError` rather than letting a turn find out. Both of them only
 look — an `isinstance` and a scan of your routes, no I/O — so they cost nothing
 and there is nothing to switch on:
@@ -392,7 +407,7 @@ implements the file operations in terms of `execute`, or register with the ABC.
 or the graph will not build: deepagents refuses `permissions=` outright on a
 backend that executes unless every rule is scoped to a route.
 
-**The other two stay yours**, because they write files and run shell commands, and
+**The other three stay yours**, because they write files and run shell commands, and
 a library should not do either at a build:
 
 ```python
@@ -403,7 +418,7 @@ def test_my_backend_keeps_the_contract(check):
     check(lambda: my_filesystem(kingfishers_backend, session_dir))
 ```
 
-Run all four. The automatic pair costs nothing twice, and your own suite is a
+Run all five. The automatic pair costs nothing twice, and your own suite is a
 better place to read a failure than a turn is.
 
 **The shell and the file tools have to be two views of one filesystem**, and this
@@ -411,6 +426,12 @@ is the one left that reports nothing on its own. A virtual path becomes a shell
 path by dropping its leading slash; the prompt says so in a table the model reads
 every turn. Route a path somewhere the shell cannot follow and the agent can read
 its inputs and run nothing over them, with a confused model as the only symptom.
+
+**The shell may not write under `/.harness` or `/data`.** `shell_denied` writes a
+file there through the backend, then has the shell try to overwrite it and to create
+another beside it. `default_backend` passes on the strength of its sandbox; with the
+sandbox off it fails on `/.harness`, which is exactly the deployment that needs a
+session key.
 
 The last is ordinary: if you refuse host paths, refuse them with `HostPathError`
 (`from kingfisher import HostPathError`),

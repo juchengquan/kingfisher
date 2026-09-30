@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from kingfisher.kinds.documents import DefinitionText
 from kingfisher.layout import HARNESS, PINNED_AGENT
@@ -25,12 +26,7 @@ from kingfisher.layout import HARNESS, PINNED_AGENT
 AGENT_SNAPSHOT = f"{HARNESS}/{PINNED_AGENT}"
 
 
-def agent_snapshot(session_dir: Path) -> Path:
-    """The path a session's agent definition is kept at."""
-    return Path(session_dir) / HARNESS / PINNED_AGENT
-
-
-def remember_agent(session_dir: Path, document: str) -> None:
+def remember_agent(harness: Any, document: str) -> None:
     """Keep the agent definition this session opened with.
 
     Written once and never rewritten: a later turn naming the same agent is built
@@ -38,18 +34,16 @@ def remember_agent(session_dir: Path, document: str) -> None:
     then. A deploy mid-conversation is ordinary; an agent's prompt changing under
     a history that already happened is not.
     """
-    path = agent_snapshot(session_dir)
-    if path.exists():
+    if harness.read(PINNED_AGENT) is not None:
         return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(document, encoding="utf-8")
+    harness.write(PINNED_AGENT, document.encode("utf-8"))
 
 
-def agent_started_with(session_dir: Path) -> DefinitionText | None:
+def agent_started_with(harness: Any) -> DefinitionText | None:
     """The agent document this session opened with, or `None` if it kept none.
 
     `None` covers two ordinary cases: a session that named no agent, and a
     deployment whose repository cannot hand over the document it parsed.
     """
-    path = agent_snapshot(session_dir)
-    return DefinitionText.at(path) if path.is_file() else None
+    held = harness.read(PINNED_AGENT)
+    return None if held is None else DefinitionText(held.decode("utf-8"), Path(AGENT_SNAPSHOT))

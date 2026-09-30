@@ -19,14 +19,13 @@ from langgraph.checkpoint.memory import InMemorySaver
 from kingfisher import Kingfisher, default_backend
 from kingfisher.domain.request import Decision, DecisionError, Request, Resume
 from kingfisher.domain.result import AWAITING, DECISIONS, END_TURN
-from kingfisher.infrastructure.session_store import (
-    PAUSED,
-    PAUSED_PROVENANCE,
-    read_pause_mark,
-    write_pause_mark,
-)
+from kingfisher.infrastructure.session_store import read_pause_mark, write_pause_mark
 from kingfisher.infrastructure.workspace import session_bytes
-from tests.conftest import FakeToolCallingModel
+from kingfisher.layout import HARNESS, PAUSED_MARK, PAUSED_STATE
+from tests.conftest import FakeToolCallingModel, harness_of
+
+PAUSED = f"{HARNESS}/{PAUSED_STATE}"
+PAUSED_PROVENANCE = f"{HARNESS}/{PAUSED_MARK}"
 
 
 def _gated(*, calls: list[dict[str, Any]], after: str = "done", saver: Any = None) -> Any:
@@ -211,7 +210,7 @@ def test_answering_clears_the_pause(cfg):
     )
 
     assert not (_session_dir(cfg, paused.session_id) / PAUSED).exists()
-    assert read_pause_mark(_session_dir(cfg, paused.session_id)) is None
+    assert read_pause_mark(harness_of(cfg, paused.session_id)) is None
 
 
 def test_two_gated_calls_are_answered_one_each(cfg, session_dir):
@@ -326,10 +325,10 @@ def test_a_pause_that_did_not_survive_an_upgrade_is_refused(cfg):
     """
     kf = Kingfisher(cfg, graph=_gated(calls=[_write("/derived/a.txt", "x", "c1")]))
     paused = kf.run(Request("write it"))
-    directory = _session_dir(cfg, paused.session_id)
-    written = read_pause_mark(directory)
+    kept = harness_of(cfg, paused.session_id)
+    written = read_pause_mark(kept)
     assert written is not None, "the pause recorded nothing to move under it"
-    write_pause_mark(directory, {**written, "deepagents": "0.0.1-before"})
+    write_pause_mark(kept, {**written, "deepagents": "0.0.1-before"})
 
     with pytest.raises(DecisionError, match="did not survive the upgrade"):
         kf.run(

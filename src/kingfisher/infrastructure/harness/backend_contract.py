@@ -126,6 +126,43 @@ def filesystem_consistency(make: Callable[[], Any]) -> None:
             raise AssertionError(msg)
 
 
+def shell_denied(make: Callable[[], Any]) -> None:
+    """The agent's shell may not write under `/.harness` or `/data`.
+
+    `/.harness` is what kingfisher reads back and trusts -- the pinned agent, the
+    conversation, a paused turn -- and `/data` is the caller's input, which the agent
+    is promised it cannot change. The file tools are refused both by the turn's
+    permissions; the shell bypasses those, so on any backend but kingfisher's own this
+    is the only thing that says the shell is refused too.
+
+    Driven through `execute` rather than read off the backend's configuration, and
+    both ways a shell writes: a new file, and over one kingfisher put there. The
+    second is the one a pinned agent is rewritten by.
+    """
+    backend = make()
+    if not _executes(backend):
+        return
+    token = uuid4().hex
+    written: list[str] = []
+    for route, what in (
+        ("/.harness", "what kingfisher reads back and trusts"),
+        ("/data", "the caller's input"),
+    ):
+        kept, fresh = f"{route}/{token}-kept", f"{route}/{token}-fresh"
+        backend.upload_files([(kept, b"as written")])
+        for path in (kept, fresh):
+            backend.execute(f"printf %s {token} > {path.lstrip('/')}")
+        after_kept, after_fresh = backend.download_files([kept, fresh])
+        if after_kept.content != b"as written" or after_fresh.error is None:
+            written.append(f"{route}, {what}")
+    if written:
+        msg = (
+            f"the shell wrote under {'; and under '.join(written)}. Each is only safe "
+            "where the backend keeps the shell out of it"
+        )
+        raise AssertionError(msg)
+
+
 def host_path_refusal(make: Callable[[], Any]) -> None:
     """Conditional on purpose: refusing host paths at all is kingfisher's policy, not
     an obligation a replacement inherits.
@@ -156,11 +193,13 @@ def host_path_refusal(make: Callable[[], Any]) -> None:
 
 #: Every check a backend a deployment's factory returned must pass, in the order a
 #: deployment wants to read them: the silent failure first, then the one that stops
-#: the graph building, then the promise the prompt makes, then the refusal.
+#: the graph building, then the promise the prompt makes, then what the shell must
+#: not write, then the refusal.
 BACKEND_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (
     execution_support,
     route_coverage,
     filesystem_consistency,
+    shell_denied,
     host_path_refusal,
 )
 

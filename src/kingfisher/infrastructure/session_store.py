@@ -96,31 +96,16 @@ def keep_from(store: SessionStore, session_id: str, directory: Path, names: Sequ
 TRANSCRIPT = f"{HARNESS}/{TRANSCRIPT_FILE}"
 
 
-def read_transcript(directory: Path) -> tuple[Message, ...]:
+def read_transcript(harness: Any) -> tuple[Message, ...]:
     """What was said in this session before now, or nothing for a first turn."""
-    held = Path(directory) / TRANSCRIPT
-    if not held.is_file():
-        return ()
-    return from_json(held.read_text(encoding="utf-8"))
+    held = harness.read(TRANSCRIPT_FILE)
+    return () if held is None else from_json(held.decode("utf-8"))
 
 
-def write_transcript(directory: Path, messages: tuple[Message, ...]) -> None:
+def write_transcript(harness: Any, messages: tuple[Message, ...]) -> None:
     """Replace this session's transcript with what it now holds."""
-    # The transcript's own directory, not the session's: `TRANSCRIPT` is a path
-    # under `.harness` now, and a session restored onto a host that has only the
-    # store has neither yet.
-    path = Path(directory) / TRANSCRIPT
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(as_json(messages), encoding="utf-8")
+    harness.write(TRANSCRIPT_FILE, as_json(messages).encode("utf-8"))
 
-
-#: Where a paused turn's graph state and its provenance live. Under `.harness` for
-#: the reasons the transcript is: deleted with the session, counted by
-#: `session_bytes`, carried by whatever carries the rest, and out of reach of the
-#: file tools. Out of the *shell's* reach only where the sandbox profile is running,
-#: which is why what goes here is msgpack and never a pickle.
-PAUSED = f"{HARNESS}/{PAUSED_STATE}"
-PAUSED_PROVENANCE = f"{HARNESS}/{PAUSED_MARK}"
 
 #: Which agent the paused graph was built from. Kept for *checking* a resume, never
 #: for granting one: capabilities are re-presented every time, and a different agent
@@ -134,11 +119,6 @@ AGENT_MARK = "agent"
 #: two derivations of one. Deriving them again would also need a compiled graph,
 #: which the admission path does not have until after it has dealt with the pause.
 PENDING_MARK = "pending"
-
-
-def paused_path(directory: Path) -> Path:
-    """Where this session's paused graph state goes, whether or not it is there."""
-    return Path(directory) / PAUSED
 
 
 def pending_from_mark(mark: Mapping[str, Any]) -> tuple[PendingDecision, ...]:
@@ -170,13 +150,13 @@ def pending_as_mark(waiting: Sequence[PendingDecision]) -> list[dict[str, Any]]:
     ]
 
 
-def read_pause_mark(directory: Path) -> dict[str, Any] | None:
+def read_pause_mark(harness: Any) -> dict[str, Any] | None:
     """What the paused checkpoint beside this was built against, or `None`."""
-    path = Path(directory) / PAUSED_PROVENANCE
-    if not path.is_file():
+    written = harness.read(PAUSED_MARK)
+    if written is None:
         return None
     try:
-        held = json.loads(path.read_text(encoding="utf-8"))
+        held = json.loads(written)
     except ValueError:
         # Unreadable is the same answer as absent, and deliberately: this file
         # exists to refuse a resume, so a damaged one refusing it too is right.
@@ -184,14 +164,11 @@ def read_pause_mark(directory: Path) -> dict[str, Any] | None:
     return held if isinstance(held, dict) else None
 
 
-def write_pause_mark(directory: Path, mark: Mapping[str, Any]) -> None:
+def write_pause_mark(harness: Any, mark: Mapping[str, Any]) -> None:
     """Record what the checkpoint written beside this was built against."""
-    path = Path(directory) / PAUSED_PROVENANCE
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(dict(mark), sort_keys=True), encoding="utf-8")
+    harness.write(PAUSED_MARK, json.dumps(dict(mark), sort_keys=True).encode("utf-8"))
 
 
-def clear_pause(directory: Path) -> None:
+def clear_pause(harness: Any) -> None:
     """Drop a pause, answered or superseded. Safe where there was never one."""
-    for name in (PAUSED, PAUSED_PROVENANCE):
-        (Path(directory) / name).unlink(missing_ok=True)
+    harness.delete(PAUSED_STATE, PAUSED_MARK)

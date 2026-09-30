@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import platform
 import shutil
+from pathlib import Path
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -21,8 +22,8 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import default_backend
-from kingfisher.infrastructure.workspace import agent_snapshot, claim_path, ensure_layout
-from kingfisher.layout import LAYOUT_VERSION, MARKER
+from kingfisher.infrastructure.workspace import claim_path, ensure_layout
+from kingfisher.layout import HARNESS, LAYOUT_VERSION, MARKER, PINNED_AGENT
 from tests.conftest import FakeToolCallingModel, pin, start
 
 macos = pytest.mark.skipif(
@@ -34,6 +35,11 @@ description: An agent.
 system_prompt: |
   You help.
 """
+
+
+def agent_snapshot(session_dir) -> Path:
+    """Where the default backend keeps a session's pinned agent, on disk."""
+    return Path(session_dir) / HARNESS / PINNED_AGENT
 
 
 def _agent(cfg) -> None:
