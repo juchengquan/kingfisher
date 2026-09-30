@@ -64,6 +64,11 @@ slices land.
   `CAP_SYS_ADMIN` costs to do it. Nothing built. Half its premise went with
   #502 and the document says so at the top; its measurements are the part that
   kept.
+- [A tool's path is the backend's
+  path](design/2026-09-30-a-tool-path-is-the-backend-s-path.md) — a workspace tool's
+  `path` resolved through the backend rather than the session folder, which fixes a
+  `/skills` path that fails today, a `/.harness` path a tool is handed today, and
+  paths a remote backend keeps elsewhere. Settled in review, nothing built.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
