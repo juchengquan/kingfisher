@@ -453,3 +453,114 @@ def test_a_hard_failure_is_passed_through_rather_than_emptied(cfg, session_dir):
         truncated: bool = False
 
     assert _once(Failed(), key=lambda one: one).matches is None
+
+
+def test_the_shell_is_told_its_own_spelling(cfg, session_dir):
+    """deepagents describes `execute` as wanting absolute paths, which a model reads as a
+    leading slash -- the host's root, from the shell. With that in place the agent passed
+    `/data/<name>` to the shell in most runs of the smoke task.
+
+    Driven through a live call in all three graphs, because the description is rewritten
+    per call after deepagents writes its own, and a delegate carries none of the parent's
+    middleware -- so a build that looked right could still send the old sentence to one.
+    """
+    from langchain_core.messages import AIMessage
+    from langchain_core.tools import BaseTool
+
+    from kingfisher.domain.capabilities import Capabilities
+    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.infrastructure.harness.middlewares.shell_path_spelling import SHELL_PATHS
+    from tests.conftest import FakeToolCallingModel, subagents_dir
+    from tests.unit.test_delegation_ceiling import _subagent_graphs
+
+    class DescribingModel(FakeToolCallingModel):
+        """Remembers what it was told each tool does, on the last call."""
+
+        described: dict[str, str] = {}
+
+        def bind_tools(self, tools, **kwargs):
+            self.described = {t.name: t.description for t in tools if isinstance(t, BaseTool)}
+            return self
+
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "writer.yaml").write_text(
+        "name: writer\ndescription: Writes a file.\nsystem_prompt: |\n  You write files.\n",
+        encoding="utf-8",
+    )
+    model = DescribingModel(responses=[AIMessage(content="ok")])
+    graph = build_agent(
+        cfg, session_dir=session_dir, model=model, capabilities=Capabilities(subagents=("writer",))
+    ).graph
+    delegates = _subagent_graphs(graph)
+    graphs = {"the agent": graph, **{d: delegates[d] for d in ("writer", "general-purpose")}}
+    go = {"messages": [{"role": "user", "content": "go"}]}
+
+    for name, one in graphs.items():
+        model.described = {}
+        one.invoke(go)
+        told = model.described.get("execute", "")
+
+        assert SHELL_PATHS in told, f"{name} was not told the shell's spelling"
+        assert "absolute path" not in told.lower(), f"{name} was still told absolute paths"
+
+
+def test_a_save_outside_every_folder_is_refused_and_redirected(cfg, session_dir):
+    """A bare `result.json` is the top of the session to a file tool, where nothing is
+    returned or kept. Measured: a run saved both its outputs there, said they were
+    written, and its caller got nothing back.
+
+    Driven in all three graphs, beside two controls: a save inside `/derived` still
+    lands, and one to `/data` still meets its own refusal rather than this one.
+    """
+    from langchain_core.messages import AIMessage, ToolMessage
+
+    from kingfisher.domain.capabilities import Capabilities
+    from kingfisher.infrastructure.harness.agent import build_agent
+    from tests.conftest import FakeToolCallingModel, subagents_dir
+    from tests.unit.test_delegation_ceiling import _subagent_graphs
+
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "writer.yaml").write_text(
+        "name: writer\ndescription: Writes a file.\nsystem_prompt: |\n  You write files.\n",
+        encoding="utf-8",
+    )
+
+    def save(path, call_id):
+        return AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "write_file", "args": {"file_path": path, "content": "x"}, "id": call_id}
+            ],
+        )
+
+    for name in ("the agent", "writer", "general-purpose"):
+        stray = f"{name.replace(' ', '-')}.json"
+        model = FakeToolCallingModel(
+            responses=[
+                save(stray, "c1"),
+                save(f"/derived/{stray}", "c2"),
+                save(f"/data/{stray}", "c3"),
+                AIMessage(content="done"),
+            ]
+        )
+        graph = build_agent(
+            cfg,
+            session_dir=session_dir,
+            model=model,
+            capabilities=Capabilities(subagents=("writer",)),
+        ).graph
+        one = graph if name == "the agent" else _subagent_graphs(graph)[name]
+        out = one.invoke(
+            {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 40}
+        )
+        said = {
+            m.tool_call_id: str(m.content) for m in out["messages"] if isinstance(m, ToolMessage)
+        }
+
+        assert f"'/derived/{stray}'" in said["c1"], f"{name}: {said['c1']}"
+        assert not (session_dir / stray).exists(), f"{name} saved where nothing is kept"
+        assert (session_dir / "derived" / stray).is_file(), f"{name} could not save in /derived"
+        assert not (session_dir / "data" / stray).exists(), f"{name} wrote into /data"
+        assert "outside the session's folders" not in said["c3"], (
+            f"{name}: /data's own refusal was pre-empted by this one"
+        )

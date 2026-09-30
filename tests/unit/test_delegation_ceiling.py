@@ -527,7 +527,7 @@ def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session
     # It still carries the guards every graph holding workspace tools carries. This
     # asserted an empty list, which was the defect: deepagents hands this delegate the
     # agent's own tools, and it held them with nothing wrapped around them.
-    assert kinds == ["HostPathGuard"], kinds
+    assert kinds == ["HostPathGuard", "ShellPathSpelling", "StrayWriteGuard"], kinds
 
 
 # -- a tool name nothing offers -------------------------------------------
