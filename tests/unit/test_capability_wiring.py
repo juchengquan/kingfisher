@@ -18,7 +18,7 @@ from kingfisher.infrastructure.harness.agent import (
     build_agent,
 )
 from kingfisher.infrastructure.harness.backend import default_backend, skills_sources
-from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from tests.conftest import (
     FakeToolCallingModel,

@@ -110,8 +110,9 @@ agent will not load is reported, not refused.
 *(2026-08-17, `skill-registry.md`.)*
 
 **Only `kinds.skills.registry` calls it.** The lister and its async twin were called
-from there and from `infrastructure.harness.narrowing`, so an upgrade that moved
-either meant the same edit in two files, and the async one was never pinned.
+from there and from `infrastructure.harness.middlewares.narrowing`, so an upgrade
+that moved either meant the same edit in two files, and the async one was never
+pinned.
 `listed` and `alisted` are the only calls now; `test_skill_registry` pins both
 names and fails if another module names either. A listing becomes a `Listed` where
 it arrives, so `name`, `path` and `description` are read off deepagents' metadata in
@@ -282,8 +283,8 @@ it is instead. *(2026-09-24, from an architecture review.)*
 
 **The mass noun stays wherever it is still a mass noun.** `middlewares` names the
 kind -- a directory, a field, a key, a table row. `MiddlewareRepository`,
-`approved_middleware`, `harness/middleware.py` and every sentence about *a
-middleware* keep the singular, because `ToolRepository` already sits behind a
+`approved_middleware`, `harness/declared_middleware.py` and every sentence about
+*a middleware* keep the singular, because `ToolRepository` already sits behind a
 kind called `tools`: naming the type for one of the things is what the other four
 kinds do. *(2026-09-15.)*
 
@@ -3663,6 +3664,44 @@ so neither has to import the other. `HostPathError` is exported from the root,
 because `ports.md` tells an adapter to raise it and the address it had given was
 a module that has stopped being where it lives; `backend` still re-exports it for
 anybody who copied that address.
+
+**Regrouped a week later, by what a class is rather than by what is edited with
+it.** *(2026-09-30.)* Kingfisher's own middleware is one package,
+`infrastructure/harness/middlewares/`: `narrowing` holds the three that apply a
+request's capabilities, `workspace_tools` the two around a workspace tool call,
+`host_path_guard` the one. The history test above draws a boundary for whoever is
+editing, and this one is for whoever is looking: "what does kingfisher wrap an
+agent in" had three answers, in modules named for other things, and the six
+classes had no address in common. `test_kingfisher_keeps_its_own_middleware_in_one_package`
+holds it, following bases rather than matching a name, because `NarrowedSkills`
+subclasses deepagents' `SkillsMiddleware` and never says `AgentMiddleware`.
+
+Only the classes moved. `HostPathGuard` left `reject_host_path`, which the
+paragraph above calls one mechanism, and it still is one -- the error stays in
+`host_paths` and the guard imports it. That module names no runtime class now, so
+`HostPathError` went from 250ms and ~970 modules to 16ms and 91, measured, and
+from `HEAVY_EXPORTS` to the light list where a test keeps it there.
+`SessionPaths` went to `session_paths`, a module of its own, because it has two
+readers on opposite sides: `WorkspaceToolPaths` in the package and `GuardedTool`
+outside it. Left in `tool_guards`, the package would import that module for the
+helper and that module would import the package for the three guards it composes.
+
+**None of the six is offered to a definition, and that was the alternative
+considered.** They ship with the package the way `prompts/` does, which invites
+listing them beside a deployment's own so a definition could name one. A name a
+definition can write is a name it can leave out, and `ToolAllowlist` is what holds
+a request to the tools it was granted -- omitting it would be a way to widen, which
+*Capabilities narrow and never widen* does not allow an exception for. They do not
+fit the registry mechanically either: an entry there is built from defaults a
+deployment stored, and these are built per request from the names that request
+resolved and the backend it runs on. Nor are they under `kinds/middlewares`, since
+a kind may not name a layer, nor at the package root, for the reason *Not a
+module: middleware* gave against a fifth area reaching the runtime.
+
+`harness/middleware.py` is `declared_middleware.py`, because beside a package
+called `middlewares` the bare name no longer said which set it builds. It keeps
+the singular, as the mass-noun entry has it; the package takes the plural for the
+reason the kind's does -- it is a directory of them.
 
 **A cluster that size means two different things and this one is the harmless
 one.** Everything joined to everything is what a cohesive unit and a rippling

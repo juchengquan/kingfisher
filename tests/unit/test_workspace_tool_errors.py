@@ -12,7 +12,7 @@ import asyncio
 import pytest
 from langchain_core.messages import ToolMessage
 
-from kingfisher.infrastructure.harness.tool_guards import WorkspaceToolErrors
+from kingfisher.infrastructure.harness.middlewares.workspace_tools import WorkspaceToolErrors
 
 
 class _Request:

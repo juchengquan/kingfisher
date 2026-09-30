@@ -38,19 +38,19 @@ from kingfisher.infrastructure.harness.backend import (
     skills_sources,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
-from kingfisher.infrastructure.harness.interpreter import _interpreter
-from kingfisher.infrastructure.harness.middleware import (
+from kingfisher.infrastructure.harness.declared_middleware import (
     ByName,
     MiddlewareFactory,
     declared_middleware,
     offered_middleware,
 )
-from kingfisher.infrastructure.harness.models import build_model, model_named
-from kingfisher.infrastructure.harness.narrowing import (
+from kingfisher.infrastructure.harness.interpreter import _interpreter
+from kingfisher.infrastructure.harness.middlewares.narrowing import (
     DeclaredDelegatesOnly,
     NarrowedSkills,
     ToolAllowlist,
 )
+from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.subagents import (
     as_subagent,
     model_object,

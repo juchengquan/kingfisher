@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, ceiling, narrowed
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
+from kingfisher.infrastructure.harness.middlewares.narrowing import ToolAllowlist
 from kingfisher.infrastructure.harness.subagents import as_subagent, subagent_skills
 from kingfisher.kinds.agents.spec import AgentSpec
 from kingfisher.kinds.skills.registry import Listed, SkillRegistry
@@ -659,7 +659,7 @@ def test_the_wrong_list_message_agrees_in_number(cfg, session_dir):
 
 def test_a_missing_subagent_type_says_so_rather_than_naming_none():
     """A missing argument is a different mistake from a refused name."""
-    from kingfisher.infrastructure.harness.narrowing import DeclaredDelegatesOnly
+    from kingfisher.infrastructure.harness.middlewares.narrowing import DeclaredDelegatesOnly
 
     class _Call:
         tool_call = {"name": "task", "args": {"subagentType": "reviewer"}, "id": "c1"}
@@ -674,7 +674,7 @@ def test_a_missing_subagent_type_says_so_rather_than_naming_none():
 
 def test_a_delegate_that_does_not_exist_still_names_it():
     """The other half, unchanged: a real name that is not on the list."""
-    from kingfisher.infrastructure.harness.narrowing import DeclaredDelegatesOnly
+    from kingfisher.infrastructure.harness.middlewares.narrowing import DeclaredDelegatesOnly
 
     class _Call:
         tool_call = {"name": "task", "args": {"subagent_type": "nobody"}, "id": "c1"}

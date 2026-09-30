@@ -20,7 +20,7 @@ from kingfisher.infrastructure.harness.backend import (
     skills_sources,
     skills_view,
 )
-from kingfisher.infrastructure.harness.narrowing import NarrowedSkills
+from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills
 from kingfisher.kinds.skills import registry as skill_registry
 from tests.conftest import FakeToolCallingModel
 

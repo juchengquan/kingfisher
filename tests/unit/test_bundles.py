@@ -13,7 +13,7 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import default_backend, skills_sources
-from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.kinds.agents import reading as agent_reading
 from kingfisher.kinds.agents.spec import AgentError
 from kingfisher.kinds.documents import DefinitionText
