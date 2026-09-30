@@ -24,7 +24,7 @@ lines apart.
 |---|---|
 | **What a deployment authors** | [The definition format](#the-definition-format) · [The catalogue](#the-catalogue) · [Agents and delegation](#agents-and-delegation) · [Packaging](#packaging-where-the-definitions-live) |
 | **What a request may do** | [Capabilities](#capabilities) · [Source-id access](#source-id-access) · [Models and endpoints](#models-and-endpoints) |
-| **What a run meets** | [What a tool returns](#what-a-tool-returns) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) |
+| **What a run meets** | [What a tool returns](#what-a-tool-returns) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) · [A session is its backend](#a-session-is-its-backend) |
 | **The surfaces** | [The command line](#the-command-line) · [What doctor promises](#what-doctor-promises) · [Where a deployment reads from](#where-a-deployment-reads-from) · [The HTTP service](#the-http-service) · [The front door](#the-front-door) |
 | **The codebase itself** | [Layering](#layering) · [Splitting a file](#splitting-a-file) · [The architecture rules](#the-architecture-rules) · [How much a comment says](#how-much-a-comment-says) · [The size of the test suite](#the-size-of-the-test-suite) |
 | | [Proposals, and what became of them](#proposals-and-what-became-of-them) |
@@ -2083,9 +2083,8 @@ diagnostics that would be re-uploaded whole every turn.
 **The claim moving in deleted `_discard_dead_claims` outright.** It existed
 because a claim could outlive the session it named; one inside that session
 cannot. `busy` is a stat per session rather than a listing of a shared directory,
-which is the cost. `domain.session.claim` takes the slot's path rather than the
-root every slot sat in, because where inside a session is a layout question and
-the domain does not import `layout` -- the reason `layout.py` left `domain/`.
+which is the cost. *(The claim has since moved onto the session's backend, as
+`SessionClaims`; see "A session is its backend".)*
 
 **No migration and no fallback reader; the marker carries a layout version.**
 The failure a fallback would paper over is silence rather than breakage: a pin
@@ -2163,6 +2162,10 @@ worth keeping. A turn stopped at a bound keeps its session on purpose and leaves
 the field empty -- `stop_reason` says why. *(2026-09-15.)*
 
 ## Wiring a store
+
+*Much of this was reversed on 2026-09-30: `SessionStore` and `SessionRoot` are gone,
+and the backend is where a session is. See *A session is its backend*, below. What
+is here stays as the record of why they were built.*
 
 **The session directory is the backend root**, `/data` is materialised once at
 session creation, writes come back as a manifest, and processes are stateless
@@ -2442,6 +2445,77 @@ factory, which stayed unopened for the reason the entry above gives -- the servi
 reached the seam without a name to resolve, and the parameter becoming required is
 not the same as something asking for one.
 *(2026-09-15, in three slices: the rename, the check, then the parameter.)*
+
+## A session is its backend
+
+**Every read and write of a session's files goes through that session's backend,
+kingfisher's own included.** The agent always reached a session through the backend
+a factory returned; kingfisher reached the same session through a `Path` and assumed
+they were one directory. With the default they were. With a backend that runs
+elsewhere they were two places: a request's data went where the agent could not
+read it, the report it wrote came back as nothing, and the turn said it had worked.
+Proposed on 2026-09-30 and built the same day in four slices, the last two together
+because the lock and the housekeeping could not move to the backend while
+`SessionRoot` still decided where a session was.
+
+**What goes through it.** A request's `data` (`upload_files`), what a turn left
+(`glob`, and `download_files` for `Kingfisher.artifact`, which replaced opening
+`RunResult.artifacts` on this disk), the pinned agent, the conversation and a paused
+turn (`HarnessFiles`), and the turn lock. Nothing is read from a directory on this
+host any more, and a backend that keeps its sessions elsewhere keeps all of them
+there.
+
+**The backend is a `SessionBackends`.** Called per turn with a session *id*, not a
+directory, because a backend that runs elsewhere has no directory here to be handed;
+and asked what only something that sees every session can answer -- `sessions`,
+`mark_used`, `size`, `delete` -- which is what `SessionDirs` answered, keyed by id.
+Each takes the `Config`, because the default is one object serving every workspace.
+`default_backend` is that object, and a deployment building on it subclasses
+`DefaultBackend`; a plain function is refused, because it can build a backend and
+cannot say which sessions there are. `backend_at(cfg, directory)` is the old
+per-directory builder, public because building on the default needs it.
+
+**The lock is on the backend.** `claim`, `release` and `held` -- a create that fails
+while another claim is live, which `write` cannot be. Considered and not chosen: a
+lock beside the backend, which asks less of an adapter and gives a session two
+things that must be wired to the same place, the split this closed.
+
+**`SessionRoot` and `SessionStore` are gone**, with `KINGFISHER_SESSION_STORE` and
+`KINGFISHER_SESSION_STORE_FACTORY`, which are refused rather than ignored: ignored,
+a deployment that relied on one for durable sessions would lose them on upgrade with
+nothing said. Keeping a session when the machine may not is what a durable backend
+does, or storage mounted at `<workspace>/sessions`. A `synced(backend, store)`
+wrapper was the alternative that lost, as a second way to answer one question.
+`KINGFISHER_BACKEND_FACTORY` replaces them, and only the command line reads it:
+`Kingfisher` takes its backend as an argument, and the setting is how `sessions`,
+`reap` and `artifact` see sessions a backend keeps elsewhere. `SESSION_ROOT_CONTRACT`
+went with its port; the one check in it that mattered -- two sessions are two
+places -- is `two_sessions_are_kept_apart` in `SESSION_BACKENDS_CONTRACT`.
+
+**`/.harness` is in the shell's reach on a remote backend, so it is defended twice.**
+`shell_denied` in the kit drives `execute` at `/.harness` and `/data`; and
+kingfisher signs the pin, the conversation and a paused turn with
+`KINGFISHER_SESSION_KEY`, an HMAC bound to the session and the file name as well as
+the bytes, verified on every read. Unsigned is refused, because it cannot be told
+from a signature deleted. The key is required unless the factory *is*
+`default_backend` under a sandbox kingfisher applies itself -- identity, because a
+wrapper can return the default's backend with anything changed -- and it has no
+default and must never get one: generated and saved in the workspace, it is readable
+by the macOS sandbox's shell. Two things were decided building it: any supplied
+runner needs a key, because whether it is local cannot be known at startup; and a
+paused checkpoint is written in place, a backend having no rename, so half of one
+fails its signature rather than loading.
+
+**The run log is `RunEvents`, not session state.** It was the one file appended to
+while a turn ran, which a backend cannot do, and most wanted for the turn that
+crashed. Events go to the `kingfisher.run` logger or a sink the deployment passes,
+and carry `session_id` and `turn_id`. The proposal said nothing read the log; the
+live driver did, for its usage line, and now keeps a sink of its own.
+
+**Still local, on purpose.** `default_backend`'s confinement, because confining a
+shell only means something on the host that runs it; and a supplied runner is still
+built from `<workspace>/sessions/<id>`, because a runner is about where commands run
+on this host.
 
 ## The command line
 
@@ -4248,6 +4322,12 @@ sentence that needs a test.*
 shipped -- `WorkspaceToolErrors` and `tests/unit/test_workspace_tool_errors.py` --
 and its status line had never been changed to say so. Its decisions are under
 *Tool failure* above.*
+
+*`a-session-is-its-backend` was written on 2026-09-30 and built the same day in
+four slices; its decisions are under *A session is its backend* above. Its own
+order was wrong: slice 4 moved the lock and the housekeeping onto a backend keyed by
+session id, which a `SessionRoot` still deciding where a session was would have
+broken, so slices 4 and 5 landed together.*
 
 *A fourth, `the-verb-that-runs-a-task`, was written on 2026-09-04 and removed the
 same day, having been built in three slices. Its decisions are under *The command

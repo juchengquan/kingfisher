@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from dataclasses import replace
 from pathlib import Path
 
@@ -11,9 +12,17 @@ import yaml
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
 from langchain_core.messages import AIMessage
 
-from kingfisher import ArtifactError, Kingfisher, Request, UnknownSessionError, default_backend
+from kingfisher import (
+    ArtifactError,
+    Kingfisher,
+    Request,
+    UnknownSessionError,
+    backend_at,
+    default_backend,
+)
 from kingfisher.domain.access import parse
 from kingfisher.infrastructure.catalogue import Definitions
+from kingfisher.infrastructure.harness.backend import SessionClaims
 from kingfisher.infrastructure.harness.session_files import (
     collect_artifacts,
     local_files,
@@ -30,21 +39,11 @@ def _calls(name: str, **args: str) -> AIMessage:
     return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"call-{name}"}])
 
 
-def elsewhere(root: Path):
-    """A backend factory that keeps each session under `root`, never in its directory.
+class ElsewhereFiles(SessionClaims, CompositeBackend):
+    """One session's filesystem in a directory kingfisher is never told about."""
 
-    What a remote sandbox looks like from here: a working filesystem the agent can
-    read, write and run commands in, sharing nothing with the session directory
-    kingfisher holds. Routed the way `route_coverage` asks, so it is refused for
-    nothing but the thing under test.
-    """
-
-    def make(cfg, session_dir, /, *, catalogue=None, runner=None):
-        kept = root / Path(session_dir).name
-        for name in (*SESSION_DIRS, HARNESS):
-            (kept / name).mkdir(parents=True, exist_ok=True)
-        skills = (catalogue or Definitions.from_config(cfg)).skills.root
-        return CompositeBackend(
+    def __init__(self, kept: Path, skills: Path) -> None:
+        super().__init__(
             default=LocalShellBackend(root_dir=kept),
             routes={
                 route: FilesystemBackend(
@@ -53,8 +52,41 @@ def elsewhere(root: Path):
                 for route in routed_paths()
             },
         )
+        self._session_dir = kept
 
-    return make
+
+class Elsewhere:
+    """`SessionBackends` keeping each session under `root`, never in its directory.
+
+    What a remote sandbox looks like from here: a working filesystem the agent can
+    read, write and run commands in, sharing nothing with the workspace kingfisher
+    holds. Routed the way `route_coverage` asks, so it is refused for nothing but the
+    thing under test.
+    """
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+
+    def __call__(self, cfg, session_id, /, *, catalogue=None, runner=None):
+        kept = self.root / session_id
+        for name in (*SESSION_DIRS, HARNESS):
+            (kept / name).mkdir(parents=True, exist_ok=True)
+        skills = (catalogue or Definitions.from_config(cfg)).skills.root
+        return ElsewhereFiles(kept, skills)
+
+    def sessions(self, cfg):
+        if not self.root.is_dir():
+            return ()
+        return tuple((p.name, p.stat().st_mtime) for p in self.root.iterdir() if p.is_dir())
+
+    def mark_used(self, cfg, session_id):
+        (self.root / session_id).touch()
+
+    def size(self, cfg, session_id):
+        return sum(p.stat().st_size for p in (self.root / session_id).rglob("*") if p.is_file())
+
+    def delete(self, cfg, session_id):
+        shutil.rmtree(self.root / session_id, ignore_errors=True)
 
 
 # -- a turn ------------------------------------------------------------------
@@ -68,7 +100,6 @@ def test_a_backend_that_keeps_the_session_elsewhere_gets_the_data_and_gives_back
     turn that said it had worked.
     """
     an_agent(scripted)
-    start(scripted, "s")
     source = tmp_path / "in.csv"
     source.write_text("alpha\n")
     remote = tmp_path / "remote"
@@ -77,18 +108,20 @@ def test_a_backend_that_keeps_the_session_elsewhere_gets_the_data_and_gives_back
         _calls("write_file", file_path="/derived/report.txt", content="made elsewhere"),
         AIMessage(content="done"),
     ])
-    kf = Kingfisher(scripted, backend=elsewhere(remote))
+    kf = Kingfisher(scripted, backend=Elsewhere(remote))
 
-    events = list(kf.stream(Request("go", agent="only", session_id="s", data=(source,))))
+    events = list(kf.stream(Request("go", agent="only", data=(source,))))
 
     read = next(e.text for e in events if e.kind == "tool_result" and e.tool == "read_file")
     assert "alpha" in read, f"the agent never saw the data it was given: {read!r}"
     (finished,) = [e for e in events if e.kind == "finished"]
+    session_id = finished.result.session_id
     assert "derived/report.txt" in finished.result.artifacts
-    assert kf.artifact("s", "derived/report.txt") == b"made elsewhere"
+    assert kf.artifact(session_id, "derived/report.txt") == b"made elsewhere"
+    assert kf.sessions()[0].id == session_id
     # And none of it went through the directory kingfisher holds, which is what makes
-    # the three answers above ones only the backend could have given.
-    local = scripted.workspace / "sessions" / "s"
+    # the answers above ones only the backend could have given.
+    local = scripted.workspace / "sessions" / session_id
     assert not (local / DATA / "in.csv").exists()
     assert not (local / "derived" / "report.txt").exists()
 
@@ -190,7 +223,7 @@ def test_data_placed_through_the_default_backend_lands_read_only(cfg, session_di
     """
     source = tmp_path / "in.csv"
     source.write_text("x")
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
 
     placement = place_data((source,), backend)
 

@@ -77,14 +77,6 @@ class StubCheckpointer:
 
 
 @pytest.fixture
-def dirs():
-    """The real `SessionDirs`."""
-    from kingfisher.infrastructure.workspace import LocalSessionDirs
-
-    return LocalSessionDirs()
-
-
-@pytest.fixture
 def workspace(tmp_path):
     return ensure_layout(tmp_path / "ws")
 

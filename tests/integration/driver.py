@@ -45,10 +45,9 @@ from kingfisher import (
 )
 from kingfisher.config import Config
 from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
-from kingfisher.domain.session import Session
+from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.harness.runlog import usage_of
 from kingfisher.infrastructure.workspace import (
-    LocalSessionDirs,
     ensure_session_layout,
     is_new_workspace,
     seeding,
@@ -94,11 +93,10 @@ def _usage_summary(events: list[Any]) -> str:
 
 def prepare_smoke(cfg: Config, workspace: Path, session_id: str) -> list[str]:
     """Put the smoke's fixtures where the agent will look for them."""
-    session = Session.open(workspace, session_id, LocalSessionDirs())
-    ensure_session_layout(session.directory)
+    directory = ensure_session_layout(sessions_root(workspace) / session_id)
 
     seeded = []
-    if seed_sample_data(session.directory):
+    if seed_sample_data(directory):
         seeded.append("dataset into /data")
     if cfg.skills_enabled and seed_sample_skill(workspace):
         seeded.append("skill into /skills")

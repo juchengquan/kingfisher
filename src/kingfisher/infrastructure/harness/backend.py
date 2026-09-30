@@ -6,18 +6,20 @@ import hashlib
 import os
 import shutil
 import sys
+import time
 import uuid
 import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
 from deepagents.backends.protocol import ExecuteResponse
 
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.ports import CommandRunner, SkillRepository
+from kingfisher.domain.session import sessions_root, still_held
 from kingfisher.infrastructure.catalogue import Definitions, refuse_unmountable
 
 # Re-exported: `ports.md` and `BACKEND_CONTRACT` have named this path to adapter
@@ -27,7 +29,12 @@ from kingfisher.infrastructure.harness.host_paths import (
 )
 from kingfisher.infrastructure.harness.host_paths import reject_host_path
 from kingfisher.infrastructure.sandbox import confinement
-from kingfisher.infrastructure.workspace.permissions import writable_data
+from kingfisher.infrastructure.workspace.permissions import protect_data, writable_data
+from kingfisher.infrastructure.workspace.sessions import (
+    LocalSessionDirs,
+    ensure_session_layout,
+    session_bytes,
+)
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
@@ -185,7 +192,50 @@ def _once(result: Any, *, key: Callable[[Any], Any]) -> Any:
     return replace(result, matches=kept)
 
 
-class WorkspaceScopedBackend(CompositeBackend):
+class SessionClaims:
+    """A session's turn lock, held on this host: a directory under its `.harness`.
+
+    `mkdir` because it is the one operation that fails when the name is taken, which
+    is what a lock is -- `write` overwrites, and two turns would both "take" it. A
+    claim older than `stale_after` belongs to a turn that died and is taken over.
+    """
+
+    _session_dir: Path
+
+    def _claim_path(self, name: str) -> Path:
+        return self._session_dir / HARNESS / name
+
+    def claim(self, name: str, *, stale_after: float, now: float | None = None) -> bool:
+        """Take `name`, or answer False because a live claim holds it."""
+        dirs, path = LocalSessionDirs(), self._claim_path(name)
+        if dirs.create_exclusive(path):
+            return True
+        if self.held(name, stale_after=stale_after, now=now):
+            return False
+        dirs.remove_tree(path)
+        return dirs.create_exclusive(path)
+
+    def release(self, name: str) -> None:
+        """Give `name` back. Safe where it was never taken."""
+        LocalSessionDirs().remove_tree(self._claim_path(name))
+
+    def held(self, name: str, *, stale_after: float, now: float | None = None) -> bool:
+        """Whether a claim on `name` is young enough that its turn may be running.
+
+        One vanishing between the two looks counts as held: its age is zero, so a
+        race resolves toward refusing rather than toward taking a slot whose owner
+        may be about to write.
+        """
+        path = self._claim_path(name)
+        at = time.time() if now is None else now
+        try:
+            taken = path.stat().st_mtime
+        except FileNotFoundError:
+            return False
+        return bool(still_held(((name, taken),), stale_after=stale_after, now=at))
+
+
+class WorkspaceScopedBackend(SessionClaims, CompositeBackend):
     """A `CompositeBackend` that refuses host paths instead of re-rooting them.
 
     `glob` and `grep` are deduplicated. They merge every backend's answer, and two
@@ -222,6 +272,9 @@ class WorkspaceScopedBackend(CompositeBackend):
     ) -> None:
         super().__init__(default=default, routes=routes)
         self.workspace = workspace
+        self._session_dir = Path(workspace)
+        #: What `protect_data` could not harden, for the turn to report.
+        self.unprotected: tuple[str, ...] = ()
 
     def _get_backend_and_key(self, key: str) -> tuple[Any, str]:
         reject_host_path(key, self.workspace)
@@ -378,8 +431,14 @@ def _require_layout(session_dir: Path) -> None:
         raise ValueError(msg)
 
 
-class BackendFactory(Protocol):
-    """How a deployment says what filesystem its agents run on.
+@runtime_checkable
+class SessionBackends(Protocol):
+    """How a deployment says where its sessions are, and what each one runs on.
+
+    Called per turn with the session it is for, and asked the questions only
+    something that sees every session can answer: which there are, how big, and
+    when each was last used. Keyed by session id rather than by a directory,
+    because a backend that runs elsewhere has no directory here to be handed.
 
     Typed against the call and not the return, which is the asymmetry worth
     knowing. deepagents decides what a backend *is* with `isinstance` against its
@@ -393,31 +452,61 @@ class BackendFactory(Protocol):
     `CommandRunner` the deployment wired, and nothing downstream can tell: the
     backend that comes back is well-formed and passes every check, and merely runs
     its commands somewhere the deployment did not choose.
+
+    Each takes the `Config` because the default is one object serving every
+    workspace, and the workspace is where it keeps them. A deployment's own may
+    ignore it.
     """
 
     def __call__(
         self,
         cfg: Config,
-        session_dir: Path,
+        session_id: str,
         # Positional-only, or this would be dictating parameter *names*: a protocol
         # matches those, so without the slash a deployment whose factory reads
-        # `(config, where)` fails to satisfy it for no reason anybody could act on.
-        # Both are passed positionally, so nothing is given up.
+        # `(config, which)` fails to satisfy it for no reason anybody could act on.
         /,
         *,
         catalogue: Definitions | None = None,
         runner: CommandRunner | None = None,
-    ) -> Any: ...
+    ) -> Any:
+        """This session's backend, making the session if it is new."""
+        ...
+
+    def sessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
+        """`(session_id, last_used)` for every session there is."""
+        ...
+
+    def mark_used(self, cfg: Config, session_id: str) -> None:
+        """Record that a turn is running in this session now.
+
+        A port because retention depends on it. A turn writes *inside* a session, and
+        on an ordinary filesystem that leaves the session's own timestamp alone --
+        measured, a session was still 10,000s idle by that clock immediately after a
+        turn completed in it.
+        """
+        ...
+
+    def size(self, cfg: Config, session_id: str) -> int:
+        """How many bytes this session holds."""
+        ...
+
+    def delete(self, cfg: Config, session_id: str) -> str | None:
+        """Remove this session and everything in it. A reason on failure, or `None`."""
+        ...
 
 
-def default_backend(
+def backend_at(
     cfg: Config,
     session_dir: Path,
     *,
     catalogue: Definitions | None = None,
     runner: CommandRunner | None = None,
 ) -> WorkspaceScopedBackend:
-    """Kingfisher's own backend, rooted at one session.
+    """Kingfisher's own backend, rooted at one session directory on this host.
+
+    What `default_backend` builds for a session id, and what a deployment building
+    on the default calls to get it for a directory of its choosing.
 
     Typed to the class rather than to deepagents' protocol because a deployment
     adjusting what this built reads `default` and `routes` off it, and the protocol
@@ -504,3 +593,49 @@ def default_backend(
     })
 
     return WorkspaceScopedBackend(default=shell, routes=routes, workspace=session_dir)
+
+
+class DefaultBackend:
+    """Kingfisher's own `SessionBackends`: each session a directory under
+    `<workspace>/sessions`, each backend `backend_at` that directory.
+
+    One instance, `default_backend`, and deployments name it rather than build
+    another: whether a key is needed is decided by asking whether the factory *is*
+    this object, because a wrapper around it can return its backend with anything
+    changed.
+    """
+
+    def __call__(
+        self,
+        cfg: Config,
+        session_id: str,
+        /,
+        *,
+        catalogue: Definitions | None = None,
+        runner: CommandRunner | None = None,
+    ) -> WorkspaceScopedBackend:
+        directory = ensure_session_layout(sessions_root(cfg.workspace) / session_id)
+        # Kernel-level, because the deny rule covers only the file tools. What it
+        # could not harden is reported by the turn rather than raised: raising here
+        # used to make one file owned by another user a session unusable for good.
+        unprotected = protect_data(directory)
+        built = backend_at(cfg, directory, catalogue=catalogue, runner=runner)
+        built.unprotected = unprotected
+        return built
+
+    def sessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
+        return LocalSessionDirs().listing(sessions_root(cfg.workspace))
+
+    def mark_used(self, cfg: Config, session_id: str) -> None:
+        LocalSessionDirs().mark_used(sessions_root(cfg.workspace) / session_id)
+
+    def size(self, cfg: Config, session_id: str) -> int:
+        return session_bytes(sessions_root(cfg.workspace) / session_id)
+
+    def delete(self, cfg: Config, session_id: str) -> str | None:
+        return LocalSessionDirs().remove_tree(sessions_root(cfg.workspace) / session_id)
+
+
+#: The only `DefaultBackend` there is. See the class for why it is one.
+default_backend = DefaultBackend()
+

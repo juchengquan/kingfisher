@@ -15,7 +15,7 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import (
-    default_backend,
+    backend_at,
     shell_env,
     skills_sources,
     skills_view,
@@ -137,7 +137,7 @@ def test_the_index_reaches_a_mount_through_the_backend(mounted, session_dir):
     registry = Definitions.from_config(mounted).registry
     middleware = NarrowedSkills(
         allowed=("vendor::lookup",),
-        backend=default_backend(mounted, session_dir),
+        backend=backend_at(mounted, session_dir),
         sources=skills_sources(registry.folders),
     )
 
@@ -230,7 +230,7 @@ def test_the_backend_refuses_before_it_mounts(mounted, session_dir):
     cfg = replace(mounted, skills_mounts={"a/b": mounted.skills_mounts["vendor"]})
 
     with pytest.raises(ConfigError, match="skills mount"):
-        default_backend(cfg, session_dir)
+        backend_at(cfg, session_dir)
 
 
 # -- the shell ---------------------------------------------------------------
@@ -245,7 +245,7 @@ def test_the_shell_may_read_a_mount_under_a_denied_home(cfg, session_dir, tmp_pa
     vendor = home / "vendor-skills"
     _skill(vendor, "lookup", "lookup")
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
-    shell = default_backend(replace(cfg, skills_mounts={"vendor": vendor}), session_dir)
+    shell = backend_at(replace(cfg, skills_mounts={"vendor": vendor}), session_dir)
 
     assert shell.execute(f"cat {vendor}/lookup/SKILL.md").exit_code == 0
     assert shell.execute(f"echo pwned > {vendor}/lookup/SKILL.md").exit_code != 0
@@ -259,7 +259,7 @@ def test_the_shell_cannot_write_a_mount_inside_the_workspace(cfg, session_dir):
     """
     vendor = cfg.workspace / "vendor-skills"
     _skill(vendor, "lookup", "lookup")
-    shell = default_backend(replace(cfg, skills_mounts={"vendor": vendor}), session_dir)
+    shell = backend_at(replace(cfg, skills_mounts={"vendor": vendor}), session_dir)
 
     assert shell.execute(f"echo pwned > {vendor}/lookup/SKILL.md").exit_code != 0
     assert shell.execute(f"echo pwned > {vendor}/PWNED.md").exit_code != 0
@@ -288,7 +288,7 @@ def test_a_mounted_skills_script_runs_through_the_shells_catalogue_path(
     _script(_skill(vendor, "lookup", "lookup"))
     _skill(cfg.skills_dir, "local", "local")
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
-    shell = default_backend(replace(cfg, skills_mounts={"vendor": vendor}), session_dir)
+    shell = backend_at(replace(cfg, skills_mounts={"vendor": vendor}), session_dir)
 
     ran = shell.execute('sh "$KINGFISHER_SKILLS/vendor/lookup/scripts/hello.sh"')
 
@@ -302,7 +302,7 @@ def test_the_shell_cannot_write_through_the_view(mounted, session_dir):
     """The view is a directory of links in the workspace, which the shell may write
     everywhere else in.
     """
-    shell = default_backend(mounted, session_dir)
+    shell = backend_at(mounted, session_dir)
 
     assert shell.execute('touch "$KINGFISHER_SKILLS/planted"').exit_code != 0
     assert shell.execute('echo x > "$KINGFISHER_SKILLS/vendor/planted"').exit_code != 0
@@ -360,7 +360,7 @@ def test_the_linux_fence_is_granted_the_view(mounted, session_dir, monkeypatch):
     monkeypatch.setattr(
         backend, "_fence_for", lambda cfg, session, confined, skills, env: handed.append(skills)
     )
-    default_backend(mounted, session_dir)
+    backend_at(mounted, session_dir)
 
     view = skills_view(Definitions.from_config(mounted).skills, mounted.workspace)
     assert view in handed[0]

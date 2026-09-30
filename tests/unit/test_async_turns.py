@@ -25,9 +25,9 @@ def service(cfg, graph=None):
 
 
 def _claim(cfg, session_id: str) -> Path:
-    from kingfisher.infrastructure.workspace import claim_path
+    from kingfisher.layout import CLAIM, HARNESS
 
-    return claim_path(cfg.workspace / "sessions" / session_id)
+    return cfg.workspace / "sessions" / session_id / HARNESS / CLAIM
 
 
 class _SlowAgent(StubAgent):
@@ -193,9 +193,9 @@ def test_disposing_of_a_session_does_not_happen_on_the_event_loop(cfg):
     ran_on_main = []
 
     class _Watching(Kingfisher):
-        def delete_session(self, session_id: str, *, forget: bool = True) -> str | None:
+        def delete_session(self, session_id: str) -> str | None:
             ran_on_main.append(threading.current_thread() is threading.main_thread())
-            return super().delete_session(session_id, forget=forget)
+            return super().delete_session(session_id)
 
     session = start(cfg, "s")
     kf = _Watching(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
@@ -437,12 +437,12 @@ def test_the_callers_context_reaches_the_turn(cfg):
 
 def test_a_busy_session_still_refuses_the_async_path(cfg):
     """The claim is the turn's, not the entry point's."""
-    from kingfisher.domain.session import Session
+    from kingfisher import backend_at
+    from kingfisher.layout import CLAIM
 
     kf = service(cfg)
     session = start(cfg, "s")
-    held = Session(id=session, directory=cfg.workspace / "sessions" / session)
-    held.claim(kf.dirs, _claim(cfg, session), stale_after=3600, now=1000.0)
+    assert backend_at(cfg, cfg.workspace / "sessions" / session).claim(CLAIM, stale_after=3600)
 
     with pytest.raises(SessionBusyError, match="already has a turn running"):
         _drain(kf, Request("go", session_id=session))

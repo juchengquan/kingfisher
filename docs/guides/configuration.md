@@ -30,9 +30,8 @@ mentions.
 | `KINGFISHER_SKILLS_MOUNTS` | Further skills directories, as `label=path` pairs separated by `:`. Each is offered at `/skills/<label>/` and granted as `<label>::<name>`, for a party that cannot write into the catalogue. Skills sit directly in each one, and nothing creates or seeds it. The shell reaches a mount's scripts as `$KINGFISHER_SKILLS/<label>/...`, through a view of links kingfisher keeps in `<workspace>/.kingfisher/`. | none |
 | `KINGFISHER_SUBAGENTS_DIR` | Relocate the subagents catalogue. | inside the workspace |
 | `KINGFISHER_TOOLS_DIR` | Relocate the tools catalogue. | inside the workspace |
-| `KINGFISHER_SESSION_STORE` | A directory sessions are kept in, so they survive the machine that ran them. | none — the session directory is the only copy |
-| `KINGFISHER_SESSION_STORE_FACTORY` | `module:name` naming something callable with no arguments that returns a store of your own — a bucket, a database. A factory rather than a class, because kingfisher does not know whether yours wants a DSN or a mount point. | none |
 | `KINGFISHER_SESSION_KEY` | Signs what kingfisher reads back from a session — its pinned agent, its conversation, a paused turn — and refuses a turn when one was changed. `kingfisher key` prints one. Required unless the default backend runs under a sandbox kingfisher applies itself; `kingfisher doctor` says which case a deployment is. Never generated: saved in the workspace, the agent's shell could read it. | none — refused at startup where needed |
+| `KINGFISHER_BACKEND_FACTORY` | `module:name` naming something callable with no arguments that returns a `SessionBackends`, for the `kingfisher` command. Only the command reads it — `Kingfisher` takes its backend as an argument — and it is how `sessions`, `reap` and `artifact` see sessions a backend of yours keeps elsewhere. `KINGFISHER_SESSION_STORE` and `KINGFISHER_SESSION_STORE_FACTORY`, which configured the store this replaced, are refused if still set. | `default_backend` |
 | *(none)* | Where session directories are, while a turn runs. No setting moves them; mount `<workspace>/sessions` on whatever device you want them on. | `<workspace>/sessions` |
 
 **The last row is in the table rather than left out of it.** A reader asking how
@@ -40,10 +39,8 @@ to put sessions on another disk should find the answer here, not conclude from a
 absence that it cannot be done. A mount is the answer because the harness cannot
 tell a mounted directory from a plain one — it resolves the session root and
 checks containment per access, which a bind mount passes and a symlink does not.
-`KINGFISHER_SESSION_STORE` above is a different question: that is where a session
-is *copied* for safekeeping, not where it lives while it runs. A deployment whose
-session tree exists only for the length of a turn wants the `SessionRoot` port
-instead — see [`ports.md`](ports.md).
+A deployment whose sessions should not be directories on this host at all names a
+backend that keeps them itself — see [`ports.md`](ports.md).
 
 The `*_DIR` settings exist because definitions are authored and reviewed
 rather than produced by a run — one per definition kind, and

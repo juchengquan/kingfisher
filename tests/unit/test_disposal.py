@@ -2,17 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
-
-from kingfisher import Kingfisher
+from kingfisher import DefaultBackend, Kingfisher, backend_at
 from kingfisher.domain import retention
 from kingfisher.domain.request import Request
-from kingfisher.domain.session import (
-    Session,
-    SessionBusyError,
-    still_held,
-)
-from kingfisher.infrastructure.workspace import LocalSessionDirs
+from kingfisher.domain.session import still_held
+from kingfisher.layout import CLAIM
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 
@@ -23,10 +17,10 @@ from tests.unit.test_run import StubAgent
 from tests.unit.test_tenancy import _claim, service
 
 
-class StuckDirs(LocalSessionDirs):
-    """A filesystem where no session directory will go."""
+class Stuck(DefaultBackend):
+    """The default, where no session will go."""
 
-    def remove_tree(self, path):
+    def delete(self, cfg, session_id):
         return "directory not removed (Permission denied)"
 
 # -- lifecycle: disposal is asked for -------------------------------------
@@ -57,96 +51,6 @@ def test_delete_session_removes_the_directory_and_the_thread(cfg):
 def test_deleting_an_unknown_session_is_not_an_error(cfg):
     """A caller that retries a delete should not have to care."""
     assert service(cfg).delete_session("never-existed") is None
-
-
-def test_a_session_the_store_alone_keeps_is_forgotten_when_deleted(cfg, tmp_path):
-    """Under a root of the deployment's own there is no directory in the workspace, and
-    `delete_session` stopped there -- so the store kept the session, `knows` still
-    answered for it, and a session reported deleted could be resumed.
-    """
-    from kingfisher import LocalSessionStore
-    from kingfisher.domain.session import UnknownSessionError
-    from tests.unit.test_service import FreshEachTurn
-
-    kept = LocalSessionStore(tmp_path / "kept")
-    kf = service(cfg, sessions=kept, session_root=FreshEachTurn(tmp_path / "for-one-turn"))
-    session_id = kf.run(Request("go")).session_id
-    assert kept.knows(session_id), "the store never held it, so this would prove nothing"
-
-    assert kf.delete_session(session_id) is None
-
-    assert not kept.knows(session_id)
-    with pytest.raises(UnknownSessionError):
-        kf.run(Request("again", session_id=session_id))
-
-
-def test_a_directory_that_would_not_go_keeps_the_store_copy_behind_it(cfg, tmp_path):
-    """What `reap` already did and `delete_session` did not: forgetting the store's copy
-    of a session whose directory stayed leaves a directory with no history behind it.
-    """
-    from kingfisher import LocalSessionStore
-
-    kept = LocalSessionStore(tmp_path / "kept")
-    kf = service(cfg, sessions=kept, dirs=StuckDirs())
-    session_id = kf.run(Request("go")).session_id
-
-    failure = kf.delete_session(session_id)
-
-    assert failure is not None
-    assert "not removed" in failure
-    assert kept.knows(session_id)
-
-
-def test_an_evicted_session_resumes_from_the_store_with_its_history(cfg, tmp_path):
-    """Eviction frees this machine and keeps the session. One that kept the store's copy
-    but not the conversation would resume as a stranger to its own first turn.
-    """
-    from kingfisher import LocalSessionStore
-
-    kept = LocalSessionStore(tmp_path / "kept")
-    agent = StubAgent("ok")
-    kf = Kingfisher(cfg, graph=agent, threads=StubCheckpointer(), sessions=kept)
-    session_id = kf.run(Request("the first task")).session_id
-
-    assert kf.delete_session(session_id, forget=False) is None
-
-    assert not (cfg.workspace / "sessions" / session_id).exists()
-    assert kept.knows(session_id)
-    kf.run(Request("again", session_id=session_id))
-    assert agent.state is not None
-    assert "the first task" in str(agent.state["messages"])
-
-
-def test_reap_forgets_the_store_copy_of_what_it_swept(cfg, tmp_path):
-    """A sweep that kept the store's copy would leave an expired session resumable by id."""
-    import time
-
-    from kingfisher import LocalSessionStore
-
-    kept = LocalSessionStore(tmp_path / "kept")
-    kf = service(cfg, sessions=kept)
-    session_id = kf.run(Request("go")).session_id
-
-    result = kf.reap(older_than_seconds=0, now=time.time() + 10)
-
-    assert result.removed == (session_id,)
-    assert not kept.knows(session_id)
-
-
-def test_reap_can_evict_rather_than_forget(cfg, tmp_path):
-    """A sweep that ignored the flag would forget every session it was asked to evict."""
-    import time
-
-    from kingfisher import LocalSessionStore
-
-    kept = LocalSessionStore(tmp_path / "kept")
-    kf = service(cfg, sessions=kept)
-    session_id = kf.run(Request("go")).session_id
-
-    result = kf.reap(older_than_seconds=0, now=time.time() + 10, forget=False)
-
-    assert result.removed == (session_id,)
-    assert kept.knows(session_id)
 
 
 def test_reap_disposes_of_the_idle_and_leaves_the_rest(cfg):
@@ -285,8 +189,7 @@ def test_a_sweep_keeps_a_session_that_has_a_turn_running(cfg):
     session = start(cfg, "s")
     directory = cfg.workspace / "sessions" / session
 
-    held = Session(id=session, directory=directory)
-    held.claim(service.dirs, _claim(cfg, session), stale_after=3600, now=time.time())
+    assert backend_at(cfg, directory).claim(CLAIM, stale_after=3600)
     stale = time.time() - 10_000
     os.utime(directory, (stale, stale))
 
@@ -305,8 +208,7 @@ def test_a_busy_session_does_not_shelter_an_idle_one(cfg):
     busy = start(cfg, "busy")
     idle = start(cfg, "idle")
 
-    held = Session(id=busy, directory=cfg.workspace / "sessions" / busy)
-    held.claim(service.dirs, _claim(cfg, busy), stale_after=3600, now=time.time())
+    assert backend_at(cfg, cfg.workspace / "sessions" / busy).claim(CLAIM, stale_after=3600)
     stale = time.time() - 10_000
     for name in (busy, idle):
         os.utime(cfg.workspace / "sessions" / name, (stale, stale))
@@ -384,14 +286,10 @@ def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
     """The window a turn stops *in*, which the claim used to be taken during."""
     import time
 
-    from kingfisher.domain.session import Session, still_held
-
-    kf = service(cfg)
     held = start(cfg, "held")
-    slot = _claim(cfg, held)
-    session = Session(id=held, directory=cfg.workspace / "sessions" / held)
+    backend = backend_at(cfg, cfg.workspace / "sessions" / held)
     taken = time.time()
-    session.claim(kf.dirs, slot, stale_after=cfg.claim_stale_after, now=taken)
+    assert backend.claim(CLAIM, stale_after=cfg.claim_stale_after, now=taken)
 
     # The instant the turn runs out of time, and a little after.
     at_deadline = taken + cfg.turn_timeout_s
@@ -400,10 +298,8 @@ def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
     ) == (held,)
 
     # And a second caller is refused for the whole of that window.
-    with pytest.raises(SessionBusyError):
-        Session(id=held, directory=session.directory).claim(
-            kf.dirs, slot, stale_after=cfg.claim_stale_after, now=at_deadline
-        )
+    second = backend_at(cfg, cfg.workspace / "sessions" / held)
+    assert not second.claim(CLAIM, stale_after=cfg.claim_stale_after, now=at_deadline)
 
     # Long enough after, the slot is takeable again -- a holder that died must
     # not lock the session out for good.
@@ -514,11 +410,12 @@ def test_a_turn_stopped_at_a_bound_keeps_its_session(cfg):
     assert result.deletion_failure is None, "a session kept on purpose is not a failure"
 
 
-def test_a_deletion_that_fails_is_on_the_result_beside_the_answer(cfg):
+def test_a_deletion_that_fails_is_on_the_result_beside_the_answer(cfg, monkeypatch):
     """`run` threw away what `delete_session` answered, so a caller got the answer and no
     sign the session was still there.
     """
-    kf = service(cfg, dirs=StuckDirs())
+    monkeypatch.setattr(DefaultBackend, "delete", Stuck.delete)
+    kf = service(cfg)
 
     result = kf.run(Request("go"), delete_session=True)
 

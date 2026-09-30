@@ -249,16 +249,19 @@ def _at_rest(cfg: Config) -> Iterator[Check]:
 
     # Two things that only matter once sessions are in memory, and both are
     # silent until the moment they are expensive.
-    if cfg.session_store is None:
+    if cfg.backend_factory is None:
         yield Check(
             "sessions survive",
             "fail",
             f"{devices} — nothing is configured to keep sessions, so everything a "
             "session produced goes with the process",
-            "set KINGFISHER_SESSION_STORE, or wire a SessionStore",
+            "mount durable storage at <workspace>/sessions, or set "
+            "KINGFISHER_BACKEND_FACTORY to a backend that keeps sessions itself",
         )
     else:
-        yield Check("sessions survive", "ok", f"{devices} — kept at {cfg.session_store}")
+        yield Check(
+            "sessions survive", "ok", f"{devices} — kept by {cfg.backend_factory}"
+        )
 
     if cfg.session_max_bytes is None:
         yield Check(

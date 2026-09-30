@@ -1,4 +1,4 @@
-"""The two ports that had no tests at all, and now have contracts."""
+"""The runner port, which had no tests at all, and now has a contract."""
 
 from __future__ import annotations
 
@@ -6,30 +6,11 @@ import subprocess
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 
 import pytest
 
 from kingfisher.domain.ports import CommandResult, CommandRunner
-from kingfisher.infrastructure.workspace import LocalSessionRoot
-from kingfisher.testing import COMMAND_RUNNER_CONTRACT, SESSION_ROOT_CONTRACT
-
-
-def test_the_local_session_root_keeps_the_port_contract(tmp_path):
-    """The kit, against the implementation it was written from.
-
-    One counter for every check, which is what lets them share a `tmp_path`: each call
-    to `make` takes a workspace of its own.
-    """
-    made = 0
-
-    def make():
-        nonlocal made
-        made += 1
-        return LocalSessionRoot(tmp_path / f"ws-{made}")
-
-    for check in SESSION_ROOT_CONTRACT:
-        check(make)
+from kingfisher.testing import COMMAND_RUNNER_CONTRACT
 
 
 @dataclass(frozen=True)
@@ -109,54 +90,18 @@ def test_the_reference_runner_satisfies_the_port_it_was_written_from() -> None:
 
 
 def test_the_contracts_are_not_quietly_empty():
-    """Both are hand-maintained tuples, and a rule walking an empty one passes having
-    checked nothing.
+    """A hand-maintained tuple, and a rule walking an empty one passes having checked
+    nothing.
     """
-    assert len(SESSION_ROOT_CONTRACT) >= 6
     assert len(COMMAND_RUNNER_CONTRACT) >= 5
-    assert all(callable(check) for check in (*SESSION_ROOT_CONTRACT, *COMMAND_RUNNER_CONTRACT))
+    assert all(callable(check) for check in COMMAND_RUNNER_CONTRACT)
 
 
 # -- what the checks refuse -------------------------------------------------
 #
-# A kit is only worth what it catches, and the two ports it covers are the ones
+# A kit is only worth what it catches, and the port it covers is one
 # whose rules nothing else in this repository enforces. These are the mutations
 # from the commit message, kept so they stay caught.
-
-
-class SharedRoot:
-    """A root that ignores the session id -- the isolation failure."""
-
-    def __init__(self, workspace: Path) -> None:
-        self.workspace = Path(workspace)
-
-    def hold(self, session_id: str):
-        from contextlib import contextmanager
-
-        @contextmanager
-        def held():
-            yield self.workspace / "shared"
-
-        return held()
-
-
-class SwallowingRoot:
-    """A root whose context manager returns true from `__exit__`."""
-
-    def __init__(self, workspace: Path) -> None:
-        self.workspace = Path(workspace)
-
-    def hold(self, session_id: str):
-        root = self.workspace / session_id
-
-        class Held:
-            def __enter__(self):
-                return root
-
-            def __exit__(self, *_: object) -> bool:
-                return True
-
-        return Held()
 
 
 @dataclass(frozen=True)
@@ -176,30 +121,6 @@ def _run(contract, name, subject):
     """One named check from a contract, against one subject."""
     (check,) = [c for c in contract if c.__name__ == name]
     check(subject)
-
-
-def test_two_sessions_in_one_directory_is_caught(tmp_path):
-    """The security-relevant one: every path is legal, and each session reads the
-    other's files as its own.
-    """
-    with pytest.raises(AssertionError, match="Two sessions in one directory"):
-        _run(
-            SESSION_ROOT_CONTRACT,
-            "two_sessions_are_two_directories",
-            lambda: SharedRoot(tmp_path),
-        )
-
-
-def test_a_hold_that_swallows_a_failure_is_caught(tmp_path):
-    """A turn that failed reported as one that succeeded, with whatever was mounted
-    still mounted.
-    """
-    with pytest.raises(AssertionError, match="would be swallowed"):
-        _run(
-            SESSION_ROOT_CONTRACT,
-            "a_failed_turn_still_leaves_the_hold",
-            lambda: SwallowingRoot(tmp_path),
-        )
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the check runs a POSIX shell command")

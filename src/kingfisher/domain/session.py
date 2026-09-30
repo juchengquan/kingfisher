@@ -7,8 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
-from kingfisher.domain.ports import SessionDirs, ThreadStore
-
 
 class UnknownSessionError(ValueError):
     """A request named a session that does not exist."""
@@ -98,56 +96,6 @@ class Session:
     id: str
     directory: Path
 
-    @classmethod
-    def open(cls, workspace: Path, session_id: str, dirs: SessionDirs) -> Session:
-        """Open (creating if needed) one session's directory."""
-        return cls.at(session_id, sessions_root(workspace) / session_id, dirs)
-
-    @classmethod
-    def at(cls, session_id: str, directory: Path, dirs: SessionDirs) -> Session:
-        """The same, for a directory chosen by something other than a workspace."""
-        dirs.ensure(directory)
-        return cls(id=session_id, directory=directory)
-
-    def claim(
-        self, dirs: SessionDirs, path: Path, *, stale_after: float, now: float
-    ) -> Path:
-        """Take this session's turn slot, or refuse because someone holds it.
-
-        The slot's *path* rather than the directory every session's slot sits in,
-        which is what this took while there was one. It is inside the session
-        now, and where inside is a layout question -- which this layer does not
-        get to ask, for the reason `layout.py` sits outside `domain/`.
-
-        Moving it there removes a failure mode rather than merely tidying: a
-        claim can no longer outlive the session it names, so there is nothing to
-        sweep and `_discard_dead_claims` goes.
-        """
-        if dirs.create_exclusive(path):
-            return path
-
-        # A claim that vanished between the two calls counts as held: `now` makes
-        # its age zero, so a race resolves toward refusing rather than toward
-        # taking over a slot whose owner may be about to write.
-        held = dict(dirs.listing(path.parent))
-        mine = ((path.name, held.get(path.name, now)),)
-        if path.name in still_held(mine, stale_after=stale_after, now=now):
-            msg = (
-                f"session {self.id} already has a turn running; "
-                f"wait for it to finish or start another session"
-            )
-            raise SessionBusyError(msg)
-
-        dirs.remove_tree(path)
-        if dirs.create_exclusive(path):
-            return path
-        msg = f"session {self.id} already has a turn running"
-        raise SessionBusyError(msg)
-
-    def release(self, dirs: SessionDirs, path: Path) -> None:
-        """Give the slot back. Safe to call when it was never taken."""
-        dirs.remove_tree(path)
-
     def allocate_turn(self, turn_id: str | None = None) -> Turn:
         """Name the next turn. A caller's own id wins, or one is made.
 
@@ -163,14 +111,3 @@ class Session:
         directory is gone.
         """
         return Turn(session_id=self.id, id=turn_id or f"t{uuid4().hex[:8]}")
-
-    def discard(self, dirs: SessionDirs, threads: ThreadStore | None = None) -> str | None:
-        """Delete this session's thread and directory. Returns a failure, or None."""
-        if threads is not None:
-            try:
-                threads.delete_thread(self.id)
-            except Exception as exc:  # noqa: BLE001 -- reported, not swallowed
-                return f"{self.id}: thread not deleted ({type(exc).__name__})"
-
-        failure = dirs.remove_tree(self.directory)
-        return f"{self.id}: {failure}" if failure else None

@@ -29,7 +29,7 @@ from collections.abc import AsyncGenerator, AsyncIterator, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from time import monotonic, time
+from time import monotonic
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.application import access
@@ -65,7 +65,6 @@ from kingfisher.domain.capabilities import (
     Capabilities,
     CapabilityError,
 )
-from kingfisher.domain.ports import SessionStore
 from kingfisher.domain.request import DecisionError, Request, Resume
 from kingfisher.domain.result import (
     AWAITING,
@@ -75,9 +74,7 @@ from kingfisher.domain.result import (
     RunResult,
     normalize_answer,
 )
-from kingfisher.domain.session import (
-    Session,
-)
+from kingfisher.domain.session import Session, SessionBusyError, sessions_root
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.activation import (
@@ -89,7 +86,10 @@ from kingfisher.infrastructure.harness.agent import (
     build_agent,
     builtin_tool_names,
 )
-from kingfisher.infrastructure.harness.backend import BackendFactory
+from kingfisher.infrastructure.harness.backend import (
+    SessionBackends,
+    default_backend,
+)
 from kingfisher.infrastructure.harness.checkpointing import (
     build_session_checkpointer,
     harness_mark,
@@ -114,10 +114,7 @@ from kingfisher.infrastructure.harness.session_files import (
 from kingfisher.infrastructure.session_store import (
     AGENT_MARK,
     PENDING_MARK,
-    TRANSCRIPT,
-    LocalSessionStore,
     clear_pause,
-    keep_from,
     pending_as_mark,
     pending_from_mark,
     read_pause_mark,
@@ -125,23 +122,18 @@ from kingfisher.infrastructure.session_store import (
     write_pause_mark,
     write_transcript,
 )
-from kingfisher.infrastructure.signing import SIGNATURE
-from kingfisher.infrastructure.wiring import store_named
 from kingfisher.infrastructure.workspace import (
-    AGENT_SNAPSHOT,
     SEED_HINT,
     STARTER_AGENT,
-    LocalSessionDirs,
-    LocalSessionRoot,
     agent_started_with,
-    claim_path,
     ensure_layout,
+    ensure_session_layout,
     protect_data,
     remember_agent,
 )
 from kingfisher.kinds.agents.reading import read
 from kingfisher.kinds.agents.spec import AgentSpec
-from kingfisher.layout import PAUSED_STATE
+from kingfisher.layout import CLAIM, PAUSED_STATE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -149,8 +141,6 @@ if TYPE_CHECKING:
     from kingfisher.domain.ports import (
         CommandRunner,
         RunEvents,
-        SessionDirs,
-        SessionRoot,
         ThreadStore,
     )
 
@@ -185,21 +175,6 @@ _UNSET: Any = object()
 def _asked(value: str | Request | Resume) -> Request | Resume:
     """Whatever a caller handed in, as one of the two things a turn starts from."""
     return value if isinstance(value, Request | Resume) else Request.coerce(value)
-
-
-def _session_store(supplied: SessionStore | None, cfg: Config) -> SessionStore | None:
-    """Which store this deployment gets: the one passed, the one named, or none."""
-    if supplied is not None:
-        return supplied
-    if cfg.session_store_factory is not None:
-        return store_named(
-            cfg.session_store_factory,
-            setting="KINGFISHER_SESSION_STORE_FACTORY",
-            port=SessionStore,
-        )
-    if cfg.session_store is not None:
-        return LocalSessionStore(cfg.session_store)
-    return None
 
 
 #: What a provider answers with when it will not accept the credentials. Matched
@@ -248,19 +223,12 @@ class Kingfisher(Sessions, Disposal):
         self,
         cfg: Config | None = None,
         *,
-        dirs: SessionDirs | None = None,
         # A store, or a factory given a session directory, or nothing for the
         # default -- see `_checkpointer_for`. The union is the contract, so it
         # is written here rather than left for a reader to infer from a branch.
         threads: ThreadStore | Callable[[Path], Any] | None = None,
-        # Where a session's files go when the machine may not keep them. `None`
-        # means the session directory is the only copy, which is what every
-        # deployment has had until now and stays correct wherever the host is
-        # allowed to hold data.
-        sessions: SessionStore | None = None,
-        session_root: SessionRoot | None = None,
         runner: Callable[[Path], CommandRunner] | None = None,
-        backend: BackendFactory | None = None,
+        backend: SessionBackends | None = None,
         catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middlewares: Mapping[str, MiddlewareFactory] | None = None,
@@ -302,16 +270,6 @@ class Kingfisher(Sessions, Disposal):
         if self.catalogue.tools.found:
             builtin_tool_names(self.cfg, self.catalogue)
 
-        # Injected, or derived from configuration, or nothing -- the same order
-        # `catalogue` follows and for the same reason: derive from `cfg`, never invent.
-        self.sessions_store: SessionStore | None = _session_store(sessions, self.cfg)
-        self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
-        # Where a session's files are for the length of a turn. The default keeps them
-        # under the workspace and leaves them there, which is what this did before there
-        # was a port for it; a deployment whose tree exists only while a turn runs
-        # supplies its own and gets the release for free, because the turn is what
-        # closes it.
-        self.session_root: SessionRoot = session_root or LocalSessionRoot(self.workspace)
         # A callable, and only a callable. A runner is built for one turn --
         # kingfisher's own Landlock fence is, because its policy is generated
         # from the session -- and a shared instance could not know which session
@@ -344,7 +302,18 @@ class Kingfisher(Sessions, Disposal):
                 "filesystem between callers"
             )
             raise TypeError(msg)
+        if backend is not None and not isinstance(backend, SessionBackends):
+            msg = (
+                "backend has to answer for every session as well as build one: which "
+                "there are, how big, when each was used, and deleting one. To build on "
+                "kingfisher's own, subclass DefaultBackend and override __call__"
+            )
+            raise TypeError(msg)
         self._backend = backend
+        # Where the sessions are, for the questions no single session answers: which
+        # there are, how big, when each was used. A deployment that supplied a graph
+        # rather than a backend keeps its sessions where the default does.
+        self._backends: SessionBackends = backend if backend is not None else default_backend
         # Before anything else can run: a deployment that needs a key and has none
         # would otherwise serve turns whose pinned agent and conversation the agent's
         # own shell can rewrite, and nothing would say so.
@@ -444,7 +413,11 @@ class Kingfisher(Sessions, Disposal):
     @property
     def origins(self) -> Origins:
         """Where this deployment is actually reading from."""
-        return Origins.of(self.cfg, catalogue=self.catalogue, sessions=self.sessions_store)
+        return Origins.of(
+            self.cfg,
+            catalogue=self.catalogue,
+            sessions=None if self._backends is default_backend else self._backends,
+        )
 
     def held_for(self, source_ids: Held | None) -> frozenset[str] | None:
         """The caller's expanded source ids, or `None` where nothing narrows."""
@@ -513,7 +486,7 @@ class Kingfisher(Sessions, Disposal):
             # here, a remote backend would be asked for two sessions' worth of
             # sandbox, and the agent could run in the one that was never given the
             # data.
-            backend=files if files is not None else self._files_for(session_dir),
+            backend=files if files is not None else self._files_for(session_dir.name, session_dir),
             # What the deployment permits, narrowed by what the request asked for,
             # and never the request's own: they are equal only where the deployment
             # restricts nothing, which is why defaulting to them here looked
@@ -527,18 +500,21 @@ class Kingfisher(Sessions, Disposal):
             catalogue=self.catalogue,
         )
 
-    def _files_for(self, session_dir: Path) -> Any:
+    def _files_for(self, session_id: str, session_dir: Path) -> Any:
         """The backend a session's files are reached through, for kingfisher and agent alike.
 
         The runner goes into the factory rather than alongside it: a deployment that
         replaced the backend owns what runs its commands, and handing the same runner
-        to `build_agent` as well would leave two answers to that.
+        to `build_agent` as well would leave two answers to that. It is still built
+        from the directory: a runner is about where commands run on *this* host.
         """
         if self._graph is not None or self._backend is None:
-            return local_files(session_dir)
+            files = local_files(ensure_session_layout(session_dir))
+            files.unprotected = protect_data(session_dir)
+            return files
         return self._backend(
             self.cfg,
-            session_dir,
+            session_id,
             catalogue=self.catalogue,
             runner=self._runner(session_dir) if self._runner is not None else None,
         )
@@ -546,7 +522,7 @@ class Kingfisher(Sessions, Disposal):
     def _harness_at(self, session_id: str, session_dir: Path, files: Any = None) -> HarnessFiles:
         """What kingfisher keeps about this session, through the backend its files are on."""
         return HarnessFiles(
-            files if files is not None else self._files_for(session_dir),
+            files if files is not None else self._files_for(session_id, session_dir),
             session_id,
             self.cfg.session_key,
         )
@@ -558,8 +534,8 @@ class Kingfisher(Sessions, Disposal):
         is pending must not be a thing that can supersede it, and every other way into
         the session is a turn.
         """
-        with self.session_root.hold(session_id) as directory:
-            return pending_from_mark(read_pause_mark(self._harness_at(session_id, directory)) or {})
+        directory = sessions_root(self.workspace) / session_id
+        return pending_from_mark(read_pause_mark(self._harness_at(session_id, directory)) or {})
 
     def artifact(
         self, session_id: str, name: str, *, source_ids: Held | None = None
@@ -572,8 +548,8 @@ class Kingfisher(Sessions, Disposal):
         """
         if self.session(session_id, source_ids=source_ids) is None:
             raise self._unknown_session(session_id)
-        with self.session_root.hold(session_id) as directory:
-            return read_artifact(self._files_for(directory), name)
+        directory = sessions_root(self.workspace) / session_id
+        return read_artifact(self._files_for(session_id, directory), name)
 
     def _pin_agent_in(self, harness: HarnessFiles, name: str | None) -> None:
         """Keep the agent, in the session this is about.
@@ -739,7 +715,7 @@ class Kingfisher(Sessions, Disposal):
         source_ids: Held | None = None,
     ) -> Admitted:
         """Everything that can refuse, before anything a refusal would strand."""
-        cfg, dirs = self.cfg, self.dirs
+        cfg = self.cfg
         # Who is calling, before the session is marked, claimed or written to. Any
         # later and a refused caller's files are already in the `/data` of a session
         # that was never theirs; after the claim, and a turn running in it would
@@ -748,7 +724,7 @@ class Kingfisher(Sessions, Disposal):
         self._effective_grants(source_ids)
         # Built here, before anything else reads the session: who may touch it is
         # decided by its pinned agent, and that is read through the backend too.
-        files = self._files_for(session.directory)
+        files = self._files_for(session.id, session.directory)
         harness = self._harness_at(session.id, session.directory, files)
         if not self._reaches_session(harness, self.held_for(source_ids)):
             raise self._unknown_session(session.id)
@@ -756,18 +732,21 @@ class Kingfisher(Sessions, Disposal):
         # timestamp `retention.expired` reads would still say "idle" for a
         # conversation in daily use. Recorded here, at the top of a turn, rather
         # than at the end: a turn that fails still happened.
-        dirs.mark_used(session.directory)
+        self._backends.mark_used(cfg, session.id)
         # Before the other refusals rather than after: those read the session,
         # and a turn arriving halfway through would be reading it as it moved.
-        session.claim(
-            dirs, claim_path(session.directory), stale_after=cfg.claim_stale_after, now=time()
-        )
+        if not files.claim(CLAIM, stale_after=cfg.claim_stale_after):
+            msg = (
+                f"session {session.id} already has a turn running; "
+                f"wait for it to finish or start another session"
+            )
+            raise SessionBusyError(msg)
         try:
             return self._admitted(
                 request, session, cfg, files=files, harness=harness, source_ids=source_ids
             )
         except BaseException:
-            session.release(dirs, claim_path(session.directory))
+            files.release(CLAIM)
             raise
 
     def _admitted(  # noqa: PLR0913 -- what `_admit` already built, handed on rather
@@ -782,11 +761,9 @@ class Kingfisher(Sessions, Disposal):
         source_ids: Held | None = None,
     ) -> Admitted:
         """The rest of admission, once the session is claimed."""
-        # Kernel-level guard; the deny rule covers only the file tools. Paths
-        # it could not harden are reported below rather than raised: they used
-        # to abort the run, and since this runs before anything else, one file
-        # owned by another user made a session unusable for good.
-        unprotected = protect_data(session.directory)
+        # What the backend could not make read-only, where it is one that says. Reported
+        # below rather than raised; see `DefaultBackend`.
+        unprotected = tuple(getattr(files, "unprotected", ()))
 
         # Before the data is placed, not after: placing it grows the session,
         # so checking afterwards would let a request that is already over
@@ -955,42 +932,7 @@ class Kingfisher(Sessions, Disposal):
     def _keep(self, prepared: Prepared, snapshot: Any) -> tuple[str, ...]:
         """Persist what this turn produced, and name it."""
         self._record(prepared, snapshot)
-        kept = collect_artifacts(prepared.files)
-        if self.sessions_store is not None:
-            # Two names beyond what `collect_artifacts` walks, which is `/derived`
-            # and `/memory`. Both are under `.harness` and both have to survive a
-            # machine, and neither is an artifact -- what a turn *produced* is what
-            # the caller is handed, and these are what a session *is*.
-            #
-            # The transcript, or a session that outlived its machine comes back
-            # with its files and no conversation -- measured, of a first draft that
-            # wrote it and never kept it.
-            #
-            # And the pinned agent, which the store never saw while it lived under
-            # `state_dir`. A session moving between hosts found no pin on the new
-            # one, re-pinned from *that* host's catalogue, and accepted whatever
-            # agent the request named -- so "a session is fixed to the agent it
-            # opened with" held on one machine and quietly failed across two.
-            #
-            # The claim stays behind, and deliberately. A restored claim would make
-            # the session look busy for `claim_stale_after` -- minutes -- before
-            # anyone could take the slot.
-            keep_from(
-                self.sessions_store,
-                prepared.session.id,
-                prepared.session.directory,
-                (
-                    *kept,
-                    *(
-                        f"{name}{suffix}"
-                        for name in (TRANSCRIPT, AGENT_SNAPSHOT)
-                        # With their signatures, or a session restored on another host
-                        # comes back unsigned and is refused on its next turn.
-                        for suffix in ("", SIGNATURE)
-                    ),
-                ),
-            )
-        return kept
+        return collect_artifacts(prepared.files)
 
     def _finished(  # noqa: PLR0913 -- one terminal event, assembled from the four
         # things a turn ends holding. A parameter object here would exist only to
@@ -1163,7 +1105,7 @@ class Kingfisher(Sessions, Disposal):
             finally:
                 # The slot goes back however the turn ended -- answered, refused
                 # mid-stream, or cut short by its deadline.
-                prepared.session.release(self.dirs, claim_path(prepared.session.directory))
+                prepared.files.release(CLAIM)
             # And so does the connection, when this service opened one. A
             # per-session database is a file descriptor per session, so a
             # process serving many would otherwise hold every one it touched.

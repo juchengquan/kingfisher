@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from pathlib import Path
-
-from kingfisher.domain.ports import SessionDirs, ThreadStore
-from kingfisher.domain.session import Session
 
 
 @dataclass(frozen=True)
@@ -61,15 +57,13 @@ def orphaned(names: Sequence[str], sessions: Sequence[str]) -> tuple[str, ...]:
 
 def apply(
     sweep_plan: SweepPlan,
-    runs: Path,
-    dirs: SessionDirs,
-    threads: ThreadStore | None = None,
+    discard: Callable[[str], str | None],
 ) -> SweepResult:
-    """Carry out a plan, one session at a time."""
+    """Carry out a plan, one session at a time. `discard` answers a failure, or `None`."""
     removed: list[str] = []
     failures: list[str] = []
     for name in sweep_plan.doomed:
-        failure = Session(id=name, directory=runs / name).discard(dirs, threads)
+        failure = discard(name)
         if failure:
             failures.append(failure)
         else:

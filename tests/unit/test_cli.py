@@ -357,10 +357,10 @@ def test_a_warning_of_kingfishers_own_is_one_plain_line(cfg, session_dir, monkey
     """
     from dataclasses import replace
 
-    from kingfisher import default_backend
+    from kingfisher import backend_at
 
     def turn():
-        default_backend(replace(cfg, shell_sandbox="off"), session_dir)
+        backend_at(replace(cfg, shell_sandbox="off"), session_dir)
         yield _finished()
 
     _ran(monkeypatch, turn(), cfg)

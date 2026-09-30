@@ -20,7 +20,7 @@ from deepagents.backends.protocol import BackendProtocol, SandboxBackendProtocol
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage
 
-from kingfisher import Kingfisher, ToolContext, default_backend
+from kingfisher import Kingfisher, ToolContext, backend_at, default_backend
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Decision, Request, Resume
 from kingfisher.domain.result import AWAITING
@@ -54,7 +54,7 @@ def backend(cfg, session_dir):
     (session_dir / "derived" / "private").mkdir(parents=True)
     (session_dir / "derived" / "private" / "key.txt").write_text("needle: private\n")
     (session_dir / "derived" / "open.txt").write_text("needle: open\n")
-    return default_backend(cfg, session_dir)
+    return backend_at(cfg, session_dir)
 
 
 def _refusal(result: Any) -> str:
@@ -641,7 +641,7 @@ def test_the_wrapper_a_compiled_delegates_tools_wear_passes_the_runtime_on(cfg, 
 
     out = graph.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
-        context=ToolContext(backend=PermittedBackend(default_backend(cfg, session_dir), [])),
+        context=ToolContext(backend=PermittedBackend(backend_at(cfg, session_dir), [])),
     )
 
     (result,) = [m for m in out["messages"] if isinstance(m, ToolMessage)]

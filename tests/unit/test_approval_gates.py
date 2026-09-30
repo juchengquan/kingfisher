@@ -16,7 +16,7 @@ from deepagents import create_deep_agent
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from kingfisher import Kingfisher, default_backend
+from kingfisher import Kingfisher, backend_at
 from kingfisher.domain.request import Decision, DecisionError, Request, Resume
 from kingfisher.domain.result import AWAITING, DECISIONS, END_TURN
 from kingfisher.infrastructure.session_store import read_pause_mark, write_pause_mark
@@ -52,7 +52,7 @@ def _gated_on_disk(cfg, session_dir, *, calls: list[dict[str, Any]], after: str 
         model=FakeToolCallingModel(
             responses=[AIMessage(content="", tool_calls=calls), AIMessage(content=after)]
         ),
-        backend=default_backend(cfg, session_dir),
+        backend=backend_at(cfg, session_dir),
         tools=None,
         interrupt_on={"write_file": True},
         checkpointer=InMemorySaver(),

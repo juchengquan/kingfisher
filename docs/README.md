@@ -13,7 +13,7 @@ file count it refuses to print.
 | [`guides/formats.md`](guides/formats.md) | What an agent, subagent, tool or skill file may say. | Writing or changing a definition. |
 | [`guides/tools.md`](guides/tools.md) | How to write a workspace tool: the shapes, what it returns, what the loader refuses, how it reaches a session's files. | Writing or changing a tool. |
 | [`guides/configuration.md`](guides/configuration.md) | Every setting a deployment reads from the environment, and what it defaults to. | Standing one up, or wondering what a variable does. |
-| [`guides/ports.md`](guides/ports.md) | How to write an adapter for one of the thirteen ports, and how to check it. | Putting sessions, files or commands somewhere kingfisher did not choose. |
+| [`guides/ports.md`](guides/ports.md) | How to write an adapter for one of the ten ports, or the backend, and how to check it. | Putting sessions, files or commands somewhere kingfisher did not choose. |
 | [`guides/middleware.md`](guides/middleware.md) | How to register middleware a definition can name, what it may configure, and what it sees. | Wrapping the agent in code of your own. |
 | [`decisions.md`](decisions.md) | Why the code is shaped this way, and what was tried and reversed. | **Before proposing a change** to something it lists. |
 | [`findings.md`](findings.md) | What deepagents, langchain and the model surfaces actually do. | Before touching streaming, middleware or delegation. |
@@ -64,12 +64,6 @@ slices land.
   `CAP_SYS_ADMIN` costs to do it. Nothing built. Half its premise went with
   #502 and the document says so at the top; its measurements are the part that
   kept.
-- [A session is its
-  backend](design/2026-09-30-a-session-is-its-backend.md) — every read and write
-  of a session's files, kingfisher's own included, through the backend, so a
-  backend that runs elsewhere is where the session actually is. Reverses part of
-  *Wiring a store* and removes `SessionRoot` and `SessionStore`. Settled in
-  review, nothing built.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
@@ -84,6 +78,8 @@ written; its decisions are split between *Confining the shell* and *Sessions:
 what persists and where*, which is where the two halves of it belonged.
 *Several skills roots* was built in two slices; its decisions are under
 *The catalogue* in `decisions.md`.
+*A session is its backend* was built in four the day it was written; its decisions
+are under a section of that name in `decisions.md`.
 
 A document belongs there while it is arguing for something; once it is built its
 decisions move to `decisions.md`, anything it measured about upstream moves to

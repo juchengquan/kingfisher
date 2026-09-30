@@ -177,13 +177,9 @@ def _source_ids(cfg: Config) -> Origin:
     return Origin(_derived(cfg.access_source, cfg.workspace / "source_ids.yaml"), cfg.access_source)
 
 
-def _sessions(cfg: Config, store: object | None) -> Origin:
-    """Where a session's files are kept when the machine may not keep them."""
-    if store is None:
-        return _configured(cfg.session_store)
-    root = getattr(store, "root", None)
-    if not isinstance(root, (str, Path)) or cfg.session_store is None:
-        return Origin("supplied")
-    if Path(root) != cfg.session_store:
-        return Origin("overridden", Path(root))
-    return _configured(cfg.session_store)
+def _sessions(cfg: Config, backends: object | None) -> Origin:
+    """Where sessions are: the workspace's own directory, or a backend's. `None` is the
+    default backend, which keeps them in the workspace."""
+    if backends is None:
+        return Origin("default", cfg.workspace / "sessions")
+    return Origin("supplied")
