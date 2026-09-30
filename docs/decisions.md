@@ -2020,7 +2020,10 @@ that gets it wrong helpfully -- adding a `Path` serialiser makes the error go aw
 and ships exactly the leak. The service and its payloads went on 2026-09-15; the
 fields are still `Path`, so a caller serialising a result meets the same refusal.
 *(`log_path` went on 2026-09-30, with the run log leaving the session for
-`RunEvents`; `session_dir` is the one left.)*
+`RunEvents`, and `session_dir` on 2026-10-01, when a session stopped being a folder
+on this host. Nothing in a result is a host path now, so a result serialises whole:
+`artifacts` names files relative to the session, and `Kingfisher.artifact` fetches
+them.)*
 
 **The session quota is checked between turns and never during one.** This reverses
 what *Nothing at rest* argued: N11 said the bound could be metered on the

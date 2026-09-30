@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 # on an import that has not changed.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from evals.artifacts import load_result
+from evals.artifacts import RESULT, load_result
 from evals.checks import check_result
 from evals.seed import seed_sample_data, seed_sample_skill
 from evals.task import SMOKE_TASK
@@ -339,12 +339,15 @@ def main(argv: list[str]) -> int:
     # printed again after the summary -- it arrived as it was written.
     # Deferred: this is the first thing that needs deepagents, and paths
     # that never get here (--help, --list, a bad .env) should not pay for it.
-    from kingfisher import stream
+    from kingfisher import Kingfisher, default_backend
 
     result = None
     recorded = _Recorded()
+    # One service for the turn and for fetching what it wrote afterwards, which
+    # goes through the session's backend rather than a folder on this host.
+    kf = Kingfisher(cfg, backend=default_backend, run_events=recorded)
     try:
-        result = show(stream(request, cfg=cfg, run_events=recorded), sys.stdout)
+        result = show(kf.stream(request), sys.stdout)
     except CapabilityError as exc:
         # A named capability the workspace does not offer. Reported here rather
         # than as a traceback because it is a usage error, not a crash.
@@ -365,15 +368,16 @@ def main(argv: list[str]) -> int:
 
     print()
     print(f"session   : {result.session_id}")
-    print(f"directory : {result.session_dir}")
     print(f"usage     : {_usage_summary(recorded.events)}")
 
     for name in ("report.md", "result.json"):
-        path = result.session_dir / DERIVED / name
-        if path.exists():
-            print(f"{name:<12}: written  {path}")
+        kept = f"{DERIVED}/{name}"
+        if kept in result.artifacts:
+            print(f"{name:<12}: written  {kept}")
         elif is_smoke:
-            print(f"{name:<12}: MISSING  {path}")
+            print(f"{name:<12}: MISSING  {kept}")
+    if result.artifacts:
+        print(f"fetch with: kingfisher artifact --session {result.session_id} NAME")
 
     # Continuing this session is the next thing you will want, so say how.
     print(
@@ -389,7 +393,9 @@ def main(argv: list[str]) -> int:
 
     # The regression signal is the structured result, not the prose: two runs
     # on identical input rewrite the report entirely while the numbers hold.
-    payload = load_result(result.session_dir / DERIVED)
+    payload = load_result(
+        kf.artifact(result.session_id, RESULT) if RESULT in result.artifacts else None
+    )
     if payload is None:
         print("\nresult.json missing or unparseable — cannot check", file=sys.stderr)
         return 1

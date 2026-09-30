@@ -56,7 +56,7 @@ def test_being_cut_short_keeps_the_work(cfg):
 
     result = kf.run(Request("go"))
 
-    assert result.session_dir.is_dir()
+    assert (cfg.workspace / "sessions" / result.session_id).is_dir()
     assert "memory/AGENTS.md" in result.artifacts
 
 
@@ -101,7 +101,8 @@ def test_a_turn_that_runs_out_of_steps_is_cut_short_not_crashed(cfg):
     # `max_steps`, not `max_duration` -- the distinction the boolean could not
     # carry, and the reason a reader was sent to the wrong setting.
     assert result.stop_reason == "max_steps"
-    assert result.session_dir.is_dir(), "the turn's work went with the error"
+    kept = cfg.workspace / "sessions" / result.session_id
+    assert kept.is_dir(), "the turn's work went with the error"
 
 
 def test_a_turn_cut_short_for_steps_is_logged_as_having_ended(cfg):

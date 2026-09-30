@@ -1,7 +1,8 @@
 # A tool's path is the backend's path
 
-**Status:** proposed, nothing built. Its questions were settled in review on
-2026-10-01, under *Settled in review*.
+**Status:** proposed. **Slice 1 landed**: `decide` asks the backends whether a
+session exists, and `RunResult.session_dir` is gone. Slices 2 to 4 are not built. Its
+questions were settled in review on 2026-10-01, under *Settled in review*.
 **Date:** 2026-09-30.
 **Occasion:** an audit after *A session is its backend* landed, asking what else on
 the agent's side still assumed a session is a folder on this host. Three things

@@ -138,3 +138,21 @@ def test_building_a_session_s_backend_makes_its_data_read_only(cfg):
 
     assert not os.access(directory / "data", os.W_OK)
     assert built.unprotected == ()
+
+
+def test_deciding_nothing_finds_a_session_the_named_backend_keeps(
+    told_about_a_remote_backend, capsys
+):
+    """It checked for `<workspace>/sessions/<id>`, which a backend keeping sessions
+    elsewhere never makes, and told somebody asking what their session waits on that
+    it did not exist.
+    """
+    cfg = told_about_a_remote_backend
+    remote_backends()(cfg, "kept-elsewhere")
+
+    main(["decide", "--session", "kept-elsewhere"])
+    main(["decide", "--session", "never-was"])
+
+    said = capsys.readouterr().err
+    assert "session kept-elsewhere is not waiting on a decision" in said
+    assert "no such session: never-was" in said

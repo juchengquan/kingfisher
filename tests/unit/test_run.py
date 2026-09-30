@@ -80,8 +80,8 @@ def test_run_creates_the_session_triple(cfg):
 
     assert isinstance(result, RunResult)
     assert result.answer == "42"
-    assert result.session_dir == cfg.workspace / "sessions" / "sess123"
-    assert result.session_dir.is_dir()
+    assert result.session_id == "sess123"
+    assert (cfg.workspace / "sessions" / "sess123").is_dir()
     assert agent.config["configurable"]["thread_id"] == "sess123"
 
 
@@ -234,10 +234,10 @@ def test_supplied_data_is_still_there_on_the_next_turn(cfg):
         checkpointer=ck,
     )
 
-    session = first.session_dir
+    session = cfg.workspace / "sessions" / first.session_id
     assert (session / "data" / "sales.csv").read_text() == "a,b\n1,2\n"
-    assert second.session_dir == session  # same session, second turn
-    assert not (second.session_dir / "input").exists()  # nothing was re-supplied
+    assert second.session_id == first.session_id  # same session, second turn
+    assert not (session / "input").exists()  # nothing was re-supplied
 
 
 def test_the_agent_is_told_what_arrived_in_data(cfg):
@@ -265,34 +265,18 @@ def test_the_agent_is_told_what_arrived_in_data(cfg):
 # has to be legible -- the alternative is every API author deciding it again.
 
 
-def test_everything_but_the_host_paths_is_json(cfg):
-    """The half a server sends."""
+def test_a_result_is_json_all_of_it(cfg):
+    """It carried two host paths once, and a caller elsewhere had to know to leave them
+    behind. `artifacts` locates a file for that caller -- names relative to the session,
+    fetched through its backend -- so nothing in a result is a path on this host.
+    """
     import dataclasses
 
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     start(cfg, "s")
     result = service.run(Request("go", session_id="s"))
 
-    sendable = {
-        k: v for k, v in dataclasses.asdict(result).items()
-        if k != "session_dir"
-    }
-
-    # `artifacts` is the half that locates a file for a caller elsewhere: it is
-    # relative to the session root, so it needs no host path to be useful.
-    assert json.loads(json.dumps(sendable))["turn_id"] == result.turn_id
-
-
-def test_the_host_paths_refuse_to_serialise(cfg):
-    """Deliberate, and the reason they are named in the docstring."""
-    import dataclasses
-
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    start(cfg, "s")
-    result = service.run(Request("go", session_id="s"))
-
-    with pytest.raises(TypeError, match="not JSON serializable"):
-        json.dumps(dataclasses.asdict(result))
+    assert json.loads(json.dumps(dataclasses.asdict(result)))["turn_id"] == result.turn_id
 
 
 # -- what counts as having finished ---------------------------------------
