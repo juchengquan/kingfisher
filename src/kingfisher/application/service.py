@@ -956,7 +956,6 @@ class Kingfisher(Sessions, Disposal):
                 session_id=prepared.session.id,
                 turn_id=prepared.turn.id,
                 answer=answer,
-                session_dir=prepared.session.directory,
                 # Collected after the graph has finished, so it reflects what
                 # the turn actually left behind -- including what the shell
                 # wrote, which no file tool would have reported.

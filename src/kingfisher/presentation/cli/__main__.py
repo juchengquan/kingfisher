@@ -616,8 +616,10 @@ def _decide(args: argparse.Namespace) -> int:
 
 def _show_pending(kf: Kingfisher, session_id: str) -> int:
     """What this session is waiting on, for somebody who has lost the ids."""
-    directory = sessions_root(kf.workspace) / session_id
-    if not directory.is_dir():
+    # Asked of the backends, not of a folder here, which a backend keeping its
+    # sessions elsewhere never makes. `UNSCOPED` for the reason `_reap_one` gives:
+    # this only asks whether the id names a session.
+    if kf.session(session_id, source_ids=UNSCOPED) is None:
         print(f"no such session: {session_id}", file=sys.stderr)
         return 2
     waiting = kf.pending(session_id)
