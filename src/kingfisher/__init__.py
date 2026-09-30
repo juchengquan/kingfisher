@@ -74,6 +74,12 @@ _EXPORTS = {
     # forbids. Found by the kit: the reference runner in
     # `test_root_and_runner_contracts` had to import it from somewhere.
     "CommandResult": "kingfisher.domain.ports",
+    # What a workspace tool annotates `runtime` with to be handed the turn's backend:
+    # `runtime: ToolRuntime[ToolContext]`. A tool file is a caller outside this
+    # wheel by construction -- it lives in a deployment's workspace -- and the bare
+    # `ToolRuntime` it would otherwise write has pydantic warn on every call that
+    # the context it was handed is not the `None` it declared.
+    "ToolContext": "kingfisher.infrastructure.harness.tool_context",
     "UnknownSessionError": "kingfisher.domain.session",
     "Config": "kingfisher.config",
     "WorkspacePaths": "kingfisher.config",
@@ -149,6 +155,7 @@ __all__ = [
     "SessionBusyError",
     "SessionInfo",
     "SubagentError",
+    "ToolContext",
     "UnknownSessionError",
     "UnsafeReferenceError",
     "WorkspacePaths",
@@ -207,6 +214,7 @@ if TYPE_CHECKING:
         BACKEND_CONTRACT as BACKEND_CONTRACT,
     )
     from kingfisher.infrastructure.harness.host_paths import HostPathError as HostPathError
+    from kingfisher.infrastructure.harness.tool_context import ToolContext as ToolContext
     from kingfisher.infrastructure.session_store import (
         LocalSessionStore as LocalSessionStore,
     )
