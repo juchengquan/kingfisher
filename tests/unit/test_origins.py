@@ -126,24 +126,12 @@ def test_the_seed_directory_is_never_derived(cfg, tmp_path):
     assert Origins.of(replace(cfg, assets=tmp_path)).seed == Origin("relocated", tmp_path)
 
 
-def test_a_session_store_handed_in_is_told_from_a_configured_one(cfg, tmp_path):
-    """The same override the catalogues have, on the one other seam that corresponds to
-    a path a deployment configured.
+def test_sessions_are_the_workspace_s_own_unless_a_backend_says_otherwise(cfg):
+    """`None` is the default backend, which keeps sessions under the workspace; anything
+    else keeps them wherever it keeps them, which no path here can name.
     """
-
-    class Elsewhere:
-        root = tmp_path / "blob"
-
-    kept = replace(cfg, session_store=tmp_path / "kept")
-
-    assert Origins.of(cfg).sessions == Origin("unset", None)
-    assert Origins.of(kept).sessions == Origin("relocated", tmp_path / "kept")
-    assert Origins.of(kept, sessions=Elsewhere()).sessions == Origin(
-        "overridden", tmp_path / "blob"
-    )
-    # Nothing configured and a store handed in: there is no path the deployment
-    # named, so there is nothing for the store to be an override of.
-    assert Origins.of(cfg, sessions=Elsewhere()).sessions == Origin("supplied", None)
+    assert Origins.of(cfg).sessions == Origin("default", cfg.workspace / "sessions")
+    assert Origins.of(cfg, sessions=object()).sessions == Origin("supplied", None)
 
 
 def test_entries_are_derived_from_the_record_not_listed_beside_it(cfg):

@@ -1,99 +1,19 @@
-"""A `SessionStore` over a directory.
+"""What kingfisher keeps about a session: its conversation, and a turn paused for an
+answer.
 
-Deliberately dull. It walks, it writes, it deletes. Everything interesting about this
-design is in *when* a caller reaches for it, not in what happens when they do, and a
-first implementation that was clever about batching or streaming would be optimising a
-cost nobody has measured yet.
+Read and written through the session's `HarnessFiles`, so through its backend, and
+signed there. This module owns the formats, not where they live.
 """
 
 from __future__ import annotations
 
 import json
-import shutil
 from collections.abc import Mapping, Sequence
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from kingfisher.domain.references import within
 from kingfisher.domain.result import PendingDecision
 from kingfisher.domain.transcript import Message, as_json, from_json
-from kingfisher.layout import HARNESS, PAUSED_MARK, PAUSED_STATE, TRANSCRIPT_FILE
-
-if TYPE_CHECKING:
-    from kingfisher.domain.ports import SessionStore
-
-
-class LocalSessionStore:
-    """Sessions kept as directories under `root`, one per session id."""
-
-    def __init__(self, root: Path) -> None:
-        self.root = Path(root).expanduser().resolve()
-
-    def _held(self, session_id: str) -> Path:
-        """Where one session's files sit, refusing an id that would escape."""
-        return within(self.root, session_id)
-
-    def fetch(self, session_id: str) -> dict[str, bytes]:
-        """Everything kept for this session, keyed by path relative to its root."""
-        held = self._held(session_id)
-        if not held.is_dir():
-            return {}
-        return {
-            str(path.relative_to(held)): path.read_bytes()
-            for path in sorted(held.rglob("*"))
-            if path.is_file()
-        }
-
-    def save(self, session_id: str, files: Mapping[str, bytes]) -> None:
-        """Keep these files, replacing any of the same name."""
-        held = self._held(session_id)
-        for name, content in files.items():
-            target = within(held, name)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(content)
-
-    def knows(self, session_id: str) -> bool:
-        """Whether anything is held for this session, without reading it."""
-        return self._held(session_id).is_dir()
-
-    def forget(self, session_id: str) -> None:
-        """Drop everything kept for this session. Idempotent."""
-        shutil.rmtree(self._held(session_id), ignore_errors=True)
-
-
-def restore_into(store: SessionStore, session_id: str, directory: Path) -> tuple[str, ...]:
-    """Write back what the store kept, for a directory that has lost it."""
-    written: list[str] = []
-    for name, content in store.fetch(session_id).items():
-        target = within(directory, name)
-        if target.exists():
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(content)
-        written.append(name)
-    return tuple(written)
-
-
-def keep_from(store: SessionStore, session_id: str, directory: Path, names: Sequence[str]) -> None:
-    """Hand the named files to the store, reading them from `directory`."""
-    store.save(
-        session_id,
-        {
-            name: within(directory, name).read_bytes()
-            for name in names
-            if within(directory, name).is_file()
-        },
-    )
-
-
-#: Where a session's conversation is kept: inside the session, so it is deleted
-#: with the session, counted by `session_bytes`, and carried by whatever keeps
-#: the rest -- and under `.harness`, so the agent cannot edit it.
-#:
-#: It sat at the session root, which bought the first three and not the last: the
-#: shell roots at the session, so the conversation the next turn is rebuilt from
-#: was one the current turn could rewrite.
-TRANSCRIPT = f"{HARNESS}/{TRANSCRIPT_FILE}"
+from kingfisher.layout import PAUSED_MARK, PAUSED_STATE, TRANSCRIPT_FILE
 
 
 def read_transcript(harness: Any) -> tuple[Message, ...]:

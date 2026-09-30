@@ -44,13 +44,14 @@ from kingfisher import (
 # see *The front door* in `docs/decisions.md` -- and each of these is something
 # no caller outside the wheel has asked for: the four kinds a catalogue holds,
 # used to say what a directory has none of; where a workspace keeps its
-# sessions; what one of them costs; how long a session key must be, for `key` to
-# print one; and the warning `doctor` says as a check instead. Everything above
-# is public and comes through the front door because it is.
+# sessions; how long a session key must be, for `key` to print one; and the
+# warning `doctor` says as a check instead. `configured_backend` is taken the same
+# way, inside the commands that build a service, because only a command has a
+# setting and no argument to be told its backend by. Everything above is public
+# and comes through the front door because it is.
 from kingfisher.config import SESSION_KEY_MIN_BYTES, MissingCredentialsWarning
 from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
-from kingfisher.infrastructure.workspace import session_bytes
 from kingfisher.infrastructure.workspace.seeding import REMEDY, UNCONSULTED
 from kingfisher.presentation.cli.health import _retired, examine, worst
 from kingfisher.presentation.cli.listing import as_json, failed, origins_document, render
@@ -376,9 +377,9 @@ def build_parser() -> argparse.ArgumentParser:
             "The size is a walk per session -- about a millisecond each -- which\n"
             "a workspace holding thousands will feel.\n"
             "\n"
-            "A deployment that moved its sessions with the SessionRoot port sees\n"
-            "nothing here: this reads <workspace>/sessions, which such a\n"
-            "deployment never uses."
+            "Asked of the backend KINGFISHER_BACKEND_FACTORY names, or of\n"
+            "<workspace>/sessions where it names none -- so a deployment whose\n"
+            "own backend keeps sessions elsewhere sets it for this to see them."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -512,9 +513,11 @@ def _run(args: argparse.Namespace) -> int:
     # three provider SDKs -- about a second -- and
     # `test_reaching_the_cli_stays_free_of_provider_sdks` holds every other verb
     # to not paying it. `seed`, `list` and `doctor` do not build one.
-    from kingfisher import Kingfisher, default_backend  # noqa: PLC0415
+    from kingfisher import Kingfisher  # noqa: PLC0415
+    from kingfisher.application.run import configured_backend  # noqa: PLC0415
 
-    kf = Kingfisher(config_from_env(), backend=default_backend)
+    cfg = config_from_env()
+    kf = Kingfisher(cfg, backend=configured_backend(cfg))
     request = Request(
         task=args.task,
         agent=args.agent,
@@ -578,7 +581,8 @@ def _decide(args: argparse.Namespace) -> int:
     # Only the two that cost. `Decision` and `Resume` are frozen dataclasses in
     # `domain`, which importing this module already loads, so deferring them would
     # save nothing -- they are at module scope beside `Request`.
-    from kingfisher import Kingfisher, default_backend  # noqa: PLC0415
+    from kingfisher import Kingfisher  # noqa: PLC0415
+    from kingfisher.application.run import configured_backend  # noqa: PLC0415
 
     decisions: list[Decision] = [
         *(Decision(call_id=one, action="approve") for one in args.approve),
@@ -594,7 +598,8 @@ def _decide(args: argparse.Namespace) -> int:
             return 2
         decisions.append(Decision(call_id=call_id, action="respond", message=text))
 
-    kf = Kingfisher(config_from_env(), backend=default_backend)
+    cfg = config_from_env()
+    kf = Kingfisher(cfg, backend=configured_backend(cfg))
     if not decisions:
         return _show_pending(kf, args.session)
     return _drive(
@@ -752,15 +757,17 @@ def _count(sessions: int) -> str:
 
 def _sessions(*, as_document: bool = False) -> int:
     """What this workspace is holding, and what each session costs it."""
-    from kingfisher import Kingfisher, default_backend  # noqa: PLC0415
+    from kingfisher import Kingfisher  # noqa: PLC0415
+    from kingfisher.application.run import configured_backend  # noqa: PLC0415
 
-    kf = Kingfisher(config_from_env(), backend=default_backend)
+    cfg = config_from_env()
+    kf = Kingfisher(cfg, backend=configured_backend(cfg))
     root = sessions_root(kf.workspace)
     now = time.time()
     # A walk per session, at ~0.8ms each. The same trade `sessions()` already
     # makes for the listing: cheap where it is read, and a workspace large
     # enough to mind wants an index rather than a cheaper column.
-    held = [(info, session_bytes(root / info.id)) for info in kf.sessions()]
+    held = [(info, kf.session_size(info.id)) for info in kf.sessions()]
 
     if as_document:
         print(
@@ -800,9 +807,11 @@ def _sessions(*, as_document: bool = False) -> int:
 
 def _reap(args: argparse.Namespace) -> int:
     """Delete sessions: one by name, or every one that has been idle too long."""
-    from kingfisher import Kingfisher, default_backend  # noqa: PLC0415
+    from kingfisher import Kingfisher  # noqa: PLC0415
+    from kingfisher.application.run import configured_backend  # noqa: PLC0415
 
-    kf = Kingfisher(config_from_env(), backend=default_backend)
+    cfg = config_from_env()
+    kf = Kingfisher(cfg, backend=configured_backend(cfg))
     if args.session is not None:
         return _reap_one(kf, args.session)
 
@@ -852,9 +861,11 @@ def _key() -> int:
 
 def _artifact(args: argparse.Namespace) -> int:
     """Fetch one file a turn produced, to a file or to standard output."""
-    from kingfisher import Kingfisher, default_backend  # noqa: PLC0415
+    from kingfisher import Kingfisher  # noqa: PLC0415
+    from kingfisher.application.run import configured_backend  # noqa: PLC0415
 
-    kf = Kingfisher(config_from_env(), backend=default_backend)
+    cfg = config_from_env()
+    kf = Kingfisher(cfg, backend=configured_backend(cfg))
     content = kf.artifact(args.session, args.name, source_ids=args.held)
     if args.out is None:
         # The buffer, not `print`: an artifact is bytes, and a text stream would

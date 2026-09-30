@@ -54,6 +54,7 @@ def _args(**over: Any) -> argparse.Namespace:
 def _drive(monkeypatch, result: RunResult) -> None:
     """Run the command's ending against a result, with nothing real behind it."""
     monkeypatch.setattr(cli, "config_from_env", object)
+    monkeypatch.setattr("kingfisher.application.run.configured_backend", lambda cfg: None)
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Nothing())
     monkeypatch.setattr(cli, "show", lambda *a, **k: result)
 
@@ -161,6 +162,7 @@ def test_the_three_decisions_reach_the_library_as_written(monkeypatch):
             return iter(())
 
     monkeypatch.setattr(cli, "config_from_env", object)
+    monkeypatch.setattr("kingfisher.application.run.configured_backend", lambda cfg: None)
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Recording())
 
     cli._decide(
@@ -240,7 +242,7 @@ def test_the_whole_loop_runs_through_the_command(cfg, session_dir, monkeypatch, 
     from langchain_core.messages import AIMessage
     from langgraph.checkpoint.memory import InMemorySaver
 
-    from kingfisher import Kingfisher, Request, default_backend
+    from kingfisher import Kingfisher, Request, backend_at
     from tests.conftest import FakeToolCallingModel
 
     graph = create_deep_agent(
@@ -259,7 +261,7 @@ def test_the_whole_loop_runs_through_the_command(cfg, session_dir, monkeypatch, 
                 AIMessage(content="written"),
             ]
         ),
-        backend=default_backend(cfg, session_dir),
+        backend=backend_at(cfg, session_dir),
         tools=None,
         interrupt_on={"write_file": True},
         checkpointer=InMemorySaver(),

@@ -185,6 +185,11 @@ class ConfigError(RuntimeError):
     """Raised when required configuration is missing or invalid."""
 
 
+#: What configured the `SessionStore`, which went when a session's backend became
+#: where it is kept. Refused where the environment is read rather than ignored, and
+#: kept here rather than beside that reader because they are refusals, not knobs.
+REMOVED_STORE_SETTINGS = ("KINGFISHER_SESSION_STORE", "KINGFISHER_SESSION_STORE_FACTORY")
+
 #: The shortest `KINGFISHER_SESSION_KEY` accepted, in bytes. HMAC-SHA256's own
 #: block of strength; `kingfisher key` prints twice this as hex.
 SESSION_KEY_MIN_BYTES = 32
@@ -366,14 +371,12 @@ class Config:
     # mistyped or emptied source is the likeliest thing standing between an
     # install and a run once the definitions stop arriving with the wheel.
     assets: Path | None = None
-    # Where a session's files are kept when the machine may not keep them. Unset means
-    # the session directory is the only copy, which is right wherever the host is
-    # allowed to hold data and is a silent disaster where it is not -- `doctor` says so
-    # when the workspace turns out to be in memory.
-    session_store: Path | None = None
-    # The same port, named rather than built here: `module:name` for something callable
-    # with no arguments that returns a `SessionStore`.
-    session_store_factory: str | None = None
+    # The backend the command line runs on, named rather than built here: `module:name`
+    # for something callable with no arguments that returns a `SessionBackends`. Only
+    # the command line reads it -- `Kingfisher` takes its backend as an argument -- and
+    # it is what lets `kingfisher sessions` and `reap` see sessions a deployment's own
+    # backend keeps somewhere else.
+    backend_factory: str | None = None
     # Signs the pinned agent, the conversation and a paused turn, so kingfisher can
     # tell what it wrote from what the agent's shell rewrote. `None` is allowed only
     # where kingfisher's own sandbox keeps the shell out of `.harness` -- `Kingfisher`
@@ -398,17 +401,6 @@ class Config:
     # reads one answer. Measured: with it on, a two-turn workspace carries a ~0.4MB
     # database it never reads back.
     conversation_enabled: bool = True
-
-    def __post_init__(self) -> None:
-        """Refuse a deployment that named its session store twice."""
-        if self.session_store is not None and self.session_store_factory is not None:
-            msg = (
-                "session storage is configured twice: KINGFISHER_SESSION_STORE names "
-                f"{str(self.session_store)!r} and KINGFISHER_SESSION_STORE_FACTORY names "
-                f"{self.session_store_factory!r}. Set one -- the factory for a store that "
-                "is not a directory on this host, the directory for one that is"
-            )
-            raise ConfigError(msg)
 
     @property
     def claim_stale_after(self) -> float:

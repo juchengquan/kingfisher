@@ -204,9 +204,9 @@ def test_a_delegates_gate_is_answered_the_same_way(cfg, session_dir):
     """Approving it has to run the delegate's call, not the parent's -- the resume
     re-enters a nested graph, which is the part a top-level test cannot show.
     """
-    from kingfisher import default_backend
+    from kingfisher import backend_at
 
-    kf = Kingfisher(cfg, graph=_parent_with("scribe", backend=default_backend(cfg, session_dir)))
+    kf = Kingfisher(cfg, graph=_parent_with("scribe", backend=backend_at(cfg, session_dir)))
     paused = kf.run(Request("delegate it", session_id=session_dir.name))
     assert paused.pending, "the delegate never paused"
 
@@ -225,9 +225,9 @@ def test_a_delegates_gate_is_answered_the_same_way(cfg, session_dir):
 
 def test_rejecting_a_delegates_call_leaves_it_unrun(cfg, session_dir):
     """The half a test asserting only on the turn's end would miss."""
-    from kingfisher import default_backend
+    from kingfisher import backend_at
 
-    kf = Kingfisher(cfg, graph=_parent_with("scribe", backend=default_backend(cfg, session_dir)))
+    kf = Kingfisher(cfg, graph=_parent_with("scribe", backend=backend_at(cfg, session_dir)))
     paused = kf.run(Request("delegate it", session_id=session_dir.name))
 
     kf.run(

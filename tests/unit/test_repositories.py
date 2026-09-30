@@ -75,10 +75,6 @@ def test_each_local_repository_satisfies_the_port_for_its_kind(catalogue):
 #: Reads of a repository member's name that are not reads of a repository, each with
 #: what they are reading instead. The rule matches by name, so these are the collisions.
 NOT_A_REPOSITORY = {
-    ("kingfisher/application/origins.py", "root"): (
-        "a `SessionStore`, which a deployment does implement, and which may have no "
-        "directory at all"
-    ),
 }
 
 

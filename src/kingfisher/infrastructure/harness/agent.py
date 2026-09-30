@@ -34,7 +34,7 @@ from kingfisher.infrastructure.harness.activation import (
 )
 from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
-    default_backend,
+    backend_at,
     skills_sources,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
@@ -67,6 +67,7 @@ from kingfisher.infrastructure.harness.tools import (
 )
 from kingfisher.infrastructure.prompting import system_prompt
 from kingfisher.infrastructure.sandbox.confinement import EXTERNAL
+from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.kinds.agents.spec import AgentError, AgentSpec
 from kingfisher.kinds.subagents.spec import RunOn
 from kingfisher.kinds.tools.spec import Found
@@ -224,7 +225,7 @@ def _backend_for(
     if backend is not None:
         built = backend
     elif session_dir is not None:
-        built = default_backend(cfg, session_dir, catalogue=catalogue)
+        built = backend_at(cfg, session_dir, catalogue=catalogue)
     else:
         msg = "build_agent needs either a session_dir to root a backend at, or a backend"
         raise ValueError(msg)
@@ -329,10 +330,6 @@ def builtin_tool_names(
     hand the decision to somebody else.
     """
     import tempfile  # noqa: PLC0415 -- one caller, and only on the branch that probes
-
-    from kingfisher.infrastructure.workspace import (  # noqa: PLC0415
-        ensure_session_layout,
-    )
 
     with tempfile.TemporaryDirectory(prefix="kingfisher-builtin-") as scratch:
         return registered_tools(

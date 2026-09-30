@@ -17,12 +17,8 @@ from kingfisher.domain.session import (
     known,
     sessions_root,
 )
-from kingfisher.infrastructure.session_store import restore_into
 from kingfisher.infrastructure.workspace import (
     agent_started_with,
-    make_session_dirs,
-    scaffold_memory,
-    session_bytes,
 )
 from kingfisher.kinds.agents.reading import read
 
@@ -32,7 +28,6 @@ if TYPE_CHECKING:
 
     from kingfisher.config import Config
     from kingfisher.domain.access import Held, SourceIds
-    from kingfisher.domain.ports import SessionRoot, SessionStore
 
 
 class Sessions:
@@ -43,18 +38,17 @@ class Sessions:
     #: contract nothing checks, which is the shape this repository distrusts.
     cfg: Config
     access: SourceIds | None
-    dirs: Any
     workspace: Path
-    sessions_store: SessionStore | None
-    session_root: SessionRoot
+    #: Where the sessions are: which there are, how big, when each was used.
+    _backends: Any
     #: What the instance keeps about one session, through that session's backend.
     _harness_at: Callable[..., Any]
 
-    def _session_id_for(self, request: Request | Resume, root: Path) -> str:
+    def _session_id_for(self, request: Request | Resume) -> str:
         """Mint an id, or accept one that already names a session."""
         if request.session_id is None:
             return uuid4().hex
-        if not self._exists(request.session_id, root):
+        if not self._exists(request.session_id):
             raise self._unknown_session(request.session_id)
         return request.session_id
 
@@ -80,17 +74,15 @@ class Sessions:
             return True
         return reaches(read(kept).source_ids, held)
 
-    def _exists(self, session_id: str, root: Path) -> bool:
-        """Whether this id names a session, by directory or by store."""
-        if session_id in self.dirs.children(root):
-            return True
-        return self.sessions_store is not None and self.sessions_store.knows(session_id)
+    def _exists(self, session_id: str) -> bool:
+        """Whether this id names a session the deployment's backends hold."""
+        return any(name == session_id for name, _ in self._backends.sessions(self.cfg))
 
     def _refuse_if_over_budget(self, session: Session) -> None:
         """Stop a session that is already too large from growing further."""
         if self.cfg.session_max_bytes is None:
             return
-        held = session_bytes(session.directory)
+        held = self._backends.size(self.cfg, session.id)
         if held > self.cfg.session_max_bytes:
             msg = (
                 f"session {session.id} holds {held} bytes, over the "
@@ -98,13 +90,17 @@ class Sessions:
             )
             raise QuotaExceededError(msg)
 
+    def session_size(self, session_id: str) -> int:
+        """How many bytes one session holds, as its backend counts them."""
+        return self._backends.size(self.cfg, session_id)
+
     def sessions(self) -> tuple[SessionInfo, ...]:
         """Every session in this workspace, most recently used first.
 
         One `listing` call, measured at 0.22ms for fifty sessions, because it is the
         same call `reap` already makes.
         """
-        return known(self.dirs.listing(sessions_root(self.workspace)))
+        return known(self._backends.sessions(self.cfg))
 
     def session(self, session_id: str, *, source_ids: Held | None = None) -> SessionInfo | None:
         """One session, or `None` when this caller has no such session.
@@ -129,19 +125,8 @@ class Sessions:
         harness = self._harness_at(session_id, directory)
         return found if self._reaches_session(harness, held) else None
 
-    def _ready(self, session: Session) -> Session:
-        """A session with its layout made and its files back, wherever it is."""
-        make_session_dirs(session.directory)
-        if self.sessions_store is not None:
-            restore_into(self.sessions_store, session.id, session.directory)
-        # Last, so a session's own memory beats the scaffold rather than losing to
-        # it. `scaffold_memory` carries what the other order costs.
-        scaffold_memory(session.directory)
-        return session
-
     @contextmanager
     def _held_session(self, request: Request | Resume) -> Iterator[Session]:
-        """This turn's session, in a directory held for exactly as long."""
-        session_id = self._session_id_for(request, sessions_root(self.workspace))
-        with self.session_root.hold(session_id) as directory:
-            yield self._ready(Session.at(session_id, directory, self.dirs))
+        """This turn's session. Its backend makes it, the first time it is asked for it."""
+        session_id = self._session_id_for(request)
+        yield Session(id=session_id, directory=sessions_root(self.workspace) / session_id)

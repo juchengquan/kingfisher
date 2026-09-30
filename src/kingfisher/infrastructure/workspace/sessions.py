@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import shutil
-from collections.abc import Iterator
-from contextlib import contextmanager, suppress
+from contextlib import suppress
 from pathlib import Path
 
-from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.workspace.permissions import keep_tmp_private, unlock_and_retry
 from kingfisher.layout import (
     AGENTS_SCAFFOLD,
-    CLAIM,
     HARNESS,
     MEMORY,
     SESSION_DIRS,
@@ -19,10 +16,9 @@ from kingfisher.layout import (
 
 
 class LocalSessionDirs:
-    """`SessionDirs` over the real filesystem."""
-
-    def ensure(self, path: Path) -> None:
-        path.mkdir(parents=True, exist_ok=True)
+    """The rules about session directories on this host: make one exclusively, mark
+    one used, list them, remove one. What `DefaultBackend` and the turn lock use.
+    """
 
     def create_exclusive(self, path: Path) -> bool:
         try:
@@ -37,11 +33,6 @@ class LocalSessionDirs:
         # a race, and the turn will fail on its own next read.
         with suppress(OSError):
             path.touch(exist_ok=True)
-
-    def children(self, path: Path) -> tuple[str, ...]:
-        if not path.is_dir():
-            return ()
-        return tuple(p.name for p in path.iterdir() if p.is_dir())
 
     def listing(self, path: Path) -> tuple[tuple[str, float], ...]:
         if not path.is_dir():
@@ -58,18 +49,7 @@ class LocalSessionDirs:
 
 
 def ensure_session_layout(session_dir: Path) -> Path:
-    """Create one session's layout. Idempotent.
-
-    For a caller with no store to read. Where there is one, the two halves go
-    either side of it -- see `scaffold_memory` for what the order is protecting.
-    """
-    session_dir = make_session_dirs(session_dir)
-    scaffold_memory(session_dir)
-    return session_dir
-
-
-def make_session_dirs(session_dir: Path) -> Path:
-    """Every directory a session holds. Idempotent."""
+    """Every directory a session holds, and its memory scaffolded. Idempotent."""
     session_dir = Path(session_dir).expanduser().resolve()
     for name in (*SESSION_DIRS, HARNESS):
         (session_dir / name).mkdir(parents=True, exist_ok=True)
@@ -77,7 +57,8 @@ def make_session_dirs(session_dir: Path) -> Path:
     # Asked for rather than done here: `permissions` is the one module in this
     # package that changes a mode, and it says why this one is set at all.
     keep_tmp_private(session_dir)
-
+    # Last, so a session's own memory beats the scaffold rather than losing to it.
+    scaffold_memory(session_dir)
     return session_dir
 
 
@@ -86,40 +67,10 @@ def scaffold_memory(session_dir: Path) -> None:
 
     Scaffolded rather than empty: the memory prompt directs the agent to save
     knowledge with `edit_file`, which replaces existing text.
-
-    **After a store has been read, never before it.** A scaffold written first is
-    a file `restore_into` then skips as already present, so the agent opens the
-    turn with an empty memory and `keep_from` saves that scaffold over what the
-    store had kept -- the session's own memory, destroyed on the turn after it
-    was written. A directory that survives between turns hides this, because the
-    scaffold is written once when the session is created and the branch below is
-    false forever after; it is a `SessionRoot` handing back a fresh tree that
-    reaches it every turn.
     """
     agents_md = Path(session_dir) / MEMORY / "AGENTS.md"
     if not agents_md.exists() or not agents_md.read_text(encoding="utf-8").strip():
         agents_md.write_text(AGENTS_SCAFFOLD, encoding="utf-8")
-
-
-class LocalSessionRoot:
-    """A session's directory, on this machine, staying where it is."""
-
-    def __init__(self, workspace: Path) -> None:
-        self.workspace = Path(workspace)
-
-    @contextmanager
-    def hold(self, session_id: str) -> Iterator[Path]:
-        yield sessions_root(self.workspace) / session_id
-
-
-def claim_path(session_dir: Path) -> Path:
-    """Where one session's turn slot is taken.
-
-    Here rather than in `domain.session`, which takes it as an argument: where a
-    thing sits is what this package answers, and the domain does not import
-    `layout` -- the reason `layout.py` was moved out of it.
-    """
-    return Path(session_dir) / HARNESS / CLAIM
 
 
 def session_bytes(session_dir: Path) -> int:

@@ -37,10 +37,7 @@ _EXPORTS = {
     "seed": "kingfisher.infrastructure.workspace.seeding",
     "source_ids_named": "kingfisher.infrastructure.workspace.seeding",
     "LocalSessionDirs": "kingfisher.infrastructure.workspace.sessions",
-    "LocalSessionRoot": "kingfisher.infrastructure.workspace.sessions",
-    "claim_path": "kingfisher.infrastructure.workspace.sessions",
     "ensure_session_layout": "kingfisher.infrastructure.workspace.sessions",
-    "make_session_dirs": "kingfisher.infrastructure.workspace.sessions",
     "scaffold_memory": "kingfisher.infrastructure.workspace.sessions",
     "session_bytes": "kingfisher.infrastructure.workspace.sessions",
     "AGENT_SNAPSHOT": "kingfisher.infrastructure.workspace.snapshots",
@@ -61,20 +58,17 @@ __all__ = [
     "DataPlacement",
     "Destination",
     "LocalSessionDirs",
-    "LocalSessionRoot",
     "MemoryBacking",
     "Seeded",
     "Skipped",
     "Source",
     "agent_started_with",
-    "claim_path",
     "definitions_source",
     "destination_hint",
     "ensure_layout",
     "ensure_session_layout",
     "is_new_workspace",
     "kinds_at",
-    "make_session_dirs",
     "memory_backing",
     "middleware_named",
     "protect_data",
@@ -115,13 +109,8 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.seeding import seed as seed
     from kingfisher.infrastructure.workspace.seeding import source_ids_named as source_ids_named
     from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs as LocalSessionDirs
-    from kingfisher.infrastructure.workspace.sessions import LocalSessionRoot as LocalSessionRoot
-    from kingfisher.infrastructure.workspace.sessions import claim_path as claim_path
     from kingfisher.infrastructure.workspace.sessions import (
         ensure_session_layout as ensure_session_layout,
-    )
-    from kingfisher.infrastructure.workspace.sessions import (
-        make_session_dirs as make_session_dirs,
     )
     from kingfisher.infrastructure.workspace.sessions import scaffold_memory as scaffold_memory
     from kingfisher.infrastructure.workspace.sessions import session_bytes as session_bytes

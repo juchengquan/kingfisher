@@ -1689,9 +1689,9 @@ def test_the_compaction_example_keeps_what_it_threw_away(shipped, cfg, session_d
     """
     import asyncio
 
-    from kingfisher.infrastructure.harness.backend import default_backend
+    from kingfisher.infrastructure.harness.backend import backend_at
 
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
     spec = LocalAgentRepository(shipped / "agents").specs["researcher"]
     cls = _compaction(shipped)
     # Its own `defaults`, the way the build path applies them. Values written here

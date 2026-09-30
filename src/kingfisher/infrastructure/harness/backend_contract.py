@@ -229,3 +229,89 @@ def refuse_unusable_backend(backend: Any) -> None:
         route_coverage(lambda: backend)
     except AssertionError as unusable:
         raise ConfigError(str(unusable)) from unusable
+
+
+#: Session ids the backends checks use. Two, because the property that matters most is
+#: that they do not collide.
+CONTRACT_SESSIONS = ("kingfisher-contract-a", "kingfisher-contract-b")
+
+
+def _ids(listing: Any) -> set[str]:
+    return {name for name, _ in listing}
+
+
+def a_session_asked_for_is_listed(make: Callable[[], Any]) -> None:
+    """`kingfisher sessions` and `reap` see what the listing says, and nothing else."""
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    backends(cfg, one)
+    if one not in _ids(backends.sessions(cfg)):
+        msg = f"a backend was built for {one!r}, and `sessions` does not list it"
+        raise AssertionError(msg)
+
+
+def two_sessions_are_kept_apart(make: Callable[[], Any]) -> None:
+    """The one that matters most. Every path is legal and each session reads the other's
+    files as its own, so nothing else would notice.
+    """
+    cfg, backends = make()
+    one, other = CONTRACT_SESSIONS
+    backends(cfg, one).upload_files([("/derived/kept-apart", b"one's")])
+    (seen,) = backends(cfg, other).download_files(["/derived/kept-apart"])
+    if seen.error is None:
+        msg = f"{other!r} reads {one!r}'s /derived: two sessions share one filesystem"
+        raise AssertionError(msg)
+
+
+def a_session_is_there_on_the_next_turn(make: Callable[[], Any]) -> None:
+    """Each turn builds its backend again. What one turn wrote, the next must find."""
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    backends(cfg, one).upload_files([("/derived/again", b"still here")])
+    (seen,) = backends(cfg, one).download_files(["/derived/again"])
+    if seen.content != b"still here":
+        msg = f"a second backend for {one!r} did not find what the first wrote: {seen!r}"
+        raise AssertionError(msg)
+
+
+def a_claim_is_exclusive(make: Callable[[], Any]) -> None:
+    """Two turns in one session share a conversation and the last write wins; the
+    claim is what refuses the second. A `write` that overwrites would let both take it.
+    """
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    first, second = backends(cfg, one), backends(cfg, one)
+    if not first.claim("contract-claim", stale_after=3600):
+        msg = "a claim nobody held was refused"
+        raise AssertionError(msg)
+    if second.claim("contract-claim", stale_after=3600):
+        msg = "a second backend for the same session took a claim the first still holds"
+        raise AssertionError(msg)
+    first.release("contract-claim")
+    if not second.claim("contract-claim", stale_after=3600):
+        msg = "a released claim could not be taken again"
+        raise AssertionError(msg)
+    second.release("contract-claim")
+
+
+def a_deleted_session_is_gone(make: Callable[[], Any]) -> None:
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    backends(cfg, one)
+    failure = backends.delete(cfg, one)
+    if failure is not None or one in _ids(backends.sessions(cfg)):
+        msg = f"deleting {one!r} answered {failure!r} and left it listed"
+        raise AssertionError(msg)
+
+
+#: Every check a deployment's `SessionBackends` must pass. `make` returns a fresh
+#: `(Config, backends)` pair, because every question a backends object answers is
+#: about one deployment's sessions. These write files, as `filesystem_consistency`,
+#: `shell_denied` and `host_path_refusal` do.
+SESSION_BACKENDS_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (
+    two_sessions_are_kept_apart,
+    a_session_is_there_on_the_next_turn,
+    a_claim_is_exclusive,
+    a_session_asked_for_is_listed,
+    a_deleted_session_is_gone,
+)

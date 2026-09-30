@@ -1770,15 +1770,10 @@ WITNESSES: dict[str, str] = {
     # that page was edited.
     "UNSCOPED": "document",
     "RunOn": "document",
-    # `guides/ports.md` writes `from kingfisher import SESSION_STORE_CONTRACT` --
-    # a deployment runs it against a store of its own, so it exists for nobody
-    # else.
-    "SESSION_STORE_CONTRACT": "document",
-    # The other two kits, and the type a runner returns. The same page writes
-    # all three; `CommandResult` is the one that would have been missed, because
+    # The runner's kit, and the type a runner returns. `guides/ports.md` writes
+    # both; `CommandResult` is the one that would have been missed, because
     # nothing *imports* it in a snippet -- a runner's `run` returns one, so a
     # deployment cannot write the port without it and had no public spelling.
-    "SESSION_ROOT_CONTRACT": "document",
     "COMMAND_RUNNER_CONTRACT": "document",
     # The same page writes `from kingfisher import BACKEND_CONTRACT`, beside the
     # seam it is the way to check. Nothing in this repository runs it against a
@@ -1812,10 +1807,12 @@ WITNESSES: dict[str, str] = {
     "Origin": "embedder",
     # The streaming half of `run`, which is documented; the two are one decision.
     "stream": "embedder",
-    # A directory of sessions, and the port it satisfies. The subject of a
-    # standing proposal about deployments naming their own store, which is a
-    # reason to leave it reachable while that argument is live.
-    "LocalSessionStore": "embedder",
+    # `guides/ports.md` shows a deployment building on the default by subclassing
+    # it, and building a backend for a directory of its own with `backend_at`, and
+    # checking what it wrote with the kit beside `BACKEND_CONTRACT`.
+    "DefaultBackend": "document",
+    "backend_at": "document",
+    "SESSION_BACKENDS_CONTRACT": "document",
 }
 
 
@@ -2342,13 +2339,12 @@ LIGHT_EXPORTS = frozenset({
     # Light, and it has to stay light: a deployment runs this from its own test
     # suite, and a kit that pulled three provider SDKs in to check four methods
     # over bytes would be a cost paid on every CI run for nothing. `testing`
-    # imports `domain.references` and the standard library, and no test
-    # framework either -- see its docstring for why that one is deliberate.
-    "SESSION_STORE_CONTRACT",
-    # The remaining two kits and the result type a runner builds. Light by the
-    # same route: `testing` reaches `domain.references` and the standard
-    # library, and `CommandResult` is a frozen dataclass in `domain.ports`.
-    "SESSION_ROOT_CONTRACT", "COMMAND_RUNNER_CONTRACT", "CommandResult",
+    # imports the standard library and no test framework either -- see its
+    # docstring for why that one is deliberate.
+    # The runner's kit and the result type a runner builds. Light by the same
+    # route: `testing` reaches the standard library, and `CommandResult` is a
+    # frozen dataclass in `domain.ports`.
+    "COMMAND_RUNNER_CONTRACT", "CommandResult",
     "ensure_layout", "config_from_env",
     # What a `KINGFISHER_ADAPTERS_FACTORY` returns. Light because the setting is read
     # by `config_from_env`, and a row names its class as a string for exactly this.
@@ -2385,9 +2381,6 @@ LIGHT_EXPORTS = frozenset({
     # this one is asked by `doctor`, by a listing, and by anybody debugging a
     # definition that will not load.
     "Origins", "Origin",
-    # A directory of sessions, and the port it satisfies. Neither imports
-    # anything a deployment does not already have -- see `session_store`.
-    "LocalSessionStore",
     # Reads `/proc/mounts` and two cgroup files. Nothing imported, and
     # all-`None` off Linux rather than an error.
     "memory_backing",
@@ -2400,11 +2393,6 @@ LIGHT_EXPORTS = frozenset({
     # `<workspace>/sessions`. A `Path` join in `domain.session`, which reaches
     # `domain.ports` and the standard library.
     "sessions_root",
-    # What one session holds, which `sessions` puts in a column beside it. A
-    # tree walk in `infrastructure.workspace.sessions`, which reaches `shutil`,
-    # `domain.session` and `layout` -- no provider SDK anywhere near it, and the
-    # alternative was the command counting bytes its own way.
-    "session_bytes",
     # A renderer and a sentence. Both are what a consumer needed and neither
     # imports anything -- the cheapest names on this list.
     "offered", "SKILL_LAYOUT", "DEFINITION_KINDS", "SEED_HINT", "split_reference",
@@ -2456,6 +2444,13 @@ HEAVY_EXPORTS = frozenset({
     # rather than at the top of `health`, where every other verb would pay it.
     "unrunnable_delegates",
     "Kingfisher", "run", "stream",
+    # The default's class and its per-directory builder, and the command line's way to
+    # the backends a setting names: all three are the backend module, which is
+    # deepagents by definition, as `default_backend` below is.
+    "DefaultBackend", "backend_at", "configured_backend",
+    # Its companion kit checks what a deployment's backends build, which are backends
+    # deepagents has to accept.
+    "SESSION_BACKENDS_CONTRACT",
     # The one kit that is heavy, and unavoidably: the other four describe ports a
     # deployment satisfies without knowing deepagents exists, and this one checks
     # an object deepagents has to accept.

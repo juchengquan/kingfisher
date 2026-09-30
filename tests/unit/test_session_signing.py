@@ -7,7 +7,14 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import Kingfisher, Request, SessionTamperedError, default_backend
+from kingfisher import (
+    DefaultBackend,
+    Kingfisher,
+    Request,
+    SessionTamperedError,
+    backend_at,
+    default_backend,
+)
 from kingfisher.config import ConfigError, SessionKey
 from kingfisher.domain.request import Decision, Resume
 from kingfisher.domain.transcript import Message
@@ -162,15 +169,15 @@ def test_a_rewritten_pause_is_not_resumed(cfg):
 # -- when a key is required ---------------------------------------------------
 
 
-def _wrapping_the_default(cfg, session_dir, /, *, catalogue=None, runner=None):
-    return default_backend(cfg, session_dir, catalogue=catalogue, runner=runner)
+class _WrappingTheDefault(DefaultBackend):
+    """Returns exactly what the default does, and is still not the default."""
 
 
 @pytest.mark.parametrize(
     ("wiring", "because"),
     [
         (lambda cfg: {"graph": StubAgent("ok")}, "pre-built graph"),
-        (lambda cfg: {"backend": _wrapping_the_default}, "not default_backend itself"),
+        (lambda cfg: {"backend": _WrappingTheDefault()}, "not default_backend itself"),
         (lambda cfg: {"backend": default_backend, "runner": lambda d: None}, "CommandRunner"),
     ],
     ids=["graph", "wrapped-default", "runner"],
@@ -227,7 +234,7 @@ def test_the_key_never_reaches_the_shell(cfg, session_dir, monkeypatch):
     keyed = replace(cfg, session_key=SessionKey(secret.encode()))
 
     assert secret not in " ".join(shell_env(keyed, session_dir).values())
-    seen = default_backend(keyed, session_dir).execute("env").output
+    seen = backend_at(keyed, session_dir).execute("env").output
     # The control: the command ran and printed an environment, so an absence is one.
     assert "TMPDIR=" in seen
     assert secret not in seen
@@ -240,7 +247,7 @@ def test_the_kit_catches_a_shell_that_can_write_the_harness(cfg, session_dir):
     unfenced = replace(cfg, shell_sandbox="off")
 
     with pytest.raises(AssertionError, match=r"under /\.harness") as caught:
-        shell_denied(lambda: default_backend(unfenced, session_dir))
+        shell_denied(lambda: backend_at(unfenced, session_dir))
     assert "/data" not in str(caught.value), "the permission bits stopped holding /data"
 
 

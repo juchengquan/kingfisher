@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -187,68 +186,6 @@ class ThreadStore(Protocol):
     def delete_thread(self, thread_id: str) -> None: ...
 
 
-@runtime_checkable
-class SessionDirs(Protocol):
-    """The directories a session and its turns live in."""
-
-    def ensure(self, path: Path) -> None:
-        """Create `path` and any parents. Succeeds if it already exists."""
-        ...
-
-    def create_exclusive(self, path: Path) -> bool:
-        """Create `path`, or return False if something already holds the name."""
-        ...
-
-    def mark_used(self, path: Path) -> None:
-        """Record that `path` was used just now.
-
-        A port because the rule depends on it. `retention.expired` reads one
-        timestamp to decide a session is idle, and a turn writes *inside* a
-        session, which on an ordinary filesystem leaves the session's own
-        timestamp alone. Measured: a session was still 10,000s idle by that clock
-        immediately after a turn completed in it.
-        """
-        ...
-
-    def children(self, path: Path) -> tuple[str, ...]:
-        """Names of the directories directly inside `path`."""
-        ...
-
-    def listing(self, path: Path) -> tuple[tuple[str, float], ...]:
-        """`(name, modified_at)` for each directory inside `path`."""
-        ...
-
-    def remove_tree(self, path: Path) -> str | None:
-        """Delete `path` and its contents. Returns a reason on failure."""
-        ...
-
-
-@runtime_checkable
-class SessionStore(Protocol):
-    """Where a session's files live when the machine may not keep them.
-
-    **A local directory is a perfectly good implementation of this port.** What the
-    constraint forbids is kingfisher *assuming* a local disk, not a deployment
-    choosing one.
-    """
-
-    def fetch(self, session_id: str) -> Mapping[str, bytes]:
-        """Everything this session kept, keyed by path relative to its root."""
-        ...
-
-    def save(self, session_id: str, files: Mapping[str, bytes]) -> None:
-        """Keep these files against this session, replacing any it already had."""
-        ...
-
-    def knows(self, session_id: str) -> bool:
-        """Whether this store holds anything for this session."""
-        ...
-
-    def forget(self, session_id: str) -> None:
-        """Drop everything kept for this session. Idempotent."""
-        ...
-
-
 @dataclass(frozen=True)
 class CommandResult:
     """What running one command produced."""
@@ -292,24 +229,6 @@ class CommandRunner(Protocol):
         """
         ...
 
-
-class SessionRoot(Protocol):
-    """Where one session's files are, for the length of one turn.
-
-    The one rule that follows: **a symlink out of the root is refused**, because that
-    containment check resolves before it compares. A session has to be a real
-    directory, or a mount that presents as one.
-
-    **Nothing here is ever closed by kingfisher.** Whoever constructs one owns
-    shutting it down: kingfisher does not decide when the service stops, so it cannot
-    decide when a connection to the storage does. Anything set up per *turn* belongs
-    inside `hold`; anything set up when the provider was *built* is released by the
-    deployment that built it.
-    """
-
-    def hold(self, session_id: str) -> AbstractContextManager[Path]:
-        """The directory this session's turn runs in, for as long as it runs."""
-        ...
 
 
 @runtime_checkable
