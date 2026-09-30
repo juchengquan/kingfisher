@@ -112,15 +112,14 @@ def test_a_turn_cut_short_for_steps_is_logged_as_having_ended(cfg):
     false, a bounded turn reads in the log like a crash, and the two want
     different things done about them.
     """
-    import json
+    from tests.conftest import RecordedEvents
 
-    from kingfisher.infrastructure.harness.runlog import log_path
+    sink = RecordedEvents()
+    Kingfisher(
+        cfg, graph=RunawayAgent(), threads=StubCheckpointer(), run_events=sink
+    ).run(Request("go"))
 
-    result = Kingfisher(cfg, graph=RunawayAgent(), threads=StubCheckpointer()).run(Request("go"))
-
-    written = log_path(result.session_dir).read_text(encoding="utf-8")
-    ended = [json.loads(line) for line in written.splitlines() if line.strip()]
-    ends = [record for record in ended if record["event"] == "run_end"]
+    ends = sink.named("run_end")
     assert ends and ends[-1]["ok"] is True
 
 

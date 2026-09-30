@@ -102,7 +102,7 @@ from kingfisher.infrastructure.harness.declared_middleware import (
     refuse_unbuildable_middleware,
 )
 from kingfisher.infrastructure.harness.interpreter import release_interpreter
-from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
+from kingfisher.infrastructure.harness.runlog import LoggedRunEvents, RunLogger
 from kingfisher.infrastructure.harness.session_files import (
     collect_artifacts,
     local_files,
@@ -145,6 +145,7 @@ if TYPE_CHECKING:
 
     from kingfisher.domain.ports import (
         CommandRunner,
+        RunEvents,
         SessionDirs,
         SessionRoot,
         ThreadStore,
@@ -261,6 +262,7 @@ class Kingfisher(Sessions, Disposal):
         grants: Capabilities | None = None,
         middlewares: Mapping[str, MiddlewareFactory] | None = None,
         graph: Any | None = None,
+        run_events: RunEvents | None = None,
     ) -> None:
         self.cfg = cfg or config_module.config_from_env()
         config_module.enforce_local_only_tracing()
@@ -340,6 +342,12 @@ class Kingfisher(Sessions, Disposal):
             )
             raise TypeError(msg)
         self._backend = backend
+        # Where each turn's record of itself goes. The default is the `kingfisher.run`
+        # logger, which the default logging configuration discards: a deployment
+        # decides whether it keeps them by configuring logging or by passing a sink.
+        self.run_events: RunEvents = (
+            run_events if run_events is not None else LoggedRunEvents()
+        )
         # Three shapes, and the difference is who owns the connection. An instance is a
         # shared store the deployment made and manages; a callable is a factory this
         # service calls per session and closes after the turn; `None` means the default,
@@ -848,18 +856,19 @@ class Kingfisher(Sessions, Disposal):
         # so there is nothing to be atomic about any more.
         turn = session.allocate_turn(request.turn_id)
 
-        logger = JsonlRunLogger(
-            log_path(session.directory),
+        logger = RunLogger(
+            self.run_events,
             model=cfg.models.default,
             endpoint=cfg.models.resolve()[0].endpoint,
             session_id=session_id,
+            turn_id=turn.id,
         )
-        # What this turn is: a task, or the answers to one already asked. The log
-        # line says which, because a resume with a task-shaped line in the run log
-        # reads as a second request for work that was never re-requested.
+        # What this turn is: a task, or the answers to one already asked. The event
+        # says which, because a resume with a task-shaped `run_start` reads as a
+        # second request for work that was never re-requested.
         asked = getattr(request, "task", "")
         started = asked or f"resuming {len(getattr(request, 'decisions', ()))} decision(s)"
-        logger.run_start(started, str(session.directory))
+        logger.run_start(started)
 
         return Prepared(
             graph=admitted.graph,
@@ -921,10 +930,9 @@ class Kingfisher(Sessions, Disposal):
             # agent the request named -- so "a session is fixed to the agent it
             # opened with" held on one machine and quietly failed across two.
             #
-            # The claim and the run log stay behind, and deliberately. A restored
-            # claim would make the session look busy for `claim_stale_after` --
-            # minutes -- before anyone could take the slot; the log is diagnostics
-            # that would be re-uploaded whole every turn as it grows.
+            # The claim stays behind, and deliberately. A restored claim would make
+            # the session look busy for `claim_stale_after` -- minutes -- before
+            # anyone could take the slot.
             keep_from(
                 self.sessions_store,
                 prepared.session.id,
@@ -956,7 +964,6 @@ class Kingfisher(Sessions, Disposal):
                 turn_id=prepared.turn.id,
                 answer=answer,
                 session_dir=prepared.session.directory,
-                log_path=log_path(prepared.session.directory),
                 # Collected after the graph has finished, so it reflects what
                 # the turn actually left behind -- including what the shell
                 # wrote, which no file tool would have reported.

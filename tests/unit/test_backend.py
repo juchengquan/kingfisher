@@ -11,7 +11,6 @@ from kingfisher.infrastructure.harness.backend import (
     default_backend,
     shell_env,
 )
-from kingfisher.infrastructure.harness.runlog import log_path
 from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
@@ -206,12 +205,6 @@ def test_scratch_is_created_private(cfg, session_dir):
     it -- and `ensure_session_layout` says so where it does this.
     """
     assert (session_dir / "scratchpad").stat().st_mode & 0o077 == 0
-
-
-def test_the_run_log_is_the_session_s_own(session_dir):
-    """It was `<state_dir>/runs/<id>.jsonl`, which nothing deleted when the session
-    went: one file per session that had ever existed, kept for good."""
-    assert log_path(session_dir) == session_dir / ".harness" / "runlog.jsonl"
 
 
 def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir):

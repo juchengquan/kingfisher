@@ -312,12 +312,12 @@ host.
 rather than the backend itself. deepagents applies a turn's permissions inside
 `read_file` and `write_file`, not in the backend under them, so a tool handed the
 backend bare would write into `/skills` — the catalogue every session shares — and
-read the run log under `/.harness`, for a model that was refused both. Through the
+read the conversation under `/.harness`, for a model that was refused both. Through the
 wrapper the same paths are refused the same way:
 
 | Asked for | Comes back as |
 | --- | --- |
-| a path the turn may not read or write | the result's `error` — `permission denied for read on /.harness/run.jsonl` |
+| a path the turn may not read or write | the result's `error` — `permission denied for read on /.harness/transcript.jsonl` |
 | a path that climbs out with `..` | the result's `error`, the same way |
 | `ls`, `glob` or `grep` over a folder | the entries that may be read, and no sign of the rest |
 | `delete` on a folder | refused if anything under it may not be written, not only the folder |

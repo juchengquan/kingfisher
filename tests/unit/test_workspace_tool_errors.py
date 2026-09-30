@@ -329,16 +329,17 @@ def test_a_helper_below_a_delegate_is_guarded_too(cfg, session_dir):
     assert out["messages"][-1].content == "done"
 
 
-def test_a_converted_failure_still_reaches_the_run_log(cfg, session_dir, tmp_path):
+def test_a_converted_failure_still_reaches_the_run_log(cfg, session_dir):
     """Catching it for the model does not hide it from whoever reads afterwards."""
-    from kingfisher.infrastructure.harness.runlog import JsonlRunLogger
+    from kingfisher.infrastructure.harness.runlog import RunLogger
+    from tests.conftest import RecordedEvents
 
-    log = tmp_path / "run.jsonl"
+    sink = RecordedEvents()
     out = _graph_with_a_failing_tool(cfg, session_dir).invoke(
         {"messages": [{"role": "user", "content": "go"}]},
         config={
             "callbacks": [
-                JsonlRunLogger(log, model="m", endpoint="e", session_id="s")
+                RunLogger(sink, model="m", endpoint="e", session_id="s", turn_id="t")
             ]
         },
     )
@@ -346,7 +347,4 @@ def test_a_converted_failure_still_reaches_the_run_log(cfg, session_dir, tmp_pat
     assert [m for m in out["messages"] if isinstance(m, ToolMessage) and m.status == "error"], (
         "the model stopped being told, which is what this guard is for"
     )
-    assert log.exists(), "the run produced no log at all"
-    assert '"tool_error"' in log.read_text(encoding="utf-8"), (
-        "the run log lost its only record of a tool that failed"
-    )
+    assert sink.named("tool_error"), "the run log lost its only record of a tool that failed"

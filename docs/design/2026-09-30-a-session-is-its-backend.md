@@ -1,8 +1,8 @@
 # A session is its backend
 
 **Status:** proposed. **Slice 1 landed**: a request's data is placed, and a
-turn's artifacts collected and fetched, through the session's backend. Slices 2 to
-5 are not built. Every question it raised was settled in review on 2026-09-30, and
+turn's artifacts collected and fetched, through the session's backend. **Slice 3
+landed**: the run log is `RunEvents`. Slices 2, 4 and 5 are not built. Every question it raised was settled in review on 2026-09-30, and
 the answers are under *Settled in review* with their reasons. It stays here until
 its slices land or it is withdrawn.
 **Date:** 2026-09-30.
@@ -121,8 +121,10 @@ in every stream event as well.
 
 ### The run log stops being session state
 
-Nothing in kingfisher reads `runlog.jsonl`. It reaches a caller only as
-`RunResult.log_path`, a local `Path`. It is also the one harness file written by
+Nothing in the library reads `runlog.jsonl`. It reaches a caller only as
+`RunResult.log_path`, a local `Path`. *(Not quite: the live driver in
+`tests/integration/` read it back for its usage line. Slice 3 found that and gave
+the driver a sink of its own to total from.)* It is also the one harness file written by
 appending, which the backend cannot do, and the only one whose value is highest on
 a turn that crashes before a buffer is flushed.
 

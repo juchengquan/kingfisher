@@ -310,3 +310,25 @@ class SessionRoot(Protocol):
     def hold(self, session_id: str) -> AbstractContextManager[Path]:
         """The directory this session's turn runs in, for as long as it runs."""
         ...
+
+
+@runtime_checkable
+class RunEvents(Protocol):
+    """Where a record of what each turn did goes: its start and end, every model call,
+    every tool call.
+
+    Not session state. It is the one record written as the turn runs rather than at
+    its end, and it is most wanted for the turn that crashed, so it goes wherever a
+    deployment keeps its logs and outlives the session it describes. Every event
+    carries `session_id` and `turn_id`, which is how one session's are found again.
+    """
+
+    def record(self, event: Mapping[str, object]) -> None:
+        """Keep one event: a flat mapping whose `event` key names what happened.
+
+        Called from the thread running the turn, once per event and in order. An
+        exception here is logged and the turn goes on, because a turn is not failed
+        for want of a log line -- which also means a sink that fails is heard from
+        only in the log it was failing to write.
+        """
+        ...

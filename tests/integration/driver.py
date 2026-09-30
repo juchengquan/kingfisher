@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -46,7 +46,7 @@ from kingfisher import (
 from kingfisher.config import Config
 from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
 from kingfisher.domain.session import Session
-from kingfisher.infrastructure.harness.runlog import read_usage
+from kingfisher.infrastructure.harness.runlog import usage_of
 from kingfisher.infrastructure.workspace import (
     LocalSessionDirs,
     ensure_session_layout,
@@ -70,9 +70,19 @@ def _selection(value: str | None) -> tuple[str, ...] | None:
     return tuple(part.strip() for part in value.split(",") if part.strip())
 
 
-def _usage_summary(log_path: Path) -> str:
-    """Render what `read_usage` totalled."""
-    usage = read_usage(log_path)
+class _Recorded:
+    """The run's events, kept for the usage line at the end."""
+
+    def __init__(self) -> None:
+        self.events: list[Any] = []
+
+    def record(self, event: Any) -> None:
+        self.events.append(dict(event))
+
+
+def _usage_summary(events: list[Any]) -> str:
+    """Render what `usage_of` totalled."""
+    usage = usage_of(events)
     if not usage.calls:
         return "no model calls logged"
     share = "n/a" if usage.cached_share is None else f"{usage.cached_share:.0%}"
@@ -334,8 +344,9 @@ def main(argv: list[str]) -> int:
     from kingfisher import stream
 
     result = None
+    recorded = _Recorded()
     try:
-        result = show(stream(request, cfg=cfg), sys.stdout)
+        result = show(stream(request, cfg=cfg, run_events=recorded), sys.stdout)
     except CapabilityError as exc:
         # A named capability the workspace does not offer. Reported here rather
         # than as a traceback because it is a usage error, not a crash.
@@ -357,7 +368,7 @@ def main(argv: list[str]) -> int:
     print()
     print(f"session   : {result.session_id}")
     print(f"directory : {result.session_dir}")
-    print(f"usage     : {_usage_summary(result.log_path)}")
+    print(f"usage     : {_usage_summary(recorded.events)}")
 
     for name in ("report.md", "result.json"):
         path = result.session_dir / DERIVED / name
