@@ -35,6 +35,10 @@ class Admitted:
     release: Any = None
     #: The saver itself, which `release` is only sometimes.
     saver: Any = None
+    #: What a graph kingfisher built is driven with, or `None` for one the caller
+    #: built -- that graph's context is whatever its builder decided, which is not
+    #: known here.
+    context: Any = None
     #: Answers this turn resumes into, already translated, or `None`.
     resume: dict[str, Any] | None = None
     #: Tools an earlier turn was waiting on that this one superseded. Carried to the
@@ -72,6 +76,8 @@ class Prepared:
     #: The saver itself, which `release` is only sometimes. A turn that stops at a
     #: gate has to write what this holds before the lifecycle lets go of it.
     saver: Any = None
+    #: What the graph is driven with, or `None` for a graph the caller built.
+    context: Any = None
     #: What was said in this session before now. The graph's saver holds one
     #: turn and nothing after it, so this is where a conversation comes from.
     history: tuple[Message, ...] = ()

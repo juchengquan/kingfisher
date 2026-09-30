@@ -1774,6 +1774,10 @@ WITNESSES: dict[str, str] = {
     # repository cannot see.
     "BACKEND_CONTRACT": "document",
     "CommandResult": "document",
+    # `tools.md` writes `from kingfisher import ToolContext` for the annotation that
+    # hands a tool the turn's backend. A tool file is in a deployment's workspace,
+    # so nothing in this repository imports the name and nothing ever will.
+    "ToolContext": "document",
     # The type of `Kingfisher.run`'s `source_ids=`. `UNSCOPED` is one of its two
     # members and is documented; the type that admits it cannot be private.
     "Held": "embedder",
@@ -2167,10 +2171,11 @@ def test_the_cycle_finder_finds_one_in_this_tree():
 #: that makes it worth having: it names no foreign package at all, passes that table
 #: cleanly, and loads three provider SDKs through one import two hops away.
 SDK_LOADING: frozenset[str] = frozenset({
-    # The harness, where speaking to deepagents is the job. Five in that package are
+    # The harness, where speaking to deepagents is the job. Six in that package are
     # not here. `models` and `interpreter` name their foreign classes as strings and
-    # resolve them on demand, `tools` reads a graph it is handed, and `host_paths` and
-    # `session_paths` are plain path rules the middleware is built on.
+    # resolve them on demand, `tools` reads a graph it is handed, `host_paths` and
+    # `session_paths` are plain path rules the middleware is built on, and
+    # `tool_context` is a record with one untyped field.
     "kingfisher.infrastructure.harness.activation",
     "kingfisher.infrastructure.harness.agent",
     "kingfisher.infrastructure.harness.backend",
@@ -2179,6 +2184,12 @@ SDK_LOADING: frozenset[str] = frozenset({
     # spelling: `SandboxBackendProtocol` is an abstract base class and the answer
     # is `isinstance` against it.
     "kingfisher.infrastructure.harness.backend_contract",
+    # What a caller's tool is handed in place of the backend, which has no light
+    # spelling either. It subclasses `BackendProtocol` so that it is a backend to
+    # whatever a tool passes it on to -- deepagents asks with `isinstance`.
+    # `tool_context` holds one and names nothing, and that split is what keeps
+    # `ToolContext` cheap for a tool file to import.
+    "kingfisher.infrastructure.harness.permitted_backend",
     # Kingfisher's own middleware, each a subclass of a langchain or deepagents class,
     # and `tool_guards`, which composes them. `host_paths` and `session_paths` are what
     # those are built on and name no runtime class, which is what keeps `HostPathError`
@@ -2415,6 +2426,11 @@ LIGHT_EXPORTS = frozenset({
     # defined beside the error it catches, it made raising the error cost 250ms and
     # ~970 modules.
     "HostPathError",
+    # Light only while it is defined apart from the backend it carries. A tool file
+    # imports it for an annotation, and so does that tool's own test. Measured: 11ms
+    # and 82 modules where it is, against 1.1-1.3s and three provider SDKs beside
+    # `PermittedBackend`, which subclasses a deepagents class.
+    "ToolContext",
 })
 
 #: The rest, which genuinely need deepagents to do their job.
