@@ -64,6 +64,12 @@ slices land.
   `CAP_SYS_ADMIN` costs to do it. Nothing built. Half its premise went with
   #502 and the document says so at the top; its measurements are the part that
   kept.
+- [A session is its
+  backend](design/2026-09-30-a-session-is-its-backend.md) — every read and write
+  of a session's files, kingfisher's own included, through the backend, so a
+  backend that runs elsewhere is where the session actually is. Reverses part of
+  *Wiring a store* and removes `SessionRoot` and `SessionStore`. Settled in
+  review, nothing built.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
