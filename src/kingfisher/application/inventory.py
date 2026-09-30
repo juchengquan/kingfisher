@@ -152,12 +152,12 @@ class Inventory:
     #: other way to find that out.
     bundled_tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
     bundled_skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
-    #: Skills in a bundle whose owner is a compiled delegate, by subagent. They
-    #: load, they are mounted, and nothing is ever told about them: a skills index
-    #: arrives through middleware and deepagents gives a compiled graph none. Its
-    #: tools do reach it -- `build` is handed a list -- so this is one half of a
-    #: bundle working and the other half not, which is why it has to be said rather
-    #: than left to be inferred from two fields that each look fine.
+    #: Skills in a bundle whose owner is a compiled delegate, by subagent. A skills
+    #: index arrives through middleware and deepagents gives a compiled graph none,
+    #: so such a delegate cannot list them and the folder is refused as unlisted.
+    #: Carried so the listing can say *why* beside that refusal: the unlisted-file
+    #: message alone sends a reader to add a `source: bundled` line that a compiled
+    #: declaration refuses.
     stranded_skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
     #: Catalogue tools a bundle answers for instead, by subagent. Printed
     #: because shadowing is only acceptable while it is visible: the delegate

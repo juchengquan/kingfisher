@@ -719,9 +719,10 @@ rather than the definition's, so they stay narrowed by the request: otherwise
 `pip install` would be a way to put back a shell a deployment had turned off.
 
 **`Holdings` gained a second backing rather than the spec gaining contents.**
-`SubagentSpec.bundle` stays the claim it was -- names, checked against a folder --
-and `carried` beside it holds what a definition brought instead, refused together
-by `__post_init__` since a delegate owns one or the other. Putting imported tool
+`SubagentSpec.bundled` holds names -- what a definition lists from its folder,
+checked against it -- and `carried` beside it holds what a definition brought
+instead, refused together by `__post_init__` since a delegate owns one or the
+other. Putting imported tool
 objects on the spec for folder bundles too would have made *parsing* a definition
 import its bundle's Python, where now the import happens when a bundle's tools are
 asked for. `kingfisher list` asks, to report them, and so does `warm`.
