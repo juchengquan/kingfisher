@@ -97,11 +97,11 @@ from kingfisher.infrastructure.harness.checkpointing import (
     release_checkpointer,
     write_paused_state,
 )
-from kingfisher.infrastructure.harness.interpreter import release_interpreter
-from kingfisher.infrastructure.harness.middleware import (
+from kingfisher.infrastructure.harness.declared_middleware import (
     MiddlewareFactory,
     refuse_unbuildable_middleware,
 )
+from kingfisher.infrastructure.harness.interpreter import release_interpreter
 from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.session_store import (
     AGENT_MARK,

@@ -15,8 +15,8 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent, declared_middleware
-from kingfisher.infrastructure.harness.middleware import ByName
-from kingfisher.infrastructure.harness.narrowing import NarrowedSkills
+from kingfisher.infrastructure.harness.declared_middleware import ByName
+from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills
 from kingfisher.kinds.agents.catalogue import LocalAgentRepository
 from kingfisher.kinds.importing import load
 from kingfisher.kinds.skills import spec as skill

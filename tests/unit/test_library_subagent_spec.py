@@ -19,7 +19,7 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import default_backend
-from kingfisher.infrastructure.harness.narrowing import NarrowedSkills
+from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE

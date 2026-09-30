@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from tests.conftest import FakeToolCallingModel, a_subagent, middleware_of
 
 
