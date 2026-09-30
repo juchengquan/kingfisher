@@ -250,6 +250,24 @@ def test_a_usage_only_chunk_produces_no_token(cfg):
     assert not [e for e in _events(cfg, agent) if e.kind == "token"]
 
 
+def test_the_summarizer_is_not_streamed_as_the_answer(cfg):
+    """The summarizer's model call runs inside the model node, so its summary streamed as reply."""
+    agent = StubAgent(
+        "42",
+        tokens=[
+            (
+                AIMessageChunk(content="Here is a summary of the conversation"),
+                {"langgraph_node": "model", "lc_source": "summarization"},
+            ),
+            # The answer's chunk beside it: dropping every token would pass without it.
+            (AIMessageChunk(content="42"), {"langgraph_node": "model"}),
+        ],
+    )
+    tokens = [e for e in _events(cfg, agent) if e.kind == "token"]
+
+    assert [t.text for t in tokens] == ["42"]
+
+
 def test_the_adapter_owns_the_stream_modes(cfg):
     """`values` and `messages` are LangGraph's words, not orchestration's."""
     from kingfisher.infrastructure.harness import runtime
