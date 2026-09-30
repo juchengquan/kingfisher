@@ -17,6 +17,7 @@ import kingfisher
 from kingfisher import (
     UNSCOPED,
     AccessError,
+    ArtifactError,
     CapabilityError,
     ConfigError,
     Decision,
@@ -316,6 +317,33 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "show what these source ids reach: comma-separated names, or UNSCOPED "
             "for the operator's view of everything"
+        ),
+    )
+    fetching = sub.add_parser(
+        "artifact",
+        help="fetch one file a turn produced",
+        description=(
+            "Fetches a file a turn left under /derived or /memory, by the name\n"
+            "the run printed for it -- `derived/report.html`, not a path on\n"
+            "this machine. Read through the session's backend, so it works\n"
+            "wherever that backend keeps the session.\n"
+            "\n"
+            "Without --out the bytes go to standard output, to pipe or redirect."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    fetching.add_argument("--session", metavar="ID", required=True, help="the session")
+    fetching.add_argument("name", help="the artifact, as the run named it")
+    fetching.add_argument("--out", metavar="PATH", help="write it here instead")
+    fetching.add_argument(
+        "--as",
+        dest="held",
+        type=_held,
+        default=None,
+        metavar="SOURCE_IDS",
+        help=(
+            "who is calling: comma-separated source ids, or UNSCOPED to read "
+            "with no caller. Required where the workspace declares source ids"
         ),
     )
     holding = sub.add_parser(
@@ -811,6 +839,23 @@ def _nothing_reaped(kept: int, age: float, *, from_config: bool) -> None:
     print("--older-than sweeps on a shorter age: kingfisher reap --older-than 1d")
 
 
+def _artifact(args: argparse.Namespace) -> int:
+    """Fetch one file a turn produced, to a file or to standard output."""
+    from kingfisher import Kingfisher, default_backend  # noqa: PLC0415
+
+    kf = Kingfisher(config_from_env(), backend=default_backend)
+    content = kf.artifact(args.session, args.name, source_ids=args.held)
+    if args.out is None:
+        # The buffer, not `print`: an artifact is bytes, and a text stream would
+        # re-encode a PDF on its way out.
+        sys.stdout.buffer.write(content)
+        sys.stdout.flush()
+        return 0
+    Path(args.out).write_bytes(content)
+    print(f"wrote {args.name} to {args.out}")
+    return 0
+
+
 def _reap_one(kf: Kingfisher, session_id: str) -> int:
     """Reap one session by name, whatever its age and whatever is running in it."""
     # `UNSCOPED` because this is housekeeping on the machine rather than a call on
@@ -895,6 +940,7 @@ def _doctor(*, as_document: bool = False) -> int:
 #: `AccessError` and `ConfigError` keep their own branches too, because each has
 #: something extra to say.
 REFUSALS = (
+    ArtifactError,
     CapabilityError,
     QuotaExceededError,
     SubagentError,
@@ -915,6 +961,7 @@ HANDLERS = {
     "doctor": lambda args: _doctor(as_document=args.json),
     "list": lambda args: _list(as_document=args.json, held=args.held),
     "sessions": lambda args: _sessions(as_document=args.json),
+    "artifact": _artifact,
     "reap": _reap,
 }
 

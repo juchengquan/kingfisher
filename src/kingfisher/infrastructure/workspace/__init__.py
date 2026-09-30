@@ -22,7 +22,6 @@ _EXPORTS = {
     "writable_data": "kingfisher.infrastructure.workspace.permissions",
     "DataError": "kingfisher.infrastructure.workspace.placement",
     "DataPlacement": "kingfisher.infrastructure.workspace.placement",
-    "place_data": "kingfisher.infrastructure.workspace.placement",
     "DESTINATION": "kingfisher.infrastructure.workspace.seeding",
     "SEED_HINT": "kingfisher.infrastructure.workspace.seeding",
     "STARTER_AGENT": "kingfisher.infrastructure.workspace.seeding",
@@ -40,7 +39,6 @@ _EXPORTS = {
     "LocalSessionDirs": "kingfisher.infrastructure.workspace.sessions",
     "LocalSessionRoot": "kingfisher.infrastructure.workspace.sessions",
     "claim_path": "kingfisher.infrastructure.workspace.sessions",
-    "collect_artifacts": "kingfisher.infrastructure.workspace.sessions",
     "ensure_session_layout": "kingfisher.infrastructure.workspace.sessions",
     "make_session_dirs": "kingfisher.infrastructure.workspace.sessions",
     "scaffold_memory": "kingfisher.infrastructure.workspace.sessions",
@@ -72,7 +70,6 @@ __all__ = [
     "agent_snapshot",
     "agent_started_with",
     "claim_path",
-    "collect_artifacts",
     "definitions_source",
     "destination_hint",
     "ensure_layout",
@@ -82,7 +79,6 @@ __all__ = [
     "make_session_dirs",
     "memory_backing",
     "middleware_named",
-    "place_data",
     "protect_data",
     "remember_agent",
     "scaffold_memory",
@@ -104,7 +100,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.permissions import writable_data as writable_data
     from kingfisher.infrastructure.workspace.placement import DataError as DataError
     from kingfisher.infrastructure.workspace.placement import DataPlacement as DataPlacement
-    from kingfisher.infrastructure.workspace.placement import place_data as place_data
     from kingfisher.infrastructure.workspace.seeding import DESTINATION as DESTINATION
     from kingfisher.infrastructure.workspace.seeding import SEED_HINT as SEED_HINT
     from kingfisher.infrastructure.workspace.seeding import STARTER_AGENT as STARTER_AGENT
@@ -124,9 +119,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs as LocalSessionDirs
     from kingfisher.infrastructure.workspace.sessions import LocalSessionRoot as LocalSessionRoot
     from kingfisher.infrastructure.workspace.sessions import claim_path as claim_path
-    from kingfisher.infrastructure.workspace.sessions import (
-        collect_artifacts as collect_artifacts,
-    )
     from kingfisher.infrastructure.workspace.sessions import (
         ensure_session_layout as ensure_session_layout,
     )

@@ -103,6 +103,12 @@ from kingfisher.infrastructure.harness.declared_middleware import (
 )
 from kingfisher.infrastructure.harness.interpreter import release_interpreter
 from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
+from kingfisher.infrastructure.harness.session_files import (
+    collect_artifacts,
+    local_files,
+    place_data,
+    read_artifact,
+)
 from kingfisher.infrastructure.session_store import (
     AGENT_MARK,
     PENDING_MARK,
@@ -127,9 +133,7 @@ from kingfisher.infrastructure.workspace import (
     LocalSessionRoot,
     agent_started_with,
     claim_path,
-    collect_artifacts,
     ensure_layout,
-    place_data,
     protect_data,
     remember_agent,
 )
@@ -456,6 +460,7 @@ class Kingfisher(Sessions, Disposal):
         *,
         agent: AgentSpec | None,
         held: frozenset[str] | None,
+        files: Any = None,
     ) -> Any:
         """What serves one request, rooted at its session.
 
@@ -474,11 +479,6 @@ class Kingfisher(Sessions, Disposal):
                 raise ValueError(msg)
             return self._graph
 
-        make = self._backend
-        if make is None:  # pragma: no cover -- the constructor refuses the pairing
-            msg = "a Kingfisher built with neither a backend nor a graph reached a turn"
-            raise ValueError(msg)
-
         return build_agent(
             self.cfg,
             # Resolved by the caller, which is the only one there is: `_admitted`
@@ -487,17 +487,11 @@ class Kingfisher(Sessions, Disposal):
             # the second read that pin back and parsed it.
             agent=agent,
             held=held,
-            # Both called here rather than passed down, because this is where a turn
-            # first has a session directory and neither can be built without one. The
-            # runner goes into the factory rather than alongside it: a deployment that
-            # replaced the backend owns what runs its commands, and handing the same
-            # runner to `build_agent` as well would leave two answers to that.
-            backend=make(
-                self.cfg,
-                session_dir,
-                catalogue=self.catalogue,
-                runner=self._runner(session_dir) if self._runner is not None else None,
-            ),
+            # The one `_files_for` built, which placed this turn's data. Built again
+            # here, a remote backend would be asked for two sessions' worth of
+            # sandbox, and the agent could run in the one that was never given the
+            # data.
+            backend=files if files is not None else self._files_for(session_dir),
             # What the deployment permits, narrowed by what the request asked for,
             # and never the request's own: they are equal only where the deployment
             # restricts nothing, which is why defaulting to them here looked
@@ -510,6 +504,36 @@ class Kingfisher(Sessions, Disposal):
             checkpointer=self.threads if checkpointer is _UNSET else checkpointer,
             catalogue=self.catalogue,
         )
+
+    def _files_for(self, session_dir: Path) -> Any:
+        """The backend a session's files are reached through, for kingfisher and agent alike.
+
+        The runner goes into the factory rather than alongside it: a deployment that
+        replaced the backend owns what runs its commands, and handing the same runner
+        to `build_agent` as well would leave two answers to that.
+        """
+        if self._graph is not None or self._backend is None:
+            return local_files(session_dir)
+        return self._backend(
+            self.cfg,
+            session_dir,
+            catalogue=self.catalogue,
+            runner=self._runner(session_dir) if self._runner is not None else None,
+        )
+
+    def artifact(
+        self, session_id: str, name: str, *, source_ids: Held | None = None
+    ) -> bytes:
+        """One file a turn in this session produced, fetched through its backend.
+
+        `name` is as `RunResult.artifacts` gave it. Checked the way reading a session
+        is: a caller who cannot reach the session gets `UnknownSessionError`, the
+        same answer a wrong id gets.
+        """
+        if self.session(session_id, source_ids=source_ids) is None:
+            raise self._unknown_session(session_id)
+        with self.session_root.hold(session_id) as directory:
+            return read_artifact(self._files_for(directory), name)
 
     def _pin_agent_in(self, session_dir: Path, name: str | None) -> None:
         """Keep the agent, in the directory this is about.
@@ -727,7 +751,8 @@ class Kingfisher(Sessions, Disposal):
         # A resume places nothing. It is finishing work already proposed rather
         # than asking for something, so there is no `data` on it to place -- see
         # `Resume`, where the absence of the field carries the reason.
-        placement = place_data(getattr(request, "data", ()), session.directory)
+        files = self._files_for(session.directory)
+        placement = place_data(getattr(request, "data", ()), files)
 
         # What this deployment permits, narrowed by what the request asked for.
         allowed = self._effective_grants(source_ids).intersect(request.capabilities)
@@ -765,6 +790,7 @@ class Kingfisher(Sessions, Disposal):
             checkpointer=checkpointer,
             agent=agent,
             held=held,
+            files=files,
         )
         # `isinstance` rather than `getattr(built, "graph", built)`: the two shapes
         # `_graph_for` returns are named types, and a duck test here would also
@@ -778,6 +804,7 @@ class Kingfisher(Sessions, Disposal):
             graph=graph,
             unprotected=unprotected,
             placement=placement,
+            files=files,
             release=release,
             saver=checkpointer,
             context=built.context if isinstance(built, Assembled) else None,
@@ -836,6 +863,7 @@ class Kingfisher(Sessions, Disposal):
 
         return Prepared(
             graph=admitted.graph,
+            files=admitted.files,
             release=admitted.release,
             saver=admitted.saver,
             context=admitted.context,
@@ -876,7 +904,7 @@ class Kingfisher(Sessions, Disposal):
     def _keep(self, prepared: Prepared, snapshot: Any) -> tuple[str, ...]:
         """Persist what this turn produced, and name it."""
         self._record(prepared, snapshot)
-        kept = collect_artifacts(prepared.session.directory)
+        kept = collect_artifacts(prepared.files)
         if self.sessions_store is not None:
             # Two names beyond what `collect_artifacts` walks, which is `/derived`
             # and `/memory`. Both are under `.harness` and both have to survive a

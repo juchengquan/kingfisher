@@ -27,6 +27,7 @@ from kingfisher.infrastructure.harness.host_paths import (
 )
 from kingfisher.infrastructure.harness.host_paths import reject_host_path
 from kingfisher.infrastructure.sandbox import confinement
+from kingfisher.infrastructure.workspace.permissions import writable_data
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
@@ -225,6 +226,26 @@ class WorkspaceScopedBackend(CompositeBackend):
     def _get_backend_and_key(self, key: str) -> tuple[Any, str]:
         reject_host_path(key, self.workspace)
         return super()._get_backend_and_key(key)
+
+
+class DataBackend(FilesystemBackend):
+    """A session's `/data`, which is read-only on disk and opened only for an upload.
+
+    `upload_files` is how kingfisher places a caller's files, and the only way in.
+    The agent never reaches it: its file tools write through `write` and `edit`,
+    which the permission bits still refuse, and a tool's backend refuses `/data`
+    before the call arrives here. Unlocking inside the backend rather than around
+    the call is what lets `place_data` work on any backend -- a remote one has no
+    permission bits to lift, and meets the same promise its own way.
+    """
+
+    def __init__(self, session_dir: Path) -> None:
+        super().__init__(root_dir=str(Path(session_dir) / DATA))
+        self._session_dir = Path(session_dir)
+
+    def upload_files(self, files: list[tuple[str, bytes]]) -> Any:
+        with writable_data(self._session_dir):
+            return super().upload_files(files)
 
 
 def _bundles_with_skills(catalogue: Definitions) -> tuple[Any, ...]:
@@ -450,7 +471,7 @@ def default_backend(
     # the backend is built, instead of reaching a turn as a path that resolves
     # to the default backend and quietly ignores its own deny rule.
     backing = {
-        DATA_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / DATA)),
+        DATA_ROUTE: lambda: DataBackend(session_dir),
         SKILLS_ROUTE: lambda: FilesystemBackend(root_dir=str(skills_dir)),
         MEMORY_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / MEMORY)),
         # Mounted so it can be refused. Every operation through it is denied by
