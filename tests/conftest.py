@@ -53,6 +53,19 @@ def scripted(cfg):
     Scripted.script.clear()
 
 
+class RecordedEvents:
+    """A `RunEvents` that keeps what it is handed, for a test to read back."""
+
+    def __init__(self) -> None:
+        self.events: list[dict[str, Any]] = []
+
+    def record(self, event) -> None:
+        self.events.append(dict(event))
+
+    def named(self, name: str) -> list[dict[str, Any]]:
+        return [event for event in self.events if event["event"] == name]
+
+
 class StubCheckpointer:
     """Records thread deletions so the sweep can be asserted on."""
 

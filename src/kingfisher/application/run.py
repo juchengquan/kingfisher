@@ -29,8 +29,14 @@ __all__ = [
 ]
 
 
-def _service(
-    cfg: Config | None, graph: Any, backend: Any, checkpointer: Any, dirs: Any
+def _service(  # noqa: PLR0913 -- the parameters below, handed on
+    cfg: Config | None,
+    *,
+    graph: Any,
+    backend: Any,
+    checkpointer: Any,
+    dirs: Any,
+    run_events: Any,
 ) -> Kingfisher:
     return Kingfisher(
         cfg,
@@ -42,6 +48,7 @@ def _service(
         backend=None if graph is not None else backend,
         threads=checkpointer,
         dirs=dirs,
+        run_events=run_events,
     )
 
 
@@ -55,9 +62,17 @@ def stream(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
     backend: Any = default_backend,
     checkpointer: Any | None = None,
     dirs: Any | None = None,
+    run_events: Any | None = None,
 ) -> Iterator[RunEvent]:
     """Run one task, yielding progress as it happens."""
-    return _service(cfg, graph, backend, checkpointer, dirs).stream(request)
+    return _service(
+        cfg,
+        graph=graph,
+        backend=backend,
+        checkpointer=checkpointer,
+        dirs=dirs,
+        run_events=run_events,
+    ).stream(request)
 
 
 def run(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
@@ -70,6 +85,14 @@ def run(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
     backend: Any = default_backend,
     checkpointer: Any | None = None,
     dirs: Any | None = None,
+    run_events: Any | None = None,
 ) -> RunResult:
     """Run one task to completion and return where its outputs landed."""
-    return _service(cfg, graph, backend, checkpointer, dirs).run(request)
+    return _service(
+        cfg,
+        graph=graph,
+        backend=backend,
+        checkpointer=checkpointer,
+        dirs=dirs,
+        run_events=run_events,
+    ).run(request)

@@ -80,16 +80,15 @@ class RunResult:
     #: made here. Not a sequence -- nothing compares two.
     turn_id: str
     answer: str
-    #: Host paths, and the two fields here that must not leave the machine. They name a
+    #: A host path, and the one field here that must not leave the machine. It names a
     #: directory on the server's disk, which a remote caller cannot read and should not
-    #: be told about. They are here because a *local* caller is on the host: the driver
+    #: be told about. It is here because a *local* caller is on the host: the driver
     #: prints `session_dir` to say where your files landed.
     #:
     #: The session's, not the turn's. A turn had a directory of its own until
     #: `/scratchpad` and `/derived` took over what it held, and `artifacts` below is
     #: relative to this root.
     session_dir: Path = Path()
-    log_path: Path = Path()
     #: Everything under `/derived` and `/memory` at the end of this turn, as names
     #: relative to the session, listed through its backend -- so names, not files to
     #: open: `Kingfisher.artifact` fetches one, wherever the backend keeps it. What is

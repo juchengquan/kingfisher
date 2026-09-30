@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage
 from kingfisher.application.run import Request, RunResult, normalize_answer, run
 from kingfisher.application.service import Kingfisher
 from kingfisher.domain.result import END_TURN, STOP_REASONS
-from tests.conftest import StubCheckpointer, start
+from tests.conftest import RecordedEvents, StubCheckpointer, start
 
 
 class StubAgent:
@@ -82,7 +82,6 @@ def test_run_creates_the_session_triple(cfg):
     assert result.answer == "42"
     assert result.session_dir == cfg.workspace / "sessions" / "sess123"
     assert result.session_dir.is_dir()
-    assert result.log_path.exists()
     assert agent.config["configurable"]["thread_id"] == "sess123"
 
 
@@ -109,14 +108,16 @@ def test_run_tells_the_agent_where_to_work_in_the_task(cfg):
 def test_run_logs_usage_shaped_records(cfg):
     start(cfg, "logged")
     agent = StubAgent("ok")
-    result = run(
+    sink = RecordedEvents()
+    run(
         Request("t", session_id="logged"),
         cfg=cfg,
         graph=agent,
         checkpointer=StubCheckpointer(),
+        run_events=sink,
     )
 
-    records = [json.loads(line) for line in result.log_path.read_text().splitlines()]
+    records = sink.events
     events = [r["event"] for r in records]
     assert "run_start" in events
     assert "run_end" in events
@@ -274,7 +275,7 @@ def test_everything_but_the_host_paths_is_json(cfg):
 
     sendable = {
         k: v for k, v in dataclasses.asdict(result).items()
-        if k not in ("session_dir", "log_path")
+        if k != "session_dir"
     }
 
     # `artifacts` is the half that locates a file for a caller elsewhere: it is

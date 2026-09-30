@@ -1,6 +1,6 @@
 # Writing an adapter
 
-Kingfisher reaches the world through twelve Protocols in
+Kingfisher reaches the world through thirteen Protocols in
 [`domain/ports.py`](../../src/kingfisher/domain/ports.py). Each has a default
 that works on one host with its own disk. This page is for a deployment that
 needs one of them to be something else — a bucket, a mount, another machine.
@@ -222,6 +222,40 @@ with `None` but guess.
 Only *running* the command is delegated. File access is not, and deliberately:
 the shell backend is also the filesystem for every unrouted path, so handing over
 "the shell" would hand over `/derived` with it.
+
+## `RunEvents` — where each turn's record goes
+
+What a turn did — its start and end, every model call with its token counts, every
+tool call — as one event at a time, while it happens:
+
+```python
+class ShipToCollector:
+    def record(self, event):
+        collector.send(dict(event))
+
+kingfisher = Kingfisher(cfg, backend=default_backend, run_events=ShipToCollector())
+```
+
+Each event is a flat mapping. `event` names it — `run_start`, `run_end`,
+`model_call`, `tool_start`, `tool_end`, `tool_error`, `model_error` — and `ts`,
+`session_id`, `turn_id`, `model` and `endpoint` ride on every one. `model_call`
+carries `input_tokens`, `output_tokens` and `cache_read`, which is what a bill is
+totalled from.
+
+**Wire nothing and they go to the `kingfisher.run` logger**, one JSON line per event
+at `INFO`, with the mapping itself on the record as `run_event` for a handler that
+ships structured logs. Python's default configuration drops `INFO`, so a
+deployment that wants them either configures logging or passes a sink — and
+`kingfisher run`, which configures neither, keeps none.
+
+**Not session state.** They used to be a file in the session's `.harness`, deleted
+with it. They outlive the session now, because a log is most wanted for the turn
+that went wrong, and keeping them is your retention policy rather than
+kingfisher's. `session_id` and `turn_id` are how one session's are found again.
+
+**A sink that raises does not fail the turn.** The failure is logged as a warning
+and the turn goes on — so a sink that is failing is heard from only in your logs.
+It is called on the thread running the turn, once per event and in order.
 
 ## The rest
 

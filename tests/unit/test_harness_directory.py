@@ -21,7 +21,6 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import default_backend
-from kingfisher.infrastructure.harness.runlog import log_path
 from kingfisher.infrastructure.workspace import agent_snapshot, claim_path, ensure_layout
 from kingfisher.layout import LAYOUT_VERSION, MARKER
 from tests.conftest import FakeToolCallingModel, pin, start
@@ -199,10 +198,9 @@ def test_the_claim_and_the_run_log_stay_on_the_machine(cfg, tmp_path):
     assert ".harness/agent.yaml" in held
     assert ".harness/transcript.jsonl" in held
     assert not [name for name in held if name.startswith(".harness/claim")]
-    assert ".harness/runlog.jsonl" not in held
 
 
-def test_the_run_log_and_the_claim_go_with_the_session(cfg):
+def test_the_pin_and_the_claim_go_with_the_session(cfg):
     """The residue this whole change is about: one file per session that ever existed,
     under `state_dir`, deleted by nothing."""
     from kingfisher.application.service import Kingfisher
@@ -215,12 +213,10 @@ def test_the_run_log_and_the_claim_go_with_the_session(cfg):
     pin(service, session_id, "assistant")
     service.run(Request(task="go", session_id=session_id))
     directory = cfg.workspace / "sessions" / session_id
-    assert log_path(directory).is_file()
     assert agent_snapshot(directory).is_file()
 
     service.delete_session(session_id)
 
-    assert not log_path(directory).exists()
     assert not agent_snapshot(directory).exists()
     assert not claim_path(directory).exists()
     assert not list((cfg.workspace / "sessions").iterdir())

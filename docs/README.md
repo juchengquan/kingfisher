@@ -13,7 +13,7 @@ file count it refuses to print.
 | [`guides/formats.md`](guides/formats.md) | What an agent, subagent, tool or skill file may say. | Writing or changing a definition. |
 | [`guides/tools.md`](guides/tools.md) | How to write a workspace tool: the shapes, what it returns, what the loader refuses, how it reaches a session's files. | Writing or changing a tool. |
 | [`guides/configuration.md`](guides/configuration.md) | Every setting a deployment reads from the environment, and what it defaults to. | Standing one up, or wondering what a variable does. |
-| [`guides/ports.md`](guides/ports.md) | How to write an adapter for one of the twelve ports, and how to check it. | Putting sessions, files or commands somewhere kingfisher did not choose. |
+| [`guides/ports.md`](guides/ports.md) | How to write an adapter for one of the thirteen ports, and how to check it. | Putting sessions, files or commands somewhere kingfisher did not choose. |
 | [`guides/middleware.md`](guides/middleware.md) | How to register middleware a definition can name, what it may configure, and what it sees. | Wrapping the agent in code of your own. |
 | [`decisions.md`](decisions.md) | Why the code is shaped this way, and what was tried and reversed. | **Before proposing a change** to something it lists. |
 | [`findings.md`](findings.md) | What deepagents, langchain and the model surfaces actually do. | Before touching streaming, middleware or delegation. |

@@ -2019,6 +2019,8 @@ mirrored pydantic model would have been a second home for that rule, and the kin
 that gets it wrong helpfully -- adding a `Path` serialiser makes the error go away
 and ships exactly the leak. The service and its payloads went on 2026-09-15; the
 fields are still `Path`, so a caller serialising a result meets the same refusal.
+*(`log_path` went on 2026-09-30, with the run log leaving the session for
+`RunEvents`; `session_dir` is the one left.)*
 
 **The session quota is checked between turns and never during one.** This reverses
 what *Nothing at rest* argued: N11 said the bound could be metered on the

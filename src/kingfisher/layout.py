@@ -78,8 +78,8 @@ SESSION_DIRS: tuple[str, ...] = (DATA, DERIVED, MEMORY, SCRATCH)
 SKILLS = "skills"
 
 #: What the harness keeps about a session, inside the session and out of the
-#: agent's reach: the agent it opened with, its conversation, the lock a turn
-#: holds, and its run log. Every one of these used to live under `state_dir`,
+#: agent's reach: the agent it opened with, its conversation and the lock a turn
+#: holds. Every one of these used to live under `state_dir`,
 #: where nothing deleted it when the session went and nothing counted it against
 #: the session that caused it -- one file per session that ever existed, kept
 #: forever. Inside, `reap` and `session_bytes` cover them the way they already
@@ -96,7 +96,6 @@ HARNESS = ".harness"
 PINNED_AGENT = "agent.yaml"
 TRANSCRIPT_FILE = "transcript.jsonl"
 CLAIM = "claim"
-RUNLOG = "runlog.jsonl"
 #: Written only by a turn that stopped at an approval gate, and deleted the moment
 #: one is answered or superseded. Its presence *is* the mark that a session is
 #: waiting -- a second file saying so is a second thing to keep in step, and the
