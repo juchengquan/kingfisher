@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
+from deepagents.backends import CompositeBackend, FilesystemBackend
 from deepagents.backends.protocol import (
     INVALID_PATH,
     PERMISSION_DENIED,
@@ -30,6 +32,8 @@ from deepagents.middleware.filesystem import (
     _find_delete_deny_patterns,
     _grep_backend,
 )
+
+from kingfisher.domain.references import UnsafeReferenceError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -62,15 +66,56 @@ class PermittedBackend(BackendProtocol):
         self, backend: BackendProtocol, permissions: Sequence[FilesystemPermission]
     ) -> None:
         self._inner = backend
+        # Held, not copied: `build_agent` hands this over before it has finished adding
+        # the turn's rules -- memory declined, skills narrowed -- and a copy taken here
+        # would check a tool's path against a turn with fewer rules than it has.
+        self._permissions = permissions
+
+    @property
+    def _rules(self) -> list[FilesystemPermission]:
         # `interrupt` means stop and ask a person, and the asking is the graph pausing
         # before a file tool runs. Nothing pauses for a call made from inside a tool's
         # body, so there is nobody to ask and the rule is a refusal. Rewritten rather
-        # than read at each check because deepagents' result filters pass `interrupt`
+        # than read as written because deepagents' result filters pass `interrupt`
         # entries through -- for them the person has already said yes.
-        self._rules = [
+        return [
             replace(rule, mode="deny") if rule.mode == "interrupt" else rule
-            for rule in permissions
+            for rule in self._permissions
         ]
+
+    def on_this_host(self, path: str) -> Path:
+        """Where a tool may be handed `path` as a real file, or `UnsafeReferenceError`.
+
+        The turn's rules first, as `read_file` applies them: a path the file tools may
+        not read -- `/.harness`, `/memory` where it was declined -- is refused before
+        anything is looked up. Then the backend's own answer to where the path lives,
+        so a tool is handed the file the backend would read, and nothing where the
+        backend keeps it somewhere this host cannot open.
+        """
+        where, refused = self._where("read", path)
+        if refused:
+            raise UnsafeReferenceError(refused)
+        mapped = host_path(self._inner, where)
+        if mapped is None:
+            msg = (
+                f"{where} is not kept on this host by this session's backend, so it "
+                "cannot be handed to a tool as a file; a tool taking "
+                "`runtime: ToolRuntime[ToolContext]` reads it through "
+                "`runtime.context.backend` instead"
+            )
+            raise UnsafeReferenceError(msg)
+        root, candidate = mapped
+        # Resolved before it is compared, and against the root that answered rather
+        # than the session: the agent can make a link, and a link inside a route
+        # pointing out of it must not widen what a tool is handed.
+        real = candidate.resolve()
+        if root is not None and not real.is_relative_to(root.resolve()):
+            msg = (
+                f"reference {path!r} resolves outside this session; a link inside it "
+                "does not widen it"
+            )
+            raise UnsafeReferenceError(msg)
+        return real
 
     def _where(self, operation: FilesystemOperation, path: str) -> tuple[str, str | None]:
         """The spelling the rules read, and the refusal if there is one.
@@ -318,3 +363,27 @@ def _in_order[Response: (FileUploadResponse, FileDownloadResponse)](
         landed[at] if at in landed else refusal(path=path, error=refused[at])
         for at, path in enumerate(asked)
     ]
+
+
+def host_path(backend: Any, where: str) -> tuple[Path | None, Path] | None:
+    """Where `where` lives on this host, as `(root it must stay in, path)`, or `None`.
+
+    The backend's own mapping, not a second one: a route is followed as the composite
+    follows it for a read, and a filesystem answers from its root. A backend that
+    says for itself -- `host_path(virtual)` -- is taken at its word, root and all.
+    Anything else keeps its files somewhere this host cannot open, as far as can be
+    told, and answers `None`.
+    """
+    own = getattr(backend, "host_path", None)
+    if callable(own):
+        answered = own(where)
+        return None if answered is None else (None, Path(answered))
+    if isinstance(backend, CompositeBackend):
+        for prefix in sorted(backend.routes, key=len, reverse=True):
+            if where.startswith(prefix) or where == prefix.rstrip("/"):
+                return host_path(backend.routes[prefix], "/" + where[len(prefix) :])
+        return host_path(backend.default, where)
+    if isinstance(backend, FilesystemBackend) and backend.virtual_mode:
+        root = Path(backend.cwd)
+        return root, root / where.lstrip("/")
+    return None
