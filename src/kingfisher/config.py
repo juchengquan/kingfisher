@@ -185,6 +185,30 @@ class ConfigError(RuntimeError):
     """Raised when required configuration is missing or invalid."""
 
 
+#: The shortest `KINGFISHER_SESSION_KEY` accepted, in bytes. HMAC-SHA256's own
+#: block of strength; `kingfisher key` prints twice this as hex.
+SESSION_KEY_MIN_BYTES = 32
+
+
+@dataclass(frozen=True)
+class SessionKey:
+    """What signs what kingfisher reads back from a session.
+
+    Its own type so the secret never reaches a `repr`: a `Config` is printed in
+    tracebacks and by anyone debugging one, and the key would ride along.
+    """
+
+    secret: bytes = field(repr=False)
+
+    def __post_init__(self) -> None:
+        if len(self.secret) < SESSION_KEY_MIN_BYTES:
+            msg = (
+                f"KINGFISHER_SESSION_KEY is {len(self.secret)} bytes; it must be at least "
+                f"{SESSION_KEY_MIN_BYTES}. Generate one with: kingfisher key"
+            )
+            raise ConfigError(msg)
+
+
 class MissingCredentialsWarning(UserWarning):
     """An endpoint in `models.yaml` whose key is not set here, so it was dropped.
 
@@ -350,6 +374,11 @@ class Config:
     # The same port, named rather than built here: `module:name` for something callable
     # with no arguments that returns a `SessionStore`.
     session_store_factory: str | None = None
+    # Signs the pinned agent, the conversation and a paused turn, so kingfisher can
+    # tell what it wrote from what the agent's shell rewrote. `None` is allowed only
+    # where kingfisher's own sandbox keeps the shell out of `.harness` -- `Kingfisher`
+    # refuses to start otherwise, and says which case it is.
+    session_key: SessionKey | None = None
     # What this deployment *wires*. Distinct from `Capabilities`, which is what a single
     # request may *use* of it -- and the distinction is not stylistic: these two flags
     # shape `render_system_prompt`, which is the cached prefix every turn is compared

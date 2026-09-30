@@ -34,6 +34,9 @@ class Admitted:
     #: graph runs on, so what was placed is what the agent reads, and what is
     #: collected is what it wrote.
     files: Any = None
+    #: What kingfisher keeps about the session under `/.harness`, read and written
+    #: through `files` and signed where the deployment has a key.
+    harness: Any = None
     #: The saver this service opened for the turn, or None when it opened
     #: nothing -- an injected instance is the deployment's to close.
     release: Any = None
@@ -77,6 +80,8 @@ class Prepared:
     timeout_s: float
     #: What `collect_artifacts` walks at the end. See `Admitted.files`.
     files: Any = None
+    #: Where the transcript and a pause are written at the end. See `Admitted.harness`.
+    harness: Any = None
     #: Closed when the turn ends. See `_checkpointer_for`.
     release: Any = None
     #: The saver itself, which `release` is only sometimes. A turn that stops at a

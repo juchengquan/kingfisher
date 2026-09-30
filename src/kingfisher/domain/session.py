@@ -28,6 +28,14 @@ class QuotaExceededError(ValueError):
     """A session is already holding more than the deployment allows."""
 
 
+class SessionTamperedError(ValueError):
+    """What kingfisher kept about a session is not what it wrote.
+
+    Refused rather than repaired: a session whose conversation, pinned agent or paused
+    turn was rewritten has no version left that can be trusted to go back to.
+    """
+
+
 @dataclass(frozen=True)
 class Turn:
     """One request within a conversation.

@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from kingfisher.config import Config, ConfigError, WorkspacePaths
+from kingfisher.config import Config, ConfigError, SessionKey, WorkspacePaths
 from kingfisher.infrastructure import access_policy, model_catalogue
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
@@ -180,6 +180,11 @@ class Environment:
             assets=paths.assets,
             session_store=self.optional_path("KINGFISHER_SESSION_STORE"),
             session_store_factory=self.optional_text("KINGFISHER_SESSION_STORE_FACTORY"),
+            session_key=(
+                SessionKey(secret.encode("utf-8"))
+                if (secret := self.optional_text("KINGFISHER_SESSION_KEY"))
+                else None
+            ),
             skills_enabled=self.flag("KINGFISHER_SKILLS_ENABLED"),
             memory_enabled=self.flag("KINGFISHER_MEMORY_ENABLED"),
             interpreter_enabled=self.flag("KINGFISHER_INTERPRETER_ENABLED"),

@@ -1753,6 +1753,10 @@ WITNESSES: dict[str, str] = {
     # caller fetching by a name it was handed tells apart from a session it cannot
     # reach.
     "ArtifactError": "embedder",
+    # What a turn raises when what kingfisher kept about the session is not what it
+    # wrote. Not the caller's doing, like `SessionBusyError`, and like it the one
+    # answer a caller acts on differently: the session is done, start another.
+    "SessionTamperedError": "embedder",
     # `README.md` opens on these four and the package docstring on `run`. A
     # reader who copied either is owed them.
     "definitions_source": "document",
@@ -2332,7 +2336,8 @@ LIGHT_EXPORTS = frozenset({
     # The errors a caller must tell apart. Public so a consumer outside the package can
     # catch them by name -- the server being the first such consumer.
     "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError",
-    "SessionBusyError", "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
+    "SessionBusyError", "SessionTamperedError", "SubagentError", "UnknownSessionError",
+    "UnsafeReferenceError",
     # The `SessionStore` contract, for a deployment checking its own adapter.
     # Light, and it has to stay light: a deployment runs this from its own test
     # suite, and a kit that pulled three provider SDKs in to check four methods
@@ -2365,11 +2370,6 @@ LIGHT_EXPORTS = frozenset({
     # -- paying for three provider SDKs to find out where `skills/` goes would
     # be the wrong shape entirely.
     "paths_from_env", "WorkspacePaths",
-    # How `decide` answers "what is this session waiting on?" without starting a
-    # turn. Light, and it has to stay light for the same reason `paths_from_env`
-    # does: reading a file a pause already wrote should not load an agent runtime,
-    # and asking what is pending must not be the thing that supersedes it.
-    "read_pause_mark", "pending_from_mark",
     # Seeding, and asking what a workspace offers. Measured at 21-50ms and 148-192
     # modules with no SDK loaded -- heavier than `system_prompt` at 90, because `yaml`
     # and `importlib.metadata` come with them, and nowhere near the 3,100 a provider
@@ -2430,6 +2430,12 @@ LIGHT_EXPORTS = frozenset({
     # Reaching it costs nothing; calling it may write a sandbox profile,
     # which is the same light-to-reach / heavy-to-call split `inventory` has.
     "shell_confinement", "Confinement",
+    # What `doctor` and `key` ask about a session key: whether this host's sandbox
+    # makes one unnecessary, which key is set, and how long one must be. `doctor` is
+    # meant to run where a turn would not, so asking must not load the agent runtime
+    # -- which is why the sandbox half of the rule lives beside `shell_confinement`
+    # rather than beside the backend it is about.
+    "harness_unfenced", "key_id", "SESSION_KEY_MIN_BYTES",
     # Light only while `host_paths` names no runtime class. `HostPathGuard` is the
     # langchain half of that mechanism and lives with the rest of the middleware;
     # defined beside the error it catches, it made raising the error cost 250ms and
@@ -3055,8 +3061,9 @@ def test_every_record_this_package_hands_out_is_frozen():
 
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
-    "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError", "SessionBusyError",
-    "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
+    "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError",
+    "SessionBusyError", "SessionTamperedError", "SubagentError", "UnknownSessionError",
+    "UnsafeReferenceError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.

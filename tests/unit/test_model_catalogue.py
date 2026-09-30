@@ -252,11 +252,11 @@ def test_a_deployment_can_supply_models_without_a_file_at_all(tmp_path):
     """
     from kingfisher import Kingfisher
     from kingfisher.domain.request import Request
-    from tests.conftest import FAKE_CATALOGUE
+    from tests.conftest import FAKE_CATALOGUE, TEST_KEY
     from tests.unit.test_run import StubAgent
 
     assert not (tmp_path / "models.yaml").exists()
-    cfg = Config(workspace=tmp_path / "ws", models=FAKE_CATALOGUE)
+    cfg = Config(workspace=tmp_path / "ws", models=FAKE_CATALOGUE, session_key=TEST_KEY)
 
     service = Kingfisher(cfg, graph=StubAgent("ok"))
 

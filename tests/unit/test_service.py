@@ -19,17 +19,24 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.workspace import agent_snapshot, ensure_session_layout
+from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
+from kingfisher.layout import HARNESS, PINNED_AGENT
 from tests.conftest import (
     FAKE_ENDPOINT,
     OTHER_ENDPOINT,
     StubCheckpointer,
     an_agent,
+    harness_in,
     start,
     subagents_dir,
 )
 from tests.unit.test_run import StubAgent
+
+
+def agent_snapshot(session_dir) -> Path:
+    """Where the default backend keeps a session's pinned agent, on disk."""
+    return Path(session_dir) / HARNESS / PINNED_AGENT
 
 
 class CountingCheckpointer(StubCheckpointer):
@@ -114,7 +121,7 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     service = Kingfisher(cfg, backend=default_backend)
     asked = Request("go", agent="only")
 
-    built = service._agent_for(asked, session_dir)
+    built = service._agent_for(asked, harness_in(session_dir))
 
     def once():
         return service._graph_for(
@@ -978,7 +985,7 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     elsewhere = ensure_session_layout(tmp_path / "for-one-turn" / "a-session")
     service = Kingfisher(cfg, backend=default_backend)
 
-    service._agent_for(Request("go", agent="only"), elsewhere)
+    service._agent_for(Request("go", agent="only"), harness_in(elsewhere))
 
     assert agent_snapshot(elsewhere).is_file(), "the pin is not where the turn ran"
     assert not (cfg.workspace / "sessions" / elsewhere.name).exists(), (
@@ -986,7 +993,7 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     )
 
     with pytest.raises(CapabilityError, match="cannot be changed"):
-        service._agent_for(Request("again", agent="other"), elsewhere)
+        service._agent_for(Request("again", agent="other"), harness_in(elsewhere))
 
 
 def test_a_session_opened_as_one_agent_cannot_run_as_another_somewhere_else(cfg, tmp_path):
@@ -999,6 +1006,7 @@ def test_a_session_opened_as_one_agent_cannot_run_as_another_somewhere_else(cfg,
     the default root were refused.
     """
     from kingfisher import LocalSessionStore
+    from kingfisher.infrastructure.signing import SIGNATURE, sign
     from kingfisher.infrastructure.workspace import AGENT_SNAPSHOT
 
     an_agent(cfg, "only")
@@ -1011,13 +1019,19 @@ def test_a_session_opened_as_one_agent_cannot_run_as_another_somewhere_else(cfg,
     )
     # Held in the store and nowhere else, pinned to `only`: which is how a session
     # arrives on a machine that has never run it.
-    document = service.catalogue.agents.documents["only"]
-    kept.save("s", {AGENT_SNAPSHOT: document.encode("utf-8")})
+    document = service.catalogue.agents.documents["only"].encode("utf-8")
+    kept.save(
+        "s",
+        {
+            AGENT_SNAPSHOT: document,
+            f"{AGENT_SNAPSHOT}{SIGNATURE}": sign(cfg.session_key, "s", PINNED_AGENT, document),
+        },
+    )
 
     asked = Request("go", agent="other", session_id="s")
     with pytest.raises(CapabilityError, match="cannot be changed"), \
             service._held_session(asked) as session:
-        service._agent_for(asked, session.directory)
+        service._agent_for(asked, service._harness_at(session.id, session.directory))
 
 
 def test_a_session_kept_only_in_a_store_is_not_swept_out_of_it(cfg, tmp_path):

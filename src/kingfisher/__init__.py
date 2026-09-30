@@ -37,6 +37,7 @@ _EXPORTS = {
     "CapabilityError": "kingfisher.domain.capabilities",
     "QuotaExceededError": "kingfisher.domain.session",
     "SessionBusyError": "kingfisher.domain.session",
+    "SessionTamperedError": "kingfisher.domain.session",
     "SubagentError": "kingfisher.kinds.subagents.spec",
     "UnsafeReferenceError": "kingfisher.domain.references",
     "HostPathError": "kingfisher.infrastructure.harness.host_paths",
@@ -156,6 +157,7 @@ __all__ = [
     "Seeded",
     "SessionBusyError",
     "SessionInfo",
+    "SessionTamperedError",
     "SubagentError",
     "ToolContext",
     "UnknownSessionError",
@@ -209,6 +211,7 @@ if TYPE_CHECKING:
     from kingfisher.domain.session import QuotaExceededError as QuotaExceededError
     from kingfisher.domain.session import SessionBusyError as SessionBusyError
     from kingfisher.domain.session import SessionInfo as SessionInfo
+    from kingfisher.domain.session import SessionTamperedError as SessionTamperedError
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
     from kingfisher.infrastructure.harness.backend import (
         default_backend as default_backend,

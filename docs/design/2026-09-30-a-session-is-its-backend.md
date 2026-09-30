@@ -2,7 +2,11 @@
 
 **Status:** proposed. **Slice 1 landed**: a request's data is placed, and a
 turn's artifacts collected and fetched, through the session's backend. **Slice 3
-landed**: the run log is `RunEvents`. Slices 2, 4 and 5 are not built. Every question it raised was settled in review on 2026-09-30, and
+landed**: the run log is `RunEvents`. **Slice 2 landed**: `/.harness` goes through
+the backend, signed, with the startup rule, `kingfisher key`, the `doctor` check and
+`shell_denied`. Two things were decided building it, recorded under *Settled in
+review*: any supplied runner needs a key, and a paused checkpoint is no longer
+written aside and renamed into place. Slices 4 and 5 are not built. Every question it raised was settled in review on 2026-09-30, and
 the answers are under *Settled in review* with their reasons. It stays here until
 its slices land or it is withdrawn.
 **Date:** 2026-09-30.
@@ -246,7 +250,7 @@ trustworthy version to restore.
 | no | the factory *is* `default_backend`, and the confinement's mechanism is `sandbox-exec`, `bubblewrap` or `Landlock` | runs unsigned; `.harness` is protected by the fence |
 | no | any other factory, including one that wraps `default_backend` | refused at startup |
 | no | `KINGFISHER_SHELL_SANDBOX` is `off` or `external` | refused at startup |
-| no | a supplied `CommandRunner` that is not local | refused at startup |
+| no | a supplied `CommandRunner` (its locality is not knowable at startup) | refused at startup |
 
 The exemption holds because all three mechanisms kingfisher applies itself already
 refuse the shell writes under `.harness`: `_harness_denial` in the macOS profile,
@@ -342,6 +346,17 @@ alternative. It would have been the bypass for as long as anyone forgot to turn 
 off. So a deployment that sets a key, at launch or later, has its existing
 sessions refused on their next turn, and the release note says to reap them. A
 deployment on the unsigned row never reads a signature, so nothing changes for it.
+
+**Any supplied `CommandRunner` needs a key**, not only one that is not local. Decided
+building slice 2: `runner` is a callable built per turn, so whether what it returns
+is local cannot be known at startup, where the rule has to answer. Being unsure is
+the case a key is for.
+
+**A paused checkpoint is written in place.** It was staged and renamed, so a write
+cut off halfway left the previous checkpoint whole. A backend has no rename. With a
+key, half a checkpoint fails its signature and the turn is refused as tampered, which
+is the wrong word for a crash but the right outcome: nothing half-written is
+resumed. Without one, it fails to load.
 
 **Key rotation is not built.** One key, and changing it refuses every live
 session. Acceptable before 1.0. When it is wanted, the shape is one signing key

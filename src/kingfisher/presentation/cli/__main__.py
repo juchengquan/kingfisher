@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import secrets
 import sys
 import time
 import warnings
@@ -26,6 +27,7 @@ from kingfisher import (
     Request,
     Resume,
     SessionBusyError,
+    SessionTamperedError,
     SubagentError,
     UnknownSessionError,
     UnsafeReferenceError,
@@ -42,10 +44,10 @@ from kingfisher import (
 # see *The front door* in `docs/decisions.md` -- and each of these is something
 # no caller outside the wheel has asked for: the four kinds a catalogue holds,
 # used to say what a directory has none of; where a workspace keeps its
-# sessions; what one of them costs; and the warning `doctor` says as a check
-# instead. Everything above is public and comes through the front door because
-# it is.
-from kingfisher.config import MissingCredentialsWarning
+# sessions; what one of them costs; how long a session key must be, for `key` to
+# print one; and the warning `doctor` says as a check instead. Everything above
+# is public and comes through the front door because it is.
+from kingfisher.config import SESSION_KEY_MIN_BYTES, MissingCredentialsWarning
 from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.workspace import session_bytes
@@ -318,6 +320,19 @@ def build_parser() -> argparse.ArgumentParser:
             "show what these source ids reach: comma-separated names, or UNSCOPED "
             "for the operator's view of everything"
         ),
+    )
+    sub.add_parser(
+        "key",
+        help="print a new KINGFISHER_SESSION_KEY",
+        description=(
+            "Prints 32 random bytes, hex-encoded, for KINGFISHER_SESSION_KEY.\n"
+            "\n"
+            "It writes nothing: put it wherever this deployment keeps secrets.\n"
+            "Saved inside the workspace it would be readable by the agent's\n"
+            "shell, which could then sign whatever it liked. Every host serving\n"
+            "the same sessions needs the same key."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     fetching = sub.add_parser(
         "artifact",
@@ -595,22 +610,12 @@ def _decide(args: argparse.Namespace) -> int:
 
 
 def _show_pending(kf: Kingfisher, session_id: str) -> int:
-    """What this session is waiting on, for somebody who has lost the ids.
-
-    Read from the mark the pause wrote rather than by starting a turn: asking what
-    is pending must not be a thing that can supersede it, and every other way into
-    the session is a turn.
-    """
-    from kingfisher.infrastructure.session_store import (  # noqa: PLC0415
-        pending_from_mark,
-        read_pause_mark,
-    )
-
+    """What this session is waiting on, for somebody who has lost the ids."""
     directory = sessions_root(kf.workspace) / session_id
     if not directory.is_dir():
         print(f"no such session: {session_id}", file=sys.stderr)
         return 2
-    waiting = pending_from_mark(read_pause_mark(directory) or {})
+    waiting = kf.pending(session_id)
     if not waiting:
         print(f"session {session_id} is not waiting on a decision", file=sys.stderr)
         return 2
@@ -839,6 +844,12 @@ def _nothing_reaped(kept: int, age: float, *, from_config: bool) -> None:
     print("--older-than sweeps on a shorter age: kingfisher reap --older-than 1d")
 
 
+def _key() -> int:
+    """Print a new session key and keep no copy of it."""
+    print(secrets.token_hex(SESSION_KEY_MIN_BYTES))
+    return 0
+
+
 def _artifact(args: argparse.Namespace) -> int:
     """Fetch one file a turn produced, to a file or to standard output."""
     from kingfisher import Kingfisher, default_backend  # noqa: PLC0415
@@ -943,6 +954,7 @@ REFUSALS = (
     ArtifactError,
     CapabilityError,
     QuotaExceededError,
+    SessionTamperedError,
     SubagentError,
     UnknownSessionError,
     UnsafeReferenceError,
@@ -962,6 +974,7 @@ HANDLERS = {
     "list": lambda args: _list(as_document=args.json, held=args.held),
     "sessions": lambda args: _sessions(as_document=args.json),
     "artifact": _artifact,
+    "key": lambda _args: _key(),
     "reap": _reap,
 }
 

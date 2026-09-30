@@ -18,7 +18,7 @@ from kingfisher.infrastructure.harness.backend import (
     default_backend,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
-from tests.conftest import StubCheckpointer, an_agent
+from tests.conftest import StubCheckpointer, an_agent, harness_in
 from tests.unit.test_run import StubAgent
 
 
@@ -121,7 +121,7 @@ def test_the_factory_is_called_per_turn_with_the_session_it_is_for(cfg, session_
         asked,
         session_dir,
         service.grants,
-        agent=service._agent_for(asked, session_dir),
+        agent=service._agent_for(asked, harness_in(session_dir)),
         held=None,
     )
 
@@ -157,7 +157,7 @@ def test_the_factory_is_handed_the_catalogue_and_the_runner_this_deployment_wire
         asked,
         session_dir,
         service.grants,
-        agent=service._agent_for(asked, session_dir),
+        agent=service._agent_for(asked, harness_in(session_dir)),
         held=None,
     )
 
@@ -192,7 +192,7 @@ def test_what_the_factory_returns_is_what_the_agent_is_built_on(cfg, session_dir
         asked,
         session_dir,
         service.grants,
-        agent=service._agent_for(asked, session_dir),
+        agent=service._agent_for(asked, harness_in(session_dir)),
         held=None,
     )
 

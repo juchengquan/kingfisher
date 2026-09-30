@@ -25,8 +25,10 @@ from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.sandbox.bubblewrap import bubblewrap_available
 from kingfisher.infrastructure.sandbox.confinement import (
     Confinement,
+    harness_unfenced,
     shell_confinement,
 )
+from kingfisher.infrastructure.signing import key_id
 from kingfisher.infrastructure.workspace import MemoryBacking, destination_hint, memory_backing
 
 #: `fail` means this deployment will not run. `warn` means it will, and
@@ -643,6 +645,32 @@ def _shell(cfg: Config) -> Iterator[Check]:
         )
 
 
+def _session_key(cfg: Config) -> Iterator[Check]:
+    """Whether what kingfisher reads back from a session can be trusted here.
+
+    Asked of the wiring `kingfisher` itself uses -- the default backend, no runner, no
+    graph -- because that is the deployment this command can see. One built in code
+    with its own backend needs a key whatever this says, and `Kingfisher` refuses to
+    start without one.
+    """
+    if cfg.session_key is not None:
+        yield Check("session key", "ok", f"set (key {key_id(cfg.session_key)})")
+    elif (why := harness_unfenced(cfg)) is None:
+        yield Check(
+            "session key",
+            "ok",
+            "not set, and not needed here: the sandbox keeps the agent's shell out of "
+            ".harness. A deployment with its own backend, graph or runner needs one",
+        )
+    else:
+        yield Check(
+            "session key",
+            "fail",
+            f"not set, and needed because {why}",
+            "generate one with `kingfisher key` and set KINGFISHER_SESSION_KEY",
+        )
+
+
 def _retired(environ: Mapping[str, str] | None = None) -> Iterator[Check]:
     """Settings this deployment still carries that nothing reads any more.
 
@@ -698,6 +726,7 @@ def examine(cfg: Config, found: Inventory | None = None) -> tuple[Check, ...]:
         checks += _where(cfg, found)
         checks += _definitions(cfg, found)
         checks += _shell(cfg)
+        checks += _session_key(cfg)
     except ConfigError as exc:  # pragma: no cover -- belt and braces
         checks.append(Check("configuration", "fail", str(exc)))
     return tuple(checks)

@@ -19,10 +19,10 @@ from langgraph.graph import START, StateGraph
 from langgraph.types import Command, interrupt
 from typing_extensions import TypedDict
 
-from kingfisher.infrastructure.harness.checkpointing import (
-    read_paused_state,
-    write_paused_state,
-)
+from kingfisher.domain.session import SessionTamperedError
+from kingfisher.infrastructure.harness.checkpointing import paused_state, resumed_saver
+from kingfisher.layout import HARNESS, PAUSED_STATE
+from tests.conftest import harness_of, start
 
 
 class _State(TypedDict):
@@ -52,17 +52,16 @@ def _thread(name: str) -> Any:
     return {"configurable": {"thread_id": name}}
 
 
-def test_a_pause_survives_the_saver_that_held_it(tmp_path):
+def test_a_pause_survives_the_saver_that_held_it():
     """Without this the resume finds an empty graph and asks the human all over again."""
-    path = tmp_path / ".harness" / "paused"
 
     holding = InMemorySaver()
     stopped = _gated_graph(holding).invoke({"asked": "rm -rf /"}, config=_thread("s1"))
     # Asserted, so the half below cannot pass by the graph never having stopped.
     assert "__interrupt__" in stopped, "the graph ran to the end and paused nothing"
-    write_paused_state(holding, path)
+    state = paused_state(holding)
 
-    resumed = _gated_graph(read_paused_state(path)).invoke(
+    resumed = _gated_graph(resumed_saver(state)).invoke(
         Command(resume="approve"), config=_thread("s1")
     )
 
@@ -70,7 +69,7 @@ def test_a_pause_survives_the_saver_that_held_it(tmp_path):
     assert resumed["asked"] == "rm -rf /", "the state the pause happened in did not carry"
 
 
-def test_work_finished_beside_the_pause_is_not_done_twice(tmp_path):
+def test_work_finished_beside_the_pause_is_not_done_twice():
     """A sibling task that completed in the superstep the gate stopped runs again on
     resume, unless the pending writes were kept.
 
@@ -79,7 +78,6 @@ def test_work_finished_beside_the_pause_is_not_done_twice(tmp_path):
     twice for one decision. The state both paths end in is identical -- only the side
     effect tells them apart, so a test asserting on the result would never see it.
     """
-    path = tmp_path / "paused"
     ran: list[str] = []
 
     def build(saver: Any) -> Any:
@@ -100,71 +98,66 @@ def test_work_finished_beside_the_pause_is_not_done_twice(tmp_path):
     holding = InMemorySaver()
     build(holding).invoke({"asked": "rm -rf /"}, config=_thread("s1"))
     assert ran == ["sibling"], "the sibling never ran, so re-running it cannot be seen"
-    write_paused_state(holding, path)
+    state = paused_state(holding)
 
     ran.clear()
-    build(read_paused_state(path)).invoke(Command(resume="approve"), config=_thread("s1"))
+    build(resumed_saver(state)).invoke(Command(resume="approve"), config=_thread("s1"))
 
     assert ran == [], "the finished sibling ran a second time on resume"
 
 
-def test_a_resume_reaches_the_right_thread(tmp_path):
+def test_a_resume_reaches_the_right_thread():
     """One file holds one session's threads, and a thread it does not hold is not a
     pause that silently answers itself.
     """
-    path = tmp_path / "paused"
     holding = InMemorySaver()
     _gated_graph(holding).invoke({"asked": "one"}, config=_thread("s1"))
-    write_paused_state(holding, path)
+    state = paused_state(holding)
 
-    elsewhere = _gated_graph(read_paused_state(path)).invoke(
+    elsewhere = _gated_graph(resumed_saver(state)).invoke(
         {"asked": "two"}, config=_thread("s2")
     )
 
     assert "__interrupt__" in elsewhere, "another thread resumed on this thread's answer"
 
 
-def test_a_checkpoint_is_msgpack_and_a_pickle_is_refused_on_the_way_back(tmp_path):
+def test_a_checkpoint_is_msgpack_and_a_pickle_is_refused_on_the_way_back():
     """`.harness` is kept from the shell by a macOS profile a deployment can switch off,
     so what is written there has to be a format that is only ever data.
     """
-    path = tmp_path / "paused"
     holding = InMemorySaver()
     _gated_graph(holding).invoke({"asked": "x"}, config=_thread("s1"))
-    write_paused_state(holding, path)
+    state = paused_state(holding)
 
-    assert path.read_bytes().split(b"\n", 1)[0] == b"msgpack"
+    assert state.split(b"\n", 1)[0] == b"msgpack"
 
     # The control beside the claim: the serialiser *refuses* a pickle rather than
     # merely declining to write one, so a file rewritten to claim that type is still
     # not code. Without this, the assertion above passes against a reader that would
     # happily unpickle whatever it was handed.
-    path.write_bytes(b"pickle\n" + pickle.dumps({"storage": [], "writes": [], "blobs": []}))
     with pytest.raises(NotImplementedError):
-        read_paused_state(path)
+        resumed_saver(b"pickle\n" + pickle.dumps({"storage": [], "writes": [], "blobs": []}))
 
 
-def test_a_failed_write_leaves_the_previous_checkpoint_whole(tmp_path):
-    """A resume finding half a checkpoint fails on state that looks present, where one
-    finding nothing is a turn that gets asked again.
+def test_a_checkpoint_cut_off_halfway_is_refused_rather_than_resumed(cfg):
+    """It was written aside and renamed into place, so a write that died left the one
+    before it whole. Through a backend there is no rename, and what stands in for it is
+    the signature: half a checkpoint is refused as not what kingfisher wrote, where
+    loading it would fail on state that looks present.
     """
-    path = tmp_path / "paused"
+    start(cfg, "s")
     holding = InMemorySaver()
     _gated_graph(holding).invoke({"asked": "first"}, config=_thread("s1"))
-    write_paused_state(holding, path)
+    harness = harness_of(cfg, "s")
+    harness.write(PAUSED_STATE, paused_state(holding))
+    written = cfg.workspace / "sessions" / "s" / HARNESS / PAUSED_STATE
+    written.write_bytes(written.read_bytes()[: len(written.read_bytes()) // 2])
 
-    # The staging name taken by a directory, so the write fails exactly where a
-    # process dying mid-write would leave it -- driven rather than mocked.
-    (tmp_path / "paused.partial").mkdir()
-    with pytest.raises(OSError):
-        write_paused_state(holding, path)
-
-    resumed = _gated_graph(read_paused_state(path)).invoke(
-        Command(resume="approve"), config=_thread("s1")
-    )
-    assert resumed["answered"] == "approve"
+    with pytest.raises(SessionTamperedError):
+        harness.read(PAUSED_STATE)
 
 
-def test_no_checkpoint_is_not_an_error(tmp_path):
+def test_no_checkpoint_is_not_an_error(cfg):
     """Every ordinary turn ends without one, and the resume path asks regardless."""
-    assert read_paused_state(tmp_path / "never-written") is None
+    start(cfg, "s")
+    assert harness_of(cfg, "s").read(PAUSED_STATE) is None

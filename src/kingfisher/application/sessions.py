@@ -27,7 +27,7 @@ from kingfisher.infrastructure.workspace import (
 from kingfisher.kinds.agents.reading import read
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
     from kingfisher.config import Config
@@ -47,6 +47,8 @@ class Sessions:
     workspace: Path
     sessions_store: SessionStore | None
     session_root: SessionRoot
+    #: What the instance keeps about one session, through that session's backend.
+    _harness_at: Callable[..., Any]
 
     def _session_id_for(self, request: Request | Resume, root: Path) -> str:
         """Mint an id, or accept one that already names a session."""
@@ -62,8 +64,8 @@ class Sessions:
         """
         return UnknownSessionError(f"no session {session_id!r}; omit session_id to start one")
 
-    def _reaches_session(self, directory: Path, held: frozenset[str] | None) -> bool:
-        """Whether a caller holding `held` may touch the session in `directory`.
+    def _reaches_session(self, harness: Any, held: frozenset[str] | None) -> bool:
+        """Whether a caller holding `held` may touch the session `harness` belongs to.
 
         The one rule reading a session and running a turn in it share: a caller who
         cannot reach the session's pinned agent cannot touch the session. `None` is a
@@ -73,7 +75,7 @@ class Sessions:
         """
         if held is None:
             return True
-        kept = agent_started_with(directory)
+        kept = agent_started_with(harness)
         if kept is None:
             return True
         return reaches(read(kept).source_ids, held)
@@ -124,7 +126,8 @@ class Sessions:
         if found is None:
             return None
         directory = sessions_root(self.workspace) / session_id
-        return found if self._reaches_session(directory, held) else None
+        harness = self._harness_at(session_id, directory)
+        return found if self._reaches_session(harness, held) else None
 
     def _ready(self, session: Session) -> Session:
         """A session with its layout made and its files back, wherever it is."""

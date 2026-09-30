@@ -32,6 +32,7 @@ mentions.
 | `KINGFISHER_TOOLS_DIR` | Relocate the tools catalogue. | inside the workspace |
 | `KINGFISHER_SESSION_STORE` | A directory sessions are kept in, so they survive the machine that ran them. | none — the session directory is the only copy |
 | `KINGFISHER_SESSION_STORE_FACTORY` | `module:name` naming something callable with no arguments that returns a store of your own — a bucket, a database. A factory rather than a class, because kingfisher does not know whether yours wants a DSN or a mount point. | none |
+| `KINGFISHER_SESSION_KEY` | Signs what kingfisher reads back from a session — its pinned agent, its conversation, a paused turn — and refuses a turn when one was changed. `kingfisher key` prints one. Required unless the default backend runs under a sandbox kingfisher applies itself; `kingfisher doctor` says which case a deployment is. Never generated: saved in the workspace, the agent's shell could read it. | none — refused at startup where needed |
 | *(none)* | Where session directories are, while a turn runs. No setting moves them; mount `<workspace>/sessions` on whatever device you want them on. | `<workspace>/sessions` |
 
 **The last row is in the table rather than left out of it.** A reader asking how

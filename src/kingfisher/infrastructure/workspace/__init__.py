@@ -44,7 +44,6 @@ _EXPORTS = {
     "scaffold_memory": "kingfisher.infrastructure.workspace.sessions",
     "session_bytes": "kingfisher.infrastructure.workspace.sessions",
     "AGENT_SNAPSHOT": "kingfisher.infrastructure.workspace.snapshots",
-    "agent_snapshot": "kingfisher.infrastructure.workspace.snapshots",
     "agent_started_with": "kingfisher.infrastructure.workspace.snapshots",
     "remember_agent": "kingfisher.infrastructure.workspace.snapshots",
 }
@@ -67,7 +66,6 @@ __all__ = [
     "Seeded",
     "Skipped",
     "Source",
-    "agent_snapshot",
     "agent_started_with",
     "claim_path",
     "definitions_source",
@@ -128,7 +126,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.sessions import scaffold_memory as scaffold_memory
     from kingfisher.infrastructure.workspace.sessions import session_bytes as session_bytes
     from kingfisher.infrastructure.workspace.snapshots import AGENT_SNAPSHOT as AGENT_SNAPSHOT
-    from kingfisher.infrastructure.workspace.snapshots import agent_snapshot as agent_snapshot
     from kingfisher.infrastructure.workspace.snapshots import (
         agent_started_with as agent_started_with,
     )
