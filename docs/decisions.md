@@ -110,8 +110,9 @@ agent will not load is reported, not refused.
 *(2026-08-17, `skill-registry.md`.)*
 
 **Only `kinds.skills.registry` calls it.** The lister and its async twin were called
-from there and from `infrastructure.harness.narrowing`, so an upgrade that moved
-either meant the same edit in two files, and the async one was never pinned.
+from there and from `infrastructure.harness.middlewares.narrowing`, so an upgrade
+that moved either meant the same edit in two files, and the async one was never
+pinned.
 `listed` and `alisted` are the only calls now; `test_skill_registry` pins both
 names and fails if another module names either. A listing becomes a `Listed` where
 it arrives, so `name`, `path` and `description` are read off deepagents' metadata in
@@ -282,8 +283,8 @@ it is instead. *(2026-09-24, from an architecture review.)*
 
 **The mass noun stays wherever it is still a mass noun.** `middlewares` names the
 kind -- a directory, a field, a key, a table row. `MiddlewareRepository`,
-`approved_middleware`, `harness/middleware.py` and every sentence about *a
-middleware* keep the singular, because `ToolRepository` already sits behind a
+`approved_middleware`, `harness/declared_middleware.py` and every sentence about
+*a middleware* keep the singular, because `ToolRepository` already sits behind a
 kind called `tools`: naming the type for one of the things is what the other four
 kinds do. *(2026-09-15.)*
 
@@ -1574,6 +1575,71 @@ report: `on_tool_error` writes a `tool_error` event even when the middleware has
 already converted the exception into a tool result, which is now asserted rather
 than assumed.*
 
+**A caller's tool can be handed the turn's backend, under the turn's permissions.**
+The entry on real paths says nothing hands the backend to a tool the caller
+supplied, and since this one something does. The graph is built with
+`context_schema=ToolContext`, every turn is driven with a `ToolContext` holding the
+backend, and a tool declaring `runtime: ToolRuntime[ToolContext]` reads
+`runtime.context.backend`. It works in the virtual paths the model writes, with no
+host path anywhere in it. The `path` translation stays, for the tool that wants one
+real file to open; this is for the one that wants to list, search or write.
+
+The run context rather than a closure, because of when each thing exists. A tool is
+imported once, when the catalogue is read; a backend is rooted at one session and
+built per turn. langgraph's context is the one value that is per run, reaches every
+tool, and is never shown to the model.
+
+**Wrapped, because the backend keeps none of the rules.** deepagents applies
+`permissions=` in the bodies of its file tools and nowhere else. Measured on the
+default backend, in a session hardened the way a turn hardens one: a write to
+`/skills/x/SKILL.md` landed in the catalogue every session shares, and
+`/.harness/run.jsonl` was read back whole. `/data` held, but only because
+`protect_data` had dropped its write bits -- and the refusal named the host path.
+`PermittedBackend` puts the turn's rules in front of the backend with deepagents'
+own helpers. They are private and called deliberately, for the reason the skills
+lister is: a second matcher is the copy that drifts, and here the drift is a path
+one side refuses and the other reads. It answers the way the file tools do and no
+more strictly -- a listing is filtered, a delete is checked against the whole
+subtree, a batch marks the paths it refused and sends the rest.
+
+Three things differ from the file tools, each because a call made inside a tool is
+not a file tool call:
+
+- **`interrupt` is a refusal.** The rule means stop and ask a person, and the asking
+  is the graph pausing before a file tool runs; nothing pauses for a call made in a
+  tool's body. deepagents' result filters pass `interrupt` entries through -- for
+  them the person has answered -- so the rules are rewritten to `deny` once rather
+  than compared at each check. No rule kingfisher writes today is an `interrupt`,
+  and this is so that the first one is not a hole.
+- **There is no `execute`.** No permission rule reaches the shell, so a tool holding
+  it has a way round all of them, and runs commands for a request that was refused
+  the `execute` tool.
+- **A refused path is an `error` on the result**, where a file tool returns a failed
+  message: a backend's callers read results, and that is the convention every other
+  failure of these methods already follows.
+
+**Every turn, and a resume is a turn.** langgraph keeps the context out of the
+checkpoint: a graph paused at a gate and resumed without one ran the approved call
+with `runtime.context` as `None`. So it travels with the keywords both loops are
+driven with and not with the payload, which is the part a resume replaces.
+
+**A graph the caller built is driven with none.** Its context is whatever its
+builder decided. The keyword is left off rather than passed as `None`, because all
+that is known of such a graph is the three keywords it has always been driven with.
+A tool written this way needs a graph kingfisher assembled.
+
+**It costs an author two rules, documented rather than guarded.** The argument must
+not be called `path`: that name is rewritten to a host path before the tool runs,
+the backend takes virtual ones, and the default backend refuses the rewritten one.
+And the tool is a function: a `BaseTool` subclass declaring its own `args_schema` is
+called without `runtime`. Each fails on the first call with a message naming what
+went wrong, and a test pins each so the guide hears when upstream moves.
+
+`ToolContext` is on the front door and apart from the wrapper it carries, so a tool
+file naming it for an annotation does not load deepagents. **Not a sandbox for the
+tool:** what the wrapper bounds is where the model can point one, and a tool's own
+`open()` meets nothing, as before. *(2026-09-30.)*
+
 ## Confining the shell
 
 **The two fences share a toolchain and not a workspace**, and the asymmetry is
@@ -2633,6 +2699,47 @@ passing, and the deployment that breaks on it is the one nobody told.
 Named `Catalogued` rather than `Kind` because `origins.Kind` is already a word in
 this layer and means what sort of *place* something was read from. *(2026-09-23.)*
 
+**A non-zero listing says why, to the person and not only to a script.** The exit
+code and the printed text were two hand-written lists of one set, and they had drifted
+by three entries. `middlewares_error`, `bundles_error` and `moved_tools` each made
+`kingfisher list` exit 1 with nothing in the human output saying so: the text renderer
+had no middlewares section at all, and the only hint was `(could not introspect)` under
+the *builtin tools* heading, which sends a reader to the wrong directory -- what a
+broken `middlewares/*.py` costs is the graph the built-in set is read off. `--json`
+carried the file and the `SyntaxError` all along.
+
+Every rule that proved those errors were carried asserted on `--json`. That is how
+three of them passed while the person most likely to be running the command -- somebody
+looking at a broken workspace -- was told nothing. The rule now has two halves driven
+over the same total set: each `*_error` makes the listing non-zero, **and** each one is
+said in the rendered text. The two troubles that are not a kind's error, `moved_tools`
+and `miscounted_bundles`, are held by a table pinned against `failed`'s own source, so
+a fourth cannot be added to the exit code and forgotten by the renderer.
+
+`moved_tools` was the worst of the three to be silent about, and this file already said
+why: an agent naming a tool by a path it has moved from loads, runs, and quietly does
+not have the tool its author granted.
+
+**`render` has no branch now**, which is the other half of the same bug. It used to
+return early when `tools/` would not walk, so every section written afterwards had to
+be remembered on that path too. Skills and subagents were remembered when that was
+fixed; `_access` was not -- so an operator auditing a policy on a workspace with one
+unparseable `.py` in `tools/` got no access report and no sign there was one to get.
+The tools half moved into a section of its own, which is what let the early return go,
+and `_skills_and_subagents` went with it: that helper existed only to be called from
+both paths. The nine tests that reached for it now go through `render`, which is the
+output a person actually reads -- the same lesson as the `--json` rules above.
+
+**The middlewares section prints the name and not the module.** For a class written in
+`middlewares/*.py` the `__module__` is a dynamic name made unique and nothing more, and
+a listing printing `cap_3107351676692534586` would look like it was saying where the
+code is. A class *imported* into a workspace file keeps its own package, and that one
+is printed as `(from ...)` -- the same fact the subagents section marks with `carried`,
+for the same reason: code an operator cannot open in this workspace should not print
+like code they can. `Inventory.middlewares` carries that distinction rather than the
+raw `__module__`, so `--json` gets the honest answer too. *(2026-09-27, from an
+architecture review.)*
+
 **The inventory's seven `try` blocks keep their six catch-sets.** The review read
 them as one rule written six ways. They are not: each set is exactly the kinds its
 block reads, and every type beyond the obvious one carries the incident that put it
@@ -3622,6 +3729,44 @@ so neither has to import the other. `HostPathError` is exported from the root,
 because `ports.md` tells an adapter to raise it and the address it had given was
 a module that has stopped being where it lives; `backend` still re-exports it for
 anybody who copied that address.
+
+**Regrouped a week later, by what a class is rather than by what is edited with
+it.** *(2026-09-30.)* Kingfisher's own middleware is one package,
+`infrastructure/harness/middlewares/`: `narrowing` holds the three that apply a
+request's capabilities, `workspace_tools` the two around a workspace tool call,
+`host_path_guard` the one. The history test above draws a boundary for whoever is
+editing, and this one is for whoever is looking: "what does kingfisher wrap an
+agent in" had three answers, in modules named for other things, and the six
+classes had no address in common. `test_kingfisher_keeps_its_own_middleware_in_one_package`
+holds it, following bases rather than matching a name, because `NarrowedSkills`
+subclasses deepagents' `SkillsMiddleware` and never says `AgentMiddleware`.
+
+Only the classes moved. `HostPathGuard` left `reject_host_path`, which the
+paragraph above calls one mechanism, and it still is one -- the error stays in
+`host_paths` and the guard imports it. That module names no runtime class now, so
+`HostPathError` went from 250ms and ~970 modules to 16ms and 91, measured, and
+from `HEAVY_EXPORTS` to the light list where a test keeps it there.
+`SessionPaths` went to `session_paths`, a module of its own, because it has two
+readers on opposite sides: `WorkspaceToolPaths` in the package and `GuardedTool`
+outside it. Left in `tool_guards`, the package would import that module for the
+helper and that module would import the package for the three guards it composes.
+
+**None of the six is offered to a definition, and that was the alternative
+considered.** They ship with the package the way `prompts/` does, which invites
+listing them beside a deployment's own so a definition could name one. A name a
+definition can write is a name it can leave out, and `ToolAllowlist` is what holds
+a request to the tools it was granted -- omitting it would be a way to widen, which
+*Capabilities narrow and never widen* does not allow an exception for. They do not
+fit the registry mechanically either: an entry there is built from defaults a
+deployment stored, and these are built per request from the names that request
+resolved and the backend it runs on. Nor are they under `kinds/middlewares`, since
+a kind may not name a layer, nor at the package root, for the reason *Not a
+module: middleware* gave against a fifth area reaching the runtime.
+
+`harness/middleware.py` is `declared_middleware.py`, because beside a package
+called `middlewares` the bare name no longer said which set it builds. It keeps
+the singular, as the mass-noun entry has it; the package takes the plural for the
+reason the kind's does -- it is a directory of them.
 
 **A cluster that size means two different things and this one is the harmless
 one.** Everything joined to everything is what a cohesive unit and a rippling

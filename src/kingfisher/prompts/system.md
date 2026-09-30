@@ -35,7 +35,7 @@ leading slash, and nothing in the workspace is out of the shell's reach:
 | `/derived/<name>` | `derived/<name>` |
 | `/scratchpad/<name>` | `scratchpad/<name>` |
 
-All four already exist when a turn starts, so do not go searching for them — `find`
+These already exist when a turn starts, so do not go searching for them — `find`
 will not locate one any faster than dropping the slash will.
 
 Tools this workspace defines take these same virtual paths.

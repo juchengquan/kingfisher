@@ -14,7 +14,7 @@ from kingfisher.infrastructure.harness.agent import (
     _model_named,
     _provisions,
 )
-from kingfisher.infrastructure.harness.middleware import ByName, declared_middleware
+from kingfisher.infrastructure.harness.declared_middleware import ByName, declared_middleware
 from kingfisher.kinds.agents import spec as agent_format
 from kingfisher.kinds.agents.spec import AgentError
 from kingfisher.kinds.subagents.spec import SubagentError

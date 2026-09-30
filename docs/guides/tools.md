@@ -262,17 +262,101 @@ host path — under `/Users/`, `/home/`, `/tmp/`, `/proc/` and the other roots a
 file tool refuses, or under the directory this session's neighbours are in --
 comes back to the model as a failed tool result instead of reaching the tool.
 
-That refusal is not a boundary, and the next section is why. A tool is ordinary
-Python, and one that opens whatever string it is handed can still be pointed
-somewhere by a relative path, or by text that does not look like a path at all.
+That refusal is not a boundary, and the section after next is why. A tool is
+ordinary Python, and one that opens whatever string it is handed can still be
+pointed somewhere by a relative path, or by text that does not look like a path at
+all.
+
+## Or the tool is handed the session's filesystem
+
+`path` gives a tool one real file. A tool that wants more — to list a folder,
+search it, write its result beside its input — asks for the filesystem the file
+tools themselves use, and works in the paths the model already writes:
+
+```python
+from langchain.tools import ToolRuntime
+
+from kingfisher import ToolContext
+
+
+def first_line(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
+    """Return the first line of a text file. `file_path` is the same virtual
+    path the file tools take, such as `/data/report.csv`."""
+    found = runtime.context.backend.read(file_path)
+    if found.error:
+        raise OSError(found.error)
+    return found.file_data["content"].splitlines()[0]
+
+
+TOOLS = [first_line]
+```
+
+`runtime` is not an argument the model sees or sends. langgraph fills it in and
+leaves it out of the schema.
+
+**Write it as a function**, decorated or not. langgraph reads which arguments to
+fill off the tool's schema, so a class that declares its own `args_schema` — the
+reason to write a class at all — is called without `runtime` and fails on
+`_run() missing 1 required positional argument: 'runtime'`. Naming it in the
+schema is no way out: pydantic cannot build a model holding one, and the file
+stops importing.
+
+`runtime.context.backend` is a deepagents `BackendProtocol`: `ls`, `read`, `grep`,
+`glob`, `write`, `edit`, `delete`, `upload_files` and `download_files`, and each
+again with an `a` in front for an `async` tool. It is this turn's backend — the
+one the deployment named, rooted at this session — so `/data/report.csv` is the
+file `read_file` would read, and nothing in the tool knows where that is on the
+host.
+
+**It keeps the rules the file tools keep**, and that is the reason it is a wrapper
+rather than the backend itself. deepagents applies a turn's permissions inside
+`read_file` and `write_file`, not in the backend under them, so a tool handed the
+backend bare would write into `/skills` — the catalogue every session shares — and
+read the run log under `/.harness`, for a model that was refused both. Through the
+wrapper the same paths are refused the same way:
+
+| Asked for | Comes back as |
+| --- | --- |
+| a path the turn may not read or write | the result's `error` — `permission denied for read on /.harness/run.jsonl` |
+| a path that climbs out with `..` | the result's `error`, the same way |
+| `ls`, `glob` or `grep` over a folder | the entries that may be read, and no sign of the rest |
+| `delete` on a folder | refused if anything under it may not be written, not only the folder |
+| `upload_files` or `download_files` | one response per path, in the order asked; a refused one carries `error="permission_denied"` and the others still go through |
+| a path a rule would stop to ask a person about | refused — nothing can pause for an answer inside a tool call |
+
+**A refused path is on the result, not raised.** That is `BackendProtocol`'s
+convention rather than kingfisher's, and it means a tool that ignores `.error`
+carries on with `file_data` as `None`. Check it and raise, as above: the
+exception reaches the model as a failed tool result. The one refusal that arrives
+raised is the default backend's own, for a host path — and that reaches the model
+as a failed result too, with the virtual path to use instead.
+
+**There is no `execute`.** No permission rule reaches the shell, so a tool holding
+it would be the way round every row of that table — and would run commands for a
+request that was refused the shell.
+
+**Do not call the argument `path`.** The two ways of handing a tool a file do not
+mix. `path` is rewritten to the real file before the tool runs, the backend takes
+the virtual path, and handed the rewritten one it refuses it as a host path. Any
+other name — `file_path`, `source` — reaches the tool as the model wrote it.
+
+**Write the annotation out as `ToolRuntime[ToolContext]`.** A bare `ToolRuntime`
+runs, and declares a context of `None` — so pydantic warns on every call that it
+was handed something else.
+
+Two edges. A delegate's tools are handed the same backend as the agent that
+started it. And `runtime.context` is `None` when the deployment passed `graph=` to
+`Kingfisher`: a graph kingfisher did not build is driven the way its builder
+left it, so a tool written this way needs a graph kingfisher assembled.
 
 ## A tool is code, and it runs in the kingfisher process
 
-Not in the agent's sandbox, and not under the filesystem permissions. `tools/`
-is deliberately *not* a backend route, so no file tool can reach it; the only
-agent that could write one is an agent already holding `execute`, which can run
-anything on the host regardless. Treat this directory the way you treat the rest
-of your source: it is yours, not the agent's.
+Not in the agent's sandbox, and not under the filesystem permissions. The backend
+above meets those permissions because the wrapper applies them; the tool's own
+`open()` meets nothing. `tools/` is deliberately *not* a backend route, so no file
+tool can reach it; the only agent that could write one is an agent already holding
+`execute`, which can run anything on the host regardless. Treat this directory the
+way you treat the rest of your source: it is yours, not the agent's.
 
 ## Where the directory lives
 

@@ -97,11 +97,11 @@ from kingfisher.infrastructure.harness.checkpointing import (
     release_checkpointer,
     write_paused_state,
 )
-from kingfisher.infrastructure.harness.interpreter import release_interpreter
-from kingfisher.infrastructure.harness.middleware import (
+from kingfisher.infrastructure.harness.declared_middleware import (
     MiddlewareFactory,
     refuse_unbuildable_middleware,
 )
+from kingfisher.infrastructure.harness.interpreter import release_interpreter
 from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.session_store import (
     AGENT_MARK,
@@ -780,6 +780,7 @@ class Kingfisher(Sessions, Disposal):
             placement=placement,
             release=release,
             saver=checkpointer,
+            context=built.context if isinstance(built, Assembled) else None,
             resume=resume,
             discarded=discarded,
             # Tools come off the assembled graph rather than a list kept
@@ -837,6 +838,7 @@ class Kingfisher(Sessions, Disposal):
             graph=admitted.graph,
             release=admitted.release,
             saver=admitted.saver,
+            context=admitted.context,
             resume=admitted.resume,
             discarded=admitted.discarded,
             agent_name=getattr(request, "agent", None),
@@ -1106,11 +1108,21 @@ class Kingfisher(Sessions, Disposal):
         Shared so that one of them cannot quietly lose `subgraphs`, which would
         leave a delegate's tokens out of that path and nothing else changed.
         """
-        return {
+        driving: dict[str, Any] = {
             "config": turn.prepared.config,
             "stream_mode": runtime.STREAM_MODES,
             "subgraphs": True,
         }
+        if turn.prepared.context is not None:
+            # Here rather than beside the payload, so that a resume carries it: the
+            # payload is what differs between a turn and its resume, and the context
+            # is in no checkpoint for the resume to find.
+            #
+            # Left off for a graph the caller built, not passed as `None`. All that is
+            # known of such a graph is that it takes the three keywords above, and one
+            # that is not langgraph's refuses a fourth.
+            driving["context"] = turn.prepared.context
+        return driving
 
     def _bound(self, turn: _Turn) -> RunEvent | None:
         """The turn's deadline, read between chunks. `None` while there is time."""

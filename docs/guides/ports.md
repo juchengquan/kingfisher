@@ -317,6 +317,14 @@ passed beside it. `run()` and `stream()` keep `backend=default_backend` in their
 signatures, because they are conveniences over a *default* `Kingfisher` and that
 is what makes the one-liner a one-liner.
 
+**What you return is also what a workspace tool is handed.** A tool that asks for
+it reaches this backend's file methods directly — behind the turn's permissions,
+and without `execute`; [`tools.md`](tools.md#or-the-tool-is-handed-the-sessions-filesystem)
+is the tool's side of it. So every file method of `BackendProtocol` may be called
+on yours, `delete` and the two batch ones included, whichever of them the
+built-in tools happen to use. A pre-built graph is the exception: kingfisher
+drives it with no context, and such a tool finds `runtime.context` is `None`.
+
 There is no setting for this one. Build `Kingfisher` yourself; `kingfisher run`
 builds its own with the default.
 

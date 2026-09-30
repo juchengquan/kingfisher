@@ -8,7 +8,8 @@ from typing import Any
 
 import pytest
 
-from kingfisher.infrastructure.harness.tool_guards import WorkspaceToolPaths, guarded_tools
+from kingfisher.infrastructure.harness.middlewares.workspace_tools import WorkspaceToolPaths
+from kingfisher.infrastructure.harness.tool_guards import guarded_tools
 
 
 @dataclass

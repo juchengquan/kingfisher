@@ -191,6 +191,48 @@ cost an experiment to establish.
   carries no `name`, so `_event_for` records a `tool_result` naming no tool.
   Documented rather than refused, and `decisions.md` says why. *(2026-09-04.)*
 
+## The run context, and the permissions around a backend
+
+What `ToolContext` and `PermittedBackend` were built on.
+`tests/unit/test_tool_context.py` pins the ones a turn depends on, so what is here
+is the part a test cannot say: which versions answered, and what was tried that
+did not work. All of it langchain-core 1.5.5, langgraph 1.2.11, deepagents 0.7.6.
+*(2026-09-30.)*
+
+- **langgraph does not checkpoint the context.** A graph paused at a gate and
+  resumed with `Command(resume=...)` and no `context=` ran the approved tool with
+  `runtime.context` as `None`; resumed with one, the tool saw the new one. Nothing
+  is restored and nothing is refused, so a resume has to be handed it again.
+- **A delegate inherits its parent's context, and deepagents is not what passes
+  it.** The `task` tool invokes a delegate with a config and nothing else, and the
+  delegate's tools saw the parent's context anyway -- for a declared delegate, for
+  `general-purpose`, and for a compiled graph handed in as `runnable`.
+- **`context_schema` is not what delivers a context.** A graph compiled with no
+  schema handed its tools the context it was driven with all the same. What is
+  sensitive to the type is the *tool's* annotation: a bare `ToolRuntime` declares a
+  context of `None`, and pydantic warns `PydanticSerializationUnexpectedValue` on
+  every call that hands it something else.
+- **`runtime` is filled in from the tool's schema, so a class that declares its
+  schema does not get one.** A plain function and a `@tool` function both do, and
+  so does a `BaseTool` subclass that leaves `args_schema` to be inferred from
+  `_run`. One that declares `args_schema` is called without `runtime` and raises
+  `TypeError`. Adding `runtime: ToolRuntime[...]` to that schema fails earlier, at
+  import, with `PydanticSchemaGenerationError` over langgraph's `BaseStore`.
+- **deepagents enforces `permissions=` in its file tools' bodies and nowhere
+  else**, so a backend called directly keeps none of them. The functions it uses
+  are private -- `_check_fs_permission`, `_find_delete_deny_patterns`, the two
+  result filters -- and `PermittedBackend` calls the same ones.
+- **Its result filters pass `interrupt` entries through**, and so does its delete
+  check for a confirmed leaf. Correct for a file tool, where the person has
+  answered before the tool body runs, and a hole for any other caller.
+- **A rule on `/x/**` does not match `/x`.** It matches `/x/` and everything
+  under it, so `ls('/x')` is allowed and comes back empty where `ls('/x/y')` is
+  refused. Repeated slashes do not get past a rule: `//data/x.txt` matches
+  `/data/**`.
+- **The default backend routes on the leading slash.** `skills/x/SKILL.md` and
+  `/skills/x/SKILL.md` validate to one path and are two files to the backend: the
+  first misses the `/skills/` route and is looked for under the session.
+
 ## The Linux fence
 
 - **GitHub's `ubuntu-latest` runs Landlock ABI 7** against the 6 a full ruleset

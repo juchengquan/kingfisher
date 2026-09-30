@@ -209,7 +209,11 @@ def _token_event(chunk: Any) -> RunEvent | None:
     """One `messages` chunk into a token event, or nothing."""
     if not isinstance(chunk, tuple) or len(chunk) != TOKEN_CHUNK_PARTS:
         return None
-    message, _metadata = chunk
+    message, metadata = chunk
+    # The summarizer calls its model from inside the model node, so the node
+    # cannot tell its tokens from the answer's; the tag it sets on the call can.
+    if isinstance(metadata, Mapping) and metadata.get("lc_source") == "summarization":
+        return None
     # `AIMessageChunk` and not `AIMessage`: the former is a subclass, and only
     # it appears on this stream. Testing for the base class would admit the
     # tool results this exists to exclude.

@@ -1346,8 +1346,8 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
             # read smaller.
             "backend",
             "checkpointing",
+            "declared_middleware",
             "interpreter",
-            "middleware",
             "runlog",
             "runtime",
         }
@@ -1458,6 +1458,122 @@ def test_every_named_harness_edge_is_a_real_one():
     assert not stale, (
         f"HARNESS_EDGES names {stale}, which nothing imports any more; delete the "
         "entry so the table keeps describing the code"
+    )
+
+
+#: Where kingfisher's own middleware lives, and the only place it may.
+OWN_MIDDLEWARE = "kingfisher.infrastructure.harness.middlewares"
+
+
+def _bases_of(path: Path) -> dict[str, list[tuple[str, str]]]:
+    """Each class a file defines, and its bases as `(module, name)`.
+
+    A base the file imported is reported where it was imported from; one it did not
+    import is reported as the file's own. `ast.walk` rather than the module body, so
+    a class defined inside a function is a class here too.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    package = _package_of(path)
+    here = next(name for name, at in _module_paths().items() if at == path)
+    names: dict[str, tuple[str, str]] = {}
+    modules: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.asname:
+                    modules[alias.asname] = alias.name
+                else:
+                    modules[alias.name.split(".")[0]] = alias.name.split(".")[0]
+        elif isinstance(node, ast.ImportFrom):
+            base = package[: max(len(package) - (node.level - 1), 0)] if node.level else ()
+            source = ".".join((*base, *([node.module] if node.module else [])))
+            for alias in node.names:
+                names[alias.asname or alias.name] = (source, alias.name)
+                modules[alias.asname or alias.name] = f"{source}.{alias.name}"
+
+    def resolved(base: ast.expr) -> tuple[str, str] | None:
+        if isinstance(base, ast.Subscript):  # `Base[T]`
+            base = base.value
+        if isinstance(base, ast.Name):
+            return names.get(base.id, (here, base.id))
+        dotted: list[str] = []
+        while isinstance(base, ast.Attribute):
+            dotted.append(base.attr)
+            base = base.value
+        if not isinstance(base, ast.Name) or base.id not in modules:
+            return None
+        *inner, name = reversed(dotted)
+        return ".".join((modules[base.id], *inner)), name
+
+    return {
+        node.name: [found for base in node.bases if (found := resolved(base)) is not None]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef)
+    }
+
+
+def _middleware_classes() -> set[tuple[str, str]]:
+    """`(module, ClassName)` for every middleware the package defines.
+
+    Read off the source and asked of the runtime only where the source runs out: a
+    base in this tree is followed to its own bases, and a base from the agent runtime
+    is imported and asked. Matching the name `AgentMiddleware` instead would miss the
+    skills index, which subclasses deepagents' `SkillsMiddleware` and never names it.
+    """
+    import importlib
+
+    from langchain.agents.middleware import AgentMiddleware
+
+    runtime = THIRD_PARTY["infrastructure/harness"]
+    bases = {
+        (module, name): found
+        for module, path in _module_paths().items()
+        for name, found in _bases_of(path).items()
+    }
+
+    def foreign(module: str, name: str) -> bool:
+        if module.partition(".")[0] not in runtime:
+            return False
+        try:
+            candidate = getattr(importlib.import_module(module), name)
+        except (ImportError, AttributeError):
+            return False
+        return isinstance(candidate, type) and issubclass(candidate, AgentMiddleware)
+
+    found: set[tuple[str, str]] = set()
+    while True:
+        more = {
+            klass
+            for klass, its in bases.items()
+            if klass not in found and any(base in found or foreign(*base) for base in its)
+        }
+        if not more:
+            break
+        found |= more
+    return found
+
+
+def test_kingfisher_keeps_its_own_middleware_in_one_package():
+    """A middleware written beside the code that installs it, where nobody looking for
+    "what does kingfisher wrap an agent in" would find it.
+
+    Six were spread over three modules named for other things before this rule, and
+    the package they moved to stays the whole answer only if the seventh cannot land
+    anywhere else.
+    """
+    found = _middleware_classes()
+
+    # The witness that the walk follows a base rather than matching a name: it is the
+    # one class here that never says `AgentMiddleware`. Without it, a walk that found
+    # nothing would pass the assertion below on an empty mapping.
+    assert "NarrowedSkills" in {name for _, name in found}, f"the walk found only {found}"
+
+    elsewhere = sorted(
+        f"{module}.{name}" for module, name in found if not module.startswith(f"{OWN_MIDDLEWARE}.")
+    )
+    assert not elsewhere, (
+        f"{elsewhere} are middleware defined outside {OWN_MIDDLEWARE} — move the class "
+        "there and import it where it is installed; what it is built on can stay put"
     )
 
 
@@ -1658,6 +1774,10 @@ WITNESSES: dict[str, str] = {
     # repository cannot see.
     "BACKEND_CONTRACT": "document",
     "CommandResult": "document",
+    # `tools.md` writes `from kingfisher import ToolContext` for the annotation that
+    # hands a tool the turn's backend. A tool file is in a deployment's workspace,
+    # so nothing in this repository imports the name and nothing ever will.
+    "ToolContext": "document",
     # The type of `Kingfisher.run`'s `source_ids=`. `UNSCOPED` is one of its two
     # members and is documented; the type that admits it cannot be private.
     "Held": "embedder",
@@ -2051,10 +2171,11 @@ def test_the_cycle_finder_finds_one_in_this_tree():
 #: that makes it worth having: it names no foreign package at all, passes that table
 #: cleanly, and loads three provider SDKs through one import two hops away.
 SDK_LOADING: frozenset[str] = frozenset({
-    # The harness, where speaking to deepagents is the job. `models`, `interpreter` and
-    # `tools` are the three in that package that are not here: two name their foreign
-    # classes as strings and resolve them on demand, and the third reads a graph it is
-    # handed.
+    # The harness, where speaking to deepagents is the job. Six in that package are
+    # not here. `models` and `interpreter` name their foreign classes as strings and
+    # resolve them on demand, `tools` reads a graph it is handed, `host_paths` and
+    # `session_paths` are plain path rules the middleware is built on, and
+    # `tool_context` is a record with one untyped field.
     "kingfisher.infrastructure.harness.activation",
     "kingfisher.infrastructure.harness.agent",
     "kingfisher.infrastructure.harness.backend",
@@ -2063,12 +2184,22 @@ SDK_LOADING: frozenset[str] = frozenset({
     # spelling: `SandboxBackendProtocol` is an abstract base class and the answer
     # is `isinstance` against it.
     "kingfisher.infrastructure.harness.backend_contract",
-    # The two halves `backend` was split into, which build langchain middleware.
-    "kingfisher.infrastructure.harness.host_paths",
+    # What a caller's tool is handed in place of the backend, which has no light
+    # spelling either. It subclasses `BackendProtocol` so that it is a backend to
+    # whatever a tool passes it on to -- deepagents asks with `isinstance`.
+    # `tool_context` holds one and names nothing, and that split is what keeps
+    # `ToolContext` cheap for a tool file to import.
+    "kingfisher.infrastructure.harness.permitted_backend",
+    # Kingfisher's own middleware, each a subclass of a langchain or deepagents class,
+    # and `tool_guards`, which composes three of them. `host_paths` and `session_paths`
+    # are what those are built on and name no runtime class, which is what keeps
+    # `HostPathError` cheap for a backend author to import.
+    "kingfisher.infrastructure.harness.middlewares.host_path_guard",
+    "kingfisher.infrastructure.harness.middlewares.narrowing",
+    "kingfisher.infrastructure.harness.middlewares.workspace_tools",
     "kingfisher.infrastructure.harness.tool_guards",
     "kingfisher.infrastructure.harness.checkpointing",
-    "kingfisher.infrastructure.harness.middleware",
-    "kingfisher.infrastructure.harness.narrowing",
+    "kingfisher.infrastructure.harness.declared_middleware",
     "kingfisher.infrastructure.harness.runlog",
     "kingfisher.infrastructure.harness.runtime",
     "kingfisher.infrastructure.harness.subagents",
@@ -2125,7 +2256,7 @@ def test_only_the_named_modules_load_a_provider_sdk():
 #: touches deepagents only once one of its functions is called, deferring those imports
 #: to say so -- while the index that narrows skills imports it at the top.
 SDK_WITNESSES = {
-    "kingfisher.infrastructure.harness.narrowing": True,
+    "kingfisher.infrastructure.harness.middlewares.narrowing": True,
     "kingfisher.kinds.skills.registry": False,
 }
 
@@ -2288,6 +2419,16 @@ LIGHT_EXPORTS = frozenset({
     # Reaching it costs nothing; calling it may write a sandbox profile,
     # which is the same light-to-reach / heavy-to-call split `inventory` has.
     "shell_confinement", "Confinement",
+    # Light only while `host_paths` names no runtime class. `HostPathGuard` is the
+    # langchain half of that mechanism and lives with the rest of the middleware;
+    # defined beside the error it catches, it made raising the error cost 250ms and
+    # ~970 modules.
+    "HostPathError",
+    # Light only while it is defined apart from the backend it carries. A tool file
+    # imports it for an annotation, and so does that tool's own test. Measured: 11ms
+    # and 82 modules where it is, against 1.1-1.3s and three provider SDKs beside
+    # `PermittedBackend`, which subclasses a deepagents class.
+    "ToolContext",
 })
 
 #: The rest, which genuinely need deepagents to do their job.
@@ -2302,10 +2443,6 @@ HEAVY_EXPORTS = frozenset({
     # deployment satisfies without knowing deepagents exists, and this one checks
     # an object deepagents has to accept.
     "BACKEND_CONTRACT",
-    # Beside `HostPathGuard`, which is langchain middleware: 250ms and ~970 modules,
-    # measured, though no deepagents. Paid by nobody new -- the one who raises it is
-    # writing a backend deepagents has to accept, and has loaded deepagents for that.
-    "HostPathError",
     # It builds a `CompositeBackend` over a confined shell, so it is deepagents by
     # definition. Every consumer that names it was already paying for `Kingfisher`
     # on the same line, so nothing new arrives with it.
