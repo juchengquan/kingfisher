@@ -31,6 +31,7 @@ __version__ = "0.1.0"
 _EXPORTS = {
     "Held": "kingfisher.domain.access",
     "AccessError": "kingfisher.domain.access",
+    "ArtifactError": "kingfisher.domain.result",
     "UNSCOPED": "kingfisher.domain.access",
     "Capabilities": "kingfisher.domain.capabilities",
     "CapabilityError": "kingfisher.domain.capabilities",
@@ -129,6 +130,7 @@ __all__ = [
     "UNSCOPED",
     "AccessError",
     "Adapter",
+    "ArtifactError",
     "Capabilities",
     "CapabilityError",
     "CommandResult",
@@ -200,6 +202,7 @@ if TYPE_CHECKING:
     from kingfisher.domain.request import DecisionError as DecisionError
     from kingfisher.domain.request import Request as Request
     from kingfisher.domain.request import Resume as Resume
+    from kingfisher.domain.result import ArtifactError as ArtifactError
     from kingfisher.domain.result import PendingDecision as PendingDecision
     from kingfisher.domain.result import RunEvent as RunEvent
     from kingfisher.domain.result import RunResult as RunResult

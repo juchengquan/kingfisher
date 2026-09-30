@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import fields
+from dataclasses import fields, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -12,9 +12,10 @@ import yaml
 from dotenv import load_dotenv
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
-from kingfisher.config import Config, Endpoint, ModelProfile, Models
+from kingfisher.config import Adapter, Config, Endpoint, Landing, ModelProfile, Models
 from kingfisher.infrastructure.harness.models import ADAPTERS
 from kingfisher.infrastructure.workspace import ensure_layout, ensure_session_layout
+from tests.unit.scripted import Scripted
 
 if TYPE_CHECKING:
     # Type-only, and deliberately: naming the record at runtime would pull
@@ -29,6 +30,27 @@ class FakeToolCallingModel(FakeMessagesListChatModel):
 
     def bind_tools(self, tools, **kwargs):
         return self
+
+
+@pytest.fixture
+def scripted(cfg):
+    """`cfg`, with every endpoint answered by `Scripted`."""
+    row = Adapter(
+        f"{Scripted.__module__}:Scripted",
+        Landing(
+            model="model",
+            base_url="base_url",
+            api_key="api_key",
+            max_tokens="max_tokens",
+            timeout="timeout",
+        ),
+    )
+    endpoints = {
+        name: replace(endpoint, adapter=row) for name, endpoint in cfg.models.endpoints.items()
+    }
+    Scripted.script.clear()
+    yield replace(cfg, models=replace(cfg.models, endpoints=endpoints))
+    Scripted.script.clear()
 
 
 class StubCheckpointer:

@@ -15,6 +15,10 @@ from typing import Any
 _THINK = re.compile(r"<think\b[^>]*>.*?</think>", re.DOTALL | re.IGNORECASE)
 
 
+class ArtifactError(ValueError):
+    """A name that is not something a turn produced, or that is not there."""
+
+
 def normalize_answer(text: str) -> str:
     """Remove inlined reasoning blocks from a final answer."""
     return _THINK.sub("", text or "").strip()
@@ -86,8 +90,10 @@ class RunResult:
     #: relative to this root.
     session_dir: Path = Path()
     log_path: Path = Path()
-    #: Everything under `/derived` and `/memory` at the end of this turn, as paths
-    #: relative to the session root. What is *present*, not what changed: `execute`
+    #: Everything under `/derived` and `/memory` at the end of this turn, as names
+    #: relative to the session, listed through its backend -- so names, not files to
+    #: open: `Kingfisher.artifact` fetches one, wherever the backend keeps it. What is
+    #: *present*, not what changed: `execute`
     #: writes without any file tool seeing it, so the only sound view is the
     #: filesystem's, and a caller persisting incrementally diffs against the
     #: previous turn's manifest -- which also tells it what was deleted.

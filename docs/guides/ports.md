@@ -325,6 +325,18 @@ on yours, `delete` and the two batch ones included, whichever of them the
 built-in tools happen to use. A pre-built graph is the exception: kingfisher
 drives it with no context, and such a tool finds `runtime.context` is `None`.
 
+**Kingfisher reaches the session through it too.** A request's `data` is placed
+with `upload_files` under `/data/`, what a turn left is listed with `glob` under
+`/derived/` and `/memory/`, and `Kingfisher.artifact` fetches one with
+`download_files`. So those three work on a backend that keeps the session
+somewhere other than the directory it was handed. `/data` has to take that upload
+while refusing the agent's own writes: `default_backend` routes it to
+`DataBackend`, which lifts the permission bits for kingfisher's upload alone, and
+a backend of yours meets the same promise its own way. The rest of what kingfisher
+keeps about a session — its conversation, its pinned agent — is still read from
+that directory; [the proposal](../design/2026-09-30-a-session-is-its-backend.md)
+moving it is not finished.
+
 There is no setting for this one. Build `Kingfisher` yourself; `kingfisher run`
 builds its own with the default.
 

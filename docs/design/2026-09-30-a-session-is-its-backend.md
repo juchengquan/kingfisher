@@ -1,8 +1,10 @@
 # A session is its backend
 
-**Status:** proposed, nothing built. Every question it raised was settled in
-review on 2026-09-30, and the answers are under *Settled in review* with their
-reasons. It stays here until its slices land or it is withdrawn.
+**Status:** proposed. **Slice 1 landed**: a request's data is placed, and a
+turn's artifacts collected and fetched, through the session's backend. Slices 2 to
+5 are not built. Every question it raised was settled in review on 2026-09-30, and
+the answers are under *Settled in review* with their reasons. It stays here until
+its slices land or it is withdrawn.
 **Date:** 2026-09-30.
 **Occasion:** a question about whether a session is implemented with the backend.
 It is only half implemented that way. The agent reaches a session only through

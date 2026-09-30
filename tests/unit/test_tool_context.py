@@ -11,20 +11,16 @@ from __future__ import annotations
 
 import asyncio
 import warnings
-from collections import deque
 from dataclasses import replace
-from typing import Any, ClassVar
+from typing import Any
 
 import pytest
 from deepagents import FilesystemPermission
 from deepagents.backends.protocol import BackendProtocol, SandboxBackendProtocol
 from langchain.agents import create_agent
-from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, ToolMessage
-from langchain_core.outputs import ChatGeneration, ChatResult
 
 from kingfisher import Kingfisher, ToolContext, default_backend
-from kingfisher.config import Adapter, Landing
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Decision, Request, Resume
 from kingfisher.domain.result import AWAITING
@@ -33,7 +29,14 @@ from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
 from kingfisher.infrastructure.harness.tool_guards import guarded_tools
 from kingfisher.kinds.tools.catalogue import LocalToolRepository
-from tests.conftest import FakeToolCallingModel, an_agent, start, subagents_dir, tools_dir
+from tests.conftest import (
+    FakeToolCallingModel,
+    an_agent,
+    start,
+    subagents_dir,
+    tools_dir,
+)
+from tests.unit.scripted import Scripted
 
 KEY = "/derived/private/key.txt"
 OPEN = "/derived/open.txt"
@@ -646,56 +649,6 @@ def test_the_wrapper_a_compiled_delegates_tools_wear_passes_the_runtime_on(cfg, 
 
 
 # -- the service ---------------------------------------------------------------
-
-
-class Scripted(BaseChatModel):
-    """A model the service builds for itself, from the catalogue row naming this class.
-
-    `Kingfisher` takes no model: it builds one per turn out of `cfg.models`. So a turn
-    whose graph kingfisher assembled -- the only kind that is driven with a context --
-    can be scripted only through the row. The script is on the class because a resume
-    is a second graph and a second instance, and has to carry on where the first
-    stopped.
-    """
-
-    model: str
-    base_url: str
-    api_key: str
-    max_tokens: int
-    timeout: float
-
-    script: ClassVar[deque[AIMessage]] = deque()
-
-    @property
-    def _llm_type(self) -> str:
-        return "scripted"
-
-    def bind_tools(self, tools, **kwargs):
-        return self
-
-    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-        return ChatResult(generations=[ChatGeneration(message=self.script.popleft())])
-
-
-@pytest.fixture
-def scripted(cfg):
-    """`cfg`, with every endpoint answered by `Scripted`."""
-    row = Adapter(
-        f"{__name__}:Scripted",
-        Landing(
-            model="model",
-            base_url="base_url",
-            api_key="api_key",
-            max_tokens="max_tokens",
-            timeout="timeout",
-        ),
-    )
-    endpoints = {
-        name: replace(endpoint, adapter=row) for name, endpoint in cfg.models.endpoints.items()
-    }
-    Scripted.script.clear()
-    yield replace(cfg, models=replace(cfg.models, endpoints=endpoints))
-    Scripted.script.clear()
 
 
 def _session(cfg) -> str:

@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
+from kingfisher.infrastructure.harness.session_files import local_files, place_data
 from kingfisher.infrastructure.workspace import (
     DataError,
     LocalSessionDirs,
-    place_data,
     protect_data,
     writable_data,
 )
@@ -116,7 +116,7 @@ def test_a_supplied_file_lands_in_the_sessions_data(session_dir, tmp_path):
     source = tmp_path / "sales.csv"
     source.write_text("a,b\n1,2\n")
 
-    placement = place_data((source,), session_dir)
+    placement = place_data((source,), local_files(session_dir))
 
     assert placement.placed == ("sales.csv",)
     assert (session_dir / "data" / "sales.csv").read_text() == "a,b\n1,2\n"
@@ -127,7 +127,7 @@ def test_data_is_read_only_again_afterwards(session_dir, tmp_path):
     source = tmp_path / "sales.csv"
     source.write_text("x")
 
-    place_data((source,), session_dir)
+    place_data((source,), local_files(session_dir))
 
     assert not os.access(session_dir / "data", os.W_OK)
     with pytest.raises(PermissionError):
@@ -144,10 +144,12 @@ def test_data_is_read_only_again_even_when_a_copy_fails(session_dir, tmp_path, m
     def explode(*_args, **_kwargs):
         raise OSError(gone)
 
-    monkeypatch.setattr("kingfisher.infrastructure.workspace.placement.shutil.copy", explode)
+    monkeypatch.setattr(
+        "kingfisher.infrastructure.harness.backend.FilesystemBackend.upload_files", explode
+    )
 
     with pytest.raises(OSError, match=gone):
-        place_data((source,), session_dir)
+        place_data((source,), local_files(session_dir))
 
     monkeypatch.undo()
     assert not os.access(session_dir / "data", os.W_OK)
@@ -163,7 +165,7 @@ def test_two_sources_with_one_basename_are_refused(session_dir, tmp_path):
     second.write_text("two")
 
     with pytest.raises(DataError, match=r"report\.pdf"):
-        place_data((first, second), session_dir)
+        place_data((first, second), local_files(session_dir))
 
     assert not (session_dir / "data" / "report.pdf").exists()
 
@@ -173,7 +175,7 @@ def test_a_missing_source_is_refused_before_anything_is_written(session_dir, tmp
     good.write_text("x")
 
     with pytest.raises(DataError, match=r"ghost\.csv"):
-        place_data((good, tmp_path / "ghost.csv"), session_dir)
+        place_data((good, tmp_path / "ghost.csv"), local_files(session_dir))
 
     assert not (session_dir / "data" / "good.csv").exists()
 
@@ -194,10 +196,10 @@ def test_resupplying_replaces_and_says_so(session_dir, tmp_path):
     """
     source = tmp_path / "sales.csv"
     source.write_text("first")
-    place_data((source,), session_dir)
+    place_data((source,), local_files(session_dir))
 
     source.write_text("second")
-    placement = place_data((source,), session_dir)
+    placement = place_data((source,), local_files(session_dir))
 
     assert (session_dir / "data" / "sales.csv").read_text() == "second"
     assert placement.replaced == ("sales.csv",)
@@ -207,11 +209,11 @@ def test_nothing_is_replaced_on_a_first_supply(session_dir, tmp_path):
     source = tmp_path / "new.csv"
     source.write_text("x")
 
-    assert place_data((source,), session_dir).replaced == ()
+    assert place_data((source,), local_files(session_dir)).replaced == ()
 
 
 def test_supplying_nothing_touches_nothing(session_dir):
-    placement = place_data((), session_dir)
+    placement = place_data((), local_files(session_dir))
 
     assert placement.placed == ()
     assert placement.replaced == ()
@@ -226,7 +228,7 @@ def test_a_session_that_was_given_data_can_still_be_removed(session_dir, tmp_pat
     """
     source = tmp_path / "orders.csv"
     source.write_text("a,b\n1,2\n")
-    place_data((source,), session_dir)
+    place_data((source,), local_files(session_dir))
     assert not os.access(session_dir / "data", os.W_OK), "not hardened; test proves nothing"
 
     failure = LocalSessionDirs().remove_tree(session_dir)

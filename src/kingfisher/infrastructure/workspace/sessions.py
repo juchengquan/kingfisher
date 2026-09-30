@@ -11,7 +11,6 @@ from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.workspace.permissions import keep_tmp_private, unlock_and_retry
 from kingfisher.layout import (
     AGENTS_SCAFFOLD,
-    ARTIFACT_DIRS,
     CLAIM,
     HARNESS,
     MEMORY,
@@ -111,20 +110,6 @@ class LocalSessionRoot:
     @contextmanager
     def hold(self, session_id: str) -> Iterator[Path]:
         yield sessions_root(self.workspace) / session_id
-
-
-def collect_artifacts(session_dir: Path) -> tuple[str, ...]:
-    """What this session holds that is worth keeping, as relative paths."""
-    session_dir = Path(session_dir)
-    found: list[str] = []
-    for name in ARTIFACT_DIRS:
-        root = session_dir / name
-        if not root.is_dir():
-            continue
-        found.extend(
-            str(path.relative_to(session_dir)) for path in root.rglob("*") if path.is_file()
-        )
-    return tuple(sorted(found))
 
 
 def claim_path(session_dir: Path) -> Path:

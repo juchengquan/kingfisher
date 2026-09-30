@@ -1350,6 +1350,10 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
             "interpreter",
             "runlog",
             "runtime",
+            # A session's files, reached through the backend the turn runs on,
+            # which is a deepagents object: placing a caller's data, collecting
+            # what the turn left and fetching one of those files.
+            "session_files",
         }
     ),
     # The disposal half of `service`, which took this edge with it: reaping a
@@ -1745,6 +1749,10 @@ WITNESSES: dict[str, str] = {
     "SessionBusyError": "embedder",
     "SubagentError": "embedder",
     "UnknownSessionError": "embedder",
+    # What `Kingfisher.artifact` raises for a name that is not an artifact, which a
+    # caller fetching by a name it was handed tells apart from a session it cannot
+    # reach.
+    "ArtifactError": "embedder",
     # `README.md` opens on these four and the package docstring on `run`. A
     # reader who copied either is owed them.
     "definitions_source": "document",
@@ -2202,6 +2210,9 @@ SDK_LOADING: frozenset[str] = frozenset({
     "kingfisher.infrastructure.harness.declared_middleware",
     "kingfisher.infrastructure.harness.runlog",
     "kingfisher.infrastructure.harness.runtime",
+    # Builds `local_files`, a `CompositeBackend`, for a graph kingfisher did not
+    # build. Imported by `service` alone, which already pays for `backend`.
+    "kingfisher.infrastructure.harness.session_files",
     "kingfisher.infrastructure.harness.subagents",
     # The application layer's half: what a turn needs on the way to running one. Each
     # is imported by `service` and by nothing else, so being heavy costs no caller that
@@ -2320,8 +2331,8 @@ LIGHT_EXPORTS = frozenset({
     "PendingDecision", "Resume", "Decision",
     # The errors a caller must tell apart. Public so a consumer outside the package can
     # catch them by name -- the server being the first such consumer.
-    "CapabilityError", "DecisionError", "QuotaExceededError", "SessionBusyError",
-    "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
+    "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError",
+    "SessionBusyError", "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
     # The `SessionStore` contract, for a deployment checking its own adapter.
     # Light, and it has to stay light: a deployment runs this from its own test
     # suite, and a kit that pulled three provider SDKs in to check four methods
@@ -3044,7 +3055,7 @@ def test_every_record_this_package_hands_out_is_frozen():
 
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
-    "CapabilityError", "DecisionError", "QuotaExceededError", "SessionBusyError",
+    "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError", "SessionBusyError",
     "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
 })
 

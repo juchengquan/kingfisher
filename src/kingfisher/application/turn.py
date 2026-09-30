@@ -30,6 +30,10 @@ class Admitted:
     #: than raised, so they cross the boundary instead of stopping at it.
     unprotected: tuple[str, ...]
     placement: Any
+    #: The backend the session's files are reached through. The same object the
+    #: graph runs on, so what was placed is what the agent reads, and what is
+    #: collected is what it wrote.
+    files: Any = None
     #: The saver this service opened for the turn, or None when it opened
     #: nothing -- an injected instance is the deployment's to close.
     release: Any = None
@@ -71,6 +75,8 @@ class Prepared:
     events: tuple[RunEvent, ...]
     deadline: float
     timeout_s: float
+    #: What `collect_artifacts` walks at the end. See `Admitted.files`.
+    files: Any = None
     #: Closed when the turn ends. See `_checkpointer_for`.
     release: Any = None
     #: The saver itself, which `release` is only sometimes. A turn that stops at a
