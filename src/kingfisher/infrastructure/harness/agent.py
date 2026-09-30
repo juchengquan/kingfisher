@@ -51,12 +51,14 @@ from kingfisher.infrastructure.harness.middlewares.narrowing import (
     ToolAllowlist,
 )
 from kingfisher.infrastructure.harness.models import build_model, model_named
+from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
 from kingfisher.infrastructure.harness.subagents import (
     as_subagent,
     model_object,
     subagent_helpers,
     subagent_skills,
 )
+from kingfisher.infrastructure.harness.tool_context import ToolContext
 from kingfisher.infrastructure.harness.tool_guards import tool_guards
 from kingfisher.infrastructure.harness.tools import (
     _private_tools,
@@ -100,7 +102,7 @@ class Assembled:
     #: What `create_deep_agent` returned. Typed under `TYPE_CHECKING` like every
     #: other mention of it here, which `from __future__ import annotations` makes
     #: free: a dataclass does not evaluate its annotations.
-    graph: CompiledStateGraph
+    graph: CompiledStateGraph[Any, ToolContext, Any, Any]
     model: Any
     backend: Any
     system_prompt: str
@@ -108,6 +110,14 @@ class Assembled:
     permissions: list[FilesystemPermission]
     checkpointer: Any
     tools: list[Any] | None
+    context_schema: type[ToolContext]
+    #: What a turn on this graph is driven with -- every turn, a resume too, because
+    #: langgraph keeps the context out of the checkpoint and a graph resumed without
+    #: it hands a tool `None`. The one field `create_deep_agent` was not called
+    #: with, and it is on the record because this build is the only place holding
+    #: both halves: the backend, and the rules the file tools were given. A caller
+    #: pairing them itself could pair the backend with a different list.
+    context: ToolContext
     #: The four that reach `create_deep_agent` through `**extras` and are absent
     #: unless this build wired them, so each defaults to what "not passed" means
     #: rather than to an empty value a test could mistake for one that was.
@@ -459,9 +469,14 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             "permissions": permissions,
             "checkpointer": checkpointer,
             "tools": list(extra_tools) or None,
+            "context_schema": ToolContext,
             **extras,
         }
-        return Assembled(graph=create_deep_agent(**attached), **attached)
+        return Assembled(
+            graph=create_deep_agent(**attached),
+            context=ToolContext(backend=PermittedBackend(resolved_backend, permissions)),
+            **attached,
+        )
 
     defined, activated = _activated_subagents(cfg, capabilities, catalogue=roots)
     surface = _resolve_tools(
