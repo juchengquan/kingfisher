@@ -16,6 +16,7 @@ from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
     ROUTES,
+    SCRATCH,
     SCRATCH_ROUTE,
     denied_read_scopes,
     denied_scopes,
@@ -39,7 +40,7 @@ def test_shell_env_supplies_a_usable_toolchain(cfg, session_dir):
 
 def test_home_points_at_this_session_not_the_real_home(cfg, session_dir):
     """So ~/.aws, ~/.ssh and ~/.config are not where the agent's tooling looks."""
-    assert shell_env(cfg, session_dir)["HOME"] == str(session_dir / "scratchpad")
+    assert shell_env(cfg, session_dir)["HOME"] == str(session_dir / SCRATCH)
     assert shell_env(cfg, session_dir)["HOME"] != str(cfg.workspace)
 
 
@@ -62,7 +63,7 @@ def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
     bare.mkdir()
     (bare / "data").mkdir()
 
-    wanted = r"missing derived, memory, scratchpad, \.harness"
+    wanted = r"missing derived, memory, derived/scratchpad, \.harness"
     with pytest.raises(ValueError, match=wanted):
         default_backend(cfg, bare)
 
@@ -122,14 +123,14 @@ def test_derived_is_unrouted_and_the_table_says_so(cfg, session_dir):
     backend = default_backend(cfg, session_dir)
     unrouted = {r.path for r in ROUTES if not r.routed}
 
-    assert unrouted == {"/derived/", "/scratchpad/"}
+    assert unrouted == {"/derived/", "/derived/scratchpad/"}
     assert not (unrouted & set(backend.routes)), "an unrouted path was mounted"
 
 
 def test_a_host_path_to_a_file_tool_is_refused_not_mirrored(cfg, session_dir):
     """The observed bug: it succeeded, and the file was not where it looked."""
     backend = default_backend(cfg, session_dir)
-    host_path = f"{cfg.workspace}/sessions/s1/scratchpad/report.md"
+    host_path = f"{cfg.workspace}/sessions/s1/{SCRATCH}/report.md"
 
     with pytest.raises(ValueError, match="is a host path"):
         backend.write(host_path, "content")
@@ -142,8 +143,8 @@ def test_the_refusal_names_the_path_that_was_meant(cfg, session_dir):
     """An error the model can act on beats one it can only apologise for."""
     backend = default_backend(cfg, session_dir)
 
-    with pytest.raises(ValueError, match=r"Use '/scratchpad/report\.md' instead"):
-        backend.write(f"{session_dir}/scratchpad/report.md", "content")
+    with pytest.raises(ValueError, match=r"Use '/derived/scratchpad/report\.md' instead"):
+        backend.write(f"{session_dir}/{SCRATCH}/report.md", "content")
 
 
 def test_other_host_roots_are_refused_too(cfg, session_dir):
@@ -167,7 +168,7 @@ def test_virtual_paths_still_work(cfg, session_dir):
     """The guard must not cost the agent its ordinary vocabulary."""
     backend = default_backend(cfg, session_dir)
 
-    for virtual_path in ("/scratchpad/report.md", "/derived/x.csv"):
+    for virtual_path in (f"{SCRATCH_ROUTE}report.md", "/derived/x.csv"):
         backend.write(virtual_path, "content")
 
         assert backend.read(virtual_path), virtual_path
@@ -188,7 +189,7 @@ def test_scratch_is_the_session_s_own(cfg, session_dir):
     readable by every other session's shell. Per session, `reap` and `session_bytes`
     already cover it and neither fence has to grant anything extra.
     """
-    assert shell_env(cfg, session_dir)["TMPDIR"] == str(session_dir / "scratchpad")
+    assert shell_env(cfg, session_dir)["TMPDIR"] == str(session_dir / SCRATCH)
 
 
 def test_two_sessions_do_not_share_a_tmpdir(cfg, session_dir, workspace):
@@ -202,10 +203,10 @@ def test_two_sessions_do_not_share_a_tmpdir(cfg, session_dir, workspace):
 def test_scratch_is_created_private(cfg, session_dir):
     """The mode the shared scratch directory had, kept rather than quietly widened.
 
-    Not a boundary on its own -- `derived/` sits beside it at whatever the umask gave
+    Not a boundary on its own -- the rest of `derived/` sits at whatever the umask gave
     it -- and `ensure_session_layout` says so where it does this.
     """
-    assert (session_dir / "scratchpad").stat().st_mode & 0o077 == 0
+    assert (session_dir / SCRATCH).stat().st_mode & 0o077 == 0
 
 
 def test_the_run_log_is_the_session_s_own(session_dir):
@@ -223,7 +224,7 @@ def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir)
     from kingfisher.infrastructure.harness.agent import build_agent
     from tests.conftest import FakeToolCallingModel
 
-    host_path = f"{cfg.workspace}/sessions/s1/scratchpad/notes.md"
+    host_path = f"{cfg.workspace}/sessions/s1/{SCRATCH}/notes.md"
     responses = [
         AIMessage(
             content="",
@@ -271,7 +272,7 @@ def test_a_delegate_gets_the_correction_too(cfg, session_dir):
         encoding="utf-8",
     )
 
-    host_path = f"{cfg.workspace}/sessions/s1/scratchpad/notes.md"
+    host_path = f"{cfg.workspace}/sessions/s1/{SCRATCH}/notes.md"
     responses = [
         AIMessage(
             content="",

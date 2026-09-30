@@ -1865,6 +1865,49 @@ and a resumed conversation that reaches for `/scratch` is refused or writes a fi
 no later turn is told about. Entries above that say `scratch` meant this directory
 under its old name. *(2026-09-24.)*
 
+**`/scratchpad` is `/derived/scratchpad`.** What the agent makes has one folder, and a
+subfolder decides what comes back: everything in `/derived` is returned and stored
+except `/derived/scratchpad`, which stays `TMPDIR` and `HOME` and stays out of both.
+`collect_artifacts` is the only walk of `/derived` -- `keep_from` and the store take
+the names it returns -- so the exclusion is one condition there, and
+`test_run_scratch_is_not_reported` goes red without it.
+
+**The cut runs this way round on purpose.** The other way -- a working folder returned
+to nobody, with an `outputs/` inside it that is -- fails by losing work: a model that
+writes to the top folder from habit hands the caller an empty list, and nothing says
+so. This way, forgetting the rule hands the caller extra files, and
+`RunResult.artifacts` keeps its paths. A dot would have kept the subfolder out of
+`ls /derived`; it has none for the reason `.tmp` lost its own, which is that the agent
+types the name. `/memory` stays out of it: deepagents' memory middleware prints its
+path to the model, so folding it in would rename that path and remove nothing the
+model has to learn.
+
+**Swept with the session, not the turn**, as before -- a later turn on this host may
+find what an earlier one left, and one restored elsewhere will not -- and the prompt
+now says so rather than calling it throwaway: it may be gone on a later turn, so never
+depend on it. A session made before this keeps an unaddressed top-level `scratchpad/`
+until it is reaped, and nothing handles it, deliberately.
+
+**Measured before landing.** The smoke task with "into /derived" taken out, so that
+where the outputs land is the prompt's doing; 10 runs on `main` and 10 on this change,
+`MiniMax-M3`, counted from each session's transcript:
+
+| | before | after |
+| --- | --- | --- |
+| checks passed | 10/10 | 10/10 |
+| a requested output missing from `/derived` | 0 | 0 |
+| extra files returned | 0 | 0 |
+| runs passing a virtual path to `execute` | 8 | 10 |
+| such failures, all runs | 19 (`/data` 9, scratch 10) | 16 (`/data` 11, scratch 4, `/derived` 1) |
+| mean model calls | 17.0 | 14.1 |
+
+Nothing that would have stopped it. No output was lost; nothing but the two requested
+files ended at the top of `/derived`, with the file tools writing under
+`/derived/scratchpad` 18 times; and 10 runs against 8 is p=0.24 on a one-sided Fisher
+test, with fewer failures in all. What it did show is older than this change: on this
+model the agent passes a virtual `/data` path to the shell in most runs, and the turn
+message names both spellings only for the working folder. *(2026-09-30.)*
+
 **A session's history is kingfisher's own records, not a framework's.**
 `domain/transcript.py` holds it, and it keeps what the agent *did* as well as
 what it said -- tool calls and results, not only human and assistant text, since

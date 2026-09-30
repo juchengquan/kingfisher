@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage
 from kingfisher.application.run import Request, RunResult, normalize_answer, run
 from kingfisher.application.service import Kingfisher
 from kingfisher.domain.result import END_TURN, STOP_REASONS
+from kingfisher.layout import SCRATCH_ROUTE
 from tests.conftest import StubCheckpointer, start
 
 
@@ -101,7 +102,7 @@ def test_run_tells_the_agent_where_to_work_in_the_task(cfg):
     )
 
     message = agent.state["messages"][0]["content"]
-    assert "/scratchpad" in message
+    assert SCRATCH_ROUTE in message
     assert "do a thing" in message
     assert str(cfg.workspace) not in message  # virtual path only
 
@@ -196,7 +197,7 @@ def test_the_framework_never_asks_for_files_of_its_own(cfg):
     run(Request("say hello"), cfg=cfg, graph=quiet, checkpointer=StubCheckpointer())
     sent = quiet.state["messages"][0]["content"]
 
-    assert "/scratchpad" in sent  # where to work is a fact, and reaches it
+    assert SCRATCH_ROUTE in sent  # where to work is a fact, and reaches it
     assert "report.md" not in sent
     assert "result.json" not in sent
 

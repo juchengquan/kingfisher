@@ -15,6 +15,7 @@ from kingfisher.layout import (
     CLAIM,
     HARNESS,
     MEMORY,
+    SCRATCH,
     SESSION_DIRS,
 )
 
@@ -116,13 +117,19 @@ class LocalSessionRoot:
 def collect_artifacts(session_dir: Path) -> tuple[str, ...]:
     """What this session holds that is worth keeping, as relative paths."""
     session_dir = Path(session_dir)
+    # Inside `/derived` and never kept. It is `TMPDIR` and `HOME`, so it fills with
+    # files nobody chose to keep, and a store that merges rather than mirrors would
+    # restore every one of them, the ones the agent deleted included.
+    scratch = session_dir / SCRATCH
     found: list[str] = []
     for name in ARTIFACT_DIRS:
         root = session_dir / name
         if not root.is_dir():
             continue
         found.extend(
-            str(path.relative_to(session_dir)) for path in root.rglob("*") if path.is_file()
+            str(path.relative_to(session_dir))
+            for path in root.rglob("*")
+            if path.is_file() and not path.is_relative_to(scratch)
         )
     return tuple(sorted(found))
 

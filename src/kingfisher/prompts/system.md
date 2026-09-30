@@ -12,10 +12,11 @@ same thing in every session and on every machine:
   and it is reported back to whoever asked for the work when the turn ends. There is
   no separate place for reports; whatever should be kept goes here, whatever it is
   called.
-- `/scratchpad` — working files: intermediates, downloads, anything you need while you
-  think. Nothing here is reported back and old sessions are swept, so anything you
-  want kept belongs in `/derived` instead. It is also where the shell's `TMPDIR`
-  points, so both halves of your toolkit write the same place.
+  - `/derived/scratchpad` — working files: intermediates, downloads, anything you need
+    while you think. The one part of `/derived` that is not reported back and not
+    kept. It may be gone on a later turn, so never depend on it; anything you want
+    kept belongs elsewhere in `/derived`. It is also where the shell's `TMPDIR`
+    points, so both halves of your toolkit write the same place.
 
 The session is yours alone; another session's files are not reachable from any path
 you can write.
@@ -33,7 +34,7 @@ leading slash, and nothing in the workspace is out of the shell's reach:
 | --- | --- |
 | `/data/<name>` | `data/<name>` |
 | `/derived/<name>` | `derived/<name>` |
-| `/scratchpad/<name>` | `scratchpad/<name>` |
+| `/derived/scratchpad/<name>` | `derived/scratchpad/<name>` |
 
 These already exist when a turn starts, so do not go searching for them — `find`
 will not locate one any faster than dropping the slash will.
@@ -53,12 +54,13 @@ The two views do not mix, in either direction:
 Where these instructions give host path mappings for particular mounts, use those with
 the shell when you need an absolute path.
 
-What you write while working goes in one of two places, and never anywhere else:
+What you write while working goes in `/derived`, in one of its two parts, and never
+anywhere else:
 
 - Anything you want to survive the turn — a script you want reviewed, an intermediate
-  table worth keeping — goes in `/derived`.
-- Anything genuinely throwaway goes in the working-files directory above, which the
-  shell also exports as `$TMPDIR`. Write `"$TMPDIR/name.py"`, never a literal
+  table worth keeping — goes in `/derived`, outside `/derived/scratchpad`.
+- Anything genuinely throwaway goes in `/derived/scratchpad`, which the shell also
+  exports as `$TMPDIR`. Write `"$TMPDIR/name.py"`, never a literal
   `/tmp/name.py`: `$TMPDIR` is set per session, so a hardcoded `/tmp` scatters files
   somewhere nothing will clean up and nothing will find.
 

@@ -82,15 +82,15 @@ class RunResult:
     #: prints `session_dir` to say where your files landed.
     #:
     #: The session's, not the turn's. A turn had a directory of its own until
-    #: `/scratchpad` and `/derived` took over what it held, and `artifacts` below is
+    #: `/derived` and its scratchpad took over what it held, and `artifacts` below is
     #: relative to this root.
     session_dir: Path = Path()
     log_path: Path = Path()
-    #: Everything under `/derived` and `/memory` at the end of this turn, as paths
-    #: relative to the session root. What is *present*, not what changed: `execute`
-    #: writes without any file tool seeing it, so the only sound view is the
-    #: filesystem's, and a caller persisting incrementally diffs against the
-    #: previous turn's manifest -- which also tells it what was deleted.
+    #: Everything under `/derived`, less its scratchpad, and `/memory` at the end of
+    #: this turn, as paths relative to the session root. What is *present*, not what
+    #: changed: `execute` writes without any file tool seeing it, so the only sound
+    #: view is the filesystem's, and a caller persisting incrementally diffs against
+    #: the previous turn's manifest -- which also tells it what was deleted.
     artifacts: tuple[str, ...] = ()
     #: Why this turn stopped. `end_turn` is the ordinary case; anything else means the
     #: answer is what had been reached when a bound was hit, and `artifacts` still lists

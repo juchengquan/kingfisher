@@ -100,9 +100,10 @@ Verified with `SESSION_STORE_CONTRACT` — twelve checks.
 **Evicting frees the machine and keeps the session.** `delete_session(id,
 forget=False)` and `reap(forget=False)` remove the directory and the thread and
 leave the store's copy, so the id still resolves and the next turn restores from
-the store. What comes back is what the store was handed — `/derived`, `/memory`,
-the transcript and the pinned agent — so `/data` does not. With no store wired
-there is nothing to keep, and eviction is deletion.
+the store. What comes back is what the store was handed — `/derived` less its
+scratchpad, `/memory`, the transcript and the pinned agent — so `/data` and
+`/derived/scratchpad` do not. With no store wired there is nothing to keep, and
+eviction is deletion.
 
 ## `SessionRoot` — where a session's directory is, for one turn
 
@@ -149,11 +150,11 @@ it held — a mount made and dropped around each turn — meets the following, a
 none of it fails loudly.
 
 **`/data` does not come back.** What the store is handed after a turn is
-`/derived`, `/memory`, the transcript and the pinned agent. `/data` is left out
-because it came from the caller and, on a directory that persists, it is still
-sitting there; on a fresh one, turn two opens with an empty `/data` and the
-caller's inputs gone. Carry `data/**` yourself, or require that callers re-supply
-it every turn.
+`/derived` less its scratchpad, `/memory`, the transcript and the pinned agent.
+`/data` is left out because it came from the caller and, on a directory that
+persists, it is still sitting there; on a fresh one, turn two opens with an empty
+`/data` and the caller's inputs gone. Carry `data/**` yourself, or require that
+callers re-supply it every turn.
 
 **A deletion does not stick.** `save` merges rather than mirrors, so a name the
 store once held it holds still, and what it holds is written back into a tree

@@ -12,6 +12,7 @@ from kingfisher import Kingfisher
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import QuotaExceededError
 from kingfisher.infrastructure.workspace import session_bytes
+from kingfisher.layout import SCRATCH
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 
@@ -173,8 +174,7 @@ def test_session_bytes_counts_everything_the_session_holds(cfg, session_dir):
     is worth keeping.
     """
     (session_dir / "derived" / "kept.bin").write_bytes(b"x" * 100)
-    (session_dir / "scratchpad").mkdir(exist_ok=True)
-    (session_dir / "scratchpad" / "scratch.bin").write_bytes(b"y" * 50)
+    (session_dir / SCRATCH / "scratch.bin").write_bytes(b"y" * 50)
 
     assert session_bytes(session_dir) >= 150
 

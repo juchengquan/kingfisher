@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from kingfisher.application.run import Request, run
 from kingfisher.infrastructure.workspace import collect_artifacts
+from kingfisher.layout import DERIVED, SCRATCH
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 
@@ -33,16 +34,21 @@ def test_memory_is_reported_too(cfg):
 
 
 def test_run_scratch_is_not_reported(cfg):
-    """`/scratchpad` is disposable by design, and the prompt tells the agent so."""
+    """The scratchpad sits inside `/derived`, so a walk of `/derived` that does not skip
+    it hands the caller every temp file and cache the shell wrote there.
+    """
     start(cfg, "s")
     result = run(Request("t", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
                  checkpointer=StubCheckpointer())
-    (result.session_dir / "scratchpad" / "scratch.txt").write_text("intermediate")
+    (result.session_dir / SCRATCH / "scratch.txt").write_text("intermediate")
+    (result.session_dir / DERIVED / "kept.txt").write_text("kept")
 
     again = run(Request("t2", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
                 checkpointer=StubCheckpointer())
 
-    assert not any(path.startswith("scratchpad/") for path in again.artifacts)
+    # The control: without it, a walk that reached nothing would pass as well.
+    assert f"{DERIVED}/kept.txt" in again.artifacts
+    assert not any(path.startswith(f"{SCRATCH}/") for path in again.artifacts)
 
 
 def test_inputs_are_not_reported(cfg):
