@@ -67,6 +67,11 @@ slices land.
   `CAP_SYS_ADMIN` costs to do it. Nothing built. Half its premise went with
   #502 and the document says so at the top; its measurements are the part that
   kept.
+- [Where the command line keeps its
+  keys](design/2026-10-01-where-the-command-line-keeps-its-keys.md) — moving the
+  `kingfisher` command's API keys from `.env` into YAML without putting them where
+  the agent's shell reads more easily, and what each fence hides, measured. Nothing
+  built.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
