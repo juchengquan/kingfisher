@@ -17,10 +17,13 @@ file count it refuses to print.
 | [`guides/middleware.md`](guides/middleware.md) | How to register middleware a definition can name, what it may configure, and what it sees. | Wrapping the agent in code of your own. |
 | [`decisions.md`](decisions.md) | Why the code is shaped this way, and what was tried and reversed. | **Before proposing a change** to something it lists. |
 | [`findings.md`](findings.md) | What deepagents, langchain and the model surfaces actually do. | Before touching streaming, middleware or delegation. |
+| [`upgrading.md`](upgrading.md) | What changed for a deployment built before #608, when a session became its backend, and what to do about each change. | Upgrading a deployment from before that. |
 
-The guides are kept current. The other two are records: `decisions.md` says what
-was settled and when, `findings.md` says what was measured and when. Neither is a
-manual, and an entry old enough to doubt is one to re-check rather than trust.
+The guides are kept current. `decisions.md` and `findings.md` are records:
+`decisions.md` says what was settled and when, `findings.md` says what was measured and
+when. Neither is a manual, and an entry old enough to doubt is one to re-check rather
+than trust. `upgrading.md` is neither: it is for one upgrade, and goes once nobody is
+upgrading from before it.
 
 ## `guides/`
 
