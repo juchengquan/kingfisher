@@ -7,6 +7,7 @@ import logging
 import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
@@ -46,6 +47,22 @@ def usage_of(events: Iterable[Mapping[str, Any]]) -> Usage:
         output_tokens=sum(e.get("output_tokens", 0) for e in calls),
         cache_read=sum(e.get("cache_read", 0) for e in calls),
     )
+
+
+class JsonlRunEvents:
+    """`RunEvents` appended to a file, one JSON line per event: `kingfisher run --log`.
+
+    Opened and closed for each event rather than held. A turn that crashes leaves
+    every line it got to, and that is the turn a log is most wanted for.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def record(self, event: Mapping[str, object]) -> None:
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event, ensure_ascii=False, default=str) + "\n")
 
 
 class LoggedRunEvents:

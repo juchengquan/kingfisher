@@ -62,6 +62,7 @@ if TYPE_CHECKING:
     from typing import TextIO
 
     from kingfisher import Kingfisher, RunResult
+    from kingfisher.infrastructure.harness.runlog import JsonlRunEvents
 
 #: Read from the working directory and nowhere else. A bare `load_dotenv()`
 #: walks up looking for one, which is the behaviour this deliberately does not
@@ -182,6 +183,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     doing.add_argument(
+        "--log",
+        metavar="FILE",
+        type=Path,
+        help=(
+            "append what the turn did -- each model call with its tokens, each tool "
+            "call -- to FILE as JSON lines. Without it, nothing is kept"
+        ),
+    )
+    doing.add_argument(
         "--as",
         dest="held",
         type=_held,
@@ -255,6 +265,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--delete-session",
         action="store_true",
         help="delete the session once the turn finishes, as `run` does",
+    )
+    deciding.add_argument(
+        "--log",
+        metavar="FILE",
+        type=Path,
+        help="append what the resumed turn did to FILE as JSON lines, as `run --log` does",
     )
     deciding.add_argument(
         "--as",
@@ -517,7 +533,7 @@ def _run(args: argparse.Namespace) -> int:
     from kingfisher.application.run import configured_backend  # noqa: PLC0415
 
     cfg = config_from_env()
-    kf = Kingfisher(cfg, backend=configured_backend(cfg))
+    kf = Kingfisher(cfg, backend=configured_backend(cfg), run_events=_kept_in(args.log))
     request = Request(
         task=args.task,
         agent=args.agent,
@@ -525,6 +541,20 @@ def _run(args: argparse.Namespace) -> int:
         data=tuple(Path(p).expanduser() for p in args.data),
     )
     return _drive(kf, request, held=args.held, delete_session=args.delete_session)
+
+
+def _kept_in(log: Path | None) -> JsonlRunEvents | None:
+    """Where `--log` keeps a turn's events, or `None` for the library's default.
+
+    The default is the `kingfisher.run` logger, which this command configures nothing
+    to keep -- so without `--log` a turn leaves no record of itself, as it did before
+    the run log left the session.
+    """
+    if log is None:
+        return None
+    from kingfisher.infrastructure.harness.runlog import JsonlRunEvents  # noqa: PLC0415
+
+    return JsonlRunEvents(log.expanduser())
 
 
 def _drive(
@@ -599,7 +629,7 @@ def _decide(args: argparse.Namespace) -> int:
         decisions.append(Decision(call_id=call_id, action="respond", message=text))
 
     cfg = config_from_env()
-    kf = Kingfisher(cfg, backend=configured_backend(cfg))
+    kf = Kingfisher(cfg, backend=configured_backend(cfg), run_events=_kept_in(args.log))
     if not decisions:
         return _show_pending(kf, args.session, args.held)
     return _drive(

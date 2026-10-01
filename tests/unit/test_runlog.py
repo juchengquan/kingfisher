@@ -159,3 +159,23 @@ def test_the_default_sink_is_a_run_events():
     default would leave it satisfying nothing while every turn still logged.
     """
     assert isinstance(LoggedRunEvents(), RunEvents)
+
+
+def test_a_file_sink_keeps_one_line_per_event_in_its_own_alphabet(tmp_path):
+    """What `kingfisher run --log` writes. One line per event, appended, so a second
+    turn adds to the file rather than replacing it -- and the parent is made, because a
+    path somebody typed on the command line is the likeliest to name a folder that is
+    not there yet.
+    """
+    import json
+
+    from kingfisher.infrastructure.harness.runlog import JsonlRunEvents
+
+    sink = JsonlRunEvents(tmp_path / "logs" / "turns.jsonl")
+    _logger(sink).run_start("Résume le rapport")
+    _logger(sink).run_end(ok=True, answer_chars=3)
+
+    written = (tmp_path / "logs" / "turns.jsonl").read_text(encoding="utf-8")
+    events = [json.loads(line) for line in written.splitlines()]
+    assert [e["event"] for e in events] == ["run_start", "run_end"]
+    assert "Résume" in written

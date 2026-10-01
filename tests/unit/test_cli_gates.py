@@ -49,6 +49,7 @@ def _args(**over: Any) -> argparse.Namespace:
             "session": None,
             "held": None,
             "delete_session": False,
+            "log": None,
             **over,
         }
     )
@@ -144,6 +145,7 @@ def _decide_args(**over: Any) -> argparse.Namespace:
             "agent": None,
             "held": None,
             "delete_session": False,
+            "log": None,
             **over,
         }
     )
@@ -348,3 +350,37 @@ def test_the_command_asks_as_the_caller_it_names(cfg, monkeypatch, capsys):
     assert "abc123#0" not in told
     assert shown == 1
     assert "abc123#0" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("verb", ["run", "decide"])
+def test_log_reaches_the_service_on_both_verbs_that_run_a_turn(verb, tmp_path, monkeypatch):
+    """A resumed turn is a turn too. Without `--log` a command keeps no record of what
+    a turn did, which is where it was left when the run log stopped being a file in
+    the session.
+    """
+    from kingfisher.infrastructure.harness.runlog import JsonlRunEvents
+
+    handed: list[object] = []
+
+    class Recording(_Nothing):
+        def __init__(self, *args, run_events=None, **kwargs) -> None:
+            handed.append(run_events)
+
+    monkeypatch.setattr(cli, "config_from_env", object)
+    monkeypatch.setattr(
+        importlib.import_module("kingfisher.application.run"),
+        "configured_backend",
+        lambda cfg: None,
+    )
+    monkeypatch.setattr(kingfisher, "Kingfisher", Recording)
+    monkeypatch.setattr(cli, "show", lambda *a, **k: None)
+    log = tmp_path / "turns.jsonl"
+
+    if verb == "run":
+        cli._run(_args(log=log))
+    else:
+        cli._decide(_decide_args(log=log, approve=["c1"]))
+
+    (sink,) = handed
+    assert isinstance(sink, JsonlRunEvents)
+    assert sink.path == log

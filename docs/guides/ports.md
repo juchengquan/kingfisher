@@ -137,7 +137,8 @@ totalled from.
 at `INFO`, with the mapping itself on the record as `run_event` for a handler that
 ships structured logs. Python's default configuration drops `INFO`, so a
 deployment that wants them either configures logging or passes a sink — and
-`kingfisher run`, which configures neither, keeps none.
+`kingfisher run` and `decide` keep none unless given `--log FILE`, which appends one
+JSON line per event.
 
 **Not session state.** They used to be a file in the session's `.harness`, deleted
 with it. They outlive the session now, because a log is most wanted for the turn

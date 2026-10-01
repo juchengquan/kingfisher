@@ -68,8 +68,8 @@ only the first three items of the checklist.
 
 - **`log_path` is removed.** What a turn did now goes to a `RunEvents` sink: one
   `record(event)` call per model call, tool call, start and end, each carrying
-  `session_id` and `turn_id`. Note that `kingfisher run` configures no logging, so a
-  CLI user no longer gets a per-session log file.
+  `session_id` and `turn_id`. `kingfisher run` and `decide` keep no log file unless
+  given `--log FILE`, which appends one JSON line per event.
 - **`session_dir` is removed.** `artifacts` lists what a turn left, as names
   relative to the session (`derived/report.md`). Fetch one with
   `Kingfisher.artifact(session_id, name)` or `kingfisher artifact --session ID NAME`.
