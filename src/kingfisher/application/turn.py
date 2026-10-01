@@ -48,6 +48,11 @@ class Admitted:
     context: Any = None
     #: Answers this turn resumes into, already translated, or `None`.
     resume: dict[str, Any] | None = None
+    #: The agent this turn's graph was built from, by name, or `None` where none was
+    #: resolved -- an injected graph under no policy. The *resolved* one, not the one
+    #: the request named: a session's agent is fixed when it opens, so every turn after
+    #: the first names nothing and the two answers are only the same on turn one.
+    agent_name: str | None = None
     #: Tools an earlier turn was waiting on that this one superseded. Carried to the
     #: end of the turn as well as announced at its start, because `run` drains the
     #: stream for a result and would otherwise be the one caller never told.
@@ -96,8 +101,9 @@ class Prepared:
     #: for a turn that is asking something new. The two are alternatives rather than
     #: additions: a resume continues a graph mid-superstep and has no message to add.
     resume: dict[str, Any] | None = None
-    #: Which agent this turn's graph was built from, written beside a pause so a
-    #: resume can refuse one that names a different agent.
+    #: The agent this turn's graph was built from, written beside a pause so a resume
+    #: can refuse one that names a different agent. Carried from `Admitted`, which is
+    #: where it was resolved.
     agent_name: str | None = None
     #: Tools an earlier turn was waiting on that this one superseded.
     discarded: tuple[str, ...] = ()

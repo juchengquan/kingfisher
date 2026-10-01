@@ -680,7 +680,11 @@ class Kingfisher(Sessions, Disposal):
         whole reason the mark is written beside the state.
         """
         was = held.get(AGENT_MARK) or None
-        if request.agent is not None and was != request.agent:
+        # `was is None` is not a mismatch: nothing was recorded because nothing was
+        # resolved -- an injected graph under no policy, where the deployment's own
+        # graph runs whatever the request calls it and a *request* naming an agent is
+        # not refused either. Comparing against it refused the one name that was right.
+        if was is not None and request.agent is not None and was != request.agent:
             msg = (
                 f"session {session.id} paused under agent {was or 'none'!r}, "
                 f"and this resume names {request.agent!r}"
@@ -836,6 +840,7 @@ class Kingfisher(Sessions, Disposal):
             context=built.context if isinstance(built, Assembled) else None,
             resume=resume,
             discarded=discarded,
+            agent_name=agent.name if agent is not None else None,
             # Tools come off the assembled graph rather than a list kept
             # somewhere: the surface includes whatever the workspace defined, so
             # the only honest answer to "what was offered" is what was wired.
@@ -897,7 +902,10 @@ class Kingfisher(Sessions, Disposal):
             context=admitted.context,
             resume=admitted.resume,
             discarded=admitted.discarded,
-            agent_name=getattr(request, "agent", None),
+            # The agent admission resolved, never `request.agent`: a session's agent
+            # is fixed when it opens, so the request names one only on the turn that
+            # opened it and this would be empty for every pause after that.
+            agent_name=admitted.agent_name,
             history=read_transcript(admitted.harness),
             # A resume adds no message: it continues a superstep that already has
             # everything it needs, and a new user turn appended there would be one

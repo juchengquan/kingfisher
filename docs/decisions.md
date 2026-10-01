@@ -2003,6 +2003,31 @@ already run; drop those writes and the sibling runs *again* on resume, which for
 an approval gate means a tool firing twice for one decision. Both paths end in
 identical state, so nothing but a side effect can tell them apart. *(2026-09-22.)*
 
+**The mark beside it records the agent the turn ran, not the one the request named.**
+It recorded `request.agent`, and a session's agent is fixed when it opens -- so every
+turn after the first names nothing, and a pause on one of those recorded `""`.
+`_refuse_stale_pause` then compared every resume against nothing. Measured through the
+service on a session plainly running `analyst`: a resume naming `analyst` was refused
+as *"paused under agent 'none', and this resume names 'analyst'"*, and a resume naming a
+different agent was refused with the same wrong sentence. The field's own comment had
+said *"which agent this turn's graph was built from"* all along; it was filled from the
+request.
+
+The rule that was supposed to hold this passed throughout, and the reason is worth
+keeping: it ran on an injected graph under no policy, where `_admitted` resolves no
+agent at all. With nothing recorded, "a resume naming a *different* agent" was refused
+the same way every name was -- so the rule passed for the correct name too. It is driven
+on a session with a pinned agent now, and the accepting half it never had sits beside it.
+
+**Nothing recorded is not a mismatch.** A deployment that supplies its own graph and
+declares no policy never resolves an agent, and a *request* naming one there is not
+refused either -- so a resume carrying the same name meant two different things
+depending on which call it rode in on. The `agent` clause now fires only where an agent
+was actually recorded; the other direction, a resume naming an agent the session is not
+running, is also refused by the pin in `_agent_for`, but this check stays ahead of it
+because the paused state is deserialised first. *(2026-10-01, from an architecture
+review.)*
+
 The three things the old per-session sqlite bought all survive by another route,
 which was measured rather than assumed. A conversation deleted with its directory
 (one workspace held 132 orphaned threads after every session had been reaped), a
