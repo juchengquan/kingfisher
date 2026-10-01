@@ -58,10 +58,8 @@ class SessionPaths:
         # Where every session is, spelled both ways. In a container the workspace is
         # `/workspace`, which no host root names, and another session is one
         # directory over from this one.
-        self._refused = (
-            *NOT_FOR_TOOLS,
-            *{f"{root}/" for root in (str(sessions), str(Path(sessions).resolve()))},
-        )
+        self.roots = tuple({f"{root}/" for root in (str(sessions), str(Path(sessions).resolve()))})
+        self._refused = (*NOT_FOR_TOOLS, *self.roots)
 
     def host_path_in(self, args: Mapping[str, Any]) -> str | None:
         """The first host path in an argument that is not `path`, or `None`."""

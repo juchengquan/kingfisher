@@ -148,7 +148,6 @@ def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg):
     [
         ".harness/agent.yaml",
         "data/in.csv",
-        "scratchpad/tmp.txt",
         "derived/../.harness/agent.yaml",
         "/derived/out.txt",
         "derived",
@@ -163,6 +162,23 @@ def test_only_what_a_turn_produced_can_be_fetched(cfg, name):
 
     with pytest.raises(ArtifactError):
         kf.artifact("s", name)
+
+
+def test_a_working_file_is_not_an_artifact_even_where_it_exists(cfg):
+    """The scratchpad sits inside `/derived`, so a fetch that checked only the top
+    folder would hand a caller any working file whose name it guessed.
+
+    The file is really there, which the list above cannot say of its names: a refusal
+    that had gone would still fail those, on a file with no content.
+    """
+    kf = _produced(cfg)
+    working = cfg.workspace / "sessions" / "s" / "derived" / "scratchpad" / "tmp.txt"
+    working.parent.mkdir(parents=True, exist_ok=True)
+    working.write_text("half")
+
+    assert kf.artifact("s", "derived/out.txt") == b"result"
+    with pytest.raises(ArtifactError, match="not an artifact"):
+        kf.artifact("s", "derived/scratchpad/tmp.txt")
 
 
 @pytest.mark.parametrize(

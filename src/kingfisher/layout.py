@@ -62,15 +62,14 @@ SKILLS_VIEW = "skills-view"
 DATA = "data"
 DERIVED = "derived"
 MEMORY = "memory"
-#: Where the agent works. Disposable by contract: never returned to the caller,
-#: never saved, swept when the session goes.
+#: Where the agent works, and the one part of `/derived` that is never returned to
+#: the caller -- inside it so that what the agent makes has one folder. Swept with
+#: the session, not the turn: a later turn may find what an earlier one left, and
+#: nothing promises it.
 #:
-#: It was `.tmp`, plumbing the agent was never told about, while a parallel
-#: `runs/<turn>` held the same kind of file under a name the agent *was* told. Two
-#: scratch directories with one purpose, and the per-turn one accumulated for the
-#: life of a session because nothing ever swept it. The dot went with the silence:
-#: a name the agent addresses belongs in this tuple rather than beside the lock.
-SCRATCH = "scratchpad"
+#: No leading dot, though one would keep it out of `ls /derived`. The agent types
+#: this name, and a name it is meant to type has no business being hidden from it.
+SCRATCH = f"{DERIVED}/scratchpad"
 
 SESSION_DIRS: tuple[str, ...] = (DATA, DERIVED, MEMORY, SCRATCH)
 
@@ -107,8 +106,8 @@ PAUSED_STATE = "paused.state"
 #: case this answers, and answering it means reading this without reading that.
 PAUSED_MARK = "paused.json"
 
-#: What a run produces and would lose. `/data` is read-only and came from the
-#: caller; `/scratchpad` is disposable and says so. These two are the ones the agent
+#: What a run produces and would lose, less the `SCRATCH` inside the first.
+#: `/data` is read-only and came from the caller. These two are the ones the agent
 #: is told will outlive the run, so these are what a reaped session takes with it
 #: unless the caller is handed a list.
 ARTIFACT_DIRS: tuple[str, ...] = (DERIVED, MEMORY)
@@ -134,7 +133,7 @@ BUNDLED_SKILLS_ROUTE = _route(SKILLS, RESERVED_SKILL_FOLDER)
 #: reader asking "what happens to /derived" should find the answer here rather
 #: than by noticing an absence.
 #:
-#: `/scratchpad` is among them, and that is what lets the shell and the file tools
+#: The scratchpad is among them, and that is what lets the shell and the file tools
 #: write the same place: `TMPDIR` points at it on disk, and the virtual path is
 #: the same name with a slash.
 DERIVED_ROUTE = _route(DERIVED)

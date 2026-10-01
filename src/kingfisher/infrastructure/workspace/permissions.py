@@ -44,8 +44,8 @@ def keep_tmp_private(session_dir: Path) -> None:
     ignored outright when the directory already exists -- which it does for
     every session made before `TMPDIR` moved inside one.
 
-    Not a boundary, and not claimed as one. `derived/` sits beside it holding the
-    same data at whatever the umask gave it, so this is continuity with what
+    Not a boundary, and not claimed as one. The rest of `derived/` holds the same
+    data at whatever the umask gave it, so this is continuity with what
     `prepare_scratch` did rather than a rule about who may read a session. A
     session that must be private to its uid wants a mode on the session
     directory, which is a different change from the one that moved `TMPDIR`.

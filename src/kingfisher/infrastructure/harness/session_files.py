@@ -20,7 +20,7 @@ from kingfisher.infrastructure.harness.backend import DataBackend, SessionClaims
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.signing import SIGNATURE, sign, verify
 from kingfisher.infrastructure.workspace.placement import DataError, DataPlacement, checked
-from kingfisher.layout import ARTIFACT_DIRS, DATA_ROUTE, HARNESS_ROUTE
+from kingfisher.layout import ARTIFACT_DIRS, DATA_ROUTE, HARNESS_ROUTE, SCRATCH, SCRATCH_ROUTE
 
 _log = logging.getLogger(__name__)
 
@@ -87,10 +87,12 @@ def collect_artifacts(backend: Any) -> tuple[str, ...]:
                 name,
                 result.error or "the listing was cut short",
             )
+        # The scratchpad sits inside `/derived` and is never returned: it is `TMPDIR`
+        # and `HOME`, so it fills with files nobody chose to keep.
         found.extend(
             match["path"].lstrip("/")
             for match in result.matches or ()
-            if not match.get("is_dir")
+            if not match.get("is_dir") and not match["path"].startswith(SCRATCH_ROUTE)
         )
     return tuple(sorted(found))
 
@@ -108,8 +110,12 @@ def read_artifact(backend: Any, name: str) -> bytes:
         or ".." in path.parts
         or not path.parent.parts
         or path.parts[0] not in ARTIFACT_DIRS
+        or path.is_relative_to(SCRATCH)
     ):
-        msg = f"{name!r} is not an artifact: name a file under {', '.join(ARTIFACT_DIRS)}"
+        msg = (
+            f"{name!r} is not an artifact: name a file under {', '.join(ARTIFACT_DIRS)}, "
+            f"outside {SCRATCH}"
+        )
         raise ArtifactError(msg)
     (answer,) = backend.download_files([f"/{path}"])
     if answer.error or answer.content is None:

@@ -18,7 +18,7 @@ from kingfisher.infrastructure.sandbox.confinement import (
 )
 from kingfisher.infrastructure.sandbox.fence import SYSTEM_PATHS, LandlockRunner, policy_for
 from kingfisher.infrastructure.workspace import ensure_session_layout
-from kingfisher.layout import DERIVED, HARNESS
+from kingfisher.layout import DERIVED, HARNESS, SCRATCH
 from tests.conftest import repository_root
 
 #: A message short enough for `TRY003`, since what it says never survives
@@ -104,7 +104,7 @@ def test_the_shell_may_write_exactly_these_places_in_a_session(sandlock, tmp_pat
 
     assert set(policy.fs_writable) == {
         str(session / name)
-        for name in ("data", "derived", "memory", "scratchpad")
+        for name in ("data", "derived", "memory", SCRATCH)
     }
 
 

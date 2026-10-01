@@ -229,7 +229,8 @@ def test_a_bare_task_is_told_only_where_to_work():
     message = turn_message("do a thing", ())
 
     assert message == (
-        "do a thing\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
+        "do a thing\n\n/derived/scratchpad/ is yours to work in "
+        "(from the shell, derived/scratchpad)."
     )
 
 

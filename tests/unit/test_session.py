@@ -40,19 +40,19 @@ def test_a_session_is_the_backend_root(workspace):
 def test_the_turn_message_names_both_forms_of_the_scratch_path(workspace):
     """Measured over ten runs of one task: told only the virtual path, the agent passed
     it to `execute` 4 times in 10, each failing and costing about three times the whole
-    task to recover. It was a per-turn directory then and is the session's `/scratchpad`
-    now, which changes nothing about the measurement -- what was measured is the
-    agent's handling of the two spellings.
+    task to recover. The directory has moved since, which changes nothing about the
+    measurement -- what was measured is the agent's handling of the two spellings.
     """
     from kingfisher.application.turn import turn_message
+    from kingfisher.layout import SCRATCH, SCRATCH_ROUTE
 
     message = turn_message("count the rows", ())
 
-    assert "/scratchpad" in message
+    assert SCRATCH_ROUTE in message
     # Not a plain `in`: the virtual path *contains* the shell form as a substring, so
     # that assertion passed even with the shell form removed. Caught by mutation-testing
     # this test rather than by reading it.
-    without_virtual = message.replace("/scratchpad", "")
-    assert "scratchpad" in without_virtual, (
-        "the shell form is only present as part of '/scratchpad'"
+    without_virtual = message.replace(SCRATCH_ROUTE, "")
+    assert SCRATCH in without_virtual, (
+        f"the shell form is only present as part of {SCRATCH_ROUTE!r}"
     )

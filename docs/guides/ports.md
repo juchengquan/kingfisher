@@ -267,7 +267,7 @@ drives it with no context, and such a tool finds `runtime.context` is `None`.
 
 **Kingfisher reaches the session through it too.** A request's `data` is placed
 with `upload_files` under `/data/`, what a turn left is listed with `glob` under
-`/derived/` and `/memory/`, and `Kingfisher.artifact` fetches one with
+`/derived/`, less its scratchpad, and `/memory/`, and `Kingfisher.artifact` fetches one with
 `download_files`. So those three work on a backend that keeps the session
 somewhere other than the directory it was handed. `/data` has to take that upload
 while refusing the agent's own writes: `default_backend` routes it to

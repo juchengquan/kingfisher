@@ -27,6 +27,7 @@ from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.sandbox.bubblewrap import BubblewrapRunner
 from kingfisher.infrastructure.sandbox.fence import LandlockRunner
 from kingfisher.infrastructure.workspace import ensure_layout, ensure_session_layout
+from kingfisher.layout import SCRATCH
 
 macos = pytest.mark.skipif(
     platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
@@ -487,7 +488,7 @@ def test_the_agent_can_still_write_everything_it_is_meant_to(cfg, session_dir):
 
     for command in (
         "echo kept > derived/report.md",
-        "echo scratch > scratchpad/notes.txt",
+        f"echo scratch > {SCRATCH}/notes.txt",
     ):
         result = backend.execute(command)
         assert result.exit_code == 0, f"{command!r} was refused: {result.output}"
@@ -537,13 +538,13 @@ def workspace_in_the_home():
 def test_the_shell_can_walk_into_a_workspace_that_lives_in_the_home(cfg, workspace_in_the_home):
     """Denying the home as a subpath denies the way *in* to the workspace too."""
     session = ensure_session_layout(workspace_in_the_home / "sessions" / "s")
-    (session / "scratchpad" / "t001").mkdir(parents=True)
+    (session / SCRATCH / "t001").mkdir(parents=True)
     backend = backend_at(replace(cfg, workspace=workspace_in_the_home), session)
 
-    result = backend.execute("cd scratchpad && pwd")
+    result = backend.execute(f"cd {SCRATCH} && pwd")
 
     assert result.exit_code == 0, f"the shell cannot walk into the workspace: {result.output}"
-    assert str(session / "scratchpad") in str(result.output)
+    assert str(session / SCRATCH) in str(result.output)
 
 
 @macos

@@ -29,6 +29,7 @@ from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
 from kingfisher.infrastructure.harness.tool_guards import guarded_tools
 from kingfisher.kinds.tools.catalogue import LocalToolRepository
+from kingfisher.layout import SCRATCH_ROUTE
 from tests.conftest import (
     FakeToolCallingModel,
     an_agent,
@@ -116,11 +117,12 @@ def test_a_listing_leaves_out_what_may_not_be_read(backend):
 
     # Each control is the bare backend answering with the private path, so a filter
     # that matched nothing -- a changed entry shape -- fails here rather than passing.
-    assert seen(backend.ls("/derived").entries) == [OPEN, "/derived/private/"]
+    # Every session holds its scratchpad in `/derived`, and nothing here refuses it.
+    assert seen(backend.ls("/derived").entries) == [OPEN, "/derived/private/", SCRATCH_ROUTE]
     assert seen(backend.glob("**/*.txt", "/derived").matches) == [OPEN, KEY]
     assert seen(backend.grep("needle", "/derived").matches) == [OPEN, KEY]
 
-    assert seen(handed.ls("/derived").entries) == [OPEN]
+    assert seen(handed.ls("/derived").entries) == [OPEN, SCRATCH_ROUTE]
     assert seen(handed.glob("**/*.txt", "/derived").matches) == [OPEN]
     assert seen(handed.grep("needle", "/derived").matches) == [OPEN]
     assert seen(handed.grep("needle").matches) == [OPEN], "no path named, and still filtered"
@@ -154,7 +156,10 @@ def test_a_rule_that_asks_a_person_is_a_refusal_here(backend, session_dir):
     handed = PermittedBackend(backend, [ask])
 
     assert handed.read(KEY).error == f"permission denied for read on {KEY}"
-    assert [one["path"] for one in handed.ls("/derived").entries or []] == [OPEN]
+    assert sorted(one["path"] for one in handed.ls("/derived").entries or []) == [
+        OPEN,
+        SCRATCH_ROUTE,
+    ]
     assert [one["path"] for one in handed.grep("needle", "/derived").matches or []] == [OPEN]
     assert "permission denied for write" in _refusal(handed.delete(KEY))
     assert (session_dir / "derived" / "private" / "key.txt").exists()
@@ -335,7 +340,7 @@ def test_the_async_calls_keep_the_same_rules(backend, session_dir):
     assert got["write"] == "permission denied for write on /derived/private/new.txt"
     assert got["edit"] == f"permission denied for write on {KEY}"
     assert "/derived/private/**" in got["delete"]
-    assert got["ls"] == [OPEN]
+    assert sorted(got["ls"]) == [OPEN, SCRATCH_ROUTE]
     inside = "permission denied for read on /derived/private/inner"
     assert (got["ls inside"], got["glob inside"], got["grep inside"]) == (inside,) * 3
     assert got["glob"] == [OPEN]

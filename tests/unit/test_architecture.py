@@ -2200,11 +2200,13 @@ SDK_LOADING: frozenset[str] = frozenset({
     # `ToolContext` cheap for a tool file to import.
     "kingfisher.infrastructure.harness.permitted_backend",
     # Kingfisher's own middleware, each a subclass of a langchain or deepagents class,
-    # and `tool_guards`, which composes three of them. `host_paths` and `session_paths`
-    # are what those are built on and name no runtime class, which is what keeps
-    # `HostPathError` cheap for a backend author to import.
+    # and `tool_guards`, which composes them. `host_paths` and `session_paths` are what
+    # those are built on and name no runtime class, which is what keeps `HostPathError`
+    # cheap for a backend author to import.
     "kingfisher.infrastructure.harness.middlewares.host_path_guard",
     "kingfisher.infrastructure.harness.middlewares.narrowing",
+    "kingfisher.infrastructure.harness.middlewares.shell_path_spelling",
+    "kingfisher.infrastructure.harness.middlewares.stray_write_guard",
     "kingfisher.infrastructure.harness.middlewares.workspace_tools",
     "kingfisher.infrastructure.harness.tool_guards",
     "kingfisher.infrastructure.harness.checkpointing",

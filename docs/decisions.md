@@ -1961,6 +1961,96 @@ and a resumed conversation that reaches for `/scratch` is refused or writes a fi
 no later turn is told about. Entries above that say `scratch` meant this directory
 under its old name. *(2026-09-24.)*
 
+**`/scratchpad` is `/derived/scratchpad`.** What the agent makes has one folder, and a
+subfolder decides what comes back: everything in `/derived` is listed in
+`RunResult.artifacts` and fetchable by `Kingfisher.artifact` except
+`/derived/scratchpad`, which stays `TMPDIR` and `HOME`. `collect_artifacts` is the only
+walk of `/derived`, so the exclusion is one condition there, and `read_artifact` refuses
+the same names, so a caller cannot fetch what no turn listed. Each goes red without its
+condition: `test_run_scratch_is_not_reported` and
+`test_a_working_file_is_not_an_artifact_even_where_it_exists`.
+
+**The cut runs this way round on purpose.** The other way -- a working folder returned
+to nobody, with an `outputs/` inside it that is -- fails by losing work: a model that
+writes to the top folder from habit hands the caller an empty list, and nothing says
+so. This way, forgetting the rule hands the caller extra files, and
+`RunResult.artifacts` keeps its paths. A dot would have kept the subfolder out of
+`ls /derived`; it has none for the reason `.tmp` lost its own, which is that the agent
+types the name. `/memory` stays out of it: deepagents' memory middleware prints its
+path to the model, so folding it in would rename that path and remove nothing the
+model has to learn.
+
+**Swept with the session, not the turn**, as before -- a later turn may find what an
+earlier one left, and nothing promises it -- and the prompt now says so rather than
+calling it throwaway: it may be gone on a later turn, so never depend on it. A session made before this keeps an unaddressed top-level `scratchpad/`
+until it is reaped, and nothing handles it, deliberately.
+
+**Measured before landing.** The smoke task with "into /derived" taken out, so that
+where the outputs land is the prompt's doing; 10 runs on `main` and 10 on this change,
+`MiniMax-M3`, counted from each session's transcript:
+
+| | before | after |
+| --- | --- | --- |
+| checks passed | 10/10 | 10/10 |
+| a requested output missing from `/derived` | 0 | 0 |
+| extra files returned | 0 | 0 |
+| runs passing a virtual path to `execute` | 8 | 10 |
+| such failures, all runs | 19 (`/data` 9, scratch 10) | 16 (`/data` 11, scratch 4, `/derived` 1) |
+| mean model calls | 17.0 | 14.1 |
+
+Nothing that would have stopped it. No output was lost; nothing but the two requested
+files ended at the top of `/derived`, with the file tools writing under
+`/derived/scratchpad` 18 times; and 10 runs against 8 is p=0.24 on a one-sided Fisher
+test, with fewer failures in all. What it did show is older than this change: on this
+model the agent passes a virtual `/data` path to the shell in most runs, and the turn
+message names both spellings only for the working folder. *(2026-09-30.)*
+
+**The shell is told its own spelling, and a save outside the session's folders is
+refused.** deepagents describes `execute` with "Use absolute paths and avoid `cd`", and a
+model reads "absolute" as a leading slash -- which in the shell is the host's root. That
+sentence sits beside the tool, where the choice is made, and `system.md` saying to drop
+the slash lost to it. `ShellPathSpelling` swaps that one sentence for one giving the
+shell's spelling of each folder, per model call, because deepagents picks its own
+description per call too. The rest of deepagents' text stays, and a deepagents that
+rewords the sentence turns `test_the_shell_is_told_its_own_spelling` red rather than
+leaving the old one in place.
+
+**Rejected: registering a replacement description.** deepagents takes one only through
+its harness-profile registry, which is keyed by model provider and global to the
+process. A middleware on the model call is per graph, and reaches a named delegate and
+`general-purpose` through `tool_guards` with the rest. A compiled delegate, the fourth
+graph, gets neither this nor the save refusal below: it takes no middleware of ours.
+
+**The first measurement of it lost an output, and the save refusal is the answer.** With
+the shell told `data/<name>`, one run in ten carried the habit into the file tools:
+`write_file("result.json")`, which is the top of the session, where nothing is returned
+or kept, and a report that both outputs were written. `StrayWriteGuard` refuses a
+`write_file` or `edit_file` outside every folder in `ROUTES` and names the `/derived`
+path to use; host paths and `/data` keep their own refusals. It sits on the model's
+save calls rather than in the backend because deepagents writes files of its own at the
+top of the session -- `/large_tool_results/`, `/conversation_history/` -- through the
+same backend. The shell writing there is not covered: Landlock grants only the folders
+on Linux, and the macOS profile allows the whole workspace.
+
+**Measured** on the task and model of the entry above, 10 runs each:
+
+| | #603 alone | + shell text | + shell text + save refusal |
+| --- | --- | --- | --- |
+| checks passed | 10/10 | 9/10 | 9/10 |
+| a requested output lost | 0 | 1 (saved at the top) | 1 (provider timed out) |
+| loose files at the top of the session | 0 | 2 | 0 |
+| save refusals | -- | -- | 0 |
+| runs passing a virtual path to `execute` | 10 | 6 | 7 |
+| such failures, all runs | 16 | 8 | 11 |
+| mean input tokens | 205k | 139k | 149k |
+
+13 runs of 20 with the shell text against 10 of 10 without is p=0.04, one-sided Fisher.
+The last batch's lost output was a `ReadTimeout` from the model provider after
+`result.json` was already in `/derived`, and is counted as a crash rather than against
+either change. The refusal never fired in those runs: the bare-name save is occasional,
+and what holds the refusal in place is
+`test_a_save_outside_every_folder_is_refused_and_redirected`. *(2026-09-30.)*
+
 **A session's history is kingfisher's own records, not a framework's.**
 `domain/transcript.py` holds it, and it keeps what the agent *did* as well as
 what it said -- tool calls and results, not only human and assistant text, since

@@ -79,13 +79,13 @@ class RunResult:
     #: made here. Not a sequence -- nothing compares two.
     turn_id: str
     answer: str
-    #: Everything under `/derived` and `/memory` at the end of this turn, as names
-    #: relative to the session, listed through its backend -- so names, not files to
-    #: open: `Kingfisher.artifact` fetches one, wherever the backend keeps it. What is
-    #: *present*, not what changed: `execute`
-    #: writes without any file tool seeing it, so the only sound view is the
-    #: filesystem's, and a caller persisting incrementally diffs against the
-    #: previous turn's manifest -- which also tells it what was deleted.
+    #: Everything under `/derived`, less its scratchpad, and `/memory` at the end of
+    #: this turn, as names relative to the session, listed through its backend -- so
+    #: names, not files to open: `Kingfisher.artifact` fetches one, wherever the backend
+    #: keeps it. What is *present*, not what changed: `execute` writes without any file
+    #: tool seeing it, so the only sound view is the filesystem's, and a caller
+    #: persisting incrementally diffs against the previous turn's manifest -- which also
+    #: tells it what was deleted.
     artifacts: tuple[str, ...] = ()
     #: Why this turn stopped. `end_turn` is the ordinary case; anything else means the
     #: answer is what had been reached when a bound was hit, and `artifacts` still lists

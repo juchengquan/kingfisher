@@ -12,6 +12,8 @@ from langchain_core.tools import BaseTool, StructuredTool, ToolException
 from kingfisher.domain.references import UnsafeReferenceError
 from kingfisher.infrastructure.harness.host_paths import HostPathError
 from kingfisher.infrastructure.harness.middlewares.host_path_guard import HostPathGuard
+from kingfisher.infrastructure.harness.middlewares.shell_path_spelling import ShellPathSpelling
+from kingfisher.infrastructure.harness.middlewares.stray_write_guard import StrayWriteGuard
 from kingfisher.infrastructure.harness.middlewares.workspace_tools import (
     WorkspaceToolErrors,
     WorkspaceToolPaths,
@@ -31,11 +33,14 @@ def tool_guards(names: frozenset[str], paths: SessionPaths | None) -> list[Agent
 
     `HostPathGuard` is unconditional: the backend refuses a host path on every run, so
     the thing that turns that refusal into a correction the model can read has to be
-    there whether or not this graph holds a workspace tool. The other two are about the
-    tools themselves, so they need names -- and translation needs the turn's backend to
-    translate against, which every graph here is handed the same one of.
+    there whether or not this graph holds a workspace tool. `ShellPathSpelling` is
+    unconditional because every graph holding `execute` is handed deepagents'
+    description of it, and `StrayWriteGuard` because every graph holding `write_file`
+    can save where nothing is kept. The other two are about the tools themselves, so
+    they need names -- and translation needs the turn's backend to translate against,
+    which every graph here is handed the same one of.
     """
-    guards: list[AgentMiddleware] = [HostPathGuard()]
+    guards: list[AgentMiddleware] = [HostPathGuard(), ShellPathSpelling(), StrayWriteGuard(paths)]
     if names:
         # Beside each other and in this order, which the delegate's stack is pinned to:
         # both are about a workspace tool call, and the translation rewrites the

@@ -121,9 +121,8 @@ def turn_message(task: str, placed: tuple[str, ...]) -> str:
     # times, each failing and costing roughly three times the whole task to
     # recover. The 6 that used the shell form first never failed.
     #
-    # It said this about a per-turn `/runs/<turn>`; the directory is the session's
-    # `/scratchpad` now and the sentence is unchanged in kind, because what was
-    # measured was the agent's handling of the two spellings rather than anything
+    # Measured against a directory that has since moved, which does not date it:
+    # what was measured was the agent's handling of the two spellings, not anything
     # about which directory it was being handed.
     return (
         f"{task}\n\n"

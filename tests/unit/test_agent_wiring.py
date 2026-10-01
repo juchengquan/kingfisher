@@ -44,7 +44,7 @@ def test_agent_runs_shell_and_writes_files(cfg, session_dir):
             tool_calls=[
                 {
                     "name": "write_file",
-                    "args": {"file_path": "/out.txt", "content": "42"},
+                    "args": {"file_path": "/derived/out.txt", "content": "42"},
                     "id": "c2",
                 }
             ],
@@ -63,8 +63,8 @@ def test_agent_runs_shell_and_writes_files(cfg, session_dir):
 
     # The shell actually ran, with a PATH we constructed rather than inherited.
     assert "42" in _all_text(out["messages"])
-    # The virtual path /out.txt resolved to a real file inside root_dir.
-    assert (session_dir / "out.txt").read_text().strip() == "42"
+    # The virtual path /derived/out.txt resolved to a real file inside root_dir.
+    assert (session_dir / "derived" / "out.txt").read_text().strip() == "42"
 
 
 def test_planning_and_permissions_are_wired(cfg, session_dir):
