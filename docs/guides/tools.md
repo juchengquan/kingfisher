@@ -271,7 +271,7 @@ Three things are refused, each as a failed result the model can read:
   else has no real file to hand over; a tool taking
   `runtime: ToolRuntime[ToolContext]`, below, works on any backend. A backend that
   is not kingfisher's can still keep its files here — a directory of its own, a
-  network mount — and say so.
+  network mount — and say so with `host_path`; [`ports.md`](ports.md) is its side.
 
 **Only `path` is translated.** An argument with any other name reaches the tool as
 written, so a tool calling its file `input_file` is handed `/data/report.csv`

@@ -290,6 +290,29 @@ rewriting its own pinned agent, and both are yours to get right:
 Nothing else is read from a directory on this host. A backend that keeps its
 sessions somewhere else keeps all of them there.
 
+**Saying a file is on this host: `host_path`.** A workspace tool that takes a `path`
+is handed a real file to open — see [`tools.md`](tools.md). Kingfisher asks the
+backend where that file lives here: it follows your routes, and a
+`FilesystemBackend` answers from its own root, so a backend built from those needs
+nothing more. A backend whose files are on this host by some other means — a
+network mount, a cache — says so with an optional method on what your factory
+returns:
+
+```python
+class MountedFiles(MySandbox):
+    def host_path(self, virtual):
+        return Path("/mnt/sessions") / self.session_id / virtual.lstrip("/")
+```
+
+Return `None` for a path that is not on this host; the tool is refused with a
+message saying to read through `runtime.context.backend`, which works anywhere.
+What you return is taken at your word: it is handed to a tool running in
+kingfisher's own process, outside every sandbox. So it must never name another
+session's file — `a_host_path_stays_in_its_session` in the kit below writes a file
+into two sessions and reads back what your answer names. The turn's rules still
+apply first: a path the file tools may not read, `/.harness` among them, is
+refused before your method is asked.
+
 For the command line, name it with `KINGFISHER_BACKEND_FACTORY`; without it,
 `kingfisher sessions`, `reap` and `artifact` run on `default_backend`.
 
@@ -326,7 +349,8 @@ Run all five. The automatic pair costs nothing twice, and your own suite is a
 better place to read a failure than a turn is. And run
 `SESSION_BACKENDS_CONTRACT`, above, against the object that makes them: that two
 sessions are kept apart, that a session is there on the next turn, that the claim
-is exclusive, and that what is listed and deleted is what exists.
+is exclusive, that what is listed and deleted is what exists, and that where you say
+a file is on this host, it is that session's file.
 
 **The shell and the file tools have to be two views of one filesystem**, and this
 is the one left that reports nothing on its own. A virtual path becomes a shell

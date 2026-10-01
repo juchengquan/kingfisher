@@ -156,3 +156,38 @@ def test_deciding_nothing_finds_a_session_the_named_backend_keeps(
     said = capsys.readouterr().err
     assert "session kept-elsewhere is not waiting on a decision" in said
     assert "no such session: never-was" in said
+
+
+class Misdirected(DefaultBackend):
+    """A backend whose own `host_path` answers from the wrong session: every file it
+    serves is right, and every one it hands a tool by path is a neighbour's.
+    """
+
+    def __call__(self, cfg, session_id, /, *, catalogue=None, runner=None):
+        built = super().__call__(cfg, session_id, catalogue=catalogue, runner=runner)
+        neighbour = "kingfisher-contract-b" if session_id != "kingfisher-contract-b" else "x"
+        root = cfg.workspace / "sessions" / neighbour
+        built.host_path = lambda virtual: root / virtual.lstrip("/")
+        return built
+
+
+class NothingHere(DefaultBackend):
+    """A backend that says none of its files are on this host."""
+
+    def __call__(self, cfg, session_id, /, *, catalogue=None, runner=None):
+        built = super().__call__(cfg, session_id, catalogue=catalogue, runner=runner)
+        built.host_path = lambda virtual: None
+        return built
+
+
+def test_the_kit_catches_a_host_path_into_another_session(cfg):
+    """The one that hands a tool, outside every fence, a neighbour's file -- and only a
+    tool taking `path` would ever notice.
+    """
+    with pytest.raises(AssertionError, match="not this session's"):
+        _check("a_host_path_stays_in_its_session")(lambda: (cfg, Misdirected()))
+
+
+def test_a_backend_that_keeps_nothing_here_passes_the_host_path_check(cfg):
+    """`None` is an honest answer: the tool is refused and reads through the backend."""
+    _check("a_host_path_stays_in_its_session")(lambda: (cfg, NothingHere()))

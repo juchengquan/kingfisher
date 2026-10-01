@@ -20,6 +20,7 @@ from deepagents.backends.protocol import SandboxBackendProtocol
 
 from kingfisher.config import ConfigError
 from kingfisher.infrastructure.harness.host_paths import HostPathError
+from kingfisher.infrastructure.harness.permitted_backend import host_path
 from kingfisher.layout import denied_read_scopes, denied_scopes
 
 if TYPE_CHECKING:
@@ -304,6 +305,40 @@ def a_deleted_session_is_gone(make: Callable[[], Any]) -> None:
         raise AssertionError(msg)
 
 
+def a_host_path_stays_in_its_session(make: Callable[[], Any]) -> None:
+    """Where a backend says a file is on this host, it is that session's file.
+
+    Asked the way a workspace tool's `path` is resolved -- a backend's own `host_path`,
+    or its routes -- because that answer is handed to a tool as a real file to open,
+    in kingfisher's own process and outside every fence. An answer pointing into
+    another session hands a tool that session's files. `None`, "not on this host", is
+    always allowed: the tool is refused and told to read through the backend instead.
+
+    Checked by reading what the answer names rather than by comparing paths, because
+    a backend answering from a mount knows its own layout and this does not.
+    """
+    cfg, backends = make()
+    one, other = CONTRACT_SESSIONS
+    mine, theirs = backends(cfg, one), backends(cfg, other)
+    mine.upload_files([("/derived/whose", f"{one}'s".encode())])
+    theirs.upload_files([("/derived/whose", f"{other}'s".encode())])
+    answered = host_path(mine, "/derived/whose")
+    if answered is None:
+        return
+    _, where = answered
+    try:
+        held = where.read_bytes()
+    except OSError as unreadable:
+        msg = f"{one!r}'s backend says /derived/whose is {where}, which cannot be read"
+        raise AssertionError(msg) from unreadable
+    if held != f"{one}'s".encode():
+        msg = (
+            f"{one!r}'s backend says /derived/whose is {where}, which holds {held!r}: "
+            "a tool handed that path opens a file that is not this session's"
+        )
+        raise AssertionError(msg)
+
+
 #: Every check a deployment's `SessionBackends` must pass. `make` returns a fresh
 #: `(Config, backends)` pair, because every question a backends object answers is
 #: about one deployment's sessions. These write files, as `filesystem_consistency`,
@@ -314,4 +349,5 @@ SESSION_BACKENDS_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (
     a_claim_is_exclusive,
     a_session_asked_for_is_listed,
     a_deleted_session_is_gone,
+    a_host_path_stays_in_its_session,
 )
