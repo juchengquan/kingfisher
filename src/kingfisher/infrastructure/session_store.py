@@ -1,8 +1,8 @@
 """What kingfisher keeps about a session: its conversation, and a turn paused for an
 answer.
 
-Read and written through the session's `HarnessFiles`, so through its backend, and
-signed there. This module owns the formats, not where they live.
+Read and written through the session's `HarnessFiles`, so through its backend. This
+module owns the formats, not where they live.
 """
 
 from __future__ import annotations

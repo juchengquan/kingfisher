@@ -70,9 +70,7 @@ workspace. `kingfisher sessions` shows what that workspace is holding — one li
 per session, how long it has been idle and what it costs — and `kingfisher reap`
 deletes the ones it is finished with. `kingfisher artifact --session ID
 derived/report.html` fetches one file a turn produced, by the name the run
-reported — `Kingfisher.artifact(session_id, name)` from Python. `kingfisher key`
-prints a `KINGFISHER_SESSION_KEY`, which any deployment but the default under its
-own sandbox needs. A run that should
+reported — `Kingfisher.artifact(session_id, name)` from Python. A run that should
 leave nothing behind can say so at the time: `kingfisher run --delete-session`, or
 `Kingfisher.run(..., delete_session=True)` from Python.
 

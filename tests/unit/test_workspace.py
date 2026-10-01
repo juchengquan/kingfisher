@@ -115,10 +115,10 @@ def sweep(workspace, keep, checkpointer):
 
     from kingfisher import Kingfisher
     from kingfisher.config import Config
-    from tests.conftest import FAKE_CATALOGUE, TEST_KEY
+    from tests.conftest import FAKE_CATALOGUE
     from tests.unit.test_run import StubAgent
 
-    cfg = Config(workspace=workspace, models=FAKE_CATALOGUE, session_key=TEST_KEY)
+    cfg = Config(workspace=workspace, models=FAKE_CATALOGUE)
     kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=checkpointer)
     return kf.reap(older_than_seconds=keep, now=time.time())
 

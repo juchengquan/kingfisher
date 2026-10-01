@@ -106,7 +106,6 @@ from kingfisher.infrastructure.harness.runlog import LoggedRunEvents, RunLogger
 from kingfisher.infrastructure.harness.session_files import (
     HarnessFiles,
     collect_artifacts,
-    key_needed,
     local_files,
     place_data,
     read_artifact,
@@ -314,17 +313,6 @@ class Kingfisher(Sessions, Disposal):
         # there are, how big, when each was used. A deployment that supplied a graph
         # rather than a backend keeps its sessions where the default does.
         self._backends: SessionBackends = backend if backend is not None else default_backend
-        # Before anything else can run: a deployment that needs a key and has none
-        # would otherwise serve turns whose pinned agent and conversation the agent's
-        # own shell can rewrite, and nothing would say so.
-        if self.cfg.session_key is None and (
-            why := key_needed(self.cfg, backend=backend, graph=graph, runner=runner)
-        ):
-            msg = (
-                f"KINGFISHER_SESSION_KEY is not set, and this deployment needs one "
-                f"because {why}. Generate one with: kingfisher key"
-            )
-            raise ConfigError(msg)
         # Where each turn's record of itself goes. The default is the `kingfisher.run`
         # logger, which the default logging configuration discards: a deployment
         # decides whether it keeps them by configuring logging or by passing a sink.
@@ -524,7 +512,6 @@ class Kingfisher(Sessions, Disposal):
         return HarnessFiles(
             files if files is not None else self._files_for(session_id, session_dir),
             session_id,
-            self.cfg.session_key,
         )
 
     def pending(
@@ -670,7 +657,14 @@ class Kingfisher(Sessions, Disposal):
         if state is None:
             msg = f"session {session.id} recorded a pause whose state is missing"
             raise DecisionError(msg)
-        restored = resumed_saver(state)
+        try:
+            restored = resumed_saver(state)
+        except (ValueError, NotImplementedError) as exc:
+            # A backend has no rename, so a pause is written in place and a crash can
+            # leave part of one. No part of one deserialises; this says which session
+            # rather than leaving msgpack to.
+            msg = f"session {session.id} recorded a pause whose state cannot be read: {exc}"
+            raise DecisionError(msg) from exc
         # Read back rather than derived again from the restored state. These are the
         # very ids the caller was handed, so answering them cannot drift from being
         # asked them -- and re-deriving would need the graph, which does not exist

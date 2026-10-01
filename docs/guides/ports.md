@@ -278,15 +278,11 @@ a backend of yours meets the same promise its own way.
 **And what it keeps about the session, under `/.harness`.** The agent the session is
 pinned to, its conversation, and a turn paused at an approval gate are all written
 and read through your backend — which means your agent's shell can reach them too,
-unless your backend keeps it out. So two things stand between the agent and
-rewriting its own pinned agent, and both are yours to get right:
-
-- **`shell_denied`**, in the kit below, drives `execute` at `/.harness` and `/data`
-  and fails if the shell can write either.
-- **`KINGFISHER_SESSION_KEY`**, which kingfisher signs those files with and checks
-  on every read. A mismatch refuses the turn with `SessionTamperedError`. With any
-  backend but `default_backend` itself — a factory wrapping it included — kingfisher
-  will not start without one; `kingfisher key` prints one.
+unless your backend keeps it out. Nothing signs them, so what stands between the
+agent and rewriting its own pinned agent is that fence, and it is yours to get
+right: **`shell_denied`**, in the kit below, drives `execute` at `/.harness` and
+`/data` and fails if the shell can write either. `kingfisher doctor` warns when
+`KINGFISHER_BACKEND_FACTORY` names a backend, because it cannot look inside one.
 
 Nothing else is read from a directory on this host. A backend that keeps its
 sessions somewhere else keeps all of them there.

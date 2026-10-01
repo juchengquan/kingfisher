@@ -28,7 +28,6 @@ from kingfisher.infrastructure.sandbox.confinement import (
     harness_unfenced,
     shell_confinement,
 )
-from kingfisher.infrastructure.signing import key_id
 from kingfisher.infrastructure.workspace import MemoryBacking, destination_hint, memory_backing
 
 #: `fail` means this deployment will not run. `warn` means it will, and
@@ -57,6 +56,8 @@ RETIRED: dict[str, str] = {
     "KINGFISHER_STATE_DIR": "nothing -- run logs, claims and pinned agents are "
                             "inside the session they belong to",
     "KINGFISHER_SCRATCH_DIR": "nothing -- TMPDIR is a directory inside the session",
+    "KINGFISHER_SESSION_KEY": "nothing -- what a session keeps is no longer signed, and "
+                              "the `session files` check says what keeps the shell out",
 }
 
 #: Prefixes that went whole, matched rather than enumerated: every setting the
@@ -648,29 +649,37 @@ def _shell(cfg: Config) -> Iterator[Check]:
         )
 
 
-def _session_key(cfg: Config) -> Iterator[Check]:
-    """Whether what kingfisher reads back from a session can be trusted here.
+def _session_files(cfg: Config) -> Iterator[Check]:
+    """Whether anything this command can see keeps the agent's shell out of `.harness`.
 
-    Asked of the wiring `kingfisher` itself uses -- the default backend, no runner, no
-    graph -- because that is the deployment this command can see. One built in code
-    with its own backend needs a key whatever this says, and `Kingfisher` refuses to
-    start without one.
+    Nothing signs what kingfisher keeps there -- the pinned agent, the conversation, a
+    paused turn -- so a shell that can write it can rewrite them. Asked of what this
+    command can see: the backend `KINGFISHER_BACKEND_FACTORY` names, and the sandbox.
+    A deployment wiring its own backend, graph or runner in code is out of its sight.
+    A warning rather than a failure, because the deployment runs either way and may
+    well be fenced by something this cannot look into.
     """
-    if cfg.session_key is not None:
-        yield Check("session key", "ok", f"set (key {key_id(cfg.session_key)})")
-    elif (why := harness_unfenced(cfg)) is None:
+    if cfg.backend_factory:
         yield Check(
-            "session key",
-            "ok",
-            "not set, and not needed here: the sandbox keeps the agent's shell out of "
-            ".harness. A deployment with its own backend, graph or runner needs one",
+            "session files",
+            "warn",
+            f"KINGFISHER_BACKEND_FACTORY names {cfg.backend_factory}, and nothing here "
+            "can see whether its shell is kept out of .harness",
+            "run BACKEND_CONTRACT from kingfisher against it: its shell_denied check "
+            "drives the shell at /.harness",
+        )
+    elif (why := harness_unfenced(cfg)) is not None:
+        yield Check(
+            "session files",
+            "warn",
+            f"{why}, so the agent's shell can rewrite the session's pinned agent, "
+            "conversation and paused turn",
+            "turn the sandbox on, or confine the shell another way -- shell_denied in "
+            "BACKEND_CONTRACT says whether it holds",
         )
     else:
         yield Check(
-            "session key",
-            "fail",
-            f"not set, and needed because {why}",
-            "generate one with `kingfisher key` and set KINGFISHER_SESSION_KEY",
+            "session files", "ok", "the sandbox keeps the agent's shell out of .harness"
         )
 
 
@@ -729,7 +738,7 @@ def examine(cfg: Config, found: Inventory | None = None) -> tuple[Check, ...]:
         checks += _where(cfg, found)
         checks += _definitions(cfg, found)
         checks += _shell(cfg)
-        checks += _session_key(cfg)
+        checks += _session_files(cfg)
     except ConfigError as exc:  # pragma: no cover -- belt and braces
         checks.append(Check("configuration", "fail", str(exc)))
     return tuple(checks)

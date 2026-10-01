@@ -93,8 +93,6 @@ def remote_backends() -> Elsewhere:
 def told_about_a_remote_backend(at_the_command_line, monkeypatch, tmp_path):
     REMOTE.append(tmp_path / "remote")
     monkeypatch.setenv("KINGFISHER_BACKEND_FACTORY", f"{__name__}:remote_backends")
-    # A backend that is not the default needs a key, from the command line as anywhere.
-    monkeypatch.setenv("KINGFISHER_SESSION_KEY", "k" * 32)
     yield at_the_command_line
     REMOTE.pop()
 

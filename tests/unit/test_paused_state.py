@@ -19,9 +19,8 @@ from langgraph.graph import START, StateGraph
 from langgraph.types import Command, interrupt
 from typing_extensions import TypedDict
 
-from kingfisher.domain.session import SessionTamperedError
 from kingfisher.infrastructure.harness.checkpointing import paused_state, resumed_saver
-from kingfisher.layout import HARNESS, PAUSED_STATE
+from kingfisher.layout import PAUSED_STATE
 from tests.conftest import harness_of, start
 
 
@@ -139,22 +138,19 @@ def test_a_checkpoint_is_msgpack_and_a_pickle_is_refused_on_the_way_back():
         resumed_saver(b"pickle\n" + pickle.dumps({"storage": [], "writes": [], "blobs": []}))
 
 
-def test_a_checkpoint_cut_off_halfway_is_refused_rather_than_resumed(cfg):
+def test_no_part_of_a_checkpoint_resumes():
     """It was written aside and renamed into place, so a write that died left the one
     before it whole. Through a backend there is no rename, and what stands in for it is
-    the signature: half a checkpoint is refused as not what kingfisher wrote, where
-    loading it would fail on state that looks present.
+    the format: every prefix of a paused state fails to deserialise rather than
+    resuming from part of one. Every length, because a half is one case of thousands.
     """
-    start(cfg, "s")
     holding = InMemorySaver()
     _gated_graph(holding).invoke({"asked": "first"}, config=_thread("s1"))
-    harness = harness_of(cfg, "s")
-    harness.write(PAUSED_STATE, paused_state(holding))
-    written = cfg.workspace / "sessions" / "s" / HARNESS / PAUSED_STATE
-    written.write_bytes(written.read_bytes()[: len(written.read_bytes()) // 2])
+    state = paused_state(holding)
 
-    with pytest.raises(SessionTamperedError):
-        harness.read(PAUSED_STATE)
+    for cut in range(len(state)):
+        with pytest.raises((ValueError, NotImplementedError)):
+            resumed_saver(state[:cut])
 
 
 def test_no_checkpoint_is_not_an_error(cfg):

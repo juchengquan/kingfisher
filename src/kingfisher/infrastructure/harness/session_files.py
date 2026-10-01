@@ -14,11 +14,8 @@ from typing import Any
 
 from deepagents.backends import CompositeBackend, FilesystemBackend
 
-from kingfisher.config import Config, SessionKey
 from kingfisher.domain.result import ArtifactError
-from kingfisher.infrastructure.harness.backend import DataBackend, SessionClaims, default_backend
-from kingfisher.infrastructure.sandbox import confinement
-from kingfisher.infrastructure.signing import SIGNATURE, sign, verify
+from kingfisher.infrastructure.harness.backend import DataBackend, SessionClaims
 from kingfisher.infrastructure.workspace.placement import DataError, DataPlacement, checked
 from kingfisher.layout import ARTIFACT_DIRS, DATA_ROUTE, HARNESS_ROUTE
 
@@ -118,55 +115,28 @@ def read_artifact(backend: Any, name: str) -> bytes:
     return answer.content
 
 
-def key_needed(cfg: Config, *, backend: Any, graph: Any, runner: Any) -> str | None:
-    """Why this deployment must sign what it keeps about a session, or `None`.
-
-    `None` only where kingfisher itself keeps the shell away from `.harness`, and
-    only where it can see that it does. Anything it cannot see into counts as
-    needing a key: being unsure is the case a signature is for.
-    """
-    if graph is not None:
-        return "it supplies a pre-built graph, and kingfisher cannot see the backend inside it"
-    if backend is not default_backend:
-        # Identity, not the type of what it returns: a factory wrapping
-        # `default_backend` can hand back its result with anything changed, and
-        # kingfisher cannot tell that without trusting the wrapper.
-        return "its backend factory is not default_backend itself"
-    if runner is not None:
-        return "it supplies a CommandRunner, which may run commands outside kingfisher's sandbox"
-    return confinement.harness_unfenced(cfg)
-
-
 class HarnessFiles:
     """What kingfisher keeps about one session under `/.harness`, through its backend.
 
-    Signed wherever a key is set, and verified on every read. The agent's shell
-    reaches the same backend, and on one kingfisher does not fence nothing else
-    stops it rewriting its own pinned agent or conversation.
+    Kept as written and read back as found. The agent's shell reaches the same
+    backend, so what keeps it from rewriting its own pinned agent, conversation or
+    paused turn is the shell's fence: kingfisher's sandbox, or a backend of the
+    deployment's that passes `shell_denied`. `kingfisher doctor` says where it can
+    see neither.
     """
 
-    def __init__(self, backend: Any, session_id: str, key: SessionKey | None) -> None:
+    def __init__(self, backend: Any, session_id: str) -> None:
         self._backend = backend
         self._session_id = session_id
-        self._key = key
 
     def read(self, name: str) -> bytes | None:
         """`name`'s content, or `None` where the session has none."""
-        content, signature = self._download(name, f"{name}{SIGNATURE}")
-        if content is not None and self._key is not None:
-            verify(self._key, self._session_id, name, content, signature)
+        (content,) = self._download(name)
         return content
 
     def write(self, name: str, content: bytes) -> None:
-        """Replace `name`, and its signature with it."""
+        """Replace `name`."""
         files = [(f"{HARNESS_ROUTE}{name}", content)]
-        if self._key is not None:
-            files.append(
-                (
-                    f"{HARNESS_ROUTE}{name}{SIGNATURE}",
-                    sign(self._key, self._session_id, name, content),
-                )
-            )
         refused = [a for a in self._backend.upload_files(files) if a.error]
         if refused:
             kept = ", ".join(f"{a.path}: {a.error}" for a in refused)
@@ -174,10 +144,8 @@ class HarnessFiles:
             raise OSError(msg)
 
     def delete(self, *names: str) -> None:
-        """Drop these and their signatures. Safe where they were never written."""
-        paths = [
-            f"{HARNESS_ROUTE}{one}" for name in names for one in (name, f"{name}{SIGNATURE}")
-        ]
+        """Drop these. Safe where they were never written."""
+        paths = [f"{HARNESS_ROUTE}{name}" for name in names]
         for path in paths:
             self._backend.delete(path)
         # Asked again rather than trusting each answer: a backend reports a file that
