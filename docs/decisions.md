@@ -24,7 +24,7 @@ lines apart.
 |---|---|
 | **What a deployment authors** | [The definition format](#the-definition-format) · [The catalogue](#the-catalogue) · [Agents and delegation](#agents-and-delegation) · [Packaging](#packaging-where-the-definitions-live) |
 | **What a request may do** | [Capabilities](#capabilities) · [Source-id access](#source-id-access) · [Models and endpoints](#models-and-endpoints) |
-| **What a run meets** | [What a tool returns](#what-a-tool-returns) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) · [A session is its backend](#a-session-is-its-backend) |
+| **What a run meets** | [What a tool returns](#what-a-tool-returns) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) · [A session is its backend](#a-session-is-its-backend) · [A tool's path is the backend's path](#a-tools-path-is-the-backends-path) |
 | **The surfaces** | [The command line](#the-command-line) · [What doctor promises](#what-doctor-promises) · [Where a deployment reads from](#where-a-deployment-reads-from) · [The HTTP service](#the-http-service) · [The front door](#the-front-door) |
 | **The codebase itself** | [Layering](#layering) · [Splitting a file](#splitting-a-file) · [The architecture rules](#the-architecture-rules) · [How much a comment says](#how-much-a-comment-says) · [The size of the test suite](#the-size-of-the-test-suite) |
 | | [Proposals, and what became of them](#proposals-and-what-became-of-them) |
@@ -2550,6 +2550,69 @@ shell only means something on the host that runs it; and a supplied runner is st
 built from `<workspace>/sessions/<id>`, because a runner is about where commands run
 on this host.
 
+## A tool's path is the backend's path
+
+**A workspace tool's `path` is resolved by the session's backend, under the turn's
+rules, one path at a time.** It was resolved by joining the virtual path onto the
+session directory: a second copy of the backend's own path mapping, which had drifted
+three ways, each measured on 2026-09-30. On the default backend it handed a tool
+`<session>/skills/...`, which does not exist, while `read_file` read the same path from
+the catalogue. It handed a tool the real `/.harness` pin and conversation, which the
+file tools are refused and the shell is fenced from -- and a tool runs in this process,
+outside every fence, so one writing to its `path` could rewrite the agent a session is
+pinned to. And on a backend keeping sessions elsewhere it handed a tool a local path to
+nothing. Proposed on 2026-09-30 after an audit of what still assumed a session is a
+folder here, settled on 2026-10-01, and built in four slices.
+
+**In order, per path:** the turn's rules as `read_file` applies them; then where the
+backend keeps the path on this host -- a composite's routes, a `FilesystemBackend`'s
+root, or the backend's own `host_path(virtual)`; then containment against the root
+that answered, links resolved. A path not kept here is refused with a message naming
+`ToolContext`. `SessionPaths` holds the turn's `PermittedBackend`, the same object a
+tool gets as `runtime.context.backend`, and that reads its rules when it checks:
+`build_agent` builds the guards before it has finished adding rules, and a copy taken
+then would miss memory declined and skills narrowed.
+
+**Per path, not per backend.** The first finding read like "refuse path tools on a
+remote backend", and that was the wrong rule: a backend that is not kingfisher's may
+keep all, some or none of its files on this host -- a directory of its own, a network
+mount, or `/data` here and the shell elsewhere. Which backend it is says nothing about
+one path, so the question is asked of the path, at the call. A startup rule was the
+alternative, and it would have refused a deployment over a tool it never calls.
+
+**A delegate is handed the parent's paths.** It guessed its session from
+`backend.workspace`, which a deployment's backend need not have, and without it a
+delegate's tools lost translation and the host-path refusal silently.
+
+**A path under a write-denied scope is handed over.** Under `/data` that is safe on the
+default backend, the directory being read-only on disk. Under `/skills` it is not: the
+catalogue is writable and shared, and a tool runs outside the shell's fence. Decided
+for a `fill_template(path="/skills/report/template.md")` that reads a template, against
+a `tidy_whitespace(path=...)` that would rewrite it for every session: workspace tools
+are the operator's reviewed code, every shipped one only reads, and the protection
+rests on the operator not writing that tool. Refusing write-denied scopes was the
+alternative, and would have left a path tool unable to read a skill's file at all.
+
+**`host_path` is part of the documented backend contract**, optional, and checked:
+`a_host_path_stays_in_its_session` in `SESSION_BACKENDS_CONTRACT` reads back what a
+backend's answer names and refuses one that is another session's file. Decided for a
+deployment keeping sessions on a network mount, whose existing path tools keep working
+with it. Keeping it internal was the alternative, and that deployment would have
+rewritten every path tool against `ToolContext` for files already here. A backend's own
+answer is taken at its word -- there is no root to hold it to -- which is what the
+check is for.
+
+**The shipped path tools read through `ToolContext`.** They take `file_path` and a
+runtime and fetch with `download_files`, so the examples work on any backend and teach
+the route that does. `line_count` streamed so as never to hold a large file; a backend
+hands a file back whole, so it holds it once now, and still keeps it out of the
+model's context, which is its job.
+
+**Two leftovers of *A session is its backend* went with it.** `kingfisher decide`
+asks the backends whether a session exists rather than looking for a folder, and
+`RunResult.session_dir` is gone, so nothing in a result is a host path and a result
+serialises whole.
+
 ## The command line
 
 **The command is a consumer of the library, not an insider.** Seeding and the
@@ -4355,6 +4418,11 @@ sentence that needs a test.*
 shipped -- `WorkspaceToolErrors` and `tests/unit/test_workspace_tool_errors.py` --
 and its status line had never been changed to say so. Its decisions are under
 *Tool failure* above.*
+
+*`a-tool-path-is-the-backend-s-path` was written on 2026-09-30, settled on
+2026-10-01 and built in four slices; its decisions are under *A tool's path is the
+backend's path* above. Digging into its first finding is what turned it from a rule
+about remote backends into one about each path.*
 
 *`a-session-is-its-backend` was written on 2026-09-30 and built the same day in
 four slices; its decisions are under *A session is its backend* above. Its own
