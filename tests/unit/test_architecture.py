@@ -2448,6 +2448,9 @@ HEAVY_EXPORTS = frozenset({
     # the backends a setting names: all three are the backend module, which is
     # deepagents by definition, as `default_backend` below is.
     "DefaultBackend", "backend_at", "configured_backend",
+    # Where `kingfisher run --log` keeps a turn's events: beside the logger sink it is
+    # the file twin of, in the harness module that turns callbacks into events.
+    "JsonlRunEvents",
     # Its companion kit checks what a deployment's backends build, which are backends
     # deepagents has to accept.
     "SESSION_BACKENDS_CONTRACT",
