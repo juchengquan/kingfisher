@@ -147,7 +147,10 @@ does. `docs/guides/formats.md`, under *Tools and skills of its own*, has the det
   NAME [--out PATH]` fetches a file a turn produced.
 - **Changed:** `sessions`, `reap`, `artifact` and `decide` run on
   `KINGFISHER_BACKEND_FACTORY` when it's set. `decide --session ID` with no decisions
-  now finds a session a backend keeps elsewhere. `doctor` gains a `session key` row,
+  now finds a session a backend keeps elsewhere, and asks as the caller `--as` names:
+  in a workspace with source ids it needs `--as`, and a caller who can't reach the
+  session is told it doesn't exist (`Kingfisher.pending` takes `source_ids=` for the
+  same check). `doctor` gains a `session key` row,
   and its advice for a memory-backed workspace points at a durable mount or
   `KINGFISHER_BACKEND_FACTORY`.
 
