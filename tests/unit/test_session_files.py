@@ -22,7 +22,7 @@ from kingfisher import (
 )
 from kingfisher.domain.access import parse
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.harness.backend import SessionClaims
+from kingfisher.infrastructure.harness.backend import DefaultBackend, SessionClaims
 from kingfisher.infrastructure.harness.session_files import (
     collect_artifacts,
     local_files,
@@ -129,12 +129,14 @@ def test_a_backend_that_keeps_the_session_elsewhere_gets_the_data_and_gives_back
 # -- fetching one ------------------------------------------------------------
 
 
-def _produced(cfg, name: str = "derived/out.txt", content: str = "result") -> Kingfisher:
+def _produced(
+    cfg, name: str = "derived/out.txt", content: str = "result", *, backend=default_backend
+) -> Kingfisher:
     start(cfg, "s")
     target = cfg.workspace / "sessions" / "s" / name
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content)
-    return Kingfisher(cfg, backend=default_backend)
+    return Kingfisher(cfg, backend=backend)
 
 
 def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg):
@@ -212,6 +214,37 @@ def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg):
     assert kf.artifact("s", "derived/out.txt", source_ids=("A",)) == b"result"
     with pytest.raises(UnknownSessionError):
         kf.artifact("s", "derived/out.txt", source_ids=("B",))
+
+
+# -- reading one -------------------------------------------------------------
+
+
+class Counting(DefaultBackend):
+    """The default backend, recording each session it is asked for."""
+
+    def __init__(self) -> None:
+        self.asked: list[str] = []
+
+    def __call__(self, cfg, session_id, /, *, catalogue=None, runner=None):
+        self.asked.append(session_id)
+        return super().__call__(cfg, session_id, catalogue=catalogue, runner=runner)
+
+
+@pytest.mark.parametrize(
+    "read",
+    [lambda kf: kf.artifact("s", "derived/out.txt"), lambda kf: kf.pending("s")],
+    ids=["artifact", "pending"],
+)
+def test_reading_a_session_asks_the_factory_for_it_once(cfg, read):
+    """Both built the session's backend once to decide whether the caller reached it and
+    again to read through, so a remote factory handed out two sandboxes per query.
+    """
+    counting = Counting()
+    kf = _produced(cfg, backend=counting)
+
+    read(kf)
+
+    assert counting.asked == ["s"]
 
 
 # -- the pieces --------------------------------------------------------------
