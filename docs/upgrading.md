@@ -6,6 +6,9 @@ session's backend keeps. Most of what follows exists so that a backend which kee
 sessions somewhere else, such as a remote sandbox, works end to end. Some of it
 changes what every deployment writes.
 
+It also covers the earlier change to subagent bundles (#566, #568), because a
+deployment from before #608 may well be from before that too. See *Subagent bundles*.
+
 **If you run the default backend on one machine** and don't use `SessionStore`,
 `SessionRoot`, `RunResult.log_path` or `RunResult.session_dir`, you probably need
 only the first three items of the checklist.
@@ -27,6 +30,9 @@ only the first three items of the checklist.
    *For backend authors*.
 7. **If you copied the shipped tools**, decide whether to re-seed them (see
    *Workspace tools*).
+8. **If a subagent has its own `tools/` or `skills/` folder, or writes `bundle`**,
+   list what it takes from the folder (see *Subagent bundles*). Kingfisher refuses to
+   start until you do.
 
 ## Settings
 
@@ -101,6 +107,40 @@ only the first three items of the checklist.
 - **A compiled delegate with a blank `name` or `description` is now refused** (#601).
   The other three readers already refused one.
 
+## Subagent bundles
+
+A subagent's own folder, `subagents/<name>/tools/` and `skills/`, used to grant
+everything in it automatically, and an optional `bundle:` key could describe it.
+Now the definition lists what it takes from the folder, and only that arrives:
+
+```yaml
+tools:
+  - "*"                     # keep every catalogue tool, if it had them before
+  - name: mask_secrets
+    source: bundled         # subagents/<name>/tools/
+skills:
+  - name: redaction
+    source: bundled         # subagents/<name>/skills/
+```
+
+- **List every file in the folder.** An unlisted file stops the catalogue loading
+  rather than being silently dropped, so you find out on the first start.
+- **Add `"*"` if the definition had no `tools:` line.** That used to mean every
+  catalogue tool *plus* the folder. A list that names only bundled entries now means
+  the folder alone.
+- **Remove `bundle:`.** It's refused in YAML and in compiled (`build`) definitions.
+- **A compiled subagent can't keep a `skills/` folder.** A compiled graph is never told
+  about skills, so the folder is refused. Move the skill to the shared catalogue, or
+  read it inside the graph.
+- **A portable `SUBAGENTS` entry** (no `build`, often from an installed package) moves
+  what it carried out of `bundle` and into the plain fields: `"tools": [the tool
+  objects]` and `"skills": an absolute path`. Names aren't accepted there.
+- **Agents** may write `source: shared` but not `source: bundled`, since an agent has
+  no folder of its own.
+
+`kingfisher doctor` reports any mismatch on its `bundled entries` row before startup
+does. `docs/guides/formats.md`, under *Tools and skills of its own*, has the details.
+
 ## Command line
 
 - **New:** `kingfisher key` prints a session key. `kingfisher artifact --session ID
@@ -149,3 +189,7 @@ backend* and *A tool's path is the backend's path*, explains why.
 | `SessionTamperedError: … is not signed` | A session from before the key was set | Reap it |
 | `SessionTamperedError: … is not what kingfisher wrote there` | A stored session file was changed | The session can't be trusted; start a new one |
 | `… is not kept on this host by this session's backend …` | A `path` tool on a backend without local files | Read through `ToolContext`, or give the backend a `host_path` |
+| `subagent '…': …/tools/ holds …, which tools: does not list` | A file in a subagent's folder the definition doesn't list | Add it as `{name: …, source: bundled}`, or move it out; see *Subagent bundles* |
+| `… lists entries as source: bundled and owns no folder to take them from` | The definition or its folder was renamed, so they no longer pair | Make the folder name and the `name:` match |
+| `'bundle' is not a field of this format` | A YAML or compiled definition still writes `bundle:` | List the entries with `source: bundled` instead |
+| `'bundle' -- a portable entry carries its own under the plain fields` | A portable `SUBAGENTS` entry still writes `bundle` | Move its contents to `tools` and `skills` |
