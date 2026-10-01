@@ -11,7 +11,6 @@ from kingfisher.config import (
     REMOVED_STORE_SETTINGS,
     Config,
     ConfigError,
-    SessionKey,
     WorkspacePaths,
 )
 from kingfisher.infrastructure import access_policy, model_catalogue
@@ -195,11 +194,6 @@ class Environment:
             skills_mounts=paths.skills_mounts,
             assets=paths.assets,
             backend_factory=self.optional_text("KINGFISHER_BACKEND_FACTORY"),
-            session_key=(
-                SessionKey(secret.encode("utf-8"))
-                if (secret := self.optional_text("KINGFISHER_SESSION_KEY"))
-                else None
-            ),
             skills_enabled=self.flag("KINGFISHER_SKILLS_ENABLED"),
             memory_enabled=self.flag("KINGFISHER_MEMORY_ENABLED"),
             interpreter_enabled=self.flag("KINGFISHER_INTERPRETER_ENABLED"),

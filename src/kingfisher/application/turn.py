@@ -35,7 +35,7 @@ class Admitted:
     #: collected is what it wrote.
     files: Any = None
     #: What kingfisher keeps about the session under `/.harness`, read and written
-    #: through `files` and signed where the deployment has a key.
+    #: through `files`.
     harness: Any = None
     #: The saver this service opened for the turn, or None when it opened
     #: nothing -- an injected instance is the deployment's to close.

@@ -2590,7 +2590,30 @@ default and must never get one: generated and saved in the workspace, it is read
 by the macOS sandbox's shell. Two things were decided building it: any supplied
 runner needs a key, because whether it is local cannot be known at startup; and a
 paused checkpoint is written in place, a backend having no rename, so half of one
-fails its signature rather than loading.
+fails its signature rather than loading. *Reversed 2026-10-01, next entry.*
+
+**Reversed: the session key.** Nothing signs what a session keeps; the shell's fence
+is the one defence, and `doctor` says where it cannot see one. The key was
+configuration every deployment's environment carried, for a threat whose shape only
+the deployment's runtime knows -- which backend, where its shell runs, what that
+shell can read. Where kingfisher fences the shell no key was ever needed, and where
+it does not, the key was only as safe as the place it was kept: with the sandbox off,
+the shell read it out of a `.env` on the first try, and the sandbox being off was one
+of the cases the key was required for. Protection a backend needs belongs to the
+runtime that brings the backend, not to the package.
+
+So `KINGFISHER_SESSION_KEY`, `kingfisher key`, `SessionTamperedError` and the refusal
+to start went. A deployment kingfisher cannot see into starts, and `doctor`'s
+`session files` check warns -- for the sandbox off or external, and for a backend
+`KINGFISHER_BACKEND_FACTORY` names -- pointing at `shell_denied`. A key still set is
+reported as retired rather than refused, because the deployment runs either way.
+What the signature also did for a paused turn the format does by itself: no prefix
+of a paused state deserialises, measured at every length and held by
+`test_no_part_of_a_checkpoint_resumes`, and a resume of one now says which session
+rather than leaving msgpack to. Weighed and not taken: a backend carrying an
+optional key kingfisher would use, which keeps the signing code for a protection
+nothing requires; and keeping session state where the shell cannot reach it, which
+splits a session back into the two places it was just made one. *(2026-10-01.)*
 
 **The run log is `RunEvents`, not session state.** It was the one file appended to
 while a turn ran, which a backend cannot do, and most wanted for the turn that

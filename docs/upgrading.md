@@ -11,26 +11,24 @@ deployment from before #608 may well be from before that too. See *Subagent bund
 
 **If you run the default backend on one machine** and don't use `SessionStore`,
 `SessionRoot`, `RunResult.log_path` or `RunResult.session_dir`, you probably need
-only the first three items of the checklist.
+only the first two items of the checklist.
 
 ## Checklist
 
 1. **Remove `KINGFISHER_SESSION_STORE` and `KINGFISHER_SESSION_STORE_FACTORY`** if
    you set them. Kingfisher now refuses to start while either is set.
-2. **Decide whether you need `KINGFISHER_SESSION_KEY`.** Run `kingfisher doctor`; its
-   `session key` row says. If it's needed, generate one with `kingfisher key`. Store it
-   where you keep secrets, not in the workspace, and give every host that serves the
-   same sessions the same key.
-3. **Expect existing sessions to be refused if you set a key.** Their stored files
-   aren't signed. Reap them (`kingfisher reap --older-than 0`) or let them expire.
-4. **If you call `Kingfisher(...)` yourself**, check the constructor changes below.
-5. **If you read `RunResult.session_dir` or `RunResult.log_path`**, switch to
+2. **Run `kingfisher doctor` and read its `session files` row.** Nothing signs what
+   a session keeps under `/.harness`, so the row says whether anything it can see
+   keeps the agent's shell from rewriting it. With your own backend, that is the
+   backend's `shell_denied` check (see *For backend authors*).
+3. **If you call `Kingfisher(...)` yourself**, check the constructor changes below.
+4. **If you read `RunResult.session_dir` or `RunResult.log_path`**, switch to
    `artifacts` with `Kingfisher.artifact`, and to `RunEvents`.
-6. **If you wrote your own backend**, it now has to be a `SessionBackends`. See
+5. **If you wrote your own backend**, it now has to be a `SessionBackends`. See
    *For backend authors*.
-7. **If you copied the shipped tools**, decide whether to re-seed them (see
+6. **If you copied the shipped tools**, decide whether to re-seed them (see
    *Workspace tools*).
-8. **If a subagent has its own `tools/` or `skills/` folder, or writes `bundle`**,
+7. **If a subagent has its own `tools/` or `skills/` folder, or writes `bundle`**,
    list what it takes from the folder (see *Subagent bundles*). Kingfisher refuses to
    start until you do.
 
@@ -39,7 +37,7 @@ only the first three items of the checklist.
 | Setting | What changed | What to do |
 |---|---|---|
 | `KINGFISHER_SESSION_STORE`, `KINGFISHER_SESSION_STORE_FACTORY` | **Removed and refused.** Startup fails with `KINGFISHER_SESSION_STORE was removed: a session's backend keeps it now…` | Unset them. For sessions that outlive the machine, mount durable storage at `<workspace>/sessions`, or use a backend that keeps sessions itself. |
-| `KINGFISHER_SESSION_KEY` | **New, and required for most custom setups.** It signs the pinned agent, the conversation and a paused turn. | Required unless the backend is `default_backend` itself **and** the shell runs under Kingfisher's own sandbox (sandbox-exec, bubblewrap or Landlock). Required for a custom backend (including a subclass of `DefaultBackend`), a pre-built `graph=`, a supplied `runner=`, or `KINGFISHER_SHELL_SANDBOX` set to `off` or `external`. At least 32 bytes; `kingfisher key` prints one. |
+| `KINGFISHER_SESSION_KEY` | **Gone.** It was on `main` for a day after #610, signing the pin, the conversation and a paused turn; nothing signs them now. | Unset it if you set it; `kingfisher doctor` reports it as read by nothing. |
 | `KINGFISHER_BACKEND_FACTORY` | **New, for the command line only.** `module:name` of something callable with no arguments that returns your `SessionBackends`. | Set it if your backend keeps sessions anywhere but `<workspace>/sessions`, so `kingfisher sessions`, `reap`, `artifact` and `decide` see them. |
 
 ## Existing sessions
@@ -47,9 +45,8 @@ only the first three items of the checklist.
 - **Sessions that a `SessionStore` kept** are not read any more. Copy any you need into
   `<workspace>/sessions/<id>/` before upgrading, or move them into whatever your
   backend now keeps.
-- **Once a key is set, sessions written without one are refused** on their next turn
-  with `SessionTamperedError: … is not signed`. An unsigned file can't be told apart
-  from one whose signature was deleted, so there's no migration flag.
+- **A session written while a key was set** keeps `.sig` files beside its `.harness`
+  files. Nothing reads them, and they go when the session is reaped.
 - **The old run log**, `.harness/runlog.jsonl`, is no longer written or read. It's
   safe to delete.
 
@@ -82,7 +79,7 @@ only the first three items of the checklist.
   `SESSION_ROOT_CONTRACT`. The `SessionRoot`, `SessionStore` and `SessionDirs` ports
   are gone from `kingfisher.domain.ports`.
 - **Added:** `DefaultBackend`, `backend_at`, `SESSION_BACKENDS_CONTRACT`,
-  `ArtifactError`, `SessionTamperedError`, and `Kingfisher.artifact` and
+  `ArtifactError`, and `Kingfisher.artifact` and
   `Kingfisher.pending` on the service.
 
 ## Workspace tools
@@ -143,8 +140,8 @@ does. `docs/guides/formats.md`, under *Tools and skills of its own*, has the det
 
 ## Command line
 
-- **New:** `kingfisher key` prints a session key. `kingfisher artifact --session ID
-  NAME [--out PATH]` fetches a file a turn produced.
+- **New:** `kingfisher artifact --session ID NAME [--out PATH]` fetches a file a turn
+  produced.
 - **Changed:** `sessions`, `reap`, `artifact` and `decide` run on
   `KINGFISHER_BACKEND_FACTORY` when it's set. `decide --session ID` with no decisions
   now finds a session a backend keeps elsewhere, and asks as the caller `--as` names:
@@ -186,11 +183,7 @@ backend* and *A tool's path is the backend's path*, explains why.
 | Message | Cause | Fix |
 |---|---|---|
 | `KINGFISHER_SESSION_STORE was removed: …` | The old store setting is still set | Unset it; see *Settings* |
-| `KINGFISHER_SESSION_KEY is not set, and this deployment needs one because …` | A setup that needs a key, with none set | `kingfisher key`, then set it |
-| `KINGFISHER_SESSION_KEY is N bytes; it must be at least 32` | Key too short | Generate one with `kingfisher key` |
 | `TypeError: backend has to answer for every session …` | A plain factory function passed as `backend=` | Subclass `DefaultBackend` |
-| `SessionTamperedError: … is not signed` | A session from before the key was set | Reap it |
-| `SessionTamperedError: … is not what kingfisher wrote there` | A stored session file was changed | The session can't be trusted; start a new one |
 | `… is not kept on this host by this session's backend …` | A `path` tool on a backend without local files | Read through `ToolContext`, or give the backend a `host_path` |
 | `subagent '…': …/tools/ holds …, which tools: does not list` | A file in a subagent's folder the definition doesn't list | Add it as `{name: …, source: bundled}`, or move it out; see *Subagent bundles* |
 | `… lists entries as source: bundled and owns no folder to take them from` | The definition or its folder was renamed, so they no longer pair | Make the folder name and the `name:` match |

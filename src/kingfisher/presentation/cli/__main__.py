@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import secrets
 import sys
 import time
 import warnings
@@ -27,7 +26,6 @@ from kingfisher import (
     Request,
     Resume,
     SessionBusyError,
-    SessionTamperedError,
     SubagentError,
     UnknownSessionError,
     UnsafeReferenceError,
@@ -49,7 +47,7 @@ from kingfisher import (
 # way, inside the commands that build a service, because only a command has a
 # setting and no argument to be told its backend by. Everything above is public
 # and comes through the front door because it is.
-from kingfisher.config import SESSION_KEY_MIN_BYTES, MissingCredentialsWarning
+from kingfisher.config import MissingCredentialsWarning
 from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.workspace.seeding import REMEDY, UNCONSULTED
@@ -337,19 +335,6 @@ def build_parser() -> argparse.ArgumentParser:
             "show what these source ids reach: comma-separated names, or UNSCOPED "
             "for the operator's view of everything"
         ),
-    )
-    sub.add_parser(
-        "key",
-        help="print a new KINGFISHER_SESSION_KEY",
-        description=(
-            "Prints 32 random bytes, hex-encoded, for KINGFISHER_SESSION_KEY.\n"
-            "\n"
-            "It writes nothing: put it wherever this deployment keeps secrets.\n"
-            "Saved inside the workspace it would be readable by the agent's\n"
-            "shell, which could then sign whatever it liked. Every host serving\n"
-            "the same sessions needs the same key."
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     fetching = sub.add_parser(
         "artifact",
@@ -888,12 +873,6 @@ def _nothing_reaped(kept: int, age: float, *, from_config: bool) -> None:
     print("--older-than sweeps on a shorter age: kingfisher reap --older-than 1d")
 
 
-def _key() -> int:
-    """Print a new session key and keep no copy of it."""
-    print(secrets.token_hex(SESSION_KEY_MIN_BYTES))
-    return 0
-
-
 def _artifact(args: argparse.Namespace) -> int:
     """Fetch one file a turn produced, to a file or to standard output."""
     from kingfisher import Kingfisher  # noqa: PLC0415
@@ -1000,7 +979,6 @@ REFUSALS = (
     ArtifactError,
     CapabilityError,
     QuotaExceededError,
-    SessionTamperedError,
     SubagentError,
     UnknownSessionError,
     UnsafeReferenceError,
@@ -1020,7 +998,6 @@ HANDLERS = {
     "list": lambda args: _list(as_document=args.json, held=args.held),
     "sessions": lambda args: _sessions(as_document=args.json),
     "artifact": _artifact,
-    "key": lambda _args: _key(),
     "reap": _reap,
 }
 

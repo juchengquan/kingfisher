@@ -12,7 +12,7 @@ import yaml
 from dotenv import load_dotenv
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
-from kingfisher.config import Adapter, Config, Endpoint, Landing, ModelProfile, Models, SessionKey
+from kingfisher.config import Adapter, Config, Endpoint, Landing, ModelProfile, Models
 from kingfisher.infrastructure.harness.models import ADAPTERS
 from kingfisher.infrastructure.workspace import ensure_layout, ensure_session_layout
 from tests.unit.scripted import Scripted
@@ -180,11 +180,6 @@ def models_file(workspace: Path) -> Path:
     return path
 
 
-#: The key every test deployment signs with. A test about running without one builds
-#: its own `Config`, because that is the case a deployment has to arrive at on purpose.
-TEST_KEY = SessionKey(b"k" * 32)
-
-
 @pytest.fixture
 def cfg(workspace):
     return Config(
@@ -192,7 +187,6 @@ def cfg(workspace):
         models=FAKE_CATALOGUE,
         turn_timeout_s=3600,
         execution_timeout_s=30,
-        session_key=TEST_KEY,
     )
 
 
@@ -225,23 +219,19 @@ def start(cfg, session_id: str) -> str:
 
 
 def harness_of(cfg, session_id: str):
-    """What kingfisher keeps about a session, as a test reads and writes it: signed with
-    `cfg`'s key, so what a test puts there is what a turn would have.
-    """
+    """What kingfisher keeps about a session, as a test reads and writes it."""
     from kingfisher.infrastructure.harness.session_files import HarnessFiles, local_files
 
-    return HarnessFiles(
-        local_files(cfg.workspace / "sessions" / session_id), session_id, cfg.session_key
-    )
+    return HarnessFiles(local_files(cfg.workspace / "sessions" / session_id), session_id)
 
 
-def harness_in(session_dir: Path, key: SessionKey | None = TEST_KEY):
+def harness_in(session_dir: Path):
     """The same, for a session directory a test already holds -- including one a
     `SessionRoot` put somewhere other than under the workspace.
     """
     from kingfisher.infrastructure.harness.session_files import HarnessFiles, local_files
 
-    return HarnessFiles(local_files(session_dir), Path(session_dir).name, key)
+    return HarnessFiles(local_files(session_dir), Path(session_dir).name)
 
 
 def paths_in(session_dir: Path):

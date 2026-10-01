@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 import pytest
 from deepagents import FilesystemPermission
 from deepagents.backends import CompositeBackend, FilesystemBackend
@@ -69,19 +67,17 @@ def test_a_skills_file_reaches_a_tool_where_the_backend_keeps_it(scripted):
 
 
 def test_the_pinned_agent_is_not_handed_to_a_tool(scripted):
-    """The case with nothing else behind it: the default backend, no key, so no
-    signature to catch a tool that writes to its `path`. The file tools are refused
-    `/.harness`, and a tool is refused it the same way now.
+    """Nothing signs the pin, so nothing would catch a tool that writes to its `path`.
+    The file tools are refused `/.harness`, and a tool is refused it the same way now.
     """
-    unkeyed = replace(scripted, session_key=None)
-    if harness_unfenced(unkeyed) is not None:
+    if harness_unfenced(scripted) is not None:
         pytest.skip("no sandbox kingfisher applies itself is available on this host")
-    _with_the_tool(unkeyed)
-    start(unkeyed, "s")
+    _with_the_tool(scripted)
+    start(scripted, "s")
     Scripted.script.extend([_calls(path="/.harness/agent.yaml"), AIMessage("done")])
 
     events = list(
-        Kingfisher(unkeyed, backend=default_backend).stream(
+        Kingfisher(scripted, backend=default_backend).stream(
             Request("go", agent="only", session_id="s")
         )
     )
