@@ -14,9 +14,12 @@ would have been about kingfisher rather than about the code.
 from __future__ import annotations
 
 import csv
-from pathlib import Path
+import io
 
+from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
+
+from kingfisher import ToolContext
 
 from .columns import profile_column
 
@@ -27,14 +30,21 @@ from .columns import profile_column
 SAMPLE_ROWS = 5_000
 
 
-def _read(path: str) -> tuple[list[str], dict[str, list[str]], int]:
-    """Header, columns and how many rows were actually looked at."""
-    target = Path(path).expanduser()
-    if not target.is_file():
-        msg = f"no such file: {path}"
+def _fetched(runtime: ToolRuntime[ToolContext], file_path: str) -> bytes:
+    """The file's bytes, through the session's backend -- wherever that keeps them."""
+    (got,) = runtime.context.backend.download_files([file_path])
+    if got.error or got.content is None:
+        msg = f"{file_path}: {got.error or 'no content'}"
         raise FileNotFoundError(msg)
+    return got.content
 
-    with target.open(newline="", encoding="utf-8-sig") as handle:
+
+def _read(
+    runtime: ToolRuntime[ToolContext], file_path: str
+) -> tuple[list[str], dict[str, list[str]], int]:
+    """Header, columns and how many rows were actually looked at."""
+    text = _fetched(runtime, file_path).decode("utf-8-sig")
+    with io.StringIO(text, newline="") as handle:
         reader = csv.reader(handle)
         try:
             header = next(reader)
@@ -53,18 +63,18 @@ def _read(path: str) -> tuple[list[str], dict[str, list[str]], int]:
 
 
 @tool
-def csv_profile(path: str) -> str:
+def csv_profile(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     """Summarise a CSV: every column's type, how much is missing, how varied.
 
     Use before analysing a file you have not seen. Cheaper and more reliable
     than reading it, and the answer does not grow with the file.
 
-    `path` is the same virtual path the file tools take -- `/data/<name>` --
-    rooted at this session. Kingfisher resolves it before this runs.
+    `file_path` is the same virtual path the file tools take -- `/data/<name>` --
+    rooted at this session, read through the session's backend.
     """
-    header, gathered, seen = _read(path)
+    header, gathered, seen = _read(runtime, file_path)
     if not header:
-        return f"{path}: empty"
+        return f"{file_path}: empty"
 
     lines = [profile_column(name, gathered[name]).line() for name in header]
     note = f" (first {seen} rows)" if seen >= SAMPLE_ROWS else ""
@@ -72,14 +82,14 @@ def csv_profile(path: str) -> str:
 
 
 @tool
-def csv_columns(path: str) -> str:
+def csv_columns(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     """Just the column names of a CSV, one per line.
 
     The cheap half of `csv_profile`, for when the question is only what the
     file contains and not what state it is in.
 
-    `path` is the same virtual path the file tools take -- `/data/<name>` --
-    rooted at this session. Kingfisher resolves it before this runs.
+    `file_path` is the same virtual path the file tools take -- `/data/<name>` --
+    rooted at this session, read through the session's backend.
     """
-    header, _, _ = _read(path)
-    return "\n".join(header) if header else f"{path}: empty"
+    header, _, _ = _read(runtime, file_path)
+    return "\n".join(header) if header else f"{file_path}: empty"

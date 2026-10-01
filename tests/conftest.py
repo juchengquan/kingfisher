@@ -257,6 +257,27 @@ def paths_in(session_dir: Path):
     return SessionPaths(under_rules, Path(session_dir).parent)
 
 
+def on_backend(tool, backend, **args):
+    """Call a tool that reads through `runtime.context.backend`, handed `backend`.
+
+    The function under the decorator, called directly: a test of what a tool does
+    with a file wants the tool and a backend, not a graph to dispatch it.
+    """
+    from langchain.tools import ToolRuntime
+
+    from kingfisher import ToolContext
+
+    runtime = ToolRuntime(
+        state={},
+        context=ToolContext(backend=backend),
+        config={},
+        stream_writer=lambda _: None,
+        tool_call_id="t",
+        store=None,
+    )
+    return getattr(tool, "func", tool)(**args, runtime=runtime)
+
+
 def pin(kf, session_id: str, name: str) -> None:
     """Fix a session's agent before it has run, the way its first turn would.
 

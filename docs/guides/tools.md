@@ -56,7 +56,12 @@ trigger condition and say what the arguments mean in a caller's words.
 either:
 
 ```python
-def line_count(path: str) -> str:
+from langchain.tools import ToolRuntime
+
+from kingfisher import ToolContext
+
+
+def line_count(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     """Count the lines in a text file. Use before reading a file you expect to
     be long, so you can ask `read_file` for the part you want."""
     ...
@@ -282,9 +287,11 @@ all.
 
 ## Or the tool is handed the session's filesystem
 
-`path` gives a tool one real file. A tool that wants more — to list a folder,
-search it, write its result beside its input — asks for the filesystem the file
-tools themselves use, and works in the paths the model already writes:
+`path` gives a tool one real file, and only where the backend keeps it on this
+host. A tool that wants more — to list a folder, search it, write its result
+beside its input, or to work on any backend at all — asks for the filesystem the
+file tools themselves use, and works in the paths the model already writes. Every
+shipped tool is written this way, because the examples are what gets copied:
 
 ```python
 from langchain.tools import ToolRuntime
