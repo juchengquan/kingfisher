@@ -25,7 +25,11 @@ this tool wants no control over either.
 from __future__ import annotations
 
 import re
-from pathlib import Path
+from pathlib import PurePosixPath
+
+from langchain.tools import ToolRuntime
+
+from kingfisher import ToolContext
 
 #: What gets masked. Deliberately crude and deliberately named: this is an
 #: example of *where a tool lives*, not a redaction library, and a pattern list
@@ -37,18 +41,27 @@ PATTERNS: tuple[tuple[str, str], ...] = (
 )
 
 
-def mask_secrets(path: str, max_lines: int = 200) -> str:
+def _fetched(runtime: ToolRuntime[ToolContext], file_path: str) -> bytes:
+    """The file's bytes, through the session's backend -- wherever that keeps them."""
+    (got,) = runtime.context.backend.download_files([file_path])
+    if got.error or got.content is None:
+        msg = f"{file_path}: {got.error or 'no content'}"
+        raise FileNotFoundError(msg)
+    return got.content
+
+
+def mask_secrets(file_path: str, runtime: ToolRuntime[ToolContext], max_lines: int = 200) -> str:
     """Read a text file with credentials, emails and IP addresses masked. Use
     when you must quote from a file that may carry secrets.
 
-    `path` is the same virtual path the file tools take -- `/data/<name>` --
-    rooted at this session. Kingfisher resolves it before this runs.
+    `file_path` is the same virtual path the file tools take -- `/data/<name>` --
+    rooted at this session, read through the session's backend.
 
     Reports how many lines were returned and how many were masked, so the caller
     can tell "nothing sensitive here" from "the interesting part was removed" --
     two very different answers that look identical once the text is clean.
     """
-    lines = Path(path).read_text(encoding="utf-8").splitlines()[:max_lines]
+    lines = _fetched(runtime, file_path).decode("utf-8").splitlines()[:max_lines]
     masked = 0
     out = []
     for line in lines:
@@ -57,7 +70,7 @@ def mask_secrets(path: str, max_lines: int = 200) -> str:
             cleaned = re.sub(pattern, replacement, cleaned)
         masked += cleaned != line
         out.append(cleaned)
-    header = f"{Path(path).name}: {len(out)} line(s), {masked} masked"
+    header = f"{PurePosixPath(file_path).name}: {len(out)} line(s), {masked} masked"
     return "\n".join([header, *out])
 
 

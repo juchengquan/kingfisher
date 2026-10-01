@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from pathlib import Path
+from pathlib import PurePosixPath
 
+from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
+
+from kingfisher import ToolContext
 
 #: The status after the quoted request in the common and combined log formats,
 #: as in `"GET /orders HTTP/1.1" 503 1187`. Any other line is counted as
@@ -25,26 +28,34 @@ STATUS = re.compile(r'"\s+(\d{3})\s')
 TOP_CODES = 5
 
 
+def _fetched(runtime: ToolRuntime[ToolContext], file_path: str) -> bytes:
+    """The file's bytes, through the session's backend -- wherever that keeps them."""
+    (got,) = runtime.context.backend.download_files([file_path])
+    if got.error or got.content is None:
+        msg = f"{file_path}: {got.error or 'no content'}"
+        raise FileNotFoundError(msg)
+    return got.content
+
+
 @tool
-def status_codes(path: str) -> str:
+def status_codes(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     """Count the HTTP status codes in an access log, grouped by class. Use to size
     an outage -- how many requests failed, and with which codes -- without reading
     the log.
 
-    `path` is the same virtual path the file tools take -- `/data/<name>` --
-    rooted at this session. Kingfisher resolves it before this runs.
+    `file_path` is the same virtual path the file tools take -- `/data/<name>` --
+    rooted at this session, read through the session's backend.
     """
     codes: Counter[str] = Counter()
     unparsed = 0
-    with Path(path).open(encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            found = STATUS.search(line)
-            if found is None:
-                unparsed += 1
-            else:
-                codes[found[1]] += 1
+    for line in _fetched(runtime, file_path).decode("utf-8", errors="replace").splitlines():
+        found = STATUS.search(line + "\n")
+        if found is None:
+            unparsed += 1
+        else:
+            codes[found[1]] += 1
 
-    name = Path(path).name
+    name = PurePosixPath(file_path).name
     total = codes.total()
     if not total:
         return (

@@ -15,9 +15,12 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from pathlib import Path
+from pathlib import PurePosixPath
 
+from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
+
+from kingfisher import ToolContext
 
 #: A line's date and minute. A line that does not open with one is counted as
 #: undated rather than placed by guesswork: an error filed under the wrong minute
@@ -30,32 +33,40 @@ LEVEL = re.compile(r"\b(CRITICAL|FATAL|ERROR|WARN(?:ING)?)\b")
 MAX_MINUTES = 30
 
 
+def _fetched(runtime: ToolRuntime[ToolContext], file_path: str) -> bytes:
+    """The file's bytes, through the session's backend -- wherever that keeps them."""
+    (got,) = runtime.context.backend.download_files([file_path])
+    if got.error or got.content is None:
+        msg = f"{file_path}: {got.error or 'no content'}"
+        raise FileNotFoundError(msg)
+    return got.content
+
+
 @tool
-def log_levels(path: str) -> str:
+def log_levels(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     """Count a log's warnings and errors minute by minute, loudest minutes first.
     Use before reading a long log, to find the minutes worth reading.
 
-    `path` is the same virtual path the file tools take -- `/data/<name>` --
-    rooted at this session. Kingfisher resolves it before this runs.
+    `file_path` is the same virtual path the file tools take -- `/data/<name>` --
+    rooted at this session, read through the session's backend.
 
     Reads lines that begin with a timestamp such as `2026-09-01T14:03:22`, and
     counts any other line as undated.
     """
     minutes: dict[str, Counter[str]] = {}
     total = undated = 0
-    with Path(path).open(encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            total += 1
-            stamp = STAMP.match(line)
-            if stamp is None:
-                undated += 1
-                continue
-            level = LEVEL.search(line)
-            if level is not None:
-                word = "WARN" if level[1].startswith("WARN") else level[1]
-                minutes.setdefault(f"{stamp[1]} {stamp[2]}", Counter())[word] += 1
+    for line in _fetched(runtime, file_path).decode("utf-8", errors="replace").splitlines():
+        total += 1
+        stamp = STAMP.match(line)
+        if stamp is None:
+            undated += 1
+            continue
+        level = LEVEL.search(line)
+        if level is not None:
+            word = "WARN" if level[1].startswith("WARN") else level[1]
+            minutes.setdefault(f"{stamp[1]} {stamp[2]}", Counter())[word] += 1
 
-    head = f"{Path(path).name}: {total} line(s), {undated} undated"
+    head = f"{PurePosixPath(file_path).name}: {total} line(s), {undated} undated"
     if not minutes:
         return f"{head}, no warnings or errors"
     loudest = sorted(minutes, key=lambda minute: (-minutes[minute].total(), minute))

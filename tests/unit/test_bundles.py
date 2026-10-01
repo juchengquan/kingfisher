@@ -1266,7 +1266,11 @@ def test_the_shipped_bundles_tool_loads_and_masks(tmp_path, shipped):
 
     target = tmp_path / "config.ini"
     target.write_text("api_key = sk-live-123\nhost = example.com\n", encoding="utf-8")
-    answer = tool.tool(str(target))
+    from deepagents.backends import FilesystemBackend
+
+    from tests.conftest import on_backend
+
+    answer = on_backend(tool.tool, FilesystemBackend(root_dir=tmp_path), file_path="/config.ini")
 
     assert "sk-live-123" not in answer
     assert "1 masked" in answer
