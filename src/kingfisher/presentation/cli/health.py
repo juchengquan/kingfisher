@@ -335,6 +335,13 @@ def _tool_references(found: Inventory) -> Iterator[Check]:
     have the tool its author granted it -- no error, no warning, and no other symptom.
     That second one is why this is a failure rather than a warning.
     """
+    if not found.moved_tools_checked:
+        yield Check(
+            "tool references",
+            "warn",
+            "not checked -- a catalogue it reads did not load, which is above",
+        )
+        return
     if not found.moved_tools:
         yield Check("tool references", "ok", "every definition names tools where they are")
         return
@@ -355,6 +362,14 @@ def _bundled_entries(found: Inventory) -> Iterator[Check]:
     it is still there. A failure because `warm` refuses it -- a deployment carrying one
     does not start, and this check exists to say that before the deployment does.
     """
+    if not found.miscounted_bundles_checked:
+        yield Check(
+            "bundled entries",
+            "warn",
+            "not checked -- the subagents or a delegate's own folder did not load; its "
+            "own row says why",
+        )
+        return
     if not found.miscounted_bundles:
         yield Check("bundled entries", "ok", "every delegate lists exactly its own folder")
         return
