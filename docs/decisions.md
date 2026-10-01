@@ -712,6 +712,36 @@ means the portable ones. The alternative was a second export name or a
 self-declared marker, and both would have been a rule about where an entry came
 from that any local file could claim.
 
+**Both Python declarations check a required field the same way, in one body.** They
+did not. The compiled branch checked that `name` and `description` were *present*; the
+portable branch beside it checked presence and emptiness, and so did both document
+readers. So `{"name": "", "description": "", "build": f}` was accepted by the one
+reader of four that had half the check. Measured: the delegate reached deepagents --
+which dispatches on the name and hands the description to the parent model to choose on
+-- and `kingfisher list` exited **zero** over a line reading `(surveyor.py)  [compiled]
+— `, against this record's own rule that a listing exiting zero means nothing in the
+catalogue will break.
+
+Absent and blank stay different messages, for the reason both document readers already
+gave: "missing" sends somebody looking for a line they can see they wrote, which is the
+wrong hunt. What is shared is the body, not the wording -- the documents say `missing
+required field 'name'` and the Python declarations say `SUBAGENTS entry is missing
+'name'`, which is the format naming its own export, and `EXPORT` is beside the format
+for that reason.
+
+The rule is driven over **all four readers** rather than over the one that was wrong: a
+required field present but blank is refused, and the same fields never written are
+refused as missing, with a control that each reader still accepts a definition with
+nothing wrong. `models.yaml` was measured too and already refuses every blank required
+key, so the class stops at the definition formats.
+
+Folding the two moved a refusal, and `test_refusals.py` said so -- `_portable` from four
+to two, `declared` from five to four, and a new entry for the shared body, filed on the
+blank name rather than the missing one because that is the refusal the fold added and
+what the table is for is proving `doctor` reports it. The defect that entry needed was
+already written and filed nowhere: `a_portable_subagent_naming_a_model` had been sitting
+unreferenced since it was added. *(2026-09-27, from an architecture review.)*
+
 **What it carries is its own, and `builtin_tools` is the exception.** Carried
 tools reach that delegate and nothing else -- they enter no catalogue, so nothing
 can grant or narrow them, which is what atomic means. Built-ins are the host's
