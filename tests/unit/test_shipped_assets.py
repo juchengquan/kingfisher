@@ -5,13 +5,16 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import warnings
 from dataclasses import fields, replace
 from typing import Any, get_type_hints
 
 import pytest
 import yaml
 from deepagents import SubAgent
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent, declared_middleware
@@ -1086,7 +1089,7 @@ def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
     registry, which is the one registry a seeded workspace never has.
     """
     from kingfisher.infrastructure.workspace import seed
-    from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository
+    from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository, name_of
 
     seed(cfg, shipped, everything=True)
     spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["assistant"]
@@ -1100,7 +1103,9 @@ def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
 
     # By name, not by class: a `middlewares/` file is imported afresh each time the
     # catalogue is read, so the classes loaded here are not the ones built there.
-    worn = {m.name for m in built.middleware} & offered
+    # The class's name rather than the instance's, which `compact` points at the
+    # deepagents slot it fills.
+    worn = {name_of(type(m)) for m in built.middleware} & offered
     assert spec.middlewares, "assistant names no middleware"
     assert spec.middlewares != ALL, "assistant takes whatever is offered again"
     assert worn == set(spec.middlewares), f"assistant runs under {sorted(worn)}"
@@ -1656,105 +1661,125 @@ def _compaction(shipped):
     return load(shipped / "middlewares" / "compaction.py", declares="Compact").Compact
 
 
-def _fired(middleware: Any, messages: list[Any]) -> Any:
-    """One `before_model` call, with the middleware deliberately typed loosely.
+class _Reader(BaseChatModel):
+    """Reads a file per call, noting whether it was shown the read before.
 
-    No `Runtime` is constructed: this hook never reads it, and building one would
-    be a test of langchain's constructor rather than of the example.
+    `follow_history` has it read the file a summary names, once one appears.
     """
-    return middleware.before_model({"messages": messages}, None)
+
+    reads: int
+    big_reads: int = 0
+    follow_history: bool = False
+    calls: int = 0
+    summarised: int = 0
+    history: str = ""
+    saw_last_read: list[bool] = []
+
+    @property
+    def _llm_type(self) -> str:
+        return "reader"
+
+    def bind_tools(self, tools, **kwargs):
+        return self
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        # The summarizer calls the agent's own model, tagged; the tag is how a
+        # scripted reader tells its calls from the agent's turns.
+        if run_manager is not None and run_manager.metadata.get("lc_source") == "summarization":
+            self.summarised += 1
+            return _reply(AIMessage(content="a summary"))
+        last = messages[-1]
+        if isinstance(last, ToolMessage) and last.tool_call_id == "history":
+            self.history = last.text
+            return _reply(AIMessage(content="done"))
+        summary = next(
+            (m.text for m in messages if m.additional_kwargs.get("lc_source") == "summarization"),
+            "",
+        )
+        if self.follow_history and (named := re.search(r"/conversation_history/\S+?\.md", summary)):
+            call = {"name": "read_file", "args": {"file_path": named.group()}, "id": "history"}
+            return _reply(AIMessage(content="", tool_calls=[call]))
+        if self.calls:
+            self.saw_last_read.append(
+                isinstance(last, ToolMessage) and last.tool_call_id == f"read-{self.calls}"
+            )
+        self.calls += 1
+        if self.calls > self.reads:
+            return _reply(AIMessage(content="done"))
+        name = "big" if self.calls <= self.big_reads else "small"
+        path = f"/scratchpad/{name}.txt"
+        call = {"name": "read_file", "args": {"file_path": path}, "id": f"read-{self.calls}"}
+        return _reply(AIMessage(content="", tool_calls=[call]))
 
 
-async def _afired(middleware: Any, messages: list[Any]) -> Any:
-    """Its other half, which is a separate loop over one turn rather than a wrapper."""
-    return await middleware.abefore_model({"messages": messages}, None)
+def _reply(message: AIMessage) -> ChatResult:
+    return ChatResult(generations=[ChatGeneration(message=message)])
 
 
-def test_an_unset_trigger_never_fires_which_is_why_the_example_sets_one(shipped):
-    """The claim `Compact.defaults` rests on, pinned against langchain itself.
-
-    `trigger=None` normalises to no clauses, so a summariser shipped without one
-    installs, reports, wraps every model call and summarises nothing -- for the life
-    of the deployment, with nothing said. The comment saying so is worth no more
-    than this assertion: if upstream ever gives it a default, the file is wrong and
-    this is what says so.
-    """
-    from langchain.agents.middleware import SummarizationMiddleware
-
-    plenty = [HumanMessage(content="x" * 400) for _ in range(500)]
-    unset = SummarizationMiddleware(model=FakeToolCallingModel(responses=[AIMessage("ok")]))
-
-    assert _fired(unset, plenty) is None
-
-
-def test_the_compaction_example_keeps_what_it_threw_away(shipped, cfg, session_dir):
-    """The example run rather than read, on both paths.
-
-    It is the only shipped middleware that needs an object rather than a scalar, so
-    it is the only one whose `wants` can be wrong in a way no import catches: built
-    with the model and the backend this build holds, it has to summarise *and* leave
-    the discarded messages somewhere readable. It overrides both halves of a parent
-    that implements both, so a half it missed would still summarise, without the
-    note and without an error.
-    """
-    import asyncio
-
+def _read_under_compact(shipped, cfg, session_dir, model: _Reader) -> list[str]:
+    """One turn of `model` on an agent naming `compact`, and what its build warned."""
     from kingfisher.infrastructure.harness.backend import backend_at
+    from kingfisher.kinds.agents.spec import AgentSpec
 
     backend = backend_at(cfg, session_dir)
-    spec = LocalAgentRepository(shipped / "agents").specs["researcher"]
-    cls = _compaction(shipped)
-    # Its own `defaults`, the way the build path applies them. Values written here
-    # instead would be a test of numbers this file chose rather than of the ones
-    # the example ships, which is how a trigger nobody set passes its own test.
-    compact = cls(
-        model=FakeToolCallingModel(responses=[AIMessage("a summary")] * 2),
-        backend=backend,
-        definition=spec,
-        **cls.defaults,
+    # A read of `big` is about 7k tokens. With no model profile deepagents
+    # summarizes at 170k and keeps six messages, so a run of them reaches its
+    # threshold near message 49, before the sixty-message clause would.
+    backend.write("/scratchpad/big.txt", "\n".join("x" * 280 for _ in range(100)))
+    backend.write("/scratchpad/small.txt", "x")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        graph = build_agent(
+            cfg,
+            agent=AgentSpec(
+                name="reader",
+                description="an agent that reads files",
+                system_prompt="You read.",
+                middlewares=("compact",),
+            ),
+            session_dir=session_dir,
+            model=model,
+            backend=backend,
+            middleware_registry={"compact": _compaction(shipped)},
+        ).graph
+    graph.invoke(
+        {"messages": [{"role": "user", "content": "read them"}]},
+        {"recursion_limit": 500, "configurable": {"thread_id": "t"}},
     )
-    # Distinguishable content, so the note can be checked for the messages that
-    # went rather than merely for having been written.
-    plenty = [HumanMessage(content=f"message {n}", id=str(n)) for n in range(200)]
-
-    assert _fired(compact, plenty) is not None
-    assert asyncio.run(_afired(compact, plenty)) is not None
-
-    first = backend.read(f"/derived/compaction/{spec.name}-1.md")
-    second = backend.read(f"/derived/compaction/{spec.name}-2.md")
-
-    assert "message 0" in str(first), "the sync path kept nothing"
-    assert "message 0" in str(second), "the async path kept nothing"
+    return [str(warning.message) for warning in caught]
 
 
-def test_the_compaction_example_stops_rather_than_lose_the_note(shipped):
-    """A backend reports a failed write by *returning* one, not by raising.
+def test_a_compacted_agent_still_sees_what_it_just_read(shipped, cfg, session_dir):
+    """deepagents' summary cutoff outlived compact's rewrite, and the model saw a stale summary.
 
-    So ignoring the result is what happens by default rather than a decision
-    anybody makes, and it is the wrong one here: the middleware exists so that what
-    compaction discards stays readable, and a run carrying on in the belief that it
-    has that record is worse off than one that stops.
+    deepagents records its cutoff as an index into the state's messages, so a
+    second summarizer that rewrites them leaves the index pointing past the end:
+    the model was shown an old summary and nothing it had just read.
     """
-    from types import SimpleNamespace
+    model = _Reader(reads=34, big_reads=26)
+    _read_under_compact(shipped, cfg, session_dir, model)
 
-    class Refuses:
-        """A backend that cannot write, which is what a full disk looks like."""
+    assert model.summarised, "nothing was summarized, so this proves nothing"
+    missed = [n + 2 for n, saw in enumerate(model.saw_last_read) if not saw]
+    assert not missed, f"calls not shown the read just before them: {missed}"
 
-        def write(self, file_path, content):
-            return SimpleNamespace(error="no space left on device")
 
-    cls = _compaction(shipped)
-    spec = LocalAgentRepository(shipped / "agents").specs["researcher"]
-    compact = cls(
-        model=FakeToolCallingModel(responses=[AIMessage("a summary")]),
-        backend=Refuses(),
-        definition=spec,
-        **cls.defaults,
-    )
-    plenty = [HumanMessage(content=f"message {n}", id=str(n)) for n in range(200)]
+def test_compaction_fires_at_sixty_messages_however_small(shipped, cfg, session_dir):
+    """Small reads never reach deepagents' token threshold; the message clause does.
 
-    with pytest.raises(RuntimeError, match="could not write"):
-        _fired(compact, plenty)
+    And the summary names where what it replaced went, which `assistant`'s prompt
+    tells the agent to read -- read back here through the agent's own `read_file`,
+    so under the permissions the agent runs with rather than the backend's.
+    """
+    model = _Reader(reads=40, follow_history=True)
+    warned = _read_under_compact(shipped, cfg, session_dir, model)
+
+    assert model.summarised, "sixty small messages were never summarized"
+    assert "Summarized at" in model.history, f"the history did not read back: {model.history!r}"
+    # The notice kingfisher gives when a middleware takes one of deepagents' own
+    # places. Here it is the design: without it, this runs beside deepagents'
+    # summarizer instead of in its place.
+    assert any("replaces its SummarizationMiddleware in place" in w for w in warned), warned
 
 
 # -- an agent in a folder, and the delegates it reaches -----------------------

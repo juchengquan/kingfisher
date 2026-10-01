@@ -40,7 +40,8 @@ subagents: [extractor, reviewer, profiler, timestamps, versions]
 # stops at twenty calls. `call-cap-generous` is here so a delegate may name it,
 # since this line is what its delegates are clamped by. `tool-note` bare carries
 # the deployment's own wording, where `researcher` and `sweeper` each write
-# theirs; `compact` bare summarises on the model this agent already runs.
+# theirs; `compact` summarises on the model this agent already runs, in place
+# of deepagents' own summarizer.
 middlewares:
   - call-cap-strict
   - call-cap-generous
@@ -81,8 +82,8 @@ system_prompt: |
   so, and you answer from what you have and say where you stopped. A delegate's
   calls are its own, so a hundred files read through `extractor` cost you one.
 
-  In a long conversation the older part is summarised for you. What the summary
-  replaced is kept under `/derived/compaction/`; read it when the summary is not
+  In a long conversation the older part is summarised for you, and the summary
+  says which file holds what it replaced; read that file when the summary is not
   enough.
 
   Check what you would report. `reviewer` recomputes a figure from the file
