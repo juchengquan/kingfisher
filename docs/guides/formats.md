@@ -576,7 +576,7 @@ A definition may appear in several places — two delegates may both consult the
 same `checker` — and reaching one twice is not a loop.
 
 **What it costs.** Every level is a real conversation with a real model. A
-helper's tokens are on your bill and in the run log, attributed to it by name,
+helper's tokens are on your bill and in the run events, attributed to it by name,
 and its work streams into the terminal under `[second-opinion]`.
 
 Three reasons to reach for one, one example each:

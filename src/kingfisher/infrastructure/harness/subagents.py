@@ -23,6 +23,7 @@ from kingfisher.domain.capabilities import (
 )
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.harness.models import build_model, model_named
+from kingfisher.infrastructure.harness.session_paths import SessionPaths
 from kingfisher.infrastructure.harness.tool_guards import guarded_tools, tool_guards
 from kingfisher.infrastructure.prompting import with_user_prompt
 from kingfisher.kinds.agents.spec import AgentSpec
@@ -32,7 +33,6 @@ from kingfisher.kinds.tools.spec import Found, Offering, select, split_reference
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from pathlib import Path
 
     from kingfisher.config import Config
     from kingfisher.kinds.skills.registry import SkillRegistry
@@ -175,7 +175,7 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     #: What this delegate's tools resolve their paths against. Needed here and
     #: nowhere else in this file: an assembled delegate gets translation from the
     #: middleware built below, and this one has no middleware to get it from.
-    session_dir: Path | None = None,
+    paths: SessionPaths | None = None,
     run_on: RunOn | None = None,
     default_model: Any = None,
 ) -> dict[str, Any]:
@@ -215,7 +215,7 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     # kingfisher's, so its tools carry their guards or have none. The shipped
     # `scribe` is what found that -- it handed `show-your-work` three path-taking
     # tools and the first call died on a path nothing had translated.
-    runnable = spec.build(model, guarded_tools(granted, session_dir))
+    runnable = spec.build(model, guarded_tools(granted, paths))
     # Against `Runnable`, which is what `CompiledSubAgent` declares this field to be --
     # the same reason `test_the_compiled_shape_is_deepagents_own` pins the *keys*
     # against their declaration rather than a copy of it.
@@ -272,9 +272,10 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     #: request granted, for the reason `private` is.
     private_skills: tuple[tuple[str, ...], tuple[tuple[str, str], ...]] | None = None,
     skill_sources: list[Any] | None = None,
-    #: Passed on to a compiled delegate, whose tools carry their own translation.
-    #: An assembled one resolves paths through the middleware built below instead.
-    session_dir: Path | None = None,
+    #: What a tool's paths mean in this turn: the parent's, because a delegate runs
+    #: in the parent's session on the parent's backend. A compiled delegate's tools
+    #: carry it; an assembled one's middleware below does.
+    paths: SessionPaths | None = None,
     #: Where this request wants this delegate to run, replacing its file's
     #: answer. `None` is the ordinary case: the file decides.
     run_on: RunOn | None = None,
@@ -292,7 +293,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
             tools=tools,
             catalogue=catalogue,
             private=private,
-            session_dir=session_dir,
+            paths=paths,
             run_on=run_on,
             default_model=default_model,
         )
@@ -344,13 +345,12 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # own prompt and none of `system.md`, so it never learns that host paths exist and
     # cannot be told one except by its caller. #245 left that open in as many words:
     # "a design question about what a delegate is told". This is the answer -- it is
-    # told the same paths as everyone else, because there is no other kind. The root is
-    # the backend's, since a delegate has no `session_dir` of its own.
+    # told the same paths as everyone else, because there is no other kind. Handed
+    # down rather than read off the backend: a backend of a deployment's own need not
+    # carry the attribute this once guessed from, and without it a delegate's tools
+    # lost translation and the host-path refusal with nothing said.
     middleware.extend(
-        tool_guards(
-            frozenset(entry.name for entry in (*catalogue, *private)),
-            getattr(backend, "workspace", None),
-        )
+        tool_guards(frozenset(entry.name for entry in (*catalogue, *private)), paths)
     )
     if allowed != ALL:
         # `None` is a delegate permitted nothing, which is an empty allowlist rather

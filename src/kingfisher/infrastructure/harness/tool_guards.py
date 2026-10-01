@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware
@@ -22,7 +21,7 @@ from kingfisher.infrastructure.harness.middlewares.workspace_tools import (
 from kingfisher.infrastructure.harness.session_paths import SessionPaths, refusal_text
 
 
-def tool_guards(names: frozenset[str], root: Path | None) -> list[AgentMiddleware]:
+def tool_guards(names: frozenset[str], paths: SessionPaths | None) -> list[AgentMiddleware]:
     """What every graph holding workspace tools gets wrapped in, built once.
 
     Three graphs hold them -- the agent, a delegate, and the `general-purpose` delegate
@@ -38,17 +37,17 @@ def tool_guards(names: frozenset[str], root: Path | None) -> list[AgentMiddlewar
     unconditional because every graph holding `execute` is handed deepagents'
     description of it, and `StrayWriteGuard` because every graph holding `write_file`
     can save where nothing is kept. The other two are about the tools themselves, so
-    they need names -- and translation needs somewhere to translate against, which a
-    build with no session does not have.
+    they need names -- and translation needs the turn's backend to translate against,
+    which every graph here is handed the same one of.
     """
-    guards: list[AgentMiddleware] = [HostPathGuard(), ShellPathSpelling(), StrayWriteGuard(root)]
+    guards: list[AgentMiddleware] = [HostPathGuard(), ShellPathSpelling(), StrayWriteGuard(paths)]
     if names:
         # Beside each other and in this order, which the delegate's stack is pinned to:
         # both are about a workspace tool call, and the translation rewrites the
         # arguments before anything below it decides anything about them.
         guards.append(WorkspaceToolErrors(names))
-        if root is not None:
-            guards.append(WorkspaceToolPaths(names, root))
+        if paths is not None:
+            guards.append(WorkspaceToolPaths(names, paths))
     return guards
 
 
@@ -129,14 +128,13 @@ class GuardedTool(BaseTool):
             raise self._failed(exc) from exc
 
 
-def guarded_tools(tools: Sequence[Any], root: Path | None) -> list[Any]:
+def guarded_tools(tools: Sequence[Any], paths: SessionPaths | None) -> list[Any]:
     """The workspace tools a compiled delegate is handed, each one wrapped.
 
     The names are not needed here the way `tool_guards` needs them: everything in
     this list is a workspace tool already, chosen by the grant this delegate was
     resolved against.
     """
-    paths = SessionPaths(root) if root is not None else None
     return [_guarded(one, paths) for one in tools]
 
 

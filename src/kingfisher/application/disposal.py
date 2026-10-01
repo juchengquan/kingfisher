@@ -1,11 +1,9 @@
 """Getting rid of a session, and everything it left in other places.
 
-A session is four things in four places: a directory on disk, a thread in a database, a
-claim marking a turn in progress, and a copy in whatever durable store a deployment
-wired. Removing one means removing all four, and missing one does not fail -- it
+A session is two things in two places: what its backend holds, and a thread in a
+checkpointer. Removing one means removing both, and missing one does not fail -- it
 accumulates. One real workspace held 132 orphaned threads after every session had been
-deleted; a leftover claim made a reopened session refuse its first turn as busy; a
-process that died mid-turn left a session ten years idle and still there.
+deleted; a process that died mid-turn left a session ten years idle and still there.
 """
 
 from __future__ import annotations
@@ -16,132 +14,100 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain import retention
 from kingfisher.domain.retention import SweepResult
-from kingfisher.domain.session import Session, sessions_root, still_held
+from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.harness.checkpointing import thread_ids
-from kingfisher.infrastructure.workspace import claim_path
 from kingfisher.layout import CLAIM
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from kingfisher.config import Config
-    from kingfisher.domain.ports import SessionStore
 
 
 class Disposal:
     """Getting rid of a session, and everything it left in other places."""
 
     #: What this half needs from the instance it is mixed into. Declared rather
-    #: than assumed: a mixin that read `self.dirs` without saying so would be a
+    #: than assumed: a mixin that read `self._backends` without saying so would be a
     #: contract nothing checks, which is the shape this repository distrusts.
     cfg: Config
-    dirs: Any
     workspace: Path
-    sessions_store: SessionStore | None
     _shared: Any
+    _backends: Any
+    _files_for: Callable[..., Any]
 
-    def delete_session(self, session_id: str, *, forget: bool = True) -> str | None:
-        """Dispose of one session: its directory and thread where this workspace keeps
-        them, and the store's copy wherever it is. Returns a failure, or None.
-
-        `forget=False` evicts instead: this machine's copy goes and the store's stays,
-        so the session can still be resumed -- without `/data`, which the store is
-        never handed. The thread goes either way; the next turn is rebuilt from the
-        transcript, which the store carries.
+    def delete_session(self, session_id: str) -> str | None:
+        """Dispose of one session: its thread, and everything its backend holds.
+        Returns a failure, or None.
         """
-        root = sessions_root(self.workspace)
-        failure = None
-        if session_id in self.dirs.children(root):
-            session = Session(id=session_id, directory=root / session_id)
-            failure = session.discard(self.dirs, self._shared)
-        # The store whether or not a directory was here: under a root of the
-        # deployment's own the store is the only place a session is kept, and
-        # stopping at the missing directory left a deleted session resumable. Not
-        # after a failure, for the reason `reap` gives -- a directory that stayed
-        # needs the history behind it.
-        if failure is None and forget:
-            self._forget(session_id)
-        return failure
+        if session_id not in self._known():
+            return None
+        return self._discard(session_id)
 
-    def reap(
-        self,
-        older_than_seconds: float | None = None,
-        *,
-        now: float,
-        forget: bool = True,
-    ) -> SweepResult:
+    def reap(self, older_than_seconds: float | None = None, *, now: float) -> SweepResult:
         """Dispose of every session untouched for `older_than_seconds`.
 
         A claim only spares a session while somebody could still be holding it. This
         used to read claim names and spare every one, so a process that died mid-turn
         exempted its session from retention for good -- ten years idle and still
         there, measured.
+        """
+        age = self.cfg.session_ttl_s if older_than_seconds is None else older_than_seconds
+        entries = self._backends.sessions(self.cfg)
+        idle = retention.expired(entries, age, now)
+        plan = retention.expired(entries, age, now, busy=self._busy(idle.doomed, now=now))
+        result = retention.apply(plan, self._discard)
+        return self._reconcile_threads(result)
 
-        `forget=False` evicts, as it does for `delete_session`.
+    def _known(self) -> tuple[str, ...]:
+        return tuple(name for name, _ in self._backends.sessions(self.cfg))
+
+    def _discard(self, session_id: str) -> str | None:
+        """The thread, then the session. A failure, or None.
+
+        The thread first: a session whose files went and whose thread stayed is the
+        residue `_reconcile_threads` exists to find, where one whose thread went and
+        whose files stayed is only a session that forgot its checkpoint.
+        """
+        if self._shared is not None:
+            try:
+                self._shared.delete_thread(session_id)
+            except Exception as exc:  # noqa: BLE001 -- reported, not swallowed
+                return f"{session_id}: thread not deleted ({type(exc).__name__})"
+        failure = self._backends.delete(self.cfg, session_id)
+        return f"{session_id}: {failure}" if failure else None
+
+    def _busy(self, candidates: tuple[str, ...], *, now: float) -> tuple[str, ...]:
+        """Which of these a turn is still running in, so a sweep spares them.
+
+        Asked only of the sessions old enough to go, because the question is asked of
+        each one's backend: a lock is the backend's, and only it knows who holds one.
         """
         root = sessions_root(self.workspace)
-        age = self.cfg.session_ttl_s if older_than_seconds is None else older_than_seconds
-        plan = retention.expired(
-            self.dirs.listing(root),
-            age,
-            now,
-            busy=self._busy(root, now=now),
+        return tuple(
+            session_id
+            for session_id in candidates
+            if self._files_for(session_id, root / session_id).held(
+                CLAIM, stale_after=self.cfg.claim_stale_after, now=now
+            )
         )
-        result = retention.apply(plan, root, self.dirs, self._shared)
-        result = self._reconcile_threads(root, result)
-        # Named by the sweep rather than re-derived. `removed` is what actually
-        # went, which is not the same as what the plan asked for -- a session
-        # whose directory refused to delete is still there and its store copy
-        # has to stay with it, or the next turn would find a directory with no
-        # history behind it.
-        if forget:
-            for gone in result.removed:
-                self._forget(gone)
-        return result
 
-    def _forget(self, session_id: str) -> None:
-        """Drop this session from the store, if a deployment wired one."""
-        if self.sessions_store is not None:
-            self.sessions_store.forget(session_id)
-
-    def _busy(self, root: Path, *, now: float) -> tuple[str, ...]:
-        """The sessions a turn is still running in, so a sweep spares them.
-
-        One stat per session rather than one listing of a shared claims
-        directory, which is what a claim living inside the session it guards
-        costs. What it buys is that an orphaned claim cannot exist: it went with
-        the session, so there is nothing left to sweep and nothing to sweep it.
-
-        A claim only spares a session while somebody could still be holding it.
-        This used to read claim names and spare every one, so a process that died
-        mid-turn exempted its session from retention for good -- ten years idle
-        and still there, measured.
-        """
-        held = tuple(
-            (session_id, mtime)
-            for session_id in self.dirs.children(root)
-            for name, mtime in self.dirs.listing(claim_path(root / session_id).parent)
-            if name == CLAIM
-        )
-        return still_held(held, stale_after=self.cfg.claim_stale_after, now=now)
-
-    def _reconcile_threads(self, root: Path, result: SweepResult) -> SweepResult:
+    def _reconcile_threads(self, result: SweepResult) -> SweepResult:
         """Delete threads no session owns, and fold them into the result.
 
-        `discard` takes the thread and the directory together, so a swept session
-        leaves neither behind. A session directory that goes any other way -- deleted
-        by hand, or one of the eight that could not be removed until `remove_tree`
-        learned to unlock `/data` -- leaves its thread forever, because nothing else
-        looks. One real workspace held 132 such threads and 1,894 checkpoints after
-        every session had been reaped.
+        `_discard` takes the thread and the session together, so a swept session
+        leaves neither behind. A session that goes any other way -- deleted by hand,
+        or one that could not be removed until deleting learned to unlock `/data` --
+        leaves its thread forever, because nothing else looks. One real workspace held
+        132 such threads and 1,894 checkpoints after every session had been reaped.
         """
         held = thread_ids(self._shared)
         if held is None:
             return result
 
-        live = self.dirs.children(root)
         dropped = []
-        for thread in retention.orphaned(held, live):
+        for thread in retention.orphaned(held, self._known()):
             with suppress(Exception):
                 self._shared.delete_thread(thread)
                 dropped.append(thread)

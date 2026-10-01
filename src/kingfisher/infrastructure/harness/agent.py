@@ -25,6 +25,7 @@ from kingfisher.domain.capabilities import (
     Selection,
     refuse_ungranted_models,
 )
+from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.activation import (
     _activated_subagents,
@@ -34,7 +35,7 @@ from kingfisher.infrastructure.harness.activation import (
 )
 from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
-    default_backend,
+    backend_at,
     skills_sources,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
@@ -52,6 +53,7 @@ from kingfisher.infrastructure.harness.middlewares.narrowing import (
 )
 from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
+from kingfisher.infrastructure.harness.session_paths import SessionPaths
 from kingfisher.infrastructure.harness.subagents import (
     as_subagent,
     model_object,
@@ -67,6 +69,7 @@ from kingfisher.infrastructure.harness.tools import (
 )
 from kingfisher.infrastructure.prompting import system_prompt
 from kingfisher.infrastructure.sandbox.confinement import EXTERNAL
+from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.kinds.agents.spec import AgentError, AgentSpec
 from kingfisher.kinds.subagents.spec import RunOn
 from kingfisher.kinds.tools.spec import Found
@@ -224,7 +227,7 @@ def _backend_for(
     if backend is not None:
         built = backend
     elif session_dir is not None:
-        built = default_backend(cfg, session_dir, catalogue=catalogue)
+        built = backend_at(cfg, session_dir, catalogue=catalogue)
     else:
         msg = "build_agent needs either a session_dir to root a backend at, or a backend"
         raise ValueError(msg)
@@ -330,10 +333,6 @@ def builtin_tool_names(
     """
     import tempfile  # noqa: PLC0415 -- one caller, and only on the branch that probes
 
-    from kingfisher.infrastructure.workspace import (  # noqa: PLC0415
-        ensure_session_layout,
-    )
-
     with tempfile.TemporaryDirectory(prefix="kingfisher-builtin-") as scratch:
         return registered_tools(
             build_agent(
@@ -389,8 +388,14 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # them cannot reach one, and narrowing this to the grant would mean building
     # the guard from a set that is computed after it.
     held = frozenset(entry.name for entry in walked)
-    middleware: list[Any] = [TodoListMiddleware(), *tool_guards(held, session_dir)]
     permissions = read_only_permissions()
+    # The turn's backend under the turn's rules, and one of it: what a tool is handed as
+    # `runtime.context.backend`, and what a tool's `path` is resolved through. Built
+    # before the rules are finished, and it reads them when it checks, so what is added
+    # below -- memory declined, skills narrowed -- applies to both.
+    under_rules = PermittedBackend(resolved_backend, permissions)
+    paths = SessionPaths(under_rules, sessions_root(cfg.workspace))
+    middleware: list[Any] = [TodoListMiddleware(), *tool_guards(held, paths)]
     extras: dict[str, Any] = {}
 
     # One answer to "are skills on", for this agent and for every delegate it
@@ -474,7 +479,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         }
         return Assembled(
             graph=create_deep_agent(**attached),
-            context=ToolContext(backend=PermittedBackend(resolved_backend, permissions)),
+            context=ToolContext(backend=under_rules),
             **attached,
         )
 
@@ -583,9 +588,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                 # route either way -- withholding the index here would leave the files
                 # reachable and unnamed.
                 private_skills=_private_skills(roots, name),
-                # Reaches only a compiled delegate, whose tools are wrapped against it.
-                # An assembled one is given the same translation as middleware.
-                session_dir=session_dir,
+                paths=paths,
                 run_on=wanted.get(name),
                 extra_middleware=declared_middleware(
                     defined[name],
@@ -691,7 +694,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             # the same guards around them. Without them a tool call through this
             # delegate reached the tool with its paths untranslated.
             "middleware": (
-                tool_guards(held, session_dir)
+                tool_guards(held, paths)
                 + ([ToolAllowlist(permitted)] if permitted is not None else [])
                 + _deployment_middleware(
                     agent, registry, capabilities.middlewares, provisions=agent_provisions

@@ -12,21 +12,21 @@ from dataclasses import replace as replace_cfg
 from typing import Any
 
 import pytest
+import yaml
 from deepagents import create_deep_agent
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from kingfisher import Kingfisher, default_backend
+from kingfisher import Kingfisher, backend_at
 from kingfisher.domain.request import Decision, DecisionError, Request, Resume
 from kingfisher.domain.result import AWAITING, DECISIONS, END_TURN
-from kingfisher.infrastructure.session_store import (
-    PAUSED,
-    PAUSED_PROVENANCE,
-    read_pause_mark,
-    write_pause_mark,
-)
+from kingfisher.infrastructure.session_store import read_pause_mark, write_pause_mark
 from kingfisher.infrastructure.workspace import session_bytes
-from tests.conftest import FakeToolCallingModel
+from kingfisher.layout import HARNESS, PAUSED_MARK, PAUSED_STATE
+from tests.conftest import FakeToolCallingModel, harness_of
+
+PAUSED = f"{HARNESS}/{PAUSED_STATE}"
+PAUSED_PROVENANCE = f"{HARNESS}/{PAUSED_MARK}"
 
 
 def _gated(*, calls: list[dict[str, Any]], after: str = "done", saver: Any = None) -> Any:
@@ -53,7 +53,7 @@ def _gated_on_disk(cfg, session_dir, *, calls: list[dict[str, Any]], after: str 
         model=FakeToolCallingModel(
             responses=[AIMessage(content="", tool_calls=calls), AIMessage(content=after)]
         ),
-        backend=default_backend(cfg, session_dir),
+        backend=backend_at(cfg, session_dir),
         tools=None,
         interrupt_on={"write_file": True},
         checkpointer=InMemorySaver(),
@@ -211,7 +211,7 @@ def test_answering_clears_the_pause(cfg):
     )
 
     assert not (_session_dir(cfg, paused.session_id) / PAUSED).exists()
-    assert read_pause_mark(_session_dir(cfg, paused.session_id)) is None
+    assert read_pause_mark(harness_of(cfg, paused.session_id)) is None
 
 
 def test_two_gated_calls_are_answered_one_each(cfg, session_dir):
@@ -305,19 +305,145 @@ def test_responding_with_nothing_to_respond_is_refused(cfg):
         )
 
 
-def test_a_resume_naming_a_different_agent_is_refused(cfg):
-    """A different agent is a different graph, whose nodes this checkpoint's are not."""
-    kf = Kingfisher(cfg, graph=_gated(calls=[_write("/derived/a.txt", "x", "c1")]))
-    paused = kf.run(Request("write it"))
+def _under_a_policy(cfg):
+    """A workspace with a vocabulary and two agents, which is what makes a session have
+    a *resolved* agent at all.
 
-    with pytest.raises(DecisionError, match="paused under agent"):
+    An injected graph under no policy resolves none -- `_admitted` says so in as many
+    words -- so a session built that way has no agent for a resume to name a different
+    one from, and the rules below would assert on nothing.
+    """
+    from kingfisher.domain.access import parse
+    from tests.conftest import an_agent
+
+    for name in ("analyst", "somebody-else"):
+        an_agent(cfg, name, source_ids="[A]")
+    vocabulary = "source_ids: [A]\n"
+    # On the config as well as in the file: `_admitted` resolves an agent only where a
+    # graph was not injected *or* a policy is in force, and these rules inject one.
+    (cfg.workspace / "source_ids.yaml").write_text(vocabulary, encoding="utf-8")
+    return replace_cfg(
+        cfg, access=parse(yaml.safe_load(vocabulary), source="source_ids.yaml")
+    )
+
+
+def _paused_on_a_pinned_session(cfg, call_id: str):
+    """Open a session on `analyst`, then pause a *later* turn, which names no agent.
+
+    The later turn is the point: a session's agent is fixed when it opens, so every turn
+    after the first names nothing. A pause recorded on one of those is the case that was
+    broken, and a pause on the opening turn is not -- which is why the rules below do not
+    use one.
+    """
+    opening = Kingfisher(
+        cfg,
+        graph=create_deep_agent(
+            model=FakeToolCallingModel(responses=[AIMessage(content="hi")]),
+            tools=None,
+            checkpointer=InMemorySaver(),
+        ),
+    )
+    first = opening.run(Request("say hi", agent="analyst"), source_ids=("A",))
+    kf = Kingfisher(cfg, graph=_gated(calls=[_write("/derived/a.txt", "x", call_id)]))
+    paused = kf.run(Request("write it", session_id=first.session_id), source_ids=("A",))
+    return kf, paused
+
+
+def test_a_pause_records_the_agent_the_turn_actually_ran(cfg):
+    """It recorded what the *request* named, which is empty on every turn after the one
+    that opened the session -- so the mark said `none` for a session plainly running
+    something, and `_refuse_stale_pause` compared every resume against nothing.
+    """
+    policied = _under_a_policy(cfg)
+    _kf, paused = _paused_on_a_pinned_session(policied, "c1")
+
+    written = read_pause_mark(harness_of(policied, paused.session_id)) or {}
+
+    assert written.get("agent") == "analyst"
+
+
+def test_a_resume_naming_the_agent_the_session_runs_is_accepted(cfg):
+    """The half that was missing, and the reason the bug survived: with the mark empty
+    this was refused as `paused under agent 'none'` -- the correct name turned away.
+    """
+    policied = _under_a_policy(cfg)
+    kf, paused = _paused_on_a_pinned_session(policied, "c1")
+
+    done = kf.run(
+        Resume(
+            session_id=paused.session_id,
+            agent="analyst",
+            decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+        ),
+        source_ids=("A",),
+    )
+
+    assert done.stop_reason == END_TURN
+
+
+def test_a_resume_naming_a_different_agent_is_refused(cfg):
+    """A different agent is a different graph, whose nodes this checkpoint's are not.
+
+    Driven on a session with a pinned agent, so the refusal is a real mismatch. It used
+    to run on an injected graph under no policy, where nothing was resolved and nothing
+    recorded -- so it passed against a mark of `none`, which is to say it passed for
+    every name including the right one.
+    """
+    policied = _under_a_policy(cfg)
+    kf, paused = _paused_on_a_pinned_session(policied, "c1")
+
+    with pytest.raises(DecisionError, match="paused under agent 'analyst'"):
         kf.run(
             Resume(
                 session_id=paused.session_id,
                 agent="somebody-else",
                 decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
-            )
+            ),
+            source_ids=("A",),
         )
+
+
+def test_a_resume_naming_nothing_is_not_a_mismatch(cfg):
+    """What a caller normally sends. The agent is already fixed by the session, so there
+    is nothing to disagree with, and the pause check has nothing to say about it.
+    """
+    policied = _under_a_policy(cfg)
+    kf, paused = _paused_on_a_pinned_session(policied, "c1")
+
+    done = kf.run(
+        Resume(
+            session_id=paused.session_id,
+            decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+        ),
+        source_ids=("A",),
+    )
+
+    assert done.stop_reason == END_TURN
+
+
+def test_an_injected_graph_under_no_policy_has_no_agent_to_disagree_with(cfg):
+    """`_admitted` resolves no agent for a deployment that supplied its own graph and
+    declares no policy, so a pause records none -- and a resume naming one is then not a
+    mismatch, because there is nothing for it to mismatch.
+
+    The parity is the point: a *Request* naming an agent on such a session is accepted,
+    and the resume was refused, so the same name meant two different things depending on
+    which call carried it.
+    """
+    kf = Kingfisher(cfg, graph=_gated(calls=[_write("/derived/a.txt", "x", "c1")]))
+    paused = kf.run(Request("write it", agent="whatever"))
+
+    assert (read_pause_mark(harness_of(cfg, paused.session_id)) or {}).get("agent") == ""
+
+    done = kf.run(
+        Resume(
+            session_id=paused.session_id,
+            agent="whatever",
+            decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+        )
+    )
+
+    assert done.stop_reason == END_TURN
 
 
 def test_a_pause_that_did_not_survive_an_upgrade_is_refused(cfg):
@@ -326,10 +452,10 @@ def test_a_pause_that_did_not_survive_an_upgrade_is_refused(cfg):
     """
     kf = Kingfisher(cfg, graph=_gated(calls=[_write("/derived/a.txt", "x", "c1")]))
     paused = kf.run(Request("write it"))
-    directory = _session_dir(cfg, paused.session_id)
-    written = read_pause_mark(directory)
+    kept = harness_of(cfg, paused.session_id)
+    written = read_pause_mark(kept)
     assert written is not None, "the pause recorded nothing to move under it"
-    write_pause_mark(directory, {**written, "deepagents": "0.0.1-before"})
+    write_pause_mark(kept, {**written, "deepagents": "0.0.1-before"})
 
     with pytest.raises(DecisionError, match="did not survive the upgrade"):
         kf.run(

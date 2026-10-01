@@ -25,8 +25,10 @@ from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.sandbox.bubblewrap import bubblewrap_available
 from kingfisher.infrastructure.sandbox.confinement import (
     Confinement,
+    harness_unfenced,
     shell_confinement,
 )
+from kingfisher.infrastructure.signing import key_id
 from kingfisher.infrastructure.workspace import MemoryBacking, destination_hint, memory_backing
 
 #: `fail` means this deployment will not run. `warn` means it will, and
@@ -247,16 +249,19 @@ def _at_rest(cfg: Config) -> Iterator[Check]:
 
     # Two things that only matter once sessions are in memory, and both are
     # silent until the moment they are expensive.
-    if cfg.session_store is None:
+    if cfg.backend_factory is None:
         yield Check(
             "sessions survive",
             "fail",
             f"{devices} — nothing is configured to keep sessions, so everything a "
             "session produced goes with the process",
-            "set KINGFISHER_SESSION_STORE, or wire a SessionStore",
+            "mount durable storage at <workspace>/sessions, or set "
+            "KINGFISHER_BACKEND_FACTORY to a backend that keeps sessions itself",
         )
     else:
-        yield Check("sessions survive", "ok", f"{devices} — kept at {cfg.session_store}")
+        yield Check(
+            "sessions survive", "ok", f"{devices} — kept by {cfg.backend_factory}"
+        )
 
     if cfg.session_max_bytes is None:
         yield Check(
@@ -330,6 +335,13 @@ def _tool_references(found: Inventory) -> Iterator[Check]:
     have the tool its author granted it -- no error, no warning, and no other symptom.
     That second one is why this is a failure rather than a warning.
     """
+    if not found.moved_tools_checked:
+        yield Check(
+            "tool references",
+            "warn",
+            "not checked -- a catalogue it reads did not load, which is above",
+        )
+        return
     if not found.moved_tools:
         yield Check("tool references", "ok", "every definition names tools where they are")
         return
@@ -350,6 +362,14 @@ def _bundled_entries(found: Inventory) -> Iterator[Check]:
     it is still there. A failure because `warm` refuses it -- a deployment carrying one
     does not start, and this check exists to say that before the deployment does.
     """
+    if not found.miscounted_bundles_checked:
+        yield Check(
+            "bundled entries",
+            "warn",
+            "not checked -- the subagents or a delegate's own folder did not load; its "
+            "own row says why",
+        )
+        return
     if not found.miscounted_bundles:
         yield Check("bundled entries", "ok", "every delegate lists exactly its own folder")
         return
@@ -425,21 +445,6 @@ def _delegate_tools(found: Inventory) -> Iterator[Check]:
             f"{', '.join(f'{one}/' for one in found.orphaned_assets)}: "
             f"tools/ or skills/ that reach no delegate",
             "rename the folder, or the `name:` inside it, so the two match",
-        )
-
-    # A warning rather than a failure: the delegate runs, and what it is missing is
-    # a procedure it was never told about. Worth saying because the folder looks
-    # like every other bundle and half of it works -- the tools in it do reach a
-    # compiled graph, so there is no symptom pointing at the half that does not.
-    if found.stranded_skills:
-        stranded = ", ".join(
-            f"{name} ({', '.join(held)})" for name, held in sorted(found.stranded_skills.items())
-        )
-        yield Check(
-            "delegate bundles",
-            "warn",
-            f"held by a compiled delegate, which is told about no skills: {stranded}",
-            "move the skill to the shared catalogue, or read it inside the graph",
         )
 
     detail = f"{len(found.skills)} loadable"
@@ -643,6 +648,32 @@ def _shell(cfg: Config) -> Iterator[Check]:
         )
 
 
+def _session_key(cfg: Config) -> Iterator[Check]:
+    """Whether what kingfisher reads back from a session can be trusted here.
+
+    Asked of the wiring `kingfisher` itself uses -- the default backend, no runner, no
+    graph -- because that is the deployment this command can see. One built in code
+    with its own backend needs a key whatever this says, and `Kingfisher` refuses to
+    start without one.
+    """
+    if cfg.session_key is not None:
+        yield Check("session key", "ok", f"set (key {key_id(cfg.session_key)})")
+    elif (why := harness_unfenced(cfg)) is None:
+        yield Check(
+            "session key",
+            "ok",
+            "not set, and not needed here: the sandbox keeps the agent's shell out of "
+            ".harness. A deployment with its own backend, graph or runner needs one",
+        )
+    else:
+        yield Check(
+            "session key",
+            "fail",
+            f"not set, and needed because {why}",
+            "generate one with `kingfisher key` and set KINGFISHER_SESSION_KEY",
+        )
+
+
 def _retired(environ: Mapping[str, str] | None = None) -> Iterator[Check]:
     """Settings this deployment still carries that nothing reads any more.
 
@@ -698,6 +729,7 @@ def examine(cfg: Config, found: Inventory | None = None) -> tuple[Check, ...]:
         checks += _where(cfg, found)
         checks += _definitions(cfg, found)
         checks += _shell(cfg)
+        checks += _session_key(cfg)
     except ConfigError as exc:  # pragma: no cover -- belt and braces
         checks.append(Check("configuration", "fail", str(exc)))
     return tuple(checks)

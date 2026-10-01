@@ -2,23 +2,23 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from deepagents.backends import CompositeBackend
 
 from kingfisher import Kingfisher
-from kingfisher.config import Config, ConfigError
+from kingfisher.config import ConfigError
 from kingfisher.domain.ports import CommandResult, CommandRunner
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.agent import _backend_for
 from kingfisher.infrastructure.harness.backend import (
+    DefaultBackend,
     WorkspaceScopedBackend,
+    backend_at,
     default_backend,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
-from tests.conftest import StubCheckpointer, an_agent
+from tests.conftest import StubCheckpointer, an_agent, harness_in
 from tests.unit.test_run import StubAgent
 
 
@@ -87,6 +87,19 @@ def test_a_pre_built_graph_and_a_backend_are_refused_together(cfg):
         )
 
 
+def test_a_plain_factory_function_is_refused_with_the_way_forward(cfg):
+    """What a deployment written before `SessionBackends` passes. It makes a backend
+    and answers nothing about which sessions there are, so it is refused where it is
+    wired, naming the class to build on rather than failing at the first `reap`.
+    """
+
+    def mine(cfg_, session_id, /, *, catalogue=None, runner=None):  # pragma: no cover
+        return default_backend(cfg_, session_id, catalogue=catalogue, runner=runner)
+
+    with pytest.raises(TypeError, match="subclass DefaultBackend"):
+        Kingfisher(cfg, backend=mine, threads=StubCheckpointer())  # ty: ignore[invalid-argument-type]
+
+
 def test_a_backend_instance_is_refused_where_a_factory_belongs(cfg):
     """The mistake this parameter's shape exists to discourage, refused anyway: one
     backend is rooted at one session, so sharing an instance shares a filesystem
@@ -103,29 +116,24 @@ def test_the_factory_is_called_per_turn_with_the_session_it_is_for(cfg, session_
     backend to avoid, written where nothing at the call site looks wrong.
     """
     an_agent(cfg)
-    seen: list[Path] = []
+    seen: list[str] = []
 
-    def mine(
-        cfg_: Config,
-        where: Path,
-        *,
-        catalogue: Definitions | None = None,
-        runner: CommandRunner | None = None,
-    ) -> WorkspaceScopedBackend:
-        seen.append(where)
-        return default_backend(cfg_, where, catalogue=catalogue, runner=runner)
+    class Mine(DefaultBackend):
+        def __call__(self, cfg_, session_id, /, *, catalogue=None, runner=None):
+            seen.append(session_id)
+            return super().__call__(cfg_, session_id, catalogue=catalogue, runner=runner)
 
     asked = Request("go", agent="only")
-    service = Kingfisher(cfg, backend=mine)
+    service = Kingfisher(cfg, backend=Mine())
     service._graph_for(
         asked,
         session_dir,
         service.grants,
-        agent=service._agent_for(asked, session_dir),
+        agent=service._agent_for(asked, harness_in(session_dir)),
         held=None,
     )
 
-    assert seen == [session_dir]
+    assert seen == [session_dir.name]
 
 
 def test_the_factory_is_handed_the_catalogue_and_the_runner_this_deployment_wired(
@@ -141,23 +149,18 @@ def test_the_factory_is_handed_the_catalogue_and_the_runner_this_deployment_wire
     seen: list[dict[str, object]] = []
     runner = Elsewhere()
 
-    def mine(
-        cfg_: Config,
-        where: Path,
-        *,
-        catalogue: Definitions | None = None,
-        runner: CommandRunner | None = None,
-    ) -> WorkspaceScopedBackend:
-        seen.append({"catalogue": catalogue, "runner": runner})
-        return default_backend(cfg_, where, catalogue=catalogue)
+    class Mine(DefaultBackend):
+        def __call__(self, cfg_, session_id, /, *, catalogue=None, runner=None):
+            seen.append({"catalogue": catalogue, "runner": runner})
+            return super().__call__(cfg_, session_id, catalogue=catalogue)
 
-    service = Kingfisher(cfg, backend=mine, runner=lambda _where: runner)
+    service = Kingfisher(cfg, backend=Mine(), runner=lambda _where: runner)
     asked = Request("go", agent="only")
     service._graph_for(
         asked,
         session_dir,
         service.grants,
-        agent=service._agent_for(asked, session_dir),
+        agent=service._agent_for(asked, harness_in(session_dir)),
         held=None,
     )
 
@@ -174,25 +177,20 @@ def test_what_the_factory_returns_is_what_the_agent_is_built_on(cfg, session_dir
     an_agent(cfg)
     made: list[Substitute] = []
 
-    def mine(
-        cfg_: Config,
-        where: Path,
-        *,
-        catalogue: Definitions | None = None,
-        runner: CommandRunner | None = None,
-    ) -> Substitute:
-        made.append(
-            Substitute(default_backend(cfg_, where, catalogue=catalogue, runner=runner))
-        )
-        return made[-1]
+    class Mine(DefaultBackend):
+        def __call__(self, cfg_, session_id, /, *, catalogue=None, runner=None):
+            made.append(
+                Substitute(super().__call__(cfg_, session_id, catalogue=catalogue, runner=runner))
+            )
+            return made[-1]
 
     asked = Request("go", agent="only")
-    service = Kingfisher(cfg, backend=mine)
+    service = Kingfisher(cfg, backend=Mine())
     built = service._graph_for(
         asked,
         session_dir,
         service.grants,
-        agent=service._agent_for(asked, session_dir),
+        agent=service._agent_for(asked, harness_in(session_dir)),
         held=None,
     )
 
@@ -219,7 +217,7 @@ def test_a_backend_routing_nothing_a_deny_rule_needs_is_refused(cfg, session_dir
     for every scope the layout refuses writes under.
     """
     routeless = CompositeBackend(
-        default=default_backend(cfg, session_dir).default, routes={}
+        default=backend_at(cfg, session_dir).default, routes={}
     )
 
     with pytest.raises(ConfigError, match="routes nothing covering"):
@@ -237,7 +235,7 @@ def test_the_backend_kingfisher_builds_satisfies_what_it_refuses_others_for(
     asserting on a backend of this test's own making, which would go on passing
     whatever the checks became.
     """
-    refuse_unusable_backend(default_backend(cfg, session_dir))
+    refuse_unusable_backend(backend_at(cfg, session_dir))
 
 
 def test_the_harness_still_builds_its_own_for_a_caller_with_only_a_session(

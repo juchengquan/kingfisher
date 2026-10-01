@@ -10,6 +10,7 @@ import pytest
 
 from kingfisher.infrastructure.harness.middlewares.workspace_tools import WorkspaceToolPaths
 from kingfisher.infrastructure.harness.tool_guards import guarded_tools
+from tests.conftest import paths_in
 
 
 @dataclass
@@ -32,7 +33,7 @@ def session(tmp_path):
 
 @pytest.fixture
 def bridge(session):
-    return WorkspaceToolPaths(frozenset({"line_count", "csv_profile"}), session)
+    return WorkspaceToolPaths(frozenset({"line_count", "csv_profile"}), paths_in(session))
 
 
 def handed(bridge, request) -> Any:
@@ -114,7 +115,7 @@ def test_another_session_is_refused_where_no_host_root_would_catch_it():
     """A container puts the workspace at `/workspace`, which is not a host root. What
     catches it there is the directory this session's siblings are in.
     """
-    mine = WorkspaceToolPaths(frozenset({"peek"}), Path("/workspace/sessions/mine"))
+    mine = WorkspaceToolPaths(frozenset({"peek"}), paths_in(Path("/workspace/sessions/mine")))
     seen: list[object] = []
 
     answer = mine.wrap_tool_call(
@@ -399,7 +400,7 @@ def test_a_link_that_stays_inside_still_works(session, bridge):
 
 
 def guarded(one, root):
-    return guarded_tools([one], root)[0]
+    return guarded_tools([one], paths_in(root) if root is not None else None)[0]
 
 
 def answered(wrapped, **args):

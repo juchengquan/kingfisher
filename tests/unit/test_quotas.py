@@ -57,7 +57,7 @@ def test_being_cut_short_keeps_the_work(cfg):
 
     result = kf.run(Request("go"))
 
-    assert result.session_dir.is_dir()
+    assert (cfg.workspace / "sessions" / result.session_id).is_dir()
     assert "memory/AGENTS.md" in result.artifacts
 
 
@@ -102,7 +102,8 @@ def test_a_turn_that_runs_out_of_steps_is_cut_short_not_crashed(cfg):
     # `max_steps`, not `max_duration` -- the distinction the boolean could not
     # carry, and the reason a reader was sent to the wrong setting.
     assert result.stop_reason == "max_steps"
-    assert result.session_dir.is_dir(), "the turn's work went with the error"
+    kept = cfg.workspace / "sessions" / result.session_id
+    assert kept.is_dir(), "the turn's work went with the error"
 
 
 def test_a_turn_cut_short_for_steps_is_logged_as_having_ended(cfg):
@@ -113,15 +114,14 @@ def test_a_turn_cut_short_for_steps_is_logged_as_having_ended(cfg):
     false, a bounded turn reads in the log like a crash, and the two want
     different things done about them.
     """
-    import json
+    from tests.conftest import RecordedEvents
 
-    from kingfisher.infrastructure.harness.runlog import log_path
+    sink = RecordedEvents()
+    Kingfisher(
+        cfg, graph=RunawayAgent(), threads=StubCheckpointer(), run_events=sink
+    ).run(Request("go"))
 
-    result = Kingfisher(cfg, graph=RunawayAgent(), threads=StubCheckpointer()).run(Request("go"))
-
-    written = log_path(result.session_dir).read_text(encoding="utf-8")
-    ended = [json.loads(line) for line in written.splitlines() if line.strip()]
-    ends = [record for record in ended if record["event"] == "run_end"]
+    ends = sink.named("run_end")
     assert ends and ends[-1]["ok"] is True
 
 

@@ -251,6 +251,22 @@ def shell_confinement(cfg: Config, *, skills: tuple[Path, ...] | None = None) ->
     )
 
 
+#: The mechanisms that keep the shell out of `.harness` on kingfisher's own authority:
+#: `_harness_denial` in the macOS profile, the read-only bind in `bubblewrap.py`, and
+#: Landlock granting each session directory but never the session itself.
+FENCES_HARNESS = (SANDBOX_EXEC, BUBBLEWRAP, LANDLOCK)
+
+
+def harness_unfenced(cfg: Config) -> str | None:
+    """Why nothing kingfisher runs keeps the shell out of `.harness`, or `None`."""
+    if shell_confinement(cfg).mechanism in FENCES_HARNESS:
+        return None
+    return (
+        f"KINGFISHER_SHELL_SANDBOX is {cfg.shell_sandbox!r}, and nothing kingfisher "
+        "runs keeps the agent's shell out of .harness here"
+    )
+
+
 def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and each is
     # a different question: what to deny, what to re-allow, what to carve back out,
     # and the two paths the profile has to know about itself

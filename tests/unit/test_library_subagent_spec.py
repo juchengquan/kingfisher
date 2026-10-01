@@ -18,7 +18,7 @@ from langchain_core.messages import AIMessage
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import default_backend
+from kingfisher.infrastructure.harness.backend import backend_at
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.spec import SubagentError
@@ -112,7 +112,7 @@ def test_every_listed_directory_is_read(cfg, deployed):
 def test_each_directory_gets_a_route_of_its_own(cfg, deployed, session_dir):
     """Numbered beneath the bundle's route, in the order the spec listed them."""
     where = Definitions.from_config(cfg).subagents.bundles["clerk"].where
-    routes = default_backend(cfg, session_dir).routes
+    routes = backend_at(cfg, session_dir).routes
 
     assert f"{BUNDLED_SKILLS_ROUTE}{where}/1/" in routes
     assert f"{BUNDLED_SKILLS_ROUTE}{where}/2/" in routes
@@ -145,7 +145,7 @@ def test_a_single_path_keeps_the_bundles_own_route(cfg, installed, session_dir):
     _deploy(cfg)
     where = Definitions.from_config(cfg).subagents.bundles["clerk"].where
 
-    assert f"{BUNDLED_SKILLS_ROUTE}{where}/" in default_backend(cfg, session_dir).routes
+    assert f"{BUNDLED_SKILLS_ROUTE}{where}/" in backend_at(cfg, session_dir).routes
 
 
 def test_a_backend_path_is_refused_saying_what_it_is(cfg, installed):

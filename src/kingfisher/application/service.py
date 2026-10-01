@@ -29,7 +29,7 @@ from collections.abc import AsyncGenerator, AsyncIterator, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from time import monotonic, time
+from time import monotonic
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.application import access
@@ -65,7 +65,6 @@ from kingfisher.domain.capabilities import (
     Capabilities,
     CapabilityError,
 )
-from kingfisher.domain.ports import SessionStore
 from kingfisher.domain.request import DecisionError, Request, Resume
 from kingfisher.domain.result import (
     AWAITING,
@@ -75,9 +74,7 @@ from kingfisher.domain.result import (
     RunResult,
     normalize_answer,
 )
-from kingfisher.domain.session import (
-    Session,
-)
+from kingfisher.domain.session import Session, SessionBusyError, sessions_root
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.activation import (
@@ -89,28 +86,35 @@ from kingfisher.infrastructure.harness.agent import (
     build_agent,
     builtin_tool_names,
 )
-from kingfisher.infrastructure.harness.backend import BackendFactory
+from kingfisher.infrastructure.harness.backend import (
+    SessionBackends,
+    default_backend,
+)
 from kingfisher.infrastructure.harness.checkpointing import (
     build_session_checkpointer,
     harness_mark,
-    read_paused_state,
+    paused_state,
     release_checkpointer,
-    write_paused_state,
+    resumed_saver,
 )
 from kingfisher.infrastructure.harness.declared_middleware import (
     MiddlewareFactory,
     refuse_unbuildable_middleware,
 )
 from kingfisher.infrastructure.harness.interpreter import release_interpreter
-from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
+from kingfisher.infrastructure.harness.runlog import LoggedRunEvents, RunLogger
+from kingfisher.infrastructure.harness.session_files import (
+    HarnessFiles,
+    collect_artifacts,
+    key_needed,
+    local_files,
+    place_data,
+    read_artifact,
+)
 from kingfisher.infrastructure.session_store import (
     AGENT_MARK,
     PENDING_MARK,
-    TRANSCRIPT,
-    LocalSessionStore,
     clear_pause,
-    keep_from,
-    paused_path,
     pending_as_mark,
     pending_from_mark,
     read_pause_mark,
@@ -118,31 +122,25 @@ from kingfisher.infrastructure.session_store import (
     write_pause_mark,
     write_transcript,
 )
-from kingfisher.infrastructure.wiring import store_named
 from kingfisher.infrastructure.workspace import (
-    AGENT_SNAPSHOT,
     SEED_HINT,
     STARTER_AGENT,
-    LocalSessionDirs,
-    LocalSessionRoot,
     agent_started_with,
-    claim_path,
-    collect_artifacts,
     ensure_layout,
-    place_data,
+    ensure_session_layout,
     protect_data,
     remember_agent,
 )
 from kingfisher.kinds.agents.reading import read
 from kingfisher.kinds.agents.spec import AgentSpec
+from kingfisher.layout import CLAIM, PAUSED_STATE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from kingfisher.domain.ports import (
         CommandRunner,
-        SessionDirs,
-        SessionRoot,
+        RunEvents,
         ThreadStore,
     )
 
@@ -177,21 +175,6 @@ _UNSET: Any = object()
 def _asked(value: str | Request | Resume) -> Request | Resume:
     """Whatever a caller handed in, as one of the two things a turn starts from."""
     return value if isinstance(value, Request | Resume) else Request.coerce(value)
-
-
-def _session_store(supplied: SessionStore | None, cfg: Config) -> SessionStore | None:
-    """Which store this deployment gets: the one passed, the one named, or none."""
-    if supplied is not None:
-        return supplied
-    if cfg.session_store_factory is not None:
-        return store_named(
-            cfg.session_store_factory,
-            setting="KINGFISHER_SESSION_STORE_FACTORY",
-            port=SessionStore,
-        )
-    if cfg.session_store is not None:
-        return LocalSessionStore(cfg.session_store)
-    return None
 
 
 #: What a provider answers with when it will not accept the credentials. Matched
@@ -240,23 +223,17 @@ class Kingfisher(Sessions, Disposal):
         self,
         cfg: Config | None = None,
         *,
-        dirs: SessionDirs | None = None,
         # A store, or a factory given a session directory, or nothing for the
         # default -- see `_checkpointer_for`. The union is the contract, so it
         # is written here rather than left for a reader to infer from a branch.
         threads: ThreadStore | Callable[[Path], Any] | None = None,
-        # Where a session's files go when the machine may not keep them. `None`
-        # means the session directory is the only copy, which is what every
-        # deployment has had until now and stays correct wherever the host is
-        # allowed to hold data.
-        sessions: SessionStore | None = None,
-        session_root: SessionRoot | None = None,
         runner: Callable[[Path], CommandRunner] | None = None,
-        backend: BackendFactory | None = None,
+        backend: SessionBackends | None = None,
         catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middlewares: Mapping[str, MiddlewareFactory] | None = None,
         graph: Any | None = None,
+        run_events: RunEvents | None = None,
     ) -> None:
         self.cfg = cfg or config_module.config_from_env()
         config_module.enforce_local_only_tracing()
@@ -293,16 +270,6 @@ class Kingfisher(Sessions, Disposal):
         if self.catalogue.tools.found:
             builtin_tool_names(self.cfg, self.catalogue)
 
-        # Injected, or derived from configuration, or nothing -- the same order
-        # `catalogue` follows and for the same reason: derive from `cfg`, never invent.
-        self.sessions_store: SessionStore | None = _session_store(sessions, self.cfg)
-        self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
-        # Where a session's files are for the length of a turn. The default keeps them
-        # under the workspace and leaves them there, which is what this did before there
-        # was a port for it; a deployment whose tree exists only while a turn runs
-        # supplies its own and gets the release for free, because the turn is what
-        # closes it.
-        self.session_root: SessionRoot = session_root or LocalSessionRoot(self.workspace)
         # A callable, and only a callable. A runner is built for one turn --
         # kingfisher's own Landlock fence is, because its policy is generated
         # from the session -- and a shared instance could not know which session
@@ -335,7 +302,35 @@ class Kingfisher(Sessions, Disposal):
                 "filesystem between callers"
             )
             raise TypeError(msg)
+        if backend is not None and not isinstance(backend, SessionBackends):
+            msg = (
+                "backend has to answer for every session as well as build one: which "
+                "there are, how big, when each was used, and deleting one. To build on "
+                "kingfisher's own, subclass DefaultBackend and override __call__"
+            )
+            raise TypeError(msg)
         self._backend = backend
+        # Where the sessions are, for the questions no single session answers: which
+        # there are, how big, when each was used. A deployment that supplied a graph
+        # rather than a backend keeps its sessions where the default does.
+        self._backends: SessionBackends = backend if backend is not None else default_backend
+        # Before anything else can run: a deployment that needs a key and has none
+        # would otherwise serve turns whose pinned agent and conversation the agent's
+        # own shell can rewrite, and nothing would say so.
+        if self.cfg.session_key is None and (
+            why := key_needed(self.cfg, backend=backend, graph=graph, runner=runner)
+        ):
+            msg = (
+                f"KINGFISHER_SESSION_KEY is not set, and this deployment needs one "
+                f"because {why}. Generate one with: kingfisher key"
+            )
+            raise ConfigError(msg)
+        # Where each turn's record of itself goes. The default is the `kingfisher.run`
+        # logger, which the default logging configuration discards: a deployment
+        # decides whether it keeps them by configuring logging or by passing a sink.
+        self.run_events: RunEvents = (
+            run_events if run_events is not None else LoggedRunEvents()
+        )
         # Three shapes, and the difference is who owns the connection. An instance is a
         # shared store the deployment made and manages; a callable is a factory this
         # service calls per session and closes after the turn; `None` means the default,
@@ -418,7 +413,11 @@ class Kingfisher(Sessions, Disposal):
     @property
     def origins(self) -> Origins:
         """Where this deployment is actually reading from."""
-        return Origins.of(self.cfg, catalogue=self.catalogue, sessions=self.sessions_store)
+        return Origins.of(
+            self.cfg,
+            catalogue=self.catalogue,
+            sessions=None if self._backends is default_backend else self._backends,
+        )
 
     def held_for(self, source_ids: Held | None) -> frozenset[str] | None:
         """The caller's expanded source ids, or `None` where nothing narrows."""
@@ -456,6 +455,7 @@ class Kingfisher(Sessions, Disposal):
         *,
         agent: AgentSpec | None,
         held: frozenset[str] | None,
+        files: Any = None,
     ) -> Any:
         """What serves one request, rooted at its session.
 
@@ -474,11 +474,6 @@ class Kingfisher(Sessions, Disposal):
                 raise ValueError(msg)
             return self._graph
 
-        make = self._backend
-        if make is None:  # pragma: no cover -- the constructor refuses the pairing
-            msg = "a Kingfisher built with neither a backend nor a graph reached a turn"
-            raise ValueError(msg)
-
         return build_agent(
             self.cfg,
             # Resolved by the caller, which is the only one there is: `_admitted`
@@ -487,17 +482,11 @@ class Kingfisher(Sessions, Disposal):
             # the second read that pin back and parsed it.
             agent=agent,
             held=held,
-            # Both called here rather than passed down, because this is where a turn
-            # first has a session directory and neither can be built without one. The
-            # runner goes into the factory rather than alongside it: a deployment that
-            # replaced the backend owns what runs its commands, and handing the same
-            # runner to `build_agent` as well would leave two answers to that.
-            backend=make(
-                self.cfg,
-                session_dir,
-                catalogue=self.catalogue,
-                runner=self._runner(session_dir) if self._runner is not None else None,
-            ),
+            # The one `_files_for` built, which placed this turn's data. Built again
+            # here, a remote backend would be asked for two sessions' worth of
+            # sandbox, and the agent could run in the one that was never given the
+            # data.
+            backend=files if files is not None else self._files_for(session_dir.name, session_dir),
             # What the deployment permits, narrowed by what the request asked for,
             # and never the request's own: they are equal only where the deployment
             # restricts nothing, which is why defaulting to them here looked
@@ -511,10 +500,61 @@ class Kingfisher(Sessions, Disposal):
             catalogue=self.catalogue,
         )
 
-    def _pin_agent_in(self, session_dir: Path, name: str | None) -> None:
-        """Keep the agent, in the directory this is about.
+    def _files_for(self, session_id: str, session_dir: Path) -> Any:
+        """The backend a session's files are reached through, for kingfisher and agent alike.
 
-        **The directory, never an id re-derived from one.** This took an id and
+        The runner goes into the factory rather than alongside it: a deployment that
+        replaced the backend owns what runs its commands, and handing the same runner
+        to `build_agent` as well would leave two answers to that. It is still built
+        from the directory: a runner is about where commands run on *this* host.
+        """
+        if self._graph is not None or self._backend is None:
+            files = local_files(ensure_session_layout(session_dir))
+            files.unprotected = protect_data(session_dir)
+            return files
+        return self._backend(
+            self.cfg,
+            session_id,
+            catalogue=self.catalogue,
+            runner=self._runner(session_dir) if self._runner is not None else None,
+        )
+
+    def _harness_at(self, session_id: str, session_dir: Path, files: Any = None) -> HarnessFiles:
+        """What kingfisher keeps about this session, through the backend its files are on."""
+        return HarnessFiles(
+            files if files is not None else self._files_for(session_id, session_dir),
+            session_id,
+            self.cfg.session_key,
+        )
+
+    def pending(self, session_id: str) -> tuple[PendingDecision, ...]:
+        """What this session's paused turn is waiting on, or nothing.
+
+        Read from the mark the pause wrote rather than by starting a turn: asking what
+        is pending must not be a thing that can supersede it, and every other way into
+        the session is a turn.
+        """
+        directory = sessions_root(self.workspace) / session_id
+        return pending_from_mark(read_pause_mark(self._harness_at(session_id, directory)) or {})
+
+    def artifact(
+        self, session_id: str, name: str, *, source_ids: Held | None = None
+    ) -> bytes:
+        """One file a turn in this session produced, fetched through its backend.
+
+        `name` is as `RunResult.artifacts` gave it. Checked the way reading a session
+        is: a caller who cannot reach the session gets `UnknownSessionError`, the
+        same answer a wrong id gets.
+        """
+        if self.session(session_id, source_ids=source_ids) is None:
+            raise self._unknown_session(session_id)
+        directory = sessions_root(self.workspace) / session_id
+        return read_artifact(self._files_for(session_id, directory), name)
+
+    def _pin_agent_in(self, harness: HarnessFiles, name: str | None) -> None:
+        """Keep the agent, in the session this is about.
+
+        **The session's own files, never a path re-derived from its id.** This took an id and
         rebuilt the path as `<workspace>/sessions/<id>`, which is where the session
         is only when `session_root` is the default. Under any other one the turn
         runs elsewhere, so the pin was written where `agent_started_with` does not
@@ -528,16 +568,16 @@ class Kingfisher(Sessions, Disposal):
         if name is None:
             return
         if (text := self.catalogue.agents.documents.get(name)) is not None:
-            remember_agent(session_dir, text)
+            remember_agent(harness, text)
 
     def _agent_for(
-        self, request: Request | Resume, session_dir: Path, *, source_ids: Held | None = None
+        self, request: Request | Resume, harness: HarnessFiles, *, source_ids: Held | None = None
     ) -> AgentSpec | None:
         """The agent this turn runs, which is the one its session opened with."""
-        kept = agent_started_with(session_dir)
+        kept = agent_started_with(harness)
         if kept is None:
             spec = self.agent_named(request.agent, source_ids=source_ids)
-            self._pin_agent_in(session_dir, request.agent)
+            self._pin_agent_in(harness, request.agent)
             return spec
 
         started = read(kept)
@@ -595,7 +635,7 @@ class Kingfisher(Sessions, Disposal):
         return self._open_turn(self._admit(request, session, source_ids=source_ids))
 
     def _take_pause(
-        self, request: Request | Resume, session: Session, checkpointer: Any
+        self, request: Request | Resume, session: Session, checkpointer: Any, harness: HarnessFiles
     ) -> tuple[Any, dict[str, Any] | None, tuple[str, ...]]:
         """Deal with whatever an earlier turn left waiting, before this turn starts.
 
@@ -603,8 +643,7 @@ class Kingfisher(Sessions, Disposal):
         graph exists: an answer needs the saver holding the state it answers, and a
         supersede needs the state gone before a turn runs on a saver still holding it.
         """
-        directory = session.directory
-        held = read_pause_mark(directory)
+        held = read_pause_mark(harness)
         if not isinstance(request, Resume):
             if held is None:
                 return checkpointer, None, ()
@@ -613,16 +652,17 @@ class Kingfisher(Sessions, Disposal):
             # -- so the agent learns the gated call never ran rather than silently
             # losing it. What the caller is told is `decision_discarded`.
             waiting = tuple(item.tool for item in pending_from_mark(held))
-            clear_pause(directory)
+            clear_pause(harness)
             return checkpointer, None, waiting
         if held is None:
             msg = f"session {session.id} is not waiting on a decision"
             raise DecisionError(msg)
         self._refuse_stale_pause(session, held, request)
-        restored = read_paused_state(paused_path(directory))
-        if restored is None:
+        state = harness.read(PAUSED_STATE)
+        if state is None:
             msg = f"session {session.id} recorded a pause whose state is missing"
             raise DecisionError(msg)
+        restored = resumed_saver(state)
         # Read back rather than derived again from the restored state. These are the
         # very ids the caller was handed, so answering them cannot drift from being
         # asked them -- and re-deriving would need the graph, which does not exist
@@ -640,7 +680,11 @@ class Kingfisher(Sessions, Disposal):
         whole reason the mark is written beside the state.
         """
         was = held.get(AGENT_MARK) or None
-        if request.agent is not None and was != request.agent:
+        # `was is None` is not a mismatch: nothing was recorded because nothing was
+        # resolved -- an injected graph under no policy, where the deployment's own
+        # graph runs whatever the request calls it and a *request* naming an agent is
+        # not refused either. Comparing against it refused the one name that was right.
+        if was is not None and request.agent is not None and was != request.agent:
             msg = (
                 f"session {session.id} paused under agent {was or 'none'!r}, "
                 f"and this resume names {request.agent!r}"
@@ -675,45 +719,55 @@ class Kingfisher(Sessions, Disposal):
         source_ids: Held | None = None,
     ) -> Admitted:
         """Everything that can refuse, before anything a refusal would strand."""
-        cfg, dirs = self.cfg, self.dirs
+        cfg = self.cfg
         # Who is calling, before the session is marked, claimed or written to. Any
         # later and a refused caller's files are already in the `/data` of a session
         # that was never theirs; after the claim, and a turn running in it would
         # answer "busy" where an id nobody issued answers "no session". The grant
         # is asked for here only for its refusals, and again below for itself.
         self._effective_grants(source_ids)
-        if not self._reaches_session(session.directory, self.held_for(source_ids)):
+        # Built here, before anything else reads the session: who may touch it is
+        # decided by its pinned agent, and that is read through the backend too.
+        files = self._files_for(session.id, session.directory)
+        harness = self._harness_at(session.id, session.directory, files)
+        if not self._reaches_session(harness, self.held_for(source_ids)):
             raise self._unknown_session(session.id)
         # A turn writes inside the session, never to the session itself, so the
         # timestamp `retention.expired` reads would still say "idle" for a
         # conversation in daily use. Recorded here, at the top of a turn, rather
         # than at the end: a turn that fails still happened.
-        dirs.mark_used(session.directory)
+        self._backends.mark_used(cfg, session.id)
         # Before the other refusals rather than after: those read the session,
         # and a turn arriving halfway through would be reading it as it moved.
-        session.claim(
-            dirs, claim_path(session.directory), stale_after=cfg.claim_stale_after, now=time()
-        )
+        if not files.claim(CLAIM, stale_after=cfg.claim_stale_after):
+            msg = (
+                f"session {session.id} already has a turn running; "
+                f"wait for it to finish or start another session"
+            )
+            raise SessionBusyError(msg)
         try:
-            return self._admitted(request, session, cfg, source_ids=source_ids)
+            return self._admitted(
+                request, session, cfg, files=files, harness=harness, source_ids=source_ids
+            )
         except BaseException:
-            session.release(dirs, claim_path(session.directory))
+            files.release(CLAIM)
             raise
 
-    def _admitted(
+    def _admitted(  # noqa: PLR0913 -- what `_admit` already built, handed on rather
+        # than built twice: a second backend is a second sandbox on a remote one
         self,
         request: Request | Resume,
         session: Session,
         cfg: Config,
         *,
+        files: Any,
+        harness: HarnessFiles,
         source_ids: Held | None = None,
     ) -> Admitted:
         """The rest of admission, once the session is claimed."""
-        # Kernel-level guard; the deny rule covers only the file tools. Paths
-        # it could not harden are reported below rather than raised: they used
-        # to abort the run, and since this runs before anything else, one file
-        # owned by another user made a session unusable for good.
-        unprotected = protect_data(session.directory)
+        # What the backend could not make read-only, where it is one that says. Reported
+        # below rather than raised; see `DefaultBackend`.
+        unprotected = tuple(getattr(files, "unprotected", ()))
 
         # Before the data is placed, not after: placing it grows the session,
         # so checking afterwards would let a request that is already over
@@ -727,7 +781,7 @@ class Kingfisher(Sessions, Disposal):
         # A resume places nothing. It is finishing work already proposed rather
         # than asking for something, so there is no `data` on it to place -- see
         # `Resume`, where the absence of the field carries the reason.
-        placement = place_data(getattr(request, "data", ()), session.directory)
+        placement = place_data(getattr(request, "data", ()), files)
 
         # What this deployment permits, narrowed by what the request asked for.
         allowed = self._effective_grants(source_ids).intersect(request.capabilities)
@@ -742,7 +796,7 @@ class Kingfisher(Sessions, Disposal):
         # What an earlier turn stopped on, loaded into that saver where this turn is
         # answering it and dropped where this turn supersedes it. Before the graph is
         # built, because a resume runs on a saver that already holds the pause.
-        checkpointer, resume, discarded = self._take_pause(request, session, checkpointer)
+        checkpointer, resume, discarded = self._take_pause(request, session, checkpointer, harness)
         # Once, here, where both readers of it are in view: the build below, and the
         # withheld report at the bottom. Measured before this moved: a turn under a
         # policy resolved the agent twice and down different branches of the same
@@ -754,7 +808,7 @@ class Kingfisher(Sessions, Disposal):
         # asking anyway would make such a session start refusing a request that names
         # a different agent, which today it does not.
         agent = (
-            self._agent_for(request, session.directory, source_ids=source_ids)
+            self._agent_for(request, harness, source_ids=source_ids)
             if self._graph is None or held is not None
             else None
         )
@@ -765,6 +819,7 @@ class Kingfisher(Sessions, Disposal):
             checkpointer=checkpointer,
             agent=agent,
             held=held,
+            files=files,
         )
         # `isinstance` rather than `getattr(built, "graph", built)`: the two shapes
         # `_graph_for` returns are named types, and a duck test here would also
@@ -778,11 +833,14 @@ class Kingfisher(Sessions, Disposal):
             graph=graph,
             unprotected=unprotected,
             placement=placement,
+            files=files,
+            harness=harness,
             release=release,
             saver=checkpointer,
             context=built.context if isinstance(built, Assembled) else None,
             resume=resume,
             discarded=discarded,
+            agent_name=agent.name if agent is not None else None,
             # Tools come off the assembled graph rather than a list kept
             # somewhere: the surface includes whatever the workspace defined, so
             # the only honest answer to "what was offered" is what was wired.
@@ -821,28 +879,34 @@ class Kingfisher(Sessions, Disposal):
         # so there is nothing to be atomic about any more.
         turn = session.allocate_turn(request.turn_id)
 
-        logger = JsonlRunLogger(
-            log_path(session.directory),
+        logger = RunLogger(
+            self.run_events,
             model=cfg.models.default,
             endpoint=cfg.models.resolve()[0].endpoint,
             session_id=session_id,
+            turn_id=turn.id,
         )
-        # What this turn is: a task, or the answers to one already asked. The log
-        # line says which, because a resume with a task-shaped line in the run log
-        # reads as a second request for work that was never re-requested.
+        # What this turn is: a task, or the answers to one already asked. The event
+        # says which, because a resume with a task-shaped `run_start` reads as a
+        # second request for work that was never re-requested.
         asked = getattr(request, "task", "")
         started = asked or f"resuming {len(getattr(request, 'decisions', ()))} decision(s)"
-        logger.run_start(started, str(session.directory))
+        logger.run_start(started)
 
         return Prepared(
             graph=admitted.graph,
+            files=admitted.files,
+            harness=admitted.harness,
             release=admitted.release,
             saver=admitted.saver,
             context=admitted.context,
             resume=admitted.resume,
             discarded=admitted.discarded,
-            agent_name=getattr(request, "agent", None),
-            history=read_transcript(session.directory),
+            # The agent admission resolved, never `request.agent`: a session's agent
+            # is fixed when it opens, so the request names one only on the turn that
+            # opened it and this would be empty for every pause after that.
+            agent_name=admitted.agent_name,
+            history=read_transcript(admitted.harness),
             # A resume adds no message: it continues a superstep that already has
             # everything it needs, and a new user turn appended there would be one
             # the model never saw asked.
@@ -876,34 +940,7 @@ class Kingfisher(Sessions, Disposal):
     def _keep(self, prepared: Prepared, snapshot: Any) -> tuple[str, ...]:
         """Persist what this turn produced, and name it."""
         self._record(prepared, snapshot)
-        kept = collect_artifacts(prepared.session.directory)
-        if self.sessions_store is not None:
-            # Two names beyond what `collect_artifacts` walks, which is `/derived`
-            # and `/memory`. Both are under `.harness` and both have to survive a
-            # machine, and neither is an artifact -- what a turn *produced* is what
-            # the caller is handed, and these are what a session *is*.
-            #
-            # The transcript, or a session that outlived its machine comes back
-            # with its files and no conversation -- measured, of a first draft that
-            # wrote it and never kept it.
-            #
-            # And the pinned agent, which the store never saw while it lived under
-            # `state_dir`. A session moving between hosts found no pin on the new
-            # one, re-pinned from *that* host's catalogue, and accepted whatever
-            # agent the request named -- so "a session is fixed to the agent it
-            # opened with" held on one machine and quietly failed across two.
-            #
-            # The claim and the run log stay behind, and deliberately. A restored
-            # claim would make the session look busy for `claim_stale_after` --
-            # minutes -- before anyone could take the slot; the log is diagnostics
-            # that would be re-uploaded whole every turn as it grows.
-            keep_from(
-                self.sessions_store,
-                prepared.session.id,
-                prepared.session.directory,
-                (*kept, TRANSCRIPT, AGENT_SNAPSHOT),
-            )
-        return kept
+        return collect_artifacts(prepared.files)
 
     def _finished(  # noqa: PLR0913 -- one terminal event, assembled from the four
         # things a turn ends holding. A parameter object here would exist only to
@@ -927,8 +964,6 @@ class Kingfisher(Sessions, Disposal):
                 session_id=prepared.session.id,
                 turn_id=prepared.turn.id,
                 answer=answer,
-                session_dir=prepared.session.directory,
-                log_path=log_path(prepared.session.directory),
                 # Collected after the graph has finished, so it reflects what
                 # the turn actually left behind -- including what the shell
                 # wrote, which no file tool would have reported.
@@ -972,7 +1007,7 @@ class Kingfisher(Sessions, Disposal):
             return
         messages = snapshot.values.get("messages")
         if messages:
-            write_transcript(prepared.session.directory, runtime.as_transcript(messages))
+            write_transcript(prepared.harness, runtime.as_transcript(messages))
 
     def _settle_pause(self, prepared: Prepared, snapshot: Any) -> tuple[PendingDecision, ...]:
         """Keep a paused turn's graph state, or clear a pause this turn finished.
@@ -982,22 +1017,22 @@ class Kingfisher(Sessions, Disposal):
         refused, cut short at a bound -- and each of those is a turn that is no
         longer waiting, so each of them clears.
         """
-        directory = prepared.session.directory
+        harness = prepared.harness
         waiting = runtime.pending_in(snapshot) if snapshot is not None else ()
         if not waiting or prepared.saver is None:
             # Including the turn that was just resumed and ran to the end. A saver
             # this service did not open cannot be written out either -- an injected
             # store is the deployment's, and holding its state in a file of ours
             # would be a second copy nobody asked for.
-            clear_pause(directory)
+            clear_pause(harness)
             return ()
-        write_paused_state(prepared.saver, paused_path(directory))
+        harness.write(PAUSED_STATE, paused_state(prepared.saver))
         # The state first, then the mark. The mark is what every other path tests to
         # decide a session is waiting, so writing it second means a write that dies
         # between the two leaves a session that is simply not paused -- rather than
         # one that claims to be and has nothing to resume into.
         write_pause_mark(
-            directory,
+            harness,
             {
                 AGENT_MARK: prepared.agent_name or "",
                 PENDING_MARK: pending_as_mark(waiting),
@@ -1077,7 +1112,7 @@ class Kingfisher(Sessions, Disposal):
             finally:
                 # The slot goes back however the turn ended -- answered, refused
                 # mid-stream, or cut short by its deadline.
-                prepared.session.release(self.dirs, claim_path(prepared.session.directory))
+                prepared.files.release(CLAIM)
             # And so does the connection, when this service opened one. A
             # per-session database is a file descriptor per session, so a
             # process serving many would otherwise hold every one it touched.

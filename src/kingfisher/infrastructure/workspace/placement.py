@@ -1,19 +1,16 @@
-"""Copying a caller's files in: to a session's `/data`, or to one turn's input."""
+"""What copying a caller's files into a session's `/data` checks, and what it reports."""
 
 from __future__ import annotations
 
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from kingfisher.infrastructure.workspace.permissions import writable_data
-
 
 class DataError(ValueError):
-    """A caller-supplied file cannot be placed, in `/data` or in a turn's input."""
+    """A caller-supplied file cannot be placed in a session's `/data`."""
 
 
-def _checked(sources: tuple[Path, ...]) -> dict[str, Path]:
+def checked(sources: tuple[Path, ...]) -> dict[str, Path]:
     """Every source keyed by the name it will land under."""
     seen: dict[str, Path] = {}
     for source in sources:
@@ -38,20 +35,3 @@ class DataPlacement:
 
     placed: tuple[str, ...] = ()
     replaced: tuple[str, ...] = ()
-
-
-def place_data(sources: tuple[Path, ...], session_dir: Path) -> DataPlacement:
-    """Copy caller-supplied files into a session's `/data`, and re-harden it."""
-    if not sources:
-        return DataPlacement()
-
-    seen = _checked(sources)
-    existing = {p.name for p in (Path(session_dir) / "data").glob("*")}
-    with writable_data(session_dir) as data:
-        for name, source in seen.items():
-            shutil.copy(source, data / name)
-
-    return DataPlacement(
-        placed=tuple(seen),
-        replaced=tuple(name for name in seen if name in existing),
-    )

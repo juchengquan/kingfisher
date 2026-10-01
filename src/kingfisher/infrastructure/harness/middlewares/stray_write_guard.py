@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from pathlib import Path
 from typing import Any
 
 from deepagents.backends.utils import validate_path
@@ -11,19 +10,19 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
 from kingfisher.infrastructure.harness.host_paths import HOST_ROOTS
+from kingfisher.infrastructure.harness.session_paths import SessionPaths
 from kingfisher.layout import DERIVED_ROUTE, ROUTES, SCRATCH_ROUTE
 
 #: The tools that save a file the model names, and the argument naming it.
 SAVES = frozenset({"write_file", "edit_file"})
 
 
-def _is_host_path(path: str, session_dir: Path | None) -> bool:
-    """Whether `reject_host_path` will refuse this, with a correction of its own."""
-    if not path.startswith("/"):
-        return False
-    return path.startswith(HOST_ROOTS) or (
-        session_dir is not None and path.startswith(f"{session_dir}/")
-    )
+def _host_roots(paths: SessionPaths | None) -> tuple[str, ...]:
+    """Where a path is a host path, which the backend refuses with a correction of its
+    own: the host roots, and wherever the sessions are -- that is where the agent reads
+    one off `pwd` or `$TMPDIR`.
+    """
+    return (*HOST_ROOTS, *(paths.roots if paths is not None else ()))
 
 
 # On the model's save calls rather than in the backend, and that is the whole of why it
@@ -39,8 +38,8 @@ class StrayWriteGuard(AgentMiddleware):
     written, and handed its caller nothing.
     """
 
-    def __init__(self, session_dir: Path | None) -> None:
-        self._session_dir = session_dir
+    def __init__(self, paths: SessionPaths | None) -> None:
+        self._host = _host_roots(paths)
         super().__init__()
 
     def _refusal(self, request: Any) -> ToolMessage | None:
@@ -48,7 +47,7 @@ class StrayWriteGuard(AgentMiddleware):
         if call.get("name") not in SAVES:
             return None
         raw = (call.get("args") or {}).get("file_path")
-        if not isinstance(raw, str) or _is_host_path(raw, self._session_dir):
+        if not isinstance(raw, str) or raw.startswith(self._host):
             return None
         try:
             path = validate_path(raw)

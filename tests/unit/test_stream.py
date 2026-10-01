@@ -293,7 +293,7 @@ def test_run_is_a_drain_of_stream(cfg):
     )
 
     assert result.answer == "7"
-    assert result.session_dir.is_dir()
+    assert (cfg.workspace / "sessions" / result.session_id).is_dir()
     assert agent.config["configurable"]["thread_id"] == "drained"
 
 

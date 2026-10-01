@@ -26,37 +26,45 @@ other function.
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import PurePosixPath
 
-#: Read in chunks rather than whole. A line count is the one question you can
-#: answer without ever holding the file, and a tool that answered it by loading
-#: 2 GB into memory would be worse than the `read_file` it exists to avoid.
-CHUNK = 1 << 20
+from langchain.tools import ToolRuntime
+
+from kingfisher import ToolContext
 
 
-def line_count(path: str) -> str:
+def _fetched(runtime: ToolRuntime[ToolContext], file_path: str) -> bytes:
+    """The file's bytes, through the session's backend -- wherever that keeps them."""
+    (got,) = runtime.context.backend.download_files([file_path])
+    if got.error or got.content is None:
+        msg = f"{file_path}: {got.error or 'no content'}"
+        raise FileNotFoundError(msg)
+    return got.content
+
+
+def line_count(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     """Count the lines in a text file. Use before reading a file you expect to
     be long, so you can ask `read_file` for the part you want.
 
-    `path` is the same virtual path the file tools take -- `/data/<name>` --
-    rooted at this session. Kingfisher resolves it before this runs.
+    `file_path` is the same virtual path the file tools take -- `/data/<name>` --
+    rooted at this session, read through the session's backend.
 
     Reports the count and whether the last line ends in a newline, because a
     file's final line is the one a range read is most likely to get wrong.
     """
-    where = Path(path)
-    lines = 0
-    ended = True
-    with where.open("rb") as handle:
-        while chunk := handle.read(CHUNK):
-            lines += chunk.count(b"\n")
-            ended = chunk.endswith(b"\n")
+    # Whole, because a backend hands a file back whole: one that keeps the session
+    # elsewhere has no file here to stream from. What this still saves is the model's
+    # context, which is the cost it exists to avoid.
+    content = _fetched(runtime, file_path)
+    lines = content.count(b"\n")
+    ended = not content or content.endswith(b"\n")
     # A file with content and no trailing newline still has a last line; one
     # that is empty has none, and saying "1" for it would be a lie a range read
     # then trips over.
     if not ended:
         lines += 1
-    return f"{where.name}: {lines} line(s){'' if ended else ', no trailing newline'}"
+    name = PurePosixPath(file_path).name
+    return f"{name}: {lines} line(s){'' if ended else ', no trailing newline'}"
 
 
 TOOLS = [line_count]

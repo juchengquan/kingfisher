@@ -267,8 +267,13 @@ def test_the_log_tools_answer_from_a_log(shipped, tmp_path):
         encoding="utf-8",
     )
 
-    levels = tools["log_levels"].invoke({"path": str(app)})
-    codes = tools["status_codes"].invoke({"path": str(access)})
+    from deepagents.backends import FilesystemBackend
+
+    from tests.conftest import on_backend
+
+    here = FilesystemBackend(root_dir=tmp_path)
+    levels = on_backend(tools["log_levels"], here, file_path="/app.log")
+    codes = on_backend(tools["status_codes"], here, file_path="/access.log")
 
     assert "1 undated" in levels
     # Loudest first, which is what makes the answer a place to start reading.
@@ -684,11 +689,15 @@ def test_the_typed_presets_tool_reports_rather_than_repairs(shipped):
     assert unread.split() == ["'1.2'", repr("1.1\u0663.0")]
 
 
-def test_every_shipped_tool_taking_a_path_says_it_is_a_session_path(shipped):
-    """The convention, reversed once the mismatch it documented was removed."""
+def test_every_shipped_tool_naming_a_file_reads_it_through_the_backend(shipped):
+    """The examples are what a tool author copies, so they teach the route that works
+    on every backend: `file_path` and `runtime: ToolRuntime[ToolContext]`, never a
+    `path` handed over as a file on this host. And the docstring says it is the same
+    virtual path the file tools take, because the model reads the docstring.
+    """
     import ast
 
-    missing = []
+    wrong, named = [], 0
     for module in sorted(shipped.rglob("*.py")):
         if "__pycache__" in module.parts:
             continue
@@ -696,17 +705,18 @@ def test_every_shipped_tool_taking_a_path_says_it_is_a_session_path(shipped):
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            if node.name.startswith("_") or "path" not in {a.arg for a in node.args.args}:
+            arguments = {a.arg for a in node.args.args}
+            if node.name.startswith("_") or not arguments & {"path", "file_path"}:
                 continue
-            doc = ast.get_docstring(node) or ""
-            if "virtual path" not in doc:
-                missing.append(f"{module.relative_to(shipped)}:{node.name}")
+            named += 1
+            where = f"{module.relative_to(shipped)}:{node.name}"
+            if "path" in arguments or "runtime" not in arguments:
+                wrong.append(f"{where} takes a host file rather than reading the backend")
+            elif "virtual path" not in (ast.get_docstring(node) or ""):
+                wrong.append(f"{where} does not say `file_path` is a virtual path")
 
-    assert not missing, (
-        f"{missing} take a `path` and do not say it is the same virtual path the "
-        "file tools take. The model reads the docstring, so one that says otherwise "
-        "teaches it to go looking for a host path"
-    )
+    assert named >= 6, "no shipped tool names a file, so this checked nothing"
+    assert not wrong, wrong
 
 
 # -- the example nothing seeds ---------------------------------------------
@@ -1689,9 +1699,9 @@ def test_the_compaction_example_keeps_what_it_threw_away(shipped, cfg, session_d
     """
     import asyncio
 
-    from kingfisher.infrastructure.harness.backend import default_backend
+    from kingfisher.infrastructure.harness.backend import backend_at
 
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
     spec = LocalAgentRepository(shipped / "agents").specs["researcher"]
     cls = _compaction(shipped)
     # Its own `defaults`, the way the build path applies them. Values written here
@@ -1824,3 +1834,52 @@ def test_the_nested_agent_hands_the_compiled_delegate_its_own_grant(
     answering = delegates["show-your-work"]["runnable"].nodes["answer"].bound
     handed = set(answering.nodes["tools"].bound.tools_by_name)
     assert handed == {"log_levels", "status_codes", "line_count"}
+
+
+def test_every_shipped_file_tool_works_on_a_backend_with_nothing_on_this_host(shipped):
+    """What moving them to `ToolContext` was for: a deployment whose backend keeps its
+    sessions somewhere else still gets working examples. A backend that answers from
+    memory has no host path for a tool to open, so a tool that opened one fails here.
+    """
+    from deepagents.backends.protocol import BackendProtocol, FileDownloadResponse
+
+    from kingfisher.kinds.tools.catalogue import LocalToolRepository
+    from tests.conftest import on_backend
+
+    held = {
+        "/data/rows.csv": b"region,sales\nnorth,10\nsouth,\n",
+        "/data/app.log": b"2026-09-01T14:17:40 ERROR queue full\n",
+        "/data/access.log": b'1.2.3.4 - - [x] "GET / HTTP/1.1" 503 17\n',
+        "/data/config.ini": b"api_key = sk-live-123\n",
+    }
+
+    class Remote(BackendProtocol):
+        def download_files(self, paths):
+            return [
+                FileDownloadResponse(path=p, content=held.get(p), error=None)
+                if p in held
+                else FileDownloadResponse(path=p, content=None, error="file_not_found")
+                for p in paths
+            ]
+
+    found = {
+        one.name: one.tool
+        for root in (shipped / "tools", shipped / "subagents" / "redactor" / "tools")
+        for one in LocalToolRepository(root).found
+    }
+    asked = {
+        "line_count": "/data/rows.csv",
+        "csv_profile": "/data/rows.csv",
+        "csv_columns": "/data/rows.csv",
+        "log_levels": "/data/app.log",
+        "status_codes": "/data/access.log",
+        "mask_secrets": "/data/config.ini",
+    }
+
+    answers = {name: on_backend(found[name], Remote(), file_path=at) for name, at in asked.items()}
+
+    assert answers["line_count"].startswith("rows.csv: 3 line(s)")
+    assert "region" in answers["csv_columns"]
+    assert "ERROR 1" in answers["log_levels"]
+    assert "503: 1" in answers["status_codes"]
+    assert "sk-live-123" not in answers["mask_secrets"]

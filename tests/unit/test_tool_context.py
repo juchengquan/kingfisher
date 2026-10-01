@@ -11,20 +11,16 @@ from __future__ import annotations
 
 import asyncio
 import warnings
-from collections import deque
 from dataclasses import replace
-from typing import Any, ClassVar
+from typing import Any
 
 import pytest
 from deepagents import FilesystemPermission
 from deepagents.backends.protocol import BackendProtocol, SandboxBackendProtocol
 from langchain.agents import create_agent
-from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, ToolMessage
-from langchain_core.outputs import ChatGeneration, ChatResult
 
-from kingfisher import Kingfisher, ToolContext, default_backend
-from kingfisher.config import Adapter, Landing
+from kingfisher import Kingfisher, ToolContext, backend_at, default_backend
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Decision, Request, Resume
 from kingfisher.domain.result import AWAITING
@@ -33,7 +29,16 @@ from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
 from kingfisher.infrastructure.harness.tool_guards import guarded_tools
 from kingfisher.kinds.tools.catalogue import LocalToolRepository
-from tests.conftest import FakeToolCallingModel, an_agent, start, subagents_dir, tools_dir
+from kingfisher.layout import SCRATCH_ROUTE
+from tests.conftest import (
+    FakeToolCallingModel,
+    an_agent,
+    paths_in,
+    start,
+    subagents_dir,
+    tools_dir,
+)
+from tests.unit.scripted import Scripted
 
 KEY = "/derived/private/key.txt"
 OPEN = "/derived/open.txt"
@@ -51,7 +56,7 @@ def backend(cfg, session_dir):
     (session_dir / "derived" / "private").mkdir(parents=True)
     (session_dir / "derived" / "private" / "key.txt").write_text("needle: private\n")
     (session_dir / "derived" / "open.txt").write_text("needle: open\n")
-    return default_backend(cfg, session_dir)
+    return backend_at(cfg, session_dir)
 
 
 def _refusal(result: Any) -> str:
@@ -112,11 +117,12 @@ def test_a_listing_leaves_out_what_may_not_be_read(backend):
 
     # Each control is the bare backend answering with the private path, so a filter
     # that matched nothing -- a changed entry shape -- fails here rather than passing.
-    assert seen(backend.ls("/derived").entries) == [OPEN, "/derived/private/"]
+    # Every session holds its scratchpad in `/derived`, and nothing here refuses it.
+    assert seen(backend.ls("/derived").entries) == [OPEN, "/derived/private/", SCRATCH_ROUTE]
     assert seen(backend.glob("**/*.txt", "/derived").matches) == [OPEN, KEY]
     assert seen(backend.grep("needle", "/derived").matches) == [OPEN, KEY]
 
-    assert seen(handed.ls("/derived").entries) == [OPEN]
+    assert seen(handed.ls("/derived").entries) == [OPEN, SCRATCH_ROUTE]
     assert seen(handed.glob("**/*.txt", "/derived").matches) == [OPEN]
     assert seen(handed.grep("needle", "/derived").matches) == [OPEN]
     assert seen(handed.grep("needle").matches) == [OPEN], "no path named, and still filtered"
@@ -150,7 +156,10 @@ def test_a_rule_that_asks_a_person_is_a_refusal_here(backend, session_dir):
     handed = PermittedBackend(backend, [ask])
 
     assert handed.read(KEY).error == f"permission denied for read on {KEY}"
-    assert [one["path"] for one in handed.ls("/derived").entries or []] == [OPEN]
+    assert sorted(one["path"] for one in handed.ls("/derived").entries or []) == [
+        OPEN,
+        SCRATCH_ROUTE,
+    ]
     assert [one["path"] for one in handed.grep("needle", "/derived").matches or []] == [OPEN]
     assert "permission denied for write" in _refusal(handed.delete(KEY))
     assert (session_dir / "derived" / "private" / "key.txt").exists()
@@ -331,7 +340,7 @@ def test_the_async_calls_keep_the_same_rules(backend, session_dir):
     assert got["write"] == "permission denied for write on /derived/private/new.txt"
     assert got["edit"] == f"permission denied for write on {KEY}"
     assert "/derived/private/**" in got["delete"]
-    assert got["ls"] == [OPEN]
+    assert sorted(got["ls"]) == [OPEN, SCRATCH_ROUTE]
     inside = "permission denied for read on /derived/private/inner"
     assert (got["ls inside"], got["glob inside"], got["grep inside"]) == (inside,) * 3
     assert got["glob"] == [OPEN]
@@ -627,7 +636,7 @@ def test_the_wrapper_a_compiled_delegates_tools_wear_passes_the_runtime_on(cfg, 
     _a_tool(cfg)
     _notes(session_dir)
     (loaded,) = LocalToolRepository(tools_dir(cfg)).found
-    (wrapped,) = guarded_tools([loaded.tool], session_dir)
+    (wrapped,) = guarded_tools([loaded.tool], paths_in(session_dir))
     graph = create_agent(
         FakeToolCallingModel(
             responses=[_calls("first_line", file_path="/data/notes.txt"), AIMessage(content="ok")]
@@ -638,7 +647,7 @@ def test_the_wrapper_a_compiled_delegates_tools_wear_passes_the_runtime_on(cfg, 
 
     out = graph.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
-        context=ToolContext(backend=PermittedBackend(default_backend(cfg, session_dir), [])),
+        context=ToolContext(backend=PermittedBackend(backend_at(cfg, session_dir), [])),
     )
 
     (result,) = [m for m in out["messages"] if isinstance(m, ToolMessage)]
@@ -646,56 +655,6 @@ def test_the_wrapper_a_compiled_delegates_tools_wear_passes_the_runtime_on(cfg, 
 
 
 # -- the service ---------------------------------------------------------------
-
-
-class Scripted(BaseChatModel):
-    """A model the service builds for itself, from the catalogue row naming this class.
-
-    `Kingfisher` takes no model: it builds one per turn out of `cfg.models`. So a turn
-    whose graph kingfisher assembled -- the only kind that is driven with a context --
-    can be scripted only through the row. The script is on the class because a resume
-    is a second graph and a second instance, and has to carry on where the first
-    stopped.
-    """
-
-    model: str
-    base_url: str
-    api_key: str
-    max_tokens: int
-    timeout: float
-
-    script: ClassVar[deque[AIMessage]] = deque()
-
-    @property
-    def _llm_type(self) -> str:
-        return "scripted"
-
-    def bind_tools(self, tools, **kwargs):
-        return self
-
-    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-        return ChatResult(generations=[ChatGeneration(message=self.script.popleft())])
-
-
-@pytest.fixture
-def scripted(cfg):
-    """`cfg`, with every endpoint answered by `Scripted`."""
-    row = Adapter(
-        f"{__name__}:Scripted",
-        Landing(
-            model="model",
-            base_url="base_url",
-            api_key="api_key",
-            max_tokens="max_tokens",
-            timeout="timeout",
-        ),
-    )
-    endpoints = {
-        name: replace(endpoint, adapter=row) for name, endpoint in cfg.models.endpoints.items()
-    }
-    Scripted.script.clear()
-    yield replace(cfg, models=replace(cfg.models, endpoints=endpoints))
-    Scripted.script.clear()
 
 
 def _session(cfg) -> str:

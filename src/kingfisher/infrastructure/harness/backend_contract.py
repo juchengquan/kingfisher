@@ -20,6 +20,7 @@ from deepagents.backends.protocol import SandboxBackendProtocol
 
 from kingfisher.config import ConfigError
 from kingfisher.infrastructure.harness.host_paths import HostPathError
+from kingfisher.infrastructure.harness.permitted_backend import host_path
 from kingfisher.layout import denied_read_scopes, denied_scopes
 
 if TYPE_CHECKING:
@@ -126,6 +127,43 @@ def filesystem_consistency(make: Callable[[], Any]) -> None:
             raise AssertionError(msg)
 
 
+def shell_denied(make: Callable[[], Any]) -> None:
+    """The agent's shell may not write under `/.harness` or `/data`.
+
+    `/.harness` is what kingfisher reads back and trusts -- the pinned agent, the
+    conversation, a paused turn -- and `/data` is the caller's input, which the agent
+    is promised it cannot change. The file tools are refused both by the turn's
+    permissions; the shell bypasses those, so on any backend but kingfisher's own this
+    is the only thing that says the shell is refused too.
+
+    Driven through `execute` rather than read off the backend's configuration, and
+    both ways a shell writes: a new file, and over one kingfisher put there. The
+    second is the one a pinned agent is rewritten by.
+    """
+    backend = make()
+    if not _executes(backend):
+        return
+    token = uuid4().hex
+    written: list[str] = []
+    for route, what in (
+        ("/.harness", "what kingfisher reads back and trusts"),
+        ("/data", "the caller's input"),
+    ):
+        kept, fresh = f"{route}/{token}-kept", f"{route}/{token}-fresh"
+        backend.upload_files([(kept, b"as written")])
+        for path in (kept, fresh):
+            backend.execute(f"printf %s {token} > {path.lstrip('/')}")
+        after_kept, after_fresh = backend.download_files([kept, fresh])
+        if after_kept.content != b"as written" or after_fresh.error is None:
+            written.append(f"{route}, {what}")
+    if written:
+        msg = (
+            f"the shell wrote under {'; and under '.join(written)}. Each is only safe "
+            "where the backend keeps the shell out of it"
+        )
+        raise AssertionError(msg)
+
+
 def host_path_refusal(make: Callable[[], Any]) -> None:
     """Conditional on purpose: refusing host paths at all is kingfisher's policy, not
     an obligation a replacement inherits.
@@ -156,11 +194,13 @@ def host_path_refusal(make: Callable[[], Any]) -> None:
 
 #: Every check a backend a deployment's factory returned must pass, in the order a
 #: deployment wants to read them: the silent failure first, then the one that stops
-#: the graph building, then the promise the prompt makes, then the refusal.
+#: the graph building, then the promise the prompt makes, then what the shell must
+#: not write, then the refusal.
 BACKEND_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (
     execution_support,
     route_coverage,
     filesystem_consistency,
+    shell_denied,
     host_path_refusal,
 )
 
@@ -190,3 +230,124 @@ def refuse_unusable_backend(backend: Any) -> None:
         route_coverage(lambda: backend)
     except AssertionError as unusable:
         raise ConfigError(str(unusable)) from unusable
+
+
+#: Session ids the backends checks use. Two, because the property that matters most is
+#: that they do not collide.
+CONTRACT_SESSIONS = ("kingfisher-contract-a", "kingfisher-contract-b")
+
+
+def _ids(listing: Any) -> set[str]:
+    return {name for name, _ in listing}
+
+
+def a_session_asked_for_is_listed(make: Callable[[], Any]) -> None:
+    """`kingfisher sessions` and `reap` see what the listing says, and nothing else."""
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    backends(cfg, one)
+    if one not in _ids(backends.sessions(cfg)):
+        msg = f"a backend was built for {one!r}, and `sessions` does not list it"
+        raise AssertionError(msg)
+
+
+def two_sessions_are_kept_apart(make: Callable[[], Any]) -> None:
+    """The one that matters most. Every path is legal and each session reads the other's
+    files as its own, so nothing else would notice.
+    """
+    cfg, backends = make()
+    one, other = CONTRACT_SESSIONS
+    backends(cfg, one).upload_files([("/derived/kept-apart", b"one's")])
+    (seen,) = backends(cfg, other).download_files(["/derived/kept-apart"])
+    if seen.error is None:
+        msg = f"{other!r} reads {one!r}'s /derived: two sessions share one filesystem"
+        raise AssertionError(msg)
+
+
+def a_session_is_there_on_the_next_turn(make: Callable[[], Any]) -> None:
+    """Each turn builds its backend again. What one turn wrote, the next must find."""
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    backends(cfg, one).upload_files([("/derived/again", b"still here")])
+    (seen,) = backends(cfg, one).download_files(["/derived/again"])
+    if seen.content != b"still here":
+        msg = f"a second backend for {one!r} did not find what the first wrote: {seen!r}"
+        raise AssertionError(msg)
+
+
+def a_claim_is_exclusive(make: Callable[[], Any]) -> None:
+    """Two turns in one session share a conversation and the last write wins; the
+    claim is what refuses the second. A `write` that overwrites would let both take it.
+    """
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    first, second = backends(cfg, one), backends(cfg, one)
+    if not first.claim("contract-claim", stale_after=3600):
+        msg = "a claim nobody held was refused"
+        raise AssertionError(msg)
+    if second.claim("contract-claim", stale_after=3600):
+        msg = "a second backend for the same session took a claim the first still holds"
+        raise AssertionError(msg)
+    first.release("contract-claim")
+    if not second.claim("contract-claim", stale_after=3600):
+        msg = "a released claim could not be taken again"
+        raise AssertionError(msg)
+    second.release("contract-claim")
+
+
+def a_deleted_session_is_gone(make: Callable[[], Any]) -> None:
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    backends(cfg, one)
+    failure = backends.delete(cfg, one)
+    if failure is not None or one in _ids(backends.sessions(cfg)):
+        msg = f"deleting {one!r} answered {failure!r} and left it listed"
+        raise AssertionError(msg)
+
+
+def a_host_path_stays_in_its_session(make: Callable[[], Any]) -> None:
+    """Where a backend says a file is on this host, it is that session's file.
+
+    Asked the way a workspace tool's `path` is resolved -- a backend's own `host_path`,
+    or its routes -- because that answer is handed to a tool as a real file to open,
+    in kingfisher's own process and outside every fence. An answer pointing into
+    another session hands a tool that session's files. `None`, "not on this host", is
+    always allowed: the tool is refused and told to read through the backend instead.
+
+    Checked by reading what the answer names rather than by comparing paths, because
+    a backend answering from a mount knows its own layout and this does not.
+    """
+    cfg, backends = make()
+    one, other = CONTRACT_SESSIONS
+    mine, theirs = backends(cfg, one), backends(cfg, other)
+    mine.upload_files([("/derived/whose", f"{one}'s".encode())])
+    theirs.upload_files([("/derived/whose", f"{other}'s".encode())])
+    answered = host_path(mine, "/derived/whose")
+    if answered is None:
+        return
+    _, where = answered
+    try:
+        held = where.read_bytes()
+    except OSError as unreadable:
+        msg = f"{one!r}'s backend says /derived/whose is {where}, which cannot be read"
+        raise AssertionError(msg) from unreadable
+    if held != f"{one}'s".encode():
+        msg = (
+            f"{one!r}'s backend says /derived/whose is {where}, which holds {held!r}: "
+            "a tool handed that path opens a file that is not this session's"
+        )
+        raise AssertionError(msg)
+
+
+#: Every check a deployment's `SessionBackends` must pass. `make` returns a fresh
+#: `(Config, backends)` pair, because every question a backends object answers is
+#: about one deployment's sessions. These write files, as `filesystem_consistency`,
+#: `shell_denied` and `host_path_refusal` do.
+SESSION_BACKENDS_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (
+    two_sessions_are_kept_apart,
+    a_session_is_there_on_the_next_turn,
+    a_claim_is_exclusive,
+    a_session_asked_for_is_listed,
+    a_deleted_session_is_gone,
+    a_host_path_stays_in_its_session,
+)

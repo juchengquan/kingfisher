@@ -356,6 +356,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "middlewares": dict(found.middlewares),
         "middlewares_error": found.middlewares_error,
         "moved_tools": {k: list(v) for k, v in found.moved_tools.items()},
+        "moved_tools_checked": found.moved_tools_checked,
         "bundled_tools": {k: list(v) for k, v in found.bundled_tools.items()},
         "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
         "carried_bundles": list(found.carried_bundles),
@@ -364,6 +365,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "bundles_error": found.bundles_error,
         "orphaned_assets": list(found.orphaned_assets),
         "miscounted_bundles": dict(found.miscounted_bundles),
+        "miscounted_bundles_checked": found.miscounted_bundles_checked,
         # The vocabulary, or `null` where this deployment declares none. Who reaches
         # what is `audiences` below, keyed the way the definitions themselves are.
         "access": (

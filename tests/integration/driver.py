@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 # on an import that has not changed.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from evals.artifacts import load_result
+from evals.artifacts import RESULT, load_result
 from evals.checks import check_result
 from evals.seed import seed_sample_data, seed_sample_skill
 from evals.task import SMOKE_TASK
@@ -45,10 +45,9 @@ from kingfisher import (
 )
 from kingfisher.config import Config
 from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
-from kingfisher.domain.session import Session
-from kingfisher.infrastructure.harness.runlog import read_usage
+from kingfisher.domain.session import sessions_root
+from kingfisher.infrastructure.harness.runlog import usage_of
 from kingfisher.infrastructure.workspace import (
-    LocalSessionDirs,
     ensure_session_layout,
     is_new_workspace,
     seeding,
@@ -70,9 +69,19 @@ def _selection(value: str | None) -> tuple[str, ...] | None:
     return tuple(part.strip() for part in value.split(",") if part.strip())
 
 
-def _usage_summary(log_path: Path) -> str:
-    """Render what `read_usage` totalled."""
-    usage = read_usage(log_path)
+class _Recorded:
+    """The run's events, kept for the usage line at the end."""
+
+    def __init__(self) -> None:
+        self.events: list[Any] = []
+
+    def record(self, event: Any) -> None:
+        self.events.append(dict(event))
+
+
+def _usage_summary(events: list[Any]) -> str:
+    """Render what `usage_of` totalled."""
+    usage = usage_of(events)
     if not usage.calls:
         return "no model calls logged"
     share = "n/a" if usage.cached_share is None else f"{usage.cached_share:.0%}"
@@ -84,11 +93,10 @@ def _usage_summary(log_path: Path) -> str:
 
 def prepare_smoke(cfg: Config, workspace: Path, session_id: str) -> list[str]:
     """Put the smoke's fixtures where the agent will look for them."""
-    session = Session.open(workspace, session_id, LocalSessionDirs())
-    ensure_session_layout(session.directory)
+    directory = ensure_session_layout(sessions_root(workspace) / session_id)
 
     seeded = []
-    if seed_sample_data(session.directory):
+    if seed_sample_data(directory):
         seeded.append("dataset into /data")
     if cfg.skills_enabled and seed_sample_skill(workspace):
         seeded.append("skill into /skills")
@@ -331,11 +339,15 @@ def main(argv: list[str]) -> int:
     # printed again after the summary -- it arrived as it was written.
     # Deferred: this is the first thing that needs deepagents, and paths
     # that never get here (--help, --list, a bad .env) should not pay for it.
-    from kingfisher import stream
+    from kingfisher import Kingfisher, default_backend
 
     result = None
+    recorded = _Recorded()
+    # One service for the turn and for fetching what it wrote afterwards, which
+    # goes through the session's backend rather than a folder on this host.
+    kf = Kingfisher(cfg, backend=default_backend, run_events=recorded)
     try:
-        result = show(stream(request, cfg=cfg), sys.stdout)
+        result = show(kf.stream(request), sys.stdout)
     except CapabilityError as exc:
         # A named capability the workspace does not offer. Reported here rather
         # than as a traceback because it is a usage error, not a crash.
@@ -356,15 +368,16 @@ def main(argv: list[str]) -> int:
 
     print()
     print(f"session   : {result.session_id}")
-    print(f"directory : {result.session_dir}")
-    print(f"usage     : {_usage_summary(result.log_path)}")
+    print(f"usage     : {_usage_summary(recorded.events)}")
 
     for name in ("report.md", "result.json"):
-        path = result.session_dir / DERIVED / name
-        if path.exists():
-            print(f"{name:<12}: written  {path}")
+        kept = f"{DERIVED}/{name}"
+        if kept in result.artifacts:
+            print(f"{name:<12}: written  {kept}")
         elif is_smoke:
-            print(f"{name:<12}: MISSING  {path}")
+            print(f"{name:<12}: MISSING  {kept}")
+    if result.artifacts:
+        print(f"fetch with: kingfisher artifact --session {result.session_id} NAME")
 
     # Continuing this session is the next thing you will want, so say how.
     print(
@@ -380,7 +393,9 @@ def main(argv: list[str]) -> int:
 
     # The regression signal is the structured result, not the prose: two runs
     # on identical input rewrite the report entirely while the numbers hold.
-    payload = load_result(result.session_dir / DERIVED)
+    payload = load_result(
+        kf.artifact(result.session_id, RESULT) if RESULT in result.artifacts else None
+    )
     if payload is None:
         print("\nresult.json missing or unparseable — cannot check", file=sys.stderr)
         return 1

@@ -7,6 +7,8 @@ import platform
 import re
 from pathlib import Path
 
+import pytest
+
 from kingfisher import default_backend, seed
 from kingfisher.application.service import Kingfisher
 from kingfisher.presentation.cli import health
@@ -950,7 +952,7 @@ def test_a_memory_workspace_with_nowhere_to_keep_sessions_fails(cfg, monkeypatch
     check = {c.name: c for c in examine(cfg)}["sessions survive"]
 
     assert check.verdict == "fail"
-    assert "KINGFISHER_SESSION_STORE" in check.remedy
+    assert "KINGFISHER_BACKEND_FACTORY" in check.remedy
 
 
 def test_no_quota_fails_only_once_memory_is_shared(cfg, monkeypatch, tmp_path):
@@ -963,7 +965,7 @@ def test_no_quota_fails_only_once_memory_is_shared(cfg, monkeypatch, tmp_path):
         monkeypatch, filesystem="tmpfs", size_bytes=300 * 1024**2,
         limit_bytes=400 * 1024**2, swap_enabled=False,
     )
-    wired = replace(cfg, session_store=tmp_path / "kept", session_max_bytes=None)
+    wired = replace(cfg, backend_factory="mystores:build", session_max_bytes=None)
 
     check = {c.name: c for c in examine(wired)}["session quota"]
 
@@ -978,7 +980,7 @@ def test_a_quota_larger_than_the_filesystem_warns_that_it_cannot_bind(cfg, monke
         monkeypatch, filesystem="tmpfs", size_bytes=100 * 1024**2,
         limit_bytes=400 * 1024**2, swap_enabled=False,
     )
-    wired = replace(cfg, session_store=tmp_path / "kept", session_max_bytes=1024 * 1024**2)
+    wired = replace(cfg, backend_factory="mystores:build", session_max_bytes=1024 * 1024**2)
 
     check = {c.name: c for c in examine(wired)}["session quota"]
 
@@ -1171,3 +1173,51 @@ def test_a_supplied_local_runner_is_named_beside_the_mechanism():
 
     assert "sandbox-exec" in said
     assert "supplied runner" in said
+
+
+# -- a check that could not run is not a check that passed -------------------
+
+
+def _broken(cfg, where: str) -> None:
+    """A working bundled delegate, with one file broken in the place `where` names."""
+    from tests.unit.test_bundles import BROKEN, OWN_TOOL_ONLY, workspace_with_bundle
+
+    workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
+    subagents = cfg.workspace / "subagents"
+    target, text = {
+        "the delegate's own tool": (subagents / "surveyor" / "tools" / "probe.py", BROKEN),
+        "a catalogue tool": (cfg.workspace / "tools" / "shared.py", BROKEN),
+        "a subagent file": (subagents / "bad.yaml", "name: [\n"),
+    }[where]
+    target.write_text(text, encoding="utf-8")
+
+
+#: Which of the two checks each breakage stops, and which it leaves able to run.
+#: Measured rather than reasoned: a broken catalogue tool sets the bundles' error too,
+#: and the folder check still runs -- so `doctor` cannot infer "not checked" from the
+#: other rows' errors, and each of these says what it actually did.
+STOPPED_BY = {
+    "the delegate's own tool": {"bundled entries": "warn", "tool references": "ok"},
+    "a catalogue tool": {"bundled entries": "ok", "tool references": "warn"},
+    "a subagent file": {"bundled entries": "warn", "tool references": "warn"},
+}
+
+
+@pytest.mark.parametrize("where", sorted(STOPPED_BY))
+def test_a_check_that_could_not_run_says_so_rather_than_passing(cfg, where):
+    """Both read a catalogue, and both answered "ok" when it would not load: an empty
+    result reads the same as a clean one. With a delegate's tool broken, `doctor` said
+    `bundled entries: ok -- every delegate lists exactly its own folder` for a folder
+    it never read.
+
+    The `ok` cells are the control -- a check that said "not checked" whenever
+    anything at all was broken would pass every `warn` here.
+    """
+    _broken(cfg, where)
+
+    verdicts = {check.name: check for check in examine(cfg)}
+
+    for name, expected in STOPPED_BY[where].items():
+        assert verdicts[name].verdict == expected, (name, verdicts[name].detail)
+        if expected == "warn":
+            assert verdicts[name].detail.startswith("not checked"), name

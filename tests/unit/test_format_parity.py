@@ -6,6 +6,7 @@ in either file. These tests hold the two readers to that.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -50,6 +51,111 @@ REQUIRED = frozenset(yaml.safe_load(HEAD))
 #: constant defined for a test is what `test_nothing_is_defined_for_tests_alone`
 #: exists to refuse.
 FOLDED_INTO = {"model": "wanted"}
+
+
+#: The fields every definition must carry, and the value each is given where a rule is
+#: not blanking or dropping it.
+FULL = {"name": "n", "description": "d", "system_prompt": "Go."}
+
+
+def _as_document(written: Mapping[str, str]) -> str:
+    """Only the keys given, with the prompt as a literal block.
+
+    Built key by key rather than dumped from a dict so a rule can leave one out, and
+    the prompt written `|` because a plain scalar is refused on its own -- that refusal
+    would stand in for the one being measured.
+    """
+    lines = [
+        f"system_prompt: |\n  {value}" if key == "system_prompt" else f"{key}: {value}"
+        for key, value in written.items()
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _a_build(model, tools):
+    """Never called: `declared` only checks that `build` can be."""
+    return object()
+
+
+def _agent_document(written: Mapping[str, str]) -> AgentSpec:
+    return agents.read(DefinitionText(_as_document(written), Path("a.yaml")))
+
+
+def _subagent_document(written: Mapping[str, str]) -> SubagentSpec:
+    return a_subagent(_as_document(written), "s.yaml")
+
+
+def _portable_declaration(written: Mapping[str, str]) -> SubagentSpec:
+    return subagent_spec.declared(dict(written), "p.py")
+
+
+def _compiled_declaration(written: Mapping[str, str]) -> SubagentSpec:
+    return subagent_spec.declared({**written, "build": _a_build}, "c.py")
+
+
+#: Every reader a definition enters through, with the fields it must carry and the error
+#: it raises. Four, where `FORMATS` above has the two documents: a subagent may also be
+#: declared in Python, with a `build` or without. The compiled one takes no
+#: `system_prompt` -- its instruction is inside the graph it brings, so the key is
+#: refused rather than required -- and it is where the check went missing: it refused a
+#: *missing* `name` and accepted a blank one, which the three beside it refused.
+READERS = {
+    "agent document": (_agent_document, ("name", "description", "system_prompt"), AgentError),
+    "subagent document": (
+        _subagent_document,
+        ("name", "description", "system_prompt"),
+        SubagentError,
+    ),
+    "portable declaration": (
+        _portable_declaration,
+        ("name", "description", "system_prompt"),
+        SubagentError,
+    ),
+    "compiled declaration": (_compiled_declaration, ("name", "description"), SubagentError),
+}
+
+
+def _cases() -> list[tuple[str, str]]:
+    """Every reader paired with each field it requires."""
+    return [(name, field) for name, (_r, required, _e) in READERS.items() for field in required]
+
+
+@pytest.mark.parametrize(("reader", "field_name"), _cases())
+def test_a_required_field_present_but_blank_is_refused(reader, field_name):
+    """Written and left empty is a different mistake from never written, and every reader
+    has to say so -- otherwise a definition is built around a field nothing filled.
+
+    Driven over all four because of the compiled declaration: it checked presence alone,
+    so `{"name": "", "description": "", "build": f}` was accepted where the portable
+    reader in the same file refused exactly that. deepagents was handed a delegate with
+    no name to dispatch on and no description for the parent model to choose on, and
+    `kingfisher list` exited zero over a line reading `(surveyor.py)  [compiled] — `.
+    """
+    read, required, error = READERS[reader]
+    written = {key: FULL[key] for key in required} | {field_name: ""}
+
+    with pytest.raises(error, match="empty"):
+        read(written)
+
+
+@pytest.mark.parametrize(("reader", "field_name"), _cases())
+def test_a_required_field_never_written_is_refused_as_missing(reader, field_name):
+    """The other half, worded differently on purpose: "missing" sends somebody looking
+    for a line they can see they wrote, which is the wrong hunt.
+    """
+    read, required, error = READERS[reader]
+    written = {key: FULL[key] for key in required if key != field_name}
+
+    with pytest.raises(error, match="missing"):
+        read(written)
+
+
+@pytest.mark.parametrize("reader", sorted(READERS))
+def test_every_reader_accepts_a_definition_with_nothing_wrong(reader):
+    """The control the two rules above need: a reader that refused everything passes both."""
+    read, required, _error = READERS[reader]
+
+    assert read({key: FULL[key] for key in required}).name == "n"
 
 
 @pytest.mark.parametrize("kind", sorted(FORMATS))

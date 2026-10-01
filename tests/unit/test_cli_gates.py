@@ -54,6 +54,7 @@ def _args(**over: Any) -> argparse.Namespace:
 def _drive(monkeypatch, result: RunResult) -> None:
     """Run the command's ending against a result, with nothing real behind it."""
     monkeypatch.setattr(cli, "config_from_env", object)
+    monkeypatch.setattr("kingfisher.application.run.configured_backend", lambda cfg: None)
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Nothing())
     monkeypatch.setattr(cli, "show", lambda *a, **k: result)
 
@@ -161,6 +162,7 @@ def test_the_three_decisions_reach_the_library_as_written(monkeypatch):
             return iter(())
 
     monkeypatch.setattr(cli, "config_from_env", object)
+    monkeypatch.setattr("kingfisher.application.run.configured_backend", lambda cfg: None)
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Recording())
 
     cli._decide(
@@ -183,15 +185,14 @@ def test_deciding_nothing_shows_what_is_waiting(cfg, monkeypatch, capsys):
     way into the session is a turn and a turn is what discards the gate.
     """
     from kingfisher.infrastructure.session_store import pending_as_mark, write_pause_mark
-    from tests.conftest import start
+    from tests.conftest import harness_of, start
 
     start(cfg, "s-1")
     write_pause_mark(
-        cfg.workspace / "sessions" / "s-1",
+        harness_of(cfg, "s-1"),
         {"pending": pending_as_mark([PAUSED.pending[0]])},
     )
     monkeypatch.setattr(cli, "config_from_env", lambda: cfg)
-    monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Held(cfg))
 
     code = cli._decide(_decide_args())
 
@@ -210,7 +211,6 @@ def test_asking_a_session_that_is_not_waiting_says_so(cfg, monkeypatch, capsys):
 
     start(cfg, "s-1")
     monkeypatch.setattr(cli, "config_from_env", lambda: cfg)
-    monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Held(cfg))
 
     code = cli._decide(_decide_args())
 
@@ -222,19 +222,11 @@ def test_asking_about_a_session_that_does_not_exist_says_that_instead(
     cfg, monkeypatch, capsys
 ):
     monkeypatch.setattr(cli, "config_from_env", lambda: cfg)
-    monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Held(cfg))
 
     code = cli._decide(_decide_args(session="never-opened"))
 
     assert code == 2
     assert "no such session" in capsys.readouterr().err
-
-
-class _Held:
-    """Enough of a service to be asked where its workspace is."""
-
-    def __init__(self, cfg: Any) -> None:
-        self.workspace = cfg.workspace
 
 
 def test_the_whole_loop_runs_through_the_command(cfg, session_dir, monkeypatch, capsys):
@@ -250,7 +242,7 @@ def test_the_whole_loop_runs_through_the_command(cfg, session_dir, monkeypatch, 
     from langchain_core.messages import AIMessage
     from langgraph.checkpoint.memory import InMemorySaver
 
-    from kingfisher import Kingfisher, Request, default_backend
+    from kingfisher import Kingfisher, Request, backend_at
     from tests.conftest import FakeToolCallingModel
 
     graph = create_deep_agent(
@@ -269,7 +261,7 @@ def test_the_whole_loop_runs_through_the_command(cfg, session_dir, monkeypatch, 
                 AIMessage(content="written"),
             ]
         ),
-        backend=default_backend(cfg, session_dir),
+        backend=backend_at(cfg, session_dir),
         tools=None,
         interrupt_on={"write_file": True},
         checkpointer=InMemorySaver(),

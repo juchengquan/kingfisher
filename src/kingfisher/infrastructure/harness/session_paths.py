@@ -6,7 +6,6 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
-from kingfisher.domain.references import UnsafeReferenceError, within
 from kingfisher.infrastructure.harness.host_paths import HOST_ROOTS, HostPathError
 
 #: Which arguments name a file. The convention this repository already keeps --
@@ -46,18 +45,21 @@ class SessionPaths:
     middleware to attach. A second `real` written for the second place is the copy
     that drifts, and the escape it stops resolving would not be visible in either
     file.
+
+    Holds the turn's backend under the turn's rules, not a session directory. The
+    directory was a second copy of the backend's own path mapping, and it drifted:
+    it handed a tool `/skills` files that do not exist, `/.harness` files the file
+    tools are refused, and on a backend keeping sessions elsewhere a local path to
+    nothing.
     """
 
-    def __init__(self, session_dir: Path) -> None:
-        self.session_dir = Path(session_dir)
-        # The directory this session's siblings are in, spelled both ways. In a
-        # container the workspace is `/workspace`, which no host root names, and
-        # another session is one directory over from this one.
-        siblings = self.session_dir.parent
-        self._refused = (
-            *NOT_FOR_TOOLS,
-            *{f"{root}/" for root in (str(siblings), str(siblings.resolve()))},
-        )
+    def __init__(self, permitted: Any, sessions: Path) -> None:
+        self._permitted = permitted
+        # Where every session is, spelled both ways. In a container the workspace is
+        # `/workspace`, which no host root names, and another session is one
+        # directory over from this one.
+        self.roots = tuple({f"{root}/" for root in (str(sessions), str(Path(sessions).resolve()))})
+        self._refused = (*NOT_FOR_TOOLS, *self.roots)
 
     def host_path_in(self, args: Mapping[str, Any]) -> str | None:
         """The first host path in an argument that is not `path`, or `None`."""
@@ -78,28 +80,10 @@ class SessionPaths:
         return {**args, **{key: self.real(value) for key, value in wanted.items()}}
 
     def real(self, value: Any) -> Any:
-        """One argument, resolved against the session the way a file tool would."""
+        """One argument, resolved where the session's backend keeps it."""
         if not isinstance(value, str) or not value.strip():
             return value
-        landed = within(self.session_dir, value.lstrip("/"))
-        # The second check `within` tells adapters to do, and it is not optional here:
-        # that one is lexical, on purpose, because the domain may not touch the
-        # filesystem -- and a session directory is one the agent can write to. `execute`
-        # is rooted there, so it can make a symlink pointing out, hand a tool the
-        # virtual path to it, and be read the target.
-        #
-        # Measured before this existed: a link at `/derived/link.txt` pointing at
-        # another session returned `TENANT-A-PRIVATE` through a tool, while `read_file`
-        # refused the same path. deepagents resolves and compares; this had only half of
-        # that.
-        real = landed.resolve()
-        if not real.is_relative_to(self.session_dir.resolve()):
-            msg = (
-                f"reference {value!r} resolves outside this session; a link inside it "
-                "does not widen it"
-            )
-            raise UnsafeReferenceError(msg)
-        return str(real)
+        return str(self._permitted.on_this_host(value))
 
 
 def refusal_text(escaped: ValueError) -> str:

@@ -16,13 +16,15 @@ from kingfisher.application.service import Kingfisher
 from kingfisher.config import Config
 from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
-from kingfisher.infrastructure.harness.backend import default_backend
+from kingfisher.infrastructure.harness.backend import SessionBackends, default_backend
+from kingfisher.infrastructure.wiring import store_named
 
 __all__ = [
     "Kingfisher",
     "Request",
     "RunEvent",
     "RunResult",
+    "configured_backend",
     "normalize_answer",
     "run",
     "stream",
@@ -30,7 +32,12 @@ __all__ = [
 
 
 def _service(
-    cfg: Config | None, graph: Any, backend: Any, checkpointer: Any, dirs: Any
+    cfg: Config | None,
+    *,
+    graph: Any,
+    backend: Any,
+    checkpointer: Any,
+    run_events: Any,
 ) -> Kingfisher:
     return Kingfisher(
         cfg,
@@ -41,7 +48,7 @@ def _service(
         # this helper exists to spare them.
         backend=None if graph is not None else backend,
         threads=checkpointer,
-        dirs=dirs,
+        run_events=run_events,
     )
 
 
@@ -54,10 +61,16 @@ def stream(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
     graph: Any | None = None,
     backend: Any = default_backend,
     checkpointer: Any | None = None,
-    dirs: Any | None = None,
+    run_events: Any | None = None,
 ) -> Iterator[RunEvent]:
     """Run one task, yielding progress as it happens."""
-    return _service(cfg, graph, backend, checkpointer, dirs).stream(request)
+    return _service(
+        cfg,
+        graph=graph,
+        backend=backend,
+        checkpointer=checkpointer,
+        run_events=run_events,
+    ).stream(request)
 
 
 def run(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
@@ -69,7 +82,27 @@ def run(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
     graph: Any | None = None,
     backend: Any = default_backend,
     checkpointer: Any | None = None,
-    dirs: Any | None = None,
+    run_events: Any | None = None,
 ) -> RunResult:
     """Run one task to completion and return where its outputs landed."""
-    return _service(cfg, graph, backend, checkpointer, dirs).run(request)
+    return _service(
+        cfg,
+        graph=graph,
+        backend=backend,
+        checkpointer=checkpointer,
+        run_events=run_events,
+    ).run(request)
+
+
+def configured_backend(cfg: Config) -> SessionBackends:
+    """The backends `KINGFISHER_BACKEND_FACTORY` names, or `default_backend`.
+
+    For the command line, which builds its own `Kingfisher` and has nowhere else to be
+    told. Without it, `kingfisher sessions` and `reap` would list and delete a local
+    `sessions/` while a deployment's own backend keeps them somewhere else.
+    """
+    if cfg.backend_factory is None:
+        return default_backend
+    return store_named(
+        cfg.backend_factory, setting="KINGFISHER_BACKEND_FACTORY", port=SessionBackends
+    )

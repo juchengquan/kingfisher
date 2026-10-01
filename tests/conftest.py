@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import fields
+from dataclasses import fields, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -12,9 +12,10 @@ import yaml
 from dotenv import load_dotenv
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
-from kingfisher.config import Config, Endpoint, ModelProfile, Models
+from kingfisher.config import Adapter, Config, Endpoint, Landing, ModelProfile, Models, SessionKey
 from kingfisher.infrastructure.harness.models import ADAPTERS
 from kingfisher.infrastructure.workspace import ensure_layout, ensure_session_layout
+from tests.unit.scripted import Scripted
 
 if TYPE_CHECKING:
     # Type-only, and deliberately: naming the record at runtime would pull
@@ -31,6 +32,40 @@ class FakeToolCallingModel(FakeMessagesListChatModel):
         return self
 
 
+@pytest.fixture
+def scripted(cfg):
+    """`cfg`, with every endpoint answered by `Scripted`."""
+    row = Adapter(
+        f"{Scripted.__module__}:Scripted",
+        Landing(
+            model="model",
+            base_url="base_url",
+            api_key="api_key",
+            max_tokens="max_tokens",
+            timeout="timeout",
+        ),
+    )
+    endpoints = {
+        name: replace(endpoint, adapter=row) for name, endpoint in cfg.models.endpoints.items()
+    }
+    Scripted.script.clear()
+    yield replace(cfg, models=replace(cfg.models, endpoints=endpoints))
+    Scripted.script.clear()
+
+
+class RecordedEvents:
+    """A `RunEvents` that keeps what it is handed, for a test to read back."""
+
+    def __init__(self) -> None:
+        self.events: list[dict[str, Any]] = []
+
+    def record(self, event) -> None:
+        self.events.append(dict(event))
+
+    def named(self, name: str) -> list[dict[str, Any]]:
+        return [event for event in self.events if event["event"] == name]
+
+
 class StubCheckpointer:
     """Records thread deletions so the sweep can be asserted on."""
 
@@ -39,14 +74,6 @@ class StubCheckpointer:
 
     def delete_thread(self, thread_id: str) -> None:
         self.deleted.append(thread_id)
-
-
-@pytest.fixture
-def dirs():
-    """The real `SessionDirs`."""
-    from kingfisher.infrastructure.workspace import LocalSessionDirs
-
-    return LocalSessionDirs()
 
 
 @pytest.fixture
@@ -153,6 +180,11 @@ def models_file(workspace: Path) -> Path:
     return path
 
 
+#: The key every test deployment signs with. A test about running without one builds
+#: its own `Config`, because that is the case a deployment has to arrive at on purpose.
+TEST_KEY = SessionKey(b"k" * 32)
+
+
 @pytest.fixture
 def cfg(workspace):
     return Config(
@@ -160,6 +192,7 @@ def cfg(workspace):
         models=FAKE_CATALOGUE,
         turn_timeout_s=3600,
         execution_timeout_s=30,
+        session_key=TEST_KEY,
     )
 
 
@@ -191,6 +224,60 @@ def start(cfg, session_id: str) -> str:
     return session_id
 
 
+def harness_of(cfg, session_id: str):
+    """What kingfisher keeps about a session, as a test reads and writes it: signed with
+    `cfg`'s key, so what a test puts there is what a turn would have.
+    """
+    from kingfisher.infrastructure.harness.session_files import HarnessFiles, local_files
+
+    return HarnessFiles(
+        local_files(cfg.workspace / "sessions" / session_id), session_id, cfg.session_key
+    )
+
+
+def harness_in(session_dir: Path, key: SessionKey | None = TEST_KEY):
+    """The same, for a session directory a test already holds -- including one a
+    `SessionRoot` put somewhere other than under the workspace.
+    """
+    from kingfisher.infrastructure.harness.session_files import HarnessFiles, local_files
+
+    return HarnessFiles(local_files(session_dir), Path(session_dir).name, key)
+
+
+def paths_in(session_dir: Path):
+    """What a tool's paths mean in a session kept in this directory, under the rules
+    every turn starts from -- the `SessionPaths` a build hands its tool guards.
+    """
+    from kingfisher.infrastructure.harness.agent import read_only_permissions
+    from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
+    from kingfisher.infrastructure.harness.session_files import local_files
+    from kingfisher.infrastructure.harness.session_paths import SessionPaths
+
+    under_rules = PermittedBackend(local_files(session_dir), read_only_permissions())
+    return SessionPaths(under_rules, Path(session_dir).parent)
+
+
+def on_backend(tool, backend, **args):
+    """Call a tool that reads through `runtime.context.backend`, handed `backend`.
+
+    The function under the decorator, called directly: a test of what a tool does
+    with a file wants the tool and a backend, not a graph to dispatch it.
+    """
+    from langchain.tools import ToolRuntime
+
+    from kingfisher import ToolContext
+
+    runtime = ToolRuntime(
+        state={},
+        context=ToolContext(backend=backend),
+        config={},
+        stream_writer=lambda _: None,
+        tool_call_id="t",
+        store=None,
+    )
+    return getattr(tool, "func", tool)(**args, runtime=runtime)
+
+
 def pin(kf, session_id: str, name: str) -> None:
     """Fix a session's agent before it has run, the way its first turn would.
 
@@ -202,7 +289,7 @@ def pin(kf, session_id: str, name: str) -> None:
     from kingfisher.infrastructure.workspace import remember_agent
 
     document = kf.catalogue.agents.documents[name]
-    remember_agent(kf.workspace / "sessions" / session_id, document)
+    remember_agent(harness_of(kf.cfg, session_id), document)
 
 
 def a_subagent(text: str, name: str) -> SubagentSpec:

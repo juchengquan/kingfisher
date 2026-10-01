@@ -1350,6 +1350,10 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
             "interpreter",
             "runlog",
             "runtime",
+            # A session's files, reached through the backend the turn runs on,
+            # which is a deepagents object: placing a caller's data, collecting
+            # what the turn left and fetching one of those files.
+            "session_files",
         }
     ),
     # The disposal half of `service`, which took this edge with it: reaping a
@@ -1745,6 +1749,14 @@ WITNESSES: dict[str, str] = {
     "SessionBusyError": "embedder",
     "SubagentError": "embedder",
     "UnknownSessionError": "embedder",
+    # What `Kingfisher.artifact` raises for a name that is not an artifact, which a
+    # caller fetching by a name it was handed tells apart from a session it cannot
+    # reach.
+    "ArtifactError": "embedder",
+    # What a turn raises when what kingfisher kept about the session is not what it
+    # wrote. Not the caller's doing, like `SessionBusyError`, and like it the one
+    # answer a caller acts on differently: the session is done, start another.
+    "SessionTamperedError": "embedder",
     # `README.md` opens on these four and the package docstring on `run`. A
     # reader who copied either is owed them.
     "definitions_source": "document",
@@ -1758,15 +1770,10 @@ WITNESSES: dict[str, str] = {
     # that page was edited.
     "UNSCOPED": "document",
     "RunOn": "document",
-    # `guides/ports.md` writes `from kingfisher import SESSION_STORE_CONTRACT` --
-    # a deployment runs it against a store of its own, so it exists for nobody
-    # else.
-    "SESSION_STORE_CONTRACT": "document",
-    # The other two kits, and the type a runner returns. The same page writes
-    # all three; `CommandResult` is the one that would have been missed, because
+    # The runner's kit, and the type a runner returns. `guides/ports.md` writes
+    # both; `CommandResult` is the one that would have been missed, because
     # nothing *imports* it in a snippet -- a runner's `run` returns one, so a
     # deployment cannot write the port without it and had no public spelling.
-    "SESSION_ROOT_CONTRACT": "document",
     "COMMAND_RUNNER_CONTRACT": "document",
     # The same page writes `from kingfisher import BACKEND_CONTRACT`, beside the
     # seam it is the way to check. Nothing in this repository runs it against a
@@ -1800,10 +1807,12 @@ WITNESSES: dict[str, str] = {
     "Origin": "embedder",
     # The streaming half of `run`, which is documented; the two are one decision.
     "stream": "embedder",
-    # A directory of sessions, and the port it satisfies. The subject of a
-    # standing proposal about deployments naming their own store, which is a
-    # reason to leave it reachable while that argument is live.
-    "LocalSessionStore": "embedder",
+    # `guides/ports.md` shows a deployment building on the default by subclassing
+    # it, and building a backend for a directory of its own with `backend_at`, and
+    # checking what it wrote with the kit beside `BACKEND_CONTRACT`.
+    "DefaultBackend": "document",
+    "backend_at": "document",
+    "SESSION_BACKENDS_CONTRACT": "document",
 }
 
 
@@ -2204,6 +2213,9 @@ SDK_LOADING: frozenset[str] = frozenset({
     "kingfisher.infrastructure.harness.declared_middleware",
     "kingfisher.infrastructure.harness.runlog",
     "kingfisher.infrastructure.harness.runtime",
+    # Builds `local_files`, a `CompositeBackend`, for a graph kingfisher did not
+    # build. Imported by `service` alone, which already pays for `backend`.
+    "kingfisher.infrastructure.harness.session_files",
     "kingfisher.infrastructure.harness.subagents",
     # The application layer's half: what a turn needs on the way to running one. Each
     # is imported by `service` and by nothing else, so being heavy costs no caller that
@@ -2322,19 +2334,19 @@ LIGHT_EXPORTS = frozenset({
     "PendingDecision", "Resume", "Decision",
     # The errors a caller must tell apart. Public so a consumer outside the package can
     # catch them by name -- the server being the first such consumer.
-    "CapabilityError", "DecisionError", "QuotaExceededError", "SessionBusyError",
-    "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
+    "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError",
+    "SessionBusyError", "SessionTamperedError", "SubagentError", "UnknownSessionError",
+    "UnsafeReferenceError",
     # The `SessionStore` contract, for a deployment checking its own adapter.
     # Light, and it has to stay light: a deployment runs this from its own test
     # suite, and a kit that pulled three provider SDKs in to check four methods
     # over bytes would be a cost paid on every CI run for nothing. `testing`
-    # imports `domain.references` and the standard library, and no test
-    # framework either -- see its docstring for why that one is deliberate.
-    "SESSION_STORE_CONTRACT",
-    # The remaining two kits and the result type a runner builds. Light by the
-    # same route: `testing` reaches `domain.references` and the standard
-    # library, and `CommandResult` is a frozen dataclass in `domain.ports`.
-    "SESSION_ROOT_CONTRACT", "COMMAND_RUNNER_CONTRACT", "CommandResult",
+    # imports the standard library and no test framework either -- see its
+    # docstring for why that one is deliberate.
+    # The runner's kit and the result type a runner builds. Light by the same
+    # route: `testing` reaches the standard library, and `CommandResult` is a
+    # frozen dataclass in `domain.ports`.
+    "COMMAND_RUNNER_CONTRACT", "CommandResult",
     "ensure_layout", "config_from_env",
     # What a `KINGFISHER_ADAPTERS_FACTORY` returns. Light because the setting is read
     # by `config_from_env`, and a row names its class as a string for exactly this.
@@ -2356,11 +2368,6 @@ LIGHT_EXPORTS = frozenset({
     # -- paying for three provider SDKs to find out where `skills/` goes would
     # be the wrong shape entirely.
     "paths_from_env", "WorkspacePaths",
-    # How `decide` answers "what is this session waiting on?" without starting a
-    # turn. Light, and it has to stay light for the same reason `paths_from_env`
-    # does: reading a file a pause already wrote should not load an agent runtime,
-    # and asking what is pending must not be the thing that supersedes it.
-    "read_pause_mark", "pending_from_mark",
     # Seeding, and asking what a workspace offers. Measured at 21-50ms and 148-192
     # modules with no SDK loaded -- heavier than `system_prompt` at 90, because `yaml`
     # and `importlib.metadata` come with them, and nowhere near the 3,100 a provider
@@ -2376,9 +2383,6 @@ LIGHT_EXPORTS = frozenset({
     # this one is asked by `doctor`, by a listing, and by anybody debugging a
     # definition that will not load.
     "Origins", "Origin",
-    # A directory of sessions, and the port it satisfies. Neither imports
-    # anything a deployment does not already have -- see `session_store`.
-    "LocalSessionStore",
     # Reads `/proc/mounts` and two cgroup files. Nothing imported, and
     # all-`None` off Linux rather than an error.
     "memory_backing",
@@ -2391,11 +2395,6 @@ LIGHT_EXPORTS = frozenset({
     # `<workspace>/sessions`. A `Path` join in `domain.session`, which reaches
     # `domain.ports` and the standard library.
     "sessions_root",
-    # What one session holds, which `sessions` puts in a column beside it. A
-    # tree walk in `infrastructure.workspace.sessions`, which reaches `shutil`,
-    # `domain.session` and `layout` -- no provider SDK anywhere near it, and the
-    # alternative was the command counting bytes its own way.
-    "session_bytes",
     # A renderer and a sentence. Both are what a consumer needed and neither
     # imports anything -- the cheapest names on this list.
     "offered", "SKILL_LAYOUT", "DEFINITION_KINDS", "SEED_HINT", "split_reference",
@@ -2421,6 +2420,12 @@ LIGHT_EXPORTS = frozenset({
     # Reaching it costs nothing; calling it may write a sandbox profile,
     # which is the same light-to-reach / heavy-to-call split `inventory` has.
     "shell_confinement", "Confinement",
+    # What `doctor` and `key` ask about a session key: whether this host's sandbox
+    # makes one unnecessary, which key is set, and how long one must be. `doctor` is
+    # meant to run where a turn would not, so asking must not load the agent runtime
+    # -- which is why the sandbox half of the rule lives beside `shell_confinement`
+    # rather than beside the backend it is about.
+    "harness_unfenced", "key_id", "SESSION_KEY_MIN_BYTES",
     # Light only while `host_paths` names no runtime class. `HostPathGuard` is the
     # langchain half of that mechanism and lives with the rest of the middleware;
     # defined beside the error it catches, it made raising the error cost 250ms and
@@ -2441,6 +2446,13 @@ HEAVY_EXPORTS = frozenset({
     # rather than at the top of `health`, where every other verb would pay it.
     "unrunnable_delegates",
     "Kingfisher", "run", "stream",
+    # The default's class and its per-directory builder, and the command line's way to
+    # the backends a setting names: all three are the backend module, which is
+    # deepagents by definition, as `default_backend` below is.
+    "DefaultBackend", "backend_at", "configured_backend",
+    # Its companion kit checks what a deployment's backends build, which are backends
+    # deepagents has to accept.
+    "SESSION_BACKENDS_CONTRACT",
     # The one kit that is heavy, and unavoidably: the other four describe ports a
     # deployment satisfies without knowing deepagents exists, and this one checks
     # an object deepagents has to accept.
@@ -3046,8 +3058,9 @@ def test_every_record_this_package_hands_out_is_frozen():
 
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
-    "CapabilityError", "DecisionError", "QuotaExceededError", "SessionBusyError",
-    "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
+    "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError",
+    "SessionBusyError", "SessionTamperedError", "SubagentError", "UnknownSessionError",
+    "UnsafeReferenceError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.

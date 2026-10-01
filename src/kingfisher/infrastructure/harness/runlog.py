@@ -1,24 +1,30 @@
-"""Local-only structured run log."""
+"""What a turn did, as events handed to the deployment's `RunEvents`."""
 
 from __future__ import annotations
 
 import json
+import logging
 import time
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
 
 from kingfisher.infrastructure.harness import runtime
-from kingfisher.layout import HARNESS, RUNLOG
 
 MODEL_CALL = "model_call"
+
+#: Where `LoggedRunEvents` writes, and so where a deployment that wired nothing finds
+#: its run events: one JSON line per event, at INFO.
+RUN_LOGGER = "kingfisher.run"
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class Usage:
-    """What a session's model calls cost, read back from its log."""
+    """What a run's model calls cost, totalled from its events."""
 
     calls: int
     input_tokens: int
@@ -31,67 +37,66 @@ class Usage:
         return self.cache_read / self.input_tokens if self.input_tokens else None
 
 
-def read_usage(path: Path) -> Usage:
-    """Total the model calls in one session's log. Absent or unreadable, zero."""
-    if not path.is_file():
-        return Usage(calls=0, input_tokens=0, output_tokens=0, cache_read=0)
-
-    records = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:  # a torn final line; the rest still counts
-            continue
-        if record.get("event") == MODEL_CALL:
-            records.append(record)
-
+def usage_of(events: Iterable[Mapping[str, Any]]) -> Usage:
+    """Total the model calls among these events."""
+    calls = [e for e in events if e.get("event") == MODEL_CALL]
     return Usage(
-        calls=len(records),
-        input_tokens=sum(r.get("input_tokens", 0) for r in records),
-        output_tokens=sum(r.get("output_tokens", 0) for r in records),
-        cache_read=sum(r.get("cache_read", 0) for r in records),
+        calls=len(calls),
+        input_tokens=sum(e.get("input_tokens", 0) for e in calls),
+        output_tokens=sum(e.get("output_tokens", 0) for e in calls),
+        cache_read=sum(e.get("cache_read", 0) for e in calls),
     )
 
 
-def log_path(session_dir: Path) -> Path:
-    """One log per session, inside the session.
+class LoggedRunEvents:
+    """`RunEvents` into the `kingfisher.run` logger, which is where a deployment that
+    wired nothing finds them.
 
-    It was `<state_dir>/runs/<id>.jsonl`, where nothing deleted it when the
-    session went: a workspace kept one per session that had ever existed. Inside,
-    `reap` takes it with the rest and `session_bytes` counts what it costs.
-
-    Under `.harness` rather than in the scratchpad, which the agent writes to --
-    and what a turn spent is not the agent's to edit.
+    The event travels as `extra={"run_event": ...}` as well as the message, so a
+    handler that ships structured records has the mapping rather than a string to
+    parse back. Serialised only when the logger would emit it: the default Python
+    configuration drops INFO, and a turn should not pay to format lines nobody keeps.
     """
-    return Path(session_dir) / HARNESS / RUNLOG
+
+    def __init__(self, logger: logging.Logger | None = None) -> None:
+        self._logger = logger or logging.getLogger(RUN_LOGGER)
+
+    def record(self, event: Mapping[str, object]) -> None:
+        if self._logger.isEnabledFor(logging.INFO):
+            self._logger.info(
+                "%s",
+                json.dumps(event, ensure_ascii=False, default=str),
+                extra={"run_event": dict(event)},
+            )
 
 
-class JsonlRunLogger(BaseCallbackHandler):
-    """Writes one JSON object per line for each model call and tool call."""
+class RunLogger(BaseCallbackHandler):
+    """Turns one turn's model and tool callbacks into events for a `RunEvents`."""
 
-    def __init__(self, path: Path, *, model: str, endpoint: str, session_id: str) -> None:
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._model = model
-        self._endpoint = endpoint
-        self._session_id = session_id
+    def __init__(
+        self, sink: Any, *, model: str, endpoint: str, session_id: str, turn_id: str
+    ) -> None:
+        self._sink = sink
+        self._stamp = {
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "model": model,
+            "endpoint": endpoint,
+        }
 
     def _write(self, event: str, **fields: Any) -> None:
-        record = {
-            "ts": time.time(),
-            "session_id": self._session_id,
-            "event": event,
-            "model": self._model,
-            "endpoint": self._endpoint,
-            **fields,
-        }
-        with self.path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        try:
+            self._sink.record({"ts": time.time(), "event": event, **self._stamp, **fields})
+        except Exception:  # noqa: BLE001 -- the sink is the deployment's code, and
+            # any failure of it is one a turn must outlive: `run_start` and `run_end`
+            # are called from kingfisher's own turn, where langchain's own guard
+            # around callbacks does not reach.
+            _log.warning("a RunEvents sink failed to record %r", event, exc_info=True)
 
     # -- lifecycle ---------------------------------------------------------
 
-    def run_start(self, task: str, run_dir: str) -> None:
-        self._write("run_start", run_dir=run_dir, task=task)
+    def run_start(self, task: str) -> None:
+        self._write("run_start", task=task)
 
     def run_end(self, *, ok: bool, answer_chars: int) -> None:
         self._write("run_end", ok=ok, answer_chars=answer_chars)

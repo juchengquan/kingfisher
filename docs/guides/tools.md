@@ -56,7 +56,12 @@ trigger condition and say what the arguments mean in a caller's words.
 either:
 
 ```python
-def line_count(path: str) -> str:
+from langchain.tools import ToolRuntime
+
+from kingfisher import ToolContext
+
+
+def line_count(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     """Count the lines in a text file. Use before reading a file you expect to
     be long, so you can ask `read_file` for the part you want."""
     ...
@@ -250,16 +255,29 @@ rather than read.
 
 The model knows files by the paths the file tools take — `/data/report.csv`,
 `/derived/summary.md` — and never by where they sit on the host. Name the
-argument `path` and the tool is handed the real file inside this session: a path
-that climbs out with `..` is refused, and so is a link inside the session pointing
-out of it. Say in the docstring that it is the same virtual path the file tools
-take, because the docstring is what the model reads.
+argument `path` and the tool is handed the real file, resolved where the session's
+backend keeps it: `/data/report.csv` and `/skills/report/template.md` are the files
+`read_file` would read. Say in the docstring that it is the same virtual path the
+file tools take, because the docstring is what the model reads.
+
+Three things are refused, each as a failed result the model can read:
+
+- **A path the turn may not read**, as `read_file` refuses it. `/.harness` is never
+  handed to a tool — a tool runs in kingfisher's own process, outside every sandbox,
+  and could otherwise read or rewrite the agent the session is pinned to.
+- **A path that resolves out of where it is kept**, through `..` or a link the
+  agent made inside the session.
+- **A path the backend does not keep on this host.** A backend running somewhere
+  else has no real file to hand over; a tool taking
+  `runtime: ToolRuntime[ToolContext]`, below, works on any backend. A backend that
+  is not kingfisher's can still keep its files here — a directory of its own, a
+  network mount — and say so with `host_path`; [`ports.md`](ports.md) is its side.
 
 **Only `path` is translated.** An argument with any other name reaches the tool as
 written, so a tool calling its file `input_file` is handed `/data/report.csv`
 literally and does not find it. One kind of string is refused in every argument: a
 host path — under `/Users/`, `/home/`, `/tmp/`, `/proc/` and the other roots a
-file tool refuses, or under the directory this session's neighbours are in --
+file tool refuses, or under the directory every session is in --
 comes back to the model as a failed tool result instead of reaching the tool.
 
 That refusal is not a boundary, and the section after next is why. A tool is
@@ -269,9 +287,11 @@ all.
 
 ## Or the tool is handed the session's filesystem
 
-`path` gives a tool one real file. A tool that wants more — to list a folder,
-search it, write its result beside its input — asks for the filesystem the file
-tools themselves use, and works in the paths the model already writes:
+`path` gives a tool one real file, and only where the backend keeps it on this
+host. A tool that wants more — to list a folder, search it, write its result
+beside its input, or to work on any backend at all — asks for the filesystem the
+file tools themselves use, and works in the paths the model already writes. Every
+shipped tool is written this way, because the examples are what gets copied:
 
 ```python
 from langchain.tools import ToolRuntime
@@ -312,12 +332,12 @@ host.
 rather than the backend itself. deepagents applies a turn's permissions inside
 `read_file` and `write_file`, not in the backend under them, so a tool handed the
 backend bare would write into `/skills` — the catalogue every session shares — and
-read the run log under `/.harness`, for a model that was refused both. Through the
+read the conversation under `/.harness`, for a model that was refused both. Through the
 wrapper the same paths are refused the same way:
 
 | Asked for | Comes back as |
 | --- | --- |
-| a path the turn may not read or write | the result's `error` — `permission denied for read on /.harness/run.jsonl` |
+| a path the turn may not read or write | the result's `error` — `permission denied for read on /.harness/transcript.jsonl` |
 | a path that climbs out with `..` | the result's `error`, the same way |
 | `ls`, `glob` or `grep` over a folder | the entries that may be read, and no sign of the rest |
 | `delete` on a folder | refused if anything under it may not be written, not only the folder |

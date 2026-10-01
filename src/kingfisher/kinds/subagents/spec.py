@@ -308,6 +308,25 @@ NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
 )
 
 
+def _require(entry: Mapping[str, object], *names: str, source: str) -> None:
+    """The fields a Python declaration must carry, present and not blank.
+
+    One body for both shapes rather than the check written at each: the compiled branch
+    had only the presence half, so an entry writing `"name": ""` was accepted where the
+    portable reader beside it refused exactly that.
+
+    Absent and blank stay different messages: "missing" sends somebody looking for a
+    line they can see they wrote, which is the wrong hunt.
+    """
+    for required in names:
+        if required not in entry:
+            msg = f"{source}: {EXPORT} entry is missing {required!r}"
+            raise SubagentError(msg)
+        if not fields.text(entry[required]):
+            msg = f"{source}: {EXPORT} entry has {required!r} present but empty"
+            raise SubagentError(msg)
+
+
 def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     """One entry of a module's `SUBAGENTS` into the spec kingfisher works with.
 
@@ -338,11 +357,10 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         )
         raise SubagentError(msg)
 
-    # `build` is not among them: whether it is there is what chose this branch.
-    for required in ("name", "description"):
-        if required not in entry:
-            msg = f"{source}: {EXPORT} entry is missing {required!r}"
-            raise SubagentError(msg)
+    # `build` is not among them: whether it is there is what chose this branch, and a
+    # `system_prompt` is refused above -- a compiled delegate's instruction is inside
+    # the graph it brings.
+    _require(entry, "name", "description", source=source)
 
     build = entry["build"]
     if not callable(build):
@@ -400,13 +418,7 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
         )
         raise SubagentError(msg)
 
-    for required in ("name", "description", "system_prompt"):
-        if required not in entry:
-            msg = f"{source}: {EXPORT} entry is missing {required!r}"
-            raise SubagentError(msg)
-        if not fields.text(entry[required]):
-            msg = f"{source}: {EXPORT} entry has {required!r} present but empty"
-            raise SubagentError(msg)
+    _require(entry, "name", "description", "system_prompt", source=source)
 
     read = fields.Reader(source=source, error=SubagentError)
     return SubagentSpec(

@@ -63,9 +63,9 @@ DATA = "data"
 DERIVED = "derived"
 MEMORY = "memory"
 #: Where the agent works, and the one part of `/derived` that is never returned to
-#: the caller or saved -- inside it so that what the agent makes has one folder.
-#: Swept with the session, not the turn: a later turn on this host may find what an
-#: earlier one left, and one restored on another host will not.
+#: the caller -- inside it so that what the agent makes has one folder. Swept with
+#: the session, not the turn: a later turn may find what an earlier one left, and
+#: nothing promises it.
 #:
 #: No leading dot, though one would keep it out of `ls /derived`. The agent types
 #: this name, and a name it is meant to type has no business being hidden from it.
@@ -77,8 +77,8 @@ SESSION_DIRS: tuple[str, ...] = (DATA, DERIVED, MEMORY, SCRATCH)
 SKILLS = "skills"
 
 #: What the harness keeps about a session, inside the session and out of the
-#: agent's reach: the agent it opened with, its conversation, the lock a turn
-#: holds, and its run log. Every one of these used to live under `state_dir`,
+#: agent's reach: the agent it opened with, its conversation and the lock a turn
+#: holds. Every one of these used to live under `state_dir`,
 #: where nothing deleted it when the session went and nothing counted it against
 #: the session that caused it -- one file per session that ever existed, kept
 #: forever. Inside, `reap` and `session_bytes` cover them the way they already
@@ -95,7 +95,6 @@ HARNESS = ".harness"
 PINNED_AGENT = "agent.yaml"
 TRANSCRIPT_FILE = "transcript.jsonl"
 CLAIM = "claim"
-RUNLOG = "runlog.jsonl"
 #: Written only by a turn that stopped at an approval gate, and deleted the moment
 #: one is answered or superseded. Its presence *is* the mark that a session is
 #: waiting -- a second file saying so is a second thing to keep in step, and the

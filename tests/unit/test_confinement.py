@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher.domain.ports import CommandResult
-from kingfisher.infrastructure.harness.backend import default_backend
+from kingfisher.infrastructure.harness.backend import backend_at
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.sandbox.bubblewrap import BubblewrapRunner
 from kingfisher.infrastructure.sandbox.fence import LandlockRunner
@@ -137,7 +137,7 @@ def test_the_shell_cannot_read_a_secret_outside_the_workspace(cfg, session_dir, 
     secret = Path.home() / ".kingfisher-confinement-probe"
     secret.write_text("token", encoding="utf-8")
     try:
-        backend = default_backend(cfg, session_dir)
+        backend = backend_at(cfg, session_dir)
         result = backend.execute(f"cat {secret}")
 
         assert "token" not in str(result.output), "the shell read a file in the home"
@@ -154,7 +154,7 @@ def test_the_async_path_is_confined_too(cfg, session_dir):
     secret = Path.home() / ".kingfisher-confinement-probe-async"
     secret.write_text("token", encoding="utf-8")
     try:
-        backend = default_backend(cfg, session_dir)
+        backend = backend_at(cfg, session_dir)
         result = asyncio.run(backend.aexecute(f"cat {secret}"))
 
         assert "token" not in str(result.output), "aexecute read a file in the home"
@@ -186,7 +186,7 @@ class Elsewhere(Recorder):
 def test_a_runner_that_is_not_here_gets_the_command_unwrapped(cfg, session_dir):
     """A confinement is a command prefix naming paths on *this* host."""
     runner = Elsewhere()
-    backend = default_backend(cfg, session_dir, runner=runner)
+    backend = backend_at(cfg, session_dir, runner=runner)
     backend.default.confinement = replace(
         backend.default.confinement, wrap=lambda c: f"fenced({c})"
     )
@@ -218,7 +218,7 @@ def test_a_runner_that_says_nothing_keeps_the_fence(cfg, session_dir):
     # against the protocol, so an object without it is exactly the duck-typed
     # case the safe default exists for -- and the only way to reach that case is
     # to pass something the checker refuses.
-    backend = default_backend(cfg, session_dir, runner=runner)  # ty: ignore[invalid-argument-type]
+    backend = backend_at(cfg, session_dir, runner=runner)  # ty: ignore[invalid-argument-type]
     backend.default.confinement = replace(
         backend.default.confinement, wrap=lambda c: f"fenced({c})"
     )
@@ -249,7 +249,7 @@ def test_a_runner_that_says_nothing_is_confined_here(cfg, session_dir):
 
     # `ty: ignore` for the reason the sibling above gives: the duck-typed runner is
     # the whole case, and the checker refuses one without `local`.
-    backend = default_backend(cfg, session_dir, runner=SaysNothing())  # ty: ignore[invalid-argument-type]
+    backend = backend_at(cfg, session_dir, runner=SaysNothing())  # ty: ignore[invalid-argument-type]
     confined = backend.default.confinement
 
     assert confined.elsewhere is False, "a runner that said nothing was read as remote"
@@ -265,7 +265,7 @@ def test_a_runner_that_says_it_is_elsewhere_is_taken_at_its_word(cfg, session_di
         def run(self, command, *, timeout=None):
             return CommandResult(output="", exit_code=0)
 
-    confined = default_backend(cfg, session_dir, runner=SaysRemote()).default.confinement
+    confined = backend_at(cfg, session_dir, runner=SaysRemote()).default.confinement
 
     assert confined.elsewhere is True
     assert confined.supplied is True
@@ -274,7 +274,7 @@ def test_a_runner_that_says_it_is_elsewhere_is_taken_at_its_word(cfg, session_di
 def test_a_runner_is_given_the_command_already_confined(cfg, session_dir):
     """Applying the confinement stays on this side of the seam."""
     runner = Recorder()
-    backend = default_backend(cfg, session_dir, runner=runner)
+    backend = backend_at(cfg, session_dir, runner=runner)
     backend.default.confinement = replace(
         backend.default.confinement, wrap=lambda c: f"fenced({c})"
     )
@@ -286,7 +286,7 @@ def test_a_runner_is_given_the_command_already_confined(cfg, session_dir):
 
 def test_what_a_runner_returns_reaches_the_model(cfg, session_dir):
     """The seam is only useful if the result travels."""
-    backend = default_backend(cfg, session_dir, runner=Recorder(output="elsewhere", exit_code=3))
+    backend = backend_at(cfg, session_dir, runner=Recorder(output="elsewhere", exit_code=3))
 
     result = backend.execute("whoami")
 
@@ -302,7 +302,7 @@ def test_the_only_runner_kingfisher_builds_for_itself_is_a_fence(cfg, session_di
     runner built here is a fence, and where the platform has no fence there is no
     runner at all.
     """
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
 
     runner = backend.default.runner
     assert runner is None or isinstance(runner, (LandlockRunner, BubblewrapRunner)), (
@@ -318,7 +318,7 @@ def test_the_async_path_reaches_a_runner_too(cfg, session_dir):
     here instead.
     """
     runner = Recorder()
-    backend = default_backend(cfg, session_dir, runner=runner)
+    backend = backend_at(cfg, session_dir, runner=runner)
 
     asyncio.run(backend.aexecute("echo hi"))
 
@@ -333,7 +333,7 @@ def test_the_async_path_still_routes_through_execute(cfg, session_dir):
     `aexecute` is `asyncio.to_thread(self.execute, ...)`.
     """
     seen: list[str] = []
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
     shell = backend.default
     shell.confinement = replace(shell.confinement, wrap=lambda c: (seen.append(c), c)[1])
 
@@ -350,7 +350,7 @@ def test_the_workspace_itself_stays_fully_usable(cfg, session_dir):
     """Confinement that broke the agent's own working directory would be swapped
     straight back out.
     """
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
     backend.write("/derived/note.txt", "hello")
 
     result = backend.execute("cat derived/note.txt")
@@ -363,7 +363,7 @@ def test_the_workspace_itself_stays_fully_usable(cfg, session_dir):
 @needs_a_real_toolchain
 def test_python_still_runs_with_its_dependencies(cfg, session_dir):
     """The whole point of the re-allowed roots."""
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
 
     result = backend.execute('python3 -c "import yaml; print(\'deps ok\')"')
 
@@ -374,7 +374,7 @@ def test_python_still_runs_with_its_dependencies(cfg, session_dir):
 @macos
 def test_a_command_with_shell_metacharacters_still_runs_confined(cfg, session_dir):
     """The agent's command is quoted into the outer `sandbox-exec` invocation."""
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
 
     piped = backend.execute("echo 'a b' | tr ' ' '-'")
     assert piped.exit_code == 0
@@ -393,7 +393,7 @@ def test_off_really_does_leave_the_shell_open(cfg, session_dir):
     secret = Path.home() / ".kingfisher-confinement-probe-off"
     secret.write_text("token", encoding="utf-8")
     try:
-        backend = default_backend(replace(cfg, shell_sandbox=confinement.OFF), session_dir)
+        backend = backend_at(replace(cfg, shell_sandbox=confinement.OFF), session_dir)
 
         assert "token" in str(backend.execute(f"cat {secret}").output)
     finally:
@@ -407,7 +407,7 @@ def test_off_really_does_leave_the_shell_open(cfg, session_dir):
 def test_the_shell_cannot_write_outside_the_workspace(cfg, session_dir):
     """`system.md` says to stop and report rather than reach outside the workspace."""
     target = Path.home() / ".kingfisher-write-probe"
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
     try:
         result = backend.execute(f"echo pwned > {target}")
 
@@ -421,7 +421,7 @@ def test_the_shell_cannot_write_outside_the_workspace(cfg, session_dir):
 def test_a_literal_tmp_write_is_refused(cfg, session_dir):
     """The prompt says to write scratch under `$TMPDIR`, never a literal `/tmp`."""
     target = Path("/tmp/kingfisher-write-probe")
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
     try:
         backend.execute(f"echo pwned > {target}")
 
@@ -435,7 +435,7 @@ def test_installing_into_the_environment_is_refused(cfg, session_dir):
     """Two `pip install` attempts in one observed run."""
     import sys
 
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
     probe = Path(sys.prefix) / "kingfisher-write-probe"
     # Cleaned in `finally` because the interesting runs are the ones where the
     # write *succeeds*: without this, a failing assertion leaves a file in the
@@ -459,7 +459,7 @@ def test_tmpdir_is_writable_inside_the_session(cfg, session_dir):
     writable set for that reason. Inside the session, it is covered by the
     workspace allow the profile already emits.
     """
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
 
     result = backend.execute('echo hi > "$TMPDIR/note.txt" && cat "$TMPDIR/note.txt"')
 
@@ -470,7 +470,7 @@ def test_tmpdir_is_writable_inside_the_session(cfg, session_dir):
 @macos
 def test_redirecting_to_dev_null_still_works(cfg, session_dir):
     """It appears in about half the commands an agent writes."""
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
 
     result = backend.execute("echo noise 2>/dev/null && echo ok")
 
@@ -484,7 +484,7 @@ def test_the_agent_can_still_write_everything_it_is_meant_to(cfg, session_dir):
     half of the bargain: `/derived` survives the turn, the working-files directory
     holds scratch, and both are the agent's to write.
     """
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
 
     for command in (
         "echo kept > derived/report.md",
@@ -507,7 +507,7 @@ def test_a_catalogue_deployed_outside_the_workspace_stays_readable(cfg, session_
     (catalogue / "demo" / "run.sh").write_text("echo from-the-catalogue\n")
     try:
         relocated = replace(cfg, skills_root=catalogue, skills_enabled=True)
-        backend = default_backend(relocated, session_dir)
+        backend = backend_at(relocated, session_dir)
 
         result = backend.execute('sh "$KINGFISHER_SKILLS/demo/run.sh"')
 
@@ -539,7 +539,7 @@ def test_the_shell_can_walk_into_a_workspace_that_lives_in_the_home(cfg, workspa
     """Denying the home as a subpath denies the way *in* to the workspace too."""
     session = ensure_session_layout(workspace_in_the_home / "sessions" / "s")
     (session / SCRATCH / "t001").mkdir(parents=True)
-    backend = default_backend(replace(cfg, workspace=workspace_in_the_home), session)
+    backend = backend_at(replace(cfg, workspace=workspace_in_the_home), session)
 
     result = backend.execute(f"cd {SCRATCH} && pwd")
 
@@ -555,7 +555,7 @@ def test_walking_in_does_not_open_the_home_it_walks_through(cfg, workspace_in_th
     session = ensure_session_layout(workspace_in_the_home / "sessions" / "s")
     secret = Path.home() / ".kingfisher-traversal-probe"
     secret.write_text("token", encoding="utf-8")
-    backend = default_backend(replace(cfg, workspace=workspace_in_the_home), session)
+    backend = backend_at(replace(cfg, workspace=workspace_in_the_home), session)
     try:
         read = backend.execute(f"cat {secret}")
         listing = backend.execute(f"ls {Path.home()}")
@@ -649,7 +649,7 @@ def test_a_supplied_runner_that_is_not_here_stops_the_confinement_claiming(cfg, 
     with no wrap applied, and the `Confinement` still reported
     `mechanism='sandbox-exec'` and `confined=True`.
     """
-    backend = default_backend(cfg, session_dir, runner=Elsewhere())
+    backend = backend_at(cfg, session_dir, runner=Elsewhere())
     confined = backend.default.confinement
 
     assert not confined.confined, "nothing this process applies reaches the command"
@@ -660,7 +660,7 @@ def test_a_supplied_runner_that_is_not_here_stops_the_confinement_claiming(cfg, 
 
 def test_a_supplied_runner_that_is_here_keeps_the_mechanism_and_adds_itself(cfg, session_dir):
     """The other case, and it is not the same fact."""
-    backend = default_backend(cfg, session_dir, runner=Recorder())
+    backend = backend_at(cfg, session_dir, runner=Recorder())
     confined = backend.default.confinement
 
     assert confined.supplied
@@ -669,7 +669,7 @@ def test_a_supplied_runner_that_is_here_keeps_the_mechanism_and_adds_itself(cfg,
 
 def test_no_supplied_runner_says_nothing_new(cfg, session_dir):
     """The case every existing deployment is in."""
-    assert not default_backend(cfg, session_dir).default.confinement.supplied
+    assert not backend_at(cfg, session_dir).default.confinement.supplied
 
 
 # -- saying so --------------------------------------------------------------
@@ -682,7 +682,7 @@ def test_an_unconfined_shell_is_warned_about_when_its_backend_is_built(cfg, sess
     exists, not that anything says it.
     """
     with pytest.warns(UserWarning, match="unconfined"):
-        default_backend(replace(cfg, shell_sandbox=confinement.OFF), session_dir)
+        backend_at(replace(cfg, shell_sandbox=confinement.OFF), session_dir)
 
 
 def test_the_warning_is_said_once_however_many_places_build_a_backend(cfg, session_dir):
@@ -694,8 +694,8 @@ def test_the_warning_is_said_once_however_many_places_build_a_backend(cfg, sessi
     off = replace(cfg, shell_sandbox=confinement.OFF)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("default")
-        default_backend(off, session_dir)
-        default_backend(off, session_dir)
+        backend_at(off, session_dir)
+        backend_at(off, session_dir)
 
     assert len([w for w in caught if "unconfined" in str(w.message)]) == 1
 
@@ -711,7 +711,7 @@ def test_a_shell_confined_elsewhere_is_not_warned_about(cfg, session_dir, mode, 
     """
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        default_backend(replace(cfg, shell_sandbox=mode), session_dir, runner=runner)
+        backend_at(replace(cfg, shell_sandbox=mode), session_dir, runner=runner)
 
     assert not [w for w in caught if "unconfined" in str(w.message)]
 
@@ -729,7 +729,7 @@ def test_the_shell_cannot_write_into_a_definition_root(cfg, session_dir):
         # fixture's layout, and that vacuity was real: dropping the protection
         # entirely left this parametrisation green for `agents`.
         root.mkdir(parents=True, exist_ok=True)
-        backend = default_backend(cfg, session_dir)
+        backend = backend_at(cfg, session_dir)
         target = root / "written-by-the-agent"
 
         backend.execute(f'printf x > "{target}"')
@@ -746,7 +746,7 @@ def test_a_definition_root_stays_readable(cfg, session_dir):
         root = cfg.catalogue_roots[kind]
         root.mkdir(parents=True, exist_ok=True)
         (root / "readable.txt").write_text("from the catalogue\n", encoding="utf-8")
-        backend = default_backend(cfg, session_dir)
+        backend = backend_at(cfg, session_dir)
 
         result = backend.execute(f'cat "{root / "readable.txt"}"')
 
@@ -757,7 +757,7 @@ def test_a_definition_root_stays_readable(cfg, session_dir):
 @macos
 def test_the_rest_of_the_workspace_is_still_writable(cfg, session_dir):
     """The bound on the rule."""
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
     target = cfg.workspace / "ordinary-work.txt"
 
     backend.execute(f'printf x > "{target}"')
@@ -824,7 +824,7 @@ def test_the_shell_cannot_change_the_files_a_deployment_authors(cfg, session_dir
         written.write_text("as written\n", encoding="utf-8")
     source_ids.unlink(missing_ok=True)
     scratch = session_dir / "derived" / "swap"
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
 
     for target in (models, beside):
         backend.execute(f'printf x > "{target}"')
@@ -902,7 +902,7 @@ def test_the_shell_cannot_rewrite_the_profile_it_runs_under(cfg, session_dir):
             'printf x > "{beside}"; mv "{beside}" "{profile}"',
         ]:
         profile = confinement.profile_path(cfg.workspace)
-        backend = default_backend(cfg, session_dir)
+        backend = backend_at(cfg, session_dir)
         before = profile.read_text(encoding="utf-8")
 
         backend.execute(how.format(profile=profile, beside=cfg.workspace / "beside.sb"))
@@ -918,7 +918,7 @@ def test_the_home_stays_denied_after_a_shell_tries_to_open_it(cfg, session_dir):
     """The consequence, not the mechanism: what the escape was *for*."""
     secret = Path.home() / ".kingfisher-profile-probe"
     secret.write_text("PRIVATE", encoding="utf-8")
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
     try:
         profile = confinement.profile_path(cfg.workspace)
         backend.execute(f'printf "(version 1)\\n(allow default)\\n" > "{profile}"')

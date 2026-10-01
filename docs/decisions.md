@@ -24,7 +24,7 @@ lines apart.
 |---|---|
 | **What a deployment authors** | [The definition format](#the-definition-format) · [The catalogue](#the-catalogue) · [Agents and delegation](#agents-and-delegation) · [Packaging](#packaging-where-the-definitions-live) |
 | **What a request may do** | [Capabilities](#capabilities) · [Source-id access](#source-id-access) · [Models and endpoints](#models-and-endpoints) |
-| **What a run meets** | [What a tool returns](#what-a-tool-returns) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) |
+| **What a run meets** | [What a tool returns](#what-a-tool-returns) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) · [A session is its backend](#a-session-is-its-backend) · [A tool's path is the backend's path](#a-tools-path-is-the-backends-path) |
 | **The surfaces** | [The command line](#the-command-line) · [What doctor promises](#what-doctor-promises) · [Where a deployment reads from](#where-a-deployment-reads-from) · [The HTTP service](#the-http-service) · [The front door](#the-front-door) |
 | **The codebase itself** | [Layering](#layering) · [Splitting a file](#splitting-a-file) · [The architecture rules](#the-architecture-rules) · [How much a comment says](#how-much-a-comment-says) · [The size of the test suite](#the-size-of-the-test-suite) |
 | | [Proposals, and what became of them](#proposals-and-what-became-of-them) |
@@ -712,6 +712,36 @@ means the portable ones. The alternative was a second export name or a
 self-declared marker, and both would have been a rule about where an entry came
 from that any local file could claim.
 
+**Both Python declarations check a required field the same way, in one body.** They
+did not. The compiled branch checked that `name` and `description` were *present*; the
+portable branch beside it checked presence and emptiness, and so did both document
+readers. So `{"name": "", "description": "", "build": f}` was accepted by the one
+reader of four that had half the check. Measured: the delegate reached deepagents --
+which dispatches on the name and hands the description to the parent model to choose on
+-- and `kingfisher list` exited **zero** over a line reading `(surveyor.py)  [compiled]
+— `, against this record's own rule that a listing exiting zero means nothing in the
+catalogue will break.
+
+Absent and blank stay different messages, for the reason both document readers already
+gave: "missing" sends somebody looking for a line they can see they wrote, which is the
+wrong hunt. What is shared is the body, not the wording -- the documents say `missing
+required field 'name'` and the Python declarations say `SUBAGENTS entry is missing
+'name'`, which is the format naming its own export, and `EXPORT` is beside the format
+for that reason.
+
+The rule is driven over **all four readers** rather than over the one that was wrong: a
+required field present but blank is refused, and the same fields never written are
+refused as missing, with a control that each reader still accepts a definition with
+nothing wrong. `models.yaml` was measured too and already refuses every blank required
+key, so the class stops at the definition formats.
+
+Folding the two moved a refusal, and `test_refusals.py` said so -- `_portable` from four
+to two, `declared` from five to four, and a new entry for the shared body, filed on the
+blank name rather than the missing one because that is the refusal the fold added and
+what the table is for is proving `doctor` reports it. The defect that entry needed was
+already written and filed nowhere: `a_portable_subagent_naming_a_model` had been sitting
+unreferenced since it was added. *(2026-09-27, from an architecture review.)*
+
 **What it carries is its own, and `builtin_tools` is the exception.** Carried
 tools reach that delegate and nothing else -- they enter no catalogue, so nothing
 can grant or narrow them, which is what atomic means. Built-ins are the host's
@@ -719,9 +749,10 @@ rather than the definition's, so they stay narrowed by the request: otherwise
 `pip install` would be a way to put back a shell a deployment had turned off.
 
 **`Holdings` gained a second backing rather than the spec gaining contents.**
-`SubagentSpec.bundle` stays the claim it was -- names, checked against a folder --
-and `carried` beside it holds what a definition brought instead, refused together
-by `__post_init__` since a delegate owns one or the other. Putting imported tool
+`SubagentSpec.bundled` holds names -- what a definition lists from its folder,
+checked against it -- and `carried` beside it holds what a definition brought
+instead, refused together by `__post_init__` since a delegate owns one or the
+other. Putting imported tool
 objects on the spec for folder bundles too would have made *parsing* a definition
 import its bundle's Python, where now the import happens when a bundle's tools are
 asked for. `kingfisher list` asks, to report them, and so does `warm`.
@@ -1931,11 +1962,13 @@ no later turn is told about. Entries above that say `scratch` meant this directo
 under its old name. *(2026-09-24.)*
 
 **`/scratchpad` is `/derived/scratchpad`.** What the agent makes has one folder, and a
-subfolder decides what comes back: everything in `/derived` is returned and stored
-except `/derived/scratchpad`, which stays `TMPDIR` and `HOME` and stays out of both.
-`collect_artifacts` is the only walk of `/derived` -- `keep_from` and the store take
-the names it returns -- so the exclusion is one condition there, and
-`test_run_scratch_is_not_reported` goes red without it.
+subfolder decides what comes back: everything in `/derived` is listed in
+`RunResult.artifacts` and fetchable by `Kingfisher.artifact` except
+`/derived/scratchpad`, which stays `TMPDIR` and `HOME`. `collect_artifacts` is the only
+walk of `/derived`, so the exclusion is one condition there, and `read_artifact` refuses
+the same names, so a caller cannot fetch what no turn listed. Each goes red without its
+condition: `test_run_scratch_is_not_reported` and
+`test_a_working_file_is_not_an_artifact_even_where_it_exists`.
 
 **The cut runs this way round on purpose.** The other way -- a working folder returned
 to nobody, with an `outputs/` inside it that is -- fails by losing work: a model that
@@ -1947,10 +1980,9 @@ types the name. `/memory` stays out of it: deepagents' memory middleware prints 
 path to the model, so folding it in would rename that path and remove nothing the
 model has to learn.
 
-**Swept with the session, not the turn**, as before -- a later turn on this host may
-find what an earlier one left, and one restored elsewhere will not -- and the prompt
-now says so rather than calling it throwaway: it may be gone on a later turn, so never
-depend on it. A session made before this keeps an unaddressed top-level `scratchpad/`
+**Swept with the session, not the turn**, as before -- a later turn may find what an
+earlier one left, and nothing promises it -- and the prompt now says so rather than
+calling it throwaway: it may be gone on a later turn, so never depend on it. A session made before this keeps an unaddressed top-level `scratchpad/`
 until it is reaped, and nothing handles it, deliberately.
 
 **Measured before landing.** The smoke task with "into /derived" taken out, so that
@@ -2061,6 +2093,31 @@ already run; drop those writes and the sibling runs *again* on resume, which for
 an approval gate means a tool firing twice for one decision. Both paths end in
 identical state, so nothing but a side effect can tell them apart. *(2026-09-22.)*
 
+**The mark beside it records the agent the turn ran, not the one the request named.**
+It recorded `request.agent`, and a session's agent is fixed when it opens -- so every
+turn after the first names nothing, and a pause on one of those recorded `""`.
+`_refuse_stale_pause` then compared every resume against nothing. Measured through the
+service on a session plainly running `analyst`: a resume naming `analyst` was refused
+as *"paused under agent 'none', and this resume names 'analyst'"*, and a resume naming a
+different agent was refused with the same wrong sentence. The field's own comment had
+said *"which agent this turn's graph was built from"* all along; it was filled from the
+request.
+
+The rule that was supposed to hold this passed throughout, and the reason is worth
+keeping: it ran on an injected graph under no policy, where `_admitted` resolves no
+agent at all. With nothing recorded, "a resume naming a *different* agent" was refused
+the same way every name was -- so the rule passed for the correct name too. It is driven
+on a session with a pinned agent now, and the accepting half it never had sits beside it.
+
+**Nothing recorded is not a mismatch.** A deployment that supplies its own graph and
+declares no policy never resolves an agent, and a *request* naming one there is not
+refused either -- so a resume carrying the same name meant two different things
+depending on which call it rode in on. The `agent` clause now fires only where an agent
+was actually recorded; the other direction, a resume naming an agent the session is not
+running, is also refused by the pin in `_agent_for`, but this check stays ahead of it
+because the paused state is deserialised first. *(2026-10-01, from an architecture
+review.)*
+
 The three things the old per-session sqlite bought all survive by another route,
 which was measured rather than assumed. A conversation deleted with its directory
 (one workspace held 132 orphaned threads after every session had been reaped), a
@@ -2108,6 +2165,11 @@ mirrored pydantic model would have been a second home for that rule, and the kin
 that gets it wrong helpfully -- adding a `Path` serialiser makes the error go away
 and ships exactly the leak. The service and its payloads went on 2026-09-15; the
 fields are still `Path`, so a caller serialising a result meets the same refusal.
+*(`log_path` went on 2026-09-30, with the run log leaving the session for
+`RunEvents`, and `session_dir` on 2026-10-01, when a session stopped being a folder
+on this host. Nothing in a result is a host path now, so a result serialises whole:
+`artifacts` names files relative to the session, and `Kingfisher.artifact` fetches
+them.)*
 
 **The session quota is checked between turns and never during one.** This reverses
 what *Nothing at rest* argued: N11 said the bound could be metered on the
@@ -2170,9 +2232,8 @@ diagnostics that would be re-uploaded whole every turn.
 **The claim moving in deleted `_discard_dead_claims` outright.** It existed
 because a claim could outlive the session it named; one inside that session
 cannot. `busy` is a stat per session rather than a listing of a shared directory,
-which is the cost. `domain.session.claim` takes the slot's path rather than the
-root every slot sat in, because where inside a session is a layout question and
-the domain does not import `layout` -- the reason `layout.py` left `domain/`.
+which is the cost. *(The claim has since moved onto the session's backend, as
+`SessionClaims`; see "A session is its backend".)*
 
 **No migration and no fallback reader; the marker carries a layout version.**
 The failure a fallback would paper over is silence rather than breakage: a pin
@@ -2250,6 +2311,10 @@ worth keeping. A turn stopped at a bound keeps its session on purpose and leaves
 the field empty -- `stop_reason` says why. *(2026-09-15.)*
 
 ## Wiring a store
+
+*Much of this was reversed on 2026-09-30: `SessionStore` and `SessionRoot` are gone,
+and the backend is where a session is. See *A session is its backend*, below. What
+is here stays as the record of why they were built.*
 
 **The session directory is the backend root**, `/data` is materialised once at
 session creation, writes come back as a manifest, and processes are stateless
@@ -2529,6 +2594,140 @@ factory, which stayed unopened for the reason the entry above gives -- the servi
 reached the seam without a name to resolve, and the parameter becoming required is
 not the same as something asking for one.
 *(2026-09-15, in three slices: the rename, the check, then the parameter.)*
+
+## A session is its backend
+
+**Every read and write of a session's files goes through that session's backend,
+kingfisher's own included.** The agent always reached a session through the backend
+a factory returned; kingfisher reached the same session through a `Path` and assumed
+they were one directory. With the default they were. With a backend that runs
+elsewhere they were two places: a request's data went where the agent could not
+read it, the report it wrote came back as nothing, and the turn said it had worked.
+Proposed on 2026-09-30 and built the same day in four slices, the last two together
+because the lock and the housekeeping could not move to the backend while
+`SessionRoot` still decided where a session was.
+
+**What goes through it.** A request's `data` (`upload_files`), what a turn left
+(`glob`, and `download_files` for `Kingfisher.artifact`, which replaced opening
+`RunResult.artifacts` on this disk), the pinned agent, the conversation and a paused
+turn (`HarnessFiles`), and the turn lock. Nothing is read from a directory on this
+host any more, and a backend that keeps its sessions elsewhere keeps all of them
+there.
+
+**The backend is a `SessionBackends`.** Called per turn with a session *id*, not a
+directory, because a backend that runs elsewhere has no directory here to be handed;
+and asked what only something that sees every session can answer -- `sessions`,
+`mark_used`, `size`, `delete` -- which is what `SessionDirs` answered, keyed by id.
+Each takes the `Config`, because the default is one object serving every workspace.
+`default_backend` is that object, and a deployment building on it subclasses
+`DefaultBackend`; a plain function is refused, because it can build a backend and
+cannot say which sessions there are. `backend_at(cfg, directory)` is the old
+per-directory builder, public because building on the default needs it.
+
+**The lock is on the backend.** `claim`, `release` and `held` -- a create that fails
+while another claim is live, which `write` cannot be. Considered and not chosen: a
+lock beside the backend, which asks less of an adapter and gives a session two
+things that must be wired to the same place, the split this closed.
+
+**`SessionRoot` and `SessionStore` are gone**, with `KINGFISHER_SESSION_STORE` and
+`KINGFISHER_SESSION_STORE_FACTORY`, which are refused rather than ignored: ignored,
+a deployment that relied on one for durable sessions would lose them on upgrade with
+nothing said. Keeping a session when the machine may not is what a durable backend
+does, or storage mounted at `<workspace>/sessions`. A `synced(backend, store)`
+wrapper was the alternative that lost, as a second way to answer one question.
+`KINGFISHER_BACKEND_FACTORY` replaces them, and only the command line reads it:
+`Kingfisher` takes its backend as an argument, and the setting is how `sessions`,
+`reap` and `artifact` see sessions a backend keeps elsewhere. `SESSION_ROOT_CONTRACT`
+went with its port; the one check in it that mattered -- two sessions are two
+places -- is `two_sessions_are_kept_apart` in `SESSION_BACKENDS_CONTRACT`.
+
+**`/.harness` is in the shell's reach on a remote backend, so it is defended twice.**
+`shell_denied` in the kit drives `execute` at `/.harness` and `/data`; and
+kingfisher signs the pin, the conversation and a paused turn with
+`KINGFISHER_SESSION_KEY`, an HMAC bound to the session and the file name as well as
+the bytes, verified on every read. Unsigned is refused, because it cannot be told
+from a signature deleted. The key is required unless the factory *is*
+`default_backend` under a sandbox kingfisher applies itself -- identity, because a
+wrapper can return the default's backend with anything changed -- and it has no
+default and must never get one: generated and saved in the workspace, it is readable
+by the macOS sandbox's shell. Two things were decided building it: any supplied
+runner needs a key, because whether it is local cannot be known at startup; and a
+paused checkpoint is written in place, a backend having no rename, so half of one
+fails its signature rather than loading.
+
+**The run log is `RunEvents`, not session state.** It was the one file appended to
+while a turn ran, which a backend cannot do, and most wanted for the turn that
+crashed. Events go to the `kingfisher.run` logger or a sink the deployment passes,
+and carry `session_id` and `turn_id`. The proposal said nothing read the log; the
+live driver did, for its usage line, and now keeps a sink of its own.
+
+**Still local, on purpose.** `default_backend`'s confinement, because confining a
+shell only means something on the host that runs it; and a supplied runner is still
+built from `<workspace>/sessions/<id>`, because a runner is about where commands run
+on this host.
+
+## A tool's path is the backend's path
+
+**A workspace tool's `path` is resolved by the session's backend, under the turn's
+rules, one path at a time.** It was resolved by joining the virtual path onto the
+session directory: a second copy of the backend's own path mapping, which had drifted
+three ways, each measured on 2026-09-30. On the default backend it handed a tool
+`<session>/skills/...`, which does not exist, while `read_file` read the same path from
+the catalogue. It handed a tool the real `/.harness` pin and conversation, which the
+file tools are refused and the shell is fenced from -- and a tool runs in this process,
+outside every fence, so one writing to its `path` could rewrite the agent a session is
+pinned to. And on a backend keeping sessions elsewhere it handed a tool a local path to
+nothing. Proposed on 2026-09-30 after an audit of what still assumed a session is a
+folder here, settled on 2026-10-01, and built in four slices.
+
+**In order, per path:** the turn's rules as `read_file` applies them; then where the
+backend keeps the path on this host -- a composite's routes, a `FilesystemBackend`'s
+root, or the backend's own `host_path(virtual)`; then containment against the root
+that answered, links resolved. A path not kept here is refused with a message naming
+`ToolContext`. `SessionPaths` holds the turn's `PermittedBackend`, the same object a
+tool gets as `runtime.context.backend`, and that reads its rules when it checks:
+`build_agent` builds the guards before it has finished adding rules, and a copy taken
+then would miss memory declined and skills narrowed.
+
+**Per path, not per backend.** The first finding read like "refuse path tools on a
+remote backend", and that was the wrong rule: a backend that is not kingfisher's may
+keep all, some or none of its files on this host -- a directory of its own, a network
+mount, or `/data` here and the shell elsewhere. Which backend it is says nothing about
+one path, so the question is asked of the path, at the call. A startup rule was the
+alternative, and it would have refused a deployment over a tool it never calls.
+
+**A delegate is handed the parent's paths.** It guessed its session from
+`backend.workspace`, which a deployment's backend need not have, and without it a
+delegate's tools lost translation and the host-path refusal silently.
+
+**A path under a write-denied scope is handed over.** Under `/data` that is safe on the
+default backend, the directory being read-only on disk. Under `/skills` it is not: the
+catalogue is writable and shared, and a tool runs outside the shell's fence. Decided
+for a `fill_template(path="/skills/report/template.md")` that reads a template, against
+a `tidy_whitespace(path=...)` that would rewrite it for every session: workspace tools
+are the operator's reviewed code, every shipped one only reads, and the protection
+rests on the operator not writing that tool. Refusing write-denied scopes was the
+alternative, and would have left a path tool unable to read a skill's file at all.
+
+**`host_path` is part of the documented backend contract**, optional, and checked:
+`a_host_path_stays_in_its_session` in `SESSION_BACKENDS_CONTRACT` reads back what a
+backend's answer names and refuses one that is another session's file. Decided for a
+deployment keeping sessions on a network mount, whose existing path tools keep working
+with it. Keeping it internal was the alternative, and that deployment would have
+rewritten every path tool against `ToolContext` for files already here. A backend's own
+answer is taken at its word -- there is no root to hold it to -- which is what the
+check is for.
+
+**The shipped path tools read through `ToolContext`.** They take `file_path` and a
+runtime and fetch with `download_files`, so the examples work on any backend and teach
+the route that does. `line_count` streamed so as never to hold a large file; a backend
+hands a file back whole, so it holds it once now, and still keeps it out of the
+model's context, which is its job.
+
+**Two leftovers of *A session is its backend* went with it.** `kingfisher decide`
+asks the backends whether a session exists rather than looking for a folder, and
+`RunResult.session_dir` is gone, so nothing in a result is a host path and a result
+serialises whole.
 
 ## The command line
 
@@ -4335,6 +4534,17 @@ sentence that needs a test.*
 shipped -- `WorkspaceToolErrors` and `tests/unit/test_workspace_tool_errors.py` --
 and its status line had never been changed to say so. Its decisions are under
 *Tool failure* above.*
+
+*`a-tool-path-is-the-backend-s-path` was written on 2026-09-30, settled on
+2026-10-01 and built in four slices; its decisions are under *A tool's path is the
+backend's path* above. Digging into its first finding is what turned it from a rule
+about remote backends into one about each path.*
+
+*`a-session-is-its-backend` was written on 2026-09-30 and built the same day in
+four slices; its decisions are under *A session is its backend* above. Its own
+order was wrong: slice 4 moved the lock and the housekeeping onto a backend keyed by
+session id, which a `SessionRoot` still deciding where a session was would have
+broken, so slices 4 and 5 landed together.*
 
 *A fourth, `the-verb-that-runs-a-task`, was written on 2026-09-04 and removed the
 same day, having been built in three slices. Its decisions are under *The command

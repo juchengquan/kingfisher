@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-from pathlib import Path
 
 import pytest
 
@@ -32,8 +31,6 @@ def _a_result() -> RunResult:
         session_id="s",
         turn_id="t001",
         answer="42",
-        session_dir=Path("/tmp/run"),
-        log_path=Path("/tmp/log"),
     )
 
 
@@ -537,11 +534,15 @@ def _intercepted(monkeypatch) -> list:
 
     seen: list = []
 
-    def _stream(request, **kwargs):
-        seen.append(request)
-        return iter(())
+    class Service:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
 
-    monkeypatch.setattr("kingfisher.stream", _stream, raising=False)
+        def stream(self, request):
+            seen.append(request)
+            return iter(())
+
+    monkeypatch.setattr("kingfisher.Kingfisher", Service, raising=False)
     # The driver imports `show` by name, so the patch goes on the driver's own
     # binding -- patching the module it came from would leave this one bound.
     monkeypatch.setattr(driver, "show", lambda events, out: None)
@@ -583,6 +584,35 @@ def test_the_flag_is_offered_in_help(capsys):
     assert "agent" in flags
 
 
+def test_a_smoke_run_checks_the_result_it_fetched_through_the_session(cfg, monkeypatch):
+    """The checks read `result.json` from what the turn reported and fetch it by name,
+    because a folder on this host is not where a backend has to keep it.
+    """
+    from types import SimpleNamespace
+
+    driver = _driver_on(monkeypatch, cfg)
+    fetched: list[tuple[str, str]] = []
+    finished = SimpleNamespace(session_id="smoke", artifacts=("derived/result.json",))
+
+    class Service:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def stream(self, request):
+            return iter(())
+
+        def artifact(self, session_id, name):
+            fetched.append((session_id, name))
+            return b"{}"
+
+    monkeypatch.setattr("kingfisher.Kingfisher", Service, raising=False)
+    monkeypatch.setattr(driver, "show", lambda events, out: finished)
+
+    driver.main(["driver.py"])
+
+    assert fetched == [("smoke", "derived/result.json")]
+
+
 def test_a_smoke_run_reaches_its_end(cfg, tmp_path, monkeypatch):
     """The lines only a smoke run reaches, driven without a model.
 
@@ -594,13 +624,16 @@ def test_a_smoke_run_reaches_its_end(cfg, tmp_path, monkeypatch):
     from types import SimpleNamespace
 
     driver = _driver_on(monkeypatch, cfg)
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    (run_dir / "report.md").write_text("# smoke\n", encoding="utf-8")
-    finished = SimpleNamespace(
-        session_id="smoke", session_dir=run_dir, log_path=tmp_path / "runlog.jsonl"
-    )
-    monkeypatch.setattr("kingfisher.stream", lambda request, **kwargs: iter(()), raising=False)
+    finished = SimpleNamespace(session_id="smoke", artifacts=("derived/report.md",))
+
+    class Service:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def stream(self, request):
+            return iter(())
+
+    monkeypatch.setattr("kingfisher.Kingfisher", Service, raising=False)
     monkeypatch.setattr(driver, "show", lambda events, out: finished)
 
     assert driver.main(["driver.py", "--no-checks"]) == 0

@@ -5,7 +5,6 @@ import shutil
 
 import pytest
 
-from kingfisher.domain import retention
 from kingfisher.infrastructure.workspace import (
     EXAMPLE,
     LocalSessionDirs,
@@ -111,13 +110,17 @@ def test_no_gitignore_is_written_for_a_repository_nothing_manages(workspace):
 
 
 def sweep(workspace, keep, checkpointer):
-    """What `reap()` does: list, choose by age, apply."""
+    """`reap`, over the sessions under this workspace."""
     import time
 
-    dirs = LocalSessionDirs()
-    runs = workspace / "scratch"
-    plan = retention.expired(dirs.listing(runs), older_than_seconds=keep, now=time.time())
-    return retention.apply(plan, runs, dirs, checkpointer)
+    from kingfisher import Kingfisher
+    from kingfisher.config import Config
+    from tests.conftest import FAKE_CATALOGUE, TEST_KEY
+    from tests.unit.test_run import StubAgent
+
+    cfg = Config(workspace=workspace, models=FAKE_CATALOGUE, session_key=TEST_KEY)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=checkpointer)
+    return kf.reap(older_than_seconds=keep, now=time.time())
 
 
 def test_sweep_keeps_the_newest_and_deletes_thread_with_directory(workspace):
@@ -128,7 +131,7 @@ def test_sweep_keeps_the_newest_and_deletes_thread_with_directory(workspace):
 
     now = time.time()
     for name, age in (("oldest", 10_000), ("middle", 20), ("newest", 1)):
-        d = workspace / "scratch" / name
+        d = workspace / "sessions" / name
         d.mkdir(parents=True)
         os.utime(d, (now - age, now - age))
 
@@ -136,13 +139,13 @@ def test_sweep_keeps_the_newest_and_deletes_thread_with_directory(workspace):
     result = sweep(workspace, keep=100, checkpointer=ckpt)  # idle over 100s goes
 
     assert result.removed == ("oldest",)
-    assert not (workspace / "scratch" / "oldest").exists()
-    assert (workspace / "scratch" / "newest").exists()
+    assert not (workspace / "sessions" / "oldest").exists()
+    assert (workspace / "sessions" / "newest").exists()
     assert ckpt.deleted == ["oldest"]
 
 
 def test_sweep_is_a_noop_when_under_the_limit(workspace):
-    (workspace / "scratch" / "only").mkdir(parents=True)
+    (workspace / "sessions" / "only").mkdir(parents=True)
     result = sweep(workspace, keep=10_000, checkpointer=StubCheckpointer())
     assert result.removed == ()
 
@@ -165,7 +168,7 @@ def test_sweep_deletes_the_thread_before_the_directory(workspace):
         def delete_thread(self, thread_id: str) -> None:
             order.append("thread")
 
-    d = workspace / "scratch" / "old"
+    d = workspace / "sessions" / "old"
     d.mkdir(parents=True)
     (d / "scratch.txt").write_text("x")
 
@@ -189,7 +192,7 @@ def test_a_failed_thread_delete_leaves_the_session_whole(workspace):
     next sweep retries an intact session rather than finding a thread that points at
     files which are gone.
     """
-    d = workspace / "scratch" / "old"
+    d = workspace / "sessions" / "old"
     d.mkdir(parents=True)
 
     result = sweep(workspace, keep=0, checkpointer=BrokenCheckpointer())
@@ -205,7 +208,7 @@ def test_sweep_failures_are_reported_not_swallowed(workspace):
     every single run.
     """
     for name in ("a", "b"):
-        (workspace / "scratch" / name).mkdir(parents=True)
+        (workspace / "sessions" / name).mkdir(parents=True)
 
     result = sweep(workspace, keep=0, checkpointer=BrokenCheckpointer())
 

@@ -11,7 +11,7 @@ from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.prompting import system_prompt
-from tests.conftest import FakeToolCallingModel
+from tests.conftest import FakeToolCallingModel, harness_in
 
 NARROW = """name: narrow
 description: Reads and nothing else.
@@ -61,6 +61,11 @@ def _offered(built) -> set[str]:
 
 
 # -- the agent decides ------------------------------------------------------
+
+
+def _held(cfg):
+    """Session `s`, as the turn reads its pinned agent."""
+    return harness_in(_session(cfg, "s"))
 
 
 def test_an_agent_holds_only_the_tools_its_file_names(cfg, session_dir):
@@ -180,10 +185,10 @@ def test_a_later_turn_runs_what_the_session_opened_with(cfg):
     service = Kingfisher(cfg, backend=default_backend)
     asked = Request("go", agent="narrow", session_id="s")
 
-    opened = service._agent_for(asked, _session(cfg, "s"))
+    opened = service._agent_for(asked, _held(cfg))
     _agents(cfg, NARROW.replace("Reads and nothing else.", "Reads and writes now."))
 
-    assert service._agent_for(asked, _session(cfg, "s")).description == opened.description
+    assert service._agent_for(asked, _held(cfg)).description == opened.description
 
 
 def test_naming_a_different_agent_later_is_refused_rather_than_ignored(cfg):
@@ -192,10 +197,10 @@ def test_naming_a_different_agent_later_is_refused_rather_than_ignored(cfg):
     """
     _agents(cfg, NARROW, CHEAP)
     service = Kingfisher(cfg, backend=default_backend)
-    service._agent_for(Request("go", agent="narrow", session_id="s"), _session(cfg, "s"))
+    service._agent_for(Request("go", agent="narrow", session_id="s"), _held(cfg))
 
     with pytest.raises(CapabilityError, match="running 'narrow'"):
-        service._agent_for(Request("again", agent="cheap-one", session_id="s"), _session(cfg, "s"))
+        service._agent_for(Request("again", agent="cheap-one", session_id="s"), _held(cfg))
 
 
 def test_naming_the_same_agent_again_is_fine(cfg):
@@ -205,18 +210,18 @@ def test_naming_the_same_agent_again_is_fine(cfg):
     _agents(cfg, NARROW)
     service = Kingfisher(cfg, backend=default_backend)
     asked = Request("go", agent="narrow", session_id="s")
-    service._agent_for(asked, _session(cfg, "s"))
+    service._agent_for(asked, _held(cfg))
 
-    assert service._agent_for(asked, _session(cfg, "s")).name == "narrow"
+    assert service._agent_for(asked, _held(cfg)).name == "narrow"
 
 
 def test_a_turn_that_names_nothing_still_gets_the_sessions_agent(cfg):
     """The session decides, not the turn."""
     _agents(cfg, NARROW)
     service = Kingfisher(cfg, backend=default_backend)
-    service._agent_for(Request("go", agent="narrow", session_id="s"), _session(cfg, "s"))
+    service._agent_for(Request("go", agent="narrow", session_id="s"), _held(cfg))
 
-    assert service._agent_for(Request("again", session_id="s"), _session(cfg, "s")).name == "narrow"
+    assert service._agent_for(Request("again", session_id="s"), _held(cfg)).name == "narrow"
 
 
 def test_a_snapshot_is_written_once_and_not_overwritten(tmp_path):
@@ -228,7 +233,8 @@ def test_a_snapshot_is_written_once_and_not_overwritten(tmp_path):
     """
     from kingfisher.infrastructure.workspace import agent_started_with, remember_agent
 
-    remember_agent(tmp_path, "name: first\ndescription: One.\n")
-    remember_agent(tmp_path, "name: second\ndescription: Two.\n")
+    harness = harness_in(tmp_path)
+    remember_agent(harness, "name: first\ndescription: One.\n")
+    remember_agent(harness, "name: second\ndescription: Two.\n")
 
-    assert agent_started_with(tmp_path).text.startswith("name: first")
+    assert agent_started_with(harness).text.startswith("name: first")

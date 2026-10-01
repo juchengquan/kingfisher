@@ -146,9 +146,9 @@ def test_the_shell_mapping_the_prompt_promises_is_the_one_the_backend_implements
     """The prompt tells the agent a virtual path becomes a shell path by dropping the
     leading slash.
     """
-    from kingfisher.infrastructure.harness.backend import default_backend
+    from kingfisher.infrastructure.harness.backend import backend_at
 
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
     cwd = Path(backend.default.cwd).resolve()
 
     for virtual in (f"/{SCRATCH}/x.txt", f"/{DERIVED}/x.txt", f"/{DATA}/x.txt"):
@@ -164,9 +164,9 @@ def test_the_skills_exception_is_still_an_exception(cfg, session_dir):
     """The skills section warns that `/skills` is the one path where dropping the slash
     silently reads the wrong directory.
     """
-    from kingfisher.infrastructure.harness.backend import default_backend
+    from kingfisher.infrastructure.harness.backend import backend_at
 
-    backend = default_backend(cfg, session_dir)
+    backend = backend_at(cfg, session_dir)
     cwd = Path(backend.default.cwd).resolve()
     backend.write("/skills/demo/SKILL.md", "hello")
 

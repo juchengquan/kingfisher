@@ -30,6 +30,13 @@ class Admitted:
     #: than raised, so they cross the boundary instead of stopping at it.
     unprotected: tuple[str, ...]
     placement: Any
+    #: The backend the session's files are reached through. The same object the
+    #: graph runs on, so what was placed is what the agent reads, and what is
+    #: collected is what it wrote.
+    files: Any = None
+    #: What kingfisher keeps about the session under `/.harness`, read and written
+    #: through `files` and signed where the deployment has a key.
+    harness: Any = None
     #: The saver this service opened for the turn, or None when it opened
     #: nothing -- an injected instance is the deployment's to close.
     release: Any = None
@@ -41,6 +48,11 @@ class Admitted:
     context: Any = None
     #: Answers this turn resumes into, already translated, or `None`.
     resume: dict[str, Any] | None = None
+    #: The agent this turn's graph was built from, by name, or `None` where none was
+    #: resolved -- an injected graph under no policy. The *resolved* one, not the one
+    #: the request named: a session's agent is fixed when it opens, so every turn after
+    #: the first names nothing and the two answers are only the same on turn one.
+    agent_name: str | None = None
     #: Tools an earlier turn was waiting on that this one superseded. Carried to the
     #: end of the turn as well as announced at its start, because `run` drains the
     #: stream for a result and would otherwise be the one caller never told.
@@ -71,6 +83,10 @@ class Prepared:
     events: tuple[RunEvent, ...]
     deadline: float
     timeout_s: float
+    #: What `collect_artifacts` walks at the end. See `Admitted.files`.
+    files: Any = None
+    #: Where the transcript and a pause are written at the end. See `Admitted.harness`.
+    harness: Any = None
     #: Closed when the turn ends. See `_checkpointer_for`.
     release: Any = None
     #: The saver itself, which `release` is only sometimes. A turn that stops at a
@@ -85,8 +101,9 @@ class Prepared:
     #: for a turn that is asking something new. The two are alternatives rather than
     #: additions: a resume continues a graph mid-superstep and has no message to add.
     resume: dict[str, Any] | None = None
-    #: Which agent this turn's graph was built from, written beside a pause so a
-    #: resume can refuse one that names a different agent.
+    #: The agent this turn's graph was built from, written beside a pause so a resume
+    #: can refuse one that names a different agent. Carried from `Admitted`, which is
+    #: where it was resolved.
     agent_name: str | None = None
     #: Tools an earlier turn was waiting on that this one superseded.
     discarded: tuple[str, ...] = ()

@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import shutil
-from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
-from time import time
 from types import SimpleNamespace
 
 import pytest
 
-from kingfisher import Kingfisher, default_backend
+from kingfisher import DefaultBackend, Kingfisher, default_backend
 from kingfisher.application.reporting import opening_events
 from kingfisher.application.service import refused_credentials
 from kingfisher.application.turn import turn_message
@@ -19,18 +16,24 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.workspace import agent_snapshot, ensure_session_layout
+from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
-from kingfisher.layout import SCRATCH
+from kingfisher.layout import HARNESS, PINNED_AGENT
 from tests.conftest import (
     FAKE_ENDPOINT,
     OTHER_ENDPOINT,
     StubCheckpointer,
     an_agent,
+    harness_in,
     start,
     subagents_dir,
 )
 from tests.unit.test_run import StubAgent
+
+
+def agent_snapshot(session_dir) -> Path:
+    """Where the default backend keeps a session's pinned agent, on disk."""
+    return Path(session_dir) / HARNESS / PINNED_AGENT
 
 
 class CountingCheckpointer(StubCheckpointer):
@@ -115,7 +118,7 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     service = Kingfisher(cfg, backend=default_backend)
     asked = Request("go", agent="only")
 
-    built = service._agent_for(asked, session_dir)
+    built = service._agent_for(asked, harness_in(session_dir))
 
     def once():
         return service._graph_for(
@@ -428,282 +431,29 @@ def test_each_kind_gets_its_own_line(cfg):
     assert said == ["1 tool(s) not granted: execute", "1 subagent(s) not granted: extractor"]
 
 
-# -- a session that outlives its directory ----------------------------------
+# -- a turn that ends early --------------------------------------------------
 
 
-def _wired_to_a_store(cfg, tmp_path):
-    """A service whose sessions are kept somewhere the workspace is not."""
-    from kingfisher import LocalSessionStore
-
-    kept = LocalSessionStore(tmp_path / "kept-elsewhere")
-    return Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), sessions=kept), kept
-
-
-class FreshEachTurn:
-    """A provider whose tree exists for one turn and then does not."""
-
-    def __init__(self, root) -> None:
-        self.root = Path(root)
-        self.turns = 0
-        self.log: list[tuple[str, tuple[str, ...]]] = []
-
-    def _contents(self, directory) -> tuple[str, ...]:
-        return tuple(sorted(p.name for p in directory.rglob("*") if p.is_file()))
-
-    @contextmanager
-    def hold(self, session_id: str):
-        self.turns += 1
-        directory = self.root / f"{session_id}-turn{self.turns}"
-        directory.mkdir(parents=True)
-        self.log.append(("held", self._contents(directory)))
-        try:
-            yield directory
-        finally:
-            self.log.append(("released", self._contents(directory)))
-            shutil.rmtree(directory)
-
-
-def _wired_to_a_root(cfg, tmp_path):
-    from kingfisher import LocalSessionStore
-
-    kept = LocalSessionStore(tmp_path / "kept-elsewhere")
-    roots = FreshEachTurn(tmp_path / "for-one-turn")
-    service = Kingfisher(
-        cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), sessions=kept, session_root=roots
-    )
-    return service, kept, roots
-
-
-def test_a_turn_runs_in_the_directory_it_was_handed(cfg, tmp_path):
-    """The seam itself: kingfisher asks where this session's files are rather than
-    deciding, and builds the layout inside whatever it is given.
+def test_a_caller_who_stops_reading_still_gives_the_session_back(cfg):
+    """`run_start` is yielded before the graph is reached, and that yield used to sit
+    outside the `try` -- so stopping here left the session claimed, the checkpointer
+    open and the interpreter running. A later turn on the same session proves the
+    slot went back.
     """
-    service, _, roots = _wired_to_a_root(cfg, tmp_path)
-
-    result = service.run(Request(task="anything"))
-
-    assert result.session_dir.is_relative_to(roots.root)
-    assert not (cfg.workspace / "sessions" / result.session_id).exists()
-    # And nothing for `sessions()` or `reap` to see, which is what `ports.md`
-    # promises a custom root: both walk `<workspace>/sessions/`.
-    assert service.sessions() == ()
-
-
-def test_a_session_survives_a_tree_that_does_not(cfg, tmp_path):
-    """The whole design, end to end, with nothing left on the machine."""
-    service, kept, roots = _wired_to_a_root(cfg, tmp_path)
-    first = service.run(Request(task="anything"))
-    kept.save(first.session_id, {"derived/report.md": b"forty rows"})
-
-    service.run(Request(task="again", session_id=first.session_id))
-
-    arrived, at_the_end = roots.log[-2], roots.log[-1]
-    assert arrived == ("held", ()), "the second turn started with nothing on the machine"
-    assert "report.md" in at_the_end[1], "and had the work back before it ended"
-
-
-def test_a_sessions_memory_is_not_replaced_by_its_own_scaffold(cfg, tmp_path):
-    """The layout was created before the store was read, so on a tree that starts
-    empty every turn the scaffold got there first, `restore_into` skipped the name
-    as already present, and the save at the end wrote the scaffold over what had
-    been kept -- a session's memory destroyed one turn after it was written, with
-    nothing reporting it. `/derived` never caught this because no scaffold competes
-    for those names.
-    """
-    service, kept, _ = _wired_to_a_root(cfg, tmp_path)
-    first = service.run(Request(task="anything"))
-    kept.save(first.session_id, {"memory/AGENTS.md": b"# Project memory\n\n- metric units\n"})
-
-    service.run(Request(task="again", session_id=first.session_id))
-
-    assert b"metric units" in kept.fetch(first.session_id)["memory/AGENTS.md"]
-
-
-def test_the_tree_is_released_when_a_turn_fails(cfg, tmp_path):
-    """A mount left behind after every failed turn is an accumulating pile of other
-    tenants' session directories, in the box this design exists to make safe.
-    """
-
-    class Fails:
-        def stream(self, state, config, stream_mode=None, subgraphs=False):
-            yield ((), "values", {"messages": []})
-            msg = "the model went away"
-            raise RuntimeError(msg)
-
-        def get_state(self, config):
-            return None
-
-    from kingfisher import LocalSessionStore
-
-    roots = FreshEachTurn(tmp_path / "for-one-turn")
-    service = Kingfisher(
-        cfg,
-        graph=Fails(),
-        threads=StubCheckpointer(),
-        sessions=LocalSessionStore(tmp_path / "kept"),
-        session_root=roots,
-    )
-
-    with pytest.raises(RuntimeError, match="went away"):
-        service.run(Request(task="anything"))
-
-    assert [kind for kind, _ in roots.log] == ["held", "released"]
-
-
-def test_the_tree_is_released_when_a_caller_walks_away(cfg, tmp_path):
-    """The same claim for the other way a turn ends without finishing."""
-    service, _, roots = _wired_to_a_root(cfg, tmp_path)
-
-    events = service.stream(Request(task="anything"))
-    next(events)
-    events.close()
-
-    assert [kind for kind, _ in roots.log] == ["held", "released"]
-
-
-def _with_a_derived_file(cfg, service, session_id, name, text):
-    """A file this turn produced, written where `collect_artifacts` looks."""
-    directory = cfg.workspace / "sessions" / session_id
-    (directory / "derived").mkdir(parents=True, exist_ok=True)
-    (directory / "derived" / name).write_text(text, encoding="utf-8")
-
-
-def test_a_caller_who_stops_reading_still_has_their_work_kept(cfg, tmp_path):
-    """The bug this split exists for, and it was live rather than theoretical."""
-    service, kept = _wired_to_a_store(cfg, tmp_path)
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     opened = service.run(Request(task="anything"))
-    _with_a_derived_file(cfg, service, opened.session_id, "half.md", "half a turn")
 
     events = service.stream(Request(task="again", session_id=opened.session_id))
     first = next(events)
     events.close()
 
     assert first.kind == "run_start", "the caller stopped before the model, which is the point"
-    assert kept.fetch(opened.session_id)["derived/half.md"] == b"half a turn"
-    # And the turn ended in every other sense too. `run_start` is yielded before
-    # the graph is reached, and that yield used to sit outside the `try` -- so
-    # stopping here left the session claimed, the checkpointer open and the
-    # interpreter running. A later turn on the same session proves the slot
-    # went back.
     assert service.run(Request(task="third", session_id=opened.session_id)).answer == "ok"
 
 
-def test_a_turn_that_fails_keeps_what_it_made(cfg, tmp_path):
-    """A behaviour change, and the one this direction implies."""
-
-    class Fails:
-        def stream(self, state, config, stream_mode=None, subgraphs=False):
-            yield ((), "values", {"messages": []})
-            msg = "the model went away"
-            raise RuntimeError(msg)
-
-        def get_state(self, config):
-            return None
-
-    service, kept = _wired_to_a_store(cfg, tmp_path)
-    opened = service.run(Request(task="anything"))
-    _with_a_derived_file(cfg, service, opened.session_id, "partial.md", "as far as it got")
-
-    broken = Kingfisher(cfg, graph=Fails(), threads=StubCheckpointer(), sessions=kept)
-    with pytest.raises(RuntimeError, match="went away"):
-        broken.run(Request(task="again", session_id=opened.session_id))
-
-    assert kept.fetch(opened.session_id)["derived/partial.md"] == b"as far as it got"
-
-
-def test_a_turn_hands_what_it_produced_to_the_store(cfg, tmp_path):
-    """`/derived` and `/memory` at the end of a turn, which is what `collect_artifacts`
-    already names and what has to outlive the machine.
-    """
-    service, kept = _wired_to_a_store(cfg, tmp_path)
-    result = service.run(Request(task="anything"))
-
-    directory = cfg.workspace / "sessions" / result.session_id
-    (directory / "derived").mkdir(parents=True, exist_ok=True)
-    (directory / "derived" / "report.md").write_text("forty rows", encoding="utf-8")
-    (directory / SCRATCH / "working.md").write_text("half", encoding="utf-8")
-    service.run(Request(task="again", session_id=result.session_id))
-
-    held = kept.fetch(result.session_id)
-    assert held["derived/report.md"] == b"forty rows"
-    assert "memory/AGENTS.md" in held
-    assert not any(name.startswith((f"{SCRATCH}/", "data/")) for name in held), (
-        "scratch and uploads are not the store's to keep -- see `collect_artifacts`"
-    )
-
-
-def test_a_session_whose_directory_is_gone_gets_its_files_back(cfg, tmp_path):
-    """The prototype's claim, at the level a deployment sees it."""
-    import shutil
-
-    service, _ = _wired_to_a_store(cfg, tmp_path)
-    first = service.run(Request(task="anything"))
-    directory = cfg.workspace / "sessions" / first.session_id
-    (directory / "memory").mkdir(parents=True, exist_ok=True)
-    (directory / "memory" / "notes.md").write_text("remember this", encoding="utf-8")
-    service.run(Request(task="save it", session_id=first.session_id))
-
-    # The machine goes. The store is the only thing that carried over.
-    shutil.rmtree(directory)
-    assert not directory.exists()
-
-    service.run(Request(task="and now?", session_id=first.session_id))
-
-    assert (directory / "memory" / "notes.md").read_text(encoding="utf-8") == "remember this"
-
-
-def test_deleting_a_session_drops_it_from_the_store_too(cfg, tmp_path):
-    """Or a deleted session outlives its deletion everywhere that matters."""
-    service, kept = _wired_to_a_store(cfg, tmp_path)
-    result = service.run(Request(task="anything"))
-    directory = cfg.workspace / "sessions" / result.session_id
-    (directory / "derived").mkdir(parents=True, exist_ok=True)
-    (directory / "derived" / "a.md").write_text("one", encoding="utf-8")
-    service.run(Request(task="again", session_id=result.session_id))
-    assert kept.fetch(result.session_id)
-
-    service.delete_session(result.session_id)
-
-    assert kept.fetch(result.session_id) == {}
-
-
-def test_wiring_no_store_leaves_everything_as_it_was(cfg):
-    """The default, and it must stay the default: a deployment allowed to hold data on
-    its own disk should notice none of this.
-    """
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-
-    result = service.run(Request(task="anything"))
-
-    assert service.sessions_store is None
-    assert (cfg.workspace / "sessions" / result.session_id).is_dir()
-
-
-def test_a_conversation_survives_losing_its_directory(cfg, tmp_path):
-    """The transcript's claim, and the reason it is not the checkpointer."""
-    import shutil
-
-    service, _ = _wired_to_a_store(cfg, tmp_path)
-    first = service.run(Request(task="remember the number forty"))
-    service.run(Request(task="and the colour blue", session_id=first.session_id))
-
-    directory = cfg.workspace / "sessions" / first.session_id
-    before = (directory / ".harness" / "transcript.jsonl").read_text(encoding="utf-8")
-    assert "forty" in before and "blue" in before
-
-    # The machine goes.
-    shutil.rmtree(directory)
-    service.run(Request(task="what did I say?", session_id=first.session_id))
-
-    after = (directory / ".harness" / "transcript.jsonl").read_text(encoding="utf-8")
-    assert "forty" in after, "the first turn is gone from the conversation"
-    assert "blue" in after
-    assert "what did I say?" in after
-
-
-def test_the_graph_is_sent_the_whole_conversation_not_only_the_question(cfg, tmp_path):
+def test_the_graph_is_sent_the_whole_conversation_not_only_the_question(cfg):
     """Where history comes from now."""
-    service, _ = _wired_to_a_store(cfg, tmp_path)
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     first = service.run(Request(task="the number is forty"))
     service.run(Request(task="and now?", session_id=first.session_id))
 
@@ -739,13 +489,14 @@ def test_a_runner_is_built_for_each_turn_and_told_the_session(cfg, tmp_path, mon
         asked.append(session_dir)
         return Runner()
 
-    def recording(cfg_, where, *, catalogue=None, runner=None):
-        handed.append(runner)
-        return default_backend(cfg_, where, catalogue=catalogue, runner=runner)
+    class Recording(DefaultBackend):
+        def __call__(self, cfg_, session_id, /, *, catalogue=None, runner=None):
+            handed.append(runner)
+            return super().__call__(cfg_, session_id, catalogue=catalogue, runner=runner)
 
     named = an_agent(cfg, "worker")
     monkeypatch.setattr(service_module, "build_agent", lambda *a, **kw: StubAgent("ok"))
-    service = Kingfisher(cfg, backend=recording, threads=StubCheckpointer(), runner=build)
+    service = Kingfisher(cfg, backend=Recording(), threads=StubCheckpointer(), runner=build)
 
     first = service.run(Request(task="anything", agent=named))
     service.run(Request(task="again", agent=named, session_id=first.session_id))
@@ -961,26 +712,21 @@ def test_a_supplied_graph_under_a_policy_still_resolves_one(cfg, monkeypatch):
 
 
 def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
-    """The pin was written to `<workspace>/sessions/<id>` whatever `session_root` said.
-
-    That is where the session is only under the default root. Anywhere else the turn
-    ran in one directory and the pin was written to another, so `agent_started_with`
-    found none on the next turn, `_keep` collected none for the store, and the
-    guarantee `_agent_for` raises for -- a session is fixed to the agent it opened
-    with -- held on the default root and silently failed on every other.
+    """The pin goes wherever the session's own files are, never to a path re-derived
+    from its id. It was once written to `<workspace>/sessions/<id>` whatever held the
+    session, so `agent_started_with` found none on the next turn and a session fixed to
+    the agent it opened with silently was not.
 
     Driven through `_agent_for` rather than `run`, because that is what resolves a
-    turn's agent and writes the pin -- and a supplied graph never reaches it, so a
-    deployment with one would pin nothing at all.
+    turn's agent and writes the pin -- and a supplied graph never reaches it.
     """
     an_agent(cfg, "only")
     an_agent(cfg, "other")
-    # What any `SessionRoot` but the default yields: a directory that is not under
-    # the workspace at all.
+    # A session whose files are not under the workspace at all.
     elsewhere = ensure_session_layout(tmp_path / "for-one-turn" / "a-session")
     service = Kingfisher(cfg, backend=default_backend)
 
-    service._agent_for(Request("go", agent="only"), elsewhere)
+    service._agent_for(Request("go", agent="only"), harness_in(elsewhere))
 
     assert agent_snapshot(elsewhere).is_file(), "the pin is not where the turn ran"
     assert not (cfg.workspace / "sessions" / elsewhere.name).exists(), (
@@ -988,66 +734,4 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     )
 
     with pytest.raises(CapabilityError, match="cannot be changed"):
-        service._agent_for(Request("again", agent="other"), elsewhere)
-
-
-def test_a_session_opened_as_one_agent_cannot_run_as_another_somewhere_else(cfg, tmp_path):
-    """The other half of the same hole, through the other door.
-
-    Under a custom root the pin is not in the workspace, and the store is the one
-    thing both ends see: `_ready` restores it into the directory this turn holds,
-    before `_agent_for` reads it. While it did not, a session opened as one agent
-    ran as another and the refusal never fired, though the identical calls against
-    the default root were refused.
-    """
-    from kingfisher import LocalSessionStore
-    from kingfisher.infrastructure.workspace import AGENT_SNAPSHOT
-
-    an_agent(cfg, "only")
-    an_agent(cfg, "other")
-    kept = LocalSessionStore(tmp_path / "kept-elsewhere")
-    service = Kingfisher(
-        cfg, backend=default_backend,
-        sessions=kept,
-        session_root=FreshEachTurn(tmp_path / "for-one-turn"),
-    )
-    # Held in the store and nowhere else, pinned to `only`: which is how a session
-    # arrives on a machine that has never run it.
-    document = service.catalogue.agents.documents["only"]
-    kept.save("s", {AGENT_SNAPSHOT: document.encode("utf-8")})
-
-    asked = Request("go", agent="other", session_id="s")
-    with pytest.raises(CapabilityError, match="cannot be changed"), \
-            service._held_session(asked) as session:
-        service._agent_for(asked, session.directory)
-
-
-def test_a_session_kept_only_in_a_store_is_not_swept_out_of_it(cfg, tmp_path):
-    """`reap` walks `<workspace>/sessions/`, which a session under a root of the
-    deployment's own never uses -- so a sweep cannot see it, and must not forget it.
-
-    This is what the predecessor lost data over: opening a session before its first
-    turn laid a stub out under the workspace whatever `session_root` answered, and
-    the stub was idle from the moment it was made, so `reap` swept it and called
-    `forget` on the store -- deleting the only durable copy of a session in daily
-    use. Nothing opens a session before a turn now, so the stub has no route; this
-    holds the property it violated.
-    """
-    from kingfisher import LocalSessionStore
-
-    kept = LocalSessionStore(tmp_path / "kept-elsewhere")
-    service = Kingfisher(
-        cfg,
-        graph=StubAgent("ok"),
-        threads=StubCheckpointer(),
-        sessions=kept,
-        session_root=FreshEachTurn(tmp_path / "for-one-turn"),
-    )
-    session_id = service.run(Request(task="anything")).session_id
-    assert kept.knows(session_id), "the store never got the session to begin with"
-
-    # Long enough after that anything the sweep can see is expired.
-    swept = service.reap(older_than_seconds=1, now=time() + 3600)
-
-    assert session_id not in swept.removed
-    assert kept.knows(session_id), "a live session was swept out of its own store"
+        service._agent_for(Request("again", agent="other"), harness_in(elsewhere))

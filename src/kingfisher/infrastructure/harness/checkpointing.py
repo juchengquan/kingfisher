@@ -55,8 +55,8 @@ def harness_mark() -> dict[str, str]:
     return marked
 
 
-def write_paused_state(saver: Any, path: Path) -> None:
-    """Keep what a paused turn's saver holds, so a later turn can resume into it.
+def paused_state(saver: Any) -> bytes:
+    """What a paused turn's saver holds, as bytes a later turn can resume from.
 
     The three mappings rather than the saver, because everything they hold is already
     `(type, bytes)` by the time it lands there -- the saver serialised it on the way
@@ -77,21 +77,12 @@ def write_paused_state(saver: Any, path: Path) -> None:
         "blobs": [[list(key), entry] for key, entry in saver.blobs.items()],
     }
     kind, payload = _SERDE.dumps_typed(document)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # Staged and renamed rather than written where it is read from. A write cut off
-    # halfway leaves the previous checkpoint whole, and a resume that finds nothing
-    # is a turn that has to be asked again -- where one that finds half a checkpoint
-    # is a resume failing on state that looks present.
-    staged = path.with_name(f"{path.name}.partial")
-    staged.write_bytes(kind.encode("utf-8") + b"\n" + payload)
-    staged.replace(path)
+    return kind.encode("utf-8") + b"\n" + payload
 
 
-def read_paused_state(path: Path) -> Any | None:
-    """The saver a paused turn left behind, or `None` where no turn left one."""
-    if not path.is_file():
-        return None
-    kind, _, payload = path.read_bytes().partition(b"\n")
+def resumed_saver(state: bytes) -> Any:
+    """The saver `paused_state` was taken from, rebuilt from its bytes."""
+    kind, _, payload = state.partition(b"\n")
     document = _SERDE.loads_typed((kind.decode("utf-8"), payload))
     saver = InMemorySaver()
     # Assigned *through* the mappings rather than over them, so the defaultdicts a

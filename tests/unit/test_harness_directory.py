@@ -11,7 +11,7 @@ workspace -- the shell could reach them anyway.
 from __future__ import annotations
 
 import platform
-import shutil
+from pathlib import Path
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -20,10 +20,9 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import default_backend
-from kingfisher.infrastructure.harness.runlog import log_path
-from kingfisher.infrastructure.workspace import agent_snapshot, claim_path, ensure_layout
-from kingfisher.layout import LAYOUT_VERSION, MARKER
+from kingfisher.infrastructure.harness.backend import backend_at
+from kingfisher.infrastructure.workspace import ensure_layout
+from kingfisher.layout import CLAIM, HARNESS, LAYOUT_VERSION, MARKER, PINNED_AGENT
 from tests.conftest import FakeToolCallingModel, pin, start
 
 macos = pytest.mark.skipif(
@@ -35,6 +34,11 @@ description: An agent.
 system_prompt: |
   You help.
 """
+
+
+def agent_snapshot(session_dir) -> Path:
+    """Where the default backend keeps a session's pinned agent, on disk."""
+    return Path(session_dir) / HARNESS / PINNED_AGENT
 
 
 def _agent(cfg) -> None:
@@ -114,7 +118,7 @@ def test_the_shell_cannot_write_into_the_harness(cfg, session_dir):
     pinned = agent_snapshot(session_dir)
     pinned.parent.mkdir(parents=True, exist_ok=True)
     pinned.write_text(AGENT, encoding="utf-8")
-    shell = default_backend(cfg, session_dir)
+    shell = backend_at(cfg, session_dir)
 
     shell.execute(f'printf "name: mine" > "{pinned}"')
     shell.execute(f'rm -f "{pinned}"')
@@ -125,7 +129,7 @@ def test_the_shell_cannot_write_into_the_harness(cfg, session_dir):
 @macos
 def test_the_shell_can_still_write_the_rest_of_the_session(cfg, session_dir):
     """The bound on the rule: one directory is carved out, not the session."""
-    shell = default_backend(cfg, session_dir)
+    shell = backend_at(cfg, session_dir)
 
     assert shell.execute(f'echo fine > "{session_dir}/derived/ok.txt"').exit_code == 0
     assert shell.execute('echo fine > "$TMPDIR/ok.txt"').exit_code == 0
@@ -141,68 +145,12 @@ def test_one_session_s_harness_is_not_denied_by_naming_another(cfg, workspace):
     session = ensure_session_layout(workspace / "sessions" / "second")
     decoy = session / "derived" / ".harness"
     decoy.mkdir(parents=True, exist_ok=True)
-    shell = default_backend(cfg, session)
+    shell = backend_at(cfg, session)
 
     assert shell.execute(f'echo fine > "{decoy}/ok.txt"').exit_code == 0
 
 
-# -- what crosses a machine, and what does not ----------------------------
-
-
-def _wired_to_a_store(cfg, tmp_path):
-    from kingfisher import LocalSessionStore
-    from kingfisher.application.service import Kingfisher
-    from tests.conftest import StubCheckpointer
-    from tests.unit.test_run import StubAgent
-
-    kept = LocalSessionStore(tmp_path / "kept-elsewhere")
-    return Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), sessions=kept), kept
-
-
-def test_a_session_that_lost_its_directory_keeps_the_agent_it_opened_with(cfg, tmp_path):
-    """The hole this closed. The pin lived under `state_dir`, which the store never
-    saw, so a session resumed on another machine found none, re-pinned from *that*
-    host's catalogue, and accepted whatever agent the request named -- "a session is
-    fixed to the agent it opened with" held on one host and quietly failed across two.
-    """
-    _agent(cfg)
-    service, _ = _wired_to_a_store(cfg, tmp_path)
-    # Opened and pinned before any turn, which is the only way a deployment that
-    # supplies its own graph ever pins: `_graph_for` returns that graph before it
-    # resolves an agent.
-    session_id = start(cfg, "s")
-    pin(service, session_id, "assistant")
-    service.run(Request(task="go", session_id=session_id))
-
-    # The machine goes; the store is all that is left.
-    shutil.rmtree(cfg.workspace / "sessions" / session_id)
-    service.run(Request(task="again", session_id=session_id))
-
-    kept = agent_snapshot(cfg.workspace / "sessions" / session_id)
-    assert kept.is_file(), "the pin did not come back, so the session re-pinned itself"
-    assert "assistant" in kept.read_text(encoding="utf-8")
-
-
-def test_the_claim_and_the_run_log_stay_on_the_machine(cfg, tmp_path):
-    """A restored claim would make the session look busy for `claim_stale_after` --
-    minutes -- before anyone could take the slot. The log grows and is re-read whole
-    on every save, for a file nothing in production reads.
-    """
-    _agent(cfg)
-    service, kept = _wired_to_a_store(cfg, tmp_path)
-    session_id = start(cfg, "s")
-    pin(service, session_id, "assistant")
-    service.run(Request(task="go", session_id=session_id))
-
-    held = kept.fetch(session_id)
-
-    assert ".harness/agent.yaml" in held
-    assert ".harness/transcript.jsonl" in held
-    assert not [name for name in held if name.startswith(".harness/claim")]
-    assert ".harness/runlog.jsonl" not in held
-
-
-def test_the_run_log_and_the_claim_go_with_the_session(cfg):
+def test_the_pin_and_the_claim_go_with_the_session(cfg):
     """The residue this whole change is about: one file per session that ever existed,
     under `state_dir`, deleted by nothing."""
     from kingfisher.application.service import Kingfisher
@@ -215,14 +163,12 @@ def test_the_run_log_and_the_claim_go_with_the_session(cfg):
     pin(service, session_id, "assistant")
     service.run(Request(task="go", session_id=session_id))
     directory = cfg.workspace / "sessions" / session_id
-    assert log_path(directory).is_file()
     assert agent_snapshot(directory).is_file()
 
     service.delete_session(session_id)
 
-    assert not log_path(directory).exists()
     assert not agent_snapshot(directory).exists()
-    assert not claim_path(directory).exists()
+    assert not (directory / HARNESS / CLAIM).exists()
     assert not list((cfg.workspace / "sessions").iterdir())
 
 

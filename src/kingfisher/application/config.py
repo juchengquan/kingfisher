@@ -7,7 +7,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from kingfisher.config import Config, ConfigError, WorkspacePaths
+from kingfisher.config import (
+    REMOVED_STORE_SETTINGS,
+    Config,
+    ConfigError,
+    SessionKey,
+    WorkspacePaths,
+)
 from kingfisher.infrastructure import access_policy, model_catalogue
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
@@ -126,6 +132,16 @@ class Environment:
 
     def config(self) -> Config:
         """Build a `Config` from environment variables."""
+        # Refused rather than ignored. A deployment that relied on either for durable
+        # sessions would otherwise lose them on upgrade with nothing said.
+        for removed in REMOVED_STORE_SETTINGS:
+            if self.optional_text(removed):
+                msg = (
+                    f"{removed} was removed: a session's backend keeps it now. Mount "
+                    "durable storage at <workspace>/sessions, or set "
+                    "KINGFISHER_BACKEND_FACTORY to a backend that keeps sessions itself"
+                )
+                raise ConfigError(msg)
         path_extra = tuple(
             part
             for part in (self.values.get("KINGFISHER_SHELL_PATH_EXTRA") or "").split(":")
@@ -178,8 +194,12 @@ class Environment:
             middlewares_root=paths.middlewares_root,
             skills_mounts=paths.skills_mounts,
             assets=paths.assets,
-            session_store=self.optional_path("KINGFISHER_SESSION_STORE"),
-            session_store_factory=self.optional_text("KINGFISHER_SESSION_STORE_FACTORY"),
+            backend_factory=self.optional_text("KINGFISHER_BACKEND_FACTORY"),
+            session_key=(
+                SessionKey(secret.encode("utf-8"))
+                if (secret := self.optional_text("KINGFISHER_SESSION_KEY"))
+                else None
+            ),
             skills_enabled=self.flag("KINGFISHER_SKILLS_ENABLED"),
             memory_enabled=self.flag("KINGFISHER_MEMORY_ENABLED"),
             interpreter_enabled=self.flag("KINGFISHER_INTERPRETER_ENABLED"),

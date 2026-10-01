@@ -127,12 +127,19 @@ class Inventory:
     #: stops the deployment at startup, an agent's stops nothing at all and the
     #: agent simply runs without the tool it was granted.
     moved_tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    #: Whether `moved_tools` was asked at all. `False` when a catalogue it reads did
+    #: not load, which is not the answer "nothing moved" and must not be reported as
+    #: one -- an empty mapping cannot tell the two apart.
+    moved_tools_checked: bool = True
 
     #: Definitions whose `source: bundled` entries and own folder disagree, by the
     #: name a grant uses, each with how the two differ.
     #: Carried for the reason `moved_tools` is: startup refuses this, and `doctor`
     #: promises to say in advance what startup will refuse.
     miscounted_bundles: Mapping[str, str] = _NOTHING
+    #: Whether `miscounted_bundles` was asked at all, for the reason
+    #: `moved_tools_checked` gives.
+    miscounted_bundles_checked: bool = True
 
     #: Middleware class name -> the installed module it came from, or `""` where a
     #: workspace file defined it. Not the raw `__module__`: for a class written in
@@ -152,12 +159,12 @@ class Inventory:
     #: other way to find that out.
     bundled_tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
     bundled_skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
-    #: Skills in a bundle whose owner is a compiled delegate, by subagent. They
-    #: load, they are mounted, and nothing is ever told about them: a skills index
-    #: arrives through middleware and deepagents gives a compiled graph none. Its
-    #: tools do reach it -- `build` is handed a list -- so this is one half of a
-    #: bundle working and the other half not, which is why it has to be said rather
-    #: than left to be inferred from two fields that each look fine.
+    #: Skills in a bundle whose owner is a compiled delegate, by subagent. A skills
+    #: index arrives through middleware and deepagents gives a compiled graph none,
+    #: so such a delegate cannot list them and the folder is refused as unlisted.
+    #: Carried so the listing can say *why* beside that refusal: the unlisted-file
+    #: message alone sends a reader to add a `source: bundled` line that a compiled
+    #: declaration refuses.
     stranded_skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
     #: Catalogue tools a bundle answers for instead, by subagent. Printed
     #: because shadowing is only acceptable while it is visible: the delegate
@@ -333,11 +340,12 @@ def _bundled(
     return tools, skills, shadowed, error, orphans, carried
 
 
-def _moved_tools(resolved: Definitions) -> Mapping[str, tuple[str, ...]]:
-    """Definitions naming a tool by a path it no longer lives at.
+def _moved_tools(resolved: Definitions) -> Mapping[str, tuple[str, ...]] | None:
+    """Definitions naming a tool by a path it no longer lives at, or `None` when that
+    could not be asked.
 
     Both kinds, through the same `Offering` the refusal uses. A catalogue that will
-    not walk answers nothing rather than raising: whichever of `tools`, `agents` or
+    not walk answers `None` rather than raising: whichever of `tools`, `agents` or
     `subagents` failed is already reported on its own line, and a second copy of
     that error here would say nothing new.
     """
@@ -353,17 +361,18 @@ def _moved_tools(resolved: Definitions) -> Mapping[str, tuple[str, ...]]:
             if (moved := offers.moved(spec.tool_sources))
         })
     except (ToolError, AgentError, SubagentError):
-        return _NO_NAMES
+        return None
 
 
-def _miscounted_bundles(resolved: Definitions) -> Mapping[str, str]:
-    """Definitions whose bundled entries no longer match their own folder.
+def _miscounted_bundles(resolved: Definitions) -> Mapping[str, str] | None:
+    """Definitions whose bundled entries no longer match their own folder, or `None`
+    when that could not be asked.
 
     Through the same rule `warm` refuses with, not a second reading of the same
     fields: two walks that can disagree would let a listing call a catalogue fine
     that the constructor then refuses, which is the whole failure this reports.
 
-    A catalogue that will not walk answers nothing rather than raising, the way
+    A catalogue that will not walk answers `None` rather than raising, the way
     `_moved_tools` does -- whichever kind failed is already on its own line.
     """
     found: dict[str, str] = {}
@@ -374,7 +383,7 @@ def _miscounted_bundles(resolved: Definitions) -> Mapping[str, str]:
             if complaint is not None:
                 found[name] = complaint
     except (ToolError, SubagentError):
-        return _NOTHING
+        return None
     return MappingProxyType(found)
 
 
@@ -706,8 +715,10 @@ def inventory(
         subagents_error=subagents_error or broken.get("subagents"),
         middlewares=middlewares,
         middlewares_error=middlewares_error,
-        moved_tools=moved_tools,
-        miscounted_bundles=miscounted_bundles,
+        moved_tools=_NO_NAMES if moved_tools is None else moved_tools,
+        moved_tools_checked=moved_tools is not None,
+        miscounted_bundles=_NOTHING if miscounted_bundles is None else miscounted_bundles,
+        miscounted_bundles_checked=miscounted_bundles is not None,
         bundled_tools=bundled_tools,
         bundled_skills=bundled_skills,
         # Computed here rather than in `_bundled`, which is the only place that

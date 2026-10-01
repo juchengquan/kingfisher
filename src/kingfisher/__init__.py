@@ -31,34 +31,31 @@ __version__ = "0.1.0"
 _EXPORTS = {
     "Held": "kingfisher.domain.access",
     "AccessError": "kingfisher.domain.access",
+    "ArtifactError": "kingfisher.domain.result",
     "UNSCOPED": "kingfisher.domain.access",
     "Capabilities": "kingfisher.domain.capabilities",
     "CapabilityError": "kingfisher.domain.capabilities",
     "QuotaExceededError": "kingfisher.domain.session",
     "SessionBusyError": "kingfisher.domain.session",
+    "SessionTamperedError": "kingfisher.domain.session",
     "SubagentError": "kingfisher.kinds.subagents.spec",
     "UnsafeReferenceError": "kingfisher.domain.references",
     "HostPathError": "kingfisher.infrastructure.harness.host_paths",
-    "LocalSessionStore": "kingfisher.infrastructure.session_store",
-    # The port's contract, for a deployment checking its own adapter against it.
-    # Public because it is the one thing in `testing` anybody outside this
-    # repository is meant to import -- and public *here* rather than left to
-    # `import kingfisher.testing`, because `READ_ELSEWHERE` says a name this
-    # package publishes belongs in `__all__` and reaching for that table instead
-    # is how something gets published without saying so.
-    "SESSION_STORE_CONTRACT": "kingfisher.testing",
-    # The other two ports a deployment replaces. Both kits do more than read --
-    # one creates directories, one runs commands -- which is a property of the
-    # ports rather than of the kits: there is no way to check that a runner runs
-    # things without running things.
-    "SESSION_ROOT_CONTRACT": "kingfisher.testing",
+    # The runner's contract, for a deployment checking its own adapter against it.
+    # Public here rather than left to `import kingfisher.testing`, because
+    # `READ_ELSEWHERE` says a name this package publishes belongs in `__all__`. It
+    # does more than read, which is a property of the port rather than of the kit:
+    # there is no way to check that a runner runs things without running things.
     "COMMAND_RUNNER_CONTRACT": "kingfisher.testing",
-    # The fourth kit, and the one not in `testing`. Its sharpest check asks whether
+    # The other kit, and the one not in `testing`. Its sharpest check asks whether
     # deepagents will recognise a backend as running commands, which needs the
     # package -- and `testing` is permitted nothing foreign, an entry covering
     # `config` and `layout` too. So it lives where the backend it describes is
     # built, and comes through the front door from there.
     "BACKEND_CONTRACT": "kingfisher.infrastructure.harness.backend_contract",
+    # Its companion for the object that makes backends and answers for every session:
+    # that two sessions never share a filesystem, and that a claim is exclusive.
+    "SESSION_BACKENDS_CONTRACT": "kingfisher.infrastructure.harness.backend_contract",
     # One of the eleven, back. The rule those left under still holds -- a caller
     # means a caller outside this wheel -- and what changed is that every such
     # caller now has to name this one: `Kingfisher` no longer picks the filesystem
@@ -66,6 +63,13 @@ _EXPORTS = {
     # `backend=default_backend` and has to be able to say it without reaching past
     # the door for an infrastructure path.
     "default_backend": "kingfisher.infrastructure.harness.backend",
+    # What `default_backend` builds for one session, for a directory of the caller's
+    # choosing. Public because `ports.md` tells a deployment replacing the backend to
+    # start from it rather than from nothing, and that has to be sayable from here.
+    "backend_at": "kingfisher.infrastructure.harness.backend",
+    # What a deployment subclasses to build on the default: its housekeeping, with its
+    # own `__call__`. `ports.md` shows it, and the refusal of a plain function names it.
+    "DefaultBackend": "kingfisher.infrastructure.harness.backend",
     # The seventh name a consumer has forced public, and the plainest: a
     # `CommandRunner` returns one of these, so a deployment writing a runner
     # cannot write one without it. `docs/guides/ports.md` documents the port and
@@ -124,11 +128,11 @@ _EXPORTS = {
 __all__ = [
     "BACKEND_CONTRACT",
     "COMMAND_RUNNER_CONTRACT",
-    "SESSION_ROOT_CONTRACT",
-    "SESSION_STORE_CONTRACT",
+    "SESSION_BACKENDS_CONTRACT",
     "UNSCOPED",
     "AccessError",
     "Adapter",
+    "ArtifactError",
     "Capabilities",
     "CapabilityError",
     "CommandResult",
@@ -136,12 +140,12 @@ __all__ = [
     "ConfigError",
     "Decision",
     "DecisionError",
+    "DefaultBackend",
     "Held",
     "HostPathError",
     "Inventory",
     "Kingfisher",
     "Landing",
-    "LocalSessionStore",
     "Origin",
     "Origins",
     "PendingDecision",
@@ -154,11 +158,13 @@ __all__ = [
     "Seeded",
     "SessionBusyError",
     "SessionInfo",
+    "SessionTamperedError",
     "SubagentError",
     "ToolContext",
     "UnknownSessionError",
     "UnsafeReferenceError",
     "WorkspacePaths",
+    "backend_at",
     "config_from_env",
     "default_backend",
     "definitions_source",
@@ -200,24 +206,32 @@ if TYPE_CHECKING:
     from kingfisher.domain.request import DecisionError as DecisionError
     from kingfisher.domain.request import Request as Request
     from kingfisher.domain.request import Resume as Resume
+    from kingfisher.domain.result import ArtifactError as ArtifactError
     from kingfisher.domain.result import PendingDecision as PendingDecision
     from kingfisher.domain.result import RunEvent as RunEvent
     from kingfisher.domain.result import RunResult as RunResult
     from kingfisher.domain.session import QuotaExceededError as QuotaExceededError
     from kingfisher.domain.session import SessionBusyError as SessionBusyError
     from kingfisher.domain.session import SessionInfo as SessionInfo
+    from kingfisher.domain.session import SessionTamperedError as SessionTamperedError
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
+    from kingfisher.infrastructure.harness.backend import (
+        DefaultBackend as DefaultBackend,
+    )
+    from kingfisher.infrastructure.harness.backend import (
+        backend_at as backend_at,
+    )
     from kingfisher.infrastructure.harness.backend import (
         default_backend as default_backend,
     )
     from kingfisher.infrastructure.harness.backend_contract import (
         BACKEND_CONTRACT as BACKEND_CONTRACT,
     )
+    from kingfisher.infrastructure.harness.backend_contract import (
+        SESSION_BACKENDS_CONTRACT as SESSION_BACKENDS_CONTRACT,
+    )
     from kingfisher.infrastructure.harness.host_paths import HostPathError as HostPathError
     from kingfisher.infrastructure.harness.tool_context import ToolContext as ToolContext
-    from kingfisher.infrastructure.session_store import (
-        LocalSessionStore as LocalSessionStore,
-    )
     from kingfisher.infrastructure.workspace import Seeded as Seeded
     from kingfisher.infrastructure.workspace import (
         definitions_source as definitions_source,
@@ -228,8 +242,6 @@ if TYPE_CHECKING:
     from kingfisher.kinds.subagents.spec import RunOn as RunOn
     from kingfisher.kinds.subagents.spec import SubagentError as SubagentError
     from kingfisher.testing import COMMAND_RUNNER_CONTRACT as COMMAND_RUNNER_CONTRACT
-    from kingfisher.testing import SESSION_ROOT_CONTRACT as SESSION_ROOT_CONTRACT
-    from kingfisher.testing import SESSION_STORE_CONTRACT as SESSION_STORE_CONTRACT
 
 
 def __getattr__(name: str) -> Any:
