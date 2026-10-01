@@ -527,13 +527,21 @@ class Kingfisher(Sessions, Disposal):
             self.cfg.session_key,
         )
 
-    def pending(self, session_id: str) -> tuple[PendingDecision, ...]:
+    def pending(
+        self, session_id: str, *, source_ids: Held | None = None
+    ) -> tuple[PendingDecision, ...]:
         """What this session's paused turn is waiting on, or nothing.
 
         Read from the mark the pause wrote rather than by starting a turn: asking what
         is pending must not be a thing that can supersede it, and every other way into
         the session is a turn.
+
+        Checked the way reading a session is, because what it returns is somebody's
+        tool calls with their arguments. A caller who cannot reach the session gets
+        `UnknownSessionError`, the same answer a wrong id gets.
         """
+        if self.session(session_id, source_ids=source_ids) is None:
+            raise self._unknown_session(session_id)
         directory = sessions_root(self.workspace) / session_id
         return pending_from_mark(read_pause_mark(self._harness_at(session_id, directory)) or {})
 

@@ -601,7 +601,7 @@ def _decide(args: argparse.Namespace) -> int:
     cfg = config_from_env()
     kf = Kingfisher(cfg, backend=configured_backend(cfg))
     if not decisions:
-        return _show_pending(kf, args.session)
+        return _show_pending(kf, args.session, args.held)
     return _drive(
         kf,
         Resume(
@@ -614,15 +614,18 @@ def _decide(args: argparse.Namespace) -> int:
     )
 
 
-def _show_pending(kf: Kingfisher, session_id: str) -> int:
-    """What this session is waiting on, for somebody who has lost the ids."""
-    # Asked of the backends, not of a folder here, which a backend keeping its
-    # sessions elsewhere never makes. `UNSCOPED` for the reason `_reap_one` gives:
-    # this only asks whether the id names a session.
-    if kf.session(session_id, source_ids=UNSCOPED) is None:
+def _show_pending(kf: Kingfisher, session_id: str, held: Held | None) -> int:
+    """What this session is waiting on, for somebody who has lost the ids.
+
+    Asked as the caller `--as` names, not as nobody: what comes back is somebody's
+    tool calls and their arguments, and answering it would otherwise be the one
+    door into a session that does not ask who is knocking.
+    """
+    try:
+        waiting = kf.pending(session_id, source_ids=held)
+    except UnknownSessionError:
         print(f"no such session: {session_id}", file=sys.stderr)
         return 2
-    waiting = kf.pending(session_id)
     if not waiting:
         print(f"session {session_id} is not waiting on a decision", file=sys.stderr)
         return 2

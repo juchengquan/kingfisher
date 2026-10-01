@@ -10,7 +10,10 @@ decision the turn had stopped to ask for.
 from __future__ import annotations
 
 import argparse
+import importlib
 from typing import Any
+
+import pytest
 
 import kingfisher
 from kingfisher.domain.result import AWAITING, RunResult
@@ -54,7 +57,14 @@ def _args(**over: Any) -> argparse.Namespace:
 def _drive(monkeypatch, result: RunResult) -> None:
     """Run the command's ending against a result, with nothing real behind it."""
     monkeypatch.setattr(cli, "config_from_env", object)
-    monkeypatch.setattr("kingfisher.application.run.configured_backend", lambda cfg: None)
+    # The module itself, imported by name: as a dotted string `kingfisher.application.run`
+    # resolves to the `run` function the package exports, whenever nothing has loaded
+    # the module first -- so this patch worked in the full suite and failed alone.
+    monkeypatch.setattr(
+        importlib.import_module("kingfisher.application.run"),
+        "configured_backend",
+        lambda cfg: None,
+    )
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Nothing())
     monkeypatch.setattr(cli, "show", lambda *a, **k: result)
 
@@ -162,7 +172,14 @@ def test_the_three_decisions_reach_the_library_as_written(monkeypatch):
             return iter(())
 
     monkeypatch.setattr(cli, "config_from_env", object)
-    monkeypatch.setattr("kingfisher.application.run.configured_backend", lambda cfg: None)
+    # The module itself, imported by name: as a dotted string `kingfisher.application.run`
+    # resolves to the `run` function the package exports, whenever nothing has loaded
+    # the module first -- so this patch worked in the full suite and failed alone.
+    monkeypatch.setattr(
+        importlib.import_module("kingfisher.application.run"),
+        "configured_backend",
+        lambda cfg: None,
+    )
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Recording())
 
     cli._decide(
@@ -280,3 +297,54 @@ def test_the_whole_loop_runs_through_the_command(cfg, session_dir, monkeypatch, 
 
     assert code == 0, capsys.readouterr().err
     assert (session_dir / "derived" / "done.txt").read_text() == "ran"
+
+
+def _a_paused_session_only_a_reaches(cfg):
+    """A deployment with source ids, and a paused session pinned to an agent that only
+    `A` reaches -- with a pending call whose arguments are worth not leaking.
+    """
+    from dataclasses import replace
+
+    import yaml
+
+    from kingfisher.domain.access import parse
+    from kingfisher.infrastructure.session_store import pending_as_mark, write_pause_mark
+    from tests.conftest import an_agent, harness_of, pin, start
+
+    an_agent(cfg, "only_a", source_ids="[A]")
+    policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
+    kf = kingfisher.Kingfisher(policied, backend=kingfisher.default_backend)
+    start(policied, "s-1")
+    pin(kf, "s-1", "only_a")
+    write_pause_mark(harness_of(policied, "s-1"), {"pending": pending_as_mark([PAUSED.pending[0]])})
+    return policied, kf
+
+
+def test_a_caller_who_cannot_reach_the_session_is_not_shown_what_it_waits_on(cfg):
+    """It asked as nobody, so anyone holding a session id read the pending calls and
+    their arguments -- the one door into a session that did not ask who was calling.
+    """
+    from kingfisher import UnknownSessionError
+
+    _, kf = _a_paused_session_only_a_reaches(cfg)
+
+    # The control beside the escape: the caller who does reach it is shown the call.
+    assert [call.call_id for call in kf.pending("s-1", source_ids=("A",))] == ["abc123#0"]
+    with pytest.raises(UnknownSessionError):
+        kf.pending("s-1", source_ids=("B",))
+
+
+def test_the_command_asks_as_the_caller_it_names(cfg, monkeypatch, capsys):
+    """`--as` reaches the question, and an unreachable session reads as a missing one."""
+    policied, _ = _a_paused_session_only_a_reaches(cfg)
+    monkeypatch.setattr(cli, "config_from_env", lambda: policied)
+
+    refused = cli._decide(_decide_args(held=("B",)))
+    told = capsys.readouterr().err
+    shown = cli._decide(_decide_args(held=("A",)))
+
+    assert refused == 2
+    assert "no such session: s-1" in told
+    assert "abc123#0" not in told
+    assert shown == 1
+    assert "abc123#0" in capsys.readouterr().err
