@@ -133,6 +133,28 @@ for the next reader who reaches for one.*
   provided`. The quiet case is a subclass: override only `abefore_model` of a
   parent implementing both, and the parent's `before_model` runs with no error.
   `guides/middleware.md` draws the consequence. *(2026-09-15.)*
+- **deepagents' summarizer keeps an index, not a rewrite, and nothing re-checks
+  it.** It stores `_summarization_event.cutoff_index` into `state["messages"]` and
+  rebuilds each call's view as the summary plus everything after that index;
+  `_apply_event_to_messages` slices by it as stored. A second summarizer that
+  rewrites the messages leaves the index stale -- past the end, the model sees only
+  the old summary -- and two deepagents summarizers side by side break the same
+  way. *(2026-10-01.)*
+- **A subclass of deepagents' summarizer runs beside the original unless it says
+  otherwise.** Its `name` answers `SummarizationMiddleware` only for the exact
+  class and the subclass's own class name otherwise, so replacing it is something
+  a subclass opts into. `compaction.py` does. *(2026-10-01.)*
+- **What it summarizes away is kept, and the summary says where.** One file per
+  session, `/conversation_history/<session_id>.md`, a timestamped section appended
+  each time; through kingfisher's backend it lands in the session directory and the
+  agent reads it back with `read_file`.
+  `test_compaction_fires_at_sixty_messages_however_small` reads it back that way.
+  *(2026-10-01.)*
+- **Its trigger counts the system prompt and tools; its `keep` does not.** With a
+  window small enough that those approach three quarters of it, a profile-based
+  trigger fires before every call: the stock prompt (about 2.4k tokens) at a 3.2k
+  window summarized before seven of nine calls. At 8k it fired once in sixteen.
+  *(2026-09-30.)*
 
 ## Skills and subagents
 

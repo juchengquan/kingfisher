@@ -62,7 +62,7 @@ class WantsABackend(AgentMiddleware):
 
 
 class WantsAModel(AgentMiddleware):
-    """The shape `compaction.py` ships: a want a definition may name instead."""
+    """A want a definition may name instead."""
 
     name = "WantsAModel"
     wants = frozenset({"model"})
@@ -421,7 +421,7 @@ def test_a_want_this_build_does_not_provide_is_refused_naming_what_it_does():
 
 
 def test_a_want_nobody_named_falls_back_to_what_this_build_runs():
-    """`middlewares: [compact]` with no settings is a working line.
+    """A middleware wanting a model, named with no settings, is a working line.
 
     A fallback that resolved something would mean the bare form ran the deployment's
     default rather than the model the agent in front of it was pinned to, which is

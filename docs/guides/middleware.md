@@ -106,13 +106,11 @@ Three things are not the deployment's to make once: **the model this graph runs*
 for**. A class asks for them by name:
 
 ```python
-class Compact(SummarizationMiddleware):
+class Compact(SummarizationMiddleware):  # deepagents', not langchain's
     name = "compact"
-    wants = frozenset({"model", "backend", "definition"})
-    defaults = {"trigger": ("messages", 60), "keep": ("messages", 20)}
-    yaml_settable = frozenset({"model"})
+    wants = frozenset({"model", "backend"})
 
-    def __init__(self, model, backend, definition, trigger, keep) -> None:
+    def __init__(self, model, backend) -> None:
         ...
 ```
 
@@ -129,12 +127,12 @@ file and a subagent file. A want nothing there answers to is refused when the
 agent is built, listing what this build does provide — which is the listing to
 read, because there is no constant anywhere to look up instead.
 
-**A wanted key is a name in yaml and an object in Python.** `model` above is also
-in `yaml_settable`, which is not a contradiction:
+**A wanted key is a name in yaml and an object in Python.** A class may list
+`model` in `yaml_settable` as well as in `wants`, which is not a contradiction:
 
 ```yaml
 middlewares:
-  - name: compact
+  - name: my-summarizer
     settings: {model: MiniMax-M2.5}
 ```
 
@@ -155,8 +153,9 @@ could carry for them. A class naming one in `defaults` or `yaml_settable` is
 refused, whether or not any definition ever writes it.
 
 **A middleware still imports nothing from kingfisher.** What it receives is a
-LangChain chat model, a deepagents backend and a frozen spec; `compaction.py`
-imports `langchain` and nothing else, exactly as the other two do.
+LangChain chat model, a deepagents backend and a frozen spec. The other two
+examples import `langchain` and nothing else, and `compaction.py` imports
+deepagents' summarizer -- neither imports kingfisher.
 
 ## Or put it in the workspace
 
@@ -286,6 +285,13 @@ enforces the `permissions` rules, so the substitution has to do that job too.
 Kingfisher warns rather than refuses, once, at build time. If you meant it there
 is nothing to do; if you did not, rename the class and leave the registry key
 alone.
+
+`compaction.py` means it. deepagents' summarizer records what it summarized as an
+index into the conversation, so a second summarizer beside it -- one that rewrites
+the conversation, or another deepagents one keeping its own index -- leaves the
+model looking at the wrong messages. `Compact` takes that summarizer's place
+instead: the class keeps `compact` for definitions to write, and the instance
+answers to `SummarizationMiddleware`, which is the name deepagents merges by.
 
 ## What your middleware sees
 

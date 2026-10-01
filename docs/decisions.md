@@ -337,7 +337,31 @@ provider and reads credentials from the environment, around the catalogue and th
 endpoint's `base_url` entirely. Two things it teaches were measured rather than
 assumed: an unset `trigger` normalises to no clauses and never fires, and a
 backend reports a failed write by returning one rather than raising.
-*(2026-09-15.)*
+*(2026-09-15. Reversed 2026-10-01, next entry.)*
+
+**Reversed: `compact` as a second summarizer.** `compaction.py` subclassed
+langchain's `SummarizationMiddleware` under its own name, so it ran beside the
+summarizer deepagents puts on every agent rather than instead of it, and the two
+keep different books. deepagents' records its cutoff as an index into
+`state["messages"]` and never rewrites them; langchain's rewrites them to a summary
+and twenty messages. After a rewrite the index pointed past the end, and on a
+scripted run the model was shown the system prompt and an old summary for twelve
+consecutive calls -- not the request, not the results it had just asked for.
+`test_a_compacted_agent_still_sees_what_it_just_read` holds it. The note had a
+fault of its own: a counter per instance, an instance per build and a build per
+turn, so each turn's first compaction wrote `<agent>-1.md` over the last, and the
+backend overwrites without an error.
+
+`Compact` is now deepagents' summarizer in that summarizer's place -- its
+thresholds from the model's profile, its `keep`, its history file, which the
+summary itself names, and its retry when a call overflows -- with one clause added
+to the trigger: sixty messages, whatever their size. The class keeps `compact` for
+definitions and the instance answers to deepagents' name, so kingfisher's
+replacement notice fires when it is built, which here is the design rather than a
+slip. `trigger` and `keep` left `defaults` and `model` left `yaml_settable`,
+because the summarizer every other agent runs has no such settings and this one
+matches it. Weighed and not taken: dropping `compact` from the shipped agents,
+which fixes two files and leaves every workspace that names it broken. *(2026-10-01.)*
 
 **The shipped `assistant` names its middleware, and does not write the star.**
 `middlewares: ["*"]` was argued as the one form a shipped file could carry: a name
