@@ -31,7 +31,7 @@ AXES: tuple[str, ...] = tuple(f.name for f in fields(Capabilities))
 #: the layout makes and nothing reads.
 NOT_A_KIND_DIRECTORY = {
     "sessions": "the unit of isolation; one backend root per session",
-    ".kingfisher": "the harness's own, and the one directory the agent is never told about",
+    ".kingfisher": "the harness's own, which the agent may read through but not write",
 }
 
 

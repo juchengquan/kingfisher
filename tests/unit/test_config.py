@@ -150,8 +150,8 @@ def test_hosted_tracing_is_disabled_explicitly(monkeypatch):
 def test_the_host_side_roots_are_no_longer_settings(env):
     """Both existed to move harness state out of the workspace, and there is none
     left to move: run logs, claims, pinned agents and conversations are inside
-    their sessions, and what remains in `.kingfisher` -- the marker and the
-    sandbox profile -- describes the workspace rather than any session in it.
+    their sessions, and what remains in `.kingfisher` -- the marker, the sandbox
+    profile and the skills view -- describes the workspace rather than any session in it.
 
     `KINGFISHER_SCRATCH_DIR` could not have survived either way. `TMPDIR` is a
     session directory now, and `session_bytes` counts one directory, so a scratch
