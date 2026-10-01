@@ -244,6 +244,19 @@ def harness_in(session_dir: Path, key: SessionKey | None = TEST_KEY):
     return HarnessFiles(local_files(session_dir), Path(session_dir).name, key)
 
 
+def paths_in(session_dir: Path):
+    """What a tool's paths mean in a session kept in this directory, under the rules
+    every turn starts from -- the `SessionPaths` a build hands its tool guards.
+    """
+    from kingfisher.infrastructure.harness.agent import read_only_permissions
+    from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
+    from kingfisher.infrastructure.harness.session_files import local_files
+    from kingfisher.infrastructure.harness.session_paths import SessionPaths
+
+    under_rules = PermittedBackend(local_files(session_dir), read_only_permissions())
+    return SessionPaths(under_rules, Path(session_dir).parent)
+
+
 def pin(kf, session_id: str, name: str) -> None:
     """Fix a session's agent before it has run, the way its first turn would.
 

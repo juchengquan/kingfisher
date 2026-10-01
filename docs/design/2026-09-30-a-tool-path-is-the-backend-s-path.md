@@ -1,7 +1,9 @@
 # A tool's path is the backend's path
 
 **Status:** proposed. **Slice 1 landed**: `decide` asks the backends whether a
-session exists, and `RunResult.session_dir` is gone. Slices 2 to 4 are not built. Its
+session exists, and `RunResult.session_dir` is gone. **Slice 2 landed**: a tool's
+`path` is resolved through the backend, under the turn's rules, and a delegate is
+handed the parent's paths. Slices 3 and 4 are not built. Its
 questions were settled in review on 2026-10-01, under *Settled in review*.
 **Date:** 2026-09-30.
 **Occasion:** an audit after *A session is its backend* landed, asking what else on

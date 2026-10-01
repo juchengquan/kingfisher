@@ -25,6 +25,7 @@ from kingfisher.domain.capabilities import (
     Selection,
     refuse_ungranted_models,
 )
+from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.activation import (
     _activated_subagents,
@@ -52,6 +53,7 @@ from kingfisher.infrastructure.harness.middlewares.narrowing import (
 )
 from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
+from kingfisher.infrastructure.harness.session_paths import SessionPaths
 from kingfisher.infrastructure.harness.subagents import (
     as_subagent,
     model_object,
@@ -386,8 +388,14 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # them cannot reach one, and narrowing this to the grant would mean building
     # the guard from a set that is computed after it.
     held = frozenset(entry.name for entry in walked)
-    middleware: list[Any] = [TodoListMiddleware(), *tool_guards(held, session_dir)]
     permissions = read_only_permissions()
+    # The turn's backend under the turn's rules, and one of it: what a tool is handed as
+    # `runtime.context.backend`, and what a tool's `path` is resolved through. Built
+    # before the rules are finished, and it reads them when it checks, so what is added
+    # below -- memory declined, skills narrowed -- applies to both.
+    under_rules = PermittedBackend(resolved_backend, permissions)
+    paths = SessionPaths(under_rules, sessions_root(cfg.workspace))
+    middleware: list[Any] = [TodoListMiddleware(), *tool_guards(held, paths)]
     extras: dict[str, Any] = {}
 
     # One answer to "are skills on", for this agent and for every delegate it
@@ -471,7 +479,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         }
         return Assembled(
             graph=create_deep_agent(**attached),
-            context=ToolContext(backend=PermittedBackend(resolved_backend, permissions)),
+            context=ToolContext(backend=under_rules),
             **attached,
         )
 
@@ -580,9 +588,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                 # route either way -- withholding the index here would leave the files
                 # reachable and unnamed.
                 private_skills=_private_skills(roots, name),
-                # Reaches only a compiled delegate, whose tools are wrapped against it.
-                # An assembled one is given the same translation as middleware.
-                session_dir=session_dir,
+                paths=paths,
                 run_on=wanted.get(name),
                 extra_middleware=declared_middleware(
                     defined[name],
@@ -688,7 +694,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             # the same guards around them. Without them a tool call through this
             # delegate reached the tool with its paths untranslated.
             "middleware": (
-                tool_guards(held, session_dir)
+                tool_guards(held, paths)
                 + ([ToolAllowlist(permitted)] if permitted is not None else [])
                 + _deployment_middleware(
                     agent, registry, capabilities.middlewares, provisions=agent_provisions

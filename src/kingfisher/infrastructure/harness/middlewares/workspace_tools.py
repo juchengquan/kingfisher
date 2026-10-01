@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
-from pathlib import Path
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware
@@ -33,9 +32,9 @@ class WorkspaceToolPaths(AgentMiddleware):
     no middleware to attach, `GuardedTool` pays the cost of wrapping instead.
     """
 
-    def __init__(self, names: frozenset[str], session_dir: Path) -> None:
+    def __init__(self, names: frozenset[str], paths: SessionPaths) -> None:
         self.names = names
-        self.paths = SessionPaths(session_dir)
+        self.paths = paths
         super().__init__()
 
     def _translated(self, request: Any) -> Any:
