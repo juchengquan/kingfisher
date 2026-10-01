@@ -41,6 +41,8 @@ class Sessions:
     workspace: Path
     #: Where the sessions are: which there are, how big, when each was used.
     _backends: Any
+    #: The backend one session's files are reached through.
+    _files_for: Callable[..., Any]
     #: What the instance keeps about one session, through that session's backend.
     _harness_at: Callable[..., Any]
 
@@ -105,11 +107,6 @@ class Sessions:
     def session(self, session_id: str, *, source_ids: Held | None = None) -> SessionInfo | None:
         """One session, or `None` when this caller has no such session.
 
-        Filtered from the same listing rather than stat-ing one path, so both answers
-        come from one rule. At fifty sessions that is 0.22ms; it grows with the
-        workspace, and a deployment large enough to mind wants an index rather than a
-        cheaper stat.
-
         **A session whose pinned agent this caller cannot reach answers `None` too**,
         and the two states deliberately share one answer. One that said so would be a
         session *confirmed to exist*, so a leaked id would still be worth something
@@ -117,13 +114,31 @@ class Sessions:
         that is not there. The reason is not lost; it is what that caller's audit
         line says.
         """
+        reached = self._reached(session_id, source_ids)
+        return None if reached is None else reached[0]
+
+    def _reached(
+        self, session_id: str, source_ids: Held | None
+    ) -> tuple[SessionInfo, Any] | None:
+        """`session`'s answer, and the backend that was opened to decide it.
+
+        Handed back for a caller that goes on to read the session: building another
+        asks the factory a second time, which for a remote backend is a second sandbox
+        per query.
+
+        Filtered from the same listing as `sessions()` rather than stat-ing one path,
+        so both answers come from one rule. At fifty sessions that is 0.22ms; it grows
+        with the workspace, and a deployment large enough to mind wants an index rather
+        than a cheaper stat.
+        """
         held = caller_holds(self.access, source_ids)
         found = next((s for s in self.sessions() if s.id == session_id), None)
         if found is None:
             return None
         directory = sessions_root(self.workspace) / session_id
-        harness = self._harness_at(session_id, directory)
-        return found if self._reaches_session(harness, held) else None
+        files = self._files_for(session_id, directory)
+        harness = self._harness_at(session_id, directory, files)
+        return (found, files) if self._reaches_session(harness, held) else None
 
     @contextmanager
     def _held_session(self, request: Request | Resume) -> Iterator[Session]:

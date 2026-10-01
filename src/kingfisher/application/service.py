@@ -527,10 +527,12 @@ class Kingfisher(Sessions, Disposal):
         tool calls with their arguments. A caller who cannot reach the session gets
         `UnknownSessionError`, the same answer a wrong id gets.
         """
-        if self.session(session_id, source_ids=source_ids) is None:
+        reached = self._reached(session_id, source_ids)
+        if reached is None:
             raise self._unknown_session(session_id)
-        directory = sessions_root(self.workspace) / session_id
-        return pending_from_mark(read_pause_mark(self._harness_at(session_id, directory)) or {})
+        _, files = reached
+        harness = self._harness_at(session_id, sessions_root(self.workspace) / session_id, files)
+        return pending_from_mark(read_pause_mark(harness) or {})
 
     def artifact(
         self, session_id: str, name: str, *, source_ids: Held | None = None
@@ -541,10 +543,11 @@ class Kingfisher(Sessions, Disposal):
         is: a caller who cannot reach the session gets `UnknownSessionError`, the
         same answer a wrong id gets.
         """
-        if self.session(session_id, source_ids=source_ids) is None:
+        reached = self._reached(session_id, source_ids)
+        if reached is None:
             raise self._unknown_session(session_id)
-        directory = sessions_root(self.workspace) / session_id
-        return read_artifact(self._files_for(session_id, directory), name)
+        _, files = reached
+        return read_artifact(files, name)
 
     def _pin_agent_in(self, harness: HarnessFiles, name: str | None) -> None:
         """Keep the agent, in the session this is about.
