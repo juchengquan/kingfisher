@@ -48,6 +48,7 @@ from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
 from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.harness.runlog import usage_of
 from kingfisher.infrastructure.workspace import (
+    SEED_HINT,
     ensure_session_layout,
     is_new_workspace,
     seeding,
@@ -248,6 +249,16 @@ def main(argv: list[str]) -> int:
         return 2
 
     fresh = is_new_workspace(paths.workspace)
+    # Asked before the layout, because laying it out writes the marker: a refusal after
+    # that leaves a workspace that is no longer new, and the run that follows the advice
+    # below never seeds it.
+    if fresh:
+        try:
+            source = seeding.definitions_source(paths)
+        except ConfigError as exc:
+            print(f"configuration error: {exc}", file=sys.stderr)
+            print(f"this driver takes no --from; {SEED_HINT} does", file=sys.stderr)
+            return 2
     workspace = ensure_layout(paths.workspace)
     if fresh:
         print(f"created a new workspace at {workspace}")
@@ -257,11 +268,6 @@ def main(argv: list[str]) -> int:
     # wrote, because `is_new_workspace` also fires on a *misconfigured* one -- a wrong
     # path holding ten files reads more like success than an empty one does.
     if fresh:
-        try:
-            source = seeding.definitions_source(paths)
-        except ConfigError as exc:
-            print(f"configuration error: {exc}", file=sys.stderr)
-            return 2
         result = seeding.seed(paths, source)
         # `report` rather than a loop of this driver's own. What it prints about a
         # skipped definition is the reason `--agent researcher` would otherwise fail

@@ -10,6 +10,7 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.result import RunEvent, RunResult
 from kingfisher.infrastructure.harness import agent as main_agent_module
+from kingfisher.infrastructure.workspace import SEED_HINT
 from kingfisher.infrastructure.workspace import layout as workspace_layout
 from kingfisher.kinds.skills import spec as skill
 from kingfisher.kinds.skills.catalogue import reachable
@@ -367,7 +368,7 @@ def test_the_catalogue_error_stops_naming_a_command_that_already_ran(tmp_path):
 
 
 def test_a_first_run_with_nothing_to_seed_is_quiet(cfg, tmp_path, capsys, monkeypatch):
-    """A damaged install, where the shipped definitions are missing."""
+    """A definitions directory holding none of them seeds nothing, and says nothing about it."""
     fresh = _unused(cfg, tmp_path)
     driver = _driver_on(monkeypatch, fresh)
     empty = tmp_path / "no-definitions"
@@ -387,6 +388,30 @@ def test_a_first_run_with_nothing_to_seed_is_quiet(cfg, tmp_path, capsys, monkey
     assert f"seeded {workspace_layout.EXAMPLE}" not in printed
     assert "seeded skills/" not in printed
     assert (fresh.workspace / workspace_layout.EXAMPLE).is_file()
+
+
+def test_a_first_run_refused_for_want_of_definitions_seeds_on_the_next(
+    cfg, tmp_path, capsys, monkeypatch
+):
+    """The driver laid the workspace out before asking where to seed from, so a refused
+    first run wrote the marker, and the run after setting KINGFISHER_ASSETS -- what the
+    refusal said to do -- found a workspace that was no longer new and never seeded it.
+    """
+    from dataclasses import replace
+
+    fresh = _unused(cfg, tmp_path)
+    driver = _driver_on(monkeypatch, fresh)
+    # Past `_driver_on`, which reads a `None` source as "the examples".
+    monkeypatch.setattr(driver, "paths_from_env", lambda: replace(fresh, assets=None))
+
+    assert driver.main(["driver.py", "--list"]) == 2
+    # The `--from` in the library's refusal is the command's flag, not this driver's.
+    assert SEED_HINT in capsys.readouterr().err
+
+    driver = _driver_on(monkeypatch, fresh)
+    driver.main(["driver.py", "--list"])
+
+    assert reachable(fresh.skills_dir)
 
 
 # -- --without-tools and friends ------------------------------------------
