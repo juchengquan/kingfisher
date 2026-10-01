@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 #: The harness's own directory in a workspace: not a session's, and not the
 #: agent's. Declared before `LAYOUT_DIRS`, which creates it, and named again
-#: by `MARKER` and by the sandbox profile that lives in it.
+#: by `MARKER`, the sandbox profile and the skills view that live in it.
 HARNESS_OWNED = ".kingfisher"
 
 #: Created once in the workspace: the definitions the sessions share, and the
@@ -46,8 +46,8 @@ LAYOUT_DIRS: tuple[str, ...] = (
     HARNESS_OWNED,
 )
 
-#: Its two contents, named so `protected_roots` and the profile writer agree on
-#: where they are without either spelling the path a second time.
+#: The sandbox profile, named so `protected_roots` and the profile writer agree on
+#: where it is without either spelling the path a second time.
 SANDBOX_PROFILE = "shell.sb"
 
 #: Where the shell's view of a catalogue with mounts is built, one directory per

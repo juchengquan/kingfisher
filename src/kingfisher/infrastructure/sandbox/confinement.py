@@ -452,10 +452,11 @@ def protected_roots(
 
     The harness's own directory is one of them, which is what lets the profile
     stop naming itself by path: everything in `.kingfisher` is the harness's --
-    the marker, and the profile that says what the shell may do -- and none of it
-    is a session's. It could not be a `subpath` deny while `TMPDIR` lived under
-    it, because the denies are written after the allows and would have covered
-    the one directory the shell must be able to write.
+    the marker, the profile that says what the shell may do, and the skills view
+    it reads mounts through -- and none of it is a session's. It could not be a
+    `subpath` deny while `TMPDIR` lived under it, because the denies are written
+    after the allows and would have covered the one directory the shell must be
+    able to write.
     """
     roots = (
         Path(workspace) / HARNESS_OWNED,

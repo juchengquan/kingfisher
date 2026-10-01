@@ -814,7 +814,10 @@ somebody does, and their case will say which of the decisions above to take.
 repository entirely, become distributions of their own, and be found through
 entry points that kingfisher named none of. Built in full, then taken back out.
 What survived it: the framework still does not decide what a definition says, and
-a fresh workspace still seeds itself on first run.
+the integration driver still seeds a fresh workspace on its first run. The
+`kingfisher` command and the service do not -- the library ships no definitions,
+so they have nothing to seed from until `--from` or `KINGFISHER_ASSETS` names some,
+and an empty workspace gets `SEED_HINT` instead.
 *(2026-08-17, `assets-as-packages.md`. Reversed 2026-08-18.)*
 
 **Reversed: definitions shipped inside the wheel.** The reversal of the above went
