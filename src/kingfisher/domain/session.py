@@ -46,6 +46,11 @@ def sessions_root(workspace: Path | str) -> Path:
     return Path(workspace) / "sessions"
 
 
+def session_dir(workspace: Path | str, session_id: str) -> Path:
+    """Where a workspace keeps one session."""
+    return sessions_root(workspace) / session_id
+
+
 @dataclass(frozen=True)
 class SessionInfo:
     """One session, as something outside kingfisher asks about it."""

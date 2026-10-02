@@ -19,7 +19,7 @@ from deepagents.backends.protocol import ExecuteResponse
 
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.ports import CommandRunner, SkillRepository
-from kingfisher.domain.session import sessions_root, still_held
+from kingfisher.domain.session import session_dir, sessions_root, still_held
 from kingfisher.infrastructure.catalogue import Definitions, refuse_unmountable
 
 # Re-exported: `ports.md` and `BACKEND_CONTRACT` have named this path to adapter
@@ -29,6 +29,7 @@ from kingfisher.infrastructure.harness.host_paths import (
 )
 from kingfisher.infrastructure.harness.host_paths import reject_host_path
 from kingfisher.infrastructure.sandbox import confinement
+from kingfisher.infrastructure.threads import off_loop, thread_pool
 from kingfisher.infrastructure.workspace.permissions import protect_data, writable_data
 from kingfisher.infrastructure.workspace.sessions import (
     LocalSessionDirs,
@@ -495,6 +496,28 @@ class SessionBackends(Protocol):
         """Remove this session and everything in it. A reason on failure, or `None`."""
         ...
 
+    # The async twins. Written out here, so that a class subclassing this protocol has
+    # them as `open` and `sessions` on kingfisher's pool, and overrides one only where
+    # its own is a round trip it can await.
+
+    async def aopen(
+        self,
+        cfg: Config,
+        session_id: str,
+        /,
+        *,
+        catalogue: Definitions | None = None,
+        runner: CommandRunner | None = None,
+    ) -> Any:
+        """`open`, for the async path."""
+        return await off_loop(
+            thread_pool(), self.open, cfg, session_id, catalogue=catalogue, runner=runner
+        )
+
+    async def asessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
+        """`sessions`, for the async path."""
+        return await off_loop(thread_pool(), self.sessions, cfg)
+
 
 def backend_at(
     cfg: Config,
@@ -595,7 +618,7 @@ def backend_at(
     return WorkspaceScopedBackend(default=shell, routes=routes, workspace=session_dir)
 
 
-class DefaultBackends:
+class DefaultBackends(SessionBackends):
     """Kingfisher's own `SessionBackends`: each session a directory under
     `<workspace>/sessions`, each backend `backend_at` that directory.
 
@@ -614,7 +637,7 @@ class DefaultBackends:
         catalogue: Definitions | None = None,
         runner: CommandRunner | None = None,
     ) -> WorkspaceScopedBackend:
-        directory = ensure_session_layout(sessions_root(cfg.workspace) / session_id)
+        directory = ensure_session_layout(session_dir(cfg.workspace, session_id))
         # Kernel-level, because the deny rule covers only the file tools. What it
         # could not harden is reported by the turn rather than raised: raising here
         # used to make one file owned by another user a session unusable for good.
@@ -627,13 +650,13 @@ class DefaultBackends:
         return LocalSessionDirs().listing(sessions_root(cfg.workspace))
 
     def mark_used(self, cfg: Config, session_id: str) -> None:
-        LocalSessionDirs().mark_used(sessions_root(cfg.workspace) / session_id)
+        LocalSessionDirs().mark_used(session_dir(cfg.workspace, session_id))
 
     def size(self, cfg: Config, session_id: str) -> int:
-        return session_bytes(sessions_root(cfg.workspace) / session_id)
+        return session_bytes(session_dir(cfg.workspace, session_id))
 
     def delete(self, cfg: Config, session_id: str) -> str | None:
-        return LocalSessionDirs().remove_tree(sessions_root(cfg.workspace) / session_id)
+        return LocalSessionDirs().remove_tree(session_dir(cfg.workspace, session_id))
 
 
 #: The only `DefaultBackends` there is. See the class for why it is one.

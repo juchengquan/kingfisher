@@ -19,7 +19,7 @@ from kingfisher.domain.session import (
     known,
 )
 from kingfisher.layout import CLAIM
-from tests.conftest import StubCheckpointer, start
+from tests.conftest import Reads, StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 
 
@@ -270,18 +270,18 @@ def test_the_overlap_check_fails_when_the_turns_do_not_overlap(cfg):
 # refreshed the very clock retention reads.
 
 
-def test_a_lookup_finds_a_session_and_a_stranger_gets_none(cfg):
+def test_a_lookup_finds_a_session_and_a_stranger_gets_none(cfg, way):
     """`None` rather than raising: "is this still there" is an ordinary question with
     two ordinary answers.
     """
     kf = service(cfg)
     session = start(cfg, "s")
 
-    assert kf.session(session).id == session
-    assert kf.session("0" * 32) is None
+    assert Reads(kf, way).session(session).id == session
+    assert Reads(kf, way).session("0" * 32) is None
 
 
-def test_asking_does_not_disturb_the_session(cfg):
+def test_asking_does_not_disturb_the_session(cfg, way):
     """The whole reason this exists."""
     import os
     import time
@@ -292,7 +292,7 @@ def test_asking_does_not_disturb_the_session(cfg):
     stale = time.time() - 10_000
     os.utime(directory, (stale, stale))
 
-    assert kf.session(session) is not None
+    assert Reads(kf, way).session(session) is not None
     assert kf.sessions()
 
     assert directory.stat().st_mtime == pytest.approx(stale, abs=1)
@@ -314,7 +314,7 @@ def test_sessions_come_back_most_recently_used_first(cfg):
     assert {s.id for s in kf.sessions()} == {first, second}
 
 
-def test_a_deleted_session_stops_being_listed(cfg):
+def test_a_deleted_session_stops_being_listed(cfg, way):
     kf = service(cfg)
     kept = start(cfg, "kept")
     gone = start(cfg, "gone")
@@ -322,7 +322,7 @@ def test_a_deleted_session_stops_being_listed(cfg):
     kf.delete_session(gone)
 
     assert [s.id for s in kf.sessions()] == [kept]
-    assert kf.session(gone) is None
+    assert Reads(kf, way).session(gone) is None
 
 
 def test_what_comes_back_names_no_path(cfg):

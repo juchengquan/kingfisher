@@ -16,8 +16,9 @@ from deepagents.backends import CompositeBackend, FilesystemBackend
 
 from kingfisher.domain.result import ArtifactError
 from kingfisher.infrastructure.harness.backend import DataBackend, SessionClaims
+from kingfisher.infrastructure.steps import Steps, changing, on_host, reading
 from kingfisher.infrastructure.workspace.placement import DataError, DataPlacement, checked
-from kingfisher.layout import ARTIFACT_DIRS, DATA_ROUTE, HARNESS_ROUTE
+from kingfisher.layout import ARTIFACT_DIRS, DATA_ROUTE
 
 _log = logging.getLogger(__name__)
 
@@ -45,18 +46,17 @@ def local_files(session_dir: Path) -> LocalFiles:
     return LocalFiles(session_dir)
 
 
-def place_data(sources: tuple[Path, ...], backend: Any) -> DataPlacement:
+def place_data(sources: tuple[Path, ...], backend: Any) -> Steps[DataPlacement]:
     """Copy caller-supplied files into a session's `/data`, through its backend."""
     if not sources:
         return DataPlacement()
     # Before anything is read or sent: a request naming a file that is not there
     # must fail without having placed the ones that were.
-    seen = checked(sources)
-    listing = backend.ls(DATA_ROUTE)
+    seen = yield on_host(checked, sources)
+    listing = yield reading(backend, "ls", DATA_ROUTE)
     existing = {PurePosixPath(entry["path"]).name for entry in listing.entries or ()}
-    answers = backend.upload_files(
-        [(f"{DATA_ROUTE}{name}", source.read_bytes()) for name, source in seen.items()]
-    )
+    contents = yield on_host(_contents_of, seen)
+    answers = yield changing(backend, "upload_files", contents)
     if refused := [f"{answer.path}: {answer.error}" for answer in answers if answer.error]:
         msg = f"the session's backend refused {', '.join(refused)}"
         raise DataError(msg)
@@ -66,7 +66,11 @@ def place_data(sources: tuple[Path, ...], backend: Any) -> DataPlacement:
     )
 
 
-def collect_artifacts(backend: Any) -> tuple[str, ...]:
+def _contents_of(seen: dict[str, Path]) -> list[tuple[str, bytes]]:
+    return [(f"{DATA_ROUTE}{name}", source.read_bytes()) for name, source in seen.items()]
+
+
+def collect_artifacts(backend: Any) -> Steps[tuple[str, ...]]:
     """What this session holds that is worth keeping, relative to the session.
 
     A walk of what is there rather than a record of tool calls: `execute`
@@ -75,7 +79,7 @@ def collect_artifacts(backend: Any) -> tuple[str, ...]:
     """
     found: list[str] = []
     for name in ARTIFACT_DIRS:
-        result = backend.glob("**", path=f"/{name}/")
+        result = yield reading(backend, "glob", "**", path=f"/{name}/")
         if result.error or result.truncated:
             # Reported rather than raised. The turn has already run, and failing it
             # here would lose its answer over a listing of what it left behind.
@@ -92,7 +96,7 @@ def collect_artifacts(backend: Any) -> tuple[str, ...]:
     return tuple(sorted(found))
 
 
-def read_artifact(backend: Any, name: str) -> bytes:
+def read_artifact(backend: Any, name: str) -> Steps[bytes]:
     """One file a turn produced, as bytes, by the name `collect_artifacts` gave it.
 
     Only under `ARTIFACT_DIRS`. The same backend reaches `/.harness` and `/data`,
@@ -108,63 +112,8 @@ def read_artifact(backend: Any, name: str) -> bytes:
     ):
         msg = f"{name!r} is not an artifact: name a file under {', '.join(ARTIFACT_DIRS)}"
         raise ArtifactError(msg)
-    (answer,) = backend.download_files([f"/{path}"])
+    (answer,) = yield reading(backend, "download_files", [f"/{path}"])
     if answer.error or answer.content is None:
         msg = f"{name}: {answer.error or 'no content'}"
         raise ArtifactError(msg)
     return answer.content
-
-
-class HarnessFiles:
-    """What kingfisher keeps about one session under `/.harness`, through its backend.
-
-    Kept as written and read back as found. The agent's shell reaches the same
-    backend, so what keeps it from rewriting its own pinned agent, conversation or
-    paused turn is the shell's fence: kingfisher's sandbox, or a backend of the
-    deployment's that passes `shell_denied`. `kingfisher doctor` says where it can
-    see neither.
-    """
-
-    def __init__(self, backend: Any, session_id: str) -> None:
-        self._backend = backend
-        self._session_id = session_id
-
-    def read(self, name: str) -> bytes | None:
-        """`name`'s content, or `None` where the session has none."""
-        (content,) = self._download(name)
-        return content
-
-    def write(self, name: str, content: bytes) -> None:
-        """Replace `name`."""
-        files = [(f"{HARNESS_ROUTE}{name}", content)]
-        refused = [a for a in self._backend.upload_files(files) if a.error]
-        if refused:
-            kept = ", ".join(f"{a.path}: {a.error}" for a in refused)
-            msg = f"the session's backend would not keep {kept}"
-            raise OSError(msg)
-
-    def delete(self, *names: str) -> None:
-        """Drop these. Safe where they were never written."""
-        paths = [f"{HARNESS_ROUTE}{name}" for name in names]
-        for path in paths:
-            self._backend.delete(path)
-        # Asked again rather than trusting each answer: a backend reports a file that
-        # was never there as an error, and telling that from a delete that failed
-        # would mean reading its wording.
-        left = [a.path for a in self._backend.download_files(paths) if a.error is None]
-        if left:
-            msg = f"the session's backend kept {', '.join(left)} after deleting it"
-            raise OSError(msg)
-
-    def _download(self, *names: str) -> list[bytes | None]:
-        answers = self._backend.download_files([f"{HARNESS_ROUTE}{name}" for name in names])
-        found: list[bytes | None] = []
-        for answer in answers:
-            if answer.error == "file_not_found":
-                found.append(None)
-            elif answer.error is not None:
-                msg = f"the session's backend could not read {answer.path}: {answer.error}"
-                raise OSError(msg)
-            else:
-                found.append(answer.content)
-        return found
