@@ -3236,8 +3236,9 @@ no callers at all when this landed -- so this is a requirement of a new API
 rather than a break in an old one. `guides/middleware.md` says it where a
 deployment reads it.
 
-**Two things that had to be closed by hand.** `_prepare` goes through
-`asyncio.to_thread`: it is 15-46ms of CPU-bound construction, and on the loop it
+**Two things that had to be closed by hand.** `_prepare` goes through a thread --
+`asyncio.to_thread` then, kingfisher's own pool since -- because it is 15-46ms
+of CPU-bound construction, and on the loop it
 would be 15-46ms every other turn waits through. And `astream` closes
 `_astream_turn` itself, because an async generator dropped by another one is
 finalised by the event loop's `shutdown_asyncgens` rather than when it goes out of
@@ -3275,6 +3276,32 @@ one-line conveniences over a default service; these do not, because a new name i
 `__all__` needs a witness and the honest witness today is that no caller outside
 this wheel has asked. The day one does, the convenience is four lines -- which is
 how `default_backend` came back. *(2026-09-18.)*
+
+**A cancel during setup left the session claimed.** Setup ran through
+`asyncio.to_thread`, and a cancelled `await` there returns at once while the thread
+goes on: it claimed the session, built the turn, and handed it to a future nobody
+read. Measured with setup held for 0.3s and cancelled 0.1s in, the claim was on disk
+when the cancel returned and still there once the thread had finished, so the
+session answered `SessionBusyError` until the claim went stale. Every cancellation
+test had cancelled during the model call, by which time the lifecycle holds the
+turn. Now the cancel waits for setup, ends the turn through `_end_turn` -- the
+lifecycle's own ending, not a release written beside it -- and goes on: *Cancelling
+waits* again, at the cost of one setup. `arun`'s disposal is waited out the same
+way. `test_cancelling_during_setup_leaves_the_session_free` lets setup go only
+after the cancel has landed, so it cannot pass by setup finishing first.
+*(2026-10-02.)*
+
+**Kingfisher's own thread pool, one per process.** `asyncio.to_thread` borrows the
+loop's default executor, `min(32, cpu+4)` workers -- 12 on the 8-CPU host this was
+measured on -- and a call that blocks for a round trip holds its worker for all of
+it. At a simulated 50ms round trip, 200 concurrent calls took 917ms on that pool,
+73ms on one of 256 threads and 56ms awaited natively. Setup and `arun`'s disposal
+go through `infrastructure.threads` now, which copies the caller's context as
+`to_thread` does. One pool rather than one per `Kingfisher` because threads are the
+process's to spend; `KINGFISHER_THREAD_POOL_SIZE` is asked for when a service is
+built, so a second size is refused there, naming both, rather than queueing behind
+whichever service came first. 64 by default: a pool starts its threads only as work
+arrives, so a generous ceiling costs nothing idle. *(2026-10-02.)*
 
 **Asked and declined: making a turn a langchain `Runnable`.** The question is
 reasonable -- `Runnable` is the interface that ecosystem's callers already know,

@@ -110,6 +110,12 @@ for the next reader who reaches for one.*
   pool of 12: 8, 12, 20 and 40 concurrent `arun` calls all reached the model call
   together. A dedicated thread runs each turn and blocks on the model; the pool is
   only borrowed to hand an event over, which is a moment rather than the turn.
+- **It does cap calls that hold a worker for their whole length.** The bullet
+  above borrows a worker for a moment; a call that blocks for a round trip keeps
+  it until it returns, and then `min(32, cpu+4)` is the ceiling. Measured at a
+  simulated 50ms round trip on the same host: 200 concurrent calls took 917ms on
+  the default executor, 73ms on a 256-thread pool and 56ms awaited natively
+  (2026-10-02). Why kingfisher's setup runs on a pool of its own.
 
 ## Middleware
 

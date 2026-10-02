@@ -55,6 +55,7 @@ shell has no business there.
 | `KINGFISHER_EXECUTION_TIMEOUT_S` | How long one shell command may run. | `120` |
 | `KINGFISHER_TURN_TIMEOUT_S` | How long one turn may run. | `3600` |
 | `KINGFISHER_RECURSION_LIMIT` | How many steps a turn may take before it stops. | `150` |
+| `KINGFISHER_THREAD_POOL_SIZE` | How many threads `astream` and `arun` hand blocking work to. One pool per process: a second service asking for a different number is refused when it is built. | `64` |
 | `KINGFISHER_SESSION_MAX_BYTES` | Cap on what one session may hold. Checked between turns, never during one. | none — unbounded |
 | `KINGFISHER_SESSION_TTL_S` | How long an idle session survives a sweep — `kingfisher reap`, or a deployment's own call to `reap()`. Nothing sweeps on a schedule. | `604800` (7 days) |
 

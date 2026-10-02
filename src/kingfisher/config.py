@@ -321,6 +321,12 @@ class Config:
     # divided by three. 60 was sized against a toy task and cut a real
     # 1,000-row analysis off mid-step at 20 turns.
     recursion_limit: int = 150
+    # How many threads the async paths hand blocking work to. One number per
+    # process, because the pool is one per process: threads are the process's to
+    # spend. A call that blocks for a round trip holds its thread for all of it,
+    # which is why the loop's default executor -- 12 workers on an 8-CPU host --
+    # was not enough.
+    thread_pool_size: int = 64
     shell_path_extra: tuple[str, ...] = ()
     # Who keeps `execute` out of the rest of the host. `auto` uses whatever the
     # platform offers, `bubblewrap` asks for it even where Landlock would run,
