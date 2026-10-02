@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import SESSION_BACKENDS_CONTRACT, DefaultBackend, Kingfisher, default_backend
+from kingfisher import SESSION_BACKENDS_CONTRACT, DefaultBackends, Kingfisher, default_backends
 from kingfisher.infrastructure.harness.backend import backend_at
 from kingfisher.layout import CLAIM
 from kingfisher.presentation.cli.__main__ import main
@@ -20,7 +20,7 @@ from tests.unit.test_session_files import Elsewhere
 
 def test_the_default_keeps_the_contract(cfg):
     for check in SESSION_BACKENDS_CONTRACT:
-        check(lambda: (cfg, default_backend))
+        check(lambda: (cfg, default_backends))
 
 
 def test_the_contract_is_not_quietly_empty():
@@ -30,18 +30,18 @@ def test_the_contract_is_not_quietly_empty():
     assert len(SESSION_BACKENDS_CONTRACT) >= 5
 
 
-class Shared(DefaultBackend):
+class Shared(DefaultBackends):
     """Every session handed one directory: each works, and each reads the others."""
 
-    def __call__(self, cfg, session_id, /, *, catalogue=None, runner=None):
-        return super().__call__(cfg, "everyone", catalogue=catalogue, runner=runner)
+    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
+        return super().open(cfg, "everyone", catalogue=catalogue, runner=runner)
 
 
-class Overwriting(DefaultBackend):
+class Overwriting(DefaultBackends):
     """A claim written the obvious way, with a write, which never fails."""
 
-    def __call__(self, cfg, session_id, /, *, catalogue=None, runner=None):
-        built = super().__call__(cfg, session_id, catalogue=catalogue, runner=runner)
+    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
+        built = super().open(cfg, session_id, catalogue=catalogue, runner=runner)
         built.claim = lambda name, *, stale_after, now=None: True
         return built
 
@@ -85,14 +85,14 @@ REMOTE: list[Path] = []
 
 
 def remote_backends() -> Elsewhere:
-    """What `KINGFISHER_BACKEND_FACTORY` names in the tests below."""
+    """What `KINGFISHER_SESSION_BACKENDS_FACTORY` names in the tests below."""
     return Elsewhere(REMOTE[-1])
 
 
 @pytest.fixture
 def told_about_a_remote_backend(at_the_command_line, monkeypatch, tmp_path):
     REMOTE.append(tmp_path / "remote")
-    monkeypatch.setenv("KINGFISHER_BACKEND_FACTORY", f"{__name__}:remote_backends")
+    monkeypatch.setenv("KINGFISHER_SESSION_BACKENDS_FACTORY", f"{__name__}:remote_backends")
     yield at_the_command_line
     REMOTE.pop()
 
@@ -102,7 +102,7 @@ def test_the_command_lists_what_the_named_backend_keeps(told_about_a_remote_back
     of them, and a deployment would see an empty workspace.
     """
     cfg = told_about_a_remote_backend
-    remote_backends()(cfg, "kept-elsewhere")
+    remote_backends().open(cfg, "kept-elsewhere")
 
     assert main(["sessions", "--json"]) == 0
 
@@ -113,7 +113,7 @@ def test_the_command_lists_what_the_named_backend_keeps(told_about_a_remote_back
 
 def test_the_command_reaps_where_the_named_backend_keeps_them(told_about_a_remote_backend):
     cfg = told_about_a_remote_backend
-    remote_backends()(cfg, "old")
+    remote_backends().open(cfg, "old")
     stale = time.time() - 10_000
     os.utime(REMOTE[-1] / "old", (stale, stale))
 
@@ -128,11 +128,11 @@ def test_building_a_session_s_backend_makes_its_data_read_only(cfg):
     next time a turn asks for its backend, which is before the agent can touch it.
     """
     directory = cfg.workspace / "sessions" / "s"
-    default_backend(cfg, "s")
+    default_backends.open(cfg, "s")
     (directory / "data").chmod(0o755)
     assert os.access(directory / "data", os.W_OK), "not left writable; test proves nothing"
 
-    built = default_backend(cfg, "s")
+    built = default_backends.open(cfg, "s")
 
     assert not os.access(directory / "data", os.W_OK)
     assert built.unprotected == ()
@@ -146,7 +146,7 @@ def test_deciding_nothing_finds_a_session_the_named_backend_keeps(
     it did not exist.
     """
     cfg = told_about_a_remote_backend
-    remote_backends()(cfg, "kept-elsewhere")
+    remote_backends().open(cfg, "kept-elsewhere")
 
     main(["decide", "--session", "kept-elsewhere"])
     main(["decide", "--session", "never-was"])
@@ -156,24 +156,24 @@ def test_deciding_nothing_finds_a_session_the_named_backend_keeps(
     assert "no such session: never-was" in said
 
 
-class Misdirected(DefaultBackend):
+class Misdirected(DefaultBackends):
     """A backend whose own `host_path` answers from the wrong session: every file it
     serves is right, and every one it hands a tool by path is a neighbour's.
     """
 
-    def __call__(self, cfg, session_id, /, *, catalogue=None, runner=None):
-        built = super().__call__(cfg, session_id, catalogue=catalogue, runner=runner)
+    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
+        built = super().open(cfg, session_id, catalogue=catalogue, runner=runner)
         neighbour = "kingfisher-contract-b" if session_id != "kingfisher-contract-b" else "x"
         root = cfg.workspace / "sessions" / neighbour
         built.host_path = lambda virtual: root / virtual.lstrip("/")
         return built
 
 
-class NothingHere(DefaultBackend):
+class NothingHere(DefaultBackends):
     """A backend that says none of its files are on this host."""
 
-    def __call__(self, cfg, session_id, /, *, catalogue=None, runner=None):
-        built = super().__call__(cfg, session_id, catalogue=catalogue, runner=runner)
+    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
+        built = super().open(cfg, session_id, catalogue=catalogue, runner=runner)
         built.host_path = lambda virtual: None
         return built
 

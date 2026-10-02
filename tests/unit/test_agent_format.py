@@ -470,9 +470,9 @@ def test_a_workspace_with_no_agents_is_told_how_to_write_one(cfg):
     """`--from DIR` needs a DIR, and an installed kingfisher has none -- the hint is
     correct and terminal.
     """
-    from kingfisher import Kingfisher, default_backend
+    from kingfisher import Kingfisher, default_backends
 
-    kf = Kingfisher(cfg, backend=default_backend)
+    kf = Kingfisher(cfg, backends=default_backends)
 
     with pytest.raises(CapabilityError) as refused:
         kf.agent_named("assistant")
@@ -485,11 +485,11 @@ def test_a_workspace_with_no_agents_is_told_how_to_write_one(cfg):
 
 def test_a_workspace_that_has_agents_is_not_lectured(cfg):
     """The starter is for an empty workspace."""
-    from kingfisher import Kingfisher, default_backend
+    from kingfisher import Kingfisher, default_backends
     from tests.conftest import an_agent
 
     an_agent(cfg, "only")
-    kf = Kingfisher(cfg, backend=default_backend)
+    kf = Kingfisher(cfg, backends=default_backends)
 
     with pytest.raises(CapabilityError) as refused:
         kf.agent_named("missing")

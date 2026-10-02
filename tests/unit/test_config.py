@@ -282,10 +282,14 @@ def test_no_message_names_a_variable_nothing_reads():
     # anywhere, `health.py` included, still fails.
     # And a name refused where the environment is read, for the same reason from the
     # other side: the refusal names it so that whoever set it knows what went.
-    from kingfisher.config import REMOVED_STORE_SETTINGS
+    from kingfisher.config import REMOVED_STORE_SETTINGS, RENAMED_SETTINGS
 
     allowed = (
-        read | set(health.RETIRED) | set(health.RETIRED_PREFIXES) | set(REMOVED_STORE_SETTINGS)
+        read
+        | set(health.RETIRED)
+        | set(health.RETIRED_PREFIXES)
+        | set(REMOVED_STORE_SETTINGS)
+        | set(RENAMED_SETTINGS)
     )
     package = _Path(kingfisher.__file__).parent
 

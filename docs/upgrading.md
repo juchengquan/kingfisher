@@ -13,6 +13,22 @@ deployment from before #608 may well be from before that too. See *Subagent bund
 `SessionRoot`, `RunResult.log_path` or `RunResult.session_dir`, you probably need
 only the first two items of the checklist.
 
+**If you are already on #617 or later**, only *Renamed after #617* applies to you.
+
+## Renamed after #617
+
+The object that opens each session's backend was called a backend, and its setting
+a backend factory. It is a `SessionBackends`, so the names say so now, and the
+method that opens a session is named rather than being the object's `__call__`.
+
+| Before | Now |
+|---|---|
+| `Kingfisher(cfg, backend=...)`, and `backend=` on `run()` and `stream()` | `backends=` |
+| `default_backend`, `DefaultBackend` | `default_backends`, `DefaultBackends` |
+| `__call__(cfg, session_id, /, *, catalogue=None, runner=None)` on your `SessionBackends`, called as `backends(cfg, session_id)` | `open(...)`, with the same arguments, called as `backends.open(cfg, session_id)` |
+| `KINGFISHER_BACKEND_FACTORY` | `KINGFISHER_SESSION_BACKENDS_FACTORY`. The old name is **refused**: startup fails with `KINGFISHER_BACKEND_FACTORY was renamed KINGFISHER_SESSION_BACKENDS_FACTORY; set that instead`. |
+| `Config.backend_factory`, `configured_backend()` | `Config.session_backends_factory`, `configured_backends()` |
+
 ## Checklist
 
 1. **Remove `KINGFISHER_SESSION_STORE` and `KINGFISHER_SESSION_STORE_FACTORY`** if
@@ -38,7 +54,7 @@ only the first two items of the checklist.
 |---|---|---|
 | `KINGFISHER_SESSION_STORE`, `KINGFISHER_SESSION_STORE_FACTORY` | **Removed and refused.** Startup fails with `KINGFISHER_SESSION_STORE was removed: a session's backend keeps it now…` | Unset them. For sessions that outlive the machine, mount durable storage at `<workspace>/sessions`, or use a backend that keeps sessions itself. |
 | `KINGFISHER_SESSION_KEY` | **Gone.** It was on `main` for a day after #610, signing the pin, the conversation and a paused turn; nothing signs them now. | Unset it if you set it; `kingfisher doctor` reports it as read by nothing. |
-| `KINGFISHER_BACKEND_FACTORY` | **New, for the command line only.** `module:name` of something callable with no arguments that returns your `SessionBackends`. | Set it if your backend keeps sessions anywhere but `<workspace>/sessions`, so `kingfisher sessions`, `reap`, `artifact` and `decide` see them. |
+| `KINGFISHER_SESSION_BACKENDS_FACTORY` | **New, for the command line only.** `module:name` of something callable with no arguments that returns your `SessionBackends`. | Set it (the name since *Renamed after #617*) if your session backends keep sessions anywhere but `<workspace>/sessions`, so `kingfisher sessions`, `reap`, `artifact` and `decide` see them. |
 
 ## Existing sessions
 
@@ -54,8 +70,8 @@ only the first two items of the checklist.
 
 | Before | Now |
 |---|---|
-| `Kingfisher(cfg, backend=my_factory)` where `my_factory(cfg, session_dir, ...)` is a function | `backend=` takes a **`SessionBackends`**. To build on the default, subclass `DefaultBackend` and override `__call__(cfg, session_id, /, *, catalogue=None, runner=None)`. A plain function is refused with a `TypeError` saying so. |
-| `default_backend(cfg, session_dir)` called directly | `default_backend(cfg, session_id)` takes a session id now. For a folder of your choosing, call `backend_at(cfg, directory)`. |
+| `Kingfisher(cfg, backend=my_factory)` where `my_factory(cfg, session_dir, ...)` is a function | `backends=` takes a **`SessionBackends`**. To build on the default, subclass `DefaultBackends` and override `open(cfg, session_id, /, *, catalogue=None, runner=None)`. A plain function is refused with a `TypeError` saying so. |
+| `default_backend(cfg, session_dir)` called directly | `default_backends.open(cfg, session_id)` takes a session id now. For a folder of your choosing, call `backend_at(cfg, directory)`. |
 | `dirs=`, `sessions=`, `session_root=` | **Removed.** A session's backend answers all three: where it is, what it holds, and the housekeeping. |
 | `run_events=` | **New.** A sink with `record(event)`. With none given, events go to the `kingfisher.run` logger at INFO. |
 | `delete_session(id, forget=...)`, `reap(..., forget=...)` | `forget=` is **removed**: there is no store to keep a copy in. |
@@ -78,7 +94,7 @@ only the first two items of the checklist.
 - **Removed from `kingfisher`:** `LocalSessionStore`, `SESSION_STORE_CONTRACT`,
   `SESSION_ROOT_CONTRACT`. The `SessionRoot`, `SessionStore` and `SessionDirs` ports
   are gone from `kingfisher.domain.ports`.
-- **Added:** `DefaultBackend`, `backend_at`, `SESSION_BACKENDS_CONTRACT`,
+- **Added:** `DefaultBackends`, `backend_at`, `SESSION_BACKENDS_CONTRACT`,
   `ArtifactError`, and `Kingfisher.artifact` and
   `Kingfisher.pending` on the service.
 
@@ -143,20 +159,20 @@ does. `docs/guides/formats.md`, under *Tools and skills of its own*, has the det
 - **New:** `kingfisher artifact --session ID NAME [--out PATH]` fetches a file a turn
   produced.
 - **Changed:** `sessions`, `reap`, `artifact` and `decide` run on
-  `KINGFISHER_BACKEND_FACTORY` when it's set. `decide --session ID` with no decisions
+  `KINGFISHER_SESSION_BACKENDS_FACTORY` when it's set. `decide --session ID` with no decisions
   now finds a session a backend keeps elsewhere, and asks as the caller `--as` names:
   in a workspace with source ids it needs `--as`, and a caller who can't reach the
   session is told it doesn't exist (`Kingfisher.pending` takes `source_ids=` for the
   same check). `doctor` gains a `session key` row,
   and its advice for a memory-backed workspace points at a durable mount or
-  `KINGFISHER_BACKEND_FACTORY`.
+  `KINGFISHER_SESSION_BACKENDS_FACTORY`.
 
 ## For backend authors
 
-A custom backend is now a **`SessionBackends`**: one object, called per turn with a
-session id, that also answers for every session.
+A custom backend is now a **`SessionBackends`**: one object that opens a session's
+backend per turn, and also answers for every session.
 
-- `__call__(cfg, session_id, /, *, catalogue=None, runner=None)` returns that
+- `open(cfg, session_id, /, *, catalogue=None, runner=None)` returns that
   session's backend, creating the session if it's new.
 - `sessions(cfg)` returns `(session_id, last_used)` pairs. `mark_used(cfg, id)`,
   `size(cfg, id)` and `delete(cfg, id)` do what they say.
@@ -183,7 +199,8 @@ backend* and *A tool's path is the backend's path*, explains why.
 | Message | Cause | Fix |
 |---|---|---|
 | `KINGFISHER_SESSION_STORE was removed: …` | The old store setting is still set | Unset it; see *Settings* |
-| `TypeError: backend has to answer for every session …` | A plain factory function passed as `backend=` | Subclass `DefaultBackend` |
+| `TypeError: backends= takes a SessionBackends …` | A plain factory function, or one backend, passed as `backends=` | Subclass `DefaultBackends` |
+| `KINGFISHER_BACKEND_FACTORY was renamed …` | The setting's old name is still set | Rename it; see *Renamed after #617* |
 | `… is not kept on this host by this session's backend …` | A `path` tool on a backend without local files | Read through `ToolContext`, or give the backend a `host_path` |
 | `subagent '…': …/tools/ holds …, which tools: does not list` | A file in a subagent's folder the definition doesn't list | Add it as `{name: …, source: bundled}`, or move it out; see *Subagent bundles* |
 | `… lists entries as source: bundled and owns no folder to take them from` | The definition or its folder was renamed, so they no longer pair | Make the folder name and the `name:` match |

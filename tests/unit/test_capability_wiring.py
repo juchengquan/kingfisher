@@ -642,14 +642,14 @@ def test_a_turn_is_built_inside_the_deployments_ceiling(cfg, monkeypatch):
     withheld tool reached the graph and the whole suite stayed green, because every
     other fixture here leaves the deployment unrestricted, where the two are equal.
     """
-    from kingfisher import default_backend as backend
+    from kingfisher import default_backends as backend
     from kingfisher.application.service import Kingfisher
     from kingfisher.domain.request import Request
     from tests.conftest import an_agent
 
     an_agent(cfg, "only")
     _two_tools(cfg)
-    kf = Kingfisher(cfg, backend=backend, grants=Capabilities(tools=("granted",)))
+    kf = Kingfisher(cfg, backends=backend, grants=Capabilities(tools=("granted",)))
     handed = _handed_to_the_build(monkeypatch)
 
     events = kf.stream(

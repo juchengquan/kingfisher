@@ -1,8 +1,9 @@
 """Module-level conveniences over a default `Kingfisher`.
 
-A default backend where `Kingfisher` refuses one, and the difference is what each
-is for: `Kingfisher` is the composition root, where a deployment says what its
-agents run on, and these two are the one-liner that spares a caller from saying it.
+Default session backends where `Kingfisher` refuses to pick any, and the
+difference is what each is for: `Kingfisher` is the composition root, where a
+deployment says what its agents run on, and these two are the one-liner that
+spares a caller from saying it.
 The name is in the signature rather than hidden in the body, so a reader can see
 what they are getting and hand over something else without abandoning the helper.
 """
@@ -16,7 +17,7 @@ from kingfisher.application.service import Kingfisher
 from kingfisher.config import Config
 from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
-from kingfisher.infrastructure.harness.backend import SessionBackends, default_backend
+from kingfisher.infrastructure.harness.backend import SessionBackends, default_backends
 from kingfisher.infrastructure.wiring import store_named
 
 __all__ = [
@@ -24,7 +25,7 @@ __all__ = [
     "Request",
     "RunEvent",
     "RunResult",
-    "configured_backend",
+    "configured_backends",
     "normalize_answer",
     "run",
     "stream",
@@ -35,7 +36,7 @@ def _service(
     cfg: Config | None,
     *,
     graph: Any,
-    backend: Any,
+    backends: Any,
     checkpointer: Any,
     run_events: Any,
 ) -> Kingfisher:
@@ -46,7 +47,7 @@ def _service(
         # `Kingfisher` refuses both, so passing the default here unconditionally
         # would make every caller that supplies a graph commit the one mistake
         # this helper exists to spare them.
-        backend=None if graph is not None else backend,
+        backends=None if graph is not None else backends,
         threads=checkpointer,
         run_events=run_events,
     )
@@ -59,7 +60,7 @@ def stream(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
     *,
     cfg: Config | None = None,
     graph: Any | None = None,
-    backend: Any = default_backend,
+    backends: Any = default_backends,
     checkpointer: Any | None = None,
     run_events: Any | None = None,
 ) -> Iterator[RunEvent]:
@@ -67,7 +68,7 @@ def stream(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
     return _service(
         cfg,
         graph=graph,
-        backend=backend,
+        backends=backends,
         checkpointer=checkpointer,
         run_events=run_events,
     ).stream(request)
@@ -80,7 +81,7 @@ def run(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
     *,
     cfg: Config | None = None,
     graph: Any | None = None,
-    backend: Any = default_backend,
+    backends: Any = default_backends,
     checkpointer: Any | None = None,
     run_events: Any | None = None,
 ) -> RunResult:
@@ -88,21 +89,23 @@ def run(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
     return _service(
         cfg,
         graph=graph,
-        backend=backend,
+        backends=backends,
         checkpointer=checkpointer,
         run_events=run_events,
     ).run(request)
 
 
-def configured_backend(cfg: Config) -> SessionBackends:
-    """The backends `KINGFISHER_BACKEND_FACTORY` names, or `default_backend`.
+def configured_backends(cfg: Config) -> SessionBackends:
+    """The session backends `KINGFISHER_SESSION_BACKENDS_FACTORY` names, or the default.
 
     For the command line, which builds its own `Kingfisher` and has nowhere else to be
     told. Without it, `kingfisher sessions` and `reap` would list and delete a local
-    `sessions/` while a deployment's own backend keeps them somewhere else.
+    `sessions/` while a deployment's own keep them somewhere else.
     """
-    if cfg.backend_factory is None:
-        return default_backend
+    if cfg.session_backends_factory is None:
+        return default_backends
     return store_named(
-        cfg.backend_factory, setting="KINGFISHER_BACKEND_FACTORY", port=SessionBackends
+        cfg.session_backends_factory,
+        setting="KINGFISHER_SESSION_BACKENDS_FACTORY",
+        port=SessionBackends,
     )

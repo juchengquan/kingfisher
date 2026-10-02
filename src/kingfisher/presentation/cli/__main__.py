@@ -42,11 +42,10 @@ from kingfisher import (
 # see *The front door* in `docs/decisions.md` -- and each of these is something
 # no caller outside the wheel has asked for: the four kinds a catalogue holds,
 # used to say what a directory has none of; where a workspace keeps its
-# sessions; how long a session key must be, for `key` to print one; and the
-# warning `doctor` says as a check instead. `configured_backend` is taken the same
-# way, inside the commands that build a service, because only a command has a
-# setting and no argument to be told its backend by. Everything above is public
-# and comes through the front door because it is.
+# sessions; and the warning `doctor` says as a check instead. `configured_backends`
+# is taken the same way, inside the commands that build a service, because only a
+# command has a setting and no argument to be told its session backends by.
+# Everything above is public and comes through the front door because it is.
 from kingfisher.config import MissingCredentialsWarning
 from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
@@ -378,9 +377,9 @@ def build_parser() -> argparse.ArgumentParser:
             "The size is a walk per session -- about a millisecond each -- which\n"
             "a workspace holding thousands will feel.\n"
             "\n"
-            "Asked of the backend KINGFISHER_BACKEND_FACTORY names, or of\n"
-            "<workspace>/sessions where it names none -- so a deployment whose\n"
-            "own backend keeps sessions elsewhere sets it for this to see them."
+            "Asked of the session backends KINGFISHER_SESSION_BACKENDS_FACTORY\n"
+            "names, or of <workspace>/sessions where it names none -- so a\n"
+            "deployment whose own keep sessions elsewhere sets it for this to see them."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -515,10 +514,10 @@ def _run(args: argparse.Namespace) -> int:
     # `test_reaching_the_cli_stays_free_of_provider_sdks` holds every other verb
     # to not paying it. `seed`, `list` and `doctor` do not build one.
     from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_backend  # noqa: PLC0415
+    from kingfisher.application.run import configured_backends  # noqa: PLC0415
 
     cfg = config_from_env()
-    kf = Kingfisher(cfg, backend=configured_backend(cfg), run_events=_kept_in(args.log))
+    kf = Kingfisher(cfg, backends=configured_backends(cfg), run_events=_kept_in(args.log))
     request = Request(
         task=args.task,
         agent=args.agent,
@@ -597,7 +596,7 @@ def _decide(args: argparse.Namespace) -> int:
     # `domain`, which importing this module already loads, so deferring them would
     # save nothing -- they are at module scope beside `Request`.
     from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_backend  # noqa: PLC0415
+    from kingfisher.application.run import configured_backends  # noqa: PLC0415
 
     decisions: list[Decision] = [
         *(Decision(call_id=one, action="approve") for one in args.approve),
@@ -614,7 +613,7 @@ def _decide(args: argparse.Namespace) -> int:
         decisions.append(Decision(call_id=call_id, action="respond", message=text))
 
     cfg = config_from_env()
-    kf = Kingfisher(cfg, backend=configured_backend(cfg), run_events=_kept_in(args.log))
+    kf = Kingfisher(cfg, backends=configured_backends(cfg), run_events=_kept_in(args.log))
     if not decisions:
         return _show_pending(kf, args.session, args.held)
     return _drive(
@@ -778,10 +777,10 @@ def _count(sessions: int) -> str:
 def _sessions(*, as_document: bool = False) -> int:
     """What this workspace is holding, and what each session costs it."""
     from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_backend  # noqa: PLC0415
+    from kingfisher.application.run import configured_backends  # noqa: PLC0415
 
     cfg = config_from_env()
-    kf = Kingfisher(cfg, backend=configured_backend(cfg))
+    kf = Kingfisher(cfg, backends=configured_backends(cfg))
     root = sessions_root(kf.workspace)
     now = time.time()
     # A walk per session, at ~0.8ms each. The same trade `sessions()` already
@@ -828,10 +827,10 @@ def _sessions(*, as_document: bool = False) -> int:
 def _reap(args: argparse.Namespace) -> int:
     """Delete sessions: one by name, or every one that has been idle too long."""
     from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_backend  # noqa: PLC0415
+    from kingfisher.application.run import configured_backends  # noqa: PLC0415
 
     cfg = config_from_env()
-    kf = Kingfisher(cfg, backend=configured_backend(cfg))
+    kf = Kingfisher(cfg, backends=configured_backends(cfg))
     if args.session is not None:
         return _reap_one(kf, args.session)
 
@@ -876,10 +875,10 @@ def _nothing_reaped(kept: int, age: float, *, from_config: bool) -> None:
 def _artifact(args: argparse.Namespace) -> int:
     """Fetch one file a turn produced, to a file or to standard output."""
     from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_backend  # noqa: PLC0415
+    from kingfisher.application.run import configured_backends  # noqa: PLC0415
 
     cfg = config_from_env()
-    kf = Kingfisher(cfg, backend=configured_backend(cfg))
+    kf = Kingfisher(cfg, backends=configured_backends(cfg))
     content = kf.artifact(args.session, args.name, source_ids=args.held)
     if args.out is None:
         # The buffer, not `print`: an artifact is bytes, and a text stream would

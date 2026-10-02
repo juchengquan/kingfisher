@@ -48,7 +48,7 @@ def two_sessions(tmp_path):
 
 @pytest.fixture
 def fenced(two_sessions):
-    """A runner confined to the second session, as `default_backend` builds one."""
+    """A runner confined to the second session, as `default_backends` builds one."""
     from kingfisher.infrastructure.sandbox.fence import LandlockRunner, policy_for
 
     _, theirs = two_sessions

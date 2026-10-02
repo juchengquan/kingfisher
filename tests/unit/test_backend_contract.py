@@ -132,7 +132,7 @@ def test_a_backend_that_allows_host_paths_is_not_asked_to_refuse_them(cfg, sessi
 
 
 def test_the_kit_is_run_against_the_real_tree_not_a_composite_of_its_own(cfg, session_dir):
-    """The control above builds with `default_backend`, and deleting that would leave a
+    """The control above builds with `default_backends`, and deleting that would leave a
     kit asserting on routes it had assembled itself -- green against any mistake the
     real builder makes.
     """

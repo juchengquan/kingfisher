@@ -9,6 +9,7 @@ from pathlib import Path
 
 from kingfisher.config import (
     REMOVED_STORE_SETTINGS,
+    RENAMED_SETTINGS,
     Config,
     ConfigError,
     WorkspacePaths,
@@ -138,8 +139,12 @@ class Environment:
                 msg = (
                     f"{removed} was removed: a session's backend keeps it now. Mount "
                     "durable storage at <workspace>/sessions, or set "
-                    "KINGFISHER_BACKEND_FACTORY to a backend that keeps sessions itself"
+                    "KINGFISHER_SESSION_BACKENDS_FACTORY to session backends that keep them"
                 )
+                raise ConfigError(msg)
+        for old, new in RENAMED_SETTINGS.items():
+            if self.optional_text(old):
+                msg = f"{old} was renamed {new}; set that instead"
                 raise ConfigError(msg)
         path_extra = tuple(
             part
@@ -194,7 +199,7 @@ class Environment:
             middlewares_root=paths.middlewares_root,
             skills_mounts=paths.skills_mounts,
             assets=paths.assets,
-            backend_factory=self.optional_text("KINGFISHER_BACKEND_FACTORY"),
+            session_backends_factory=self.optional_text("KINGFISHER_SESSION_BACKENDS_FACTORY"),
             skills_enabled=self.flag("KINGFISHER_SKILLS_ENABLED"),
             memory_enabled=self.flag("KINGFISHER_MEMORY_ENABLED"),
             interpreter_enabled=self.flag("KINGFISHER_INTERPRETER_ENABLED"),

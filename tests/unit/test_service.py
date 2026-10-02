@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from kingfisher import DefaultBackend, Kingfisher, default_backend
+from kingfisher import DefaultBackends, Kingfisher, default_backends
 from kingfisher.application.reporting import opening_events
 from kingfisher.application.service import refused_credentials
 from kingfisher.application.turn import turn_message
@@ -79,7 +79,7 @@ def test_construction_prepares_only_what_sessions_share(cfg):
     """Eagerly, so a broken workspace fails at startup rather than mid-turn -- but only
     the shared tier.
     """
-    service = Kingfisher(cfg, backend=default_backend, threads=StubCheckpointer())
+    service = Kingfisher(cfg, backends=default_backends, threads=StubCheckpointer())
 
     assert service.workspace.is_dir()
     assert (service.workspace / "skills").is_dir()
@@ -115,7 +115,7 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     # A real checkpointer: this builds a real agent, and deepagents type-checks
     # the saver it is handed.
     an_agent(cfg)
-    service = Kingfisher(cfg, backend=default_backend)
+    service = Kingfisher(cfg, backends=default_backends)
     asked = Request("go", agent="only")
 
     built = service._agent_for(asked, harness_in(session_dir))
@@ -316,7 +316,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
-    service = Kingfisher(cfg, backend=default_backend)  # adds http_fetch, sql_query, sql_tables
+    service = Kingfisher(cfg, backends=default_backends)  # adds http_fetch, sql_query, sql_tables
     start(cfg, "s")
     asked = Request(
         "go",
@@ -347,7 +347,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
-    service = Kingfisher(cfg, backend=default_backend)
+    service = Kingfisher(cfg, backends=default_backends)
     start(cfg, "s")
     asked = Request(
         "go",
@@ -403,7 +403,7 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
-    service = Kingfisher(cfg, backend=default_backend)
+    service = Kingfisher(cfg, backends=default_backends)
     start(cfg, "s")
     asked = Request(
         "go",
@@ -468,7 +468,7 @@ def test_the_graph_is_sent_the_whole_conversation_not_only_the_question(cfg):
 def test_a_runner_is_built_for_each_turn_and_told_the_session(cfg, tmp_path, monkeypatch):
     """The reason this takes a callable rather than an object.
 
-    Read off the backend factory's arguments, because that is where a runner goes
+    Read off the arguments `open` is given, because that is where a runner goes
     now: a service that built one per turn and then handed it to nothing would
     satisfy the first two assertions on its own.
     """
@@ -488,14 +488,14 @@ def test_a_runner_is_built_for_each_turn_and_told_the_session(cfg, tmp_path, mon
         asked.append(session_dir)
         return Runner()
 
-    class Recording(DefaultBackend):
-        def __call__(self, cfg_, session_id, /, *, catalogue=None, runner=None):
+    class Recording(DefaultBackends):
+        def open(self, cfg_, session_id, /, *, catalogue=None, runner=None):
             handed.append(runner)
-            return super().__call__(cfg_, session_id, catalogue=catalogue, runner=runner)
+            return super().open(cfg_, session_id, catalogue=catalogue, runner=runner)
 
     named = an_agent(cfg, "worker")
     monkeypatch.setattr(service_module, "build_agent", lambda *a, **kw: StubAgent("ok"))
-    service = Kingfisher(cfg, backend=Recording(), threads=StubCheckpointer(), runner=build)
+    service = Kingfisher(cfg, backends=Recording(), threads=StubCheckpointer(), runner=build)
 
     first = service.run(Request(task="anything", agent=named))
     service.run(Request(task="again", agent=named, session_id=first.session_id))
@@ -518,13 +518,13 @@ def test_a_runner_that_is_not_a_callable_is_refused_at_wiring_time(cfg):
         # The type checker refuses this too, which is the point: the runtime
         # check is for callers who never run one.
         Kingfisher(
-            cfg, backend=default_backend, threads=StubCheckpointer(), runner=Runner()  # ty: ignore[invalid-argument-type]
+            cfg, backends=default_backends, threads=StubCheckpointer(), runner=Runner()  # ty: ignore[invalid-argument-type]
         )
 
 
 def test_no_runner_leaves_the_platform_to_decide(cfg):
     """The default, and the case every existing deployment is in."""
-    service = Kingfisher(cfg, backend=default_backend, threads=StubCheckpointer())
+    service = Kingfisher(cfg, backends=default_backends, threads=StubCheckpointer())
 
     assert service._runner is None
 
@@ -643,7 +643,7 @@ def test_a_turn_resolves_its_agent_once(cfg, monkeypatch):
     """
     from kingfisher.application import service as service_module
 
-    service = Kingfisher(_policied(cfg), backend=default_backend)
+    service = Kingfisher(_policied(cfg), backends=default_backends)
     reads = _snapshot_reads(monkeypatch)
     reported: list[object] = []
     real = service_module.withheld_by_kind
@@ -723,7 +723,7 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     an_agent(cfg, "other")
     # A session whose files are not under the workspace at all.
     elsewhere = ensure_session_layout(tmp_path / "for-one-turn" / "a-session")
-    service = Kingfisher(cfg, backend=default_backend)
+    service = Kingfisher(cfg, backends=default_backends)
 
     service._agent_for(Request("go", agent="only"), harness_in(elsewhere))
 

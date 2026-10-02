@@ -250,18 +250,18 @@ def _at_rest(cfg: Config) -> Iterator[Check]:
 
     # Two things that only matter once sessions are in memory, and both are
     # silent until the moment they are expensive.
-    if cfg.backend_factory is None:
+    if cfg.session_backends_factory is None:
         yield Check(
             "sessions survive",
             "fail",
             f"{devices} — nothing is configured to keep sessions, so everything a "
             "session produced goes with the process",
             "mount durable storage at <workspace>/sessions, or set "
-            "KINGFISHER_BACKEND_FACTORY to a backend that keeps sessions itself",
+            "KINGFISHER_SESSION_BACKENDS_FACTORY to session backends that keep them",
         )
     else:
         yield Check(
-            "sessions survive", "ok", f"{devices} — kept by {cfg.backend_factory}"
+            "sessions survive", "ok", f"{devices} — kept by {cfg.session_backends_factory}"
         )
 
     if cfg.session_max_bytes is None:
@@ -654,17 +654,18 @@ def _session_files(cfg: Config) -> Iterator[Check]:
 
     Nothing signs what kingfisher keeps there -- the pinned agent, the conversation, a
     paused turn -- so a shell that can write it can rewrite them. Asked of what this
-    command can see: the backend `KINGFISHER_BACKEND_FACTORY` names, and the sandbox.
-    A deployment wiring its own backend, graph or runner in code is out of its sight.
+    command can see: the session backends `KINGFISHER_SESSION_BACKENDS_FACTORY` names, and
+    the sandbox. A deployment wiring its own backends, graph or runner in code is out of its
+    sight.
     A warning rather than a failure, because the deployment runs either way and may
     well be fenced by something this cannot look into.
     """
-    if cfg.backend_factory:
+    if cfg.session_backends_factory:
         yield Check(
             "session files",
             "warn",
-            f"KINGFISHER_BACKEND_FACTORY names {cfg.backend_factory}, and nothing here "
-            "can see whether its shell is kept out of .harness",
+            f"KINGFISHER_SESSION_BACKENDS_FACTORY names {cfg.session_backends_factory}, "
+            "and nothing here can see whether its shell is kept out of .harness",
             "run BACKEND_CONTRACT from kingfisher against it: its shell_denied check "
             "drives the shell at /.harness",
         )

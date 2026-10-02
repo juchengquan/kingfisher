@@ -190,6 +190,15 @@ class ConfigError(RuntimeError):
 #: kept here rather than beside that reader because they are refusals, not knobs.
 REMOVED_STORE_SETTINGS = ("KINGFISHER_SESSION_STORE", "KINGFISHER_SESSION_STORE_FACTORY")
 
+#: Settings that changed name, refused under the old one. A renamed setting still set
+#: is one the deployment wanted, so carrying on with the default is never what it
+#: chose -- for this one, the command line's sessions and shell on this host instead
+#: of the deployment's own. `RETIRED` names are reported rather than refused because
+#: their default may well be what was wanted.
+RENAMED_SETTINGS: Mapping[str, str] = MappingProxyType(
+    {"KINGFISHER_BACKEND_FACTORY": "KINGFISHER_SESSION_BACKENDS_FACTORY"}
+)
+
 class MissingCredentialsWarning(UserWarning):
     """An endpoint in `models.yaml` whose key is not set here, so it was dropped.
 
@@ -353,12 +362,12 @@ class Config:
     # mistyped or emptied source is the likeliest thing standing between an
     # install and a run once the definitions stop arriving with the wheel.
     assets: Path | None = None
-    # The backend the command line runs on, named rather than built here: `module:name`
-    # for something callable with no arguments that returns a `SessionBackends`. Only
-    # the command line reads it -- `Kingfisher` takes its backend as an argument -- and
-    # it is what lets `kingfisher sessions` and `reap` see sessions a deployment's own
-    # backend keeps somewhere else.
-    backend_factory: str | None = None
+    # The session backends the command line runs on, named rather than built here:
+    # `module:name` for something callable with no arguments that returns a
+    # `SessionBackends`. Only the command line reads it -- `Kingfisher` takes them as
+    # `backends=` -- and it is what lets `kingfisher sessions` and `reap` see sessions
+    # a deployment's own keep somewhere else.
+    session_backends_factory: str | None = None
     # What this deployment *wires*. Distinct from `Capabilities`, which is what a single
     # request may *use* of it -- and the distinction is not stylistic: these two flags
     # shape `render_system_prompt`, which is the cached prefix every turn is compared

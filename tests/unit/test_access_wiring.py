@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 import yaml
 
-from kingfisher import backend_at, default_backend
+from kingfisher import backend_at, default_backends
 from kingfisher.application.service import Kingfisher
 from kingfisher.domain.access import UNSCOPED, AccessError, parse
 from kingfisher.domain.capabilities import Capabilities
@@ -94,14 +94,14 @@ def test_a_call_that_does_not_say_who_is_calling_is_refused(policied):
     """The dangerous failure is a handler that forgot the boundary, so it is made loud
     rather than left to grant everything in silence.
     """
-    kf = Kingfisher(policied, backend=default_backend)
+    kf = Kingfisher(policied, backends=default_backends)
     with pytest.raises(AccessError, match="source_ids="):
         kf.run("anything")
 
 
 def test_unscoped_runs_without_a_caller_and_says_so_at_the_call(policied):
     """The opt-out is a value someone typed, so a review can find it."""
-    kf = Kingfisher(policied, backend=default_backend)
+    kf = Kingfisher(policied, backends=default_backends)
     assert kf.held_for(UNSCOPED) is None
 
 
@@ -109,7 +109,7 @@ def test_an_unknown_source_id_is_refused(policied):
     """The closed vocabulary, from the caller's end: a typo would otherwise reach
     nothing, which looks exactly like a caller who was denied.
     """
-    kf = Kingfisher(policied, backend=default_backend)
+    kf = Kingfisher(policied, backends=default_backends)
     with pytest.raises(AccessError, match="unknown source id"):
         kf.held_for(("Q",))
 
@@ -118,14 +118,14 @@ def test_naming_source_ids_where_there_is_no_vocabulary_is_refused(cfg):
     """A caller naming source ids against a deployment that declares none is confused, and
     silently ignoring them is how they stay confused.
     """
-    kf = Kingfisher(cfg, backend=default_backend)
+    kf = Kingfisher(cfg, backends=default_backends)
     with pytest.raises(AccessError, match="no access policy"):
         kf._effective_grants(("A",))
 
 
 def test_a_list_of_source_ids_narrows_exactly_as_a_tuple_does(policied):
     """The trap that folding `for_groups` in had to disarm."""
-    kf = Kingfisher(policied, backend=default_backend)
+    kf = Kingfisher(policied, backends=default_backends)
 
     assert kf.held_for(["A"]) == kf.held_for(("A",))
     assert kf.held_for(["A"]) is not None, "a list read as no opinion at all"
@@ -135,7 +135,7 @@ def test_a_bare_string_of_source_ids_is_refused_rather_than_spelled_out(policied
     """`source_ids="sales_db"` is iterable, so coercing it yields eight one-letter source id
     names.
     """
-    kf = Kingfisher(policied, backend=default_backend)
+    kf = Kingfisher(policied, backends=default_backends)
 
     with pytest.raises(AccessError, match="not a string"):
         kf.held_for("A")
@@ -177,7 +177,7 @@ def test_a_deployment_without_a_vocabulary_is_unchanged(cfg):
     """Everything that worked before this must still work untouched -- including calling
     `run` without saying anything about source ids.
     """
-    kf = Kingfisher(cfg, backend=default_backend)
+    kf = Kingfisher(cfg, backends=default_backends)
     assert kf.access is None
     assert kf.held_for(None) is None
 
@@ -186,13 +186,13 @@ def test_resolving_the_same_source_ids_twice_gives_the_same_grant(policied):
     """It was a handle that could be bound once and reused; now the resolution happens
     per call, so the thing worth asserting is that it is stable.
     """
-    kf = Kingfisher(policied, backend=default_backend)
+    kf = Kingfisher(policied, backends=default_backends)
     assert kf._effective_grants(("A",)) == kf._effective_grants(("A",))
 
 
 def test_the_deployments_own_grants_still_bound_a_caller(policied):
     """Two ceilings, and the lower one wins."""
-    kf = Kingfisher(policied, backend=default_backend, grants=Capabilities(tools=()))
+    kf = Kingfisher(policied, backends=default_backends, grants=Capabilities(tools=()))
     assert kf._effective_grants(("A",)).tools == ()
 
 
@@ -216,7 +216,7 @@ def test_unscoped_still_gets_everything(policied):
 
 
 def policied_kf(cfg):
-    return Kingfisher(cfg, backend=default_backend)
+    return Kingfisher(cfg, backends=default_backends)
 
 
 # -- the report -------------------------------------------------------------
@@ -225,7 +225,7 @@ def policied_kf(cfg):
 def test_a_definition_with_no_source_ids_line_is_named(cfg):
     """Default-open must not also be silent."""
     an_agent(cfg, "assistant")
-    kf = Kingfisher(replace(cfg, access=vocabulary()), backend=default_backend)
+    kf = Kingfisher(replace(cfg, access=vocabulary()), backends=default_backends)
     assert ("agent", "assistant") in kf.access_report.unrestricted
 
 
@@ -246,20 +246,20 @@ def test_a_subagent_with_no_source_ids_line_is_named_too(cfg):
         encoding="utf-8",
     )
 
-    kf = Kingfisher(replace(cfg, access=vocabulary()), backend=default_backend)
+    kf = Kingfisher(replace(cfg, access=vocabulary()), backends=default_backends)
 
     assert ("subagent", "auditor") in kf.access_report.unrestricted
     assert "auditor" in "\n".join(kf.access_report.lines())
 
 
 def test_a_definition_that_restricts_is_not_named(policied):
-    kf = Kingfisher(policied, backend=default_backend)
+    kf = Kingfisher(policied, backends=default_backends)
     assert kf.access_report.is_clean
 
 
 def test_the_report_reads_as_a_sentence(cfg):
     an_agent(cfg, "assistant")
-    kf = Kingfisher(replace(cfg, access=vocabulary()), backend=default_backend)
+    kf = Kingfisher(replace(cfg, access=vocabulary()), backends=default_backends)
     rendered = "\n".join(kf.access_report.lines())
     assert "reachable by everyone" in rendered
     assert "assistant" in rendered
@@ -303,7 +303,7 @@ def test_a_caller_is_not_told_about_what_their_source_ids_took_away(policied):
     unfiltered catalogue it would hand a caller the exact list of what their source ids
     denied them.
     """
-    kf = Kingfisher(policied, backend=default_backend)
+    kf = Kingfisher(policied, backends=default_backends)
     names = " ".join(n for _kind, withheld in reported(kf, ["B"], "w1") for n in withheld)
     assert "line_count" not in names
 
@@ -312,7 +312,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
     """An axis no audience controls is unaffected, so the report keeps doing its
     original job.
     """
-    kf = Kingfisher(policied, backend=default_backend)
+    kf = Kingfisher(policied, backends=default_backends)
     session = session_at(kf, "w2")
     held = ("A",)
     grants = replace(kf._effective_grants(held), builtin_tools=("read_file",))
@@ -377,7 +377,7 @@ def with_skills(cfg):
 
 
 def test_a_skill_audience_narrows_the_selection(with_skills):
-    kf = Kingfisher(with_skills, backend=default_backend)
+    kf = Kingfisher(with_skills, backends=default_backends)
 
     assert kf.agent_named("skilled", source_ids=UNSCOPED).declares(
         kf.held_for(("A",))
@@ -389,7 +389,7 @@ def test_a_skill_audience_narrows_the_selection(with_skills):
 
 def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
     """The half a selection alone does not prove."""
-    kf = Kingfisher(with_skills, backend=default_backend)
+    kf = Kingfisher(with_skills, backends=default_backends)
     held = ("B",)
     session = session_at(kf, "sk1")
     request = Request(task="t", agent="skilled")
@@ -440,7 +440,7 @@ def test_a_skill_out_of_reach_is_not_reported_as_withheld(with_skills):
     could not reach `audit` was told a run had withheld it -- naming the one skill their
     source ids exist to hide.
     """
-    kf = Kingfisher(with_skills, backend=default_backend)
+    kf = Kingfisher(with_skills, backends=default_backends)
 
     assert "audit" not in skills_withheld(kf, ("B",), ("review",))
 
@@ -451,7 +451,7 @@ def test_a_skill_in_reach_is_still_reported_when_the_request_left_it_out(with_sk
     of a caller with something hidden, because for one who reaches everything the filter
     never runs, and a report that hid every skill would pass.
     """
-    kf = Kingfisher(with_skills, backend=default_backend)
+    kf = Kingfisher(with_skills, backends=default_backends)
 
     assert skills_withheld(kf, ("B",), ()) == ("review",)
 
@@ -465,7 +465,7 @@ def test_a_skill_audience_written_qualified_hides_the_bare_name_too(with_skills)
         agent.read_text(encoding="utf-8").replace("- name: audit", "- name: catalogue::audit"),
         encoding="utf-8",
     )
-    kf = Kingfisher(with_skills, backend=default_backend)
+    kf = Kingfisher(with_skills, backends=default_backends)
 
     assert "audit" not in skills_withheld(kf, ("B",), ("review",))
     assert "audit" in skills_withheld(kf, ("A",), ("review",))
@@ -473,7 +473,7 @@ def test_a_skill_audience_written_qualified_hides_the_bare_name_too(with_skills)
 
 def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
     """So the assertion above is not passing because nothing was advertised."""
-    kf = Kingfisher(with_skills, backend=default_backend)
+    kf = Kingfisher(with_skills, backends=default_backends)
     held = ("A",)
     session = session_at(kf, "sk2")
     request = Request(task="t", agent="skilled")

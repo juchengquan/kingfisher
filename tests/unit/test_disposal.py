@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from kingfisher import DefaultBackend, Kingfisher, backend_at
+from kingfisher import DefaultBackends, Kingfisher, backend_at
 from kingfisher.domain import retention
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import still_held
@@ -17,7 +17,7 @@ from tests.unit.test_run import StubAgent
 from tests.unit.test_tenancy import _claim, service
 
 
-class Stuck(DefaultBackend):
+class Stuck(DefaultBackends):
     """The default, where no session will go."""
 
     def delete(self, cfg, session_id):
@@ -414,7 +414,7 @@ def test_a_deletion_that_fails_is_on_the_result_beside_the_answer(cfg, monkeypat
     """`run` threw away what `delete_session` answered, so a caller got the answer and no
     sign the session was still there.
     """
-    monkeypatch.setattr(DefaultBackend, "delete", Stuck.delete)
+    monkeypatch.setattr(DefaultBackends, "delete", Stuck.delete)
     kf = service(cfg)
 
     result = kf.run(Request("go"), delete_session=True)

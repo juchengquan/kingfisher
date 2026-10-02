@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import Kingfisher, backend_at, default_backend
+from kingfisher import Kingfisher, backend_at, default_backends
 from kingfisher.domain.capabilities import UNRESTRICTED, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import (
@@ -76,7 +76,7 @@ def test_a_request_cannot_widen_past_what_the_deployment_granted(cfg, session_di
     """`intersect` was implemented, tested and called by nothing. Now it runs."""
     kf = Kingfisher(
         cfg,
-        backend=default_backend,
+        backends=default_backends,
         threads=StubCheckpointer(),
         grants=Capabilities(builtin_tools=("read_file",)),
     )
@@ -88,7 +88,7 @@ def test_a_request_cannot_widen_past_what_the_deployment_granted(cfg, session_di
 
 def test_grants_are_unrestricted_by_default(cfg):
     """A deployment serving one caller is unaffected by any of this."""
-    kf = Kingfisher(cfg, backend=default_backend, threads=StubCheckpointer())
+    kf = Kingfisher(cfg, backends=default_backends, threads=StubCheckpointer())
     assert kf.grants == UNRESTRICTED
 
 

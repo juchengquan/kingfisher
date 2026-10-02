@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import Kingfisher, Origin, Origins, default_backend
+from kingfisher import Kingfisher, Origin, Origins, default_backends
 from kingfisher.infrastructure.catalogue import Definitions
 
 
@@ -155,7 +155,7 @@ def test_the_record_cannot_be_edited_after_it_is_handed_back(cfg):
 
 def test_a_running_kingfisher_reports_what_it_resolved(cfg):
     """Not what it was configured with."""
-    kf = Kingfisher(cfg, backend=default_backend)
+    kf = Kingfisher(cfg, backends=default_backends)
 
     assert kf.origins.workspace == cfg.workspace
     assert kf.origins.skills.kind == "default"
@@ -224,7 +224,7 @@ def test_starting_a_kingfisher_says_where_it_reads_from_once(cfg, caplog):
     """One record per construction, and that is the whole budget."""
     caplog.set_level(logging.INFO, logger="kingfisher.origins")
 
-    Kingfisher(cfg, backend=default_backend)
+    Kingfisher(cfg, backends=default_backends)
 
     records = [r for r in caplog.records if r.name == "kingfisher.origins"]
     assert len(records) == 1
@@ -238,7 +238,7 @@ def test_nothing_is_emitted_or_even_built_when_logging_is_off(cfg, monkeypatch, 
         Origins, "line", lambda self: pytest.fail("the line was built with logging off")
     )
     try:
-        Kingfisher(cfg, backend=default_backend)
+        Kingfisher(cfg, backends=default_backends)
     finally:
         logging.getLogger("kingfisher.origins").setLevel(logging.NOTSET)
 
