@@ -20,7 +20,7 @@ from deepagents.backends.protocol import BackendProtocol, SandboxBackendProtocol
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage
 
-from kingfisher import Kingfisher, ToolContext, backend_at, default_backend
+from kingfisher import Kingfisher, ToolContext, backend_at, default_backends
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Decision, Request, Resume
 from kingfisher.domain.result import AWAITING
@@ -671,7 +671,7 @@ def test_a_turn_the_service_runs_hands_the_tool_its_sessions_backend(scripted):
     Scripted.script.extend(
         [_calls("first_line", file_path="/data/notes.txt"), AIMessage(content="done")]
     )
-    kf = Kingfisher(scripted, backend=default_backend)
+    kf = Kingfisher(scripted, backends=default_backends)
 
     events = list(kf.stream(Request("go", agent="only", session_id=_session(scripted))))
 
@@ -688,7 +688,7 @@ def test_a_resumed_turn_is_handed_it_again(scripted):
     Scripted.script.extend(
         [_calls("first_line", file_path="/data/notes.txt"), AIMessage(content="done")]
     )
-    kf = Kingfisher(scripted, backend=default_backend)
+    kf = Kingfisher(scripted, backends=default_backends)
     paused = kf.run(Request("go", agent="only", session_id=_session(scripted)))
     assert paused.stop_reason == AWAITING, "the turn never stopped, so nothing is resumed"
 

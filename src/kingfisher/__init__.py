@@ -17,7 +17,7 @@ __version__ = "0.1.0"
 #: and `__all__`, so the two cannot drift.
 #:
 #: **A caller means a caller outside this wheel**, which is the rule eleven names --
-#: `build_agent`, `default_backend`, `build_model` and the rest -- were removed under.
+#: `build_agent`, `default_backends`, `build_model` and the rest -- were removed under.
 #: Every one is live, and every one of their callers already imports it from the module
 #: that defines it, so nothing had ever come through the front door for them. The
 #: command ships in this distribution and is family: it reaches such a name directly,
@@ -59,16 +59,16 @@ _EXPORTS = {
     # means a caller outside this wheel -- and what changed is that every such
     # caller now has to name this one: `Kingfisher` no longer picks the filesystem
     # its agents run on, so a deployment keeping the one it always had writes
-    # `backend=default_backend` and has to be able to say it without reaching past
+    # `backends=default_backends` and has to be able to say it without reaching past
     # the door for an infrastructure path.
-    "default_backend": "kingfisher.infrastructure.harness.backend",
-    # What `default_backend` builds for one session, for a directory of the caller's
+    "default_backends": "kingfisher.infrastructure.harness.backend",
+    # What `default_backends` builds for one session, for a directory of the caller's
     # choosing. Public because `ports.md` tells a deployment replacing the backend to
     # start from it rather than from nothing, and that has to be sayable from here.
     "backend_at": "kingfisher.infrastructure.harness.backend",
     # What a deployment subclasses to build on the default: its housekeeping, with its
-    # own `__call__`. `ports.md` shows it, and the refusal of a plain function names it.
-    "DefaultBackend": "kingfisher.infrastructure.harness.backend",
+    # own `open`. `ports.md` shows it, and the refusal of a plain function names it.
+    "DefaultBackends": "kingfisher.infrastructure.harness.backend",
     # The seventh name a consumer has forced public, and the plainest: a
     # `CommandRunner` returns one of these, so a deployment writing a runner
     # cannot write one without it. `docs/guides/ports.md` documents the port and
@@ -139,7 +139,7 @@ __all__ = [
     "ConfigError",
     "Decision",
     "DecisionError",
-    "DefaultBackend",
+    "DefaultBackends",
     "Held",
     "HostPathError",
     "Inventory",
@@ -164,7 +164,7 @@ __all__ = [
     "WorkspacePaths",
     "backend_at",
     "config_from_env",
-    "default_backend",
+    "default_backends",
     "definitions_source",
     "ensure_layout",
     "inventory",
@@ -213,13 +213,13 @@ if TYPE_CHECKING:
     from kingfisher.domain.session import SessionInfo as SessionInfo
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
     from kingfisher.infrastructure.harness.backend import (
-        DefaultBackend as DefaultBackend,
+        DefaultBackends as DefaultBackends,
     )
     from kingfisher.infrastructure.harness.backend import (
         backend_at as backend_at,
     )
     from kingfisher.infrastructure.harness.backend import (
-        default_backend as default_backend,
+        default_backends as default_backends,
     )
     from kingfisher.infrastructure.harness.backend_contract import (
         BACKEND_CONTRACT as BACKEND_CONTRACT,

@@ -199,7 +199,7 @@ def test_a_runner_that_says_nothing_keeps_the_fence(cfg, session_dir):
     """The default is the safe one on purpose.
 
     This half only: that `execute` wraps the command when the runner reads as local.
-    It replaces the confinement below, so it cannot see what `default_backend` decided
+    It replaces the confinement below, so it cannot see what `default_backends` decided
     about that runner -- which is the other half, and was held by nothing until
     `test_a_runner_that_says_nothing_is_confined_here` was written.
     """

@@ -87,7 +87,7 @@ from kingfisher.infrastructure.harness.agent import (
 )
 from kingfisher.infrastructure.harness.backend import (
     SessionBackends,
-    default_backend,
+    default_backends,
 )
 from kingfisher.infrastructure.harness.checkpointing import (
     build_session_checkpointer,
@@ -227,7 +227,7 @@ class Kingfisher(Sessions, Disposal):
         # is written here rather than left for a reader to infer from a branch.
         threads: ThreadStore | Callable[[Path], Any] | None = None,
         runner: Callable[[Path], CommandRunner] | None = None,
-        backend: SessionBackends | None = None,
+        backends: SessionBackends | None = None,
         catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middlewares: Mapping[str, MiddlewareFactory] | None = None,
@@ -288,34 +288,25 @@ class Kingfisher(Sessions, Disposal):
             )
             raise TypeError(msg)
         self._runner = runner
-        # A callable for the reasons above, and one more that is this parameter's
-        # own: a backend is rooted at a session directory, so a single instance
-        # shared by every session would be one filesystem for every caller. A
-        # deployment separating its callers by *where their files are* -- which is
-        # what replacing the backend is usually for -- would have written the leak
-        # it was replacing the backend to avoid, and nothing about the call site
-        # would look wrong.
-        if backend is not None and not callable(backend):
+        # Session backends and not a backend: one backend is rooted at one session,
+        # so a single instance shared by every session would be one filesystem for
+        # every caller. A deployment separating its callers by *where their files
+        # are* -- which is what replacing the backend is usually for -- would have
+        # written the leak it was replacing the backend to avoid, and nothing about
+        # the call site would look wrong.
+        if backends is not None and not isinstance(backends, SessionBackends):
             msg = (
-                "backend is called per turn with the session it is for, so it takes a "
-                "factory rather than a backend: pass `default_backend`, or "
-                "`lambda *a, **kw: your_backend` if you really have one to share -- "
-                "but a backend is rooted at a session, so sharing one is sharing a "
-                "filesystem between callers"
+                "backends= takes a SessionBackends, which opens each session's backend "
+                "and answers for every session: which there are, how big, when each was "
+                "used, and deleting one. A backend is rooted at a session, so sharing one "
+                "is sharing a filesystem between callers. To build on kingfisher's own, "
+                "subclass DefaultBackends and override open"
             )
             raise TypeError(msg)
-        if backend is not None and not isinstance(backend, SessionBackends):
-            msg = (
-                "backend has to answer for every session as well as build one: which "
-                "there are, how big, when each was used, and deleting one. To build on "
-                "kingfisher's own, subclass DefaultBackend and override __call__"
-            )
-            raise TypeError(msg)
-        self._backend = backend
         # Where the sessions are, for the questions no single session answers: which
         # there are, how big, when each was used. A deployment that supplied a graph
-        # rather than a backend keeps its sessions where the default does.
-        self._backends: SessionBackends = backend if backend is not None else default_backend
+        # rather than session backends keeps its sessions where the default does.
+        self._backends: SessionBackends = backends if backends is not None else default_backends
         # Where each turn's record of itself goes. The default is the `kingfisher.run`
         # logger, which the default logging configuration discards: a deployment
         # decides whether it keeps them by configuring logging or by passing a sink.
@@ -351,27 +342,27 @@ class Kingfisher(Sessions, Disposal):
         # mistake, and this is the last moment it is cheap to say so.
         #
         # Two of them is somebody's wiring silently discarded -- a pre-built graph
-        # already holds a backend, and `_graph_for` returns it without ever calling
-        # the factory. None of them used to mean kingfisher picked one, and the
+        # already holds a backend, and `_graph_for` returns it without ever opening
+        # another. None of them used to mean kingfisher picked one, and the
         # reason it no longer does is that the backend is the sandbox: it wraps every
         # command in `sandbox-exec` or Landlock, refuses host paths, and carries the
         # route table a read-only rule is only legal against. Inheriting that in
         # silence was never unsafe -- the default is the strict option, and still is
         # -- but it meant a deployment could wire the whole service without learning
         # there was a boundary at all.
-        if graph is not None and backend is not None:
+        if graph is not None and backends is not None:
             msg = (
-                "graph= and backend= are two answers to what filesystem a turn runs "
+                "graph= and backends= are two answers to what filesystem a turn runs "
                 "against, and a pre-built graph already carries one: pass the graph, "
-                "or pass backend and let kingfisher build the graph"
+                "or pass backends and let kingfisher build the graph"
             )
             raise ValueError(msg)
-        if graph is None and backend is None:
+        if graph is None and backends is None:
             msg = (
                 "kingfisher does not pick the filesystem its agents run on: pass "
-                "backend=default_backend for the one it used to build for you, a "
-                "factory of your own for something else, or a pre-built graph that "
-                "already carries one"
+                "backends=default_backends for the one it used to build for you, "
+                "session backends of your own for something else, or a pre-built graph "
+                "that already carries one"
             )
             raise ValueError(msg)
         self._graph = graph
@@ -407,7 +398,7 @@ class Kingfisher(Sessions, Disposal):
         return Origins.of(
             self.cfg,
             catalogue=self.catalogue,
-            sessions=None if self._backends is default_backend else self._backends,
+            sessions=None if self._backends is default_backends else self._backends,
         )
 
     def held_for(self, source_ids: Held | None) -> frozenset[str] | None:
@@ -494,16 +485,16 @@ class Kingfisher(Sessions, Disposal):
     def _files_for(self, session_id: str, session_dir: Path) -> Any:
         """The backend a session's files are reached through, for kingfisher and agent alike.
 
-        The runner goes into the factory rather than alongside it: a deployment that
+        The runner goes into `open` rather than alongside it: a deployment that
         replaced the backend owns what runs its commands, and handing the same runner
         to `build_agent` as well would leave two answers to that. It is still built
         from the directory: a runner is about where commands run on *this* host.
         """
-        if self._graph is not None or self._backend is None:
+        if self._graph is not None:
             files = local_files(ensure_session_layout(session_dir))
             files.unprotected = protect_data(session_dir)
             return files
-        return self._backend(
+        return self._backends.open(
             self.cfg,
             session_id,
             catalogue=self.catalogue,
@@ -774,7 +765,7 @@ class Kingfisher(Sessions, Disposal):
     ) -> Admitted:
         """The rest of admission, once the session is claimed."""
         # What the backend could not make read-only, where it is one that says. Reported
-        # below rather than raised; see `DefaultBackend`.
+        # below rather than raised; see `DefaultBackends`.
         unprotected = tuple(getattr(files, "unprotected", ()))
 
         # Before the data is placed, not after: placing it grows the session,

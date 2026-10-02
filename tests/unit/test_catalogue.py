@@ -21,7 +21,7 @@ from kingfisher.infrastructure.harness.activation import (
     defined_subagents,
 )
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import backend_at, default_backend
+from kingfisher.infrastructure.harness.backend import backend_at, default_backends
 from kingfisher.infrastructure.harness.tools import workspace_tool_names
 from kingfisher.kinds.middlewares.catalogue import MiddlewareError
 from kingfisher.kinds.skills.catalogue import reachable
@@ -177,7 +177,7 @@ def test_the_service_settles_it_once_and_hands_it_down(tmp_path, cfg):
     """Resolved at construction, not per request."""
     roots = _staged(tmp_path / "staged", skill="staged-only", subagent=SUBAGENT)
 
-    service = Kingfisher(cfg, backend=default_backend, catalogue=roots)
+    service = Kingfisher(cfg, backends=default_backends, catalogue=roots)
 
     assert service.catalogue == roots
 
@@ -186,8 +186,11 @@ def test_a_broken_catalogue_fails_at_startup(tmp_path, cfg):
     """Rather than on the first turn, when a caller is already waiting."""
     missing = tmp_path / "never-staged"
     with pytest.raises(ConfigError):
-        Kingfisher(cfg, backend=default_backend, catalogue={"skills": missing, "subagents": missing,
-                                         "tools": missing})
+        Kingfisher(
+            cfg,
+            backends=default_backends,
+            catalogue={"skills": missing, "subagents": missing, "tools": missing},
+        )
 
 
 NOT_MIDDLEWARE = """
@@ -249,7 +252,7 @@ def test_a_tool_wearing_a_builtin_name_fails_at_startup(cfg):
     (tools_dir(cfg) / "shadow.py").write_text(SHADOWING_TOOL, encoding="utf-8")
 
     with pytest.raises(CapabilityError, match="read_file"):
-        Kingfisher(cfg, backend=default_backend)
+        Kingfisher(cfg, backends=default_backends)
 
 
 def test_a_workspace_whose_tools_clash_with_nothing_still_starts(cfg):
@@ -261,7 +264,7 @@ def test_a_workspace_whose_tools_clash_with_nothing_still_starts(cfg):
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "fine.py").write_text(ITS_OWN_NAME, encoding="utf-8")
 
-    Kingfisher(cfg, backend=default_backend)
+    Kingfisher(cfg, backends=default_backends)
 
 
 def test_a_workspace_with_no_tools_never_assembles_the_probe(cfg, monkeypatch):
@@ -278,7 +281,7 @@ def test_a_workspace_with_no_tools_never_assembles_the_probe(cfg, monkeypatch):
 
     monkeypatch.setattr(service_module, "builtin_tool_names", refuse)
 
-    Kingfisher(cfg, backend=default_backend)
+    Kingfisher(cfg, backends=default_backends)
 
 
 def test_a_delegate_is_activated_from_the_supplied_catalogue(tmp_path, cfg, session_dir):

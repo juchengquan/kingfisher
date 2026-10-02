@@ -435,20 +435,20 @@ def _require_layout(session_dir: Path) -> None:
 class SessionBackends(Protocol):
     """How a deployment says where its sessions are, and what each one runs on.
 
-    Called per turn with the session it is for, and asked the questions only
+    Asked per turn to `open` the session it is for, and asked the questions only
     something that sees every session can answer: which there are, how big, and
     when each was last used. Keyed by session id rather than by a directory,
     because a backend that runs elsewhere has no directory here to be handed.
 
-    Typed against the call and not the return, which is the asymmetry worth
-    knowing. deepagents decides what a backend *is* with `isinstance` against its
+    `open` is typed against its call and not its return, which is the asymmetry
+    worth knowing. deepagents decides what a backend *is* with `isinstance` against its
     own abstract base class, so a protocol describing the return would describe the
     requirement wrongly -- an object satisfying it exactly would still be handed no
     shell. `refuse_unusable_backend` asks that question at the only time it can be
     answered, which is once there is an object to ask about.
 
     What a type can settle is the call, and there is one mistake here it is the only
-    thing that can catch. A factory written without `runner` drops the
+    thing that can catch. An `open` written without `runner` drops the
     `CommandRunner` the deployment wired, and nothing downstream can tell: the
     backend that comes back is well-formed and passes every check, and merely runs
     its commands somewhere the deployment did not choose.
@@ -458,12 +458,12 @@ class SessionBackends(Protocol):
     ignore it.
     """
 
-    def __call__(
+    def open(
         self,
         cfg: Config,
         session_id: str,
         # Positional-only, or this would be dictating parameter *names*: a protocol
-        # matches those, so without the slash a deployment whose factory reads
+        # matches those, so without the slash a deployment whose `open` reads
         # `(config, which)` fails to satisfy it for no reason anybody could act on.
         /,
         *,
@@ -505,7 +505,7 @@ def backend_at(
 ) -> WorkspaceScopedBackend:
     """Kingfisher's own backend, rooted at one session directory on this host.
 
-    What `default_backend` builds for a session id, and what a deployment building
+    What `default_backends` builds for a session id, and what a deployment building
     on the default calls to get it for a directory of its choosing.
 
     Typed to the class rather than to deepagents' protocol because a deployment
@@ -595,17 +595,17 @@ def backend_at(
     return WorkspaceScopedBackend(default=shell, routes=routes, workspace=session_dir)
 
 
-class DefaultBackend:
+class DefaultBackends:
     """Kingfisher's own `SessionBackends`: each session a directory under
     `<workspace>/sessions`, each backend `backend_at` that directory.
 
-    One instance, `default_backend`, and deployments name it rather than build
-    another: whether a key is needed is decided by asking whether the factory *is*
-    this object, because a wrapper around it can return its backend with anything
-    changed.
+    One instance, `default_backends`, and deployments name it rather than build
+    another: `Kingfisher.origins` tells kingfisher's own from a deployment's by
+    asking whether the backends *are* this object, because a subclass can return
+    its backend with anything changed.
     """
 
-    def __call__(
+    def open(
         self,
         cfg: Config,
         session_id: str,
@@ -636,6 +636,6 @@ class DefaultBackend:
         return LocalSessionDirs().remove_tree(sessions_root(cfg.workspace) / session_id)
 
 
-#: The only `DefaultBackend` there is. See the class for why it is one.
-default_backend = DefaultBackend()
+#: The only `DefaultBackends` there is. See the class for why it is one.
+default_backends = DefaultBackends()
 

@@ -2626,6 +2626,31 @@ shell only means something on the host that runs it; and a supplied runner is st
 built from `<workspace>/sessions/<id>`, because a runner is about where commands run
 on this host.
 
+**Named for what they are: `backends=`, `open`, `KINGFISHER_SESSION_BACKENDS_FACTORY`.**
+The entries above call the object a backend and its setting a backend factory, and
+the code said the same -- `backend=`, `default_backend`, `DefaultBackend`,
+`KINGFISHER_BACKEND_FACTORY` -- while the type was `SessionBackends` and a backend
+was what it returned. A `backend=` that refuses a backend reads as a bug. Now a
+**backend** is one session's filesystem and shell, and the **session backends** open
+them: `Kingfisher(backends=...)`, `default_backends`, `DefaultBackends`,
+`Config.session_backends_factory`, `configured_backends`. A session is opened by a
+named `open` rather than the object's `__call__`, which collapses the constructor's
+two checks into one -- callability was the first, and its advice was refused by the
+second -- and gives the method a name an async twin can follow. "Factory" means only
+what the setting names: a function of no arguments returning the session backends,
+as `KINGFISHER_ADAPTERS_FACTORY` names one returning adapters.
+
+**The old setting name is refused, which the policy on renamed settings does not
+do.** *The deprecation is over* settled that a stale name is reported by `doctor`
+rather than refused, because the default it falls back to may be what was wanted.
+Here it cannot be: a deployment that named session backends did not want the command
+line's sessions, and its agent's shell, on this host instead. So
+`KINGFISHER_BACKEND_FACTORY` is in `RENAMED_SETTINGS` and refused where the
+environment is read, as the removed store settings are -- which stops a library
+deployment still carrying it too, at the cost of a rename for a variable only the
+command line ever read. It is not the `RENAMED` shim that went: that read the old
+name in place of the new, and this reads it only to refuse it. *(2026-10-02.)*
+
 ## A tool's path is the backend's path
 
 **A workspace tool's `path` is resolved by the session's backend, under the turn's

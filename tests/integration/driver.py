@@ -345,13 +345,13 @@ def main(argv: list[str]) -> int:
     # printed again after the summary -- it arrived as it was written.
     # Deferred: this is the first thing that needs deepagents, and paths
     # that never get here (--help, --list, a bad .env) should not pay for it.
-    from kingfisher import Kingfisher, default_backend
+    from kingfisher import Kingfisher, default_backends
 
     result = None
     recorded = _Recorded()
     # One service for the turn and for fetching what it wrote afterwards, which
     # goes through the session's backend rather than a folder on this host.
-    kf = Kingfisher(cfg, backend=default_backend, run_events=recorded)
+    kf = Kingfisher(cfg, backends=default_backends, run_events=recorded)
     try:
         result = show(kf.stream(request), sys.stdout)
     except CapabilityError as exc:

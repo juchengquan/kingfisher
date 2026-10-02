@@ -1338,7 +1338,7 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
         {
             "activation",
             "agent",
-            # `BackendFactory`, for the parameter a deployment now has to fill. The
+            # `SessionBackends`, for the parameter a deployment now has to fill. The
             # type belongs beside the default that satisfies it rather than beside
             # the builder that consumes it, so naming the shape costs this edge --
             # which is the honest price. Re-exporting it through `agent` to keep the
@@ -1710,7 +1710,7 @@ WITNESSES: dict[str, str] = {
     # page says what is the part that moves.
     "Kingfisher": "document",
     "config_from_env": "document",
-    "default_backend": "document",
+    "default_backends": "document",
     "Request": "document",
     "Capabilities": "document",
     # `ports.md` tells an adapter to raise this one, imported from `kingfisher`,
@@ -1806,7 +1806,7 @@ WITNESSES: dict[str, str] = {
     # `guides/ports.md` shows a deployment building on the default by subclassing
     # it, and building a backend for a directory of its own with `backend_at`, and
     # checking what it wrote with the kit beside `BACKEND_CONTRACT`.
-    "DefaultBackend": "document",
+    "DefaultBackends": "document",
     "backend_at": "document",
     "SESSION_BACKENDS_CONTRACT": "document",
 }
@@ -2441,8 +2441,8 @@ HEAVY_EXPORTS = frozenset({
     "Kingfisher", "run", "stream",
     # The default's class and its per-directory builder, and the command line's way to
     # the backends a setting names: all three are the backend module, which is
-    # deepagents by definition, as `default_backend` below is.
-    "DefaultBackend", "backend_at", "configured_backend",
+    # deepagents by definition, as `default_backends` below is.
+    "DefaultBackends", "backend_at", "configured_backends",
     # Where `kingfisher run --log` keeps a turn's events: beside the logger sink it is
     # the file twin of, in the harness module that turns callbacks into events.
     "JsonlRunEvents",
@@ -2456,7 +2456,7 @@ HEAVY_EXPORTS = frozenset({
     # It builds a `CompositeBackend` over a confined shell, so it is deepagents by
     # definition. Every consumer that names it was already paying for `Kingfisher`
     # on the same line, so nothing new arrives with it.
-    "default_backend",
+    "default_backends",
 })
 
 PROVIDER_SDKS = ("deepagents", "langchain", "langchain_openai", "langchain_anthropic")

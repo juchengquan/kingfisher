@@ -12,7 +12,7 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import DefaultBackend, Kingfisher, Request, backend_at, default_backend
+from kingfisher import DefaultBackends, Kingfisher, Request, backend_at, default_backends
 from kingfisher.domain.request import Decision, DecisionError, Resume
 from kingfisher.infrastructure.harness.backend_contract import shell_denied
 from kingfisher.layout import HARNESS, PAUSED_STATE, PINNED_AGENT
@@ -34,14 +34,14 @@ def test_what_a_session_keeps_is_written_as_it_is(scripted):
     start(scripted, "s")
     Scripted.script.append(AIMessage(content="done"))
 
-    Kingfisher(scripted, backend=default_backend).run(Request("go", agent="only", session_id="s"))
+    Kingfisher(scripted, backends=default_backends).run(Request("go", agent="only", session_id="s"))
 
     held = sorted(p.name for p in (scripted.workspace / "sessions" / "s" / HARNESS).iterdir())
     assert PINNED_AGENT in held, "nothing was pinned, so there was nothing to leave unsigned"
     assert not [name for name in held if name.endswith(".sig")], held
 
 
-class _WrappingTheDefault(DefaultBackend):
+class _WrappingTheDefault(DefaultBackends):
     """Returns exactly what the default does, and is still not the default."""
 
 
@@ -49,9 +49,9 @@ class _WrappingTheDefault(DefaultBackend):
     "wiring",
     [
         lambda cfg: {"graph": StubAgent("ok")},
-        lambda cfg: {"backend": _WrappingTheDefault()},
-        lambda cfg: {"backend": default_backend, "runner": lambda d: None},
-        lambda cfg: {"backend": default_backend, "cfg": replace(cfg, shell_sandbox="off")},
+        lambda cfg: {"backends": _WrappingTheDefault()},
+        lambda cfg: {"backends": default_backends, "runner": lambda d: None},
+        lambda cfg: {"backends": default_backends, "cfg": replace(cfg, shell_sandbox="off")},
     ],
     ids=["graph", "wrapped-default", "runner", "sandbox-off"],
 )
@@ -98,7 +98,10 @@ def test_the_kit_catches_a_shell_that_can_write_the_harness(cfg, session_dir):
     ("change", "because"),
     [
         ({"shell_sandbox": "off"}, "'off'"),
-        ({"backend_factory": "deployment.backends:Remote"}, "KINGFISHER_BACKEND_FACTORY"),
+        (
+            {"session_backends_factory": "deployment.backends:Remote"},
+            "KINGFISHER_SESSION_BACKENDS_FACTORY",
+        ),
     ],
     ids=["sandbox-off", "own-backend"],
 )

@@ -18,11 +18,11 @@ from kingfisher import (
     Request,
     UnknownSessionError,
     backend_at,
-    default_backend,
+    default_backends,
 )
 from kingfisher.domain.access import parse
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.harness.backend import DefaultBackend, SessionClaims
+from kingfisher.infrastructure.harness.backend import DefaultBackends, SessionClaims
 from kingfisher.infrastructure.harness.session_files import (
     collect_artifacts,
     local_files,
@@ -67,7 +67,7 @@ class Elsewhere:
     def __init__(self, root: Path) -> None:
         self.root = root
 
-    def __call__(self, cfg, session_id, /, *, catalogue=None, runner=None):
+    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
         kept = self.root / session_id
         for name in (*SESSION_DIRS, HARNESS):
             (kept / name).mkdir(parents=True, exist_ok=True)
@@ -108,7 +108,7 @@ def test_a_backend_that_keeps_the_session_elsewhere_gets_the_data_and_gives_back
         _calls("write_file", file_path="/derived/report.txt", content="made elsewhere"),
         AIMessage(content="done"),
     ])
-    kf = Kingfisher(scripted, backend=Elsewhere(remote))
+    kf = Kingfisher(scripted, backends=Elsewhere(remote))
 
     events = list(kf.stream(Request("go", agent="only", data=(source,))))
 
@@ -130,13 +130,13 @@ def test_a_backend_that_keeps_the_session_elsewhere_gets_the_data_and_gives_back
 
 
 def _produced(
-    cfg, name: str = "derived/out.txt", content: str = "result", *, backend=default_backend
+    cfg, name: str = "derived/out.txt", content: str = "result", *, backends=default_backends
 ) -> Kingfisher:
     start(cfg, "s")
     target = cfg.workspace / "sessions" / "s" / name
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content)
-    return Kingfisher(cfg, backend=backend)
+    return Kingfisher(cfg, backends=backends)
 
 
 def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg):
@@ -195,7 +195,7 @@ def test_a_name_that_is_not_there_is_refused_by_name(cfg):
 
 
 def test_a_session_that_is_not_there_is_the_same_error_as_ever(cfg):
-    kf = Kingfisher(cfg, backend=default_backend)
+    kf = Kingfisher(cfg, backends=default_backends)
 
     with pytest.raises(UnknownSessionError):
         kf.artifact("nobody", "derived/out.txt")
@@ -219,15 +219,15 @@ def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg):
 # -- reading one -------------------------------------------------------------
 
 
-class Counting(DefaultBackend):
+class Counting(DefaultBackends):
     """The default backend, recording each session it is asked for."""
 
     def __init__(self) -> None:
         self.asked: list[str] = []
 
-    def __call__(self, cfg, session_id, /, *, catalogue=None, runner=None):
+    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
         self.asked.append(session_id)
-        return super().__call__(cfg, session_id, catalogue=catalogue, runner=runner)
+        return super().open(cfg, session_id, catalogue=catalogue, runner=runner)
 
 
 @pytest.mark.parametrize(
@@ -235,12 +235,13 @@ class Counting(DefaultBackend):
     [lambda kf: kf.artifact("s", "derived/out.txt"), lambda kf: kf.pending("s")],
     ids=["artifact", "pending"],
 )
-def test_reading_a_session_asks_the_factory_for_it_once(cfg, read):
-    """Both built the session's backend once to decide whether the caller reached it and
-    again to read through, so a remote factory handed out two sandboxes per query.
+def test_reading_a_session_opens_its_backend_once(cfg, read):
+    """Both opened the session's backend once to decide whether the caller reached it
+    and again to read through, so remote session backends handed out two sandboxes
+    per query.
     """
     counting = Counting()
-    kf = _produced(cfg, backend=counting)
+    kf = _produced(cfg, backends=counting)
 
     read(kf)
 

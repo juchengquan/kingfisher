@@ -56,7 +56,7 @@ system_prompt: |
 def main() -> int:
     load_dotenv()
 
-    from kingfisher import Kingfisher, config_from_env, default_backend
+    from kingfisher import Kingfisher, config_from_env, default_backends
     from kingfisher.domain.request import Request
     from kingfisher.kinds.documents import SUFFIX
 
@@ -73,7 +73,7 @@ def main() -> int:
         definition.write_text(ECHO, encoding="utf-8")
 
     try:
-        kf = Kingfisher(cfg, backend=default_backend)
+        kf = Kingfisher(cfg, backends=default_backends)
 
         def turn(word: str) -> bool:
             return kf.run(Request(word, agent="echo")).completed

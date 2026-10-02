@@ -218,9 +218,9 @@ def _backend_for(
     """The filesystem an agent sees: supplied ready-made, or kingfisher's own rooted
     at a session.
 
-    A deployment reaches this through `Kingfisher`, which calls its factory itself and
-    arrives here with the backend already made -- runner and all, since the runner is
-    the factory's argument now. What is left is the harness's own two callers --
+    A deployment reaches this through `Kingfisher`, which opens the session's backend
+    itself and arrives here with it already made -- runner and all, since the runner
+    is an argument to `open` now. What is left is the harness's own two callers --
     `--list` and this repository's tests -- which have a session, want the default
     built for them, and have never had a runner to hand it.
     """

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import default_backend
+from kingfisher import default_backends
 from kingfisher.application.service import Kingfisher
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.request import Request
@@ -130,7 +130,7 @@ def test_the_agent_runs_the_model_its_file_names(cfg, session_dir):
 def test_a_request_that_names_no_agent_is_refused_once_the_workspace_has_any(cfg):
     """No default and no implicit one."""
     _agents(cfg, NARROW, CHEAP)
-    service = Kingfisher(cfg, backend=default_backend)
+    service = Kingfisher(cfg, backends=default_backends)
 
     with pytest.raises(CapabilityError, match="names no agent"):
         service.agent_named(None)
@@ -138,7 +138,7 @@ def test_a_request_that_names_no_agent_is_refused_once_the_workspace_has_any(cfg
 
 def test_the_refusal_lists_what_the_workspace_actually_offers(cfg):
     _agents(cfg, NARROW, CHEAP)
-    service = Kingfisher(cfg, backend=default_backend)
+    service = Kingfisher(cfg, backends=default_backends)
 
     with pytest.raises(CapabilityError, match="cheap-one, narrow"):
         service.agent_named("analyst")
@@ -146,7 +146,7 @@ def test_the_refusal_lists_what_the_workspace_actually_offers(cfg):
 
 def test_an_empty_workspace_is_told_how_to_get_one(cfg):
     """The other half of that message."""
-    service = Kingfisher(cfg, backend=default_backend)
+    service = Kingfisher(cfg, backends=default_backends)
 
     with pytest.raises(CapabilityError, match="kingfisher seed"):
         service.agent_named("analyst")
@@ -155,7 +155,7 @@ def test_an_empty_workspace_is_told_how_to_get_one(cfg):
 def test_naming_one_is_required_even_where_there_is_nothing_to_name(cfg):
     """No default, and no exemption for an empty workspace either."""
     with pytest.raises(CapabilityError, match="names no agent"):
-        Kingfisher(cfg, backend=default_backend).agent_named(None)
+        Kingfisher(cfg, backends=default_backends).agent_named(None)
 
 
 def test_the_request_carries_the_name_and_nothing_more(cfg):
@@ -182,7 +182,7 @@ def test_a_later_turn_runs_what_the_session_opened_with(cfg):
     history that already happened.
     """
     _agents(cfg, NARROW)
-    service = Kingfisher(cfg, backend=default_backend)
+    service = Kingfisher(cfg, backends=default_backends)
     asked = Request("go", agent="narrow", session_id="s")
 
     opened = service._agent_for(asked, _held(cfg))
@@ -196,7 +196,7 @@ def test_naming_a_different_agent_later_is_refused_rather_than_ignored(cfg):
     would be told nothing.
     """
     _agents(cfg, NARROW, CHEAP)
-    service = Kingfisher(cfg, backend=default_backend)
+    service = Kingfisher(cfg, backends=default_backends)
     service._agent_for(Request("go", agent="narrow", session_id="s"), _held(cfg))
 
     with pytest.raises(CapabilityError, match="running 'narrow'"):
@@ -208,7 +208,7 @@ def test_naming_the_same_agent_again_is_fine(cfg):
     remember what it opened the session with.
     """
     _agents(cfg, NARROW)
-    service = Kingfisher(cfg, backend=default_backend)
+    service = Kingfisher(cfg, backends=default_backends)
     asked = Request("go", agent="narrow", session_id="s")
     service._agent_for(asked, _held(cfg))
 
@@ -218,7 +218,7 @@ def test_naming_the_same_agent_again_is_fine(cfg):
 def test_a_turn_that_names_nothing_still_gets_the_sessions_agent(cfg):
     """The session decides, not the turn."""
     _agents(cfg, NARROW)
-    service = Kingfisher(cfg, backend=default_backend)
+    service = Kingfisher(cfg, backends=default_backends)
     service._agent_for(Request("go", agent="narrow", session_id="s"), _held(cfg))
 
     assert service._agent_for(Request("again", session_id="s"), _held(cfg)).name == "narrow"

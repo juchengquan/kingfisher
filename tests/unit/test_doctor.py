@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import default_backend, seed
+from kingfisher import default_backends, seed
 from kingfisher.application.service import Kingfisher
 from kingfisher.presentation.cli import health
 from kingfisher.presentation.cli.__main__ import main
@@ -210,7 +210,7 @@ def test_doctor_sees_an_agents_moved_tool_that_nothing_else_would(cfg):
     assert "probe_one" in checks["tool references"].detail
 
     # And startup is deliberately unchanged: the agent runs, without the tool.
-    Kingfisher(cfg, backend=default_backend)
+    Kingfisher(cfg, backends=default_backends)
 
 
 def test_a_clean_catalogue_says_its_tool_references_are_fine(cfg, shipped):
@@ -952,7 +952,7 @@ def test_a_memory_workspace_with_nowhere_to_keep_sessions_fails(cfg, monkeypatch
     check = {c.name: c for c in examine(cfg)}["sessions survive"]
 
     assert check.verdict == "fail"
-    assert "KINGFISHER_BACKEND_FACTORY" in check.remedy
+    assert "KINGFISHER_SESSION_BACKENDS_FACTORY" in check.remedy
 
 
 def test_no_quota_fails_only_once_memory_is_shared(cfg, monkeypatch, tmp_path):
@@ -965,7 +965,7 @@ def test_no_quota_fails_only_once_memory_is_shared(cfg, monkeypatch, tmp_path):
         monkeypatch, filesystem="tmpfs", size_bytes=300 * 1024**2,
         limit_bytes=400 * 1024**2, swap_enabled=False,
     )
-    wired = replace(cfg, backend_factory="mystores:build", session_max_bytes=None)
+    wired = replace(cfg, session_backends_factory="mystores:build", session_max_bytes=None)
 
     check = {c.name: c for c in examine(wired)}["session quota"]
 
@@ -980,7 +980,9 @@ def test_a_quota_larger_than_the_filesystem_warns_that_it_cannot_bind(cfg, monke
         monkeypatch, filesystem="tmpfs", size_bytes=100 * 1024**2,
         limit_bytes=400 * 1024**2, swap_enabled=False,
     )
-    wired = replace(cfg, backend_factory="mystores:build", session_max_bytes=1024 * 1024**2)
+    wired = replace(
+        cfg, session_backends_factory="mystores:build", session_max_bytes=1024 * 1024**2
+    )
 
     check = {c.name: c for c in examine(wired)}["session quota"]
 

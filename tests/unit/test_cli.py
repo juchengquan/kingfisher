@@ -352,7 +352,7 @@ def test_a_warning_of_kingfishers_own_is_one_plain_line(cfg, session_dir, monkey
     the package, a line number and the `warnings.warn` source line, around the one
     sentence addressed to the reader.
 
-    Raised by the real `default_backend` rather than a `warnings.warn` here, because a
+    Raised by the real `default_backends` rather than a `warnings.warn` here, because a
     warning this file raises is attributed to this file and would test the other branch.
     """
     from dataclasses import replace

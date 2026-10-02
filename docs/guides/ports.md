@@ -2,7 +2,7 @@
 
 Kingfisher reaches the world through ten Protocols in
 [`domain/ports.py`](../../src/kingfisher/domain/ports.py), and through the
-`backend` every deployment names. Each has a default that works on one host with
+`backends` every deployment names. Each has a default that works on one host with
 its own disk. This page is for a deployment that needs one of them to be
 something else — a sandbox, a bucket, another machine.
 
@@ -19,16 +19,16 @@ a dict.
 **As a constructor argument**, which every port accepts:
 
 ```python
-kingfisher = Kingfisher(cfg, backend=MyBackends(), runner=my_runner, run_events=my_sink)
+kingfisher = Kingfisher(cfg, backends=MyBackends(), runner=my_runner, run_events=my_sink)
 ```
 
-**As a setting**, which only the backend has, and only for the command line. A
+**As a setting**, which only the session backends have, and only for the command line. A
 constructor argument reaches the construction site you control, and `kingfisher
 sessions`, `reap` and `artifact` build their own instance with nowhere to point
-it. `KINGFISHER_BACKEND_FACTORY` is where they are told:
+it. `KINGFISHER_SESSION_BACKENDS_FACTORY` is where they are told:
 
 ```
-KINGFISHER_BACKEND_FACTORY=mycompany.sessions:build_backends
+KINGFISHER_SESSION_BACKENDS_FACTORY=mycompany.sessions:build_backends
 ```
 
 It names `module:name` — something **callable with no arguments** that returns
@@ -91,10 +91,10 @@ Three things to know:
   default is True so that forgetting the flag yields more confinement than
   needed, never less.
 - **A replaced backend carries your runner, or drops it.** The runner reaches the
-  shell through the backend, so kingfisher hands it to the factory under
-  [`backend`](#backend--the-filesystem-the-agent-runs-against) rather than applying
-  it itself. Write your factory with the `runner` keyword and pass it on. A factory
-  that omits it silently runs every command under kingfisher's own fence instead of
+  shell through the backend, so kingfisher hands it to `open` under
+  [`backends`](#backends--the-filesystem-the-agent-runs-against) rather than
+  applying it itself. Write your `open` with the `runner` keyword and pass it on. An
+  `open` that omits it silently runs every command under kingfisher's own fence instead of
   yours, and the backend that comes back is perfectly well-formed — nothing at
   runtime can tell. This is the one thing the two parameters share, and the reason
   `SessionBackends` is typed.
@@ -124,7 +124,7 @@ class ShipToCollector:
     def record(self, event):
         collector.send(dict(event))
 
-kingfisher = Kingfisher(cfg, backend=default_backend, run_events=ShipToCollector())
+kingfisher = Kingfisher(cfg, backends=default_backends, run_events=ShipToCollector())
 ```
 
 Each event is a flat mapping. `event` names it — `run_start`, `run_end`,
@@ -162,17 +162,17 @@ directories. Definitions kept somewhere else are staged into directories first, 
 the `KINGFISHER_*_DIR` settings in [configuration](configuration.md) say where each
 kind is read from.
 
-## `backend` — the filesystem the agent runs against
+## `backends` — the filesystem the agent runs against
 
-Not optional. Every `Kingfisher` names one:
+Not optional. Every `Kingfisher` names them:
 
 ```python
-from kingfisher import Kingfisher, default_backend
+from kingfisher import Kingfisher, default_backends
 
-kingfisher = Kingfisher(cfg, backend=default_backend)
+kingfisher = Kingfisher(cfg, backends=default_backends)
 ```
 
-Most deployments write exactly that and read no further. `default_backend` is the
+Most deployments write exactly that and read no further. `default_backends` opens the
 backend kingfisher used to build for you without asking, unchanged — naming it
 costs you nothing and buys the rest of this section a reader.
 
@@ -189,11 +189,12 @@ option and still is, and requiring the parameter makes no deployment safer on it
 own. What it does is make sure nobody wires kingfisher without finding out there
 is a boundary here at all.
 
-**What it is: a `SessionBackends`.** One object, called per turn with the id of the
-session it is for, that returns that session's backend — and answers the questions
+**What it is: a `SessionBackends`.** One object whose `open` is called per turn
+with the id of the session it is for, and returns that session's backend — and which
+answers the questions
 only something that sees every session can: `sessions(cfg)` lists them with when
 each was last used, `mark_used`, `size` and `delete` do what they say. `reap`,
-`kingfisher sessions` and the session quota are answered by it. `default_backend`
+`kingfisher sessions` and the session quota are answered by it. `default_backends`
 keeps each session as a directory under `<workspace>/sessions`.
 
 **Try a mount before replacing it.** Sessions that must outlive the machine, or
@@ -207,20 +208,20 @@ cannot be given one of its own, and every session ends up on one mount separated
 by a path prefix and nothing else. A deployment that forbids one caller's session
 from reaching another's needs the separation in the wiring instead.
 
-**Build on the default rather than from nothing.** Subclass `DefaultBackend`,
-override `__call__`, and change the one thing you came to change. Host-path
+**Build on the default rather than from nothing.** Subclass `DefaultBackends`,
+override `open`, and change the one thing you came to change. Host-path
 refusal, the route table, the confinement and the housekeeping all survive without
 your thinking about them:
 
 ```python
-from kingfisher import DefaultBackend
+from kingfisher import DefaultBackends
 
-class MyBackends(DefaultBackend):
-    def __call__(self, cfg, session_id, /, *, catalogue=None, runner=None):
-        mine = super().__call__(cfg, session_id, catalogue=catalogue, runner=runner)
+class MyBackends(DefaultBackends):
+    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
+        mine = super().open(cfg, session_id, catalogue=catalogue, runner=runner)
         return MyScoped(default=MySandbox(session=session_id), routes=mine.routes)
 
-kingfisher = Kingfisher(cfg, backend=MyBackends())
+kingfisher = Kingfisher(cfg, backends=MyBackends())
 ```
 
 `backend_at(cfg, directory)` is the same thing for a directory of your choosing.
@@ -234,12 +235,12 @@ that otherwise report nothing.
 
 **Take both keyword arguments even if you ignore one.** `catalogue` is what lets a
 session see the skills your bundles ship; `runner` is the `CommandRunner` you
-wired, and a factory that quietly drops it gets a backend that is perfectly
+wired, and an `open` that quietly drops it gets a backend that is perfectly
 well-formed and runs its commands somewhere you did not choose. Nothing at runtime
 can see that mistake, which is why `SessionBackends` is a typed protocol rather than
 a line of prose — write the signature out and your type checker catches it.
 
-**What it returns is one session's, and only one.** A backend shared between
+**What `open` returns is one session's, and only one.** A backend shared between
 sessions is one filesystem for every caller — usually the thing you are replacing
 the backend to avoid. Passing a backend itself is a `TypeError`, and
 `two_sessions_are_kept_apart` in the kit below catches the subtler version: every
@@ -248,13 +249,13 @@ id handed the same storage.
 **The turn lock is on the backend.** It has to have `claim(name, *, stale_after)`,
 `release(name)` and `held(name, *, stale_after)`: a claim that fails while another
 is live, which a `write` cannot be, because a `write` overwrites and two turns
-would both take it. `default_backend` does it with `mkdir`. Two turns in one
+would both take it. `default_backends` does it with `mkdir`. Two turns in one
 session share a conversation and the last write wins, so this is what refuses the
 second.
 
 **A pre-built graph counts as an answer.** `Kingfisher(cfg, graph=...)` already
-carries the backend it was compiled on, so it takes no `backend` and refuses one
-passed beside it. `run()` and `stream()` keep `backend=default_backend` in their
+carries the backend it was compiled on, so it takes no `backends` and refuses any
+passed beside it. `run()` and `stream()` keep `backends=default_backends` in their
 signatures, because they are conveniences over a *default* `Kingfisher` and that
 is what makes the one-liner a one-liner.
 
@@ -271,7 +272,7 @@ with `upload_files` under `/data/`, what a turn left is listed with `glob` under
 `/derived/` and `/memory/`, and `Kingfisher.artifact` fetches one with
 `download_files`. So those three work on a backend that keeps the session
 somewhere other than the directory it was handed. `/data` has to take that upload
-while refusing the agent's own writes: `default_backend` routes it to
+while refusing the agent's own writes: `default_backends` routes it to
 `DataBackend`, which lifts the permission bits for kingfisher's upload alone, and
 a backend of yours meets the same promise its own way.
 
@@ -282,7 +283,8 @@ unless your backend keeps it out. Nothing signs them, so what stands between the
 agent and rewriting its own pinned agent is that fence, and it is yours to get
 right: **`shell_denied`**, in the kit below, drives `execute` at `/.harness` and
 `/data` and fails if the shell can write either. `kingfisher doctor` warns when
-`KINGFISHER_BACKEND_FACTORY` names a backend, because it cannot look inside one.
+`KINGFISHER_SESSION_BACKENDS_FACTORY` names session backends of yours, because it
+cannot look inside them.
 
 Nothing else is read from a directory on this host. A backend that keeps its
 sessions somewhere else keeps all of them there.
@@ -292,7 +294,7 @@ is handed a real file to open — see [`tools.md`](tools.md). Kingfisher asks th
 backend where that file lives here: it follows your routes, and a
 `FilesystemBackend` answers from its own root, so a backend built from those needs
 nothing more. A backend whose files are on this host by some other means — a
-network mount, a cache — says so with an optional method on what your factory
+network mount, a cache — says so with an optional method on what your `open`
 returns:
 
 ```python
@@ -310,8 +312,8 @@ into two sessions and reads back what your answer names. The turn's rules still
 apply first: a path the file tools may not read, `/.harness` among them, is
 refused before your method is asked.
 
-For the command line, name it with `KINGFISHER_BACKEND_FACTORY`; without it,
-`kingfisher sessions`, `reap` and `artifact` run on `default_backend`.
+For the command line, name it with `KINGFISHER_SESSION_BACKENDS_FACTORY`; without it,
+`kingfisher sessions`, `reap` and `artifact` run on `default_backends`.
 
 ### Checking what you returned
 
@@ -357,7 +359,7 @@ its inputs and run nothing over them, with a confused model as the only symptom.
 
 **The shell may not write under `/.harness` or `/data`.** `shell_denied` writes a
 file there through the backend, then has the shell try to overwrite it and to create
-another beside it. `default_backend` passes on the strength of its sandbox; with the
+another beside it. `default_backends` passes on the strength of its sandbox; with the
 sandbox off it fails on `/.harness`, which is exactly the deployment that needs a
 session key.
 

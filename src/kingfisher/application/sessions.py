@@ -122,9 +122,9 @@ class Sessions:
     ) -> tuple[SessionInfo, Any] | None:
         """`session`'s answer, and the backend that was opened to decide it.
 
-        Handed back for a caller that goes on to read the session: building another
-        asks the factory a second time, which for a remote backend is a second sandbox
-        per query.
+        Handed back for a caller that goes on to read the session: opening another
+        asks the session backends a second time, which for a remote backend is a
+        second sandbox per query.
 
         Filtered from the same listing as `sessions()` rather than stat-ing one path,
         so both answers come from one rule. At fifty sessions that is 0.22ms; it grows

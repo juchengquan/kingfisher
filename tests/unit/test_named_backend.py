@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import default_backend
+from kingfisher import default_backends
 from kingfisher.application.config import Environment
-from kingfisher.application.run import configured_backend
-from kingfisher.config import REMOVED_STORE_SETTINGS, ConfigError
+from kingfisher.application.run import configured_backends
+from kingfisher.config import REMOVED_STORE_SETTINGS, RENAMED_SETTINGS, ConfigError
 from kingfisher.infrastructure.harness.backend import SessionBackends
 from kingfisher.infrastructure.wiring import store_named
 
@@ -19,18 +19,18 @@ HERE = __name__
 #: The setting these are about. `store_named` takes the name a message must carry
 #: as an argument, so a test that spelled it at every call would stop checking
 #: that the caller passes it.
-SETTING = "KINGFISHER_BACKEND_FACTORY"
+SETTING = "KINGFISHER_SESSION_BACKENDS_FACTORY"
 
 
 def named(spec: str):
-    """`store_named` as `configured_backend` calls it."""
+    """`store_named` as `configured_backends` calls it."""
     return store_named(spec, setting=SETTING, port=SessionBackends)
 
 
 class Recording:
     """A `SessionBackends` that satisfies the port and keeps nothing."""
 
-    def __call__(self, cfg, session_id, /, *, catalogue=None, runner=None):
+    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
         return None
 
     def sessions(self, cfg):
@@ -140,13 +140,13 @@ def test_a_factory_that_raises_is_left_alone():
 
 
 def test_naming_nothing_is_the_default(cfg):
-    assert configured_backend(cfg) is default_backend
+    assert configured_backends(cfg) is default_backends
 
 
 def test_a_named_factory_is_what_the_command_line_runs_on(cfg):
-    assert isinstance(
-        configured_backend(replace(cfg, backend_factory=f"{HERE}:make_backends")), Recording
-    )
+    named = replace(cfg, session_backends_factory=f"{HERE}:make_backends")
+
+    assert isinstance(configured_backends(named), Recording)
 
 
 def test_the_variable_reaches_the_config(tmp_path: Path):
@@ -167,9 +167,20 @@ def test_a_removed_store_setting_is_refused_rather_than_ignored(tmp_path: Path, 
     """
     read = Environment({"KINGFISHER_WORKSPACE": str(tmp_path), removed: "anything"})
 
-    with pytest.raises(ConfigError, match=rf"{removed} was removed.*KINGFISHER_BACKEND_FACTORY"):
+    with pytest.raises(ConfigError, match=rf"{removed} was removed.*{SETTING}"):
+        read.config()
+
+
+@pytest.mark.parametrize(("old", "new"), RENAMED_SETTINGS.items())
+def test_a_renamed_setting_is_refused_under_its_old_name(tmp_path: Path, old, new):
+    """Ignored, the command line ran on the local session backends instead of the ones
+    the deployment named -- its agent's shell on this host, `reap` looking elsewhere.
+    """
+    read = Environment({"KINGFISHER_WORKSPACE": str(tmp_path), old: f"{HERE}:make_backends"})
+
+    with pytest.raises(ConfigError, match=rf"{old} was renamed {new}"):
         read.config()
 
 
 def test_the_default_satisfies_the_port_it_is_the_default_for():
-    assert isinstance(default_backend, SessionBackends)
+    assert isinstance(default_backends, SessionBackends)

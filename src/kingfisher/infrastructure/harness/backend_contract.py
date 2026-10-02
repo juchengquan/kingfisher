@@ -192,7 +192,7 @@ def host_path_refusal(make: Callable[[], Any]) -> None:
         raise AssertionError(msg) from refused
 
 
-#: Every check a backend a deployment's factory returned must pass, in the order a
+#: Every check a backend a deployment's `open` returned must pass, in the order a
 #: deployment wants to read them: the silent failure first, then the one that stops
 #: the graph building, then the promise the prompt makes, then what the shell must
 #: not write, then the refusal.
@@ -245,7 +245,7 @@ def a_session_asked_for_is_listed(make: Callable[[], Any]) -> None:
     """`kingfisher sessions` and `reap` see what the listing says, and nothing else."""
     cfg, backends = make()
     one = CONTRACT_SESSIONS[0]
-    backends(cfg, one)
+    backends.open(cfg, one)
     if one not in _ids(backends.sessions(cfg)):
         msg = f"a backend was built for {one!r}, and `sessions` does not list it"
         raise AssertionError(msg)
@@ -257,8 +257,8 @@ def two_sessions_are_kept_apart(make: Callable[[], Any]) -> None:
     """
     cfg, backends = make()
     one, other = CONTRACT_SESSIONS
-    backends(cfg, one).upload_files([("/derived/kept-apart", b"one's")])
-    (seen,) = backends(cfg, other).download_files(["/derived/kept-apart"])
+    backends.open(cfg, one).upload_files([("/derived/kept-apart", b"one's")])
+    (seen,) = backends.open(cfg, other).download_files(["/derived/kept-apart"])
     if seen.error is None:
         msg = f"{other!r} reads {one!r}'s /derived: two sessions share one filesystem"
         raise AssertionError(msg)
@@ -268,8 +268,8 @@ def a_session_is_there_on_the_next_turn(make: Callable[[], Any]) -> None:
     """Each turn builds its backend again. What one turn wrote, the next must find."""
     cfg, backends = make()
     one = CONTRACT_SESSIONS[0]
-    backends(cfg, one).upload_files([("/derived/again", b"still here")])
-    (seen,) = backends(cfg, one).download_files(["/derived/again"])
+    backends.open(cfg, one).upload_files([("/derived/again", b"still here")])
+    (seen,) = backends.open(cfg, one).download_files(["/derived/again"])
     if seen.content != b"still here":
         msg = f"a second backend for {one!r} did not find what the first wrote: {seen!r}"
         raise AssertionError(msg)
@@ -281,7 +281,7 @@ def a_claim_is_exclusive(make: Callable[[], Any]) -> None:
     """
     cfg, backends = make()
     one = CONTRACT_SESSIONS[0]
-    first, second = backends(cfg, one), backends(cfg, one)
+    first, second = backends.open(cfg, one), backends.open(cfg, one)
     if not first.claim("contract-claim", stale_after=3600):
         msg = "a claim nobody held was refused"
         raise AssertionError(msg)
@@ -298,7 +298,7 @@ def a_claim_is_exclusive(make: Callable[[], Any]) -> None:
 def a_deleted_session_is_gone(make: Callable[[], Any]) -> None:
     cfg, backends = make()
     one = CONTRACT_SESSIONS[0]
-    backends(cfg, one)
+    backends.open(cfg, one)
     failure = backends.delete(cfg, one)
     if failure is not None or one in _ids(backends.sessions(cfg)):
         msg = f"deleting {one!r} answered {failure!r} and left it listed"
@@ -319,7 +319,7 @@ def a_host_path_stays_in_its_session(make: Callable[[], Any]) -> None:
     """
     cfg, backends = make()
     one, other = CONTRACT_SESSIONS
-    mine, theirs = backends(cfg, one), backends(cfg, other)
+    mine, theirs = backends.open(cfg, one), backends.open(cfg, other)
     mine.upload_files([("/derived/whose", f"{one}'s".encode())])
     theirs.upload_files([("/derived/whose", f"{other}'s".encode())])
     answered = host_path(mine, "/derived/whose")

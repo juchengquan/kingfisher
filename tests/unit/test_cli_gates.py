@@ -63,7 +63,7 @@ def _drive(monkeypatch, result: RunResult) -> None:
     # the module first -- so this patch worked in the full suite and failed alone.
     monkeypatch.setattr(
         importlib.import_module("kingfisher.application.run"),
-        "configured_backend",
+        "configured_backends",
         lambda cfg: None,
     )
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Nothing())
@@ -179,7 +179,7 @@ def test_the_three_decisions_reach_the_library_as_written(monkeypatch):
     # the module first -- so this patch worked in the full suite and failed alone.
     monkeypatch.setattr(
         importlib.import_module("kingfisher.application.run"),
-        "configured_backend",
+        "configured_backends",
         lambda cfg: None,
     )
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Recording())
@@ -315,7 +315,7 @@ def _a_paused_session_only_a_reaches(cfg):
 
     an_agent(cfg, "only_a", source_ids="[A]")
     policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
-    kf = kingfisher.Kingfisher(policied, backend=kingfisher.default_backend)
+    kf = kingfisher.Kingfisher(policied, backends=kingfisher.default_backends)
     start(policied, "s-1")
     pin(kf, "s-1", "only_a")
     write_pause_mark(harness_of(policied, "s-1"), {"pending": pending_as_mark([PAUSED.pending[0]])})
@@ -369,7 +369,7 @@ def test_log_reaches_the_service_on_both_verbs_that_run_a_turn(verb, tmp_path, m
     monkeypatch.setattr(cli, "config_from_env", object)
     monkeypatch.setattr(
         importlib.import_module("kingfisher.application.run"),
-        "configured_backend",
+        "configured_backends",
         lambda cfg: None,
     )
     monkeypatch.setattr(kingfisher, "Kingfisher", Recording)
