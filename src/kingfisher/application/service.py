@@ -23,7 +23,6 @@ definitions is the thing to reach for.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import AsyncGenerator, AsyncIterator, Iterator
 from contextlib import contextmanager
@@ -121,6 +120,7 @@ from kingfisher.infrastructure.session_store import (
     write_pause_mark,
     write_transcript,
 )
+from kingfisher.infrastructure.threads import finished, off_loop, thread_pool
 from kingfisher.infrastructure.workspace import (
     SEED_HINT,
     STARTER_AGENT,
@@ -236,6 +236,9 @@ class Kingfisher(Sessions, Disposal):
     ) -> None:
         self.cfg = cfg or config_module.config_from_env()
         config_module.enforce_local_only_tracing()
+        # Asked for here rather than at the first async turn, so a second size in
+        # one process is refused where the service is built.
+        self._pool = thread_pool(self.cfg.thread_pool_size)
 
         # Only what sessions share. Each session's own layout is made per
         # request, because its path is not known until the request names it.
@@ -1092,39 +1095,47 @@ class Kingfisher(Sessions, Disposal):
                 raise
             raise refused from exc
         finally:
-            prepared = turn.prepared
-            prepared.logger.run_end(ok=turn.ok, answer_chars=len(turn.answer))
-            # Before the slot goes back, and inside its own `finally` so that a
-            # store which is unreachable does not also leak the claim. Ending
-            # the turn is the only moment that happens whether the caller read
-            # the last event or walked away after the answer.
-            # One read, before anything is let go of: the saver still holds the
-            # paused state, and `_settle_pause` is what writes it out.
-            snapshot = self._settled(prepared)
-            turn.awaiting = self._settle_pause(prepared, snapshot)
-            if turn.awaiting:
-                turn.pending.append(decision_needed(turn.awaiting))
-                # A bound that already fired keeps the reason it gave. Both are true
-                # -- the gate is real and the checkpoint is written either way -- and
-                # `stop_reason` answers why the turn *ended*, which for a turn cut
-                # off at its deadline is the deadline and not the question it was
-                # holding. The pending calls are reported regardless, so a caller is
-                # never left guessing what was in flight.
-                if turn.stop_reason == END_TURN:
-                    turn.stop_reason = AWAITING
-            try:
-                turn.kept = self._keep(prepared, snapshot)
-            finally:
-                # The slot goes back however the turn ended -- answered, refused
-                # mid-stream, or cut short by its deadline.
-                prepared.files.release(CLAIM)
-            # And so does the connection, when this service opened one. A
-            # per-session database is a file descriptor per session, so a
-            # process serving many would otherwise hold every one it touched.
-            release_checkpointer(prepared.release)
-            # And the QuickJS runtime, which is the one of the three that hangs
-            # the process rather than leaking a handle. See `release_interpreter`.
-            release_interpreter(self.cfg, prepared.graph)
+            self._end_turn(turn)
+
+    def _end_turn(self, turn: _Turn) -> None:
+        """Everything a turn does once it is over, however it ended.
+
+        Sync, and so uninterruptible: a cancellation lands at an `await`, and there
+        is none in here to land at.
+        """
+        prepared = turn.prepared
+        prepared.logger.run_end(ok=turn.ok, answer_chars=len(turn.answer))
+        # Before the slot goes back, and inside its own `finally` so that a
+        # store which is unreachable does not also leak the claim. Ending
+        # the turn is the only moment that happens whether the caller read
+        # the last event or walked away after the answer.
+        # One read, before anything is let go of: the saver still holds the
+        # paused state, and `_settle_pause` is what writes it out.
+        snapshot = self._settled(prepared)
+        turn.awaiting = self._settle_pause(prepared, snapshot)
+        if turn.awaiting:
+            turn.pending.append(decision_needed(turn.awaiting))
+            # A bound that already fired keeps the reason it gave. Both are true
+            # -- the gate is real and the checkpoint is written either way -- and
+            # `stop_reason` answers why the turn *ended*, which for a turn cut
+            # off at its deadline is the deadline and not the question it was
+            # holding. The pending calls are reported regardless, so a caller is
+            # never left guessing what was in flight.
+            if turn.stop_reason == END_TURN:
+                turn.stop_reason = AWAITING
+        try:
+            turn.kept = self._keep(prepared, snapshot)
+        finally:
+            # The slot goes back however the turn ended -- answered, refused
+            # mid-stream, cut short by its deadline, or cancelled during setup.
+            prepared.files.release(CLAIM)
+        # And so does the connection, when this service opened one. A
+        # per-session database is a file descriptor per session, so a
+        # process serving many would otherwise hold every one it touched.
+        release_checkpointer(prepared.release)
+        # And the QuickJS runtime, which is the one of the three that hangs
+        # the process rather than leaking a handle. See `release_interpreter`.
+        release_interpreter(self.cfg, prepared.graph)
 
     def _read(self, turn: _Turn, namespace: Any, mode: Any, chunk: Any) -> tuple[RunEvent, ...]:
         """One stream chunk, read as events. The answer accumulates on `turn`."""
@@ -1213,9 +1224,15 @@ class Kingfisher(Sessions, Disposal):
         of CPU-bound construction, which on the loop is 15-46ms every other turn
         waits through.
         """
-        turn = _Turn(
-            await asyncio.to_thread(self._prepare, request, session, source_ids=source_ids)
+        prepared, cancelled = await finished(
+            off_loop(self._pool, self._prepare, request, session, source_ids=source_ids)
         )
+        turn = _Turn(prepared)
+        if cancelled is not None:
+            # Setup claimed the session before the cancel could reach it, so the
+            # turn is ended here, the way any turn ends, before the cancel goes on.
+            self._end_turn(turn)
+            raise cancelled
         with self._turn_lifecycle(turn):
             for event in turn.prepared.events:
                 yield event
@@ -1322,4 +1339,9 @@ class Kingfisher(Sessions, Disposal):
         # a deployment's store may be a network away -- 0.75ms locally, a round
         # trip wherever `KINGFISHER_SESSION_STORE_FACTORY` points. The whole tail
         # goes rather than the deletion alone, which keeps `_drained` the one copy.
-        return await asyncio.to_thread(self._drained, result, delete_session=True)
+        drained, cancelled = await finished(
+            off_loop(self._pool, self._drained, result, delete_session=True)
+        )
+        if cancelled is not None:
+            raise cancelled
+        return drained

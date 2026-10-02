@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import threading
 import time
 from dataclasses import replace
 from functools import partial
@@ -382,6 +383,114 @@ def test_cancelling_twice_still_leaves_the_session_free(cfg, how):
 
     assert not held, f"{how} left the turn's claim behind"
     assert admitted, f"{how} left the session unusable"
+
+
+# -- cancelling during setup -----------------------------------------------
+#
+# Setup runs on a thread and claims the session before a cancel can reach it, so
+# a cancel there has a claim to give back that no lifecycle has taken yet.
+
+
+def _held_in_setup(monkeypatch) -> tuple[threading.Event, threading.Event]:
+    """Stop each turn at the end of setup, claimed and built, until `release` is set.
+
+    Returns `(entered, release)`.
+    """
+    entered, release = threading.Event(), threading.Event()
+    opened = Kingfisher._open_turn
+
+    def held(self, admitted):
+        entered.set()
+        release.wait(timeout=5)
+        return opened(self, admitted)
+
+    monkeypatch.setattr(Kingfisher, "_open_turn", held)
+    return entered, release
+
+
+def test_cancelling_during_setup_leaves_the_session_free(cfg, monkeypatch):
+    """A cancel returned past the setup thread, which went on to claim the session
+    with nobody left to end the turn, so the next one was refused as busy until the
+    claim went stale.
+
+    Driven rather than timed: setup is let go only after the cancel has landed, so
+    this cannot pass by setup happening to finish first.
+    """
+    session = start(cfg, "s")
+    kf = service(cfg)
+    entered, release = _held_in_setup(monkeypatch)
+
+    async def cancel_during_setup() -> bool:
+        task = asyncio.ensure_future(kf.arun(Request("go", session_id=session)))
+        assert await asyncio.to_thread(entered.wait, 5), "the turn never reached setup"
+        task.cancel()
+        # The cancel is delivered on the first of these, while setup is still held.
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        # No await between the cancel returning and this.
+        return _claim(cfg, session).exists()
+
+    assert not asyncio.run(cancel_during_setup()), "setup's claim outlived the cancel"
+    assert kf.run(Request("again", session_id=session)).completed
+
+
+@pytest.mark.parametrize("how", DOUBLE_CANCELS)
+def test_cancelling_during_setup_any_way_leaves_the_session_free(cfg, monkeypatch, how):
+    """The ways of cancelling above, landing in setup instead of the model call.
+
+    `wait_for` and `asyncio.timeout` turn their cancel into `TimeoutError` only if a
+    `CancelledError` comes back out, so the one setup waited through has to be
+    re-raised rather than swallowed with the claim given back.
+    """
+    session = start(cfg, f"s-{DOUBLE_CANCELS.index(how)}")
+    kf = service(cfg)
+    opened = Kingfisher._open_turn
+
+    def slow(self, admitted):
+        time.sleep(0.3)  # every cancel in `_cancel_twice` lands inside this
+        return opened(self, admitted)
+
+    monkeypatch.setattr(Kingfisher, "_open_turn", slow)
+
+    async def cancel_then_look() -> bool:
+        await _cancel_twice(kf, session, how)
+        return _claim(cfg, session).exists()
+
+    assert not asyncio.run(cancel_then_look()), f"{how} left setup's claim behind"
+    monkeypatch.setattr(Kingfisher, "_open_turn", opened)
+    assert kf.run(Request("after", session_id=session)).completed
+
+
+def test_setup_runs_on_kingfishers_pool_in_the_callers_context(cfg, monkeypatch):
+    """Setup queued behind every other blocking call on the loop's default executor,
+    12 workers on an 8-CPU host, and a hop that starts its thread in an empty context
+    drops the caller's tracing -- which `findings.md` records a bare `run_in_executor`
+    doing.
+    """
+    ambient: contextvars.ContextVar[str] = contextvars.ContextVar("ambient", default="UNSET")
+    seen = []
+    opened = Kingfisher._open_turn
+
+    def watched(self, admitted):
+        seen.append((threading.current_thread().name, ambient.get()))
+        return opened(self, admitted)
+
+    monkeypatch.setattr(Kingfisher, "_open_turn", watched)
+    start(cfg, "s")
+    kf = service(cfg)
+
+    async def run_with_a_context():
+        ambient.set("set-by-the-caller")
+        await kf.arun(Request("go", session_id="s"))
+
+    asyncio.run(run_with_a_context())
+
+    ((thread, context),) = seen
+    assert thread.startswith("kingfisher"), f"setup ran on {thread!r}"
+    assert context == "set-by-the-caller"
 
 
 def test_the_turns_cleanup_cannot_be_interrupted_by_a_cancellation():

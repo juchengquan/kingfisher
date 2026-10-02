@@ -181,6 +181,7 @@ class Environment:
             session_max_bytes=self.optional_number("KINGFISHER_SESSION_MAX_BYTES"),
             session_ttl_s=self.number("KINGFISHER_SESSION_TTL_S", 7 * 24 * 3600),
             recursion_limit=self.number("KINGFISHER_RECURSION_LIMIT", 150),
+            thread_pool_size=self.number("KINGFISHER_THREAD_POOL_SIZE", 64),
             shell_path_extra=path_extra,
             shell_sandbox=self.values.get("KINGFISHER_SHELL_SANDBOX", "auto"),
             # From `paths`, not read again here: it is the one reader of these

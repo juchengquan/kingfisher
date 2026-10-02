@@ -84,6 +84,12 @@ def test_it_defaults_inside_the_workspace(tmp_path):
 # -- what it resolves to ---------------------------------------------------
 
 
+def test_the_thread_pool_size_is_read_from_its_setting(env):
+    """Read but not passed on, every service would run on the default and say nothing."""
+    assert config_from_env(env).thread_pool_size == 64
+    assert config_from_env({**env, "KINGFISHER_THREAD_POOL_SIZE": "8"}).thread_pool_size == 8
+
+
 def test_endpoints_and_models_come_from_the_file(env):
     cfg = config_from_env(env)
 
