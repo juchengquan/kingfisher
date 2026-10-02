@@ -21,6 +21,7 @@ from kingfisher import Kingfisher, backend_at
 from kingfisher.domain.request import Decision, DecisionError, Request, Resume
 from kingfisher.domain.result import AWAITING, DECISIONS, END_TURN
 from kingfisher.infrastructure.session_store import read_pause_mark, write_pause_mark
+from kingfisher.infrastructure.steps import drive
 from kingfisher.infrastructure.workspace import session_bytes
 from kingfisher.layout import HARNESS, PAUSED_MARK, PAUSED_STATE
 from tests.conftest import FakeToolCallingModel, harness_of
@@ -211,7 +212,7 @@ def test_answering_clears_the_pause(cfg):
     )
 
     assert not (_session_dir(cfg, paused.session_id) / PAUSED).exists()
-    assert read_pause_mark(harness_of(cfg, paused.session_id)) is None
+    assert drive(read_pause_mark(harness_of(cfg, paused.session_id))) is None
 
 
 def test_two_gated_calls_are_answered_one_each(cfg, session_dir):
@@ -357,7 +358,7 @@ def test_a_pause_records_the_agent_the_turn_actually_ran(cfg):
     policied = _under_a_policy(cfg)
     _kf, paused = _paused_on_a_pinned_session(policied, "c1")
 
-    written = read_pause_mark(harness_of(policied, paused.session_id)) or {}
+    written = drive(read_pause_mark(harness_of(policied, paused.session_id))) or {}
 
     assert written.get("agent") == "analyst"
 
@@ -433,7 +434,7 @@ def test_an_injected_graph_under_no_policy_has_no_agent_to_disagree_with(cfg):
     kf = Kingfisher(cfg, graph=_gated(calls=[_write("/derived/a.txt", "x", "c1")]))
     paused = kf.run(Request("write it", agent="whatever"))
 
-    assert (read_pause_mark(harness_of(cfg, paused.session_id)) or {}).get("agent") == ""
+    assert (drive(read_pause_mark(harness_of(cfg, paused.session_id))) or {}).get("agent") == ""
 
     done = kf.run(
         Resume(
@@ -453,9 +454,9 @@ def test_a_pause_that_did_not_survive_an_upgrade_is_refused(cfg):
     kf = Kingfisher(cfg, graph=_gated(calls=[_write("/derived/a.txt", "x", "c1")]))
     paused = kf.run(Request("write it"))
     kept = harness_of(cfg, paused.session_id)
-    written = read_pause_mark(kept)
+    written = drive(read_pause_mark(kept))
     assert written is not None, "the pause recorded nothing to move under it"
-    write_pause_mark(kept, {**written, "deepagents": "0.0.1-before"})
+    drive(write_pause_mark(kept, {**written, "deepagents": "0.0.1-before"}))
 
     with pytest.raises(DecisionError, match="did not survive the upgrade"):
         kf.run(

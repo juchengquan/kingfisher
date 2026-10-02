@@ -9,7 +9,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.config import ConfigError
+from kingfisher.config import DEFAULT_THREAD_POOL_SIZE, ConfigError
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -27,21 +27,23 @@ class _Pool:
 _POOL = _Pool()
 
 
-def thread_pool(size: int) -> ThreadPoolExecutor:
-    """The process's pool, which holds `size` threads.
+def thread_pool(size: int | None = None) -> ThreadPoolExecutor:
+    """The process's pool, which holds `size` threads -- or with no size, the pool as
+    it is, made at the default if nothing has asked for one yet.
 
     A second size is refused rather than ignored: whichever service was built first
     would otherwise decide for every other, and the one that asked for more would
     queue behind a number it never chose.
     """
-    if size < 1:
+    if size is not None and size < 1:
         msg = f"KINGFISHER_THREAD_POOL_SIZE must be at least 1, got {size}"
         raise ConfigError(msg)
     with _POOL.lock:
         if _POOL.executor is None:
-            _POOL.executor = ThreadPoolExecutor(max_workers=size, thread_name_prefix="kingfisher")
-            _POOL.size = size
-        elif size != _POOL.size:
+            made = DEFAULT_THREAD_POOL_SIZE if size is None else size
+            _POOL.executor = ThreadPoolExecutor(max_workers=made, thread_name_prefix="kingfisher")
+            _POOL.size = made
+        elif size is not None and size != _POOL.size:
             msg = (
                 f"this process's thread pool holds {_POOL.size} threads and this service "
                 f"asks for {size}; KINGFISHER_THREAD_POOL_SIZE is one number per process"

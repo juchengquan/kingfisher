@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from kingfisher.application.run import Request, run
 from kingfisher.infrastructure.harness.session_files import collect_artifacts, local_files
+from kingfisher.infrastructure.steps import drive
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 
@@ -64,7 +65,7 @@ def test_paths_are_relative_to_the_session(cfg, session_dir):
     (session_dir / "derived" / "nested").mkdir(parents=True)
     (session_dir / "derived" / "nested" / "out.csv").write_text("a,b\n")
 
-    artifacts = collect_artifacts(local_files(session_dir))
+    artifacts = drive(collect_artifacts(local_files(session_dir)))
 
     assert "derived/nested/out.csv" in artifacts
     assert not any(path.startswith("/") for path in artifacts)
@@ -83,11 +84,11 @@ def test_a_shell_write_is_reported_even_though_no_tool_saw_it(session_dir):
         check=True,
     )
 
-    assert "derived/model.txt" in collect_artifacts(local_files(session_dir))
+    assert "derived/model.txt" in drive(collect_artifacts(local_files(session_dir)))
 
 
 def test_directories_are_omitted(session_dir):
     """An empty one carries nothing to persist and reappears with its files."""
     (session_dir / "derived" / "empty").mkdir(parents=True)
 
-    assert "derived/empty" not in collect_artifacts(local_files(session_dir))
+    assert "derived/empty" not in drive(collect_artifacts(local_files(session_dir)))

@@ -228,6 +228,16 @@ kingfisher = Kingfisher(cfg, backends=MyBackends())
 A plain function is refused with a `TypeError` that says to do this: it can build a
 backend, and cannot say which sessions there are.
 
+**The async path asks for `aopen` and `asessions`.** `Kingfisher.asession`,
+`apending` and `aartifact` open a session with `aopen` and list them with
+`asessions`. `SessionBackends` carries both, running `open` and `sessions` on
+kingfisher's thread pool, so a class that subclasses it — `DefaultBackends` does —
+has them already. Override one where opening a session or listing them is a round
+trip you can await: the async path then holds no thread while it waits. A class that
+does not subclass `SessionBackends` has to write both, because the type check asks for
+every method. The backend `open` returns is read through its own async methods,
+`adownload_files` and the rest, which deepagents' `BackendProtocol` already has.
+
 Starting from nothing instead is allowed and is yours to get right — which is a
 thing to do deliberately, not to discover. Two of the five contract checks below
 run on every backend kingfisher resolves and will tell you about the two failures
@@ -341,15 +351,16 @@ from kingfisher import BACKEND_CONTRACT
 
 @pytest.mark.parametrize("check", BACKEND_CONTRACT, ids=lambda c: c.__name__)
 def test_my_backend_keeps_the_contract(check, cfg):
-    check(lambda: MyBackends()(cfg, "a-session"))
+    check(lambda: MyBackends().open(cfg, "a-session"))
 ```
 
 Run all five. The automatic pair costs nothing twice, and your own suite is a
 better place to read a failure than a turn is. And run
 `SESSION_BACKENDS_CONTRACT`, above, against the object that makes them: that two
 sessions are kept apart, that a session is there on the next turn, that the claim
-is exclusive, that what is listed and deleted is what exists, and that where you say
-a file is on this host, it is that session's file.
+is exclusive, that what is listed and deleted is what exists, that where you say
+a file is on this host it is that session's file, and that `aopen` and `asessions`
+answer as `open` and `sessions` do.
 
 **The shell and the file tools have to be two views of one filesystem**, and this
 is the one left that reports nothing on its own. A virtual path becomes a shell

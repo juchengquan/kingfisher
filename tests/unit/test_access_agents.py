@@ -13,7 +13,7 @@ from kingfisher.domain.access import UNSCOPED, AccessError, parse
 from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import UnknownSessionError
-from tests.conftest import an_agent, pin, start
+from tests.conftest import Reads, an_agent, pin, start
 
 VOCABULARY = "source_ids: [A, B]\n"
 
@@ -220,7 +220,7 @@ def test_a_first_turn_is_refused_however_the_ids_are_written(two_agents, held):
         _first_event(kf, Request(task="t", agent="assistant"), held)
 
 
-def test_reading_a_session_without_saying_who_is_calling_is_refused(two_agents):
+def test_reading_a_session_without_saying_who_is_calling_is_refused(two_agents, way):
     """The door that answered. Running a turn and asking for an agent both refuse a call
     that names nobody; reading one session took the same argument, ignored its absence,
     and answered for a session pinned to an agent the caller could not open -- because
@@ -229,16 +229,16 @@ def test_reading_a_session_without_saying_who_is_calling_is_refused(two_agents):
     kf = Kingfisher(two_agents, backends=default_backends)
 
     with pytest.raises(AccessError, match="source_ids="):
-        kf.session(_pinned_by_a(kf))
+        Reads(kf, way).session(_pinned_by_a(kf))
 
 
-def test_an_operator_reads_a_session_by_saying_so(two_agents):
+def test_an_operator_reads_a_session_by_saying_so(two_agents, way):
     """`UNSCOPED` is what a caller writes to mean no caller, and housekeeping on the
     machine is exactly that -- which is what `kingfisher reap` passes.
     """
     kf = Kingfisher(two_agents, backends=default_backends)
 
-    assert kf.session(_pinned_by_a(kf), source_ids=UNSCOPED) is not None
+    assert Reads(kf, way).session(_pinned_by_a(kf), source_ids=UNSCOPED) is not None
 
 
 def test_listing_sessions_stays_the_operators(two_agents):
@@ -254,23 +254,23 @@ def test_listing_sessions_stays_the_operators(two_agents):
 
 
 @pytest.mark.parametrize("held", [("B",), ["B"]], ids=["tuple", "list"])
-def test_a_session_out_of_reach_is_hidden_however_the_ids_are_written(two_agents, held):
+def test_a_session_out_of_reach_is_hidden_however_the_ids_are_written(two_agents, held, way):
     """And reading one: `["B"]` was shown a session pinned to A's agent."""
     kf = Kingfisher(two_agents, backends=default_backends)
 
-    assert kf.session(_pinned_by_a(kf), source_ids=held) is None
+    assert Reads(kf, way).session(_pinned_by_a(kf), source_ids=held) is None
 
 
 @pytest.mark.parametrize("held", [("A",), ["A"]], ids=["tuple", "list"])
-def test_a_caller_in_reach_is_let_in_however_the_ids_are_written(two_agents, held):
+def test_a_caller_in_reach_is_let_in_however_the_ids_are_written(two_agents, held, way):
     """So the refusals above are not passing because a list is turned away outright."""
     kf = Kingfisher(two_agents, backends=default_backends)
 
     assert kf.agent_named("assistant", source_ids=held) is not None
-    assert kf.session(_pinned_by_a(kf), source_ids=held) is not None
+    assert Reads(kf, way).session(_pinned_by_a(kf), source_ids=held) is not None
 
 
-def test_a_bare_string_is_refused_rather_than_read_as_nobody_in_particular(two_agents):
+def test_a_bare_string_is_refused_rather_than_read_as_nobody_in_particular(two_agents, way):
     """Naming an agent and reading a session let `"B"` through unfiltered, and the
     listing spelled it out a letter at a time, because a string is a sequence too.
     """
@@ -282,7 +282,7 @@ def test_a_bare_string_is_refused_rather_than_read_as_nobody_in_particular(two_a
     with pytest.raises(AccessError, match="not a string"):
         kf.agent_named("assistant", source_ids="B")
     with pytest.raises(AccessError, match="not a string"):
-        kf.session(session_id, source_ids="B")
+        Reads(kf, way).session(session_id, source_ids="B")
     with pytest.raises(AccessError, match="not a string"):
         inventory(two_agents, source_ids="B")
 
@@ -290,40 +290,40 @@ def test_a_bare_string_is_refused_rather_than_read_as_nobody_in_particular(two_a
 # -- a session out of reach reads as one that is not there ------------------
 
 
-def test_a_session_whose_agent_is_out_of_reach_reads_as_missing(two_agents):
+def test_a_session_whose_agent_is_out_of_reach_reads_as_missing(two_agents, way):
     """A session you cannot run must be indistinguishable from one that was never there."""
     kf = Kingfisher(two_agents, backends=default_backends)
     session_id = start(two_agents, "pinned")
     pin(kf, session_id, "assistant")
 
-    assert kf.session(session_id, source_ids=("A",)) is not None
-    assert kf.session(session_id, source_ids=("B",)) is None
+    assert Reads(kf, way).session(session_id, source_ids=("A",)) is not None
+    assert Reads(kf, way).session(session_id, source_ids=("B",)) is None
 
 
-def test_a_session_is_visible_where_there_is_no_vocabulary(cfg):
+def test_a_session_is_visible_where_there_is_no_vocabulary(cfg, way):
     """Every deployment that predates this keeps answering as it did."""
     an_agent(cfg, "assistant")
     kf = Kingfisher(cfg, backends=default_backends)
     session_id = start(cfg, "pinned")
     pin(kf, session_id, "assistant")
 
-    assert kf.session(session_id) is not None
+    assert Reads(kf, way).session(session_id) is not None
 
 
-def test_unscoped_sees_a_session_whatever_it_runs(two_agents):
+def test_unscoped_sees_a_session_whatever_it_runs(two_agents, way):
     kf = Kingfisher(two_agents, backends=default_backends)
     session_id = start(two_agents, "pinned")
     pin(kf, session_id, "assistant")
 
-    assert kf.session(session_id, source_ids=UNSCOPED) is not None
+    assert Reads(kf, way).session(session_id, source_ids=UNSCOPED) is not None
 
 
-def test_a_session_with_nothing_pinned_stays_visible(two_agents):
+def test_a_session_with_nothing_pinned_stays_visible(two_agents, way):
     """It has no agent to be out of reach of."""
     kf = Kingfisher(two_agents, backends=default_backends)
     session_id = start(two_agents, "unpinned")
 
-    assert kf.session(session_id, source_ids=("B",)) is not None
+    assert Reads(kf, way).session(session_id, source_ids=("B",)) is not None
 
 
 # -- a definition naming a source id the vocabulary does not declare ------------

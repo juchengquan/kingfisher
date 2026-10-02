@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -14,6 +15,7 @@ from langchain_core.language_models.fake_chat_models import FakeMessagesListChat
 
 from kingfisher.config import Adapter, Config, Endpoint, Landing, ModelProfile, Models
 from kingfisher.infrastructure.harness.models import ADAPTERS
+from kingfisher.infrastructure.steps import drive
 from kingfisher.infrastructure.workspace import ensure_layout, ensure_session_layout
 from tests.unit.scripted import Scripted
 
@@ -218,9 +220,38 @@ def start(cfg, session_id: str) -> str:
     return session_id
 
 
+@pytest.fixture(params=["sync", "async"])
+def way(request) -> str:
+    """Which way into a session a test reads through: the sync methods or their twins."""
+    return request.param
+
+
+class Reads:
+    """`session`, `pending` and `artifact` on `kf`, through the way `way` names."""
+
+    def __init__(self, kf, way: str) -> None:
+        self._kf = kf
+        self._awaited = way == "async"
+
+    def _through(self, name: str, *args, **kwargs):
+        if self._awaited:
+            return asyncio.run(getattr(self._kf, f"a{name}")(*args, **kwargs))
+        return getattr(self._kf, name)(*args, **kwargs)
+
+    def session(self, *args, **kwargs):
+        return self._through("session", *args, **kwargs)
+
+    def pending(self, *args, **kwargs):
+        return self._through("pending", *args, **kwargs)
+
+    def artifact(self, *args, **kwargs):
+        return self._through("artifact", *args, **kwargs)
+
+
 def harness_of(cfg, session_id: str):
     """What kingfisher keeps about a session, as a test reads and writes it."""
-    from kingfisher.infrastructure.harness.session_files import HarnessFiles, local_files
+    from kingfisher.infrastructure.harness.session_files import local_files
+    from kingfisher.infrastructure.session_store import HarnessFiles
 
     return HarnessFiles(local_files(cfg.workspace / "sessions" / session_id), session_id)
 
@@ -229,7 +260,8 @@ def harness_in(session_dir: Path):
     """The same, for a session directory a test already holds -- including one a
     `SessionRoot` put somewhere other than under the workspace.
     """
-    from kingfisher.infrastructure.harness.session_files import HarnessFiles, local_files
+    from kingfisher.infrastructure.harness.session_files import local_files
+    from kingfisher.infrastructure.session_store import HarnessFiles
 
     return HarnessFiles(local_files(session_dir), Path(session_dir).name)
 
@@ -279,7 +311,7 @@ def pin(kf, session_id: str, name: str) -> None:
     from kingfisher.infrastructure.workspace import remember_agent
 
     document = kf.catalogue.agents.documents[name]
-    remember_agent(harness_of(kf.cfg, session_id), document)
+    drive(remember_agent(harness_of(kf.cfg, session_id), document))
 
 
 def a_subagent(text: str, name: str) -> SubagentSpec:

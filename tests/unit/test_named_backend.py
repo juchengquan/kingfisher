@@ -27,7 +27,7 @@ def named(spec: str):
     return store_named(spec, setting=SETTING, port=SessionBackends)
 
 
-class Recording:
+class Recording(SessionBackends):
     """A `SessionBackends` that satisfies the port and keeps nothing."""
 
     def open(self, cfg, session_id, /, *, catalogue=None, runner=None):

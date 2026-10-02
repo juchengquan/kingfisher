@@ -188,6 +188,9 @@ class ConfigError(RuntimeError):
 #: What configured the `SessionStore`, which went when a session's backend became
 #: where it is kept. Refused where the environment is read rather than ignored, and
 #: kept here rather than beside that reader because they are refusals, not knobs.
+#: The size of the process's thread pool when nothing configured one.
+DEFAULT_THREAD_POOL_SIZE = 64
+
 REMOVED_STORE_SETTINGS = ("KINGFISHER_SESSION_STORE", "KINGFISHER_SESSION_STORE_FACTORY")
 
 #: Settings that changed name, refused under the old one. A renamed setting still set
@@ -335,7 +338,7 @@ class Config:
     # spend. A call that blocks for a round trip holds its thread for all of it,
     # which is why the loop's default executor -- 12 workers on an 8-CPU host --
     # was not enough.
-    thread_pool_size: int = 64
+    thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE
     shell_path_extra: tuple[str, ...] = ()
     # Who keeps `execute` out of the rest of the host. `auto` uses whatever the
     # platform offers, `bubblewrap` asks for it even where Landlock would run,
