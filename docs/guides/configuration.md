@@ -127,6 +127,43 @@ on and says why when it settled on nothing.
 Whatever you add to `PATH` is granted to the fence as readable, so a directory
 named here is one the agent can run from.
 
+### What each fence hides
+
+The fences differ in shape, not just in strength. On Linux, bubblewrap and Landlock
+start from nothing and grant the shell a list: the system directories, the
+interpreter, the skills, and the session's own directory. macOS `sandbox-exec` does
+the opposite. It allows everything and denies the operator's home, then gives the
+workspace and the interpreter back inside it. What follows from that, measured on
+2026-10-01 -- on macOS by probes through `backend_at`, on Linux from the fences'
+code:
+
+| The shell reading… | macOS `sandbox-exec` | bubblewrap | Landlock | No fence |
+|---|---|---|---|---|
+| The operator's home | hidden | hidden | hidden | readable |
+| The workspace, `models.yaml` included | readable; writes refused | hidden | hidden | readable |
+| Anywhere else -- `/tmp`, `/Users/Shared`, `/opt` | readable | hidden | hidden | readable |
+| `/etc`, `/usr` | readable | readable | readable | readable |
+| A process's environment as it started | readable | hidden | not settled | readable |
+| The network | open | closed | open | open |
+
+"No fence" is `off`, `external` with nothing outside actually confining the shell,
+and a Linux host where neither fence could start, which warns and runs.
+
+The environment row is the one that surprises. On macOS a sandboxed shell cannot run
+`ps`, but only because the sandbox will not launch a setuid binary. The system call
+`ps` uses still answers, through any interpreter on `PATH`, for every process the
+operator runs. It answers with the environment each process *started* with. So a key
+exported in a shell profile, a launchd plist or a container's `env:` is readable, and
+one `.env` added after kingfisher started is not. Landlock grants `/proc`, where
+command lines are readable. The kernel is expected to refuse another process's
+`environ`, but no test here holds it to that.
+
+**Kingfisher does not keep the model keys from the shell; where they sit decides it.**
+On macOS, keep `.env` in a directory under the home folder, start kingfisher from
+there, and do not export keys before it starts. A key set in code with
+`Endpoint(api_key=...)` reaches no file and no starting environment. A remote backend
+runs its shell on another machine, and this one's keys are not there to read.
+
 ## A wire format kingfisher does not ship
 
 An endpoint's `api` in `models.yaml` names a wire format: which LangChain chat
