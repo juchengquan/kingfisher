@@ -3438,6 +3438,10 @@ is one -- `HarnessFiles`, the transcript and pause formats, the pin, placing dat
 listing and fetching what a turn left -- and sync code that is not one, the turn's
 ending and `reap`, drives them. `HarnessFiles` moved beside the formats in
 `session_store`, because `sessions` needs it and it needs nothing from the harness.
+The pinned agent followed on 2026-10-05, for the same reason: `remember_agent` and
+`agent_started_with` are sequences over the same `/.harness` files, read by the same
+two modules, and `workspace/` is the directory, which the pin has not lived in since
+a session became its backend.
 
 **A sequence called without a driver does nothing, which is how this shape fails
 quietly.** `test_every_sequence_is_driven_or_delegated_to` finds each call by name and
@@ -4149,7 +4153,7 @@ of `infrastructure/` where being wrong is a security failure rather than a bug.
 `fs`, `seeding`, `uploads` and `files` all wrote into one directory, and three
 of them had a rule about not destroying what another put there. *(`fs` has since
 been split, and `uploads` and `files` removed; `workspace/` holds `backing`,
-`layout`, `permissions`, `placement`, `seeding`, `sessions` and `snapshots`.)*
+`layout`, `permissions`, `placement`, `seeding` and `sessions`.)*
 
 And the harness rule is what bounds them. The backend that *applies* a
 confinement, and the registry `uploads` asked about a name, both import

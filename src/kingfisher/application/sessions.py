@@ -15,11 +15,8 @@ from kingfisher.domain.session import (
     UnknownSessionError,
     known,
 )
-from kingfisher.infrastructure.session_store import HarnessFiles
+from kingfisher.infrastructure.session_store import HarnessFiles, agent_started_with
 from kingfisher.infrastructure.steps import Steps, adrive, drive, reading
-from kingfisher.infrastructure.workspace import (
-    agent_started_with,
-)
 from kingfisher.kinds.agents.reading import read
 
 if TYPE_CHECKING:

@@ -111,11 +111,13 @@ from kingfisher.infrastructure.session_store import (
     AGENT_MARK,
     PENDING_MARK,
     HarnessFiles,
+    agent_started_with,
     clear_pause,
     pending_as_mark,
     pending_from_mark,
     read_pause_mark,
     read_transcript,
+    remember_agent,
     write_pause_mark,
     write_transcript,
 )
@@ -131,9 +133,7 @@ from kingfisher.infrastructure.threads import finished, thread_pool
 from kingfisher.infrastructure.workspace import (
     SEED_HINT,
     STARTER_AGENT,
-    agent_started_with,
     ensure_layout,
-    remember_agent,
 )
 from kingfisher.kinds.agents.reading import read
 from kingfisher.kinds.agents.spec import AgentSpec

@@ -232,7 +232,7 @@ def test_a_snapshot_is_written_once_and_not_overwritten(cfg, tmp_path):
     would reintroduce exactly what the file exists to prevent, and every test above
     would still pass.
     """
-    from kingfisher.infrastructure.workspace import agent_started_with, remember_agent
+    from kingfisher.infrastructure.session_store import agent_started_with, remember_agent
 
     harness = harness_in(cfg, tmp_path)
     drive(remember_agent(harness, "name: first\ndescription: One.\n"))

@@ -320,7 +320,7 @@ def pin(kf, session_id: str, name: str) -> None:
     resolves an agent at all, so a test whose subject is the pin cannot get one by
     running a turn.
     """
-    from kingfisher.infrastructure.workspace import remember_agent
+    from kingfisher.infrastructure.session_store import remember_agent
 
     document = kf.catalogue.agents.documents[name]
     drive(remember_agent(harness_of(kf.cfg, session_id), document))
