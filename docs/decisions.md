@@ -2727,6 +2727,13 @@ refuse one with a graph the way the constructor does. So their default moved fro
 the signature into the body: in the signature it would have been handed to a graph
 caller who never named it. *(2026-10-05.)*
 
+**`backends` has no default.** It kept `None` only so that leaving it out reached a
+message naming `default_backends`. A missing argument is reported by the type checker
+where the call is written, which is earlier than any message at construction, and
+Python still refuses it at runtime for a caller nobody type-checks. The part of the
+message that was not obvious -- a graph needs them too -- is said by `run` and
+`stream`, the only callers that leave `backends` out on purpose. *(2026-10-05.)*
+
 **The runner belongs to the session backends, not to `Kingfisher`.**
 `Kingfisher(runner=)` built a runner per turn from `<workspace>/sessions/<id>` and
 handed it to `open`. So the service worked out a host path for every session whatever

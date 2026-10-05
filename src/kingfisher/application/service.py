@@ -228,7 +228,15 @@ class Kingfisher(Sessions, Disposal):
         # checkpointer is langgraph's own type, which this layer may not name, so
         # it is `Any` and `SharedThreads` is what kingfisher asks of it.
         threads: Any = None,
-        backends: SessionBackends | None = None,
+        # No default, so leaving it out is reported where the call is written. The
+        # backend is the sandbox -- it confines every command, refuses host paths and
+        # carries the route table a read-only rule is only legal against -- and a
+        # default would let a deployment wire the whole service without learning
+        # there was a boundary at all. A pre-built graph names them too: kingfisher
+        # places a request's data, collects what a turn left and takes the turn lock
+        # through them, and only the graph's builder knows where its backend keeps a
+        # session.
+        backends: SessionBackends,
         catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middlewares: Mapping[str, MiddlewareFactory] | None = None,
@@ -279,7 +287,7 @@ class Kingfisher(Sessions, Disposal):
         # are* -- which is what replacing the backend is usually for -- would have
         # written the leak it was replacing the backend to avoid, and nothing about
         # the call site would look wrong.
-        if backends is not None and not isinstance(backends, SessionBackends):
+        if not isinstance(backends, SessionBackends):
             msg = (
                 "backends= takes a SessionBackends, which opens each session's backend "
                 "and answers for every session: which there are, how big, when each was "
@@ -321,30 +329,6 @@ class Kingfisher(Sessions, Disposal):
         # caller unlucky enough to reach the wrong name. `_instantiate` keeps
         # its own guard for `build_agent`, which takes a registry directly.
         refuse_unbuildable_middleware(self.middlewares)
-        # Required, and said at construction for the reason the catalogue is read
-        # there: it is a wiring mistake, and this is the last moment it is cheap to say
-        # so. `None` stays the default only so that leaving it out gets this message.
-        #
-        # None used to mean kingfisher picked one, and the reason it no longer does is
-        # that the backend is the sandbox: it wraps every command in `sandbox-exec` or
-        # Landlock, refuses host paths, and carries the route table a read-only rule is
-        # only legal against. Inheriting that in silence was never unsafe -- the
-        # default is the strict option, and still is -- but it meant a deployment could
-        # wire the whole service without learning there was a boundary at all.
-        #
-        # Beside a pre-built graph too. Its agent runs on the backend it was compiled
-        # with, but kingfisher places a request's data, collects what a turn left and
-        # takes the turn lock through one of these -- and only the graph's builder
-        # knows which session backends reach where that backend keeps a session.
-        if backends is None:
-            msg = (
-                "kingfisher does not pick the filesystem its agents run on: pass "
-                "backends=default_backends for the one it used to build for you, or "
-                "session backends of your own for something else. A pre-built graph "
-                "needs them too: they are how kingfisher reaches the sessions its "
-                "backend keeps"
-            )
-            raise ValueError(msg)
         # Where the sessions are: what each turn opens, and what answers the questions
         # no single session does -- which there are, how big, when each was used.
         self._backends: SessionBackends = backends

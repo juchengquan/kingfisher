@@ -61,12 +61,11 @@ class Elsewhere(CommandRunner):
 
 
 def test_a_service_with_no_filesystem_named_is_refused(cfg):
-    """The whole change, in one line. Silence used to mean kingfisher picked, so a
-    deployment could wire the entire service without learning there was a sandbox in
-    it at all.
+    """Silence used to mean kingfisher picked, so a deployment could wire the entire
+    service without learning there was a sandbox in it at all.
     """
-    with pytest.raises(ValueError, match="does not pick the filesystem"):
-        Kingfisher(cfg, threads=StubCheckpointer())
+    with pytest.raises(TypeError, match="required keyword-only argument: 'backends'"):
+        Kingfisher(cfg, threads=StubCheckpointer())  # ty: ignore[missing-argument]
 
 
 def test_a_pre_built_graph_is_refused_without_backends_named(cfg):
@@ -75,14 +74,14 @@ def test_a_pre_built_graph_is_refused_without_backends_named(cfg):
     and the files it collects -- somewhere a graph whose backend runs elsewhere never
     looks.
     """
-    with pytest.raises(ValueError, match="A pre-built graph needs them too"):
-        Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    with pytest.raises(TypeError, match="required keyword-only argument: 'backends'"):
+        Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())  # ty: ignore[missing-argument]
 
 
 @pytest.mark.parametrize("door", [run, stream])
 def test_the_one_liners_refuse_a_graph_without_backends_named(cfg, door):
     """Their default is a guess about the one thing only a graph's builder knows."""
-    with pytest.raises(ValueError, match="A pre-built graph needs them too"):
+    with pytest.raises(ValueError, match="a pre-built graph needs session backends"):
         door(Request("t"), cfg=cfg, graph=StubAgent("ok"), checkpointer=StubCheckpointer())
 
 
