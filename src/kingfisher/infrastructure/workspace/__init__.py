@@ -40,13 +40,9 @@ _EXPORTS = {
     "ensure_session_layout": "kingfisher.infrastructure.workspace.sessions",
     "scaffold_memory": "kingfisher.infrastructure.workspace.sessions",
     "session_bytes": "kingfisher.infrastructure.workspace.sessions",
-    "AGENT_SNAPSHOT": "kingfisher.infrastructure.workspace.snapshots",
-    "agent_started_with": "kingfisher.infrastructure.workspace.snapshots",
-    "remember_agent": "kingfisher.infrastructure.workspace.snapshots",
 }
 
 __all__ = [
-    "AGENT_SNAPSHOT",
     "DESTINATION",
     "EXAMPLE",
     "EXAMPLES",
@@ -62,7 +58,6 @@ __all__ = [
     "Seeded",
     "Skipped",
     "Source",
-    "agent_started_with",
     "definitions_source",
     "destination_hint",
     "ensure_layout",
@@ -72,7 +67,6 @@ __all__ = [
     "memory_backing",
     "middleware_named",
     "protect_data",
-    "remember_agent",
     "scaffold_memory",
     "seed",
     "session_bytes",
@@ -114,11 +108,6 @@ if TYPE_CHECKING:
     )
     from kingfisher.infrastructure.workspace.sessions import scaffold_memory as scaffold_memory
     from kingfisher.infrastructure.workspace.sessions import session_bytes as session_bytes
-    from kingfisher.infrastructure.workspace.snapshots import AGENT_SNAPSHOT as AGENT_SNAPSHOT
-    from kingfisher.infrastructure.workspace.snapshots import (
-        agent_started_with as agent_started_with,
-    )
-    from kingfisher.infrastructure.workspace.snapshots import remember_agent as remember_agent
 
 
 def __getattr__(name: str) -> Any:
