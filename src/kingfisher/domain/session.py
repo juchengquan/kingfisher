@@ -88,10 +88,13 @@ def still_held(
 
 @dataclass(frozen=True)
 class Session:
-    """A conversation. Owns its turns and its own disposal."""
+    """A conversation. Owns its turns and its own disposal.
+
+    An id and nothing else: where a session is kept is its backend's to know, and
+    kingfisher's own backend works that out with `session_dir`.
+    """
 
     id: str
-    directory: Path
 
     def allocate_turn(self, turn_id: str | None = None) -> Turn:
         """Name the next turn. A caller's own id wins, or one is made.

@@ -2,39 +2,38 @@
 
 from __future__ import annotations
 
-from kingfisher.domain.session import Session, sessions_root
+from kingfisher.domain.session import Session, session_dir
 
 
-def test_a_callers_own_turn_id_wins(workspace):
+def test_a_callers_own_turn_id_wins():
     """A service passes its own request id so it can tie a run back to the request.
 
     What this no longer promises is de-duplication on a retry. That was `ensure` on
     the same per-turn directory, and the directory went with `/runs`: two runs under
     one id are now two runs, and a caller wanting one has to not ask twice.
     """
-    session = Session(id="sess", directory=sessions_root(workspace) / "sess")
+    session = Session(id="sess")
 
     assert session.allocate_turn("req-abc").id == "req-abc"
 
 
-def test_two_turns_are_told_apart(workspace):
+def test_two_turns_are_told_apart():
     """The id used to come from counting directories, which made a listing the
     counter and started a restored session again at `t001`. Nothing reads the
     sequence -- it reaches a printed line, the run log and the result, and none of
     them compares two -- so what is left to hold is only that they differ.
     """
-    session = Session(id="sess", directory=sessions_root(workspace) / "sess")
+    session = Session(id="sess")
 
     assert session.allocate_turn().id != session.allocate_turn().id
 
 
-def test_a_session_is_the_backend_root(workspace):
+def test_a_session_directory_is_the_default_backends_root(workspace):
     """Every name the agent addresses hangs off it, so it is what a virtual path is
-    rooted at -- and naming the session inside one would address outside that root.
+    rooted at on kingfisher's own backend -- and naming the session inside one would
+    address outside that root.
     """
-    session = Session(id="s1", directory=sessions_root(workspace) / "s1")
-
-    assert session.directory == workspace / "sessions" / "s1"
+    assert session_dir(workspace, "s1") == workspace / "sessions" / "s1"
 
 
 def test_the_turn_message_names_both_forms_of_the_scratch_path(workspace):
