@@ -1093,7 +1093,7 @@ def test_a_compiled_delegates_bundle_wins_a_name_the_catalogue_also_defines(cfg,
     """
     from langchain_core.runnables import RunnableLambda
 
-    from kingfisher.infrastructure.harness.subagents import compiled
+    from kingfisher.infrastructure.harness.kinds.subagents import compiled
     from kingfisher.kinds.subagents.spec import SubagentSpec
     from kingfisher.kinds.tools.catalogue import LocalToolRepository
 

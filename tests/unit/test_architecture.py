@@ -216,6 +216,31 @@ def test_a_harness_edge_is_seen_however_it_is_spelled(tmp_path):
     assert _harness_reach(relative) == {"agent"}, "the spelling that used to hide the edge"
 
 
+def test_a_harness_edge_into_a_subpackage_names_the_module(tmp_path):
+    """Cut at the first segment, every module in `harness/kinds/` read as `kinds`."""
+    package = tmp_path / "kingfisher" / "infrastructure"
+    (package / "harness" / "kinds").mkdir(parents=True)
+    for marker in (
+        tmp_path / "kingfisher" / "__init__.py",
+        package / "__init__.py",
+        package / "harness" / "__init__.py",
+        package / "harness" / "kinds" / "__init__.py",
+        package / "harness" / "kinds" / "tools.py",
+    ):
+        marker.touch()
+
+    spellings = (
+        "from kingfisher.infrastructure.harness.kinds import tools\n",
+        "from kingfisher.infrastructure.harness.kinds.tools import surface\n",
+        "import kingfisher.infrastructure.harness.kinds.tools\n",
+        "from .harness.kinds import tools\n",
+    )
+    for index, spelling in enumerate(spellings):
+        consumer = package / f"consumer_{index}.py"
+        consumer.write_text(spelling, encoding="utf-8")
+        assert _harness_reach(consumer) == {"kinds.tools"}, spelling
+
+
 def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
     """Every failure message in this file is built from `_module_id`."""
     assert _module_id(SRC / "tools" / "spec.py") == "tools/spec.py"
@@ -999,11 +1024,11 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # interface derived from it.
     "kinds/skills": frozenset({"deepagents"}),
     # Nothing, since the route to the runtime moved out: reading a tool roster off a
-    # compiled langgraph object is `infrastructure.harness.tools` now.
+    # compiled langgraph object is `infrastructure.harness.kinds.tools` now.
     "kinds/tools": frozenset(),
     # Nothing, for the same move: turning a spec into the `SubAgent` deepagents
     # expects cannot be done without naming the type, and it is done in
-    # `infrastructure.harness.subagents` now.
+    # `infrastructure.harness.kinds.subagents` now.
     "kinds/subagents": frozenset(),
     # Nothing, and this one never had anything: an agent's runtime half is
     # `harness/agent.py`, which is not this package's.
@@ -1345,8 +1370,8 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
             # read smaller.
             "backend",
             "checkpointing",
-            "declared_middleware",
             "interpreter",
+            "kinds.declared_middleware",
             "runlog",
             "runtime",
             # A session's files, reached through the backend the turn runs on,
@@ -1366,10 +1391,10 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # measures against what was actually wired rather than against a list kept
     # somewhere -- so the edge is the point of it, not an accident of where it
     # used to live.
-    # `surface` lived under `kinds/` for a while and is `infrastructure.harness.tools`,
+    # `surface` lived under `kinds/` for a while and is `infrastructure.harness.kinds.tools`,
     # so the edge this note once recorded closing is back. Nothing about the coupling
     # changed either time -- only whether this table could see it.
-    "reporting": frozenset({"activation", "tools"}),
+    "reporting": frozenset({"activation", "kinds.tools"}),
     # One stream chunk, read. The reading is deepagents' shape rather than ours
     # -- which namespace a chunk came from, which mode carries the answer -- so
     # it is an edge wherever it is written.
@@ -1389,9 +1414,18 @@ def _consumer_key(path: Path) -> str:
 
 
 def _harness_reach(path: Path) -> set[str]:
-    """Which harness modules one flat module imports, by their bare names."""
+    """Which harness modules one flat module imports, by their paths below the harness."""
     reached: set[str] = set()
     package = _package_of(path)
+    root = path.parents[len(package)]
+
+    def below(module: str) -> str:
+        return module[len(HARNESS) + 1 :]
+
+    def is_module(module: str) -> bool:
+        base = root.joinpath(*module.split("."))
+        return base.with_suffix(".py").is_file() or (base / "__init__.py").is_file()
+
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
         if isinstance(node, ast.ImportFrom):
             # Resolved first, for the reason `_imported_modules` is: written
@@ -1400,14 +1434,22 @@ def _harness_reach(path: Path) -> set[str]:
             # different spelling.
             base = package[: max(len(package) - (node.level - 1), 0)] if node.level else ()
             module = ".".join((*base, node.module)) if node.module else ".".join(base)
-            if module == HARNESS:                           # from <pkg>.harness import agent
-                reached.update(alias.name for alias in node.names)
-            elif module.startswith(HARNESS + "."):          # from <pkg>.harness.agent import x
-                reached.add(module[len(HARNESS) + 1 :].split(".")[0])
+            if module != HARNESS and not module.startswith(HARNESS + "."):
+                continue
+            # The whole path below the harness, never its first segment: cut there,
+            # every module in `harness/kinds/` reads as `kinds`, and the table can no
+            # longer say which of them took the coupling.
+            for alias in node.names:
+                if is_module(f"{module}.{alias.name}"):     # from <pkg>.harness import agent
+                    reached.add(below(f"{module}.{alias.name}"))
+                elif module == HARNESS:                     # a name the package itself holds
+                    reached.add(alias.name)
+                else:                                       # from <pkg>.harness.agent import x
+                    reached.add(below(module))
         elif isinstance(node, ast.Import):
             for alias in node.names:                        # import <pkg>.harness.agent
                 if alias.name.startswith(HARNESS + "."):
-                    reached.add(alias.name[len(HARNESS) + 1 :].split(".")[0])
+                    reached.add(below(alias.name))
     return reached
 
 
@@ -2205,10 +2247,10 @@ SDK_LOADING: frozenset[str] = frozenset({
     "kingfisher.infrastructure.harness.middlewares.workspace_tools",
     "kingfisher.infrastructure.harness.tool_guards",
     "kingfisher.infrastructure.harness.checkpointing",
-    "kingfisher.infrastructure.harness.declared_middleware",
+    "kingfisher.infrastructure.harness.kinds.declared_middleware",
     "kingfisher.infrastructure.harness.runlog",
     "kingfisher.infrastructure.harness.runtime",
-    "kingfisher.infrastructure.harness.subagents",
+    "kingfisher.infrastructure.harness.kinds.subagents",
     # The application layer's half: what a turn needs on the way to running one. Each
     # is imported by `service` and by nothing else, so being heavy costs no caller that
     # was not already paying -- which is why these are a fact recorded rather than a

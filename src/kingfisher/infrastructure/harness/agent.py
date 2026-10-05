@@ -4,7 +4,7 @@ Two jobs it used to do live elsewhere now, because at 657 lines it was doing fou
 `prompting` assembles the system prompt -- moved out because it needs nothing foreign,
 and sharing a file with `create_deep_agent` cost every consumer of `system_prompt` 764ms
 and three provider SDKs. Resolving what a delegate runs with is
-`infrastructure.harness.subagents`, beside this file. Neither calls anything here.
+`infrastructure.harness.kinds.subagents`. Neither calls anything here.
 """
 
 from __future__ import annotations
@@ -39,13 +39,24 @@ from kingfisher.infrastructure.harness.backend import (
     skills_sources,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
-from kingfisher.infrastructure.harness.declared_middleware import (
+from kingfisher.infrastructure.harness.interpreter import _interpreter
+from kingfisher.infrastructure.harness.kinds.declared_middleware import (
     ByName,
     MiddlewareFactory,
     declared_middleware,
     offered_middleware,
 )
-from kingfisher.infrastructure.harness.interpreter import _interpreter
+from kingfisher.infrastructure.harness.kinds.subagents import (
+    as_subagent,
+    model_object,
+    subagent_helpers,
+    subagent_skills,
+)
+from kingfisher.infrastructure.harness.kinds.tools import (
+    _private_tools,
+    _resolve_tools,
+    registered_tools,
+)
 from kingfisher.infrastructure.harness.middlewares.narrowing import (
     DeclaredDelegatesOnly,
     NarrowedSkills,
@@ -54,19 +65,8 @@ from kingfisher.infrastructure.harness.middlewares.narrowing import (
 from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
 from kingfisher.infrastructure.harness.session_paths import SessionPaths
-from kingfisher.infrastructure.harness.subagents import (
-    as_subagent,
-    model_object,
-    subagent_helpers,
-    subagent_skills,
-)
 from kingfisher.infrastructure.harness.tool_context import ToolContext
 from kingfisher.infrastructure.harness.tool_guards import tool_guards
-from kingfisher.infrastructure.harness.tools import (
-    _private_tools,
-    _resolve_tools,
-    registered_tools,
-)
 from kingfisher.infrastructure.prompting import system_prompt
 from kingfisher.infrastructure.sandbox.confinement import EXTERNAL
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
@@ -291,7 +291,7 @@ def builtin_tool_names(
 ) -> tuple[str, ...] | None:
     """The built-in set, which is only knowable from an assembled graph.
 
-    Here rather than in `harness/tools.py`, where the rest of the tool surface lives:
+    Here rather than in `harness/kinds/tools.py`, where the rest of the tool surface lives:
     this has to call `build_agent`, and that module is imported *by* this one, so the
     edge would close a cycle -- which `test_no_module_in_the_package_can_reach_itself`
     now refuses outright.

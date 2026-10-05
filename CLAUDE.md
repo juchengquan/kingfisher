@@ -103,8 +103,8 @@ name a layer, and `test_no_kind_names_a_layer` is what holds it. `domain/` is no
 a layer for this purpose -- a spec is typed with `Capabilities` and a repository
 satisfies a port. What a kind needs from `application/`, `infrastructure/` or
 `presentation/` is passed in or moved out, which is where
-`infrastructure/harness/subagents.py` and `infrastructure/harness/tools.py` came
-from.
+`infrastructure/harness/kinds/subagents.py` and
+`infrastructure/harness/kinds/tools.py` came from.
 
 **Measure before building on a premise.** Several decisions in `docs/decisions.md`
 exist because a stated premise turned out to be false when someone checked. If a

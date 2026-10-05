@@ -9,10 +9,10 @@ neither is free, and the domain may not import either.
 
 #: The name deepagents gives the tool that dispatches a delegate.
 #:
-#: **No kind reads it.** Both readers are `infrastructure.harness.tools` and
+#: **No kind reads it.** Both readers are `infrastructure.harness.kinds.tools` and
 #: `infrastructure.harness.interpreter`, so by subject it belongs beside them, and the
 #: reason it is here instead is that the obvious home is an expensive one:
-#: `infrastructure.harness.subagents` is 1,588ms and 3,164 modules, and four characters
+#: `infrastructure.harness.kinds.subagents` is 1,588ms and 3,164 modules, and four characters
 #: there would cost `interpreter` all of it -- a file that is 12ms and 82 modules with
 #: every other import stdlib. Moving it means finding a home under `harness/` that
 #: stays cheap.

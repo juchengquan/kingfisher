@@ -7,9 +7,9 @@ from langchain_core.tools import tool
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.catalogue import Definitions
+from kingfisher.infrastructure.harness.kinds.subagents import as_subagent
+from kingfisher.infrastructure.harness.kinds.tools import _ToolSurface
 from kingfisher.infrastructure.harness.middlewares.narrowing import ToolAllowlist
-from kingfisher.infrastructure.harness.subagents import as_subagent
-from kingfisher.infrastructure.harness.tools import _ToolSurface
 from kingfisher.infrastructure.workspace import seeding
 from kingfisher.kinds.tools.catalogue import LocalToolRepository
 from kingfisher.kinds.tools.spec import Found, Offering, reference, split_reference, tool_name

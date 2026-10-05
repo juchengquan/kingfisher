@@ -52,7 +52,7 @@ hardest against.
 summarizer passes it to `init_chat_model`, which infers a provider from the name
 and reads credentials from the environment -- around the
 catalogue, around the endpoint's `base_url`, around every param the profile
-carries. That is the same trap `infrastructure.harness.subagents` documents for a
+carries. That is the same trap `infrastructure.harness.kinds.subagents` documents for a
 delegate's model. Handing it a built instance is the fix, not a convenience.
 
 ## Wiring it

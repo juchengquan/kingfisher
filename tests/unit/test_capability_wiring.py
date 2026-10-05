@@ -304,7 +304,7 @@ def test_the_registered_tool_names_are_discoverable(cfg, session_dir):
 
 def test_unrecognised_graph_shapes_disable_the_check_rather_than_crashing(cfg):
     """Still no crash, and now it says which of the two answers it is giving."""
-    from kingfisher.infrastructure.harness.tools import registered_tools
+    from kingfisher.infrastructure.harness.kinds.tools import registered_tools
 
     assert registered_tools(object()) is None
 
@@ -520,13 +520,13 @@ def test_an_agent_with_no_tools_says_none_rather_than_unknown(fake_model):
     """
     from langchain.agents import create_agent
 
-    from kingfisher.infrastructure.harness.tools import registered_tools
+    from kingfisher.infrastructure.harness.kinds.tools import registered_tools
 
     assert registered_tools(create_agent(fake_model, tools=[])) == ()
 
 
 def test_a_graph_we_did_not_build_says_it_could_not_tell(fake_model):
-    from kingfisher.infrastructure.harness.tools import registered_tools
+    from kingfisher.infrastructure.harness.kinds.tools import registered_tools
 
     assert registered_tools(_hand_written_graph()) is None
 
@@ -534,7 +534,7 @@ def test_a_graph_we_did_not_build_says_it_could_not_tell(fake_model):
 def test_a_real_build_is_readable(cfg, session_dir):
     """The pin."""
     from kingfisher.infrastructure.harness.agent import build_agent
-    from kingfisher.infrastructure.harness.tools import registered_tools
+    from kingfisher.infrastructure.harness.kinds.tools import registered_tools
 
     built = build_agent(cfg, backend=backend_at(cfg, session_dir), model=None)
     names = registered_tools(built.graph)

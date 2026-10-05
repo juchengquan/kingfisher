@@ -5,7 +5,7 @@ by the agent's shell: a middleware is wrapped *around* an agent, so a copy in th
 directory the agent can edit was a cap the capped thing could rewrite.
 
 A deployment still registers classes in its own program, which is the only way to
-hand middleware a live object. `harness/declared_middleware.py` builds what a definition
+hand middleware a live object. `harness/kinds/declared_middleware.py` builds what a definition
 asked for from either source.
 
 No re-exports, as next door: each module is imported by name. This file used to
