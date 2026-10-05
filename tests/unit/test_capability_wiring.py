@@ -642,7 +642,7 @@ def test_a_turn_is_built_inside_the_deployments_ceiling(cfg, monkeypatch):
     granted, and a build that was handed the request's own capabilities instead of the
     grants narrowed by them.
 
-    Measured by making `_admitted` pass `request.capabilities` straight through: the
+    Measured by making setup pass `request.capabilities` straight through: the
     withheld tool reached the graph and the whole suite stayed green, because every
     other fixture here leaves the deployment unrestricted, where the two are equal.
     """

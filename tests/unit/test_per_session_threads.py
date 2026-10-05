@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from kingfisher import Kingfisher, default_backends
 from kingfisher.config import Config
 from kingfisher.domain.request import Request
@@ -72,7 +74,7 @@ def test_a_real_graph_checkpoints_into_the_session_database(cfg, session_dir):
     from kingfisher.infrastructure.harness.checkpointing import build_session_checkpointer
     from tests.conftest import FakeToolCallingModel
 
-    saver = build_session_checkpointer(session_dir)
+    saver = build_session_checkpointer()
     graph = build_agent(
         cfg,
         session_dir=session_dir,
@@ -166,6 +168,34 @@ def test_the_connection_does_not_outlive_the_turn(cfg):
     kf.run(Request("go"))
 
     assert len(closed) == 1, "the saver this service opened was not released"
+
+
+def test_a_turn_that_fails_to_build_closes_the_saver_it_opened(cfg):
+    """The saver is opened beside the build, and a build that raised left it open with
+    nothing holding it to close -- the turn never existed, so no turn's end ran.
+    """
+    from kingfisher.domain.capabilities import Capabilities
+
+    closed: list[object] = []
+
+    class Recorder(StubCheckpointer):
+        def __init__(self) -> None:
+            super().__init__()
+            self.conn = self
+
+        def close(self) -> None:
+            closed.append(self)
+
+    kf = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=lambda _dir: Recorder()
+    )
+    # A supplied graph cannot be narrowed, so asking it to be is a build that raises.
+    narrowed = Request("go", capabilities=Capabilities(builtin_tools=("read_file",)))
+
+    with pytest.raises(ValueError, match="pre-built graph"):
+        kf.run(narrowed)
+
+    assert len(closed) == 1, "the saver opened for a turn that failed to build stayed open"
 
 
 def test_a_sweep_needs_no_thread_store_at_all(cfg):
@@ -275,7 +305,7 @@ def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
     config: Any = {"configurable": {"thread_id": session_dir.name}, "recursion_limit": 10}
     plan = [{"content": "read the file", "status": "pending"}]
 
-    first_saver = build_session_checkpointer(session_dir)
+    first_saver = build_session_checkpointer()
     build_agent(
         cfg,
         session_dir=session_dir,
@@ -300,7 +330,7 @@ def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
     ).graph.get_state(config)
     assert written.values.get("todos") == plan, "the first turn never wrote a plan"
 
-    second_saver = build_session_checkpointer(session_dir)
+    second_saver = build_session_checkpointer()
     assert second_saver is not first_saver, "a turn reused the previous turn's saver"
 
     carried = build_agent(

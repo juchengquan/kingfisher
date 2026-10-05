@@ -230,14 +230,15 @@ kingfisher = Kingfisher(cfg, backends=MyBackends())
 A plain function is refused with a `TypeError` that says to do this: it can build a
 backend, and cannot say which sessions there are.
 
-**The async path asks for `aopen`, `asessions` and `adelete`.** `Kingfisher.asession`,
+**The async path asks for each method's `a`-prefixed twin.** `Kingfisher.asession`,
 `apending` and `aartifact` open a session with `aopen` and list them with
-`asessions`, and `adelete_session` deletes one with `adelete`. `SessionBackends`
-carries all three, running `open`, `sessions` and `delete` on kingfisher's thread
+`asessions`; `adelete_session` deletes one with `adelete`; and a turn on `astream`
+also records the session used with `amark_used` and checks its quota with `asize`.
+`SessionBackends` carries all five, running the sync method on kingfisher's thread
 pool, so a class that subclasses it — `DefaultBackends` does — has them already.
 Override one where it is a round trip you can await: the async path then holds no
 thread while it waits. A class that does not subclass `SessionBackends` has to write
-all three, because the type check asks for every method. The backend `open` returns is read through its own async methods,
+all five, because the type check asks for every method. The backend `open` returns is read through its own async methods,
 `adownload_files` and the rest, which deepagents' `BackendProtocol` already has.
 
 Starting from nothing instead is allowed and is yours to get right — which is a
@@ -259,9 +260,12 @@ the backend to avoid. Passing a backend itself is a `TypeError`, and
 id handed the same storage.
 
 **The turn lock is on the backend.** It has to have `claim(name, *, stale_after)`,
-`release(name)` and `held(name, *, stale_after)`: a claim that fails while another
-is live, which a `write` cannot be, because a `write` overwrites and two turns
-would both take it. `default_backends` does it with `mkdir`. Two turns in one
+`aclaim` for the async path, `release(name)` and `held(name, *, stale_after)`: a claim
+that fails while another is live, which a `write` cannot be, because a `write`
+overwrites and two turns would both take it. `default_backends` does it with `mkdir`,
+through `SessionClaims`, which also gives `aclaim` as `claim` on kingfisher's pool.
+`release` has no async twin: it runs where a turn is let go of, which must finish
+however often its caller is cancelled. Two turns in one
 session share a conversation and the last write wins, so this is what refuses the
 second.
 
@@ -375,8 +379,9 @@ better place to read a failure than a turn is. And run
 `SESSION_BACKENDS_CONTRACT`, above, against the object that makes them: that two
 sessions are kept apart, that a session is there on the next turn, that the claim
 is exclusive, that what is listed and deleted is what exists, that where you say
-a file is on this host it is that session's file, and that `aopen`, `asessions` and
-`adelete` answer as `open`, `sessions` and `delete` do.
+a file is on this host it is that session's file, and that every async twin —
+`aopen`, `asessions`, `adelete`, `aclaim`, `asize` and `amark_used` — answers as its
+sync one does.
 
 **The shell and the file tools have to be two views of one filesystem**, and this
 is the one left that reports nothing on its own. A virtual path becomes a shell

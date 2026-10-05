@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from contextlib import suppress
 from importlib.metadata import PackageNotFoundError, version
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from langgraph.checkpoint.memory import InMemorySaver
@@ -16,9 +15,8 @@ if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
 
-def build_session_checkpointer(session_dir: Path) -> BaseCheckpointSaver:
+def build_session_checkpointer() -> BaseCheckpointSaver:
     """The saver this turn runs on, which holds nothing after it."""
-    del session_dir
     return InMemorySaver()
 
 

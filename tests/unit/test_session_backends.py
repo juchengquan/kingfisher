@@ -75,6 +75,43 @@ class KeepsEverythingAsync(DefaultBackends):
         return None
 
 
+class ClaimsBesideClaim(DefaultBackends):
+    """An `aclaim` that keeps its own book rather than the one `claim` writes."""
+
+    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
+        built = super().open(cfg, session_id, catalogue=catalogue, runner=runner)
+
+        async def aclaim(name, *, stale_after, now=None):
+            return True
+
+        built.aclaim = aclaim
+        return built
+
+
+class WeighsNothingAsync(DefaultBackends):
+    async def asize(self, cfg, session_id):
+        return 0
+
+
+class MarksNothingAsync(DefaultBackends):
+    async def amark_used(self, cfg, session_id):
+        return None
+
+
+@pytest.mark.parametrize(
+    ("check", "backends", "said"),
+    [
+        ("aclaim_and_claim_exclude_each_other", ClaimsBesideClaim, "still holds"),
+        ("asize_counts_what_size_does", WeighsNothingAsync, "where size counts"),
+        ("amark_used_moves_the_session_on", MarksNothingAsync, "as last used as it was"),
+    ],
+    ids=["aclaim", "asize", "amark_used"],
+)
+def test_the_kit_catches_an_async_twin_that_disagrees(cfg, check, backends, said):
+    with pytest.raises(AssertionError, match=said):
+        _check(check)(lambda: (cfg, backends()))
+
+
 def test_the_kit_catches_an_adelete_that_leaves_the_session(cfg):
     with pytest.raises(AssertionError, match="still listed"):
         _check("adelete_removes_the_session")(lambda: (cfg, KeepsEverythingAsync()))

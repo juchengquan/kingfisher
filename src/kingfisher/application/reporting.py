@@ -152,7 +152,7 @@ def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning
     """What the caller is told before the model is reached.
 
     A function because it is one: nothing here touches the service, and every
-    input is already decided by the time it runs. `_prepare` was 123 lines and
+    input is already decided by the time it runs. Setup was 123 lines once, and
     this was the part of it that could be checked on its own.
     """
     events: list[RunEvent] = []

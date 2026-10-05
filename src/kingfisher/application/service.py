@@ -42,7 +42,6 @@ from kingfisher.application.reporting import (
 )
 from kingfisher.application.sessions import Sessions
 from kingfisher.application.turn import (
-    Admitted,
     Prepared,
     consume,
     decision_discarded,
@@ -120,7 +119,14 @@ from kingfisher.infrastructure.session_store import (
     write_pause_mark,
     write_transcript,
 )
-from kingfisher.infrastructure.steps import Steps, adrive, changing, drive
+from kingfisher.infrastructure.steps import (
+    Steps,
+    adrive,
+    adrive_finished,
+    changing,
+    drive,
+    on_host,
+)
 from kingfisher.infrastructure.threads import finished, off_loop, thread_pool
 from kingfisher.infrastructure.workspace import (
     SEED_HINT,
@@ -434,7 +440,7 @@ class Kingfisher(Sessions, Disposal):
         *,
         agent: AgentSpec | None,
         held: frozenset[str] | None,
-        files: Any = None,
+        files: Any,
     ) -> Any:
         """What serves one request, rooted at its session.
 
@@ -444,7 +450,7 @@ class Kingfisher(Sessions, Disposal):
         record of a build that did not happen here. Returning the record either way
         would mean inventing one with every field empty -- a record asserting a build
         that never ran, which is worse than the union, since it would be asserted on.
-        Callers take `.graph` where they need the graph; `_admitted` is the only one
+        Callers take `.graph` where they need the graph; `_built_turn` is the only one
         in `src/`.
         """
         if self._graph is not None:
@@ -455,21 +461,17 @@ class Kingfisher(Sessions, Disposal):
 
         return build_agent(
             self.cfg,
-            # Resolved by the caller, which is the only one there is: `_admitted`
-            # needs the same spec for the withheld report, and asking twice meant the
+            # Resolved by the caller, which is the only one there is: setup needs the
+            # same spec for the withheld report, and asking twice meant the
             # first call resolving it from the catalogue and writing the pin while
             # the second read that pin back and parsed it.
             agent=agent,
             held=held,
-            # The one admission built or was handed, which placed this turn's data.
-            # Built again here, a remote backend would be asked for two sessions'
+            # The one setup opened or was handed, which placed this turn's data.
+            # Opened again here, a remote backend would be asked for two sessions'
             # worth of sandbox, and the agent could run in the one that was never
             # given the data.
-            backend=(
-                files
-                if files is not None
-                else drive(self._files_for(session_dir.name, session_dir))
-            ),
+            backend=files,
             # What the deployment permits, narrowed by what the request asked for,
             # and never the request's own: they are equal only where the deployment
             # restricts nothing, which is why defaulting to them here looked
@@ -567,7 +569,7 @@ class Kingfisher(Sessions, Disposal):
         _, files = reached
         return (yield from read_artifact(files, name))
 
-    def _pin_agent_in(self, harness: HarnessFiles, name: str | None) -> None:
+    def _pin_agent_in(self, harness: HarnessFiles, name: str | None) -> Steps[None]:
         """Keep the agent, in the session this is about.
 
         **The session's own files, never a path re-derived from its id.** This took an id and
@@ -584,16 +586,25 @@ class Kingfisher(Sessions, Disposal):
         if name is None:
             return
         if (text := self.catalogue.agents.documents.get(name)) is not None:
-            drive(remember_agent(harness, text))
+            yield from remember_agent(harness, text)
 
     def _agent_for(
-        self, request: Request | Resume, harness: HarnessFiles, *, source_ids: Held | None = None
-    ) -> AgentSpec | None:
-        """The agent this turn runs, which is the one its session opened with."""
-        kept = drive(agent_started_with(harness))
+        self,
+        request: Request | Resume,
+        harness: HarnessFiles,
+        *,
+        source_ids: Held | None = None,
+        pinned: Any = _UNSET,
+    ) -> Steps[AgentSpec | None]:
+        """The agent this turn runs, which is the one its session opened with.
+
+        `pinned` is the session's pin where the caller has read it already, as setup
+        has: it read the pin to decide whether the caller reaches the session at all.
+        """
+        kept = (yield from agent_started_with(harness)) if pinned is _UNSET else pinned
         if kept is None:
             spec = self.agent_named(request.agent, source_ids=source_ids)
-            self._pin_agent_in(harness, request.agent)
+            yield from self._pin_agent_in(harness, request.agent)
             return spec
 
         started = read(kept)
@@ -636,62 +647,190 @@ class Kingfisher(Sessions, Disposal):
             raise CapabilityError(msg)
         return spec
 
-    def _prepare(
+    def _prepare_steps(
+        self,
+        request: Request | Resume,
+        *,
+        source_ids: Held | None = None,
+        files: Any = None,
+    ) -> Steps[Prepared]:
+        """Everything up to the model call, as the one sequence both loops drive.
+
+        Every refusal comes before `run_start`, so a refused request leaves no turn
+        behind, and the claim is the one thing taken before them, given back if one
+        of them refuses. Measured at 15-46ms end to end, of which 9.2ms is building
+        the agent -- which is `_built_turn`, the one piece of it done on this host.
+        """
+        cfg = self.cfg
+        # Without an id this turn would mint a new session and run it in another's files.
+        if files is not None and request.session_id is None:
+            msg = (
+                "files= is one session's backend and this request names no session: "
+                "pass the session_id the backend was opened for"
+            )
+            raise ValueError(msg)
+        session = yield from self._session_for(request)
+        # Who is calling, before the session is marked, claimed or written to. Any
+        # later and a refused caller's files are already in the `/data` of a session
+        # that was never theirs; after the claim, and a turn running in it would
+        # answer "busy" where an id nobody issued answers "no session". The grant
+        # is asked for here only for its refusals, and again below for itself.
+        self._effective_grants(source_ids)
+        # Opened here, before anything else reads the session: who may touch it is
+        # decided by its pinned agent, and that is read through the backend too.
+        if files is None:
+            files = yield from self._files_for(session.id, session.directory)
+        harness = HarnessFiles(files, session.id)
+        held = self.held_for(source_ids)
+        # Read once, for both of its readers: whether this caller reaches the session,
+        # here, and which agent the turn runs, below. Not read where neither asks -- a
+        # supplied graph under no policy.
+        pinned = (
+            (yield from agent_started_with(harness))
+            if held is not None or self._graph is None
+            else None
+        )
+        if not self._reaches_pin(pinned, held):
+            raise self._unknown_session(session.id)
+        # A turn writes inside the session, never to the session itself, so the
+        # timestamp `retention.expired` reads would still say "idle" for a
+        # conversation in daily use. Recorded here, at the top of a turn, rather
+        # than at the end: a turn that fails still happened.
+        yield changing(self._backends, "mark_used", cfg, session.id)
+        # Before the other refusals rather than after: those read the session,
+        # and a turn arriving halfway through would be reading it as it moved.
+        if not (yield changing(files, "claim", CLAIM, stale_after=cfg.claim_stale_after)):
+            msg = (
+                f"session {session.id} already has a turn running; "
+                f"wait for it to finish or start another session"
+            )
+            raise SessionBusyError(msg)
+        try:
+            return (
+                yield from self._claimed(
+                    request,
+                    session,
+                    files=files,
+                    harness=harness,
+                    pinned=pinned,
+                    source_ids=source_ids,
+                )
+            )
+        except BaseException:
+            # Sync, so that nothing can stop it halfway: a cancel lands at an `await`.
+            files.release(CLAIM)
+            raise
+
+    def _claimed(  # noqa: PLR0913 -- what setup already built, handed on rather
+        # than built twice: a second backend is a second sandbox on a remote one
         self,
         request: Request | Resume,
         session: Session,
         *,
+        files: Any,
+        harness: HarnessFiles,
+        pinned: Any,
         source_ids: Held | None = None,
-        files: Any = None,
-    ) -> Prepared:
-        """Do everything up to the model call, and return what the loop needs.
+    ) -> Steps[Prepared]:
+        """The rest of setup, once the session is claimed."""
+        # What the backend could not make read-only, where it is one that says. Reported
+        # rather than raised; see `DefaultBackends`.
+        unprotected = tuple(getattr(files, "unprotected", ()))
 
-        Filesystem work plus building the agent, measured at 15-46ms end to end --
-        of which 9.2ms is the agent.
-        """
-        return self._open_turn(self._admit(request, session, source_ids=source_ids, files=files))
+        # Before the data is placed, not after: placing it grows the session,
+        # so checking afterwards would let a request that is already over
+        # budget add to it and only then be refused.
+        yield from self._refuse_if_over_budget(session)
+
+        # Before the turn exists, and before anything is destroyed: a request
+        # naming a file that is not there must fail without having placed the
+        # ones that were. `place_data` re-hardens `/data` on its way out.
+        #
+        # A resume places nothing. It is finishing work already proposed rather
+        # than asking for something, so there is no `data` on it to place -- see
+        # `Resume`, where the absence of the field carries the reason.
+        placement = yield from place_data(getattr(request, "data", ()), files)
+
+        # What this deployment permits, narrowed by what the request asked for.
+        allowed = self._effective_grants(source_ids).intersect(request.capabilities)
+        # Named here rather than inline below, because two things want it and
+        # the expression is a mouthful. `None` for a run with no policy or an
+        # `UNSCOPED` one: both see the whole workspace, so there is nothing to
+        # filter the report against.
+        held = self.held_for(source_ids)
+        # What an earlier turn stopped on: the state this turn answers, or a pause it
+        # supersedes and drops now. Before the graph is built, because a resume runs
+        # on a saver that already holds the pause.
+        paused, resume, discarded = yield from self._take_pause(request, session, harness)
+        # Once, here, where both readers of it are in view: the build, and the
+        # withheld report. Measured before this moved: a turn under a policy
+        # resolved the agent twice and down different branches of the same function
+        # -- the first writing the pin, the second reading it back and parsing it.
+        #
+        # Not resolved at all where neither reader wants it. A deployment that
+        # supplied its own graph and declares no policy never asked for one, and
+        # asking anyway would make such a session start refusing a request that names
+        # a different agent, which today it does not.
+        agent = (
+            (yield from self._agent_for(request, harness, source_ids=source_ids, pinned=pinned))
+            if self._graph is None or held is not None
+            else None
+        )
+        history = yield from read_transcript(harness)
+        return (
+            yield on_host(
+                self._built_turn,
+                request,
+                session,
+                files=files,
+                harness=harness,
+                allowed=allowed,
+                held=held,
+                agent=agent,
+                paused=paused,
+                resume=resume,
+                discarded=discarded,
+                unprotected=unprotected,
+                placement=placement,
+                history=history,
+            )
+        )
 
     def _take_pause(
-        self, request: Request | Resume, session: Session, checkpointer: Any, harness: HarnessFiles
-    ) -> tuple[Any, dict[str, Any] | None, tuple[str, ...]]:
-        """Deal with whatever an earlier turn left waiting, before this turn starts.
+        self, request: Request | Resume, session: Session, harness: HarnessFiles
+    ) -> Steps[tuple[bytes | None, dict[str, Any] | None, tuple[str, ...]]]:
+        """Deal with whatever an earlier turn left waiting, before this turn starts:
+        the paused state a resume restores, the answers it resumes with, and the
+        tools a new request superseded.
 
         Both ways out of a pause meet here, because both have to happen before the
         graph exists: an answer needs the saver holding the state it answers, and a
         supersede needs the state gone before a turn runs on a saver still holding it.
         """
-        held = drive(read_pause_mark(harness))
+        held = yield from read_pause_mark(harness)
         if not isinstance(request, Resume):
             if held is None:
-                return checkpointer, None, ()
+                return None, None, ()
             # Superseded. The transcript this turn replays ends at the unanswered
             # call, and `PatchToolCallsMiddleware` tells the model it was cancelled
             # -- so the agent learns the gated call never ran rather than silently
             # losing it. What the caller is told is `decision_discarded`.
             waiting = tuple(item.tool for item in pending_from_mark(held))
-            drive(clear_pause(harness))
-            return checkpointer, None, waiting
+            yield from clear_pause(harness)
+            return None, None, waiting
         if held is None:
             msg = f"session {session.id} is not waiting on a decision"
             raise DecisionError(msg)
         self._refuse_stale_pause(session, held, request)
-        state = drive(harness.fetch(PAUSED_STATE))
+        state = yield from harness.fetch(PAUSED_STATE)
         if state is None:
             msg = f"session {session.id} recorded a pause whose state is missing"
             raise DecisionError(msg)
-        try:
-            restored = resumed_saver(state)
-        except (ValueError, NotImplementedError) as exc:
-            # A backend has no rename, so a pause is written in place and a crash can
-            # leave part of one. No part of one deserialises; this says which session
-            # rather than leaving msgpack to.
-            msg = f"session {session.id} recorded a pause whose state cannot be read: {exc}"
-            raise DecisionError(msg) from exc
         # Read back rather than derived again from the restored state. These are the
         # very ids the caller was handed, so answering them cannot drift from being
         # asked them -- and re-deriving would need the graph, which does not exist
         # until after this runs.
-        return restored, runtime.resume_payload(request.decisions, pending_from_mark(held)), ()
+        return state, runtime.resume_payload(request.decisions, pending_from_mark(held)), ()
 
     def _refuse_stale_pause(
         self, session: Session, held: Mapping[str, str], request: Resume
@@ -728,247 +867,153 @@ class Kingfisher(Sessions, Disposal):
         if not self.cfg.conversation_enabled:
             return None, None
         if self.threads is None:
-            saver = build_session_checkpointer(session_dir)
+            saver = build_session_checkpointer()
             return saver, saver
         if callable(self.threads):
             saver = self.threads(session_dir)
             return saver, saver
         return self.threads, None
 
-    def _admit(
+    def _built_turn(  # noqa: PLR0913 -- everything setup decided, for the one piece
+        # of it that is work on this host rather than calls to a port
         self,
         request: Request | Resume,
         session: Session,
-        *,
-        source_ids: Held | None = None,
-        files: Any = None,
-    ) -> Admitted:
-        """Everything that can refuse, before anything a refusal would strand."""
-        cfg = self.cfg
-        # Without an id this turn would mint a new session and run it in another's files.
-        if files is not None and request.session_id is None:
-            msg = (
-                "files= is one session's backend and this request names no session: "
-                "pass the session_id the backend was opened for"
-            )
-            raise ValueError(msg)
-        # Who is calling, before the session is marked, claimed or written to. Any
-        # later and a refused caller's files are already in the `/data` of a session
-        # that was never theirs; after the claim, and a turn running in it would
-        # answer "busy" where an id nobody issued answers "no session". The grant
-        # is asked for here only for its refusals, and again below for itself.
-        self._effective_grants(source_ids)
-        # Built here, before anything else reads the session: who may touch it is
-        # decided by its pinned agent, and that is read through the backend too.
-        if files is None:
-            files = drive(self._files_for(session.id, session.directory))
-        harness = HarnessFiles(files, session.id)
-        if not drive(self._reaches_session(harness, self.held_for(source_ids))):
-            raise self._unknown_session(session.id)
-        # A turn writes inside the session, never to the session itself, so the
-        # timestamp `retention.expired` reads would still say "idle" for a
-        # conversation in daily use. Recorded here, at the top of a turn, rather
-        # than at the end: a turn that fails still happened.
-        self._backends.mark_used(cfg, session.id)
-        # Before the other refusals rather than after: those read the session,
-        # and a turn arriving halfway through would be reading it as it moved.
-        if not files.claim(CLAIM, stale_after=cfg.claim_stale_after):
-            msg = (
-                f"session {session.id} already has a turn running; "
-                f"wait for it to finish or start another session"
-            )
-            raise SessionBusyError(msg)
-        try:
-            return self._admitted(
-                request, session, cfg, files=files, harness=harness, source_ids=source_ids
-            )
-        except BaseException:
-            files.release(CLAIM)
-            raise
-
-    def _admitted(  # noqa: PLR0913 -- what `_admit` already built, handed on rather
-        # than built twice: a second backend is a second sandbox on a remote one
-        self,
-        request: Request | Resume,
-        session: Session,
-        cfg: Config,
         *,
         files: Any,
         harness: HarnessFiles,
-        source_ids: Held | None = None,
-    ) -> Admitted:
-        """The rest of admission, once the session is claimed."""
-        # What the backend could not make read-only, where it is one that says. Reported
-        # below rather than raised; see `DefaultBackends`.
-        unprotected = tuple(getattr(files, "unprotected", ()))
-
-        # Before the data is placed, not after: placing it grows the session,
-        # so checking afterwards would let a request that is already over
-        # budget add to it and only then be refused.
-        self._refuse_if_over_budget(session)
-
-        # Before the turn exists, and before anything is destroyed: a request
-        # naming a file that is not there must fail without having placed the
-        # ones that were. `place_data` re-hardens `/data` on its way out.
-        #
-        # A resume places nothing. It is finishing work already proposed rather
-        # than asking for something, so there is no `data` on it to place -- see
-        # `Resume`, where the absence of the field carries the reason.
-        placement = drive(place_data(getattr(request, "data", ()), files))
-
-        # What this deployment permits, narrowed by what the request asked for.
-        allowed = self._effective_grants(source_ids).intersect(request.capabilities)
-        # Named here rather than inline below, because two things want it and
-        # the expression is a mouthful. `None` for a run with no policy or an
-        # `UNSCOPED` one: both see the whole workspace, so there is nothing to
-        # filter the report against.
-        held = self.held_for(source_ids)
+        allowed: Capabilities,
+        held: frozenset[str] | None,
+        agent: AgentSpec | None,
+        paused: bytes | None,
+        resume: dict[str, Any] | None,
+        discarded: tuple[str, ...],
+        unprotected: tuple[str, ...],
+        placement: Any,
+        history: tuple[Any, ...],
+    ) -> Prepared:
+        """The saver, the graph and the turn itself: what setup builds rather than asks
+        for. Done in one piece, on kingfisher's pool for `astream`, because building
+        the agent is CPU-bound and on the loop would hold every other turn up.
+        """
+        cfg = self.cfg
         # Resolved here rather than in `__init__`, because a saver is built per
         # session and there is no session until now.
         checkpointer, release = self._checkpointer_for(session.directory)
-        # What an earlier turn stopped on, loaded into that saver where this turn is
-        # answering it and dropped where this turn supersedes it. Before the graph is
-        # built, because a resume runs on a saver that already holds the pause.
-        checkpointer, resume, discarded = self._take_pause(request, session, checkpointer, harness)
-        # Once, here, where both readers of it are in view: the build below, and the
-        # withheld report at the bottom. Measured before this moved: a turn under a
-        # policy resolved the agent twice and down different branches of the same
-        # function -- the first writing the pin, the second reading it back and
-        # parsing it again.
-        #
-        # Not resolved at all where neither reader wants it. A deployment that
-        # supplied its own graph and declares no policy never asked for one, and
-        # asking anyway would make such a session start refusing a request that names
-        # a different agent, which today it does not.
-        agent = (
-            self._agent_for(request, harness, source_ids=source_ids)
-            if self._graph is None or held is not None
-            else None
-        )
-        built = self._graph_for(
-            request,
-            session.directory,
-            capabilities=allowed,
-            checkpointer=checkpointer,
-            agent=agent,
-            held=held,
-            files=files,
-        )
-        # `isinstance` rather than `getattr(built, "graph", built)`: the two shapes
-        # `_graph_for` returns are named types, and a duck test here would also
-        # accept anything else carrying a `graph` attribute -- which is how the
-        # backend seam lost its shell once already.
-        graph = built.graph if isinstance(built, Assembled) else built
-
-        return Admitted(
-            request=request,
-            session=session,
-            graph=graph,
-            unprotected=unprotected,
-            placement=placement,
-            files=files,
-            harness=harness,
-            release=release,
-            saver=checkpointer,
-            context=built.context if isinstance(built, Assembled) else None,
-            resume=resume,
-            discarded=discarded,
-            agent_name=agent.name if agent is not None else None,
-            # Tools come off the assembled graph rather than a list kept
-            # somewhere: the surface includes whatever the workspace defined, so
-            # the only honest answer to "what was offered" is what was wired.
-            # Skills and subagents are not on the graph, so they are asked of
-            # the same functions `build_agent` asked -- 0.04ms and 1.4ms against
-            # an admit already measured at 15-46ms.
-            withheld=withheld_by_kind(
+        graph = None
+        try:
+            saver = checkpointer if paused is None else self._restored(session, paused)
+            built = self._graph_for(
+                request,
+                session.directory,
+                capabilities=allowed,
+                checkpointer=saver,
+                agent=agent,
+                held=held,
+                files=files,
+            )
+            # `isinstance` rather than `getattr(built, "graph", built)`: the two shapes
+            # `_graph_for` returns are named types, and a duck test here would also
+            # accept anything else carrying a `graph` attribute -- which is how the
+            # backend seam lost its shell once already.
+            graph = built.graph if isinstance(built, Assembled) else built
+            # Tools come off the assembled graph rather than a list kept somewhere: the
+            # surface includes whatever the workspace defined, so the only honest
+            # answer to "what was offered" is what was wired. Skills and subagents are
+            # not on the graph, so they are asked of the same functions `build_agent`
+            # asked -- 0.04ms and 1.4ms against a setup measured at 15-46ms.
+            withheld = withheld_by_kind(
                 allowed,
                 cfg,
                 graph,
                 self.catalogue,
-                # Only where a vocabulary is in force. With none, `held` is
-                # `None`, nothing was narrowed by source ids and the filter is a
-                # no-op -- so the spec is not merely unused, it is unavailable:
-                # an injected graph never resolves one, which is exactly the
-                # case every test that hands in its own graph is.
+                # Only where a vocabulary is in force. With none, `held` is `None`,
+                # nothing was narrowed by source ids and the filter is a no-op -- so
+                # the spec is not merely unused, it is unavailable: an injected graph
+                # never resolves one, which is exactly the case every test that hands
+                # in its own graph is.
                 agent=agent if held is not None else None,
                 held=held,
-            ),
-            delegate_only=delegate_only(allowed, cfg, catalogue=self.catalogue),
-            indistinct=indistinct_delegates(
-                cfg,
-                allowed,
-                catalogue=self.catalogue,
-                run_on=request.run_on,
-            ),
-        )
-
-    def _open_turn(self, admitted: Admitted) -> Prepared:
-        """Create the turn and compose what the loop needs."""
-        cfg = self.cfg
-        request, session = admitted.request, admitted.session
-        session_id = session.id
-
-        # A caller-supplied id wins; otherwise one is made. No directory is claimed,
-        # so there is nothing to be atomic about any more.
-        turn = session.allocate_turn(request.turn_id)
-
-        logger = RunLogger(
-            self.run_events,
-            model=cfg.models.default,
-            endpoint=cfg.models.resolve()[0].endpoint,
-            session_id=session_id,
-            turn_id=turn.id,
-        )
-        # What this turn is: a task, or the answers to one already asked. The event
-        # says which, because a resume with a task-shaped `run_start` reads as a
-        # second request for work that was never re-requested.
-        asked = getattr(request, "task", "")
-        started = asked or f"resuming {len(getattr(request, 'decisions', ()))} decision(s)"
-        logger.run_start(started)
+            )
+            shared = delegate_only(allowed, cfg, catalogue=self.catalogue)
+            indistinct = indistinct_delegates(
+                cfg, allowed, catalogue=self.catalogue, run_on=request.run_on
+            )
+            # A caller-supplied id wins; otherwise one is made. No directory is
+            # claimed, so there is nothing to be atomic about any more.
+            turn = session.allocate_turn(request.turn_id)
+            logger = RunLogger(
+                self.run_events,
+                model=cfg.models.default,
+                endpoint=cfg.models.resolve()[0].endpoint,
+                session_id=session.id,
+                turn_id=turn.id,
+            )
+            # What this turn is: a task, or the answers to one already asked. The event
+            # says which, because a resume with a task-shaped `run_start` reads as a
+            # second request for work that was never re-requested.
+            asked = getattr(request, "task", "")
+            started = asked or f"resuming {len(getattr(request, 'decisions', ()))} decision(s)"
+            logger.run_start(started)
+        except BaseException:
+            # Built and not yet handed over, so nothing else will let go of them.
+            if graph is not None:
+                release_interpreter(cfg, graph)
+            release_checkpointer(release)
+            raise
 
         return Prepared(
-            graph=admitted.graph,
-            files=admitted.files,
-            harness=admitted.harness,
-            release=admitted.release,
-            saver=admitted.saver,
-            context=admitted.context,
-            resume=admitted.resume,
-            discarded=admitted.discarded,
-            # The agent admission resolved, never `request.agent`: a session's agent
-            # is fixed when it opens, so the request names one only on the turn that
+            graph=graph,
+            files=files,
+            harness=harness,
+            release=release,
+            saver=saver,
+            context=built.context if isinstance(built, Assembled) else None,
+            resume=resume,
+            discarded=discarded,
+            # The agent setup resolved, never `request.agent`: a session's agent is
+            # fixed when it opens, so the request names one only on the turn that
             # opened it and this would be empty for every pause after that.
-            agent_name=admitted.agent_name,
-            history=drive(read_transcript(admitted.harness)),
+            agent_name=agent.name if agent is not None else None,
+            history=history,
             # A resume adds no message: it continues a superstep that already has
             # everything it needs, and a new user turn appended there would be one
             # the model never saw asked.
-            message=turn_message(asked, admitted.placement.placed) if asked else "",
+            message=turn_message(asked, placement.placed) if asked else "",
             session=session,
             turn=turn,
             logger=logger,
             config={
-                "configurable": {"thread_id": session_id},
+                "configurable": {"thread_id": session.id},
                 "callbacks": [logger],
                 "recursion_limit": cfg.recursion_limit,
             },
             events=(
-                *opening_events(
-                    turn.id,
-                    admitted.unprotected,
-                    admitted.placement,
-                    admitted.withheld,
-                    admitted.indistinct,
-                    admitted.delegate_only,
-                ),
+                *opening_events(turn.id, unprotected, placement, withheld, indistinct, shared),
                 # At the start of the turn that did the superseding, which is where
                 # it belongs: it is a fact about *this* turn, not the terminal state
                 # of the one it replaced.
-                *((decision_discarded(admitted.discarded),) if admitted.discarded else ()),
+                *((decision_discarded(discarded),) if discarded else ()),
             ),
             deadline=monotonic() + cfg.turn_timeout_s,
             timeout_s=cfg.turn_timeout_s,
+            unprotected=unprotected,
+            placement=placement,
+            withheld=withheld,
+            indistinct=indistinct,
+            delegate_only=shared,
         )
+
+    def _restored(self, session: Session, state: bytes) -> Any:
+        """The saver a paused turn left, for its resume to run on."""
+        try:
+            return resumed_saver(state)
+        except (ValueError, NotImplementedError) as exc:
+            # A backend has no rename, so a pause is written in place and a crash can
+            # leave part of one. No part of one deserialises; this says which session
+            # rather than leaving msgpack to.
+            msg = f"session {session.id} recorded a pause whose state cannot be read: {exc}"
+            raise DecisionError(msg) from exc
 
     def _keep(self, prepared: Prepared, snapshot: Any) -> tuple[str, ...]:
         """Persist what this turn produced, and name it."""
@@ -1093,19 +1138,16 @@ class Kingfisher(Sessions, Disposal):
         `files` is the session's backend from `files_for`, for a caller that uses it
         around the turn too; the request must name that session.
         """
-        # Coerced here rather than only in `_prepare`, because holding the
-        # session now happens first and a bare task string has no session id to
-        # read.
-        request = _asked(request)
-        with self._held_session(request) as session:
-            yield from self._stream_turn(request, session, source_ids=source_ids, files=files)
+        # Coerced here, because setup reads the request's session id first and a bare
+        # task string has none to read.
+        yield from self._stream_turn(_asked(request), source_ids=source_ids, files=files)
 
     @contextmanager
-    def _turn_lifecycle(self, turn: _Turn) -> Iterator[None]:
-        """Everything a turn does around its graph loop, shared by both of them.
+    def _turn_outcome(self, turn: _Turn) -> Iterator[None]:
+        """How a turn's graph loop ended, recorded on `turn`, for both loops.
 
-        A bound, a translation or a release added here reaches `stream` and
-        `astream` at once; they differ only in the loop.
+        A bound or a translation added here reaches `stream` and `astream` at once;
+        they differ only in the loop, and in where `_end_turn` runs after it.
         """
         try:
             yield
@@ -1128,14 +1170,13 @@ class Kingfisher(Sessions, Disposal):
             if (refused := refused_credentials(exc, self.cfg)) is None:
                 raise
             raise refused from exc
-        finally:
-            self._end_turn(turn)
 
     def _end_turn(self, turn: _Turn) -> None:
         """Everything a turn does once it is over, however it ended.
 
         Sync, and so uninterruptible: a cancellation lands at an `await`, and there
-        is none in here to land at.
+        is none in here to land at. `stream` runs it inline; `astream` runs it on
+        kingfisher's pool, through `_end_turn_off_the_loop`.
         """
         prepared = turn.prepared
         prepared.logger.run_end(ok=turn.ok, answer_chars=len(turn.answer))
@@ -1233,65 +1274,80 @@ class Kingfisher(Sessions, Disposal):
     def _stream_turn(
         self,
         request: Request | Resume,
-        session: Session,
         *,
         source_ids: Held | None = None,
         files: Any = None,
     ) -> Iterator[RunEvent]:
-        """One turn, with its directory already held."""
-        turn = _Turn(self._prepare(request, session, source_ids=source_ids, files=files))
-        with self._turn_lifecycle(turn):
-            # Inside the lifecycle, not before it. A caller that stops reading
-            # during these -- `run_start` is the first -- used to leave the turn
-            # with no end at all: the claim stayed taken, the checkpointer
-            # stayed open, and nothing was persisted.
-            yield from turn.prepared.events
-            for chunk in turn.prepared.graph.stream(self._payload(turn), **self._driving(turn)):
-                yield from self._read(turn, *chunk)
-                if (stop := self._bound(turn)) is not None:
-                    yield stop
-                    break
+        """One turn, on the graph's own stream."""
+        turn = _Turn(drive(self._prepare_steps(request, source_ids=source_ids, files=files)))
+        try:
+            with self._turn_outcome(turn):
+                # Inside, not before. A caller that stops reading during these --
+                # `run_start` is the first -- used to leave the turn with no end at
+                # all: the claim stayed taken, the checkpointer stayed open, and
+                # nothing was persisted.
+                yield from turn.prepared.events
+                for chunk in turn.prepared.graph.stream(
+                    self._payload(turn), **self._driving(turn)
+                ):
+                    yield from self._read(turn, *chunk)
+                    if (stop := self._bound(turn)) is not None:
+                        yield stop
+                        break
+        finally:
+            self._end_turn(turn)
         yield from self._ending(turn)
 
     async def _astream_turn(
         self,
         request: Request | Resume,
-        session: Session,
         *,
         source_ids: Held | None = None,
         files: Any = None,
     ) -> AsyncGenerator[RunEvent, None]:
-        """The same turn on the graph's own async stream, its directory held.
+        """The same turn on the graph's own async stream.
 
         `AsyncGenerator` because `astream` closes this by hand, and the type has
-        to admit `aclose`. `_prepare` goes through a thread because it is 15-46ms
-        of CPU-bound construction, which on the loop is 15-46ms every other turn
-        waits through.
+        to admit `aclose`.
         """
-        prepared, cancelled = await finished(
-            off_loop(
-                self._pool, self._prepare, request, session, source_ids=source_ids, files=files
-            )
+        prepared, cancelled = await adrive_finished(
+            self._prepare_steps(request, source_ids=source_ids, files=files)
         )
         turn = _Turn(prepared)
         if cancelled is not None:
-            # Setup claimed the session before the cancel could reach it, so the
-            # turn is ended here, the way any turn ends, before the cancel goes on.
-            self._end_turn(turn)
+            # The cancel arrived while the turn was being built, so the built turn is
+            # the caller's to let go of: ended the way any turn ends, then the cancel.
+            await self._end_turn_off_the_loop(turn)
             raise cancelled
-        with self._turn_lifecycle(turn):
-            for event in turn.prepared.events:
-                yield event
-            async for chunk in turn.prepared.graph.astream(
-                self._payload(turn), **self._driving(turn)
-            ):
-                for event in self._read(turn, *chunk):
+        try:
+            with self._turn_outcome(turn):
+                for event in turn.prepared.events:
                     yield event
-                if (stop := self._bound(turn)) is not None:
-                    yield stop
-                    break
+                async for chunk in turn.prepared.graph.astream(
+                    self._payload(turn), **self._driving(turn)
+                ):
+                    for event in self._read(turn, *chunk):
+                        yield event
+                    if (stop := self._bound(turn)) is not None:
+                        yield stop
+                        break
+        finally:
+            await self._end_turn_off_the_loop(turn)
         for event in self._ending(turn):
             yield event
+
+    async def _end_turn_off_the_loop(self, turn: _Turn) -> None:
+        """`_end_turn` on kingfisher's pool, waited for however many times the caller is
+        cancelled meanwhile.
+
+        Off the loop because ending a turn is round trips to the session's backend --
+        the pause, the transcript, the artifact listing, the claim -- which on the loop
+        every other turn would wait through. Waited for because returning first would
+        hand a retry a session still claimed.
+        """
+        _, cancelled = await finished(off_loop(self._pool, self._end_turn, turn))
+        if cancelled is not None:
+            raise cancelled
 
     def run(
         self,
@@ -1351,18 +1407,15 @@ class Kingfisher(Sessions, Disposal):
         passed as `threads=` needs `aget_tuple` and `aput`. Both refusals are
         loud, and neither reaches a caller of `stream`.
         """
-        request = _asked(request)  # for the reason `stream` gives
-        with self._held_session(request) as session:
-            turn = self._astream_turn(request, session, source_ids=source_ids, files=files)
-            try:
-                async for event in turn:
-                    yield event
-            finally:
-                # By hand: an async generator dropped by another waits for the
-                # loop to finalise it, and `yield from`'s close has no async
-                # spelling. Without this a caller who stops reading leaves the
-                # session claimed.
-                await turn.aclose()
+        turn = self._astream_turn(_asked(request), source_ids=source_ids, files=files)
+        try:
+            async for event in turn:
+                yield event
+        finally:
+            # By hand: an async generator dropped by another waits for the loop to
+            # finalise it, and `yield from`'s close has no async spelling. Without
+            # this a caller who stops reading leaves the session claimed.
+            await turn.aclose()
 
     async def arun(
         self,

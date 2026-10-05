@@ -186,10 +186,10 @@ def test_a_later_turn_runs_what_the_session_opened_with(cfg):
     service = Kingfisher(cfg, backends=default_backends)
     asked = Request("go", agent="narrow", session_id="s")
 
-    opened = service._agent_for(asked, _held(cfg))
+    opened = drive(service._agent_for(asked, _held(cfg)))
     _agents(cfg, NARROW.replace("Reads and nothing else.", "Reads and writes now."))
 
-    assert service._agent_for(asked, _held(cfg)).description == opened.description
+    assert drive(service._agent_for(asked, _held(cfg))).description == opened.description
 
 
 def test_naming_a_different_agent_later_is_refused_rather_than_ignored(cfg):
@@ -198,10 +198,10 @@ def test_naming_a_different_agent_later_is_refused_rather_than_ignored(cfg):
     """
     _agents(cfg, NARROW, CHEAP)
     service = Kingfisher(cfg, backends=default_backends)
-    service._agent_for(Request("go", agent="narrow", session_id="s"), _held(cfg))
+    drive(service._agent_for(Request("go", agent="narrow", session_id="s"), _held(cfg)))
 
     with pytest.raises(CapabilityError, match="running 'narrow'"):
-        service._agent_for(Request("again", agent="cheap-one", session_id="s"), _held(cfg))
+        drive(service._agent_for(Request("again", agent="cheap-one", session_id="s"), _held(cfg)))
 
 
 def test_naming_the_same_agent_again_is_fine(cfg):
@@ -211,18 +211,18 @@ def test_naming_the_same_agent_again_is_fine(cfg):
     _agents(cfg, NARROW)
     service = Kingfisher(cfg, backends=default_backends)
     asked = Request("go", agent="narrow", session_id="s")
-    service._agent_for(asked, _held(cfg))
+    drive(service._agent_for(asked, _held(cfg)))
 
-    assert service._agent_for(asked, _held(cfg)).name == "narrow"
+    assert drive(service._agent_for(asked, _held(cfg))).name == "narrow"
 
 
 def test_a_turn_that_names_nothing_still_gets_the_sessions_agent(cfg):
     """The session decides, not the turn."""
     _agents(cfg, NARROW)
     service = Kingfisher(cfg, backends=default_backends)
-    service._agent_for(Request("go", agent="narrow", session_id="s"), _held(cfg))
+    drive(service._agent_for(Request("go", agent="narrow", session_id="s"), _held(cfg)))
 
-    assert service._agent_for(Request("again", session_id="s"), _held(cfg)).name == "narrow"
+    assert drive(service._agent_for(Request("again", session_id="s"), _held(cfg))).name == "narrow"
 
 
 def test_a_snapshot_is_written_once_and_not_overwritten(tmp_path):

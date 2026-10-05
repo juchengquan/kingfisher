@@ -34,16 +34,22 @@ method that opens a session is named rather than being the object's `__call__`.
 
 `Kingfisher` has `asession`, `apending`, `aartifact` and `adelete_session`, the async
 twins of `session`, `pending`, `artifact` and `delete_session`, for a caller already on
-an event loop. They reach a session through three new methods on `SessionBackends`,
-`aopen`, `asessions` and `adelete`:
+an event loop. They reach a session through new methods on `SessionBackends` --
+`aopen`, `asessions`, `adelete`, and for a turn on `astream`, `amark_used` and `asize`
+-- and through `aclaim` on the backend `open` returns:
 
 - **If your session backends subclass `DefaultBackends` or `SessionBackends`**, there
-  is nothing to do. All three are inherited, running `open`, `sessions` and `delete` on
+  is nothing to do. All five are inherited, each running its sync method on
   kingfisher's thread pool. Override one where it is a round trip you can await.
 - **If yours subclass neither**, they are refused at construction until they have all
-  three. Subclassing `SessionBackends` is the shortest fix.
-- `SESSION_BACKENDS_CONTRACT` has three more checks: `aopen_reaches_the_session_open_does`,
-  `asessions_lists_what_sessions_does` and `adelete_removes_the_session`.
+  five. Subclassing `SessionBackends` is the shortest fix.
+- **The backend `open` returns needs `aclaim`** beside `claim`. One built on
+  `SessionClaims`, as kingfisher's are, has it already.
+- `SESSION_BACKENDS_CONTRACT` has six more checks, one for each async twin:
+  `aopen_reaches_the_session_open_does`, `asessions_lists_what_sessions_does`,
+  `adelete_removes_the_session`, `aclaim_and_claim_exclude_each_other`,
+  `asize_counts_what_size_does` and `amark_used_moves_the_session_on`, which waits a
+  second so a coarse filesystem clock still sees the session move on.
 - **A checkpointer passed as `threads=`** is deleted from with its own `adelete_thread`
   on the async path, or on kingfisher's thread pool where it has none or raises
   `NotImplementedError` as langgraph's base saver does. `arun(delete_session=True)`

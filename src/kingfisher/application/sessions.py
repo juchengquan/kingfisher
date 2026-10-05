@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -25,7 +24,7 @@ from kingfisher.infrastructure.workspace import (
 from kingfisher.kinds.agents.reading import read
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable
     from pathlib import Path
 
     from kingfisher.config import Config
@@ -46,13 +45,17 @@ class Sessions:
     #: The backend one session's files are reached through, as a sequence.
     _files_for: Callable[..., Steps[Any]]
 
-    def _session_id_for(self, request: Request | Resume) -> str:
-        """Mint an id, or accept one that already names a session."""
+    def _session_for(self, request: Request | Resume) -> Steps[Session]:
+        """This turn's session: a new id, or one that already names a session. Its
+        backend makes it, the first time it is asked for it.
+        """
         if request.session_id is None:
-            return uuid4().hex
-        if request.session_id not in drive(self._known_steps()):
+            session_id = uuid4().hex
+        elif request.session_id in (yield from self._known_steps()):
+            session_id = request.session_id
+        else:
             raise self._unknown_session(request.session_id)
-        return request.session_id
+        return Session(id=session_id, directory=session_dir(self.workspace, session_id))
 
     def _unknown_session(self, session_id: str) -> UnknownSessionError:
         """The refusal for an id nobody issued, and for a session this caller may not
@@ -71,8 +74,11 @@ class Sessions:
         """
         if held is None:
             return True
-        kept = yield from agent_started_with(harness)
-        if kept is None:
+        return self._reaches_pin((yield from agent_started_with(harness)), held)
+
+    def _reaches_pin(self, kept: Any, held: frozenset[str] | None) -> bool:
+        """`_reaches_session`, for a pin already read."""
+        if held is None or kept is None:
             return True
         return reaches(read(kept).source_ids, held)
 
@@ -81,11 +87,11 @@ class Sessions:
         listing = yield reading(self._backends, "sessions", self.cfg)
         return tuple(name for name, _ in listing)
 
-    def _refuse_if_over_budget(self, session: Session) -> None:
+    def _refuse_if_over_budget(self, session: Session) -> Steps[None]:
         """Stop a session that is already too large from growing further."""
         if self.cfg.session_max_bytes is None:
             return
-        held = self._backends.size(self.cfg, session.id)
+        held = yield reading(self._backends, "size", self.cfg, session.id)
         if held > self.cfg.session_max_bytes:
             msg = (
                 f"session {session.id} holds {held} bytes, over the "
@@ -154,9 +160,3 @@ class Sessions:
         files = yield from self._files_for(session_id, session_dir(self.workspace, session_id))
         reaches_it = yield from self._reaches_session(HarnessFiles(files, session_id), held)
         return (found, files) if reaches_it else None
-
-    @contextmanager
-    def _held_session(self, request: Request | Resume) -> Iterator[Session]:
-        """This turn's session. Its backend makes it, the first time it is asked for it."""
-        session_id = self._session_id_for(request)
-        yield Session(id=session_id, directory=session_dir(self.workspace, session_id))

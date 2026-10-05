@@ -83,6 +83,20 @@ def drive[T](steps: Steps[T]) -> T:
 
 async def adrive[T](steps: Steps[T]) -> T:
     """Run `steps` on the event loop, awaiting each call's async twin."""
+    answer, held = await adrive_finished(steps)
+    if held is not None:
+        raise held from None
+    return answer
+
+
+async def adrive_finished[T](steps: Steps[T]) -> tuple[T, asyncio.CancelledError | None]:
+    """`adrive`, handing back with the answer a cancel that arrived during the last call.
+
+    What `finished` is to one call. A cancel during an earlier call is thrown into the
+    sequence, which gives back what it took; one during the last has no later step to
+    go in at, and raised here it would drop an answer holding something -- a claim, a
+    saver -- that only the caller can now let go of.
+    """
     answer: Any = None
     failed: BaseException | None = None
     held: asyncio.CancelledError | None = None
@@ -90,9 +104,7 @@ async def adrive[T](steps: Steps[T]) -> T:
         try:
             step = steps.send(answer) if failed is None else steps.throw(failed)
         except StopIteration as done:
-            if held is not None:
-                raise held from None
-            return done.value
+            return done.value, held
         if held is not None:
             # A cancel that arrived during a call that changes something. The sequence
             # has what that call did now, so the cancel goes in here instead of the
