@@ -125,7 +125,7 @@ def test_the_delegate_is_shown_the_skills_from_both(cfg, deployed, session_dir):
     """
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("clerk",), tools=()),
     )

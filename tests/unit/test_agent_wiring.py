@@ -6,7 +6,7 @@ import pytest
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
-from kingfisher import Kingfisher, default_backends
+from kingfisher import Kingfisher, backend_at, default_backends
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import skills_sources
@@ -54,7 +54,7 @@ def test_agent_runs_shell_and_writes_files(cfg, session_dir):
 
     agent = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=responses)).graph
     out = agent.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
@@ -71,7 +71,7 @@ def test_planning_and_permissions_are_wired(cfg, session_dir):
     """deepagents 0.7.6 ships no planning tool, and /data must be write-denied."""
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
 
     middleware_names = {type(m).__name__ for m in built.middleware}
@@ -103,9 +103,10 @@ def test_enabling_a_capability_wires_the_middleware_not_just_the_prompt(
     """One switch drives both, so the prompt cannot describe a missing capability."""
     from dataclasses import replace
 
+    wired = replace(cfg, skills_enabled=True, memory_enabled=True)
     built = build_agent(
-        replace(cfg, skills_enabled=True, memory_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
 
@@ -131,7 +132,7 @@ def test_the_agent_exposes_the_expected_tool_surface(cfg, session_dir):
     """A regression guard on the whole surface, not just one middleware."""
     agent = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")])).graph
 
     names = set()
@@ -176,7 +177,7 @@ def test_an_agents_own_middleware_is_wrapped_around_the_agent(cfg, session_dir):
     built = build_agent(
         cfg,
         agent=_named(("audit",)),
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         middleware_registry={"audit": _Audit},
     )
@@ -194,7 +195,7 @@ def test_the_agents_middleware_runs_after_the_narrowing_kingfisher_applied(
     built = build_agent(
         cfg,
         agent=_named(("audit",)),
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         middleware_registry={"audit": _Audit},
         capabilities=Capabilities(builtin_tools=("read_file",)),
@@ -213,7 +214,7 @@ def test_an_agent_naming_middleware_nothing_registered_is_refused(cfg, session_d
         build_agent(
             cfg,
             agent=_named(("audit",)),
-            session_dir=session_dir,
+            backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             middleware_registry={},
         )
@@ -228,7 +229,7 @@ def test_a_request_may_not_quietly_drop_the_agents_middleware(cfg, session_dir):
         build_agent(
             cfg,
             agent=_named(("audit",)),
-            session_dir=session_dir,
+            backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             middleware_registry={"audit": _Audit},
             capabilities=Capabilities(middlewares=()),
@@ -242,7 +243,7 @@ def test_an_agent_that_names_none_wires_none(cfg, session_dir):
     built = build_agent(
         cfg,
         agent=_named(None),
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         middleware_registry={"audit": _Audit},
     )
@@ -303,7 +304,7 @@ def test_replacing_deepagents_filesystem_warns_and_still_runs(cfg, session_dir):
         built = build_agent(
             cfg,
             agent=_named(("audit",)),
-            session_dir=session_dir,
+            backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             middleware_registry={"audit": FilesystemMiddleware},
         )
@@ -350,7 +351,7 @@ def test_a_middleware_named_its_own_thing_warns_about_nothing(cfg, session_dir):
         built = build_agent(
             cfg,
             agent=_named(("audit",)),
-            session_dir=session_dir,
+            backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             middleware_registry={"audit": _Audit},
         )
@@ -365,7 +366,7 @@ def test_a_registered_instance_is_refused_rather_than_called(cfg, session_dir):
         build_agent(
             cfg,
             agent=_named(("audit",)),
-            session_dir=session_dir,
+            backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             # `ty: ignore` is half the test. A type checker rejects this
             # statically -- `MiddlewareFactory` is `Callable[..., Any]` and an
@@ -414,7 +415,7 @@ def test_a_registered_class_is_built_again_for_every_graph(cfg, session_dir):
         assembled = build_agent(
             cfg,
             agent=_named(("audit",)),
-            session_dir=session_dir,
+            backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             middleware_registry={"audit": _Audit},
         )
@@ -466,7 +467,7 @@ def _with_a_delegate(cfg, session_dir, injected, definition: str = _DELEGATE):
     built = build_agent(
         cfg,
         agent=_named(("wants",), subagents=("reviewer",)),
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=injected,
         middleware_registry={"wants": _WantsEverything},
     )
@@ -514,7 +515,7 @@ def test_a_delegate_that_inherits_is_given_no_model_of_its_own(cfg, session_dir)
     built = build_agent(
         cfg,
         agent=_named(("wants",), subagents=("reviewer",)),
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=injected,
         middleware_registry={"wants": _WantsEverything},
     )
@@ -531,7 +532,7 @@ def _a_pinned_delegate(cfg, session_dir, injected) -> dict:
     built = build_agent(
         cfg,
         agent=_named(("wants",), subagents=("reviewer",)),
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=injected,
         middleware_registry={"wants": _WantsEverything},
     )
@@ -606,7 +607,7 @@ def test_a_middleware_naming_a_model_this_request_withheld_is_refused(cfg, sessi
             cfg,
             agent=spec,
             capabilities=Capabilities(endpoints=("fake",)),
-            session_dir=session_dir,
+            backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             middleware_registry={"wants": _WantsOnlyAModel},
         )

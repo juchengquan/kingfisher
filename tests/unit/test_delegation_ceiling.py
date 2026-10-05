@@ -8,6 +8,7 @@ import pytest
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
+from kingfisher import backend_at
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, ceiling, narrowed
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.middlewares.narrowing import ToolAllowlist
@@ -92,9 +93,10 @@ def test_a_delegate_may_not_use_what_its_caller_was_denied(cfg, session_dir):
         AIMessage(content="done"),
     ]
 
+    wired = _with_helper(cfg)
     graph = build_agent(
-        _with_helper(cfg),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=responses),
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
     ).graph
@@ -140,9 +142,10 @@ def test_a_delegate_that_withheld_a_tool_itself_is_the_one_named(cfg, session_di
         AIMessage(content="done"),
     ]
 
+    wired = _with_helper(cfg, READ_ONLY, "reader.yaml")
     graph = build_agent(
-        _with_helper(cfg, READ_ONLY, "reader.yaml"),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=responses),
         capabilities=Capabilities(subagents=("reader",)),
     ).graph
@@ -174,9 +177,10 @@ def test_the_builtin_delegate_arrives_with_the_ceiling_on(cfg, session_dir):
         AIMessage(content="done"),
     ]
 
+    wired = _with_helper(cfg)
     graph = build_agent(
-        _with_helper(cfg),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=responses),
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
     ).graph
@@ -197,9 +201,10 @@ def test_the_builtin_survives_when_no_delegates_are_named(cfg, session_dir):
     """`subagents=None` means "no opinion about delegates", and a narrowed request that
     never named one still gets the built-in -- limited, not gone.
     """
+    wired = _with_helper(cfg)
     graph = build_agent(
-        _with_helper(cfg),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(builtin_tools=("read_file", "task")),
     ).graph
@@ -232,9 +237,10 @@ def test_an_unnamed_delegate_is_still_refused(cfg, session_dir):
         AIMessage(content="done"),
     ]
 
+    wired = _with_helper(cfg)
     graph = build_agent(
-        _with_helper(cfg),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=responses),
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
     ).graph
@@ -264,9 +270,10 @@ def test_an_unrestricted_request_delegates_as_before(cfg, session_dir):
         AIMessage(content="done"),
     ]
 
+    wired = _with_helper(cfg)
     graph = build_agent(
-        _with_helper(cfg),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=responses),
     ).graph
 
@@ -473,9 +480,10 @@ def _built_with(cfg, session_dir, capabilities) -> dict:
 
     agent_module.create_deep_agent = spy
     try:
+        wired = _with_helper(cfg)
         build_agent(
-            _with_helper(cfg),
-            session_dir=session_dir,
+            wired,
+            backend=backend_at(wired, session_dir),
             model=_model(),
             capabilities=capabilities,
         )
@@ -556,9 +564,10 @@ MIXED = STAR.replace('builtin_tools: ["*"]', 'builtin_tools: ["*", read_file]')
 
 
 def _build(cfg, session_dir, definition):
+    wired = _with_helper(cfg, definition)
     return build_agent(
-        _with_helper(cfg, definition),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("helper",)),
     ).graph
@@ -612,9 +621,10 @@ def test_a_tool_the_request_withheld_is_still_dropped(cfg, session_dir):
     """The half that must *not* change."""
     definition = TYPO.replace("reed_file", "read_file, execute")
 
+    wired = _with_helper(cfg, definition)
     graph = build_agent(
-        _with_helper(cfg, definition),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
     ).graph
@@ -715,8 +725,9 @@ def _gp(built) -> dict:
 
 
 def _audited_build(cfg, session_dir, **caps):
+    wired = _with_helper(cfg)
     return build_agent(
-        _with_helper(cfg),
+        wired,
         agent=AgentSpec(
             name="probed",
             description="names the deployment's middleware",
@@ -724,7 +735,7 @@ def _audited_build(cfg, session_dir, **caps):
             middlewares=("audit",),
             subagents=("helper",),
         ),
-        session_dir=session_dir,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         middleware_registry={"audit": _Audit},
         capabilities=Capabilities(**caps),

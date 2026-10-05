@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from kingfisher import backend_at
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
@@ -31,7 +32,7 @@ def _two_vendors(cfg, *, name="surveyor"):
 def _build(cfg, session_dir, subagents):
     return build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[]),
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=subagents),
     )

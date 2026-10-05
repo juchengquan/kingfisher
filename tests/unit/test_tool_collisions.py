@@ -8,6 +8,7 @@ import pytest
 from langchain_core.messages import AIMessage
 from langgraph.prebuilt.tool_node import ToolNode
 
+from kingfisher import backend_at
 from kingfisher.domain.capabilities import Capabilities, CapabilityError, all_but
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.kinds.tools.catalogue import LocalToolRepository
@@ -88,7 +89,7 @@ def test_each_delegate_holds_the_tool_it_named(cfg, session_dir):
 
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[]),
         capabilities=Capabilities(
             builtin_tools=("read_file",),
@@ -110,7 +111,7 @@ def test_the_agent_holding_the_grant_holds_neither(cfg, session_dir):
 
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[]),
         capabilities=Capabilities(
             builtin_tools=("read_file",),
@@ -145,7 +146,7 @@ def test_a_grant_of_everything_still_works(cfg, session_dir):
 
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[]),
         capabilities=Capabilities(subagents=("agent_vendor_a",)),
     ).graph
@@ -167,7 +168,7 @@ def test_a_delegate_can_actually_call_the_one_it_named(cfg, session_dir):
 
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(
             responses=[
                 AIMessage(
@@ -204,7 +205,7 @@ def test_a_bare_name_two_files_offer_is_refused(cfg, session_dir):
     with pytest.raises(CapabilityError, match="more than one source offers"):
         build_agent(
             cfg,
-            session_dir=session_dir,
+            backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[]),
             capabilities=Capabilities(builtin_tools=(), tools=("fetch",)),
         )
@@ -216,7 +217,7 @@ def test_the_refusal_names_both_files(cfg, session_dir):
     with pytest.raises(CapabilityError) as raised:
         build_agent(
             cfg,
-            session_dir=session_dir,
+            backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[]),
             capabilities=Capabilities(builtin_tools=(), tools=("fetch",)),
         )
@@ -236,7 +237,7 @@ def test_a_definition_naming_it_bare_is_refused_too(cfg, session_dir):
     with pytest.raises(CapabilityError, match="more than one source offers"):
         build_agent(
             cfg,
-            session_dir=session_dir,
+            backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[]),
             capabilities=Capabilities(
                 builtin_tools=("read_file",),
@@ -259,7 +260,7 @@ def test_a_unique_name_is_still_granted_flat(cfg, session_dir):
 
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[]),
         capabilities=Capabilities(builtin_tools=(), tools=("fetch",)),
     ).graph
@@ -279,7 +280,7 @@ def test_a_delegate_still_cannot_reach_past_the_request(cfg, session_dir):
 
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(
             responses=[
                 AIMessage(
@@ -332,9 +333,10 @@ def test_a_workspace_tool_shadowing_a_builtin_is_still_refused(cfg, session_dir)
     )
 
     with pytest.raises(CapabilityError, match="would replace a built-in"):
+        wired = replace(cfg, skills_enabled=False)
         build_agent(
-            replace(cfg, skills_enabled=False),
-            session_dir=session_dir,
+            wired,
+            backend=backend_at(wired, session_dir),
             model=FakeToolCallingModel(responses=[]),
             capabilities=Capabilities(builtin_tools=(), tools=()),
         )

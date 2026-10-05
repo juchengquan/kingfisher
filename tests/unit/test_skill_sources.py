@@ -115,9 +115,10 @@ def test_a_qualified_name_from_the_wrong_source_is_refused(cfg):
 def test_a_request_may_activate_one_of_them(cfg, session_dir):
     _two_parties(cfg)
 
+    wired = replace(cfg, skills_enabled=True)
     build_agent(
-        replace(cfg, skills_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[]),
         capabilities=Capabilities(skills=("research::lookup",)),
     )
@@ -127,9 +128,10 @@ def test_a_request_naming_it_bare_is_refused_at_build(cfg, session_dir):
     _two_parties(cfg)
 
     with pytest.raises(CapabilityError, match="more than one source"):
+        wired = replace(cfg, skills_enabled=True)
         build_agent(
-            replace(cfg, skills_enabled=True),
-            session_dir=session_dir,
+            wired,
+            backend=backend_at(wired, session_dir),
             model=FakeToolCallingModel(responses=[]),
             capabilities=Capabilities(skills=("lookup",)),
         )
@@ -204,9 +206,10 @@ def test_a_nested_skill_is_denied_at_the_path_it_actually_has(cfg, session_dir):
     """
     _two_parties(cfg)
 
+    wired = replace(cfg, skills_enabled=True)
     built = build_agent(
-        replace(cfg, skills_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[]),
         capabilities=Capabilities(skills=("research::lookup",)),
     )

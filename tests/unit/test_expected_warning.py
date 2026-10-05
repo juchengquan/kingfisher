@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from kingfisher import backend_at
 from kingfisher.infrastructure.harness.interpreter import quieten_expected_snapshot_drop
 
 LOGGER = "langchain_quickjs.middleware"
@@ -92,9 +93,10 @@ def test_building_the_sandbox_installs_it(cfg, session_dir):
         logger.removeFilter(stale)
     assert not _installed()
 
+    wired = replace(cfg, interpreter_enabled=True)
     build_agent(
-        replace(cfg, interpreter_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
 
@@ -117,7 +119,7 @@ def test_a_deployment_without_the_sandbox_is_left_alone(cfg, session_dir):
 
     build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
 

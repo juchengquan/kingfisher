@@ -12,6 +12,7 @@ import asyncio
 import pytest
 from langchain_core.messages import ToolMessage
 
+from kingfisher import backend_at
 from kingfisher.infrastructure.harness.middlewares.workspace_tools import WorkspaceToolErrors
 
 
@@ -136,7 +137,7 @@ def test_the_build_guards_the_names_the_workspace_defined(cfg, session_dir):
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "probe.py").write_text(A_TOOL, encoding="utf-8")
 
-    built = build_agent(cfg, session_dir=session_dir, model=_a_model())
+    built = build_agent(cfg, backend=backend_at(cfg, session_dir), model=_a_model())
 
     guard = _guard_in(built)
     assert guard is not None, "the build installed no WorkspaceToolErrors"
@@ -147,7 +148,7 @@ def test_a_workspace_with_no_tools_installs_no_guard(cfg, session_dir):
     """Nothing to guard, so nothing added."""
     from kingfisher.infrastructure.harness.agent import build_agent
 
-    built = build_agent(cfg, session_dir=session_dir, model=_a_model())
+    built = build_agent(cfg, backend=backend_at(cfg, session_dir), model=_a_model())
 
     assert _guard_in(built) is None
 
@@ -197,7 +198,7 @@ def _graph_with_a_failing_tool(cfg, session_dir):
     (tools_dir(cfg) / "always_fails.py").write_text(ALWAYS_FAILS, encoding="utf-8")
     return build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=_calls("always_fails")),
     ).graph
 
@@ -249,7 +250,7 @@ def _delegate_with_a_failing_tool(cfg, session_dir):
 
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=_calls("always_fails")),
         capabilities=Capabilities(subagents=("helper",)),
     ).graph
@@ -315,7 +316,7 @@ def test_a_helper_below_a_delegate_is_guarded_too(cfg, session_dir):
 
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=_calls("always_fails")),
         capabilities=Capabilities(subagents=("helper", "deeper")),
     ).graph

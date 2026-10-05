@@ -290,7 +290,7 @@ def test_a_delegate_is_activated_from_the_supplied_catalogue(tmp_path, cfg, sess
 
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir, catalogue=roots),
         model=FakeToolCallingModel(responses=[]),
         capabilities=Capabilities(subagents=("reviewer",)),
         catalogue=roots,
@@ -307,7 +307,7 @@ def test_the_agent_it_builds_offers_the_staged_definitions(tmp_path, cfg, sessio
 
     graph = build_agent(
         enabled,
-        session_dir=session_dir,
+        backend=backend_at(enabled, session_dir, catalogue=roots),
         model=FakeToolCallingModel(responses=[]),
         catalogue=roots,
     ).graph

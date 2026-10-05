@@ -7,6 +7,7 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
+from kingfisher import backend_at
 from kingfisher.application.config import config_from_env
 from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
@@ -59,7 +60,7 @@ def define(cfg, body: str, name: str = "reviewer") -> None:
 def build(cfg, session_dir, *, run_on=None, **caps):
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reviewer",), **caps),
         run_on=run_on,

@@ -16,6 +16,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
+from kingfisher import backend_at
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent, declared_middleware
 from kingfisher.infrastructure.harness.declared_middleware import ByName
@@ -423,7 +424,7 @@ def test_every_preset_names_skills_this_distribution_actually_offers(
     # what the delegates resolve to, not about how an agent becomes a request.
     granted = Capabilities(subagents=("extractor", "reviewer", "profiler"))
 
-    build_agent(cfg, session_dir=session_dir, model=fake_model, capabilities=granted)
+    build_agent(cfg, backend=backend_at(cfg, session_dir), model=fake_model, capabilities=granted)
 
 
 def test_the_preset_that_grants_a_skill_is_told_about_it(
@@ -440,7 +441,7 @@ def test_the_preset_that_grants_a_skill_is_told_about_it(
 
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=fake_model,
         capabilities=Capabilities(subagents=("reviewer",)),
     )
@@ -462,9 +463,10 @@ def test_the_shipped_delegate_consults_its_helper_under_the_agent_that_ships_it(
     that ships the pairing dropping half of it.
     """
     declared = LocalAgentRepository(shipped / "agents").specs["assistant"].subagents
+    wired = replace(workspace_with_presets, skills_enabled=True)
     graph = build_agent(
-        replace(workspace_with_presets, skills_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=fake_model,
         capabilities=Capabilities(subagents=declared),
     ).graph
@@ -478,9 +480,10 @@ def test_a_caller_naming_the_delegate_alone_gets_it_without_its_helper(
     """Dropped rather than refused, which is why `reviewer.yaml`'s prompt copes either
     way -- a refusal would make the helper a requirement of every caller.
     """
+    wired = replace(workspace_with_presets, skills_enabled=True)
     graph = build_agent(
-        replace(workspace_with_presets, skills_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=fake_model,
         capabilities=Capabilities(subagents=("reviewer",)),
     ).graph
@@ -641,9 +644,10 @@ def test_the_typed_preset_is_handed_its_tool_and_shown_its_skill(
     """Read through the index the delegate is actually given, because `skills` as
     deepagents writes it -- a list of strings -- can load, build, and mount nothing.
     """
+    wired = replace(workspace_with_presets, skills_enabled=True)
     built = build_agent(
-        replace(workspace_with_presets, skills_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=fake_model,
         capabilities=Capabilities(subagents=("versions",)),
     )
@@ -1094,10 +1098,11 @@ def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
     seed(cfg, shipped, everything=True)
     spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["assistant"]
     offered = set(LocalMiddlewareRepository(cfg.catalogue_roots["middlewares"]).names)
+    wired = replace(cfg, skills_enabled=True)
     built = build_agent(
-        replace(cfg, skills_enabled=True),
+        wired,
         agent=spec,
-        session_dir=session_dir,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
 
@@ -1132,7 +1137,7 @@ def test_the_middleware_example_caps_a_turn(shipped, cfg, session_dir):
     graph = build_agent(
         cfg,
         agent=replace(spec, middlewares=("call-cap-strict",), subagents=None, skills=None),
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=responses),
         middleware_registry={"call-cap-strict": lambda: cap(2)},
     ).graph
@@ -1166,7 +1171,7 @@ def test_the_note_example_reaches_a_real_tool_result(shipped, cfg, session_dir):
             subagents=None,
             skills=None,
         ),
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=responses),
         middleware_registry={"tool-note": note.ToolNote},
     ).graph
@@ -1597,7 +1602,7 @@ def test_the_operator_stops_before_running_a_command(cfg, session_dir, shipped):
         cfg,
         agent=LocalAgentRepository(shipped / "agents").specs["operator"],
         catalogue=roots,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir, catalogue=roots),
         checkpointer=InMemorySaver(),
         model=FakeToolCallingModel(
             responses=[
@@ -1646,11 +1651,12 @@ def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir
     )
     spec = LocalAgentRepository(shipped / "agents").specs["researcher"]
 
+    wired = replace(cfg, skills_enabled=True)
     graph = build_agent(
-        replace(cfg, skills_enabled=True),
+        wired,
         agent=spec,
         catalogue=roots,
-        session_dir=session_dir,
+        backend=backend_at(wired, session_dir, catalogue=roots),
     )
 
     assert graph is not None
@@ -1737,7 +1743,6 @@ def _read_under_compact(shipped, cfg, session_dir, model: _Reader) -> list[str]:
                 system_prompt="You read.",
                 middlewares=("compact",),
             ),
-            session_dir=session_dir,
             model=model,
             backend=backend,
             middleware_registry={"compact": _compaction(shipped)},
@@ -1789,16 +1794,18 @@ def _scribe_delegates(cfg, session_dir, shipped) -> dict:
     """`scribe`, built from the shipped catalogue alone, as the delegates it handed on."""
     from kingfisher.infrastructure.catalogue import Definitions
 
-    built = build_agent(
-        replace(cfg, skills_enabled=True),
-        agent=LocalAgentRepository(shipped / "agents").specs["scribe"],
-        catalogue=Definitions.from_roots(
+    wired = replace(cfg, skills_enabled=True)
+    definitions = Definitions.from_roots(
             {
                 kind: shipped / kind
                 for kind in ("agents", "skills", "subagents", "tools", "middlewares")
             }
-        ),
-        session_dir=session_dir,
+        )
+    built = build_agent(
+        wired,
+        agent=LocalAgentRepository(shipped / "agents").specs["scribe"],
+        catalogue=definitions,
+        backend=backend_at(wired, session_dir, catalogue=definitions),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
     return {spec["name"]: spec for spec in built.subagents or ()}

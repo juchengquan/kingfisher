@@ -81,7 +81,6 @@ def built(kf, source_ids, name: str):
         held=kf.held_for(held),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf._effective_grants(held),
-        session_dir=session,
         catalogue=kf.catalogue,
         checkpointer=None,
     )

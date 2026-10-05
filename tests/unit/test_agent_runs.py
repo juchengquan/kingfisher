@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import default_backends
+from kingfisher import backend_at, default_backends
 from kingfisher.application.service import Kingfisher
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.request import Request
@@ -75,7 +75,7 @@ def test_an_agent_holds_only_the_tools_its_file_names(cfg, session_dir):
 
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         agent=_spec(cfg, "narrow"),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
@@ -91,7 +91,7 @@ def test_a_request_narrows_the_agent_and_cannot_widen_it(cfg, session_dir):
 
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         agent=_spec(cfg, "narrow"),
         capabilities=Capabilities(builtin_tools=("read_file", "execute")),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
@@ -120,7 +120,7 @@ def test_the_agent_runs_the_model_its_file_names(cfg, session_dir):
     """
     _agents(cfg, CHEAP)
 
-    built = build_agent(cfg, session_dir=session_dir, agent=_spec(cfg, "cheap-one"))
+    built = build_agent(cfg, backend=backend_at(cfg, session_dir), agent=_spec(cfg, "cheap-one"))
 
     assert built.model.model == "cheap-model"
 
