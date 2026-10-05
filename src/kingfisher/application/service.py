@@ -434,7 +434,6 @@ class Kingfisher(Sessions, Disposal):
         # be the shorter signature and the second answer.
         self,
         request: Request | Resume,
-        session_dir: Path,
         capabilities: Capabilities,
         checkpointer: Any = _UNSET,
         *,
@@ -478,7 +477,6 @@ class Kingfisher(Sessions, Disposal):
             # harmless. A caller asking for a tool the deployment withheld was
             # handed it -- measured, and the whole suite stayed green.
             capabilities=capabilities,
-            session_dir=session_dir,
             run_on=request.run_on,
             middleware_registry=self.middlewares,
             checkpointer=self.threads if checkpointer is _UNSET else checkpointer,
@@ -909,7 +907,6 @@ class Kingfisher(Sessions, Disposal):
             saver = checkpointer if paused is None else self._restored(session, paused)
             built = self._graph_for(
                 request,
-                session.directory,
                 capabilities=allowed,
                 checkpointer=saver,
                 agent=agent,
