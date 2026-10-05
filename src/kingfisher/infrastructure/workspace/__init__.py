@@ -1,4 +1,4 @@
-"""The directory a deployment runs out of: laying it out, filling it, adding to it.
+"""The directory a deployment runs out of: laying it out and filling it.
 
 Lazily, because the submodules differ in weight and callers reach for one at a
 time: `seeding` loads `yaml` and the catalogue, and a caller that only wants
@@ -20,8 +20,6 @@ _EXPORTS = {
     "is_new_workspace": "kingfisher.infrastructure.workspace.layout",
     "protect_data": "kingfisher.infrastructure.workspace.permissions",
     "writable_data": "kingfisher.infrastructure.workspace.permissions",
-    "DataError": "kingfisher.infrastructure.workspace.placement",
-    "DataPlacement": "kingfisher.infrastructure.workspace.placement",
     "DESTINATION": "kingfisher.infrastructure.workspace.seeding",
     "SEED_HINT": "kingfisher.infrastructure.workspace.seeding",
     "STARTER_AGENT": "kingfisher.infrastructure.workspace.seeding",
@@ -50,8 +48,6 @@ __all__ = [
     "STARTER_AGENT",
     "SUGGESTION",
     "TEMPLATES",
-    "DataError",
-    "DataPlacement",
     "Destination",
     "LocalSessionDirs",
     "MemoryBacking",
@@ -84,8 +80,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.layout import is_new_workspace as is_new_workspace
     from kingfisher.infrastructure.workspace.permissions import protect_data as protect_data
     from kingfisher.infrastructure.workspace.permissions import writable_data as writable_data
-    from kingfisher.infrastructure.workspace.placement import DataError as DataError
-    from kingfisher.infrastructure.workspace.placement import DataPlacement as DataPlacement
     from kingfisher.infrastructure.workspace.seeding import DESTINATION as DESTINATION
     from kingfisher.infrastructure.workspace.seeding import SEED_HINT as SEED_HINT
     from kingfisher.infrastructure.workspace.seeding import STARTER_AGENT as STARTER_AGENT

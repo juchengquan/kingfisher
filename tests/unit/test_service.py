@@ -283,7 +283,7 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how)
     never ran.
     """
     from kingfisher.domain.session import QuotaExceededError
-    from kingfisher.infrastructure.workspace.placement import DataError
+    from kingfisher.infrastructure.session_files import DataError
     from tests.conftest import RecordedEvents, start
     from tests.unit.test_tenancy import _claim
 

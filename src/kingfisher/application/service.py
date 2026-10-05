@@ -102,7 +102,7 @@ from kingfisher.infrastructure.harness.kinds.declared_middleware import (
     refuse_unbuildable_middleware,
 )
 from kingfisher.infrastructure.harness.runlog import LoggedRunEvents, RunLogger
-from kingfisher.infrastructure.harness.session_files import (
+from kingfisher.infrastructure.session_files import (
     collect_artifacts,
     place_data,
     read_artifact,

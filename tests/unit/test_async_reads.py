@@ -179,7 +179,7 @@ def test_an_async_turn_refused_after_its_claim_gives_it_back_off_the_loop(
     gave the claim back with the sync `release`, on the loop, a round trip every other
     turn waited through on a remote backend.
     """
-    from kingfisher.infrastructure.workspace.placement import DataError
+    from kingfisher.infrastructure.session_files import DataError
 
     kf = Kingfisher(
         cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()

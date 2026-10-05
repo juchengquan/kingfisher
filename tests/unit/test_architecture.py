@@ -1374,10 +1374,6 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
             "kinds.declared_middleware",
             "runlog",
             "runtime",
-            # A session's files, reached through the backend the turn runs on,
-            # which is a deepagents object: placing a caller's data, collecting
-            # what the turn left and fetching one of those files.
-            "session_files",
         }
     ),
     # The disposal half of `service`, which took this edge with it: reaping a
@@ -2218,12 +2214,11 @@ def test_the_cycle_finder_finds_one_in_this_tree():
 #: that makes it worth having: it names no foreign package at all, passes that table
 #: cleanly, and loads three provider SDKs through one import two hops away.
 SDK_LOADING: frozenset[str] = frozenset({
-    # The harness, where speaking to deepagents is the job. Seven in that package are
-    # not here. `models` and `interpreter` name their foreign classes as strings and
+    # The harness, where speaking to deepagents is the job. The rest of that package
+    # is not here: `models` and `interpreter` name their foreign classes as strings and
     # resolve them on demand, `tools` reads a graph it is handed, `host_paths` and
-    # `session_paths` are plain path rules the middleware is built on,
-    # `tool_context` is a record with one untyped field, and `session_files` only
-    # calls methods on a backend it is handed.
+    # `session_paths` are plain path rules the middleware is built on, and
+    # `tool_context` is a record with one untyped field.
     "kingfisher.infrastructure.harness.activation",
     "kingfisher.infrastructure.harness.agent",
     "kingfisher.infrastructure.harness.backend",

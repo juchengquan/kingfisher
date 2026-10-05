@@ -27,7 +27,7 @@ from kingfisher.infrastructure.harness.backend import (
     SessionBackends,
     SessionClaims,
 )
-from kingfisher.infrastructure.harness.session_files import (
+from kingfisher.infrastructure.session_files import (
     collect_artifacts,
     place_data,
     read_artifact,

@@ -2744,6 +2744,21 @@ A `DefaultBackends` carrying a runner still keeps kingfisher's sessions. So
 than by identity with `default_backends`. A subclass still counts as the deployment's,
 because it can return its backend with anything changed. *(2026-10-05.)*
 
+**A session's files are one module, outside the harness.** `session_files` sat in
+`infrastructure/harness/` for `LocalFiles`, which subclassed deepagents'
+`CompositeBackend`. With that gone it calls methods on a backend it is handed and
+imports no framework, and a file that imports no framework does not belong in the
+package defined by importing one. So it is `infrastructure/session_files.py`, beside
+`session_store`, and `service` has one edge fewer into the harness.
+
+`workspace/placement` came with it. `session_files` was its only reader, and
+`DataPlacement` described *what `place_data` did*, a function that had been in the
+other file since data went through the backend. What reaches `/data` through a backend
+is not about the directory a deployment runs out of, which is `workspace/`'s subject.
+The mode rule loses nothing by it: `placement` held the checks and the report, and
+the copy into `/data` is the backend's own, inside `writable_data`.
+*(2026-10-05.)*
+
 ## A tool's path is the backend's path
 
 **A workspace tool's `path` is resolved by the session's backend, under the turn's
@@ -4153,7 +4168,7 @@ of `infrastructure/` where being wrong is a security failure rather than a bug.
 `fs`, `seeding`, `uploads` and `files` all wrote into one directory, and three
 of them had a rule about not destroying what another put there. *(`fs` has since
 been split, and `uploads` and `files` removed; `workspace/` holds `backing`,
-`layout`, `permissions`, `placement`, `seeding` and `sessions`.)*
+`layout`, `permissions`, `seeding` and `sessions`.)*
 
 And the harness rule is what bounds them. The backend that *applies* a
 confinement, and the registry `uploads` asked about a name, both import

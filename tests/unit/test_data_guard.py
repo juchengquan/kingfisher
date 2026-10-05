@@ -6,10 +6,9 @@ from pathlib import Path
 import pytest
 
 from kingfisher import backend_at
-from kingfisher.infrastructure.harness.session_files import place_data
+from kingfisher.infrastructure.session_files import DataError, place_data
 from kingfisher.infrastructure.steps import drive
 from kingfisher.infrastructure.workspace import (
-    DataError,
     LocalSessionDirs,
     protect_data,
     writable_data,
