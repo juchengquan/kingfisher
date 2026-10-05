@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from kingfisher import DefaultBackends, Kingfisher, default_backends
+from kingfisher import DefaultBackends, Kingfisher, backend_at, default_backends
 from kingfisher.application.reporting import opening_events
 from kingfisher.application.service import refused_credentials
 from kingfisher.application.turn import turn_message
@@ -550,8 +550,15 @@ def test_a_runner_that_is_not_a_callable_is_refused_at_wiring_time(cfg):
 
 
 def test_no_runner_leaves_the_platform_to_decide(cfg):
-    """The default, and the case every existing deployment is in."""
-    assert default_backends.open(cfg, "s").default.runner is None
+    """The default, and the case every existing deployment is in: a command runs on
+    whatever `backend_at` picks when handed no runner. Compared with that rather than
+    with `None`, which is the pick only where kingfisher has no fence of its own --
+    on Linux it is the Landlock runner.
+    """
+    opened = default_backends.open(cfg, "s")
+    unwired = backend_at(cfg, cfg.workspace / "sessions" / "s")
+
+    assert type(opened.default.runner) is type(unwired.default.runner)
 
 
 # -- a provider that will not take the key ----------------------------------
