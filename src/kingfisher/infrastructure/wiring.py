@@ -5,6 +5,8 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
+from kingfisher.config import ConfigError
+
 
 def _wanted(port: type) -> str:
     """The method names a protocol asks for, for a message that says what is
@@ -14,12 +16,6 @@ def _wanted(port: type) -> str:
 
 def store_named(spec: str, *, setting: str, port: type) -> Any:
     """Import `spec`, call it, and check the result is a `port`."""
-    # Imported here rather than at module scope: `config` is the package root's
-    # own module and this one sits under `infrastructure/`, so a top-level
-    # import would run on any `infrastructure` import for a name used on one
-    # branch of one function.
-    from kingfisher.config import ConfigError  # noqa: PLC0415
-
     module_name, separator, attribute = spec.partition(":")
     if not separator or not module_name or not attribute:
         msg = (
