@@ -238,7 +238,11 @@ class RunEvents(Protocol):
     def record(self, event: Mapping[str, object]) -> None:
         """Keep one event: a flat mapping whose `event` key names what happened.
 
-        Called from the thread running the turn, once per event and in order. An
+        Called once per event, and not always from the thread running the turn:
+        tool calls a model makes together run at once, on an executor's threads, and
+        on the async path langchain hands each event to a worker thread. So the events
+        of tool calls made together can interleave, though each call's start comes
+        before its end, and a sink that keeps state between events wants a lock. An
         exception here is logged and the turn goes on, because a turn is not failed
         for want of a log line -- which also means a sink that fails is heard from
         only in the log it was failing to write.
