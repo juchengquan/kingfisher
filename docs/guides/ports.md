@@ -286,6 +286,16 @@ while refusing the agent's own writes: `default_backends` routes it to
 `DataBackend`, which lifts the permission bits for kingfisher's upload alone, and
 a backend of yours meets the same promise its own way.
 
+**Open it once if you use it around a turn.** `Kingfisher.files_for(session_id)`
+builds a session's backend the way a turn does — through your session backends,
+with the runner you wired — and `run`, `stream`, `arun` and `astream` take it back
+as `files=` and run the turn on it rather than opening another. Where each `open`
+is a sandbox, that is one sandbox rather than two. The request has to name the
+session it was opened for: one naming none is refused, because it would start a
+new session and run in another's files. `files_for` does not ask who you are acting
+for, so hand what it returns only to code entitled to that session; the turn still
+checks the caller it is given.
+
 **And what it keeps about the session, under `/.harness`.** The agent the session is
 pinned to, its conversation, and a turn paused at an approval gate are all written
 and read through your backend — which means your agent's shell can reach them too,
