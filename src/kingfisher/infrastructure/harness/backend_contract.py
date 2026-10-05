@@ -13,6 +13,7 @@ imported a test framework would put one in the runtime wheel.
 from __future__ import annotations
 
 import asyncio
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -404,6 +405,73 @@ def adelete_removes_the_session(make: Callable[[], Any]) -> None:
         raise AssertionError(msg)
 
 
+def aclaim_and_claim_exclude_each_other(make: Callable[[], Any]) -> None:
+    """An async turn takes its claim with `aclaim`. One that did not see a claim `claim`
+    took, or the other way round, would let a sync turn and an async one into the same
+    session at once.
+    """
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    sync, other = backends.open(cfg, one), backends.open(cfg, one)
+
+    async def taken() -> bool:
+        return await other.aclaim("contract-twins", stale_after=3600)
+
+    if not sync.claim("contract-twins", stale_after=3600):
+        msg = "a claim nobody held was refused"
+        raise AssertionError(msg)
+    if _on_a_loop_of_its_own(taken):
+        msg = "aclaim took a claim that claim still holds"
+        raise AssertionError(msg)
+    sync.release("contract-twins")
+    if not _on_a_loop_of_its_own(taken):
+        msg = "aclaim could not take a released claim"
+        raise AssertionError(msg)
+    if sync.claim("contract-twins", stale_after=3600):
+        msg = "claim took a claim that aclaim still holds"
+        raise AssertionError(msg)
+    other.release("contract-twins")
+
+
+def asize_counts_what_size_does(make: Callable[[], Any]) -> None:
+    """An async turn checks the quota with `asize`. Counted differently, a session would
+    be over its bound for one kind of caller and under it for the other.
+    """
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    backends.open(cfg, one).upload_files([("/derived/weighed", b"x" * 1024)])
+
+    async def counted() -> Any:
+        return await backends.asize(cfg, one)
+
+    if (said := _on_a_loop_of_its_own(counted)) != (expected := backends.size(cfg, one)):
+        msg = f"asize counts {said} bytes where size counts {expected}"
+        raise AssertionError(msg)
+
+
+def amark_used_moves_the_session_on(make: Callable[[], Any]) -> None:
+    """An async turn records its session as used with `amark_used`, which is what keeps
+    a conversation in daily use out of a sweep. One that did nothing would leave it
+    looking as idle as the day it opened, and `reap` would take it.
+
+    Waits a second first, so a filesystem clock that counts whole seconds still sees
+    the session move on.
+    """
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    backends.open(cfg, one)
+    before = dict(backends.sessions(cfg))[one]
+    time.sleep(1.1)
+
+    async def marked() -> None:
+        await backends.amark_used(cfg, one)
+
+    _on_a_loop_of_its_own(marked)
+    if dict(backends.sessions(cfg))[one] <= before:
+        msg = f"amark_used({one!r}) left the session as last used as it was before"
+        raise AssertionError(msg)
+
+
 #: Every check a deployment's `SessionBackends` must pass. `make` returns a fresh
 #: `(Config, backends)` pair, because every question a backends object answers is
 #: about one deployment's sessions. These write files, as `filesystem_consistency`,
@@ -418,4 +486,7 @@ SESSION_BACKENDS_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (
     aopen_reaches_the_session_open_does,
     asessions_lists_what_sessions_does,
     adelete_removes_the_session,
+    aclaim_and_claim_exclude_each_other,
+    asize_counts_what_size_does,
+    amark_used_moves_the_session_on,
 )

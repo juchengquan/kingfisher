@@ -18,6 +18,7 @@ from kingfisher.infrastructure.harness.backend import (
     default_backends,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
+from kingfisher.infrastructure.steps import drive
 from tests.conftest import StubCheckpointer, an_agent, harness_in
 from tests.unit.test_run import StubAgent
 
@@ -123,17 +124,10 @@ def test_a_backend_is_opened_per_turn_for_the_session_it_is_for(cfg, session_dir
             seen.append(session_id)
             return super().open(cfg_, session_id, catalogue=catalogue, runner=runner)
 
-    asked = Request("go", agent="only")
     service = Kingfisher(cfg, backends=Mine())
-    service._graph_for(
-        asked,
-        session_dir,
-        service.grants,
-        agent=service._agent_for(asked, harness_in(session_dir)),
-        held=None,
-    )
+    prepared = drive(service._prepare_steps(Request("go", agent="only")))
 
-    assert seen == [session_dir.name]
+    assert seen == [prepared.session.id]
 
 
 def test_open_is_handed_the_catalogue_and_the_runner_this_deployment_wired(
@@ -155,14 +149,7 @@ def test_open_is_handed_the_catalogue_and_the_runner_this_deployment_wired(
             return super().open(cfg_, session_id, catalogue=catalogue)
 
     service = Kingfisher(cfg, backends=Mine(), runner=lambda _where: runner)
-    asked = Request("go", agent="only")
-    service._graph_for(
-        asked,
-        session_dir,
-        service.grants,
-        agent=service._agent_for(asked, harness_in(session_dir)),
-        held=None,
-    )
+    drive(service._prepare_steps(Request("go", agent="only")))
 
     assert seen[0]["catalogue"] is service.catalogue
     assert seen[0]["runner"] is runner
@@ -190,8 +177,9 @@ def test_what_open_returns_is_what_the_agent_is_built_on(cfg, session_dir):
         asked,
         session_dir,
         service.grants,
-        agent=service._agent_for(asked, harness_in(session_dir)),
+        agent=drive(service._agent_for(asked, harness_in(session_dir))),
         held=None,
+        files=drive(service._files_for(session_dir.name, session_dir)),
     )
 
     assert built.backend is made[0]

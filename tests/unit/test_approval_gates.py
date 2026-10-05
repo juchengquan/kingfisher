@@ -310,7 +310,7 @@ def _under_a_policy(cfg):
     """A workspace with a vocabulary and two agents, which is what makes a session have
     a *resolved* agent at all.
 
-    An injected graph under no policy resolves none -- `_admitted` says so in as many
+    An injected graph under no policy resolves none -- setup says so in as many
     words -- so a session built that way has no agent for a resume to name a different
     one from, and the rules below would assert on nothing.
     """
@@ -320,7 +320,7 @@ def _under_a_policy(cfg):
     for name in ("analyst", "somebody-else"):
         an_agent(cfg, name, source_ids="[A]")
     vocabulary = "source_ids: [A]\n"
-    # On the config as well as in the file: `_admitted` resolves an agent only where a
+    # On the config as well as in the file: setup resolves an agent only where a
     # graph was not injected *or* a policy is in force, and these rules inject one.
     (cfg.workspace / "source_ids.yaml").write_text(vocabulary, encoding="utf-8")
     return replace_cfg(
@@ -423,7 +423,7 @@ def test_a_resume_naming_nothing_is_not_a_mismatch(cfg):
 
 
 def test_an_injected_graph_under_no_policy_has_no_agent_to_disagree_with(cfg):
-    """`_admitted` resolves no agent for a deployment that supplied its own graph and
+    """Setup resolves no agent for a deployment that supplied its own graph and
     declares no policy, so a pause records none -- and a resume naming one is then not a
     mismatch, because there is nothing for it to mismatch.
 

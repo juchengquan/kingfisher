@@ -1,4 +1,4 @@
-"""The async reads keep the event loop free: no sync port call is made on its thread."""
+"""The async paths keep the event loop free: no sync port call is made on its thread."""
 
 from __future__ import annotations
 
@@ -11,12 +11,15 @@ from deepagents.backends import CompositeBackend, FilesystemBackend
 
 from kingfisher import DefaultBackends, Kingfisher, default_backends
 from kingfisher.domain.access import parse
+from kingfisher.domain.request import Request
+from kingfisher.infrastructure.harness.backend import SessionClaims
 from tests.conftest import StubCheckpointer, an_agent, pin, start
 from tests.unit.test_run import StubAgent
 
-#: Every sync method the three reads can reach, on the classes that answer them.
+#: Every sync method the async paths can reach, on the classes that answer them.
 PORT_METHODS = {
-    DefaultBackends: ("open", "sessions"),
+    DefaultBackends: ("open", "sessions", "mark_used", "size", "delete"),
+    SessionClaims: ("claim", "release", "held"),
     CompositeBackend: ("download_files", "upload_files", "ls", "glob", "delete"),
     FilesystemBackend: ("download_files", "upload_files", "ls", "glob", "delete"),
 }
@@ -90,3 +93,58 @@ def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wir
     assert sync_calls, "no sync port method was reached, on any thread"
     on_the_loop = sorted({name for name, loop in sync_calls if loop})
     assert not on_the_loop, f"made on the event loop's thread: {on_the_loop}"
+
+
+def test_an_async_turn_makes_no_sync_port_call_on_the_loop(cfg, sync_calls, tmp_path):
+    """Setup and the turn's ending are round trips to the session's backend: the lookup,
+    the open, the pin, the claim, the data, and at the end the pause, the transcript,
+    the listing and the claim again. Made on the loop, each holds every other turn up
+    for as long as the backend takes, and every answer still comes back right.
+    """
+    an_agent(cfg, "only_a", source_ids="[A]")
+    policied = replace(
+        cfg,
+        access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"),
+        session_max_bytes=10**9,
+    )
+    data = tmp_path / "in.csv"
+    data.write_text("a,b\n")
+    kf = Kingfisher(policied, graph=StubAgent("ok"), threads=StubCheckpointer())
+    start(policied, "s")
+    sync_calls.clear()
+
+    asked = Request("go", agent="only_a", session_id="s", data=(data,))
+    result = asyncio.run(kf.arun(asked, source_ids=("A",)))
+
+    assert result.completed
+    assert sync_calls, "no sync port method was reached, on any thread"
+    on_the_loop = sorted({name for name, loop in sync_calls if loop})
+    assert not on_the_loop, f"made on the event loop's thread: {on_the_loop}"
+
+
+def test_a_turn_reads_the_pin_once(cfg, monkeypatch):
+    """Read once to decide whether the caller reaches the session and again to decide
+    which agent the turn runs, every turn under a policy paid a round trip for a file
+    it already held.
+    """
+    from kingfisher.layout import HARNESS_ROUTE, PINNED_AGENT
+
+    an_agent(cfg, "only_a", source_ids="[A]")
+    policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
+    kf = Kingfisher(policied, graph=StubAgent("ok"), threads=StubCheckpointer())
+    start(policied, "s")
+    asked = Request("go", agent="only_a", session_id="s")
+    kf.run(asked, source_ids=("A",))  # pins the agent
+
+    pin = f"{HARNESS_ROUTE}{PINNED_AGENT}"
+    reads: list[str] = []
+    downloading = CompositeBackend.download_files
+
+    def counted(self, paths):
+        reads.extend(path for path in paths if path == pin)
+        return downloading(self, paths)
+
+    monkeypatch.setattr(CompositeBackend, "download_files", counted)
+    kf.run(asked, source_ids=("A",))
+
+    assert reads == [pin]

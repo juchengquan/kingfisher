@@ -79,9 +79,11 @@ for the next reader who reaches for one.*
   the opposite case and its guard fails when it goes: there a caller can run
   synchronous work with no loop turn in between.
 - **Cancellation cannot interrupt a turn's cleanup, and the reason is
-  structural.** A cancellation is delivered at a suspension point, and
-  `_turn_lifecycle` is a *sync* context manager -- the claim, the checkpointer and
-  the interpreter are released without ever suspending. Cancelling twice, five
+  structural.** A cancellation is delivered at a suspension point, and `_end_turn`
+  is a plain function -- the claim, the checkpointer and the interpreter are
+  released without ever suspending. `astream` runs it on kingfisher's pool and
+  waits for it however many times it is cancelled, so the loop is not held up for
+  it and nothing returns before it is done. Cancelling twice, five
   times, during the unwinding, or through `wait_for` and `asyncio.timeout` all
   leave the session free. Made async, that stops being true and every one of
   those tests would pass on timing alone.

@@ -210,7 +210,7 @@ def test_a_source_that_is_not_a_directory_is_refused(cfg, tmp_path):
 
 
 def test_nothing_is_written_before_that_refusal(cfg, tmp_path):
-    """The ordering `_admit` keeps for a turn: everything able to reject runs first, so
+    """The ordering setup keeps for a turn: everything able to reject runs first, so
     a refusal leaves nothing behind to clean up.
     """
     with pytest.raises(ConfigError):

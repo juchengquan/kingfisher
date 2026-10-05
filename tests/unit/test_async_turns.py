@@ -405,14 +405,14 @@ def _held_in_setup(monkeypatch) -> tuple[threading.Event, threading.Event]:
     Returns `(entered, release)`.
     """
     entered, release = threading.Event(), threading.Event()
-    opened = Kingfisher._open_turn
+    built = Kingfisher._built_turn
 
-    def held(self, admitted):
+    def held(self, *args, **kwargs):
         entered.set()
         release.wait(timeout=5)
-        return opened(self, admitted)
+        return built(self, *args, **kwargs)
 
-    monkeypatch.setattr(Kingfisher, "_open_turn", held)
+    monkeypatch.setattr(Kingfisher, "_built_turn", held)
     return entered, release
 
 
@@ -455,21 +455,104 @@ def test_cancelling_during_setup_any_way_leaves_the_session_free(cfg, monkeypatc
     """
     session = start(cfg, f"s-{DOUBLE_CANCELS.index(how)}")
     kf = service(cfg)
-    opened = Kingfisher._open_turn
+    built = Kingfisher._built_turn
 
-    def slow(self, admitted):
+    def slow(self, *args, **kwargs):
         time.sleep(0.3)  # every cancel in `_cancel_twice` lands inside this
-        return opened(self, admitted)
+        return built(self, *args, **kwargs)
 
-    monkeypatch.setattr(Kingfisher, "_open_turn", slow)
+    monkeypatch.setattr(Kingfisher, "_built_turn", slow)
 
     async def cancel_then_look() -> bool:
         await _cancel_twice(kf, session, how)
         return _claim(cfg, session).exists()
 
     assert not asyncio.run(cancel_then_look()), f"{how} left setup's claim behind"
-    monkeypatch.setattr(Kingfisher, "_open_turn", opened)
+    monkeypatch.setattr(Kingfisher, "_built_turn", built)
     assert kf.run(Request("after", session_id=session)).completed
+
+
+def test_cancelling_at_any_step_of_setup_leaves_the_session_free(cfg, monkeypatch, tmp_path):
+    """A cancel landing at any one of setup's awaits -- the lookup, the open, the pin,
+    the claim, the quota, the data, the pause, the transcript, the build -- must leave
+    the session unclaimed and usable. Before setup was a sequence the only await was
+    one thread; each step is a place a cancel can land now, and a claim or a built
+    turn dropped at any of them holds the session until the claim goes stale.
+
+    Counted rather than listed, so a step added to setup is cancelled at too.
+    """
+    import yaml
+
+    from kingfisher.domain.access import parse
+    from kingfisher.infrastructure import steps as steps_module
+    from tests.conftest import an_agent
+
+    an_agent(cfg, "only_a", source_ids="[A]")
+    policied = replace(
+        cfg,
+        access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"),
+        session_max_bytes=10**9,
+    )
+    data = tmp_path / "in.csv"
+    data.write_text("a,b\n")
+    session = start(policied, "s")
+    kf = Kingfisher(policied, graph=StubAgent("ok"), threads=StubCheckpointer())
+    asked, held = Request("go", agent="only_a", session_id=session, data=(data,)), ("A",)
+    real = steps_module._awaited
+    # The first turn pins the agent and every later one reads the pin instead, so the
+    # count is taken on a turn like the ones cancelled below.
+    kf.run(asked, source_ids=held)
+
+    made: list[object] = []
+
+    def counting(step):
+        made.append(step)
+        return real(step)
+
+    monkeypatch.setattr(steps_module, "_awaited", counting)
+    asyncio.run(kf.arun(asked, source_ids=held))
+    monkeypatch.setattr(steps_module, "_awaited", real)
+    # The control: a setup that made a step or two would cancel at a step or two.
+    assert len(made) >= 10, f"setup made {len(made)} async steps"
+
+    def holding(target: int, entered: asyncio.Event, gate: asyncio.Event):
+        count = 0
+
+        def awaited(step):
+            nonlocal count
+            count += 1
+            if count != target:
+                return real(step)
+
+            async def held_here():
+                entered.set()
+                await gate.wait()
+                return await real(step)
+
+            return held_here()
+
+        return awaited
+
+    async def cancel_at(target: int) -> None:
+        entered, gate = asyncio.Event(), asyncio.Event()
+        monkeypatch.setattr(steps_module, "_awaited", holding(target, entered, gate))
+        task = asyncio.ensure_future(kf.arun(asked, source_ids=held))
+        await asyncio.wait_for(entered.wait(), timeout=5)
+        task.cancel()
+        # The cancel is delivered on the first of these; a step that changes something
+        # is then let finish, which is what the sequence waits for.
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        gate.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    for target in range(1, len(made) + 1):
+        asyncio.run(cancel_at(target))
+        monkeypatch.setattr(steps_module, "_awaited", real)
+        step = made[target - 1]
+        assert not _claim(policied, session).exists(), f"cancelled at {step!r}, the claim stayed"
+        assert kf.run(asked, source_ids=held).completed, f"cancelled at {step!r}, unusable"
 
 
 def test_setup_runs_on_kingfishers_pool_in_the_callers_context(cfg, monkeypatch):
@@ -480,13 +563,13 @@ def test_setup_runs_on_kingfishers_pool_in_the_callers_context(cfg, monkeypatch)
     """
     ambient: contextvars.ContextVar[str] = contextvars.ContextVar("ambient", default="UNSET")
     seen = []
-    opened = Kingfisher._open_turn
+    built = Kingfisher._built_turn
 
-    def watched(self, admitted):
+    def watched(self, *args, **kwargs):
         seen.append((threading.current_thread().name, ambient.get()))
-        return opened(self, admitted)
+        return built(self, *args, **kwargs)
 
-    monkeypatch.setattr(Kingfisher, "_open_turn", watched)
+    monkeypatch.setattr(Kingfisher, "_built_turn", watched)
     start(cfg, "s")
     kf = service(cfg)
 
@@ -504,10 +587,11 @@ def test_setup_runs_on_kingfishers_pool_in_the_callers_context(cfg, monkeypatch)
 def test_the_turns_cleanup_cannot_be_interrupted_by_a_cancellation():
     """Why the tests above hold by construction and not by timing.
 
-    A cancellation is delivered at a suspension point. `_turn_lifecycle` is a
-    *sync* context manager, so the `finally` that releases the claim, the
-    checkpointer and the interpreter cannot suspend and cannot be interrupted --
-    however many times a caller cancels, and however slow that cleanup gets.
+    A cancellation is delivered at a suspension point. `_end_turn`, which releases the
+    claim, the checkpointer and the interpreter, is a plain function with nothing in it
+    to suspend at, so once it starts it finishes -- however many times a caller
+    cancels, and however slow it gets. `astream` runs it on kingfisher's pool and
+    waits for it through every cancel; `stream` runs it where it is.
 
     Made async for the async path, it would start being interruptible, every test
     above would pass on timing alone, and nothing else here would notice.
@@ -516,13 +600,12 @@ def test_the_turns_cleanup_cannot_be_interrupted_by_a_cancellation():
 
     from kingfisher.application.service import Kingfisher as Service
 
-    lifecycle = Service._turn_lifecycle.__wrapped__  # the function `contextmanager` wrapped
-
-    assert inspect.isgeneratorfunction(lifecycle), (
-        "`_turn_lifecycle` is no longer a sync generator, so the turn's cleanup can "
-        "now be interrupted mid-way by a cancellation -- the claim, the checkpointer "
-        "and the interpreter are released in there"
+    ending = Service._end_turn
+    assert not inspect.iscoroutinefunction(ending), (
+        "`_end_turn` is a coroutine now, so a cancellation can stop it halfway -- "
+        "between giving the claim back and closing the checkpointer, or before either"
     )
+    assert not inspect.isasyncgenfunction(ending) and not inspect.isgeneratorfunction(ending)
 
 
 def test_the_callers_context_reaches_the_turn(cfg):
