@@ -48,7 +48,7 @@ class _WrappingTheDefault(DefaultBackends):
 @pytest.mark.parametrize(
     "wiring",
     [
-        lambda cfg: {"graph": StubAgent("ok")},
+        lambda cfg: {"graph": StubAgent("ok"), "backends": default_backends},
         lambda cfg: {"backends": _WrappingTheDefault()},
         lambda cfg: {"backends": default_backends, "runner": lambda d: None},
         lambda cfg: {"backends": default_backends, "cfg": replace(cfg, shell_sandbox="off")},
@@ -69,7 +69,9 @@ def test_a_paused_turn_cut_short_is_refused_with_a_reason(cfg):
     leave half of one. No prefix of it deserialises -- every one of them was tried --
     and what the caller is told is that, rather than msgpack's own error.
     """
-    kf = Kingfisher(cfg, graph=_gated(calls=[_write("/derived/a.txt", "x", "c1")]))
+    kf = Kingfisher(
+        cfg, graph=_gated(calls=[_write("/derived/a.txt", "x", "c1")]), backends=default_backends
+    )
     paused = kf.run(Request("write it"))
     state = _harness_file(cfg, paused.session_id, PAUSED_STATE)
     state.write_bytes(state.read_bytes()[: len(state.read_bytes()) // 2])

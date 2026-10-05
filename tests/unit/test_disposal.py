@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from kingfisher import DefaultBackends, Kingfisher, backend_at
+from kingfisher import DefaultBackends, Kingfisher, backend_at, default_backends
 from kingfisher.domain import retention
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import still_held
@@ -44,7 +44,7 @@ def test_a_turn_disposes_of_nothing(cfg):
 
 def test_delete_session_removes_the_directory_and_the_thread(cfg, way):
     threads = StubCheckpointer()
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends, threads=threads)
     session_id = kf.run(Request("go")).session_id
 
     assert Through(kf, way).delete_session(session_id) is None
@@ -80,7 +80,7 @@ def test_an_async_delete_awaits_the_saver_where_it_can_and_falls_back_where_not(
     hold a thread it never needed.
     """
     threads = saver()
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends, threads=threads)
     start(cfg, "s")
 
     assert asyncio.run(kf.adelete_session("s")) is None
@@ -139,7 +139,7 @@ def test_a_thread_whose_session_is_gone_is_deleted(cfg):
     import time
 
     threads = ListingCheckpointer(held=("ghost-a", "ghost-b"))
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends, threads=threads)
 
     result = kf.reap(older_than_seconds=0, now=time.time())
 
@@ -152,7 +152,7 @@ def test_a_thread_whose_session_still_exists_is_left_alone(cfg):
     live = start(cfg, "live")
 
     threads = ListingCheckpointer(held=(live, "ghost"))
-    kf2 = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
+    kf2 = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends, threads=threads)
     result = kf2.reap(older_than_seconds=10_000, now=1_000)  # nothing expired
 
     assert result.removed == ()
@@ -170,7 +170,9 @@ def test_orphans_are_reported_apart_from_sessions_this_sweep_ended(cfg):
     doomed = start(cfg, "doomed")
 
     threads = ListingCheckpointer(held=("ghost",))
-    result = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads).reap(
+    result = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=threads
+    ).reap(
         older_than_seconds=0, now=time.time()
     )
 
@@ -205,7 +207,9 @@ def test_a_turn_records_that_its_session_was_used(cfg):
     import os
     import time
 
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     session = start(cfg, "s")
     directory = cfg.workspace / "sessions" / session
 
@@ -225,7 +229,9 @@ def test_a_sweep_keeps_a_session_that_has_a_turn_running(cfg):
     import os
     import time
 
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     session = start(cfg, "s")
     directory = cfg.workspace / "sessions" / session
 
@@ -244,7 +250,9 @@ def test_a_busy_session_does_not_shelter_an_idle_one(cfg):
     import os
     import time
 
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     busy = start(cfg, "busy")
     idle = start(cfg, "idle")
 
@@ -440,7 +448,10 @@ def test_a_turn_stopped_at_a_bound_keeps_its_session(cfg):
     from tests.unit.test_quotas import SlowAgent
 
     kf = Kingfisher(
-        replace(cfg, turn_timeout_s=0), graph=SlowAgent(steps=5), threads=StubCheckpointer()
+        replace(cfg, turn_timeout_s=0),
+        graph=SlowAgent(steps=5),
+        backends=default_backends,
+        threads=StubCheckpointer(),
     )
 
     result = kf.run(Request("go"), delete_session=True)

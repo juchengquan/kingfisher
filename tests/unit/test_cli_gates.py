@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 import kingfisher
+from kingfisher import default_backends
 from kingfisher.domain.result import AWAITING, RunResult
 from kingfisher.domain.result import PendingDecision as Pending
 from kingfisher.infrastructure.steps import drive
@@ -289,7 +290,7 @@ def test_the_whole_loop_runs_through_the_command(cfg, session_dir, monkeypatch, 
         interrupt_on={"write_file": True},
         checkpointer=InMemorySaver(),
     )
-    service = Kingfisher(cfg, graph=graph)
+    service = Kingfisher(cfg, graph=graph, backends=default_backends)
     monkeypatch.setattr(cli, "config_from_env", lambda: cfg)
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: service)
 

@@ -63,7 +63,9 @@ def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wir
     an_agent(cfg, "only_a", source_ids="[A]")
     policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
     kf = (
-        Kingfisher(policied, graph=StubAgent("ok"), threads=StubCheckpointer())
+        Kingfisher(
+            policied, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        )
         if wiring == "graph"
         else Kingfisher(policied, backends=default_backends)
     )

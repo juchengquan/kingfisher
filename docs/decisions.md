@@ -2500,6 +2500,8 @@ refused with a type error when it is tried anyway.
 answers to what filesystem a turn runs against, and a pre-built graph already
 carries one, so either would be silently discarded. Refused where the wiring is
 written, which is the last moment it is cheap to say so.
+*(Reversed 2026-10-05: a graph now needs session backends beside it. See "A
+pre-built graph names its session backends" under "A session is its backend".)*
 
 *(The parameter was renamed `backend` on 2026-09-15, below, so its name no longer
 does the work the paragraph before last describes; the type error for an instance
@@ -2550,6 +2552,8 @@ making the mistake the old `graph=`/`backend_from=` refusal existed to catch int
 mandatory spelling. So the rule is exactly one of the two, both refusals at
 construction. That is why `backend` keeps a `None` default in the signature: the
 requirement is a pairing, not a parameter.
+*(Reversed 2026-10-05, along with the paragraph below. See "A pre-built graph names
+its session backends" under "A session is its backend".)*
 
 **`run` and `stream` keep a default, and `Kingfisher` does not.** They are
 documented as conveniences over a *default* `Kingfisher`, and `formats.md` teaches
@@ -2692,6 +2696,26 @@ environment is read, as the removed store settings are -- which stops a library
 deployment still carrying it too, at the cost of a rename for a variable only the
 command line ever read. It is not the `RENAMED` shim that went: that read the old
 name in place of the new, and this reads it only to refuse it. *(2026-10-02.)*
+
+**A pre-built graph names its session backends, `default_backends` included.**
+`graph=` was accepted in place of `backends=` because the backend it would have
+named was provably discarded: `_graph_for` returned the graph before any session's
+backend was opened. That stopped being true here. kingfisher places a request's data,
+collects what a turn left and takes the turn lock through a backend on every turn,
+and beside a graph it was told of none, so it built `LocalFiles` over
+`<workspace>/sessions/<id>`. That was the guess this section exists to stop making,
+still made for the one deployment kingfisher could not check. A graph compiled on a
+backend that keeps its sessions elsewhere had its data placed where its agent never
+looked. So `Kingfisher` refuses a graph without `backends=`, `LocalFiles` is gone,
+and a graph built on kingfisher's own writes `backends=default_backends`. The
+spelling the old entry declined to make mandatory, at 72 call sites, is 127 now, and
+true. Nothing checks that the graph's backend and the session backends reach the same
+place, because a compiled graph does not say what it was compiled on.
+
+`run` and `stream` still fill in `default_backends` for a caller with no graph, and
+refuse one with a graph the way the constructor does. So their default moved from
+the signature into the body: in the signature it would have been handed to a graph
+caller who never named it. *(2026-10-05.)*
 
 ## A tool's path is the backend's path
 

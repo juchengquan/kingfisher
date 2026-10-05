@@ -720,6 +720,6 @@ def test_a_graph_the_caller_built_is_driven_with_no_context_at_all(cfg):
 
     graph = Theirs()
 
-    Kingfisher(cfg, graph=graph).run(Request("go"))
+    Kingfisher(cfg, graph=graph, backends=default_backends).run(Request("go"))
 
     assert graph.driven == [{"config", "stream_mode", "subgraphs"}]

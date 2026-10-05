@@ -8,7 +8,7 @@ import pytest
 from langchain_core.messages import AIMessage
 from langgraph.errors import GraphRecursionError
 
-from kingfisher import Kingfisher
+from kingfisher import Kingfisher, default_backends
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import QuotaExceededError
 from kingfisher.infrastructure.workspace import session_bytes
@@ -38,7 +38,12 @@ def test_a_turn_that_runs_past_its_bound_stops(cfg):
     their product, so a turn could hold a process for hours.
     """
     agent = SlowAgent(steps=50)
-    kf = Kingfisher(replace(cfg, turn_timeout_s=0), graph=agent, threads=StubCheckpointer())
+    kf = Kingfisher(
+        replace(cfg, turn_timeout_s=0),
+        graph=agent,
+        backends=default_backends,
+        threads=StubCheckpointer(),
+    )
 
     result = kf.run(Request("go"))
 
@@ -52,7 +57,12 @@ def test_being_cut_short_keeps_the_work(cfg):
     """The artifacts are already on disk and the manifest lists them, so discarding the
     answer would hide work rather than undo it.
     """
-    kf = Kingfisher(replace(cfg, turn_timeout_s=0), graph=SlowAgent(), threads=StubCheckpointer())
+    kf = Kingfisher(
+        replace(cfg, turn_timeout_s=0),
+        graph=SlowAgent(),
+        backends=default_backends,
+        threads=StubCheckpointer(),
+    )
 
     result = kf.run(Request("go"))
 
@@ -64,7 +74,12 @@ def test_the_caller_is_told_rather_than_left_to_guess(cfg):
     """An answer that quietly overstates what was checked is worse than one that admits
     a gap -- which is what system.md already tells the agent.
     """
-    kf = Kingfisher(replace(cfg, turn_timeout_s=0), graph=SlowAgent(), threads=StubCheckpointer())
+    kf = Kingfisher(
+        replace(cfg, turn_timeout_s=0),
+        graph=SlowAgent(),
+        backends=default_backends,
+        threads=StubCheckpointer(),
+    )
 
     kinds = [e.kind for e in kf.stream(Request("go"))]
 
@@ -74,7 +89,9 @@ def test_the_caller_is_told_rather_than_left_to_guess(cfg):
 
 def test_an_ordinary_turn_is_untouched(cfg):
     """An hour is far past any real turn, so this only fires on the pathological case."""
-    result = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer()).run(Request("go"))
+    result = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    ).run(Request("go"))
 
     assert result.stop_reason == "end_turn"
     assert result.answer == "ok"
@@ -94,7 +111,9 @@ class RunawayAgent:
 
 def test_a_turn_that_runs_out_of_steps_is_cut_short_not_crashed(cfg):
     """The other bound on a turn, and it behaved nothing like the first."""
-    kf = Kingfisher(cfg, graph=RunawayAgent(), threads=StubCheckpointer())
+    kf = Kingfisher(
+        cfg, graph=RunawayAgent(), backends=default_backends, threads=StubCheckpointer()
+    )
 
     result = kf.run(Request("go"))
 
@@ -117,7 +136,11 @@ def test_a_turn_cut_short_for_steps_is_logged_as_having_ended(cfg):
 
     sink = RecordedEvents()
     Kingfisher(
-        cfg, graph=RunawayAgent(), threads=StubCheckpointer(), run_events=sink
+        cfg,
+        graph=RunawayAgent(),
+        backends=default_backends,
+        threads=StubCheckpointer(),
+        run_events=sink,
     ).run(Request("go"))
 
     ends = sink.named("run_end")
@@ -128,7 +151,9 @@ def test_running_out_of_steps_says_which_bound_and_how_to_raise_it(cfg):
     """A cut-short that does not say which of the two bounds it hit sends the reader to
     the wrong setting.
     """
-    kf = Kingfisher(cfg, graph=RunawayAgent(), threads=StubCheckpointer())
+    kf = Kingfisher(
+        cfg, graph=RunawayAgent(), backends=default_backends, threads=StubCheckpointer()
+    )
 
     events = list(kf.stream(Request("go")))
     stopped = [e for e in events if e.kind == "cut_short"]
@@ -146,8 +171,12 @@ def test_a_session_over_its_disk_bound_cannot_start_another_turn(cfg):
     """Checked before a turn, never during: `execute` writes without any file tool
     seeing it, so there is nothing to intercept mid-turn.
     """
-    kf = Kingfisher(replace(cfg, session_max_bytes=10), graph=StubAgent("ok"),
-                    threads=StubCheckpointer())
+    kf = Kingfisher(
+        replace(cfg, session_max_bytes=10),
+        graph=StubAgent("ok"),
+        backends=default_backends,
+        threads=StubCheckpointer(),
+    )
     session_id = start(cfg, "s")
     (cfg.workspace / "sessions" / session_id / "derived" / "big.bin").write_bytes(b"x" * 100)
 
@@ -161,7 +190,9 @@ def test_the_disk_bound_is_off_unless_a_deployment_sets_one(cfg):
     """
     assert cfg.session_max_bytes is None
 
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    kf = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     session_id = start(cfg, "s")
     (cfg.workspace / "sessions" / session_id / "derived" / "big.bin").write_bytes(b"x" * 10_000)
 
@@ -184,8 +215,12 @@ def test_session_bytes_counts_everything_the_session_holds(cfg, session_dir):
 
 def test_reap_falls_back_to_the_configured_ttl(cfg):
     """A janitor that does not want to restate the policy on every call."""
-    kf = Kingfisher(replace(cfg, session_ttl_s=60), graph=StubAgent("ok"),
-                    threads=StubCheckpointer())
+    kf = Kingfisher(
+        replace(cfg, session_ttl_s=60),
+        graph=StubAgent("ok"),
+        backends=default_backends,
+        threads=StubCheckpointer(),
+    )
     import os
 
     idle = start(cfg, "idle")
@@ -199,8 +234,12 @@ def test_a_session_over_budget_is_refused_before_its_data_is_placed(cfg, tmp_pat
     supplied = tmp_path / "report.pdf"
     supplied.write_bytes(b"z" * 500)
 
-    kf = Kingfisher(replace(cfg, session_max_bytes=10), graph=StubAgent("ok"),
-                    threads=StubCheckpointer())
+    kf = Kingfisher(
+        replace(cfg, session_max_bytes=10),
+        graph=StubAgent("ok"),
+        backends=default_backends,
+        threads=StubCheckpointer(),
+    )
     session_id = start(cfg, "s")
     session = cfg.workspace / "sessions" / session_id
     (session / "derived" / "already.bin").write_bytes(b"x" * 100)

@@ -3,9 +3,8 @@
 Default session backends where `Kingfisher` refuses to pick any, and the
 difference is what each is for: `Kingfisher` is the composition root, where a
 deployment says what its agents run on, and these two are the one-liner that
-spares a caller from saying it.
-The name is in the signature rather than hidden in the body, so a reader can see
-what they are getting and hand over something else without abandoning the helper.
+spares a caller from saying it -- unless the caller hands over a graph, which
+names its session backends here as it would to `Kingfisher`.
 """
 
 from __future__ import annotations
@@ -36,18 +35,16 @@ def _service(
     cfg: Config | None,
     *,
     graph: Any,
-    backends: Any,
+    backends: SessionBackends | None,
     checkpointer: Any,
     run_events: Any,
 ) -> Kingfisher:
     return Kingfisher(
         cfg,
         graph=graph,
-        # Not beside a graph. A pre-built one already carries its filesystem and
-        # `Kingfisher` refuses both, so passing the default here unconditionally
-        # would make every caller that supplies a graph commit the one mistake
-        # this helper exists to spare them.
-        backends=None if graph is not None else backends,
+        # Not the default beside a graph: only the graph's builder knows where its
+        # backend keeps a session, so `Kingfisher` refuses one that does not say.
+        backends=default_backends if backends is None and graph is None else backends,
         threads=checkpointer,
         run_events=run_events,
     )
@@ -60,11 +57,15 @@ def stream(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
     *,
     cfg: Config | None = None,
     graph: Any | None = None,
-    backends: Any = default_backends,
+    backends: SessionBackends | None = None,
     checkpointer: Any | None = None,
     run_events: Any | None = None,
 ) -> Iterator[RunEvent]:
-    """Run one task, yielding progress as it happens."""
+    """Run one task, yielding progress as it happens.
+
+    `backends` left out is `default_backends`, except beside `graph`, which has to
+    name them.
+    """
     return _service(
         cfg,
         graph=graph,
@@ -81,11 +82,15 @@ def run(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
     *,
     cfg: Config | None = None,
     graph: Any | None = None,
-    backends: Any = default_backends,
+    backends: SessionBackends | None = None,
     checkpointer: Any | None = None,
     run_events: Any | None = None,
 ) -> RunResult:
-    """Run one task to completion and return where its outputs landed."""
+    """Run one task to completion and return where its outputs landed.
+
+    `backends` left out is `default_backends`, except beside `graph`, which has to
+    name them.
+    """
     return _service(
         cfg,
         graph=graph,

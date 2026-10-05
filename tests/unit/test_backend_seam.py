@@ -6,6 +6,7 @@ import pytest
 from deepagents.backends import CompositeBackend
 
 from kingfisher import Kingfisher
+from kingfisher.application.run import run, stream
 from kingfisher.config import ConfigError
 from kingfisher.domain.ports import CommandResult, CommandRunner
 from kingfisher.domain.request import Request
@@ -18,8 +19,10 @@ from kingfisher.infrastructure.harness.backend import (
     default_backends,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
+from kingfisher.layout import DATA
 from tests.conftest import StubCheckpointer, an_agent, harness_in
 from tests.unit.test_run import StubAgent
+from tests.unit.test_session_files import Elsewhere as KeptElsewhere
 
 
 class Substitute(WorkspaceScopedBackend):
@@ -66,25 +69,38 @@ def test_a_service_with_no_filesystem_named_is_refused(cfg):
         Kingfisher(cfg, threads=StubCheckpointer())
 
 
-def test_a_pre_built_graph_is_a_filesystem_named(cfg):
-    """The exemption, and not a loophole: a finished graph already carries the backend
-    it was built on, so there is nothing left for session backends to decide and anything
-    passed beside it would be discarded.
+def test_a_pre_built_graph_is_refused_without_backends_named(cfg):
+    """A graph carries the backend its agent runs on, and nothing kingfisher can open.
+    Accepted alone, kingfisher guessed a directory on this host for the data it places
+    and the files it collects -- somewhere a graph whose backend runs elsewhere never
+    looks.
     """
-    assert Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer()) is not None
+    with pytest.raises(ValueError, match="A pre-built graph needs them too"):
+        Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
 
 
-def test_a_pre_built_graph_and_a_backend_are_refused_together(cfg):
-    """Either answer discards the other silently: `_graph_for` returns the graph before
-    it ever opens a session's backend.
+@pytest.mark.parametrize("door", [run, stream])
+def test_the_one_liners_refuse_a_graph_without_backends_named(cfg, door):
+    """Their default is a guess about the one thing only a graph's builder knows."""
+    with pytest.raises(ValueError, match="A pre-built graph needs them too"):
+        door(Request("t"), cfg=cfg, graph=StubAgent("ok"), checkpointer=StubCheckpointer())
+
+
+def test_a_pre_built_graph_reaches_its_session_through_the_backends_named(cfg, tmp_path):
+    """What the guess cost: beside a graph, a request's data went into
+    `<workspace>/sessions/<id>` whatever the deployment kept its sessions in.
     """
-    with pytest.raises(ValueError, match="two answers"):
-        Kingfisher(
-            cfg,
-            graph=StubAgent("ok"),
-            backends=default_backends,
-            threads=StubCheckpointer(),
-        )
+    source = tmp_path / "in.csv"
+    source.write_text("alpha\n")
+    remote = tmp_path / "remote"
+    kf = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=KeptElsewhere(remote), threads=StubCheckpointer()
+    )
+
+    session_id = kf.run(Request("t", data=(source,))).session_id
+
+    assert (remote / session_id / DATA / "in.csv").read_text() == "alpha\n"
+    assert not (cfg.workspace / "sessions" / session_id / DATA / "in.csv").exists()
 
 
 def test_a_plain_factory_function_is_refused_with_the_way_forward(cfg):
@@ -259,15 +275,30 @@ def test_a_harness_build_with_neither_is_still_refused(cfg):
         _backend_for(cfg, None, None, Definitions.from_config(cfg))
 
 
-def test_the_one_liner_keeps_a_default_where_the_constructor_refuses_one(cfg):
+def test_the_one_liner_keeps_a_default_where_the_constructor_refuses_one(monkeypatch):
     """`run` and `stream` are conveniences over a *default* `Kingfisher`, and that is
     the difference worth keeping: the constructor is where a deployment says what its
-    agents run on, and these two are what spares a caller from saying it. In the
-    signature rather than the body, so it can be seen and replaced.
+    agents run on, and these two are what spares a caller from saying it -- unless
+    the caller hands over a graph, which
+    `test_the_one_liners_refuse_a_graph_without_backends_named` holds.
     """
-    import inspect
+    import importlib
 
-    from kingfisher.application.run import run, stream
+    helpers = importlib.import_module("kingfisher.application.run")
+    handed: list[object] = []
 
-    for helper in (run, stream):
-        assert inspect.signature(helper).parameters["backends"].default is default_backends
+    class Recording:
+        def __init__(self, cfg, **wiring) -> None:
+            handed.append(wiring["backends"])
+
+        def run(self, request) -> None:
+            return None
+
+        def stream(self, request) -> None:
+            return None
+
+    monkeypatch.setattr(helpers, "Kingfisher", Recording)
+    helpers.run("t")
+    helpers.stream("t")
+
+    assert handed == [default_backends, default_backends]

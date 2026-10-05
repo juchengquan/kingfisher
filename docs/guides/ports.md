@@ -265,11 +265,15 @@ would both take it. `default_backends` does it with `mkdir`. Two turns in one
 session share a conversation and the last write wins, so this is what refuses the
 second.
 
-**A pre-built graph counts as an answer.** `Kingfisher(cfg, graph=...)` already
-carries the backend it was compiled on, so it takes no `backends` and refuses any
-passed beside it. `run()` and `stream()` keep `backends=default_backends` in their
-signatures, because they are conveniences over a *default* `Kingfisher` and that
-is what makes the one-liner a one-liner.
+**A pre-built graph names its session backends too.** `Kingfisher(cfg, graph=...)`
+runs its agent on the backend the graph was compiled with, but kingfisher still
+places a request's data, collects what a turn left and takes the turn lock through
+the session backends you pass — so a graph is refused without them, and one built on
+kingfisher's own passes `backends=default_backends`. Pass the ones that reach the
+sessions your graph's backend keeps: nothing can check that from outside a compiled
+graph. `run()` and `stream()` use `default_backends` when `backends` is left out,
+because they are conveniences over a *default* `Kingfisher` and that is what makes
+the one-liner a one-liner — except beside `graph=`, where they refuse the same way.
 
 **What you return is also what a workspace tool is handed.** A tool that asks for
 it reaches this backend's file methods directly — behind the turn's permissions,
