@@ -27,6 +27,7 @@ session's directory on this host comes from them instead.
 | `run(..., graph=my_graph)`, `stream(..., graph=my_graph)` | Name `backends=` beside `graph=` here too. Without a graph, `backends` still defaults to `default_backends`. |
 | `Kingfisher(cfg, backends=default_backends, runner=my_runner)` | `Kingfisher(cfg, backends=DefaultBackends(runner=my_runner))`. `runner=` is gone from `Kingfisher`; `my_runner` is still a callable given the session's directory. |
 | `open(cfg, session_id, /, *, catalogue=None, runner=None)` and `aopen` on your `SessionBackends` | Drop `runner`. A subclass of `DefaultBackends` gets the runner it was built with from `super().open(...)`; session backends of your own decide how their commands run themselves. |
+| A factory passed as `threads=`, called with the session's directory, `<workspace>/sessions/<id>` | Called with the session's id. A factory that kept a file per session on this host builds that path itself, from its own configuration. A checkpointer passed as `threads=` rather than a factory is unaffected. |
 
 ## Renamed after #617
 
@@ -67,13 +68,6 @@ method that opens a session is named rather than being the object's `__call__`.
   `NotImplementedError` as langgraph's base saver does. `arun(delete_session=True)`
   deletes this way too. `kingfisher.domain.ports.ThreadStore` is gone; `threads=` is
   typed `Any`, and is still a langgraph checkpointer.
-
-## Saver factories after #639
-
-A factory passed as `threads=` is called with the session's id where it was called
-with the session's directory, `<workspace>/sessions/<id>`. A factory that kept a file
-per session on this host builds that path itself, from its own configuration. A
-checkpointer passed as `threads=` rather than a factory is unaffected.
 
 ## Checklist
 
