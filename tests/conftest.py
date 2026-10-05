@@ -254,47 +254,41 @@ class Through:
         return self._through("files_for", *args, **kwargs)
 
 
-def on_disk(session_dir: Path):
-    """A session directory as a backend, with none of what `backend_at` asks first: a
-    `Config`, and a directory already laid out as a session.
+def _backend_in(cfg, session_dir: Path):
+    """Kingfisher's own backend for a session kept in this directory, laid out first as
+    `default_backends` lays out every session it opens.
     """
-    from deepagents.backends import CompositeBackend, FilesystemBackend
+    from kingfisher.infrastructure.harness.backend import backend_at
+    from kingfisher.infrastructure.workspace import ensure_session_layout
 
-    from kingfisher.infrastructure.harness.backend import DataBackend
-    from kingfisher.layout import DATA_ROUTE
-
-    return CompositeBackend(
-        default=FilesystemBackend(root_dir=str(session_dir)),
-        routes={DATA_ROUTE: DataBackend(Path(session_dir))},
-    )
+    return backend_at(cfg, ensure_session_layout(Path(session_dir)))
 
 
 def harness_of(cfg, session_id: str):
     """What kingfisher keeps about a session, as a test reads and writes it."""
-    from kingfisher.infrastructure.session_store import HarnessFiles
-
-    return HarnessFiles(on_disk(cfg.workspace / "sessions" / session_id), session_id)
+    return harness_in(cfg, cfg.workspace / "sessions" / session_id)
 
 
-def harness_in(session_dir: Path):
-    """The same, for a session directory a test already holds -- including one a
-    `SessionRoot` put somewhere other than under the workspace.
+def harness_in(cfg, session_dir: Path):
+    """The same, for a session directory a test already holds -- including one kept
+    somewhere other than under the workspace.
     """
     from kingfisher.infrastructure.session_store import HarnessFiles
 
-    return HarnessFiles(on_disk(session_dir), Path(session_dir).name)
+    return HarnessFiles(_backend_in(cfg, session_dir), Path(session_dir).name)
 
 
-def paths_in(session_dir: Path):
+def paths_in(cfg, session_dir: Path, *, sessions: Path | None = None):
     """What a tool's paths mean in a session kept in this directory, under the rules
-    every turn starts from -- the `SessionPaths` a build hands its tool guards.
+    every turn starts from -- the `SessionPaths` a build hands its tool guards. Its
+    sibling sessions are under `sessions`, or beside it when that is not given.
     """
     from kingfisher.infrastructure.harness.agent import read_only_permissions
     from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
     from kingfisher.infrastructure.harness.session_paths import SessionPaths
 
-    under_rules = PermittedBackend(on_disk(session_dir), read_only_permissions())
-    return SessionPaths(under_rules, Path(session_dir).parent)
+    under_rules = PermittedBackend(_backend_in(cfg, session_dir), read_only_permissions())
+    return SessionPaths(under_rules, Path(session_dir).parent if sessions is None else sessions)
 
 
 def on_backend(tool, backend, **args):

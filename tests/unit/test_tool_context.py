@@ -631,7 +631,7 @@ def test_the_wrapper_a_compiled_delegates_tools_wear_passes_the_runtime_on(cfg, 
     _a_tool(cfg)
     _notes(session_dir)
     (loaded,) = LocalToolRepository(tools_dir(cfg)).found
-    (wrapped,) = guarded_tools([loaded.tool], paths_in(session_dir))
+    (wrapped,) = guarded_tools([loaded.tool], paths_in(cfg, session_dir))
     graph = create_agent(
         FakeToolCallingModel(
             responses=[_calls("first_line", file_path="/data/notes.txt"), AIMessage(content="ok")]

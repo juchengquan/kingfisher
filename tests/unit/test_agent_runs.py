@@ -66,7 +66,7 @@ def _offered(built) -> set[str]:
 
 def _held(cfg):
     """Session `s`, as the turn reads its pinned agent."""
-    return harness_in(_session(cfg, "s"))
+    return harness_in(cfg, _session(cfg, "s"))
 
 
 def test_an_agent_holds_only_the_tools_its_file_names(cfg, session_dir):
@@ -225,7 +225,7 @@ def test_a_turn_that_names_nothing_still_gets_the_sessions_agent(cfg):
     assert drive(service._agent_for(Request("again", session_id="s"), _held(cfg))).name == "narrow"
 
 
-def test_a_snapshot_is_written_once_and_not_overwritten(tmp_path):
+def test_a_snapshot_is_written_once_and_not_overwritten(cfg, tmp_path):
     """The property that makes it a snapshot rather than a cache.
 
     Its only caller checks first, so this holds it directly: a second writer added later
@@ -234,7 +234,7 @@ def test_a_snapshot_is_written_once_and_not_overwritten(tmp_path):
     """
     from kingfisher.infrastructure.workspace import agent_started_with, remember_agent
 
-    harness = harness_in(tmp_path)
+    harness = harness_in(cfg, tmp_path)
     drive(remember_agent(harness, "name: first\ndescription: One.\n"))
     drive(remember_agent(harness, "name: second\ndescription: Two.\n"))
 

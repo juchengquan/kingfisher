@@ -200,7 +200,7 @@ def test_what_open_returns_is_what_the_agent_is_built_on(cfg, session_dir):
     built = service._graph_for(
         asked,
         service.grants,
-        agent=drive(service._agent_for(asked, harness_in(session_dir))),
+        agent=drive(service._agent_for(asked, harness_in(cfg, session_dir))),
         held=None,
         files=drive(service._files_for(session_dir.name)),
     )
