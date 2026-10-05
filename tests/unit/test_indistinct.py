@@ -10,6 +10,7 @@ from kingfisher.domain.capabilities import ALL, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.activation import indistinct_delegates
 from kingfisher.infrastructure.harness.models import ADAPTERS
+from kingfisher.infrastructure.steps import drive
 from kingfisher.kinds.subagents.rules import resolved_model
 from kingfisher.kinds.subagents.spec import RunOn
 from tests.conftest import a_subagent, an_agent, start, subagents_dir
@@ -208,15 +209,14 @@ def test_the_caller_is_told_before_the_turn_starts(cfg, session_dir):
         capabilities=Capabilities(subagents=("second-opinion",)),
     )
 
-    with service._held_session(asked) as session:
-        admitted = service._admit(asked, session)
+    prepared = drive(service._prepare_steps(asked))
 
-    (name, why) = admitted.indistinct[0]
+    (name, why) = prepared.indistinct[0]
     assert name == "second-opinion"
     assert "same host" in why
 
     # And it reaches the caller as an event, before the run starts.
-    told = opening_events("t001", (), _NoPlacement(), (), admitted.indistinct)
+    told = opening_events("t001", (), _NoPlacement(), (), prepared.indistinct)
     kinds = [e.kind for e in told]
     assert kinds.index("indistinct") < kinds.index("run_start")
 
@@ -236,13 +236,12 @@ def test_a_run_with_nothing_to_say_says_nothing(cfg, session_dir):
         capabilities=Capabilities(subagents=("reviewer",)),
     )
 
-    with service._held_session(asked) as session:
-        admitted = service._admit(asked, session)
+    prepared = drive(service._prepare_steps(asked))
 
-    assert admitted.indistinct == ()
+    assert prepared.indistinct == ()
     assert not [
         e
-        for e in opening_events("t001", (), _NoPlacement(), (), admitted.indistinct)
+        for e in opening_events("t001", (), _NoPlacement(), (), prepared.indistinct)
         if e.kind == "indistinct"
     ]
 

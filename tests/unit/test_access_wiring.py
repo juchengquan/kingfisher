@@ -13,6 +13,7 @@ from kingfisher.domain.access import UNSCOPED, AccessError, parse
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.steps import drive
 from kingfisher.infrastructure.workspace import ensure_session_layout
 from tests.conftest import an_agent, harness_in, tools_dir
 
@@ -279,7 +280,7 @@ def reported(kf, source_ids, name: str):
     # Once, and handed to both, which is what a turn does: the build and the report
     # are the two readers of it, and resolving separately for each is what this
     # stopped doing.
-    agent = kf._agent_for(request, harness_in(session), source_ids=held_names)
+    agent = drive(kf._agent_for(request, harness_in(session), source_ids=held_names))
     graph = kf._graph_for(
         request,
         session,
@@ -287,6 +288,7 @@ def reported(kf, source_ids, name: str):
         checkpointer=None,
         agent=agent,
         held=held,
+        files=drive(kf._files_for(session.name, session)),
     ).graph
     return withheld_by_kind(
         kf._effective_grants(held_names),
@@ -322,8 +324,9 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         session,
         capabilities=grants,
         checkpointer=None,
-        agent=kf._agent_for(request, harness_in(session), source_ids=held),
+        agent=drive(kf._agent_for(request, harness_in(session), source_ids=held)),
         held=kf.held_for(held),
+        files=drive(kf._files_for(session.name, session)),
     ).graph
     from kingfisher.application.reporting import withheld_by_kind
 
@@ -398,8 +401,9 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
         session,
         capabilities=kf._effective_grants(held),
         checkpointer=None,
-        agent=kf._agent_for(request, harness_in(session), source_ids=held),
+        agent=drive(kf._agent_for(request, harness_in(session), source_ids=held)),
         held=kf.held_for(held),
+        files=drive(kf._files_for(session.name, session)),
     )
     narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
     advertised = {name for m in narrowed for name in m._allowed}
@@ -415,7 +419,7 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
     grants = replace(kf._effective_grants(held), skills=granted)
     session = session_at(kf, "withheld-" + "-".join(held))
     request = Request(task="t", agent="skilled")
-    agent = kf._agent_for(request, harness_in(session), source_ids=held)
+    agent = drive(kf._agent_for(request, harness_in(session), source_ids=held))
     graph = kf._graph_for(
         request,
         session,
@@ -423,6 +427,7 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
         checkpointer=None,
         agent=agent,
         held=kf.held_for(held),
+        files=drive(kf._files_for(session.name, session)),
     ).graph
     report = withheld_by_kind(
         grants,
@@ -482,8 +487,9 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
         session,
         capabilities=kf._effective_grants(held),
         checkpointer=None,
-        agent=kf._agent_for(request, harness_in(session), source_ids=held),
+        agent=drive(kf._agent_for(request, harness_in(session), source_ids=held)),
         held=kf.held_for(held),
+        files=drive(kf._files_for(session.name, session)),
     )
     narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
     advertised = {name for m in narrowed for name in m._allowed}

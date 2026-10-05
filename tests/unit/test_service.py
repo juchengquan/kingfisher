@@ -16,6 +16,7 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
+from kingfisher.infrastructure.steps import drive
 from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.layout import HARNESS, PINNED_AGENT
@@ -98,13 +99,13 @@ def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
     # looked at, which is the thing this asserts.
     asked = Request("go")
     assert service._graph_for(
-        asked, session_dir, asked.capabilities, agent=None, held=None
+        asked, session_dir, asked.capabilities, agent=None, held=None, files=None
     ) is agent
 
     with pytest.raises(ValueError, match="pre-built graph"):
         narrowed = Request("go", capabilities=Capabilities(builtin_tools=("read_file",)))
         service._graph_for(
-            narrowed, session_dir, narrowed.capabilities, agent=None, held=None
+            narrowed, session_dir, narrowed.capabilities, agent=None, held=None, files=None
         )
 
 
@@ -118,11 +119,12 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     service = Kingfisher(cfg, backends=default_backends)
     asked = Request("go", agent="only")
 
-    built = service._agent_for(asked, harness_in(session_dir))
+    built = drive(service._agent_for(asked, harness_in(session_dir)))
+    files = drive(service._files_for(session_dir.name, session_dir))
 
     def once():
         return service._graph_for(
-            asked, session_dir, service.grants, agent=built, held=None
+            asked, session_dir, service.grants, agent=built, held=None, files=files
         )
 
     assert once() is not once()
@@ -181,7 +183,7 @@ def test_the_module_level_helpers_are_unchanged(cfg):
 
 # -- what a turn opens with -----------------------------------------------
 #
-# Both of these were inline in `_prepare`, which is 86 lines now and was 123.
+# Both of these were inline in setup, when it was one function of 123 lines.
 # Neither touches the service, so neither needed to be reached through a full
 # run -- and reaching them that way is why the cases below went uncovered: the
 # only assertion on either was one substring, through a stubbed agent.
@@ -252,40 +254,49 @@ def test_the_turn_message_carries_no_output_convention():
 
 # -- a refused request leaves no turn behind ------------------------------
 #
-# `_prepare` promised this and did not keep it. `--data` naming a missing file
-# left nothing; `--input` naming one was refused *after* `allocate_turn` and
-# left `t001` -- a stray turn counting against the session's own budget. The
-# promise is two functions now, `_admit` and `_open_turn`, with `_Admitted`
-# between them, and these are what say it is true.
+# `--input` naming a missing file was refused once *after* `allocate_turn`, and left
+# `t001` behind -- a stray turn counting against the session's own budget. Every
+# refusal comes before `run_start` now, and the claim taken before them goes back.
 
 
-#: Every way a request can be turned down over the files it names. `--input`
-#: is the one that used to strand a turn; the others are the control.
-REFUSALS = [
-    "--data names a missing file",
-    "--input names a missing file",
-    "--data names one file twice",
-    "--input names one file twice",
-]
+#: Every way a request is turned down after its session is claimed: over the files
+#: it names, and over the session already being too large.
+REFUSALS = ["data names a missing file", "data names one file twice", "session over budget"]
 
 
-def _refusal(how: str, tmp_path: Path) -> dict:
-    (tmp_path / "a").mkdir(exist_ok=True)
-    (tmp_path / "b").mkdir(exist_ok=True)
+@pytest.mark.parametrize("how", REFUSALS)
+def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how):
+    """Refused after the claim and before it went back, the session stayed claimed
+    until the claim went stale; refused after `run_start`, the run log held a turn that
+    never ran.
+    """
+    from kingfisher.domain.session import QuotaExceededError
+    from kingfisher.infrastructure.workspace.placement import DataError
+    from tests.conftest import RecordedEvents, start
+    from tests.unit.test_tenancy import _claim
+
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
     (tmp_path / "a" / "same.csv").write_text("one")
     (tmp_path / "b" / "same.csv").write_text("two")
+    data = {
+        "data names a missing file": (tmp_path / "nope.csv",),
+        "data names one file twice": (tmp_path / "a" / "same.csv", tmp_path / "b" / "same.csv"),
+        "session over budget": (),
+    }[how]
+    budgeted = replace(cfg, session_max_bytes=1) if how == "session over budget" else cfg
+    session = start(budgeted, "s")
+    (budgeted.workspace / "sessions" / session / "derived" / "big.txt").write_text("x" * 64)
+    recorded = RecordedEvents()
+    kf = Kingfisher(
+        budgeted, graph=StubAgent("ok"), threads=StubCheckpointer(), run_events=recorded
+    )
 
-    field = "data" if how.startswith("--data") else "inputs"
-    if "missing" in how:
-        return {field: (tmp_path / "nope.csv",)}
-    return {field: (tmp_path / "a" / "same.csv", tmp_path / "b" / "same.csv")}
+    with pytest.raises((DataError, QuotaExceededError)):
+        kf.run(Request("go", session_id=session, data=data))
 
-
-def test_the_admitted_request_is_what_opens_the_turn(cfg):
-    """`_admit` returns; `_open_turn` takes only that."""
-    import inspect
-
-    assert list(inspect.signature(Kingfisher._open_turn).parameters) == ["self", "admitted"]
+    assert recorded.named("run_start") == []
+    assert not _claim(budgeted, session).exists()
 
 
 def test_a_narrowed_request_is_told_what_it_did_not_grant(cfg):
@@ -325,10 +336,9 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
         capabilities=Capabilities(builtin_tools=("read_file",), tools=("sql_query",)),
     )
 
-    with service._held_session(asked) as session:
-        admitted = service._admit(asked, session)
+    prepared = drive(service._prepare_steps(asked))
 
-    by_kind = dict(admitted.withheld)
+    by_kind = dict(prepared.withheld)
 
     # The two kinds are reported apart, which is the whole point of the split.
     assert "http_fetch" in by_kind["tool"]  # a workspace tool
@@ -361,10 +371,9 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
         ),
     )
 
-    with service._held_session(asked) as session:
-        admitted = service._admit(asked, session)
+    prepared = drive(service._prepare_steps(asked))
 
-    by_kind = dict(admitted.withheld)
+    by_kind = dict(prepared.withheld)
 
     # Asked of what `seed` actually wrote, rather than named here. The literal
     # tuples this used to assert were arithmetic about the shipped catalogue,
@@ -412,10 +421,9 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
         capabilities=Capabilities(builtin_tools=("read_file",)),
     )
 
-    with service._held_session(asked) as session:
-        admitted = service._admit(asked, session)
+    prepared = drive(service._prepare_steps(asked))
 
-    assert [kind for kind, _ in admitted.withheld] == ["builtin tool"]
+    assert [kind for kind, _ in prepared.withheld] == ["builtin tool"]
 
 
 def test_each_kind_gets_its_own_line(cfg):
@@ -725,7 +733,7 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     elsewhere = ensure_session_layout(tmp_path / "for-one-turn" / "a-session")
     service = Kingfisher(cfg, backends=default_backends)
 
-    service._agent_for(Request("go", agent="only"), harness_in(elsewhere))
+    drive(service._agent_for(Request("go", agent="only"), harness_in(elsewhere)))
 
     assert agent_snapshot(elsewhere).is_file(), "the pin is not where the turn ran"
     assert not (cfg.workspace / "sessions" / elsewhere.name).exists(), (
@@ -733,4 +741,4 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     )
 
     with pytest.raises(CapabilityError, match="cannot be changed"):
-        service._agent_for(Request("again", agent="other"), harness_in(elsewhere))
+        drive(service._agent_for(Request("again", agent="other"), harness_in(elsewhere)))

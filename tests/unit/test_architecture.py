@@ -2991,7 +2991,7 @@ def test_the_package_ships_the_catalogue_example():
 #: underneath them.
 MAY_BE_MUTABLE: frozenset[str] = frozenset({
     # `_Turn` is the one record here that is never handed anywhere: it is private
-    # to `application/service.py` and exists so that `_turn_lifecycle` and the
+    # to `application/service.py` and exists so that `_turn_outcome` and the
     # loop inside it agree about what the turn produced. Being written in place is
     # the mechanism -- a frozen one would have to be rebuilt on every chunk, and
     # the context manager could not see what the loop wrote. The rule this

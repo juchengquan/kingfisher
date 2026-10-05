@@ -51,7 +51,7 @@ class Request:
 class DecisionError(ValueError):
     """A resume that does not answer the turn it was sent to.
 
-    Separate from the refusals in `_admit`, which are about who is calling. This one
+    Separate from setup's refusals of who is calling. This one
     is about *what* is being answered: an id nothing is waiting on, a decision the
     gate does not take, or a pending call left unanswered. Named rather than left as
     a bare `ValueError` because a caller holding a paused session has somewhere to go

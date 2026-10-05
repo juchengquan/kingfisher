@@ -216,8 +216,16 @@ class SessionClaims:
         dirs.remove_tree(path)
         return dirs.create_exclusive(path)
 
+    async def aclaim(self, name: str, *, stale_after: float, now: float | None = None) -> bool:
+        """`claim`, for the async path."""
+        return await off_loop(thread_pool(), self.claim, name, stale_after=stale_after, now=now)
+
     def release(self, name: str) -> None:
-        """Give `name` back. Safe where it was never taken."""
+        """Give `name` back. Safe where it was never taken.
+
+        Sync, and with no async twin: it runs where a turn is let go of, which has to
+        finish however many times its caller is cancelled.
+        """
         LocalSessionDirs().remove_tree(self._claim_path(name))
 
     def held(self, name: str, *, stale_after: float, now: float | None = None) -> bool:
@@ -521,6 +529,14 @@ class SessionBackends(Protocol):
     async def adelete(self, cfg: Config, session_id: str) -> str | None:
         """`delete`, for the async path."""
         return await off_loop(thread_pool(), self.delete, cfg, session_id)
+
+    async def amark_used(self, cfg: Config, session_id: str) -> None:
+        """`mark_used`, for the async path."""
+        return await off_loop(thread_pool(), self.mark_used, cfg, session_id)
+
+    async def asize(self, cfg: Config, session_id: str) -> int:
+        """`size`, for the async path."""
+        return await off_loop(thread_pool(), self.size, cfg, session_id)
 
 
 def backend_at(

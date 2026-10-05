@@ -3279,9 +3279,9 @@ workaround was fiddliest exactly where it was needed most.
 
 **What is not back is the second copy of the turn.** `stream` drives
 `graph.stream` and `astream` drives `graph.astream`, and those eight lines are
-the whole of the difference: every bound, translation and release is in
-`_turn_lifecycle`, which both share, and the state they write is one `_Turn`
-record. That is what the 2026-09-15 removal was actually about -- `_astream_turn`
+the whole of the difference: every bound and translation is in `_turn_outcome`
+and every release in `_end_turn`, which both share, and the state they write is one
+`_Turn` record. That is what the 2026-09-15 removal was actually about -- `_astream_turn`
 repeated `_stream_turn` down to its cleanup and set a flag by hand -- so the
 lifecycle came out first and the loops are only loops.
 
@@ -3303,10 +3303,10 @@ no callers at all when this landed -- so this is a requirement of a new API
 rather than a break in an old one. `guides/middleware.md` says it where a
 deployment reads it.
 
-**Two things that had to be closed by hand.** `_prepare` goes through a thread --
-`asyncio.to_thread` then, kingfisher's own pool since -- because it is 15-46ms
-of CPU-bound construction, and on the loop it
-would be 15-46ms every other turn waits through. And `astream` closes
+**Two things that had to be closed by hand.** Building the turn goes through a
+thread -- all of setup through `asyncio.to_thread` then, only `_built_turn` on
+kingfisher's own pool since -- because it is CPU-bound construction, and on the loop
+it would be 15-46ms every other turn waits through. And `astream` closes
 `_astream_turn` itself, because an async generator dropped by another one is
 finalised by the event loop's `shutdown_asyncgens` rather than when it goes out of
 scope -- `yield from` closes a nested *sync* generator for free and there is no
@@ -3433,6 +3433,38 @@ refused instead, a sync-only saver would make deleting a session fail on the asy
 path alone, which is the rule `SessionBackends`' defaults already follow. `_exists`
 and `_known` were two listings asking one question; `_known_steps` is the one.
 *(2026-10-05.)*
+
+**Setup is one sequence for both loops, and the turn's ending is off the loop.**
+`stream` and `astream` set a turn up by driving one `_prepare_steps` -- the session
+lookup, the open, the pin, `mark_used`, the claim, the quota, the data, the pause, the
+agent, the transcript -- and only `_built_turn`, the saver and the graph and the turn
+record, is work on this host: inline for `stream`, on kingfisher's pool for
+`astream`. `_admit` and `_open_turn`, with `Admitted` between them, were split so that
+a refused request left no turn directory behind; `allocate_turn` makes nothing any
+more, so the order inside one sequence keeps that promise, and
+`test_a_refused_request_starts_no_turn_and_keeps_no_claim` says so where a signature
+check used to. `_held_session` went with them, having held nothing.
+
+**A cancel can land at any of setup's steps now, and each is tried.** The claim goes
+back synchronously from the sequence's own `except`. A cancel during the last step,
+the build, has no later step to go in at, so `adrive_finished` hands the built turn
+back with the cancel and `astream` ends it the way any turn ends.
+`test_cancelling_at_any_step_of_setup_leaves_the_session_free` counts setup's steps
+on a warm turn and cancels at each in turn, so a step added later is tried too.
+
+**The turn's ending runs on the pool for `astream`, and is still uninterruptible.**
+`_end_turn` is a plain function, for the reason `findings.md` measured, and what moved
+is only where it runs: on the loop it held every other turn up through the pause, the
+transcript, the artifact listing and the claim, each a round trip on a remote
+backend. `astream` waits for it however many times it is cancelled, so the session is
+free before the cancel returns -- and `release` keeps no async twin, for the same
+reason.
+
+**Read once, and closed on failure.** The pin decides whether the caller reaches the
+session and which agent runs, and was read once for each; it is read once and handed
+down. A saver opened for a build that then raised was left open, since no turn
+existed for an ending to close it; `_built_turn` closes what it opened when it does
+not hand it over. *(2026-10-05.)*
 
 **Asked and declined: making a turn a langchain `Runnable`.** The question is
 reasonable -- `Runnable` is the interface that ecosystem's callers already know,

@@ -14,7 +14,7 @@ from kingfisher.infrastructure.steps import adrive, changing, drive, on_host, re
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src" / "kingfisher"
 CALLERS = [ROOT / d for d in ("src", "tests", "spikes", "evals", "assets_examples")]
-DRIVERS = {"drive", "adrive"}
+DRIVERS = {"drive", "adrive", "adrive_finished"}
 
 
 class _Port:

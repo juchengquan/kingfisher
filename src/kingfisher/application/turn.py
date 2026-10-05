@@ -12,24 +12,22 @@ from kingfisher.layout import SCRATCH, SCRATCH_ROUTE
 
 if TYPE_CHECKING:
     from kingfisher.config import Config
-    from kingfisher.domain.request import Request, Resume
     from kingfisher.domain.transcript import Message
 
 
 @dataclass(frozen=True)
-class Admitted:
-    """A request that has passed everything able to reject it."""
+class Prepared:
+    """Everything a turn needs before the model is reached, once nothing can refuse it."""
 
-    #: What this turn was started by: something new, or answers to a turn that
-    #: stopped for them. Both reach admission, because both build a graph and both
-    #: are refusable -- a resume is not exempt from the checks a request faces.
-    request: Request | Resume
-    session: Any
     graph: Any
-    #: Paths `protect_data` could not harden. Reported to the caller rather
-    #: than raised, so they cross the boundary instead of stopping at it.
-    unprotected: tuple[str, ...]
-    placement: Any
+    message: str
+    session: Any
+    turn: Any
+    logger: Any
+    config: dict[str, Any]
+    events: tuple[RunEvent, ...]
+    deadline: float
+    timeout_s: float
     #: The backend the session's files are reached through. The same object the
     #: graph runs on, so what was placed is what the agent reads, and what is
     #: collected is what it wrote.
@@ -37,26 +35,38 @@ class Admitted:
     #: What kingfisher keeps about the session under `/.harness`, read and written
     #: through `files`.
     harness: Any = None
-    #: The saver this service opened for the turn, or None when it opened
-    #: nothing -- an injected instance is the deployment's to close.
+    #: The saver this service opened for the turn, closed when the turn ends, or None
+    #: when it opened nothing -- an injected instance is the deployment's to close.
     release: Any = None
-    #: The saver itself, which `release` is only sometimes.
+    #: The saver itself, which `release` is only sometimes. A turn that stops at a
+    #: gate has to write what this holds before the turn lets go of it.
     saver: Any = None
     #: What a graph kingfisher built is driven with, or `None` for one the caller
     #: built -- that graph's context is whatever its builder decided, which is not
     #: known here.
     context: Any = None
-    #: Answers this turn resumes into, already translated, or `None`.
+    #: What was said in this session before now. The graph's saver holds one
+    #: turn and nothing after it, so this is where a conversation comes from.
+    history: tuple[Message, ...] = ()
+    #: Answers to a turn that stopped for them, in langgraph's own shape, or `None`
+    #: for a turn that is asking something new. The two are alternatives rather than
+    #: additions: a resume continues a graph mid-superstep and has no message to add.
     resume: dict[str, Any] | None = None
     #: The agent this turn's graph was built from, by name, or `None` where none was
     #: resolved -- an injected graph under no policy. The *resolved* one, not the one
     #: the request named: a session's agent is fixed when it opens, so every turn after
     #: the first names nothing and the two answers are only the same on turn one.
+    #: Written beside a pause, so a resume naming a different agent can be refused.
     agent_name: str | None = None
     #: Tools an earlier turn was waiting on that this one superseded. Carried to the
     #: end of the turn as well as announced at its start, because `run` drains the
     #: stream for a result and would otherwise be the one caller never told.
     discarded: tuple[str, ...] = ()
+    #: Paths `protect_data` could not harden. Reported to the caller rather
+    #: than raised, so they cross the boundary instead of stopping at it.
+    unprotected: tuple[str, ...] = ()
+    #: What this request's `data` placed in `/data`, and what that replaced.
+    placement: Any = None
     #: `(what, names)` for each thing this workspace offers that the request did
     #: not grant -- tools, skills, subagents. Crosses rather than stopping: a
     #: withheld name is a fact about the run, not a refusal.
@@ -68,45 +78,6 @@ class Admitted:
     #: Tool names more than one file defines, which the agent holding the
     #: grant therefore cannot hold. Reported rather than dropped in silence.
     delegate_only: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class Prepared:
-    """Everything a turn needs before the model is reached."""
-
-    graph: Any
-    message: str
-    session: Any
-    turn: Any
-    logger: Any
-    config: dict[str, Any]
-    events: tuple[RunEvent, ...]
-    deadline: float
-    timeout_s: float
-    #: What `collect_artifacts` walks at the end. See `Admitted.files`.
-    files: Any = None
-    #: Where the transcript and a pause are written at the end. See `Admitted.harness`.
-    harness: Any = None
-    #: Closed when the turn ends. See `_checkpointer_for`.
-    release: Any = None
-    #: The saver itself, which `release` is only sometimes. A turn that stops at a
-    #: gate has to write what this holds before the lifecycle lets go of it.
-    saver: Any = None
-    #: What the graph is driven with, or `None` for a graph the caller built.
-    context: Any = None
-    #: What was said in this session before now. The graph's saver holds one
-    #: turn and nothing after it, so this is where a conversation comes from.
-    history: tuple[Message, ...] = ()
-    #: Answers to a turn that stopped for them, in langgraph's own shape, or `None`
-    #: for a turn that is asking something new. The two are alternatives rather than
-    #: additions: a resume continues a graph mid-superstep and has no message to add.
-    resume: dict[str, Any] | None = None
-    #: The agent this turn's graph was built from, written beside a pause so a resume
-    #: can refuse one that names a different agent. Carried from `Admitted`, which is
-    #: where it was resolved.
-    agent_name: str | None = None
-    #: Tools an earlier turn was waiting on that this one superseded.
-    discarded: tuple[str, ...] = ()
 
 
 def turn_message(task: str, placed: tuple[str, ...]) -> str:
