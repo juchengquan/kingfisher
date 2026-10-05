@@ -531,6 +531,10 @@ class Kingfisher(Sessions, Disposal):
         """
         return drive(self._files_for(session_id, session_dir(self.workspace, session_id)))
 
+    async def afiles_for(self, session_id: str) -> Any:
+        """`files_for`, for a caller on an event loop."""
+        return await adrive(self._files_for(session_id, session_dir(self.workspace, session_id)))
+
     def pending(
         self, session_id: str, *, source_ids: Held | None = None
     ) -> tuple[PendingDecision, ...]:

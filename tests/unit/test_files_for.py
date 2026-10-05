@@ -12,7 +12,7 @@ from kingfisher.application import service as service_module
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.session import session_dir
 from kingfisher.infrastructure.harness.backend import DefaultBackends
-from tests.conftest import StubCheckpointer, an_agent
+from tests.conftest import StubCheckpointer, Through, an_agent
 from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
 from tests.unit.test_session_files import Elsewhere, _calls
@@ -66,7 +66,7 @@ class Sandboxes(Elsewhere):
         )
 
 
-def test_files_for_opens_the_session_with_the_deployments_runner(cfg):
+def test_files_for_opens_the_session_with_the_deployments_runner(cfg, way):
     """Opened without the runner the deployment wired, the caller's backend would be
     well-formed and run its commands somewhere nobody chose.
     """
@@ -87,7 +87,7 @@ def test_files_for_opens_the_session_with_the_deployments_runner(cfg):
     counting = Counting()
     kf = Kingfisher(cfg, backends=counting, runner=runner)
 
-    files = kf.files_for("s")
+    files = Through(kf, way).files_for("s")
 
     assert files is counting.opened[0]
     assert counting.asked == ["s"]
@@ -95,7 +95,7 @@ def test_files_for_opens_the_session_with_the_deployments_runner(cfg):
 
 
 @pytest.mark.parametrize("door", DOORS)
-def test_a_turn_handed_its_files_opens_no_others(cfg, monkeypatch, door):
+def test_a_turn_handed_its_files_opens_no_others(cfg, monkeypatch, door, way):
     """Every turn opened the session's backend itself, so a caller using one around the
     turn held a second sandbox on a remote backend, and the agent ran in the other.
     """
@@ -110,7 +110,7 @@ def test_a_turn_handed_its_files_opens_no_others(cfg, monkeypatch, door):
     named = an_agent(cfg)
     counting = Counting()
     kf = Kingfisher(cfg, backends=counting, threads=StubCheckpointer())
-    files = kf.files_for("s")
+    files = Through(kf, way).files_for("s")
 
     result = _turn(kf, door, Request("go", agent=named, session_id="s"), files=files)
 
