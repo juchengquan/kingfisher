@@ -19,7 +19,7 @@ from kingfisher.domain.session import (
     known,
 )
 from kingfisher.layout import CLAIM
-from tests.conftest import Reads, StubCheckpointer, start
+from tests.conftest import StubCheckpointer, Through, start
 from tests.unit.test_run import StubAgent
 
 
@@ -277,8 +277,8 @@ def test_a_lookup_finds_a_session_and_a_stranger_gets_none(cfg, way):
     kf = service(cfg)
     session = start(cfg, "s")
 
-    assert Reads(kf, way).session(session).id == session
-    assert Reads(kf, way).session("0" * 32) is None
+    assert Through(kf, way).session(session).id == session
+    assert Through(kf, way).session("0" * 32) is None
 
 
 def test_asking_does_not_disturb_the_session(cfg, way):
@@ -292,7 +292,7 @@ def test_asking_does_not_disturb_the_session(cfg, way):
     stale = time.time() - 10_000
     os.utime(directory, (stale, stale))
 
-    assert Reads(kf, way).session(session) is not None
+    assert Through(kf, way).session(session) is not None
     assert kf.sessions()
 
     assert directory.stat().st_mtime == pytest.approx(stale, abs=1)
@@ -319,10 +319,10 @@ def test_a_deleted_session_stops_being_listed(cfg, way):
     kept = start(cfg, "kept")
     gone = start(cfg, "gone")
 
-    kf.delete_session(gone)
+    Through(kf, way).delete_session(gone)
 
     assert [s.id for s in kf.sessions()] == [kept]
-    assert Reads(kf, way).session(gone) is None
+    assert Through(kf, way).session(gone) is None
 
 
 def test_what_comes_back_names_no_path(cfg):

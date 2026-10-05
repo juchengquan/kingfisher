@@ -180,30 +180,38 @@ def test_arun_can_dispose_of_the_session_like_run(cfg):
     assert not (cfg.workspace / "sessions" / session).exists()
 
 
-def test_disposing_of_a_session_does_not_happen_on_the_event_loop(cfg):
+def test_disposing_of_a_session_does_not_happen_on_the_event_loop(cfg, monkeypatch):
     """Disposal reaches the store as well as the disk, and a deployment's store may
     be a network away -- so `arun` must not do it on the loop while every other turn
     in the process waits. Measured at 0.75ms locally, which is the floor and not the
     cost that matters.
 
-    Asserted as *which thread*, because the time it takes is the deployment's and
-    the thread it takes it on is ours.
+    Asserted as *which thread* each of the two deletions ran on, because the time
+    they take is the deployment's and the thread they take it on is ours.
     """
     import threading
 
-    ran_on_main = []
+    from kingfisher import DefaultBackends
 
-    class _Watching(Kingfisher):
-        def delete_session(self, session_id: str) -> str | None:
-            ran_on_main.append(threading.current_thread() is threading.main_thread())
-            return super().delete_session(session_id)
+    on_main: dict[str, bool] = {}
 
+    def watched(name, original):
+        def recording(self, *args):
+            on_main[name] = threading.current_thread() is threading.main_thread()
+            return original(self, *args)
+
+        return recording
+
+    monkeypatch.setattr(DefaultBackends, "delete", watched("session", DefaultBackends.delete))
+    monkeypatch.setattr(
+        StubCheckpointer, "delete_thread", watched("thread", StubCheckpointer.delete_thread)
+    )
     session = start(cfg, "s")
-    kf = _Watching(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
 
     asyncio.run(kf.arun(Request("go", session_id=session), delete_session=True))
 
-    assert ran_on_main == [False], "the deletion ran on the event loop's own thread"
+    assert on_main == {"thread": False, "session": False}, "a deletion ran on the loop's thread"
     assert not (cfg.workspace / "sessions" / session).exists()
 
 

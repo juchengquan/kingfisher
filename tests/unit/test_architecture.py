@@ -1357,8 +1357,9 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
         }
     ),
     # The disposal half of `service`, which took this edge with it: reaping a
-    # session deletes the thread behind it, and `thread_ids` is how it learns
-    # which threads no session owns any more.
+    # session deletes the thread behind it, through the `SharedThreads` the service
+    # wraps its checkpointer in -- which is also how it learns which threads no
+    # session owns any more.
     "disposal": frozenset({"checkpointing"}),
     # The withheld report, which left `service` and took one of its four edges
     # along. It has to ask the *assembled* agent what it registered and the
@@ -2215,7 +2216,6 @@ SDK_LOADING: frozenset[str] = frozenset({
     # is imported by `service` and by nothing else, so being heavy costs no caller that
     # was not already paying -- which is why these are a fact recorded rather than a
     # list to work down.
-    "kingfisher.application.disposal",
     "kingfisher.application.reporting",
     "kingfisher.application.run",
     "kingfisher.application.service",
@@ -3472,6 +3472,9 @@ DISPATCHED_ELSEWHERE = frozenset({
     # langchain's callback protocol and deepagents' middleware hooks.
     "on_llm_end", "on_llm_error", "on_tool_start", "on_tool_end", "on_tool_error",
     "awrap_model_call", "awrap_tool_call", "wrap_model_call", "wrap_tool_call",
+    # Awaited by `steps.adrive`, which calls a step's method with an `a` in front:
+    # `changing(shared, "forget", ...)` is the only spelling of this in the tree.
+    "aforget",
 })
 
 

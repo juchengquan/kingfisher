@@ -50,7 +50,7 @@ class Sessions:
         """Mint an id, or accept one that already names a session."""
         if request.session_id is None:
             return uuid4().hex
-        if not self._exists(request.session_id):
+        if request.session_id not in drive(self._known_steps()):
             raise self._unknown_session(request.session_id)
         return request.session_id
 
@@ -76,9 +76,10 @@ class Sessions:
             return True
         return reaches(read(kept).source_ids, held)
 
-    def _exists(self, session_id: str) -> bool:
-        """Whether this id names a session the deployment's backends hold."""
-        return any(name == session_id for name, _ in self._backends.sessions(self.cfg))
+    def _known_steps(self) -> Steps[tuple[str, ...]]:
+        """The id of every session the deployment's backends hold."""
+        listing = yield reading(self._backends, "sessions", self.cfg)
+        return tuple(name for name, _ in listing)
 
     def _refuse_if_over_budget(self, session: Session) -> None:
         """Stop a session that is already too large from growing further."""

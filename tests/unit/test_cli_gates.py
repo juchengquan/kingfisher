@@ -20,7 +20,7 @@ from kingfisher.domain.result import AWAITING, RunResult
 from kingfisher.domain.result import PendingDecision as Pending
 from kingfisher.infrastructure.steps import drive
 from kingfisher.presentation.cli import __main__ as cli
-from tests.conftest import Reads
+from tests.conftest import Through
 
 PAUSED = RunResult(
     session_id="s-1",
@@ -335,7 +335,7 @@ def test_a_caller_who_cannot_reach_the_session_is_not_shown_what_it_waits_on(cfg
 
     _, kf = _a_paused_session_only_a_reaches(cfg)
 
-    reads = Reads(kf, way)
+    reads = Through(kf, way)
 
     # The control beside the escape: the caller who does reach it is shown the call.
     assert [call.call_id for call in reads.pending("s-1", source_ids=("A",))] == ["abc123#0"]

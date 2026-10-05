@@ -15,8 +15,7 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.domain import retention
 from kingfisher.domain.retention import SweepResult
 from kingfisher.domain.session import session_dir
-from kingfisher.infrastructure.harness.checkpointing import thread_ids
-from kingfisher.infrastructure.steps import drive
+from kingfisher.infrastructure.steps import Steps, adrive, changing, drive
 from kingfisher.layout import CLAIM
 
 if TYPE_CHECKING:
@@ -24,6 +23,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from kingfisher.config import Config
+    from kingfisher.infrastructure.harness.checkpointing import SharedThreads
 
 
 class Disposal:
@@ -34,17 +34,25 @@ class Disposal:
     #: contract nothing checks, which is the shape this repository distrusts.
     cfg: Config
     workspace: Path
-    _shared: Any
+    _shared: SharedThreads | None
     _backends: Any
-    _files_for: Callable[..., Any]
+    _files_for: Callable[..., Steps[Any]]
+    _known_steps: Callable[[], Steps[tuple[str, ...]]]
 
     def delete_session(self, session_id: str) -> str | None:
         """Dispose of one session: its thread, and everything its backend holds.
         Returns a failure, or None.
         """
-        if session_id not in self._known():
+        return drive(self._delete_session_steps(session_id))
+
+    async def adelete_session(self, session_id: str) -> str | None:
+        """`delete_session`, for a caller on an event loop."""
+        return await adrive(self._delete_session_steps(session_id))
+
+    def _delete_session_steps(self, session_id: str) -> Steps[str | None]:
+        if session_id not in (yield from self._known_steps()):
             return None
-        return self._discard(session_id)
+        return (yield from self._discard_steps(session_id))
 
     def reap(self, older_than_seconds: float | None = None, *, now: float) -> SweepResult:
         """Dispose of every session untouched for `older_than_seconds`.
@@ -58,13 +66,10 @@ class Disposal:
         entries = self._backends.sessions(self.cfg)
         idle = retention.expired(entries, age, now)
         plan = retention.expired(entries, age, now, busy=self._busy(idle.doomed, now=now))
-        result = retention.apply(plan, self._discard)
+        result = retention.apply(plan, lambda session_id: drive(self._discard_steps(session_id)))
         return self._reconcile_threads(result)
 
-    def _known(self) -> tuple[str, ...]:
-        return tuple(name for name, _ in self._backends.sessions(self.cfg))
-
-    def _discard(self, session_id: str) -> str | None:
+    def _discard_steps(self, session_id: str) -> Steps[str | None]:
         """The thread, then the session. A failure, or None.
 
         The thread first: a session whose files went and whose thread stayed is the
@@ -73,10 +78,10 @@ class Disposal:
         """
         if self._shared is not None:
             try:
-                self._shared.delete_thread(session_id)
+                yield changing(self._shared, "forget", session_id)
             except Exception as exc:  # noqa: BLE001 -- reported, not swallowed
                 return f"{session_id}: thread not deleted ({type(exc).__name__})"
-        failure = self._backends.delete(self.cfg, session_id)
+        failure = yield changing(self._backends, "delete", self.cfg, session_id)
         return f"{session_id}: {failure}" if failure else None
 
     def _busy(self, candidates: tuple[str, ...], *, now: float) -> tuple[str, ...]:
@@ -96,19 +101,20 @@ class Disposal:
     def _reconcile_threads(self, result: SweepResult) -> SweepResult:
         """Delete threads no session owns, and fold them into the result.
 
-        `_discard` takes the thread and the session together, so a swept session
+        `_discard_steps` takes the thread and the session together, so a swept session
         leaves neither behind. A session that goes any other way -- deleted by hand,
         or one that could not be removed until deleting learned to unlock `/data` --
         leaves its thread forever, because nothing else looks. One real workspace held
         132 such threads and 1,894 checkpoints after every session had been reaped.
         """
-        held = thread_ids(self._shared)
-        if held is None:
+        shared = self._shared
+        held = None if shared is None else shared.ids()
+        if shared is None or held is None:
             return result
 
         dropped = []
-        for thread in retention.orphaned(held, self._known()):
+        for thread in retention.orphaned(held, drive(self._known_steps())):
             with suppress(Exception):
-                self._shared.delete_thread(thread)
+                shared.forget(thread)
                 dropped.append(thread)
         return replace(result, orphans=tuple(dropped))

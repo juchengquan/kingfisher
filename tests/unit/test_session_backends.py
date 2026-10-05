@@ -68,6 +68,18 @@ class ListsNothingAsync(DefaultBackends):
         return ()
 
 
+class KeepsEverythingAsync(DefaultBackends):
+    """An `adelete` that reports success and removes nothing."""
+
+    async def adelete(self, cfg, session_id):
+        return None
+
+
+def test_the_kit_catches_an_adelete_that_leaves_the_session(cfg):
+    with pytest.raises(AssertionError, match="still listed"):
+        _check("adelete_removes_the_session")(lambda: (cfg, KeepsEverythingAsync()))
+
+
 def test_the_kit_catches_an_aopen_that_reaches_another_session(cfg):
     with pytest.raises(AssertionError, match="reach different sessions"):
         _check("aopen_reaches_the_session_open_does")(lambda: (cfg, AsyncElsewhere()))

@@ -24,7 +24,7 @@ from kingfisher.infrastructure.session_store import read_pause_mark, write_pause
 from kingfisher.infrastructure.steps import drive
 from kingfisher.infrastructure.workspace import session_bytes
 from kingfisher.layout import HARNESS, PAUSED_MARK, PAUSED_STATE
-from tests.conftest import FakeToolCallingModel, harness_of
+from tests.conftest import FakeToolCallingModel, Through, harness_of
 
 PAUSED = f"{HARNESS}/{PAUSED_STATE}"
 PAUSED_PROVENANCE = f"{HARNESS}/{PAUSED_MARK}"
@@ -563,7 +563,7 @@ def test_a_pause_nobody_answers_is_swept_with_its_session(cfg):
     assert swept.failures == ()
 
 
-def test_deleting_a_waiting_session_takes_the_pause_with_it(cfg):
+def test_deleting_a_waiting_session_takes_the_pause_with_it(cfg, way):
     """The explicit half of the same thing. `delete_session=True` on the turn that
     paused declines -- the session is what the answer is for -- so this is the path
     somebody takes once they have decided not to answer after all.
@@ -572,7 +572,7 @@ def test_deleting_a_waiting_session_takes_the_pause_with_it(cfg):
     paused = kf.run(Request("write it"))
     directory = _session_dir(cfg, paused.session_id)
 
-    assert kf.delete_session(paused.session_id) is None
+    assert Through(kf, way).delete_session(paused.session_id) is None
 
     assert not directory.exists()
     assert not (directory / PAUSED).exists()

@@ -1,6 +1,6 @@
 # Writing an adapter
 
-Kingfisher reaches the world through ten Protocols in
+Kingfisher reaches the world through nine Protocols in
 [`domain/ports.py`](../../src/kingfisher/domain/ports.py), and through the
 `backends` every deployment names. Each has a default that works on one host with
 its own disk. This page is for a deployment that needs one of them to be
@@ -151,13 +151,15 @@ It is called on the thread running the turn, once per event and in order.
 
 ## The rest
 
-| Port | What it is | Replace it when |
-|---|---|---|
-| `ThreadStore` | The checkpointer, seen as "something that forgets a thread" | You keep graph state somewhere durable |
+**A checkpointer every session shares** is passed as `threads=` and is langgraph's
+own type, so there is no protocol of ours for it to satisfy. Deleting a session asks
+it to delete that session's thread — `delete_thread`, or `adelete_thread` on the async
+path where the saver has one and on kingfisher's thread pool where it does not — and
+`reap` asks it to `list` its threads where it can, to find any no session owns.
 
 The definition repositories in `domain/ports.py` — one per kind, from
-`SkillRepository` to `MiddlewareRepository` — are not on this list, because they
-are not for replacing. They are what kingfisher builds from a catalogue's
+`SkillRepository` to `MiddlewareRepository` — are not covered here, because they are
+not for replacing. They are what kingfisher builds from a catalogue's
 directories. Definitions kept somewhere else are staged into directories first, and
 the `KINGFISHER_*_DIR` settings in [configuration](configuration.md) say where each
 kind is read from.
@@ -228,14 +230,14 @@ kingfisher = Kingfisher(cfg, backends=MyBackends())
 A plain function is refused with a `TypeError` that says to do this: it can build a
 backend, and cannot say which sessions there are.
 
-**The async path asks for `aopen` and `asessions`.** `Kingfisher.asession`,
+**The async path asks for `aopen`, `asessions` and `adelete`.** `Kingfisher.asession`,
 `apending` and `aartifact` open a session with `aopen` and list them with
-`asessions`. `SessionBackends` carries both, running `open` and `sessions` on
-kingfisher's thread pool, so a class that subclasses it — `DefaultBackends` does —
-has them already. Override one where opening a session or listing them is a round
-trip you can await: the async path then holds no thread while it waits. A class that
-does not subclass `SessionBackends` has to write both, because the type check asks for
-every method. The backend `open` returns is read through its own async methods,
+`asessions`, and `adelete_session` deletes one with `adelete`. `SessionBackends`
+carries all three, running `open`, `sessions` and `delete` on kingfisher's thread
+pool, so a class that subclasses it — `DefaultBackends` does — has them already.
+Override one where it is a round trip you can await: the async path then holds no
+thread while it waits. A class that does not subclass `SessionBackends` has to write
+all three, because the type check asks for every method. The backend `open` returns is read through its own async methods,
 `adownload_files` and the rest, which deepagents' `BackendProtocol` already has.
 
 Starting from nothing instead is allowed and is yours to get right — which is a
@@ -359,8 +361,8 @@ better place to read a failure than a turn is. And run
 `SESSION_BACKENDS_CONTRACT`, above, against the object that makes them: that two
 sessions are kept apart, that a session is there on the next turn, that the claim
 is exclusive, that what is listed and deleted is what exists, that where you say
-a file is on this host it is that session's file, and that `aopen` and `asessions`
-answer as `open` and `sessions` do.
+a file is on this host it is that session's file, and that `aopen`, `asessions` and
+`adelete` answer as `open`, `sessions` and `delete` do.
 
 **The shell and the file tools have to be two views of one filesystem**, and this
 is the one left that reports nothing on its own. A virtual path becomes a shell

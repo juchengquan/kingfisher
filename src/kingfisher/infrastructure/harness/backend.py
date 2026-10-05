@@ -518,6 +518,10 @@ class SessionBackends(Protocol):
         """`sessions`, for the async path."""
         return await off_loop(thread_pool(), self.sessions, cfg)
 
+    async def adelete(self, cfg: Config, session_id: str) -> str | None:
+        """`delete`, for the async path."""
+        return await off_loop(thread_pool(), self.delete, cfg, session_id)
+
 
 def backend_at(
     cfg: Config,

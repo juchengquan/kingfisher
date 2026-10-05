@@ -17,7 +17,7 @@ from kingfisher.config import Config
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.workspace import session_bytes
 from kingfisher.layout import HARNESS, TRANSCRIPT_FILE
-from tests.conftest import StubCheckpointer
+from tests.conftest import StubCheckpointer, Through
 from tests.unit.test_run import StubAgent
 
 TRANSCRIPT = f"{HARNESS}/{TRANSCRIPT_FILE}"
@@ -104,14 +104,14 @@ def test_two_sessions_keep_separate_conversations(cfg):
     )
 
 
-def test_deleting_a_session_takes_its_conversation_with_it(cfg):
-    """No `ThreadStore` involved, which is the point."""
+def test_deleting_a_session_takes_its_conversation_with_it(cfg, way):
+    """No shared checkpointer involved, which is the point."""
     kf = Kingfisher(cfg, graph=StubAgent("ok"))
     result = kf.run(Request("go"))
     directory = _session_dir(cfg, result.session_id)
     assert (directory / TRANSCRIPT).is_file()
 
-    assert kf.delete_session(result.session_id) is None
+    assert Through(kf, way).delete_session(result.session_id) is None
 
     assert not directory.exists()
 

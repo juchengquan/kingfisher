@@ -179,13 +179,6 @@ class MiddlewareRepository(AssetRepository, Protocol):
         ...
 
 
-@runtime_checkable
-class ThreadStore(Protocol):
-    """The checkpointer, seen from the domain: something that forgets a thread."""
-
-    def delete_thread(self, thread_id: str) -> None: ...
-
-
 @dataclass(frozen=True)
 class CommandResult:
     """What running one command produced."""
