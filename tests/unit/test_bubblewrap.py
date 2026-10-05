@@ -7,13 +7,21 @@ import subprocess
 import pytest
 
 from kingfisher.infrastructure.sandbox.bubblewrap import SYSTEM_PATHS, BubblewrapRunner, argv_for
+from kingfisher.infrastructure.sandbox.linux import present
+from kingfisher.infrastructure.workspace import ensure_session_layout
+from kingfisher.layout import HARNESS
 
 
 @pytest.fixture
 def session(tmp_path):
-    directory = tmp_path / "sessions" / "s1"
-    directory.mkdir(parents=True)
-    return directory
+    """A session built the way a turn builds one, not by hand.
+
+    `argv_for` passes every bind through `present`, which drops a source that is not
+    there -- so a hand-made directory silently removes the `.harness` bind from every
+    assertion in this file, and the line that makes it never runs. Measured: with
+    `mkdir` alone the whole suite stayed green with that bind deleted.
+    """
+    return ensure_session_layout(tmp_path / "sessions" / "s1")
 
 
 def pairs(argv: list[str], flag: str) -> set[tuple[str, str]]:
@@ -23,15 +31,33 @@ def pairs(argv: list[str], flag: str) -> set[tuple[str, str]]:
     }
 
 
-def test_the_session_is_the_only_thing_written_to(session, tmp_path):
+def chosen(argv: list[str]) -> set[tuple[str, str]]:
+    """The read-only binds this fence chose, less the host's own system paths.
+
+    Subtracted rather than listed, because which of `/usr`, `/lib64` and the rest
+    exist is the host's business -- `test_no_system_path_bound_here_holds_a_session`
+    is what holds that half.
+    """
+    return pairs(argv, "--ro-bind") - {(path, path) for path in present(SYSTEM_PATHS)}
+
+
+def index_of(argv: list[str], flag: str, source: str) -> int:
+    """Where `argv` binds `source` with `flag`. Order is a rule here, not a detail."""
+    return next(i for i, word in enumerate(argv) if word == flag and argv[i + 1] == source)
+
+
+def test_the_session_is_the_only_thing_written_to(session):
     """The claim the fence exists to make, and the one a stray `--bind` would quietly
     undo.
+
+    The whole writable set, not a list of paths that must be absent from it. Written
+    the second way this named `tmp_path` and the sibling session, and passed while
+    `--bind / /` handed over the entire host: a mutation adding it was noticed by
+    nothing in the suite, because the host root is neither of the two paths named.
     """
     argv = argv_for(session)
 
-    assert (str(session), str(session)) in pairs(argv, "--bind")
-    assert not any(src == str(tmp_path) for src, _ in pairs(argv, "--bind"))
-    assert not any(src == str(session.parent) for src, _ in pairs(argv, "--bind"))
+    assert pairs(argv, "--bind") == {(str(session), str(session))}
 
 
 def test_another_session_is_not_bound_at_all(session):
@@ -40,6 +66,34 @@ def test_another_session_is_not_bound_at_all(session):
     argv = argv_for(session)
 
     assert not any(sibling in word for word in argv)
+
+
+def test_the_harness_is_read_only_and_lands_over_the_session(session):
+    """What kingfisher keeps about a session is the shell's to read and not to write,
+    and the bind that says so only works where it falls *after* the session's own.
+
+    Both halves are asserted because both were unguarded: deleting the bind, and moving
+    it above the session bind -- which the comment beside it says "would cover this
+    again" -- each left the whole suite green.
+    """
+    argv = argv_for(session)
+    harness = str(session / HARNESS)
+
+    assert chosen(argv) == {(harness, harness)}
+    assert index_of(argv, "--ro-bind", harness) > index_of(argv, "--bind", str(session))
+
+
+def test_no_system_path_bound_here_holds_a_session(session):
+    """`/usr`, `/lib` and the rest are the host's, and none of them may be a parent of
+    the session: bound read-only, such a path covers the writable bind underneath it,
+    and the set is what a reader would otherwise have to check by eye.
+
+    Driven over the constant rather than a copy of it, so a path added there is checked
+    rather than trusted. Measured: adding `/` to it made the whole host readable inside
+    the sandbox and nothing in the suite noticed.
+    """
+    for path in SYSTEM_PATHS:
+        assert not session.is_relative_to(path), f"{path} holds the session"
 
 
 def test_the_catalogue_is_bound_read_only(session, tmp_path):
@@ -120,6 +174,36 @@ def test_the_runner_puts_the_command_after_the_sandbox(session):
         module.subprocess.run = original
 
     assert seen[0][-3:] == ["/bin/sh", "-c", "echo hi"]
+
+
+def test_the_environment_is_given_rather_than_inherited(session, monkeypatch):
+    """This process's credentials must not reach the agent's shell -- the one thing a
+    filesystem fence would not catch, and the reason the runner keeps an `env` at all.
+
+    Asserted at the `subprocess` boundary rather than by running `env`, because `bwrap`
+    is absent on this host; `tests/linux/test_bubblewrap_escapes.py` would be the place
+    to drive it, and no CI job runs that file. The Landlock runner has had
+    `test_the_environment_is_given_rather_than_inherited` since it was written, and
+    making this one inherit `os.environ` left the whole suite green.
+    """
+    monkeypatch.setenv("A_SERVICE_CREDENTIAL", "sk-do-not-leak")
+    handed: list[object] = []
+
+    def fake_run(argv, **kwargs):
+        handed.append(kwargs.get("env"))
+        return Done(stdout="ok")
+
+    import kingfisher.infrastructure.sandbox.linux as module
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    BubblewrapRunner(argv_for(session), env={"PATH": "/usr/bin"}).run("env")
+    # The empty case too, and it is the one that matters: `dict(env or ...)` returns
+    # what it was given whenever that is truthy, so a runner built with no `env` is
+    # the only call that can fall back to this process's. Written the other way
+    # first, and a mutation inheriting `os.environ` passed it.
+    BubblewrapRunner(argv_for(session)).run("env")
+
+    assert handed == [{"PATH": "/usr/bin"}, {}]
 
 
 def _launching(monkeypatch, outcome):
