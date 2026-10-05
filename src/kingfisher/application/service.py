@@ -227,7 +227,7 @@ class Kingfisher(Sessions, Disposal):
         cfg: Config | None = None,
         *,
         # A langgraph checkpointer every session shares, a factory given a session
-        # directory, or nothing for the default -- see `_checkpointer_for`. The
+        # id, or nothing for the default -- see `_checkpointer_for`. The
         # checkpointer is langgraph's own type, which this layer may not name, so
         # it is `Any` and `SharedThreads` is what kingfisher asks of it.
         threads: Any = None,
@@ -866,7 +866,7 @@ class Kingfisher(Sessions, Disposal):
             )
             raise DecisionError(msg)
 
-    def _checkpointer_for(self, session_dir: Path) -> tuple[Any, Any]:
+    def _checkpointer_for(self, session_id: str) -> tuple[Any, Any]:
         """The saver this turn runs on, and how to release it when the turn ends."""
         if not self.cfg.conversation_enabled:
             return None, None
@@ -874,7 +874,7 @@ class Kingfisher(Sessions, Disposal):
             saver = build_session_checkpointer()
             return saver, saver
         if callable(self.threads):
-            saver = self.threads(session_dir)
+            saver = self.threads(session_id)
             return saver, saver
         return self.threads, None
 
@@ -903,7 +903,7 @@ class Kingfisher(Sessions, Disposal):
         cfg = self.cfg
         # Resolved here rather than in `__init__`, because a saver is built per
         # session and there is no session until now.
-        checkpointer, release = self._checkpointer_for(session.directory)
+        checkpointer, release = self._checkpointer_for(session.id)
         graph = None
         try:
             saver = checkpointer if paused is None else self._restored(session, paused)

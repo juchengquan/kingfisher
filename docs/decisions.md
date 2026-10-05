@@ -2128,6 +2128,14 @@ it is a breaking change to a public surface is why it is written down here, and
 opening one first, separately, so the removal landed on a tree where nothing
 used it.)*
 
+**A saver factory is handed the session's id, not its directory.** It was handed
+`<workspace>/sessions/<id>` so the per-session sqlite above could live inside the
+session it belonged to. That database is gone, and since a session became its backend
+the directory is not the session either: one its backend keeps elsewhere has none
+here, and a factory handed one would put its saver beside nothing. `SessionBackends.open`
+takes the id for the same reason. A factory that does want a file per session on this
+host builds the path from its own configuration. *(2026-10-05.)*
+
 **`doctor` checks whether a memory-backed workspace can be filled safely.**
 `workspace/backing.py` reads the filesystem type, its size, the cgroup limit
 and
