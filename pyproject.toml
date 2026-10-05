@@ -79,14 +79,12 @@ dependencies = [
     "langchain>=1.3.14,<2",
     "langgraph>=1.2.11,<2",
     "langgraph-checkpoint>=4.1,<5",
-    # Imported directly by infrastructure/definitions.py and
-    # infrastructure/model_catalogue.py. It also arrives transitively through
+    # Imported directly, by the areas `THIRD_PARTY` in
+    # tests/unit/test_architecture.py grants it to -- the table rather than a list
+    # of files, because the table is held to the imports both ways and a list
+    # here is held to nothing. A dependency justified by a file that is gone is a
+    # dependency nobody can re-examine. It also arrives transitively through
     # deepagents, but a transitive dep is not a promise.
-    #
-    # It named `domain/frontmatter.py` until this commit, which has not existed
-    # for two refactors -- and could not, since the domain is barred from
-    # importing a third-party parser at all. A dependency justified by a file
-    # that is gone is a dependency nobody can re-examine.
     "pyyaml>=6.0",
     "python-dotenv>=1.2.2",
     #
