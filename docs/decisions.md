@@ -1881,6 +1881,48 @@ any host; `test_bubblewrap.py` drove `argv_for` and one thing about the runner. 
 the copy nobody tested was the one on the kernels Landlock cannot reach. Four
 mutations that used to fail one test each now fail two.
 
+**The gap was wider than that, and the fence's own claims were the part untested.**
+Found on 2026-10-01 by mutating what `argv_for` builds rather than reading it. Binding
+the whole host **writable** inside the sandbox left all 2,293 tests green. So did
+deleting the read-only bind of `.harness`, and so did moving it *above* the session's
+bind -- which the comment beside it says "would cover this again". Of the four, the only
+mutation anything noticed was binding the sibling session by name, because that is the
+one path the assertion happened to list.
+
+That is the shape: the rule enumerated what must *not* be bound -- `tmp_path`, the
+sessions root -- where the claim is about what may be. `--bind / /` is neither of those
+two paths, and the sibling rule reads `not any(sibling in word for word in argv)`, which
+a bind naming no session satisfies. Both go through the whole set now, the way
+`test_the_shell_may_write_exactly_these_places_in_a_session` has always held Landlock's.
+
+**The `.harness` bind's line had never executed.** `argv_for` passes every bind through
+`present`, which drops a source that is not there, and the fixture was
+`directory.mkdir(parents=True)` -- no `.harness`, so the bind was filtered out of every
+assertion in the file, and `test_bubblewrap.py` contained no occurrence of the word. The
+fixture uses `ensure_session_layout` now. `tests/linux/test_fence_escapes.py` had been
+built that way from the start and says why in its docstring: the lesson was written down
+for one fence and not applied to the other.
+
+**Why this mattered more than a thin test file.** `FENCES_HARNESS` -- named by no test
+-- is what `harness_unfenced` reads, which is what tells `key_needed` that a bubblewrap
+deployment needs no session key. The binds nothing checked were the thing switching
+signing off. Of the three mechanisms in that constant, sandbox-exec had four to five
+tests biting per mutation and Landlock had both a policy rule and a CI escape test;
+bubblewrap had the flag words. Its five escape tests run on no job -- no `bwrap` on the
+macOS runner, and the Linux image refuses the unprivileged user namespace the probe
+needs -- so `test_a_fence_was_exercised` is honest about *a* fence and silent about this
+one.
+
+Six mutations fail a named test now: the host bound writable, the sibling bound
+writable, the `.harness` bind deleted, the same bind moved above the session's, `/`
+added to `SYSTEM_PATHS`, and the runner inheriting `os.environ`. The last deserves its
+own line, because the first version of that rule did not catch it: it passed an explicit
+`env`, and `dict(env or ...)` returns whatever it is given whenever that is truthy, so
+only a runner built with *no* `env` can reach the fallback. The rule drives both calls.
+Writing a rule whose subject its own fixture could not reach, inside the slice fixing
+exactly that, is the clearest argument there is for mutating every new guard.
+*(2026-10-05, from an architecture review.)*
+
 **A mechanism is named, not spelled out.** `LANDLOCK`, `BUBBLEWRAP` and
 `SANDBOX_EXEC` are a vocabulary of their own, and `MODES` is a different one that
 overlaps it on a single word: a mode is what a deployment asks for, a mechanism is
