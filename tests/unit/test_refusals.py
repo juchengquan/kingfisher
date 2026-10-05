@@ -22,7 +22,7 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "kingfisher"
 
 #: The areas a definition is read in. A refusal outside these is something else --
 #: a request being narrowed, a port being wired -- and is not what `doctor` promises.
-AREAS = ("kinds", "infrastructure/catalogue")
+AREAS = ("kinds", "infrastructure/catalogue.py")
 
 #: The errors a kind raises. `load` and `require_literal_prompt` raise neither: they
 #: take the error class from the caller, which is how two refusals hid from the first
@@ -289,7 +289,7 @@ REFUSALS: dict[str, Refusal] = {
         3, defect=a_portable_subagent_whose_skills_are_a_relative_path),
     "kinds/subagents/spec.py::_skills_directories": Refusal(
         2, defect=a_portable_subagent_whose_skills_hold_one_another),
-    "infrastructure/catalogue/__init__.py::_one_registry": Refusal(
+    "infrastructure/catalogue.py::_one_registry": Refusal(
         1, defect=a_portable_subagent_carrying_one_skill_name_twice),
     # Filed on the build rather than on a missing name, which is what it used to be:
     # an entry with no `build` is now a portable declaration rather than a compiled
@@ -367,7 +367,11 @@ def _refusals_in_the_code() -> dict[str, int]:
     """The whole of it, over the areas a definition is read in."""
     found: dict[str, int] = {}
     for area in AREAS:
-        for path in sorted((SRC / area).rglob("*.py")):
+        root = SRC / area
+        # `rglob` under a path that moved finds nothing, so the refusals there drop
+        # out of the count and "delete them" is what the failure then advises.
+        assert root.exists(), f"{area} is not in the tree, so nothing in it is read"
+        for path in [root] if root.is_file() else sorted(root.rglob("*.py")):
             _refusals_in(path, found)
     return found
 
