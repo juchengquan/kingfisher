@@ -220,7 +220,7 @@ def _backend_for(
 
     A deployment reaches this through `Kingfisher`, which opens the session's backend
     itself and arrives here with it already made -- runner and all, since the runner
-    is an argument to `open` now. What is left is the harness's own two callers --
+    belongs to the session backends that open it. What is left is the harness's own two callers --
     `--list` and this repository's tests -- which have a session, want the default
     built for them, and have never had a runner to hand it.
     """

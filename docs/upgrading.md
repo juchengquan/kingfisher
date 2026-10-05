@@ -13,8 +13,20 @@ deployment from before #608 may well be from before that too. See *Subagent bund
 `SessionRoot`, `RunResult.log_path` or `RunResult.session_dir`, you probably need
 only the first two items of the checklist.
 
-**If you are already on #617 or later**, only *Renamed after #617* and *Async reads
-after #617* apply to you.
+**If you are already on #617 or later**, only the sections whose titles say *after
+#617* or later apply to you.
+
+## Session backends always given, after #639
+
+Session backends are always passed now, so what kingfisher used to work out from a
+session's directory on this host comes from them instead.
+
+| Before | Now |
+|---|---|
+| `Kingfisher(cfg, graph=my_graph)` | `Kingfisher(cfg, graph=my_graph, backends=default_backends)`, or the session backends that reach where your graph's backend keeps a session. A graph without `backends=` is **refused**. |
+| `run(..., graph=my_graph)`, `stream(..., graph=my_graph)` | Name `backends=` beside `graph=` here too. Without a graph, `backends` still defaults to `default_backends`. |
+| `Kingfisher(cfg, backends=default_backends, runner=my_runner)` | `Kingfisher(cfg, backends=DefaultBackends(runner=my_runner))`. `runner=` is gone from `Kingfisher`; `my_runner` is still a callable given the session's directory. |
+| `open(cfg, session_id, /, *, catalogue=None, runner=None)` and `aopen` on your `SessionBackends` | Drop `runner`. A subclass of `DefaultBackends` gets the runner it was built with from `super().open(...)`; session backends of your own decide how their commands run themselves. |
 
 ## Renamed after #617
 
@@ -97,7 +109,7 @@ method that opens a session is named rather than being the object's `__call__`.
 
 | Before | Now |
 |---|---|
-| `Kingfisher(cfg, backend=my_factory)` where `my_factory(cfg, session_dir, ...)` is a function | `backends=` takes a **`SessionBackends`**. To build on the default, subclass `DefaultBackends` and override `open(cfg, session_id, /, *, catalogue=None, runner=None)`. A plain function is refused with a `TypeError` saying so. |
+| `Kingfisher(cfg, backend=my_factory)` where `my_factory(cfg, session_dir, ...)` is a function | `backends=` takes a **`SessionBackends`**. To build on the default, subclass `DefaultBackends` and override `open(cfg, session_id, /, *, catalogue=None)`. A plain function is refused with a `TypeError` saying so. |
 | `default_backend(cfg, session_dir)` called directly | `default_backends.open(cfg, session_id)` takes a session id now. For a folder of your choosing, call `backend_at(cfg, directory)`. |
 | `dirs=`, `sessions=`, `session_root=` | **Removed.** A session's backend answers all three: where it is, what it holds, and the housekeeping. |
 | `run_events=` | **New.** A sink with `record(event)`. With none given, events go to the `kingfisher.run` logger at INFO. |
@@ -199,7 +211,7 @@ does. `docs/guides/formats.md`, under *Tools and skills of its own*, has the det
 A custom backend is now a **`SessionBackends`**: one object that opens a session's
 backend per turn, and also answers for every session.
 
-- `open(cfg, session_id, /, *, catalogue=None, runner=None)` returns that
+- `open(cfg, session_id, /, *, catalogue=None)` returns that
   session's backend, creating the session if it's new.
 - `sessions(cfg)` returns `(session_id, last_used)` pairs. `mark_used(cfg, id)`,
   `size(cfg, id)` and `delete(cfg, id)` do what they say.

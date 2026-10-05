@@ -14,13 +14,11 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain import retention
 from kingfisher.domain.retention import SweepResult
-from kingfisher.domain.session import session_dir
 from kingfisher.infrastructure.steps import Steps, adrive, changing, drive
 from kingfisher.layout import CLAIM
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from kingfisher.config import Config
     from kingfisher.infrastructure.harness.checkpointing import SharedThreads
@@ -33,7 +31,6 @@ class Disposal:
     #: than assumed: a mixin that read `self._backends` without saying so would be a
     #: contract nothing checks, which is the shape this repository distrusts.
     cfg: Config
-    workspace: Path
     _shared: SharedThreads | None
     _backends: Any
     _files_for: Callable[..., Steps[Any]]
@@ -93,7 +90,7 @@ class Disposal:
         return tuple(
             session_id
             for session_id in candidates
-            if drive(self._files_for(session_id, session_dir(self.workspace, session_id))).held(
+            if drive(self._files_for(session_id)).held(
                 CLAIM, stale_after=self.cfg.claim_stale_after, now=now
             )
         )

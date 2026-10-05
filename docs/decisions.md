@@ -2543,7 +2543,9 @@ commands and stay a deployment's to call. *(Landed a day earlier, on its own mer
 it improves the old seam too.)* The typed `BackendFactory` covers the one failure a
 runtime check cannot see -- a factory written without `runner` drops the
 `CommandRunner` the deployment wired, and the backend that comes back is well-formed
-and merely runs its commands in the wrong place.
+and merely runs its commands in the wrong place. *(That failure is gone since
+2026-10-05, when `open` stopped taking a runner. See "The runner belongs to the
+session backends" under "A session is its backend".)*
 
 **Required, except that a pre-built graph is an answer too.** `graph=` carries its
 own backend and `_graph_for` returns it before the factory is reached, so demanding
@@ -2670,7 +2672,7 @@ live driver did, for its usage line, and now keeps a sink of its own.
 **Still local, on purpose.** `default_backend`'s confinement, because confining a
 shell only means something on the host that runs it; and a supplied runner is still
 built from `<workspace>/sessions/<id>`, because a runner is about where commands run
-on this host.
+on this host. *(By `DefaultBackends` since 2026-10-05, not by `Kingfisher`.)*
 
 **Named for what they are: `backends=`, `open`, `KINGFISHER_SESSION_BACKENDS_FACTORY`.**
 The entries above call the object a backend and its setting a backend factory, and
@@ -2716,6 +2718,23 @@ place, because a compiled graph does not say what it was compiled on.
 refuse one with a graph the way the constructor does. So their default moved from
 the signature into the body: in the signature it would have been handed to a graph
 caller who never named it. *(2026-10-05.)*
+
+**The runner belongs to the session backends, not to `Kingfisher`.**
+`Kingfisher(runner=)` built a runner per turn from `<workspace>/sessions/<id>` and
+handed it to `open`. So the service worked out a host path for every session whatever
+its backends were, and every `open` had to take the runner and pass it on. An `open`
+that dropped it got a well-formed backend running its commands under the wrong fence,
+which nothing at runtime could see -- the failure `SessionBackends` was typed to
+catch. Now that session backends are always named, the runner goes on the ones that
+know a session's directory. `DefaultBackends(runner=...)` builds it in `open` from the
+directory it lays out, and `open` takes no runner. Session backends of a deployment's
+own decide how their commands run, as their backend always did. It is still a
+callable given the directory, for the reasons above.
+
+A `DefaultBackends` carrying a runner still keeps kingfisher's sessions. So
+`Kingfisher.origins` tells kingfisher's own from a deployment's by exact type rather
+than by identity with `default_backends`. A subclass still counts as the deployment's,
+because it can return its backend with anything changed. *(2026-10-05.)*
 
 ## A tool's path is the backend's path
 

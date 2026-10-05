@@ -122,7 +122,7 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     asked = Request("go", agent="only")
 
     built = drive(service._agent_for(asked, harness_in(session_dir)))
-    files = drive(service._files_for(session_dir.name, session_dir))
+    files = drive(service._files_for(session_dir.name))
 
     def once():
         return service._graph_for(
@@ -517,13 +517,14 @@ def test_a_runner_is_built_for_each_turn_and_told_the_session(cfg, tmp_path, mon
         return Runner()
 
     class Recording(DefaultBackends):
-        def open(self, cfg_, session_id, /, *, catalogue=None, runner=None):
-            handed.append(runner)
-            return super().open(cfg_, session_id, catalogue=catalogue, runner=runner)
+        def open(self, cfg_, session_id, /, *, catalogue=None):
+            opened = super().open(cfg_, session_id, catalogue=catalogue)
+            handed.append(opened.default.runner)
+            return opened
 
     named = an_agent(cfg, "worker")
     monkeypatch.setattr(service_module, "build_agent", lambda *a, **kw: StubAgent("ok"))
-    service = Kingfisher(cfg, backends=Recording(), threads=StubCheckpointer(), runner=build)
+    service = Kingfisher(cfg, backends=Recording(runner=build), threads=StubCheckpointer())
 
     first = service.run(Request(task="anything", agent=named))
     service.run(Request(task="again", agent=named, session_id=first.session_id))
@@ -545,16 +546,12 @@ def test_a_runner_that_is_not_a_callable_is_refused_at_wiring_time(cfg):
     with pytest.raises(TypeError, match="lambda session_dir"):
         # The type checker refuses this too, which is the point: the runtime
         # check is for callers who never run one.
-        Kingfisher(
-            cfg, backends=default_backends, threads=StubCheckpointer(), runner=Runner()  # ty: ignore[invalid-argument-type]
-        )
+        DefaultBackends(runner=Runner())  # ty: ignore[invalid-argument-type]
 
 
 def test_no_runner_leaves_the_platform_to_decide(cfg):
     """The default, and the case every existing deployment is in."""
-    service = Kingfisher(cfg, backends=default_backends, threads=StubCheckpointer())
-
-    assert service._runner is None
+    assert default_backends.open(cfg, "s").default.runner is None
 
 
 # -- a provider that will not take the key ----------------------------------

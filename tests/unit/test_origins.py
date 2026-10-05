@@ -8,8 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import Kingfisher, Origin, Origins, default_backends
+from kingfisher import DefaultBackends, Kingfisher, Origin, Origins, default_backends
 from kingfisher.infrastructure.catalogue import Definitions
+from tests.unit.test_backend_seam import Elsewhere
 
 
 def test_a_plain_workspace_reports_every_catalogue_as_derived(cfg):
@@ -159,6 +160,22 @@ def test_a_running_kingfisher_reports_what_it_resolved(cfg):
 
     assert kf.origins.workspace == cfg.workspace
     assert kf.origins.skills.kind == "default"
+
+
+def test_kingfishers_own_backends_with_a_runner_still_keep_kingfishers_sessions(cfg):
+    """A runner changes where commands run, not where sessions are kept. Told apart by
+    identity, a deployment that only named a runner was reported as keeping its sessions
+    somewhere kingfisher cannot see, which a subclass may and this class cannot.
+    """
+
+    class Theirs(DefaultBackends):
+        pass
+
+    with_runner = Kingfisher(cfg, backends=DefaultBackends(runner=lambda _where: Elsewhere()))
+    subclassed = Kingfisher(cfg, backends=Theirs())
+
+    assert with_runner.origins.sessions == Origin("default", cfg.workspace / "sessions")
+    assert subclassed.origins.sessions == Origin("supplied", None)
 
 
 def test_asking_for_origins_does_not_create_the_directories_it_reports(cfg, tmp_path):

@@ -19,7 +19,7 @@ a dict.
 **As a constructor argument**, which every port accepts:
 
 ```python
-kingfisher = Kingfisher(cfg, backends=MyBackends(), runner=my_runner, run_events=my_sink)
+kingfisher = Kingfisher(cfg, backends=DefaultBackends(runner=my_runner), run_events=my_sink)
 ```
 
 **As a setting**, which only the session backends have, and only for the command line. A
@@ -72,11 +72,14 @@ write, while each caller reads every other caller's files as their own.
 `run(command, timeout=None)` returning a `CommandResult`. For a deployment that
 runs commands somewhere else, or as another user, or with resource limits.
 
-Supplied as a **callable taking the session directory**, not an instance:
-`Kingfisher(cfg, runner=lambda session_dir: MyRunner(session_dir))`. A runner is
-built for one turn — kingfisher's own Landlock fence is, because its policy is
-generated from the session — and a shared instance could not know which session
-it was running for.
+Supplied to kingfisher's own session backends as a **callable taking the session
+directory**, not an instance: `DefaultBackends(runner=lambda session_dir:
+MyRunner(session_dir))`, passed as `backends=`. A runner is built for one session —
+kingfisher's own Landlock fence is, because its policy is generated from the session
+— and a shared instance could not know which session it was running for. It goes on
+the session backends rather than on `Kingfisher` because only they know where a
+session is on this host; session backends of your own run their commands however
+their `open` builds the backend.
 
 Verified with `COMMAND_RUNNER_CONTRACT` — five checks, which run commands.
 Three things to know:
@@ -90,14 +93,10 @@ Three things to know:
 - **Setting `local = False` when you are local loses the fence**, silently. The
   default is True so that forgetting the flag yields more confinement than
   needed, never less.
-- **A replaced backend carries your runner, or drops it.** The runner reaches the
-  shell through the backend, so kingfisher hands it to `open` under
-  [`backends`](#backends--the-filesystem-the-agent-runs-against) rather than
-  applying it itself. Write your `open` with the `runner` keyword and pass it on. An
-  `open` that omits it silently runs every command under kingfisher's own fence instead of
-  yours, and the backend that comes back is perfectly well-formed — nothing at
-  runtime can tell. This is the one thing the two parameters share, and the reason
-  `SessionBackends` is typed.
+- **A subclass of `DefaultBackends` keeps the runner.** `super().open(...)` builds
+  the backend with the runner the instance was given, so an `open` that adjusts what
+  it built still runs its commands where you chose. See
+  [`backends`](#backends--the-filesystem-the-agent-runs-against).
 - **A timeout is a result, not an exception**: `exit_code` 124, the shell's own,
   with output saying so. Raising would make your failure the model's problem
   rather than a tool result it can read and retry. This is the one the kit
@@ -219,8 +218,8 @@ your thinking about them:
 from kingfisher import DefaultBackends
 
 class MyBackends(DefaultBackends):
-    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
-        mine = super().open(cfg, session_id, catalogue=catalogue, runner=runner)
+    def open(self, cfg, session_id, /, *, catalogue=None):
+        mine = super().open(cfg, session_id, catalogue=catalogue)
         return MyScoped(default=MySandbox(session=session_id), routes=mine.routes)
 
 kingfisher = Kingfisher(cfg, backends=MyBackends())
@@ -246,12 +245,11 @@ thing to do deliberately, not to discover. Two of the five contract checks below
 run on every backend kingfisher resolves and will tell you about the two failures
 that otherwise report nothing.
 
-**Take both keyword arguments even if you ignore one.** `catalogue` is what lets a
-session see the skills your bundles ship; `runner` is the `CommandRunner` you
-wired, and an `open` that quietly drops it gets a backend that is perfectly
-well-formed and runs its commands somewhere you did not choose. Nothing at runtime
-can see that mistake, which is why `SessionBackends` is a typed protocol rather than
-a line of prose — write the signature out and your type checker catches it.
+**Take `catalogue` even if you ignore it.** It is what lets a session see the skills
+your bundles ship, and an `open` that quietly drops it gets a backend that is
+perfectly well-formed and sees none of them. Nothing at runtime can see that mistake,
+which is why `SessionBackends` is a typed protocol rather than a line of prose —
+write the signature out and your type checker catches it.
 
 **What `open` returns is one session's, and only one.** A backend shared between
 sessions is one filesystem for every caller — usually the thing you are replacing
@@ -297,8 +295,8 @@ while refusing the agent's own writes: `default_backends` routes it to
 a backend of yours meets the same promise its own way.
 
 **Open it once if you use it around a turn.** `Kingfisher.files_for(session_id)`
-builds a session's backend the way a turn does — through your session backends,
-with the runner you wired — and `run`, `stream`, `arun` and `astream` take it back
+builds a session's backend the way a turn does, through your session backends,
+and `run`, `stream`, `arun` and `astream` take it back
 as `files=` and run the turn on it rather than opening another. Where each `open`
 is a sandbox, that is one sandbox rather than two. `afiles_for` is the same for a
 caller on an event loop, opening it with `aopen`. The request has to name the

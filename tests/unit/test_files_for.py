@@ -36,17 +36,16 @@ def _turn(kf, door: str, request: Request, **kwargs):
 
 
 class Counting(DefaultBackends):
-    """The default backends, recording each session opened and the runner it was handed."""
+    """The default backends, recording each session opened."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, runner=None) -> None:
+        super().__init__(runner=runner)
         self.asked: list[str] = []
-        self.runners: list[object] = []
         self.opened: list[object] = []
 
-    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
+    def open(self, cfg, session_id, /, *, catalogue=None):
         self.asked.append(session_id)
-        self.runners.append(runner)
-        self.opened.append(super().open(cfg, session_id, catalogue=catalogue, runner=runner))
+        self.opened.append(super().open(cfg, session_id, catalogue=catalogue))
         return self.opened[-1]
 
 
@@ -59,10 +58,10 @@ class Sandboxes(Elsewhere):
         super().__init__(root)
         self.count = 0
 
-    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
+    def open(self, cfg, session_id, /, *, catalogue=None):
         self.count += 1
         return super().open(
-            cfg, f"{session_id}/{self.count}", catalogue=catalogue, runner=runner
+            cfg, f"{session_id}/{self.count}", catalogue=catalogue
         )
 
 
@@ -84,14 +83,14 @@ def test_files_for_opens_the_session_with_the_deployments_runner(cfg, way):
         built.append((directory, Runner()))
         return built[-1][1]
 
-    counting = Counting()
-    kf = Kingfisher(cfg, backends=counting, runner=runner)
+    counting = Counting(runner=runner)
+    kf = Kingfisher(cfg, backends=counting)
 
     files = Through(kf, way).files_for("s")
 
     assert files is counting.opened[0]
     assert counting.asked == ["s"]
-    assert built == [(session_dir(cfg.workspace, "s"), counting.runners[0])]
+    assert built == [(session_dir(cfg.workspace, "s"), files.default.runner)]
 
 
 @pytest.mark.parametrize("door", DOORS)

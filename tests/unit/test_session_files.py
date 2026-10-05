@@ -71,7 +71,7 @@ class Elsewhere(SessionBackends):
     def __init__(self, root: Path) -> None:
         self.root = root
 
-    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
+    def open(self, cfg, session_id, /, *, catalogue=None):
         kept = self.root / session_id
         for name in (*SESSION_DIRS, HARNESS):
             (kept / name).mkdir(parents=True, exist_ok=True)
@@ -229,9 +229,9 @@ class Counting(DefaultBackends):
     def __init__(self) -> None:
         self.asked: list[str] = []
 
-    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
+    def open(self, cfg, session_id, /, *, catalogue=None):
         self.asked.append(session_id)
-        return super().open(cfg, session_id, catalogue=catalogue, runner=runner)
+        return super().open(cfg, session_id, catalogue=catalogue)
 
 
 @pytest.mark.parametrize(

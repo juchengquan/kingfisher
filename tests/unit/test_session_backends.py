@@ -34,15 +34,15 @@ def test_the_contract_is_not_quietly_empty():
 class Shared(DefaultBackends):
     """Every session handed one directory: each works, and each reads the others."""
 
-    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
-        return super().open(cfg, "everyone", catalogue=catalogue, runner=runner)
+    def open(self, cfg, session_id, /, *, catalogue=None):
+        return super().open(cfg, "everyone", catalogue=catalogue)
 
 
 class Overwriting(DefaultBackends):
     """A claim written the obvious way, with a write, which never fails."""
 
-    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
-        built = super().open(cfg, session_id, catalogue=catalogue, runner=runner)
+    def open(self, cfg, session_id, /, *, catalogue=None):
+        built = super().open(cfg, session_id, catalogue=catalogue)
         built.claim = lambda name, *, stale_after, now=None: True
         return built
 
@@ -57,8 +57,8 @@ class AsyncElsewhere(DefaultBackends):
     its own -- the async path's reads somewhere the sync path never looks.
     """
 
-    async def aopen(self, cfg, session_id, /, *, catalogue=None, runner=None):
-        return self.open(cfg, f"{session_id}-async", catalogue=catalogue, runner=runner)
+    async def aopen(self, cfg, session_id, /, *, catalogue=None):
+        return self.open(cfg, f"{session_id}-async", catalogue=catalogue)
 
 
 class ListsNothingAsync(DefaultBackends):
@@ -78,8 +78,8 @@ class KeepsEverythingAsync(DefaultBackends):
 class ClaimsBesideClaim(DefaultBackends):
     """An `aclaim` that keeps its own book rather than the one `claim` writes."""
 
-    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
-        built = super().open(cfg, session_id, catalogue=catalogue, runner=runner)
+    def open(self, cfg, session_id, /, *, catalogue=None):
+        built = super().open(cfg, session_id, catalogue=catalogue)
 
         async def aclaim(name, *, stale_after, now=None):
             return True
@@ -251,8 +251,8 @@ class Misdirected(DefaultBackends):
     serves is right, and every one it hands a tool by path is a neighbour's.
     """
 
-    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
-        built = super().open(cfg, session_id, catalogue=catalogue, runner=runner)
+    def open(self, cfg, session_id, /, *, catalogue=None):
+        built = super().open(cfg, session_id, catalogue=catalogue)
         neighbour = "kingfisher-contract-b" if session_id != "kingfisher-contract-b" else "x"
         root = cfg.workspace / "sessions" / neighbour
         built.host_path = lambda virtual: root / virtual.lstrip("/")
@@ -262,8 +262,8 @@ class Misdirected(DefaultBackends):
 class NothingHere(DefaultBackends):
     """A backend that says none of its files are on this host."""
 
-    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
-        built = super().open(cfg, session_id, catalogue=catalogue, runner=runner)
+    def open(self, cfg, session_id, /, *, catalogue=None):
+        built = super().open(cfg, session_id, catalogue=catalogue)
         built.host_path = lambda virtual: None
         return built
 

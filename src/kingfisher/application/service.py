@@ -72,7 +72,7 @@ from kingfisher.domain.result import (
     RunResult,
     normalize_answer,
 )
-from kingfisher.domain.session import Session, SessionBusyError, session_dir
+from kingfisher.domain.session import Session, SessionBusyError
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.activation import (
@@ -85,8 +85,8 @@ from kingfisher.infrastructure.harness.agent import (
     builtin_tool_names,
 )
 from kingfisher.infrastructure.harness.backend import (
+    DefaultBackends,
     SessionBackends,
-    default_backends,
 )
 from kingfisher.infrastructure.harness.checkpointing import (
     SharedThreads,
@@ -140,12 +140,9 @@ from kingfisher.kinds.agents.spec import AgentSpec
 from kingfisher.layout import CLAIM, PAUSED_STATE
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Mapping
 
-    from kingfisher.domain.ports import (
-        CommandRunner,
-        RunEvents,
-    )
+    from kingfisher.domain.ports import RunEvents
 
 
 #: `kingfisher.origins`, and deliberately not `kingfisher`.
@@ -231,7 +228,6 @@ class Kingfisher(Sessions, Disposal):
         # checkpointer is langgraph's own type, which this layer may not name, so
         # it is `Any` and `SharedThreads` is what kingfisher asks of it.
         threads: Any = None,
-        runner: Callable[[Path], CommandRunner] | None = None,
         backends: SessionBackends | None = None,
         catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
@@ -277,22 +273,6 @@ class Kingfisher(Sessions, Disposal):
         if self.catalogue.tools.found:
             builtin_tool_names(self.cfg, self.catalogue)
 
-        # A callable, and only a callable. A runner is built for one turn --
-        # kingfisher's own Landlock fence is, because its policy is generated
-        # from the session -- and a shared instance could not know which session
-        # it was running for, would be one fence for every tenant where the
-        # runner *is* the isolation, and would be called from several threads at
-        # once because turns overlap. A deployment with one to share writes
-        # `lambda session_dir: shared`: a line at the call site rather than a
-        # second shape here forever. `threads` takes both and needed a second
-        # attribute to remember which it was given.
-        if runner is not None and not callable(runner):
-            msg = (
-                "runner is built per turn, so it takes a callable: pass "
-                "`lambda session_dir: your_runner` if you have one to share"
-            )
-            raise TypeError(msg)
-        self._runner = runner
         # Session backends and not a backend: one backend is rooted at one session,
         # so a single instance shared by every session would be one filesystem for
         # every caller. A deployment separating its callers by *where their files
@@ -401,7 +381,7 @@ class Kingfisher(Sessions, Disposal):
         return Origins.of(
             self.cfg,
             catalogue=self.catalogue,
-            sessions=None if self._backends is default_backends else self._backends,
+            sessions=None if type(self._backends) is DefaultBackends else self._backends,
         )
 
     def held_for(self, source_ids: Held | None) -> frozenset[str] | None:
@@ -485,23 +465,15 @@ class Kingfisher(Sessions, Disposal):
             catalogue=self.catalogue,
         )
 
-    def _files_for(self, session_id: str, session_dir: Path) -> Steps[Any]:
+    def _files_for(self, session_id: str) -> Steps[Any]:
         """The backend a session's files are reached through, by kingfisher and any agent it builds.
 
-        The runner goes into `open` rather than alongside it: a deployment that
-        replaced the backend owns what runs its commands, and handing the same runner
-        to `build_agent` as well would leave two answers to that. It is still built
-        from the directory: a runner is about where commands run on *this* host.
+        What runs its commands is the session backends' to decide, not this
+        service's: a runner is about where commands run on a host, and only the
+        session backends know which host a session is on.
         """
         return (
-            yield changing(
-                self._backends,
-                "open",
-                self.cfg,
-                session_id,
-                catalogue=self.catalogue,
-                runner=self._runner(session_dir) if self._runner is not None else None,
-            )
+            yield changing(self._backends, "open", self.cfg, session_id, catalogue=self.catalogue)
         )
 
     def files_for(self, session_id: str) -> Any:
@@ -512,11 +484,11 @@ class Kingfisher(Sessions, Disposal):
         which on a remote backend is a second sandbox. Nothing here asks who the
         caller is acting for -- the turn still does, through the backend it is handed.
         """
-        return drive(self._files_for(session_id, session_dir(self.workspace, session_id)))
+        return drive(self._files_for(session_id))
 
     async def afiles_for(self, session_id: str) -> Any:
         """`files_for`, for a caller on an event loop."""
-        return await adrive(self._files_for(session_id, session_dir(self.workspace, session_id)))
+        return await adrive(self._files_for(session_id))
 
     def pending(
         self, session_id: str, *, source_ids: Held | None = None
@@ -683,7 +655,7 @@ class Kingfisher(Sessions, Disposal):
         # Opened here, before anything else reads the session: who may touch it is
         # decided by its pinned agent, and that is read through the backend too.
         if files is None:
-            files = yield from self._files_for(session.id, session.directory)
+            files = yield from self._files_for(session.id)
         harness = HarnessFiles(files, session.id)
         held = self.held_for(source_ids)
         # Read once, for both of its readers: whether this caller reaches the session,

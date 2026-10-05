@@ -456,12 +456,6 @@ class SessionBackends(Protocol):
     shell. `refuse_unusable_backend` asks that question at the only time it can be
     answered, which is once there is an object to ask about.
 
-    What a type can settle is the call, and there is one mistake here it is the only
-    thing that can catch. An `open` written without `runner` drops the
-    `CommandRunner` the deployment wired, and nothing downstream can tell: the
-    backend that comes back is well-formed and passes every check, and merely runs
-    its commands somewhere the deployment did not choose.
-
     Each takes the `Config` because the default is one object serving every
     workspace, and the workspace is where it keeps them. A deployment's own may
     ignore it.
@@ -477,7 +471,6 @@ class SessionBackends(Protocol):
         /,
         *,
         catalogue: Definitions | None = None,
-        runner: CommandRunner | None = None,
     ) -> Any:
         """This session's backend, making the session if it is new."""
         ...
@@ -515,12 +508,9 @@ class SessionBackends(Protocol):
         /,
         *,
         catalogue: Definitions | None = None,
-        runner: CommandRunner | None = None,
     ) -> Any:
         """`open`, for the async path."""
-        return await off_loop(
-            thread_pool(), self.open, cfg, session_id, catalogue=catalogue, runner=runner
-        )
+        return await off_loop(thread_pool(), self.open, cfg, session_id, catalogue=catalogue)
 
     async def asessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
         """`sessions`, for the async path."""
@@ -642,11 +632,31 @@ class DefaultBackends(SessionBackends):
     """Kingfisher's own `SessionBackends`: each session a directory under
     `<workspace>/sessions`, each backend `backend_at` that directory.
 
-    One instance, `default_backends`, and deployments name it rather than build
-    another: `Kingfisher.origins` tells kingfisher's own from a deployment's by
-    asking whether the backends *are* this object, because a subclass can return
-    its backend with anything changed.
+    `default_backends` runs each session's commands here, under kingfisher's own
+    fence. A deployment whose commands run somewhere else builds one with `runner=`,
+    and its sessions are still kingfisher's own: `Kingfisher.origins` asks whether the
+    backends are exactly this class rather than a subclass, because a subclass can
+    return its backend with anything changed.
     """
+
+    #: On the class as well as set in `__init__`, so a subclass that writes its own
+    #: `__init__` without calling this one still opens sessions.
+    _runner: Callable[[Path], CommandRunner] | None = None
+
+    def __init__(self, *, runner: Callable[[Path], CommandRunner] | None = None) -> None:
+        # A callable, and only a callable. A runner is built for one session --
+        # kingfisher's own Landlock fence is, because its policy is generated from
+        # the session -- and a shared instance could not know which session it was
+        # running for, would be one fence for every tenant where the runner *is* the
+        # isolation, and would be called from several threads at once because turns
+        # overlap. A deployment with one to share writes `lambda session_dir: shared`.
+        if runner is not None and not callable(runner):
+            msg = (
+                "runner is built per session, so it takes a callable: pass "
+                "`lambda session_dir: your_runner` if you have one to share"
+            )
+            raise TypeError(msg)
+        self._runner = runner
 
     def open(
         self,
@@ -655,13 +665,13 @@ class DefaultBackends(SessionBackends):
         /,
         *,
         catalogue: Definitions | None = None,
-        runner: CommandRunner | None = None,
     ) -> WorkspaceScopedBackend:
         directory = ensure_session_layout(session_dir(cfg.workspace, session_id))
         # Kernel-level, because the deny rule covers only the file tools. What it
         # could not harden is reported by the turn rather than raised: raising here
         # used to make one file owned by another user a session unusable for good.
         unprotected = protect_data(directory)
+        runner = self._runner(directory) if self._runner is not None else None
         built = backend_at(cfg, directory, catalogue=catalogue, runner=runner)
         built.unprotected = unprotected
         return built
@@ -679,6 +689,6 @@ class DefaultBackends(SessionBackends):
         return LocalSessionDirs().remove_tree(session_dir(cfg.workspace, session_id))
 
 
-#: The only `DefaultBackends` there is. See the class for why it is one.
+#: Kingfisher's own sessions, with their commands run on this host.
 default_backends = DefaultBackends()
 

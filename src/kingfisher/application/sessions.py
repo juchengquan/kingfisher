@@ -157,6 +157,6 @@ class Sessions:
             return None
         if held is None and not files_wanted:
             return found, None
-        files = yield from self._files_for(session_id, session_dir(self.workspace, session_id))
+        files = yield from self._files_for(session_id)
         reaches_it = yield from self._reaches_session(HarnessFiles(files, session_id), held)
         return (found, files) if reaches_it else None
