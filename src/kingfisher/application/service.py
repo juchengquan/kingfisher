@@ -73,7 +73,7 @@ from kingfisher.domain.result import (
     RunResult,
     normalize_answer,
 )
-from kingfisher.domain.session import Session, SessionBusyError
+from kingfisher.domain.session import Session, SessionBusyError, session_dir
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.activation import (
@@ -476,10 +476,10 @@ class Kingfisher(Sessions, Disposal):
             # the second read that pin back and parsed it.
             agent=agent,
             held=held,
-            # The one `_files_for` built, which placed this turn's data. Built again
-            # here, a remote backend would be asked for two sessions' worth of
-            # sandbox, and the agent could run in the one that was never given the
-            # data.
+            # The one admission built or was handed, which placed this turn's data.
+            # Built again here, a remote backend would be asked for two sessions'
+            # worth of sandbox, and the agent could run in the one that was never
+            # given the data.
             backend=(
                 files
                 if files is not None
@@ -518,6 +518,16 @@ class Kingfisher(Sessions, Disposal):
                 runner=self._runner(session_dir) if self._runner is not None else None,
             )
         )
+
+    def files_for(self, session_id: str) -> Any:
+        """The backend a turn in this session is given, built the way a turn builds it.
+
+        For a caller that reaches the session's files around a turn as well: hand it
+        to the turn as `files=` and the turn runs on it rather than opening another,
+        which on a remote backend is a second sandbox. Nothing here asks who the
+        caller is acting for -- the turn still does, through the backend it is handed.
+        """
+        return drive(self._files_for(session_id, session_dir(self.workspace, session_id)))
 
     def pending(
         self, session_id: str, *, source_ids: Held | None = None
@@ -649,13 +659,14 @@ class Kingfisher(Sessions, Disposal):
         session: Session,
         *,
         source_ids: Held | None = None,
+        files: Any = None,
     ) -> Prepared:
         """Do everything up to the model call, and return what the loop needs.
 
         Filesystem work plus building the agent, measured at 15-46ms end to end --
         of which 9.2ms is the agent.
         """
-        return self._open_turn(self._admit(request, session, source_ids=source_ids))
+        return self._open_turn(self._admit(request, session, source_ids=source_ids, files=files))
 
     def _take_pause(
         self, request: Request | Resume, session: Session, checkpointer: Any, harness: HarnessFiles
@@ -747,9 +758,17 @@ class Kingfisher(Sessions, Disposal):
         session: Session,
         *,
         source_ids: Held | None = None,
+        files: Any = None,
     ) -> Admitted:
         """Everything that can refuse, before anything a refusal would strand."""
         cfg = self.cfg
+        # Without an id this turn would mint a new session and run it in another's files.
+        if files is not None and request.session_id is None:
+            msg = (
+                "files= is one session's backend and this request names no session: "
+                "pass the session_id the backend was opened for"
+            )
+            raise ValueError(msg)
         # Who is calling, before the session is marked, claimed or written to. Any
         # later and a refused caller's files are already in the `/data` of a session
         # that was never theirs; after the claim, and a turn running in it would
@@ -758,7 +777,8 @@ class Kingfisher(Sessions, Disposal):
         self._effective_grants(source_ids)
         # Built here, before anything else reads the session: who may touch it is
         # decided by its pinned agent, and that is read through the backend too.
-        files = drive(self._files_for(session.id, session.directory))
+        if files is None:
+            files = drive(self._files_for(session.id, session.directory))
         harness = HarnessFiles(files, session.id)
         if not drive(self._reaches_session(harness, self.held_for(source_ids))):
             raise self._unknown_session(session.id)
@@ -1074,7 +1094,11 @@ class Kingfisher(Sessions, Disposal):
         return waiting
 
     def stream(
-        self, request: str | Request | Resume, *, source_ids: Held | None = None
+        self,
+        request: str | Request | Resume,
+        *,
+        source_ids: Held | None = None,
+        files: Any = None,
     ) -> Iterator[RunEvent]:
         """Run one task, yielding progress as it happens.
 
@@ -1082,13 +1106,16 @@ class Kingfisher(Sessions, Disposal):
         the same door rather than a method of its own: the admission it faces is the
         same admission, and a second entry point would be a second place for those
         checks to be forgotten.
+
+        `files` is the session's backend from `files_for`, for a caller that uses it
+        around the turn too; the request must name that session.
         """
         # Coerced here rather than only in `_prepare`, because holding the
         # session now happens first and a bare task string has no session id to
         # read.
         request = _asked(request)
         with self._held_session(request) as session:
-            yield from self._stream_turn(request, session, source_ids=source_ids)
+            yield from self._stream_turn(request, session, source_ids=source_ids, files=files)
 
     @contextmanager
     def _turn_lifecycle(self, turn: _Turn) -> Iterator[None]:
@@ -1221,10 +1248,15 @@ class Kingfisher(Sessions, Disposal):
         )
 
     def _stream_turn(
-        self, request: Request | Resume, session: Session, *, source_ids: Held | None = None
+        self,
+        request: Request | Resume,
+        session: Session,
+        *,
+        source_ids: Held | None = None,
+        files: Any = None,
     ) -> Iterator[RunEvent]:
         """One turn, with its directory already held."""
-        turn = _Turn(self._prepare(request, session, source_ids=source_ids))
+        turn = _Turn(self._prepare(request, session, source_ids=source_ids, files=files))
         with self._turn_lifecycle(turn):
             # Inside the lifecycle, not before it. A caller that stops reading
             # during these -- `run_start` is the first -- used to leave the turn
@@ -1239,7 +1271,12 @@ class Kingfisher(Sessions, Disposal):
         yield from self._ending(turn)
 
     async def _astream_turn(
-        self, request: Request | Resume, session: Session, *, source_ids: Held | None = None
+        self,
+        request: Request | Resume,
+        session: Session,
+        *,
+        source_ids: Held | None = None,
+        files: Any = None,
     ) -> AsyncGenerator[RunEvent, None]:
         """The same turn on the graph's own async stream, its directory held.
 
@@ -1249,7 +1286,9 @@ class Kingfisher(Sessions, Disposal):
         waits through.
         """
         prepared, cancelled = await finished(
-            off_loop(self._pool, self._prepare, request, session, source_ids=source_ids)
+            off_loop(
+                self._pool, self._prepare, request, session, source_ids=source_ids, files=files
+            )
         )
         turn = _Turn(prepared)
         if cancelled is not None:
@@ -1277,6 +1316,7 @@ class Kingfisher(Sessions, Disposal):
         *,
         source_ids: Held | None = None,
         delete_session: bool = False,
+        files: Any = None,
     ) -> RunResult:
         """Run one task to completion. A drain of `stream`.
 
@@ -1295,7 +1335,7 @@ class Kingfisher(Sessions, Disposal):
         deleted because somebody closed a loop early. A drain has an after.
         """
         result: RunResult | None = None
-        for event in self.stream(request, source_ids=source_ids):
+        for event in self.stream(request, source_ids=source_ids, files=files):
             if event.kind == "finished":
                 result = event.result
         return drive(self._drained_steps(result, delete_session=delete_session))
@@ -1314,7 +1354,11 @@ class Kingfisher(Sessions, Disposal):
         return result
 
     async def astream(
-        self, request: str | Request | Resume, *, source_ids: Held | None = None
+        self,
+        request: str | Request | Resume,
+        *,
+        source_ids: Held | None = None,
+        files: Any = None,
     ) -> AsyncIterator[RunEvent]:
         """`stream`, for a caller already on an event loop. Cancelling is immediate.
 
@@ -1326,7 +1370,7 @@ class Kingfisher(Sessions, Disposal):
         """
         request = _asked(request)  # for the reason `stream` gives
         with self._held_session(request) as session:
-            turn = self._astream_turn(request, session, source_ids=source_ids)
+            turn = self._astream_turn(request, session, source_ids=source_ids, files=files)
             try:
                 async for event in turn:
                     yield event
@@ -1343,6 +1387,7 @@ class Kingfisher(Sessions, Disposal):
         *,
         source_ids: Held | None = None,
         delete_session: bool = False,
+        files: Any = None,
     ) -> RunResult:
         """`run`, for a caller already on an event loop. A drain of `astream`.
 
@@ -1354,7 +1399,7 @@ class Kingfisher(Sessions, Disposal):
         drain gives the claim back one turn of the loop later either way, so the
         close would be a line nothing can observe. `findings.md` has the numbers.
         """
-        events = self.astream(request, source_ids=source_ids)
+        events = self.astream(request, source_ids=source_ids, files=files)
         result: RunResult | None = None
         async for event in events:
             if event.kind == "finished":
