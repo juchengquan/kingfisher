@@ -754,7 +754,8 @@ def test_a_nested_package_is_a_prose_root(tmp_path):
     Read one directory deep, the rule stops *matching* references to a package that
     moved down a level rather than failing them -- so the move buries every comment
     naming the old path and nothing goes red, which is the one failure this rule
-    cannot report about itself. `harness` and `workspace` are the two in this tree.
+    cannot report about itself. `harness`, `sandbox` and `workspace` are nested
+    packages here.
     """
     (tmp_path / "layer").mkdir()
     (tmp_path / "layer" / "__init__.py").write_text("", encoding="utf-8")
@@ -768,7 +769,7 @@ def test_a_nested_package_is_a_prose_root(tmp_path):
     # And against the real tree, which is what the rule actually runs on. Backticks
     # are added here rather than written, so the rule scanning this file does not
     # read its own negatives as claims about the tree.
-    for missing in ("harness.nowhere", "workspace.nowhere", "catalogue.nowhere"):
+    for missing in ("harness.nowhere", "workspace.nowhere", "sandbox.nowhere"):
         assert _prose_unresolved(f"`{missing}`") == [missing], (
             f"{missing} is rooted at a package that is not at the top level, and a "
             "reference the pattern never matches is one the rule cannot fail"
@@ -1085,9 +1086,8 @@ def test_an_area_is_refused_another_areas_dependencies():
 
 def test_a_subpackage_is_judged_by_its_own_area():
     """`infrastructure/harness/agent.py` is not judged as `infrastructure/`."""
-    catalogue = SRC / "infrastructure" / "catalogue" / "__init__.py"
-    buried = SRC / "infrastructure" / "workspace" / "placement.py"
-    for path in (catalogue, buried, SRC / "domain" / "capabilities.py", SRC / "config.py"):
+    buried = SRC / "infrastructure" / "workspace" / "seeding.py"
+    for path in (buried, SRC / "domain" / "capabilities.py", SRC / "config.py"):
         assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
 
     assert _area_of(SRC / "infrastructure" / "harness" / "agent.py") == "infrastructure/harness"
@@ -1102,9 +1102,8 @@ def test_a_subpackage_is_judged_by_its_own_area():
     assert _area_of(SRC / "config.py") == ""
 
     # A subpackage with no entry of its own is judged by its parent, which is
-    # what lets `catalogue/` inherit `{yaml}` without naming it -- and what
-    # would stop being true the moment someone gave it an entry.
-    assert _area_of(catalogue) == "infrastructure"
+    # what lets `workspace/seeding.py` inherit `{yaml}` without naming it -- and
+    # what would stop being true the moment someone gave `workspace/` an entry.
     assert _area_of(buried) == "infrastructure"
 
 

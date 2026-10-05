@@ -4071,7 +4071,9 @@ in two places while three kinds had left `catalogue/` and one had not. With the
 fourth gone that branch is unreachable, so it is one place again -- a rule with
 a branch nothing can reach is half a rule. `catalogue/` kept `__init__` and
 `layered`, which was `Definitions` and the per-session merge, and held no
-per-kind module at all -- `__init__` alone since `layered` went.
+per-kind module at all -- `__init__` alone since `layered` went, and
+`catalogue.py` since 2026-10-05, because a folder of one module advertises a
+group with nothing in it.
 *(2026-09-04, reversed in part 2026-09-07.)*
 
 **Not a module: middleware.** (Reversed on 2026-09-07 by *Middleware is a
