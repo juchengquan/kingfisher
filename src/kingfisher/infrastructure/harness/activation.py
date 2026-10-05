@@ -10,7 +10,7 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import ALL, Capabilities, refuse_unoffered
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.backend import bundled_skill_mounts
-from kingfisher.infrastructure.harness.subagents import indistinct
+from kingfisher.infrastructure.harness.kinds.subagents import indistinct
 from kingfisher.kinds.skills import registry as skill_registry
 from kingfisher.kinds.skills.registry import SkillRegistry
 from kingfisher.kinds.subagents.rules import (

@@ -22,7 +22,7 @@ from kingfisher.infrastructure.harness.activation import (
 )
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import backend_at, default_backends
-from kingfisher.infrastructure.harness.tools import workspace_tool_names
+from kingfisher.infrastructure.harness.kinds.tools import workspace_tool_names
 from kingfisher.kinds.middlewares.catalogue import MiddlewareError
 from kingfisher.kinds.skills.catalogue import reachable
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec

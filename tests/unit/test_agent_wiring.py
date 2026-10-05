@@ -10,7 +10,7 @@ from kingfisher import Kingfisher, backend_at, default_backends
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import skills_sources
-from kingfisher.infrastructure.harness.declared_middleware import (
+from kingfisher.infrastructure.harness.kinds.declared_middleware import (
     REQUIRED_BY_DEEPAGENTS,
     _deepagents_middleware_names,
     declared_middleware,

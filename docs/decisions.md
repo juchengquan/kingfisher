@@ -283,7 +283,7 @@ it is instead. *(2026-09-24, from an architecture review.)*
 
 **The mass noun stays wherever it is still a mass noun.** `middlewares` names the
 kind -- a directory, a field, a key, a table row. `MiddlewareRepository`,
-`approved_middleware`, `harness/declared_middleware.py` and every sentence about
+`approved_middleware`, `harness/kinds/declared_middleware.py` and every sentence about
 *a middleware* keep the singular, because `ToolRepository` already sits behind a
 kind called `tools`: naming the type for one of the things is what the other four
 kinds do. *(2026-09-15.)*
@@ -3796,7 +3796,7 @@ about the door.
 its walk over the disk, and nothing below either. `kinds/subagents/harness.py` is
 `infrastructure/harness/subagents.py`, `kinds/tools/harness.py` is
 `infrastructure/harness/tools.py`, and `test_no_kind_names_a_layer` is what keeps it
-that way. *(2026-09-10.)*
+that way. *(2026-09-10. Both are in `infrastructure/harness/kinds/` since 2026-10-05.)*
 
 **The entry it reverses was right about ownership and wrong about direction.** *An
 asset kind owns its own registration* said the kinds "do not answer to a layer", and
@@ -4168,6 +4168,36 @@ its entry and the table goes red until told -- which is the table working.
 And `tool.ty.overrides` lists files by path: the block ignoring the optional
 Linux-only `sandlock` import named `fence.py` and `confinement.py`, and left
 behind would have stopped matching and gone silently useless.
+
+**A folder inside the harness: `kinds/`, for the kinds whose runtime half is there.**
+`tools`, `subagents` and `declared_middleware` are `infrastructure/harness/kinds/`.
+Two of them were a kind's own `harness.py` until a kind stopped naming a layer, so
+`kinds/tools/` is a format and a walk over the disk and `harness/kinds/tools.py` is
+where what it found meets deepagents -- one question, *where does this kind reach the
+runtime*, with an address per kind. *(2026-10-05.)*
+
+**Taken for whoever is looking, and measured so as not to claim more.** Each of the
+three changes most often with `agent.py`, in two-thirds to three-quarters of its
+commits since August, so no commit opens fewer files for this. It is the case
+`kinds/` itself was taken on, with the shared subject the paragraph above asks of a
+group.
+
+**`activation` stayed beside `agent.py`.** It decides what one request turns on,
+across skills and delegates at once, and reads the backend to do it: not one kind's
+half, and `agent.py` is what it changes with. Nor is every kind in the folder.
+Skills reach the runtime from `kinds.skills.registry`, because deepagents reads a
+`SKILL.md` itself, and an agent is the graph `agent.py` builds -- which the folder's
+docstring says, so a reader looking for five does not conclude two are missing.
+
+**`declared_middleware` kept its name.** `harness/kinds/middlewares.py` would mirror
+the kind and put a second `middlewares` beside `harness/middlewares/`, the clash the
+prefix was given to end.
+
+**A third mechanical fact: `_harness_reach` reads the whole path below the harness.**
+It kept the first segment, so after this move `reporting`'s edges to `activation` and
+`kinds.tools` would have read as `activation` and `kinds` -- and the table exists to
+say which module took the coupling, not which folder. `middlewares/` never showed it
+because nothing outside the harness imports from there.
 
 **Rejected with it: inverting the nesting to `function/layer.py`.** Drawn in
 full -- fourteen modules, every file placed -- and measured rather than argued.
@@ -4823,7 +4853,7 @@ fixed them says how each was caught.*
 **Not taken: splitting the build plan.** An architecture review named
 `build_agent` as assembling in one pass with thin seams, and the reading went the
 other way. The pass is deliberate and already recorded at the function: it was 657
-lines doing four jobs, `prompting` and `infrastructure.harness.subagents` left with
+lines doing four jobs, `prompting` and `infrastructure.harness.kinds.subagents` left with
 a rule that neither calls back, and what remains is wiring where every statement
 attaches one thing to the graph. Four decisions above constrain the shape further --
 the middleware registry merged once before either branch reads it, both `wants`
@@ -4884,7 +4914,7 @@ those into a check on a kind field, and an agent with a `build` would become
 something code can construct.
 
 Nothing downstream was asking for it either. `build_agent` reads two things off an
-`AgentSpec`, the model functions in `harness/subagents.py` already take either in four
+`AgentSpec`, the model functions in `harness/kinds/subagents.py` already take either in four
 signatures, and access reads both by attribute name on purpose. The middle option --
 a base class in `domain/` for the shared fields -- would write the declarations once
 and put one name in place of the union. It was judged a wash: reading `AgentSpec`

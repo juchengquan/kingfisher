@@ -96,11 +96,11 @@ from kingfisher.infrastructure.harness.checkpointing import (
     release_checkpointer,
     resumed_saver,
 )
-from kingfisher.infrastructure.harness.declared_middleware import (
+from kingfisher.infrastructure.harness.interpreter import release_interpreter
+from kingfisher.infrastructure.harness.kinds.declared_middleware import (
     MiddlewareFactory,
     refuse_unbuildable_middleware,
 )
-from kingfisher.infrastructure.harness.interpreter import release_interpreter
 from kingfisher.infrastructure.harness.runlog import LoggedRunEvents, RunLogger
 from kingfisher.infrastructure.harness.session_files import (
     collect_artifacts,
