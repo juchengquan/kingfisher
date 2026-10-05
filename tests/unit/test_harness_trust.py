@@ -19,6 +19,7 @@ from kingfisher.layout import HARNESS, PAUSED_STATE, PINNED_AGENT
 from tests.conftest import an_agent, start
 from tests.unit.scripted import Scripted
 from tests.unit.test_approval_gates import _gated, _write
+from tests.unit.test_backend_seam import Elsewhere
 from tests.unit.test_run import StubAgent
 
 
@@ -50,7 +51,7 @@ class _WrappingTheDefault(DefaultBackends):
     [
         lambda cfg: {"graph": StubAgent("ok"), "backends": default_backends},
         lambda cfg: {"backends": _WrappingTheDefault()},
-        lambda cfg: {"backends": default_backends, "runner": lambda d: None},
+        lambda cfg: {"backends": DefaultBackends(runner=lambda _d: Elsewhere())},
         lambda cfg: {"backends": default_backends, "cfg": replace(cfg, shell_sandbox="off")},
     ],
     ids=["graph", "wrapped-default", "runner", "sandbox-off"],

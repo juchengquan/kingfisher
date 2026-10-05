@@ -287,7 +287,7 @@ def reported(kf, source_ids, name: str):
         checkpointer=None,
         agent=agent,
         held=held,
-        files=drive(kf._files_for(session.name, session)),
+        files=drive(kf._files_for(session.name)),
     ).graph
     return withheld_by_kind(
         kf._effective_grants(held_names),
@@ -324,7 +324,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         checkpointer=None,
         agent=drive(kf._agent_for(request, harness_in(session), source_ids=held)),
         held=kf.held_for(held),
-        files=drive(kf._files_for(session.name, session)),
+        files=drive(kf._files_for(session.name)),
     ).graph
     from kingfisher.application.reporting import withheld_by_kind
 
@@ -400,7 +400,7 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
         checkpointer=None,
         agent=drive(kf._agent_for(request, harness_in(session), source_ids=held)),
         held=kf.held_for(held),
-        files=drive(kf._files_for(session.name, session)),
+        files=drive(kf._files_for(session.name)),
     )
     narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
     advertised = {name for m in narrowed for name in m._allowed}
@@ -423,7 +423,7 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
         checkpointer=None,
         agent=agent,
         held=kf.held_for(held),
-        files=drive(kf._files_for(session.name, session)),
+        files=drive(kf._files_for(session.name)),
     ).graph
     report = withheld_by_kind(
         grants,
@@ -484,7 +484,7 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
         checkpointer=None,
         agent=drive(kf._agent_for(request, harness_in(session), source_ids=held)),
         held=kf.held_for(held),
-        files=drive(kf._files_for(session.name, session)),
+        files=drive(kf._files_for(session.name)),
     )
     narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
     advertised = {name for m in narrowed for name in m._allowed}

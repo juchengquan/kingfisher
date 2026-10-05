@@ -30,7 +30,7 @@ def named(spec: str):
 class Recording(SessionBackends):
     """A `SessionBackends` that satisfies the port and keeps nothing."""
 
-    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
+    def open(self, cfg, session_id, /, *, catalogue=None):
         return None
 
     def sessions(self, cfg):

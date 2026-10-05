@@ -110,8 +110,8 @@ def test_a_plain_factory_function_is_refused_with_the_way_forward(cfg):
     wired, naming the class to build on rather than failing at the first `reap`.
     """
 
-    def mine(cfg_, session_id, /, *, catalogue=None, runner=None):  # pragma: no cover
-        return default_backends.open(cfg_, session_id, catalogue=catalogue, runner=runner)
+    def mine(cfg_, session_id, /, *, catalogue=None):  # pragma: no cover
+        return default_backends.open(cfg_, session_id, catalogue=catalogue)
 
     with pytest.raises(TypeError, match="subclass DefaultBackends"):
         Kingfisher(cfg, backends=mine, threads=StubCheckpointer())  # ty: ignore[invalid-argument-type]
@@ -136,9 +136,9 @@ def test_a_backend_is_opened_per_turn_for_the_session_it_is_for(cfg, session_dir
     seen: list[str] = []
 
     class Mine(DefaultBackends):
-        def open(self, cfg_, session_id, /, *, catalogue=None, runner=None):
+        def open(self, cfg_, session_id, /, *, catalogue=None):
             seen.append(session_id)
-            return super().open(cfg_, session_id, catalogue=catalogue, runner=runner)
+            return super().open(cfg_, session_id, catalogue=catalogue)
 
     service = Kingfisher(cfg, backends=Mine())
     prepared = drive(service._prepare_steps(Request("go", agent="only")))
@@ -146,29 +146,37 @@ def test_a_backend_is_opened_per_turn_for_the_session_it_is_for(cfg, session_dir
     assert seen == [prepared.session.id]
 
 
-def test_open_is_handed_the_catalogue_and_the_runner_this_deployment_wired(
-    cfg, session_dir
-):
-    """Either one missing costs a deployment something with no symptom: without the
-    catalogue a session sees none of the bundles' skills, and without the runner its
-    commands run under kingfisher's own fence rather than wherever the deployment
-    sends them. The backend that comes back is well-formed either way, which is why
-    `open`'s signature is typed rather than merely documented.
+def test_open_is_handed_the_catalogue_this_deployment_resolved(cfg, session_dir):
+    """Without it a session sees none of the bundles' skills, and the backend that
+    comes back is well-formed either way, which is why `open`'s signature is typed
+    rather than merely documented.
     """
     an_agent(cfg)
-    seen: list[dict[str, object]] = []
-    runner = Elsewhere()
+    seen: list[object] = []
 
     class Mine(DefaultBackends):
-        def open(self, cfg_, session_id, /, *, catalogue=None, runner=None):
-            seen.append({"catalogue": catalogue, "runner": runner})
+        def open(self, cfg_, session_id, /, *, catalogue=None):
+            seen.append(catalogue)
             return super().open(cfg_, session_id, catalogue=catalogue)
 
-    service = Kingfisher(cfg, backends=Mine(), runner=lambda _where: runner)
+    service = Kingfisher(cfg, backends=Mine())
     drive(service._prepare_steps(Request("go", agent="only")))
 
-    assert seen[0]["catalogue"] is service.catalogue
-    assert seen[0]["runner"] is runner
+    assert seen[0] is service.catalogue
+
+
+def test_the_runner_the_session_backends_hold_runs_the_turns_commands(cfg, session_dir):
+    """Dropped on the way, a turn's commands run under kingfisher's own fence rather
+    than wherever the deployment sends them, on a backend that is well-formed either
+    way. Read off the backend the turn was set up on, not off what `open` was handed.
+    """
+    an_agent(cfg)
+    runner = Elsewhere()
+    service = Kingfisher(cfg, backends=DefaultBackends(runner=lambda _where: runner))
+
+    prepared = drive(service._prepare_steps(Request("go", agent="only")))
+
+    assert prepared.files.default.runner is runner
 
 
 def test_what_open_returns_is_what_the_agent_is_built_on(cfg, session_dir):
@@ -181,9 +189,9 @@ def test_what_open_returns_is_what_the_agent_is_built_on(cfg, session_dir):
     made: list[Substitute] = []
 
     class Mine(DefaultBackends):
-        def open(self, cfg_, session_id, /, *, catalogue=None, runner=None):
+        def open(self, cfg_, session_id, /, *, catalogue=None):
             made.append(
-                Substitute(super().open(cfg_, session_id, catalogue=catalogue, runner=runner))
+                Substitute(super().open(cfg_, session_id, catalogue=catalogue))
             )
             return made[-1]
 
@@ -194,7 +202,7 @@ def test_what_open_returns_is_what_the_agent_is_built_on(cfg, session_dir):
         service.grants,
         agent=drive(service._agent_for(asked, harness_in(session_dir))),
         held=None,
-        files=drive(service._files_for(session_dir.name, session_dir)),
+        files=drive(service._files_for(session_dir.name)),
     )
 
     assert built.backend is made[0]
