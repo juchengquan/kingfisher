@@ -11,6 +11,7 @@ import pytest
 from kingfisher import backend_at
 from kingfisher.infrastructure.harness.middlewares.workspace_tools import WorkspaceToolPaths
 from kingfisher.infrastructure.harness.tool_guards import guarded_tools
+from kingfisher.infrastructure.workspace import ensure_session_layout
 from tests.conftest import paths_in
 
 
@@ -26,15 +27,18 @@ def a_call(name: str = "line_count", **args: Any) -> Call:
 
 
 @pytest.fixture
-def session(tmp_path):
-    directory = tmp_path / "sessions" / "mine"
-    (directory / "data").mkdir(parents=True)
-    return directory
+def session(cfg):
+    return ensure_session_layout(cfg.workspace / "sessions" / "mine")
 
 
 @pytest.fixture
-def bridge(session):
-    return WorkspaceToolPaths(frozenset({"line_count", "csv_profile"}), paths_in(session))
+def paths(cfg, session):
+    return paths_in(cfg, session)
+
+
+@pytest.fixture
+def bridge(paths):
+    return WorkspaceToolPaths(frozenset({"line_count", "csv_profile"}), paths)
 
 
 def handed(bridge, request) -> Any:
@@ -112,11 +116,12 @@ def test_a_host_path_in_any_other_argument_is_refused(bridge, session):
     assert "host path" in answer.content
 
 
-def test_another_session_is_refused_where_no_host_root_would_catch_it():
+def test_another_session_is_refused_where_no_host_root_would_catch_it(cfg, session):
     """A container puts the workspace at `/workspace`, which is not a host root. What
     catches it there is the directory this session's siblings are in.
     """
-    mine = WorkspaceToolPaths(frozenset({"peek"}), paths_in(Path("/workspace/sessions/mine")))
+    siblings = paths_in(cfg, session, sessions=Path("/workspace/sessions"))
+    mine = WorkspaceToolPaths(frozenset({"peek"}), siblings)
     seen: list[object] = []
 
     answer = mine.wrap_tool_call(
@@ -400,8 +405,8 @@ def test_a_link_that_stays_inside_still_works(session, bridge):
 # objects rather than the middleware, because that is the whole difference.
 
 
-def guarded(one, root):
-    return guarded_tools([one], paths_in(root) if root is not None else None)[0]
+def guarded(one, paths):
+    return guarded_tools([one], paths)[0]
 
 
 def answered(wrapped, **args):
@@ -409,7 +414,7 @@ def answered(wrapped, **args):
     return wrapped.invoke({"type": "tool_call", "id": "c1", "name": wrapped.name, "args": args})
 
 
-def test_a_compiled_delegates_tool_is_handed_a_real_path(session):
+def test_a_compiled_delegates_tool_is_handed_a_real_path(paths, session):
     """The crash this exists for: the shipped `scribe` handed `show-your-work`
     path-taking tools, and `log_levels('/data/api.log')` raised `FileNotFoundError`
     because a compiled graph has no middleware to translate the path.
@@ -421,12 +426,12 @@ def test_a_compiled_delegates_tool_is_handed_a_real_path(session):
         """Report what it was handed."""
         return f"handed={path}"
 
-    answer = answered(guarded(peek, session), path="/data/notes.txt")
+    answer = answered(guarded(peek, paths), path="/data/notes.txt")
 
     assert answer.content == f"handed={session / 'data' / 'notes.txt'}"
 
 
-def test_a_tool_that_raises_answers_instead_of_ending_the_run(session):
+def test_a_tool_that_raises_answers_instead_of_ending_the_run(paths, session):
     """Measured inside a compiled graph: every exception reaches the caller and ends
     the run -- `ToolException` and `ValueError` as much as `FileNotFoundError`. A
     delegate that cannot report a bad path can only die on one.
@@ -439,13 +444,13 @@ def test_a_tool_that_raises_answers_instead_of_ending_the_run(session):
         msg = f"[Errno 2] No such file or directory: {path!r}"
         raise FileNotFoundError(msg)
 
-    answer = answered(guarded(missing, session), path="/data/gone.txt")
+    answer = answered(guarded(missing, paths), path="/data/gone.txt")
 
     assert answer.status == "error"
     assert "FileNotFoundError" in answer.content
 
 
-def test_climbing_out_is_refused_as_an_answer_rather_than_an_exception(session):
+def test_climbing_out_is_refused_as_an_answer_rather_than_an_exception(paths, session):
     """Refused *and* returned. Raising would have closed the leak by ending the run,
     which is the failure this wrapper replaced rather than one to reintroduce.
     """
@@ -456,14 +461,14 @@ def test_climbing_out_is_refused_as_an_answer_rather_than_an_exception(session):
         """Report what it was handed."""
         return f"handed={path}"
 
-    answer = answered(guarded(peek, session), path="../other/secret.txt")
+    answer = answered(guarded(peek, paths), path="../other/secret.txt")
 
     assert answer.status == "error"
     assert "/data/<name>" in answer.content
     assert "handed=" not in answer.content
 
 
-def test_a_host_path_in_another_argument_is_refused_here_too(session):
+def test_a_host_path_in_another_argument_is_refused_here_too(paths, session):
     """The leak that keys on the argument's name, closed on this path as well: a tool
     calling its file `input_file` was handed another session's secret.
     """
@@ -476,13 +481,13 @@ def test_a_host_path_in_another_argument_is_refused_here_too(session):
 
     other = session.parent / "other" / "data" / "secret.txt"
 
-    answer = answered(guarded(peek, session), input_file=str(other))
+    answer = answered(guarded(peek, paths), input_file=str(other))
 
     assert answer.status == "error"
     assert "handed=" not in answer.content
 
 
-def test_a_subclass_keeps_the_arguments_it_declares(session):
+def test_a_subclass_keeps_the_arguments_it_declares(paths, session):
     """A `BaseTool` subclass carries its arguments on `_run` rather than in an
     `args_schema`. A wrapper taking `**kwargs` advertised `kwargs` to the model and
     was then called with none of them -- measured, as `TypeError: _run() missing 1
@@ -497,13 +502,13 @@ def test_a_subclass_keeps_the_arguments_it_declares(session):
         def _run(self, path: str) -> str:
             return f"shouted {path}"
 
-    wrapped = guarded(Shout(), session)
+    wrapped = guarded(Shout(), paths)
 
     assert wrapped.args == Shout().args
     assert answered(wrapped, path="/data/x").content == f"shouted {session / 'data' / 'x'}"
 
 
-def test_a_plain_function_arrives_as_the_tool_the_graph_would_have_made(session):
+def test_a_plain_function_arrives_as_the_tool_the_graph_would_have_made(paths, session):
     """A plain function has no `BaseTool` machinery to report a refusal through, so it
     is normalised first -- and normalising must not change what it advertises.
     """
@@ -513,7 +518,7 @@ def test_a_plain_function_arrives_as_the_tool_the_graph_would_have_made(session)
         """Count them."""
         return f"counted {path}"
 
-    wrapped = guarded(peek_lines, session)
+    wrapped = guarded(peek_lines, paths)
     direct = StructuredTool.from_function(peek_lines)
 
     assert wrapped.name == direct.name
@@ -521,7 +526,7 @@ def test_a_plain_function_arrives_as_the_tool_the_graph_would_have_made(session)
     assert wrapped.args == direct.args
 
 
-def test_an_artifact_survives_the_wrapping(session):
+def test_an_artifact_survives_the_wrapping(paths, session):
     """A tool declaring `content_and_artifact` returns the pair through a
     `ToolMessage`, so a wrapper invoking the plain way would drop every artifact it
     passed on -- silently, since the content still arrives.
@@ -533,7 +538,7 @@ def test_an_artifact_survives_the_wrapping(session):
         """Return both."""
         return "counted", {"read": path}
 
-    answer = answered(guarded(paired, session), path="/data/x")
+    answer = answered(guarded(paired, paths), path="/data/x")
 
     assert answer.artifact == {"read": str(session / "data" / "x")}
 

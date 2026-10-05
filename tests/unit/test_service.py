@@ -121,7 +121,7 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     service = Kingfisher(cfg, backends=default_backends)
     asked = Request("go", agent="only")
 
-    built = drive(service._agent_for(asked, harness_in(session_dir)))
+    built = drive(service._agent_for(asked, harness_in(cfg, session_dir)))
     files = drive(service._files_for(session_dir.name))
 
     def once():
@@ -761,7 +761,7 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     elsewhere = ensure_session_layout(tmp_path / "for-one-turn" / "a-session")
     service = Kingfisher(cfg, backends=default_backends)
 
-    drive(service._agent_for(Request("go", agent="only"), harness_in(elsewhere)))
+    drive(service._agent_for(Request("go", agent="only"), harness_in(cfg, elsewhere)))
 
     assert agent_snapshot(elsewhere).is_file(), "the pin is not where the turn ran"
     assert not (cfg.workspace / "sessions" / elsewhere.name).exists(), (
@@ -769,4 +769,4 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     )
 
     with pytest.raises(CapabilityError, match="cannot be changed"):
-        drive(service._agent_for(Request("again", agent="other"), harness_in(elsewhere)))
+        drive(service._agent_for(Request("again", agent="other"), harness_in(cfg, elsewhere)))

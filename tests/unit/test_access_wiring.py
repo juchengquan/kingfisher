@@ -279,7 +279,7 @@ def reported(kf, source_ids, name: str):
     # Once, and handed to both, which is what a turn does: the build and the report
     # are the two readers of it, and resolving separately for each is what this
     # stopped doing.
-    agent = drive(kf._agent_for(request, harness_in(session), source_ids=held_names))
+    agent = drive(kf._agent_for(request, harness_in(kf.cfg, session), source_ids=held_names))
     graph = kf._graph_for(
         request,
         capabilities=kf._effective_grants(held_names),
@@ -321,7 +321,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         request,
         capabilities=grants,
         checkpointer=None,
-        agent=drive(kf._agent_for(request, harness_in(session), source_ids=held)),
+        agent=drive(kf._agent_for(request, harness_in(kf.cfg, session), source_ids=held)),
         held=kf.held_for(held),
         files=drive(kf._files_for(session.name)),
     ).graph
@@ -397,7 +397,7 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
         request,
         capabilities=kf._effective_grants(held),
         checkpointer=None,
-        agent=drive(kf._agent_for(request, harness_in(session), source_ids=held)),
+        agent=drive(kf._agent_for(request, harness_in(kf.cfg, session), source_ids=held)),
         held=kf.held_for(held),
         files=drive(kf._files_for(session.name)),
     )
@@ -415,7 +415,7 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
     grants = replace(kf._effective_grants(held), skills=granted)
     session = session_at(kf, "withheld-" + "-".join(held))
     request = Request(task="t", agent="skilled")
-    agent = drive(kf._agent_for(request, harness_in(session), source_ids=held))
+    agent = drive(kf._agent_for(request, harness_in(kf.cfg, session), source_ids=held))
     graph = kf._graph_for(
         request,
         capabilities=grants,
@@ -481,7 +481,7 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
         request,
         capabilities=kf._effective_grants(held),
         checkpointer=None,
-        agent=drive(kf._agent_for(request, harness_in(session), source_ids=held)),
+        agent=drive(kf._agent_for(request, harness_in(kf.cfg, session), source_ids=held)),
         held=kf.held_for(held),
         files=drive(kf._files_for(session.name)),
     )
