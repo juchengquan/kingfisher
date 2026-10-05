@@ -1,23 +1,54 @@
-"""A session's files as kingfisher reaches them: through the backend the agent runs on.
+"""A caller's files into a session's `/data`, and what a turn left back out of it.
 
-Never through the session directory. A backend that runs somewhere else holds the
-session there, and a directory on this host is then a place the agent never sees --
-a caller's files placed where the agent cannot read them, and a turn that wrote a
-report handing back nothing.
+Through the backend the agent runs on, never through the session directory. A
+backend that runs somewhere else holds the session there, and a directory on this
+host is then a place the agent never sees -- a caller's files placed where the agent
+cannot read them, and a turn that wrote a report handing back nothing.
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from kingfisher.domain.result import ArtifactError
 from kingfisher.infrastructure.steps import Steps, changing, on_host, reading
-from kingfisher.infrastructure.workspace.placement import DataError, DataPlacement, checked
 from kingfisher.layout import ARTIFACT_DIRS, DATA_ROUTE
 
 _log = logging.getLogger(__name__)
+
+
+class DataError(ValueError):
+    """A caller-supplied file cannot be placed in a session's `/data`."""
+
+
+def checked(sources: tuple[Path, ...]) -> dict[str, Path]:
+    """Every source keyed by the name it will land under."""
+    seen: dict[str, Path] = {}
+    for source in sources:
+        name = Path(source).name
+        if name in {"", ".", ".."}:
+            msg = f"{source}: has no filename to place it under"
+            raise DataError(msg)
+        if not Path(source).is_file():
+            msg = f"{source}: no such file"
+            raise DataError(msg)
+        if name in seen:
+            # Keeping the last one silently loses a file the caller asked for.
+            msg = f"{name}: supplied twice, from {seen[name]} and {source}"
+            raise DataError(msg)
+        seen[name] = Path(source)
+    return seen
+
+
+@dataclass(frozen=True)
+class DataPlacement:
+    """What `place_data` did. `replaced` is a subset of `placed`."""
+
+    placed: tuple[str, ...] = ()
+    replaced: tuple[str, ...] = ()
 
 
 def place_data(sources: tuple[Path, ...], backend: Any) -> Steps[DataPlacement]:

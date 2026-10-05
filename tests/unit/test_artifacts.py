@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from kingfisher import backend_at, default_backends
 from kingfisher.application.run import Request, run
-from kingfisher.infrastructure.harness.session_files import collect_artifacts
+from kingfisher.infrastructure.session_files import collect_artifacts
 from kingfisher.infrastructure.steps import drive
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
