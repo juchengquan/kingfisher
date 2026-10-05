@@ -267,9 +267,9 @@ id handed the same storage.
 `aclaim` for the async path, `release(name)` and `held(name, *, stale_after)`: a claim
 that fails while another is live, which a `write` cannot be, because a `write`
 overwrites and two turns would both take it. `default_backends` does it with `mkdir`,
-through `SessionClaims`, which also gives `aclaim` as `claim` on kingfisher's pool.
-`release` has no async twin: it runs where a turn is let go of, which must finish
-however often its caller is cancelled. Two turns in one
+through `SessionClaims`, which also gives `aclaim` and `arelease`, running `claim`
+and `release` on kingfisher's pool. Override them where your lock is a round trip
+you can await. Two turns in one
 session share a conversation and the last write wins, so this is what refuses the
 second.
 
@@ -385,8 +385,8 @@ better place to read a failure than a turn is. And run
 sessions are kept apart, that a session is there on the next turn, that the claim
 is exclusive, that what is listed and deleted is what exists, that where you say
 a file is on this host it is that session's file, and that every async twin —
-`aopen`, `asessions`, `adelete`, `aclaim`, `asize` and `amark_used` — answers as its
-sync one does.
+`aopen`, `asessions`, `adelete`, `aclaim`, `arelease`, `asize` and `amark_used` —
+answers as its sync one does.
 
 **The shell and the file tools have to be two views of one filesystem**, and this
 is the one left that reports nothing on its own. A virtual path becomes a shell

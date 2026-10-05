@@ -3545,6 +3545,32 @@ work arrives with none idle, and after five turns in a row it held one. A proces
 serving a single session therefore uses one or two whatever the number says.
 *(2026-10-05.)*
 
+**A turn's ending is awaited too, run as a task no cancel reaches.** Measured after
+the pool went to 16, what still queued with concurrent turns was the ending: four
+round trips each, on kingfisher's pool so that nothing could interrupt them, and two
+hundred turns took 3173ms against one turn's 522ms. The ending is now a sequence like
+setup -- the pause, the transcript, the artifacts and the claim awaited, the run log,
+the state read and the closing of the saver and the interpreter on the pool as host
+work -- which `stream` drives with no await in it and `astream` runs through
+`finished`, as a task of its own that the caller's cancel never reaches, waited for
+however many times that cancel comes. Two hundred turns now take 646ms at the pool of
+16, and 638ms at a pool of 4: the size no longer decides it.
+
+**That replaces a guarantee rather than keeping it**, and the difference is said here
+rather than discovered. A thread nothing could interrupt also outlived its event
+loop; a task does not. `astream` is waiting on the ending whenever it runs, so the
+loop does not end first unless something stops it outright, and that is the case
+this gives up. `test_the_turns_ending_runs_to_the_end_however_often_it_is_cancelled`
+cancels at every step of the ending three times over and requires every step to
+have run, which is what the structural check on `_end_turn` stood for. `release` has
+an async twin after all, `arelease`, since the protected task is what keeps it from
+being stopped halfway -- and setup gives a refused turn's claim back with it too,
+which was the last sync call to the backend left on the async path.
+
+The pool's default stays 16, for a reason other than the one given for it above: a
+turn hands the pool no round trip now, but session backends whose async methods are
+the protocol's defaults still run every sync call there. *(2026-10-05.)*
+
 **Asked and declined: making a turn a langchain `Runnable`.** The question is
 reasonable -- `Runnable` is the interface that ecosystem's callers already know,
 and it would bring `batch`, `astream_events` and LCEL composition with it. Three

@@ -88,6 +88,19 @@ class ClaimsBesideClaim(DefaultBackends):
         return built
 
 
+class KeepsTheClaimAsync(DefaultBackends):
+    """An `arelease` that gives nothing back."""
+
+    def open(self, cfg, session_id, /, *, catalogue=None):
+        built = super().open(cfg, session_id, catalogue=catalogue)
+
+        async def arelease(name):
+            return None
+
+        built.arelease = arelease
+        return built
+
+
 class WeighsNothingAsync(DefaultBackends):
     async def asize(self, cfg, session_id):
         return 0
@@ -102,10 +115,11 @@ class MarksNothingAsync(DefaultBackends):
     ("check", "backends", "said"),
     [
         ("aclaim_and_claim_exclude_each_other", ClaimsBesideClaim, "still holds"),
+        ("arelease_gives_back_what_claim_took", KeepsTheClaimAsync, "left the claim held"),
         ("asize_counts_what_size_does", WeighsNothingAsync, "where size counts"),
         ("amark_used_moves_the_session_on", MarksNothingAsync, "as last used as it was"),
     ],
-    ids=["aclaim", "asize", "amark_used"],
+    ids=["aclaim", "arelease", "asize", "amark_used"],
 )
 def test_the_kit_catches_an_async_twin_that_disagrees(cfg, check, backends, said):
     with pytest.raises(AssertionError, match=said):

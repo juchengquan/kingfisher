@@ -591,28 +591,73 @@ def test_setup_runs_on_kingfishers_pool_in_the_callers_context(cfg, monkeypatch)
     assert context == "set-by-the-caller"
 
 
-def test_the_turns_cleanup_cannot_be_interrupted_by_a_cancellation():
-    """Why the tests above hold by construction and not by timing.
+def test_the_turns_ending_runs_to_the_end_however_often_it_is_cancelled(cfg, monkeypatch):
+    """A cancel at any step of a turn's ending -- the run log, the pause, the
+    transcript, the artifacts, the claim, the saver, the interpreter -- and again while
+    it unwinds, must not stop it: every step after it still runs, and the session is
+    free when the cancel returns. Each step is awaited now and an await is where a
+    cancel lands, so this is what running the ending as a task no cancel reaches has
+    to hold up -- the sync function it replaced held it by having no await at all.
 
-    A cancellation is delivered at a suspension point. `_end_turn`, which releases the
-    claim, the checkpointer and the interpreter, is a plain function with nothing in it
-    to suspend at, so once it starts it finishes -- however many times a caller
-    cancels, and however slow it gets. `astream` runs it on kingfisher's pool and
-    waits for it through every cancel; `stream` runs it where it is.
-
-    Made async for the async path, it would start being interruptible, every test
-    above would pass on timing alone, and nothing else here would notice.
+    Counted rather than listed, so a step added to the ending is cancelled at too.
     """
-    import inspect
+    from kingfisher.infrastructure import steps as steps_module
 
-    from kingfisher.application.service import Kingfisher as Service
+    session = start(cfg, "s")
+    kf = service(cfg)
+    asked = Request("go", session_id=session)
+    real = steps_module._awaited
+    kf.run(asked)  # the count is taken on a turn like the ones cancelled below
 
-    ending = Service._end_turn
-    assert not inspect.iscoroutinefunction(ending), (
-        "`_end_turn` is a coroutine now, so a cancellation can stop it halfway -- "
-        "between giving the claim back and closing the checkpointer, or before either"
-    )
-    assert not inspect.isasyncgenfunction(ending) and not inspect.isgeneratorfunction(ending)
+    made: list[object] = []
+
+    def counting(step):
+        made.append(step)
+        return real(step)
+
+    monkeypatch.setattr(steps_module, "_awaited", counting)
+    asyncio.run(kf.arun(asked))
+    monkeypatch.setattr(steps_module, "_awaited", real)
+    names = [getattr(getattr(step, "fn", None), "__name__", "") for step in made]
+    ending = names.index("run_end")
+    # The control: an ending of a step or two would be cancelled at a step or two.
+    assert len(made) - ending >= 5, f"the ending made {len(made) - ending} async steps"
+
+    async def cancel_at(target: int) -> int:
+        entered, gate = asyncio.Event(), asyncio.Event()
+        count = 0
+
+        def awaited(step):
+            nonlocal count
+            count += 1
+            if count != target:
+                return real(step)
+
+            async def held_here():
+                entered.set()
+                await gate.wait()
+                return await real(step)
+
+            return held_here()
+
+        monkeypatch.setattr(steps_module, "_awaited", awaited)
+        task = asyncio.ensure_future(kf.arun(asked))
+        await asyncio.wait_for(entered.wait(), timeout=5)
+        for _ in range(3):
+            task.cancel()
+            await asyncio.sleep(0)
+        gate.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        return count
+
+    for target in range(ending + 1, len(made) + 1):
+        reached = asyncio.run(cancel_at(target))
+        monkeypatch.setattr(steps_module, "_awaited", real)
+        step = made[target - 1]
+        assert reached == len(made), f"cancelled at {step!r}, the ending stopped at {reached}"
+        assert not _claim(cfg, session).exists(), f"cancelled at {step!r}, the claim stayed"
+        assert kf.run(asked).completed, f"cancelled at {step!r}, the session was left unusable"
 
 
 def test_the_callers_context_reaches_the_turn(cfg):

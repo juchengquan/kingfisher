@@ -127,7 +127,7 @@ from kingfisher.infrastructure.steps import (
     drive,
     on_host,
 )
-from kingfisher.infrastructure.threads import finished, off_loop, thread_pool
+from kingfisher.infrastructure.threads import finished, thread_pool
 from kingfisher.infrastructure.workspace import (
     SEED_HINT,
     STARTER_AGENT,
@@ -691,8 +691,8 @@ class Kingfisher(Sessions, Disposal):
                 )
             )
         except BaseException:
-            # Sync, so that nothing can stop it halfway: a cancel lands at an `await`.
-            files.release(CLAIM)
+            # A call that changes something, so a cancel arriving during it waits for it.
+            yield changing(files, "release", CLAIM)
             raise
 
     def _claimed(  # noqa: PLR0913 -- what setup already built, handed on rather
@@ -988,10 +988,10 @@ class Kingfisher(Sessions, Disposal):
             msg = f"session {session.id} recorded a pause whose state cannot be read: {exc}"
             raise DecisionError(msg) from exc
 
-    def _keep(self, prepared: Prepared, snapshot: Any) -> tuple[str, ...]:
+    def _keep(self, prepared: Prepared, snapshot: Any) -> Steps[tuple[str, ...]]:
         """Persist what this turn produced, and name it."""
-        self._record(prepared, snapshot)
-        return drive(collect_artifacts(prepared.files))
+        yield from self._record_transcript(prepared, snapshot)
+        return (yield from collect_artifacts(prepared.files))
 
     def _finished(  # noqa: PLR0913 -- one terminal event, assembled from the four
         # things a turn ends holding. A parameter object here would exist only to
@@ -1046,7 +1046,7 @@ class Kingfisher(Sessions, Disposal):
             # answer still says so.
             return None
 
-    def _record(self, prepared: Prepared, snapshot: Any) -> None:
+    def _record_transcript(self, prepared: Prepared, snapshot: Any) -> Steps[None]:
         """Write what was said this turn, as records this package owns."""
         if not self.cfg.conversation_enabled:
             return
@@ -1058,9 +1058,11 @@ class Kingfisher(Sessions, Disposal):
             return
         messages = snapshot.values.get("messages")
         if messages:
-            drive(write_transcript(prepared.harness, runtime.as_transcript(messages)))
+            yield from write_transcript(prepared.harness, runtime.as_transcript(messages))
 
-    def _settle_pause(self, prepared: Prepared, snapshot: Any) -> tuple[PendingDecision, ...]:
+    def _settle_pause(
+        self, prepared: Prepared, snapshot: Any
+    ) -> Steps[tuple[PendingDecision, ...]]:
         """Keep a paused turn's graph state, or clear a pause this turn finished.
 
         Written here and nowhere else, which is what keeps the file's presence a
@@ -1081,22 +1083,20 @@ class Kingfisher(Sessions, Disposal):
             # store is the deployment's, and holding its state in a file of ours
             # would be a second copy nobody asked for.
             if prepared.resume is not None:
-                drive(clear_pause(harness))
+                yield from clear_pause(harness)
             return ()
-        drive(harness.store(PAUSED_STATE, paused_state(prepared.saver)))
+        yield from harness.store(PAUSED_STATE, (yield on_host(paused_state, prepared.saver)))
         # The state first, then the mark. The mark is what every other path tests to
         # decide a session is waiting, so writing it second means a write that dies
         # between the two leaves a session that is simply not paused -- rather than
         # one that claims to be and has nothing to resume into.
-        drive(
-            write_pause_mark(
-                harness,
-                {
-                    AGENT_MARK: prepared.agent_name or "",
-                    PENDING_MARK: pending_as_mark(waiting),
-                    **harness_mark(),
-                },
-            )
+        yield from write_pause_mark(
+            harness,
+            {
+                AGENT_MARK: prepared.agent_name or "",
+                PENDING_MARK: pending_as_mark(waiting),
+                **harness_mark(),
+            },
         )
         return waiting
 
@@ -1126,7 +1126,7 @@ class Kingfisher(Sessions, Disposal):
         """How a turn's graph loop ended, recorded on `turn`, for both loops.
 
         A bound or a translation added here reaches `stream` and `astream` at once;
-        they differ only in the loop, and in where `_end_turn` runs after it.
+        they differ only in the loop, and in how the ending is run after it.
         """
         try:
             yield
@@ -1151,22 +1151,36 @@ class Kingfisher(Sessions, Disposal):
             raise refused from exc
 
     def _end_turn(self, turn: _Turn) -> None:
-        """Everything a turn does once it is over, however it ended.
+        """Everything a turn does once it is over, for `stream`, which runs it inline."""
+        drive(self._ending_steps(turn))
 
-        Sync, and so uninterruptible: a cancellation lands at an `await`, and there
-        is none in here to land at. `stream` runs it inline; `astream` runs it on
-        kingfisher's pool, through `_end_turn_off_the_loop`.
+    async def _aend_turn(self, turn: _Turn) -> None:
+        """Everything a turn does once it is over, for `astream`.
+
+        Awaited as a task of its own, which no cancel reaches, and waited for however
+        many times the caller is cancelled meanwhile -- so every step runs, reads
+        included, as on a thread nothing could interrupt, without holding one: each
+        step is a round trip on a remote backend, and on kingfisher's pool two hundred
+        concurrent turns queued for them. What a task does not have that a thread did
+        is surviving its event loop, and the loop goes on while `astream` waits here,
+        which it always does.
         """
+        _, cancelled = await finished(adrive(self._ending_steps(turn)))
+        if cancelled is not None:
+            raise cancelled
+
+    def _ending_steps(self, turn: _Turn) -> Steps[None]:
+        """What a turn does once it is over, however it ended."""
         prepared = turn.prepared
-        prepared.logger.run_end(ok=turn.ok, answer_chars=len(turn.answer))
+        yield on_host(prepared.logger.run_end, ok=turn.ok, answer_chars=len(turn.answer))
         # Before the slot goes back, and inside its own `finally` so that a
         # store which is unreachable does not also leak the claim. Ending
         # the turn is the only moment that happens whether the caller read
         # the last event or walked away after the answer.
         # One read, before anything is let go of: the saver still holds the
         # paused state, and `_settle_pause` is what writes it out.
-        snapshot = self._settled(prepared)
-        turn.awaiting = self._settle_pause(prepared, snapshot)
+        snapshot = yield on_host(self._settled, prepared)
+        turn.awaiting = yield from self._settle_pause(prepared, snapshot)
         if turn.awaiting:
             turn.pending.append(decision_needed(turn.awaiting))
             # A bound that already fired keeps the reason it gave. Both are true
@@ -1178,18 +1192,18 @@ class Kingfisher(Sessions, Disposal):
             if turn.stop_reason == END_TURN:
                 turn.stop_reason = AWAITING
         try:
-            turn.kept = self._keep(prepared, snapshot)
+            turn.kept = yield from self._keep(prepared, snapshot)
         finally:
             # The slot goes back however the turn ended -- answered, refused
             # mid-stream, cut short by its deadline, or cancelled during setup.
-            prepared.files.release(CLAIM)
+            yield changing(prepared.files, "release", CLAIM)
         # And so does the connection, when this service opened one. A
         # per-session database is a file descriptor per session, so a
         # process serving many would otherwise hold every one it touched.
-        release_checkpointer(prepared.release)
+        yield on_host(release_checkpointer, prepared.release)
         # And the QuickJS runtime, which is the one of the three that hangs
         # the process rather than leaking a handle. See `release_interpreter`.
-        release_interpreter(self.cfg, prepared.graph)
+        yield on_host(release_interpreter, self.cfg, prepared.graph)
 
     def _read(self, turn: _Turn, namespace: Any, mode: Any, chunk: Any) -> tuple[RunEvent, ...]:
         """One stream chunk, read as events. The answer accumulates on `turn`."""
@@ -1296,7 +1310,7 @@ class Kingfisher(Sessions, Disposal):
         if cancelled is not None:
             # The cancel arrived while the turn was being built, so the built turn is
             # the caller's to let go of: ended the way any turn ends, then the cancel.
-            await self._end_turn_off_the_loop(turn)
+            await self._aend_turn(turn)
             raise cancelled
         try:
             with self._turn_outcome(turn):
@@ -1311,22 +1325,9 @@ class Kingfisher(Sessions, Disposal):
                         yield stop
                         break
         finally:
-            await self._end_turn_off_the_loop(turn)
+            await self._aend_turn(turn)
         for event in self._ending(turn):
             yield event
-
-    async def _end_turn_off_the_loop(self, turn: _Turn) -> None:
-        """`_end_turn` on kingfisher's pool, waited for however many times the caller is
-        cancelled meanwhile.
-
-        Off the loop because ending a turn is round trips to the session's backend --
-        the pause, the transcript, the artifact listing, the claim -- which on the loop
-        every other turn would wait through. Waited for because returning first would
-        hand a retry a session still claimed.
-        """
-        _, cancelled = await finished(off_loop(self._pool, self._end_turn, turn))
-        if cancelled is not None:
-            raise cancelled
 
     def run(
         self,

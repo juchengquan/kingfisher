@@ -139,6 +139,11 @@ class RemoteFiles:
         with self.remote.lock:
             self.remote.claims.discard((self.session_id, name))
 
+    async def arelease(self, name):
+        await _awaited()
+        with self.remote.lock:
+            self.remote.claims.discard((self.session_id, name))
+
 
 class Remote(SessionBackends):
     """Session backends a round trip away, with an async client as well as a sync one."""
@@ -149,11 +154,11 @@ class Remote(SessionBackends):
         self.claims: set = set()
         self.lock = threading.Lock()
 
-    def open(self, cfg, session_id, /, *, catalogue=None, runner=None):
+    def open(self, cfg, session_id, /, *, catalogue=None):
         _blocking()
         return RemoteFiles(self, session_id)
 
-    async def aopen(self, cfg, session_id, /, *, catalogue=None, runner=None):
+    async def aopen(self, cfg, session_id, /, *, catalogue=None):
         await _awaited()
         return RemoteFiles(self, session_id)
 

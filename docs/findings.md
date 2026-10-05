@@ -79,14 +79,15 @@ for the next reader who reaches for one.*
   the opposite case and its guard fails when it goes: there a caller can run
   synchronous work with no loop turn in between.
 - **Cancellation cannot interrupt a turn's cleanup, and the reason is
-  structural.** A cancellation is delivered at a suspension point, and `_end_turn`
-  is a plain function -- the claim, the checkpointer and the interpreter are
-  released without ever suspending. `astream` runs it on kingfisher's pool and
-  waits for it however many times it is cancelled, so the loop is not held up for
-  it and nothing returns before it is done. Cancelling twice, five
-  times, during the unwinding, or through `wait_for` and `asyncio.timeout` all
-  leave the session free. Made async, that stops being true and every one of
-  those tests would pass on timing alone.
+  structural.** A cancellation is delivered at an `await` of the task it is aimed
+  at. `stream` drives the cleanup with no await in it at all; `astream` runs the same
+  sequence as a task of its own, which no cancel is aimed at, and waits for it
+  through every cancel -- so the claim, the checkpointer and the interpreter are
+  released however the waiting is interrupted. Cancelling twice, five times, during
+  the unwinding, or through `wait_for` and `asyncio.timeout` all leave the session
+  free. Awaited in the caller's own task instead, every one of those tests would
+  pass on timing alone. A task does not outlive its event loop, where a thread
+  did; `astream` is waiting on it whenever it runs, so the loop does not end first.
 - **Context reaches the worker through either helper, but not through the
   executor directly.** `asyncio.to_thread` copies the current context, and
   langchain's `run_in_executor` does it by hand -- `partial(copy_context().run,
@@ -132,6 +133,10 @@ for the next reader who reaches for one.*
   | 10 | 534ms | 953ms | 532ms | 535ms |
   | 50 | 2697ms | 3126ms | 1178ms | 556ms |
   | 200 | 9153ms | 11178ms | 3173ms | 1274ms |
+
+  Since the ending is awaited as well, a turn hands the pool no round trip at all,
+  and the pool's size stops mattering: two hundred concurrent turns took 638ms at a
+  pool of 4, 646ms at 16 and 630ms at 64, against a single turn's 518ms.
 
   The same turns on kingfisher's own filesystem backend take 4ms each and are
   CPU-bound: at 200 at once, 1103ms handed to threads and 1488ms awaited, the

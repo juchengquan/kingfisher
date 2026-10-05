@@ -433,6 +433,27 @@ def aclaim_and_claim_exclude_each_other(make: Callable[[], Any]) -> None:
     other.release("contract-twins")
 
 
+def arelease_gives_back_what_claim_took(make: Callable[[], Any]) -> None:
+    """An async turn gives its claim back with `arelease`. One that kept it would leave
+    the session answering "busy" to every turn after the first.
+    """
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    files = backends.open(cfg, one)
+
+    async def released() -> None:
+        await files.arelease("contract-given-back")
+
+    if not files.claim("contract-given-back", stale_after=3600):
+        msg = "a claim nobody held was refused"
+        raise AssertionError(msg)
+    _on_a_loop_of_its_own(released)
+    if not files.claim("contract-given-back", stale_after=3600):
+        msg = "arelease left the claim held: a second turn could not take it"
+        raise AssertionError(msg)
+    files.release("contract-given-back")
+
+
 def asize_counts_what_size_does(make: Callable[[], Any]) -> None:
     """An async turn checks the quota with `asize`. Counted differently, a session would
     be over its bound for one kind of caller and under it for the other.
@@ -487,6 +508,7 @@ SESSION_BACKENDS_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (
     asessions_lists_what_sessions_does,
     adelete_removes_the_session,
     aclaim_and_claim_exclude_each_other,
+    arelease_gives_back_what_claim_took,
     asize_counts_what_size_does,
     amark_used_moves_the_session_on,
 )
