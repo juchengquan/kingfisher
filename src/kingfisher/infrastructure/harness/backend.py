@@ -221,12 +221,12 @@ class SessionClaims:
         return await off_loop(thread_pool(), self.claim, name, stale_after=stale_after, now=now)
 
     def release(self, name: str) -> None:
-        """Give `name` back. Safe where it was never taken.
-
-        Sync, and with no async twin: it runs where a turn is let go of, which has to
-        finish however many times its caller is cancelled.
-        """
+        """Give `name` back. Safe where it was never taken."""
         LocalSessionDirs().remove_tree(self._claim_path(name))
+
+    async def arelease(self, name: str) -> None:
+        """`release`, for the async path."""
+        return await off_loop(thread_pool(), self.release, name)
 
     def held(self, name: str, *, stale_after: float, now: float | None = None) -> bool:
         """Whether a claim on `name` is young enough that its turn may be running.

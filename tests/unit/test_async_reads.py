@@ -170,3 +170,26 @@ def test_a_turn_reads_the_pin_once(cfg, monkeypatch):
     kf.run(asked, source_ids=("A",))
 
     assert reads == [pin]
+
+
+def test_an_async_turn_refused_after_its_claim_gives_it_back_off_the_loop(
+    cfg, sync_calls, tmp_path
+):
+    """Refused once claimed -- here over data naming a file that is not there -- setup
+    gave the claim back with the sync `release`, on the loop, a round trip every other
+    turn waited through on a remote backend.
+    """
+    from kingfisher.infrastructure.workspace.placement import DataError
+
+    kf = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
+    start(cfg, "s")
+    sync_calls.clear()
+
+    with pytest.raises(DataError):
+        asyncio.run(kf.arun(Request("go", session_id="s", data=(tmp_path / "nope.csv",))))
+
+    released = [loop for name, loop in sync_calls if name == "SessionClaims.release"]
+    assert released, "the claim was never given back"
+    assert not any(released), "the claim was given back on the event loop's thread"

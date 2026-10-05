@@ -55,12 +55,12 @@ method that opens a session is named rather than being the object's `__call__`.
   kingfisher's thread pool. Override one where it is a round trip you can await.
 - **If yours subclass neither**, they are refused at construction until they have all
   five. Subclassing `SessionBackends` is the shortest fix.
-- **The backend `open` returns needs `aclaim`** beside `claim`. One built on
-  `SessionClaims`, as kingfisher's are, has it already.
-- `SESSION_BACKENDS_CONTRACT` has six more checks, one for each async twin:
+- **The backend `open` returns needs `aclaim` and `arelease`** beside `claim` and
+  `release`. One built on `SessionClaims`, as kingfisher's are, has them already.
+- `SESSION_BACKENDS_CONTRACT` has seven more checks, one for each async twin:
   `aopen_reaches_the_session_open_does`, `asessions_lists_what_sessions_does`,
   `adelete_removes_the_session`, `aclaim_and_claim_exclude_each_other`,
-  `asize_counts_what_size_does` and `amark_used_moves_the_session_on`, which waits a
+  `arelease_gives_back_what_claim_took`, `asize_counts_what_size_does` and `amark_used_moves_the_session_on`, which waits a
   second so a coarse filesystem clock still sees the session move on.
 - **A checkpointer passed as `threads=`** is deleted from with its own `adelete_thread`
   on the async path, or on kingfisher's thread pool where it has none or raises
