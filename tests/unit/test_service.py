@@ -101,13 +101,13 @@ def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
     # looked at, which is the thing this asserts.
     asked = Request("go")
     assert service._graph_for(
-        asked, session_dir, asked.capabilities, agent=None, held=None, files=None
+        asked, asked.capabilities, agent=None, held=None, files=None
     ) is agent
 
     with pytest.raises(ValueError, match="pre-built graph"):
         narrowed = Request("go", capabilities=Capabilities(builtin_tools=("read_file",)))
         service._graph_for(
-            narrowed, session_dir, narrowed.capabilities, agent=None, held=None, files=None
+            narrowed, narrowed.capabilities, agent=None, held=None, files=None
         )
 
 
@@ -126,7 +126,7 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
 
     def once():
         return service._graph_for(
-            asked, session_dir, service.grants, agent=built, held=None, files=files
+            asked, service.grants, agent=built, held=None, files=files
         )
 
     assert once() is not once()

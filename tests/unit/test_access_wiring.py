@@ -283,7 +283,6 @@ def reported(kf, source_ids, name: str):
     agent = drive(kf._agent_for(request, harness_in(session), source_ids=held_names))
     graph = kf._graph_for(
         request,
-        session,
         capabilities=kf._effective_grants(held_names),
         checkpointer=None,
         agent=agent,
@@ -321,7 +320,6 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
     request = Request(task="t", agent="surveyor")
     graph = kf._graph_for(
         request,
-        session,
         capabilities=grants,
         checkpointer=None,
         agent=drive(kf._agent_for(request, harness_in(session), source_ids=held)),
@@ -398,7 +396,6 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
     request = Request(task="t", agent="skilled")
     built = kf._graph_for(
         request,
-        session,
         capabilities=kf._effective_grants(held),
         checkpointer=None,
         agent=drive(kf._agent_for(request, harness_in(session), source_ids=held)),
@@ -422,7 +419,6 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
     agent = drive(kf._agent_for(request, harness_in(session), source_ids=held))
     graph = kf._graph_for(
         request,
-        session,
         capabilities=grants,
         checkpointer=None,
         agent=agent,
@@ -484,7 +480,6 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
     request = Request(task="t", agent="skilled")
     built = kf._graph_for(
         request,
-        session,
         capabilities=kf._effective_grants(held),
         checkpointer=None,
         agent=drive(kf._agent_for(request, harness_in(session), source_ids=held)),

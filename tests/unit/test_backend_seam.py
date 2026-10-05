@@ -191,7 +191,6 @@ def test_what_open_returns_is_what_the_agent_is_built_on(cfg, session_dir):
     service = Kingfisher(cfg, backends=Mine())
     built = service._graph_for(
         asked,
-        session_dir,
         service.grants,
         agent=drive(service._agent_for(asked, harness_in(session_dir))),
         held=None,
