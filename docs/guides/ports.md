@@ -152,7 +152,9 @@ It is called on the thread running the turn, once per event and in order.
 ## The rest
 
 **A checkpointer every session shares** is passed as `threads=` and is langgraph's
-own type, so there is no protocol of ours for it to satisfy. Deleting a session asks
+own type, so there is no protocol of ours for it to satisfy. A factory passed as
+`threads=` instead is called with a session's id at the start of each of its turns,
+and what it returns is released when the turn ends. Deleting a session asks
 it to delete that session's thread — `delete_thread`, or `adelete_thread` on the async
 path where the saver has one and on kingfisher's thread pool where it does not — and
 `reap` asks it to `list` its threads where it can, to find any no session owns.

@@ -136,11 +136,15 @@ def test_an_injected_store_is_used_as_it_is_and_not_closed(cfg):
 
 
 def test_a_factory_is_asked_once_per_session(cfg):
-    """The seam an async deployment uses: given a session, hand back a saver."""
-    seen: list[str] = []
+    """The seam an async deployment uses: given a session, hand back a saver.
 
-    def factory(session_dir):
-        seen.append(session_dir.name)
+    Given its id, not a directory on this host: a session its backend keeps elsewhere
+    has none here, and a factory handed one would put the saver beside nothing.
+    """
+    seen: list[object] = []
+
+    def factory(session_id):
+        seen.append(session_id)
         return StubCheckpointer()
 
     kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends, threads=factory)
@@ -163,7 +167,7 @@ def test_the_connection_does_not_outlive_the_turn(cfg):
             closed.append(self)
 
     kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=lambda _dir: Recorder()
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=lambda _id: Recorder()
     )
     kf.run(Request("go"))
 
@@ -187,7 +191,7 @@ def test_a_turn_that_fails_to_build_closes_the_saver_it_opened(cfg):
             closed.append(self)
 
     kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=lambda _dir: Recorder()
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=lambda _id: Recorder()
     )
     # A supplied graph cannot be narrowed, so asking it to be is a build that raises.
     narrowed = Request("go", capabilities=Capabilities(builtin_tools=("read_file",)))
@@ -269,7 +273,7 @@ def test_the_flag_wins_over_an_injected_store(cfg):
     stateless = replace_cfg(cfg, conversation_enabled=False)
     service = Kingfisher(stateless, graph=StubAgent("ok"), backends=default_backends, threads=store)
 
-    saver, release = service._checkpointer_for(_session_dir(cfg, "anything"))
+    saver, release = service._checkpointer_for("anything")
 
     assert saver is None
     assert release is None

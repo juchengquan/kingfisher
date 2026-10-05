@@ -56,6 +56,13 @@ method that opens a session is named rather than being the object's `__call__`.
   deletes this way too. `kingfisher.domain.ports.ThreadStore` is gone; `threads=` is
   typed `Any`, and is still a langgraph checkpointer.
 
+## Saver factories after #639
+
+A factory passed as `threads=` is called with the session's id where it was called
+with the session's directory, `<workspace>/sessions/<id>`. A factory that kept a file
+per session on this host builds that path itself, from its own configuration. A
+checkpointer passed as `threads=` rather than a factory is unaffected.
+
 ## Checklist
 
 1. **Remove `KINGFISHER_SESSION_STORE` and `KINGFISHER_SESSION_STORE_FACTORY`** if
