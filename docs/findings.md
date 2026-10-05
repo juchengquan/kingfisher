@@ -118,6 +118,25 @@ for the next reader who reaches for one.*
   simulated 50ms round trip on the same host: 200 concurrent calls took 917ms on
   the default executor, 73ms on a 256-thread pool and 56ms awaited natively
   (2026-10-02). Why kingfisher's setup runs on a pool of its own.
+- **End to end, kingfisher's awaited path holds; what still queues is the turn's
+  ending.** `spikes/async_scaling.py` runs kingfisher against session backends
+  whose every call takes 50ms, sync and async alike (2026-10-05). A read awaits all
+  three of its round trips: 200 concurrent `apending` calls took 192ms, against
+  2754ms handing `pending` to a thread each. A turn on a pre-built graph awaits the
+  six in setup and hands the four in its ending to kingfisher's pool, so the pool's
+  size is what decides it:
+
+  | Concurrent turns | Thread per call | Pool 4 | Pool 16 | Pool 64 |
+  |---|---|---|---|---|
+  | 1 | 547ms | 523ms | 522ms | 526ms |
+  | 10 | 534ms | 953ms | 532ms | 535ms |
+  | 50 | 2697ms | 3126ms | 1178ms | 556ms |
+  | 200 | 9153ms | 11178ms | 3173ms | 1274ms |
+
+  The same turns on kingfisher's own filesystem backend take 4ms each and are
+  CPU-bound: at 200 at once, 1103ms handed to threads and 1488ms awaited, the
+  difference being the async path's many short hops. Awaiting pays where a round
+  trip is long, and costs a little where it is not.
 
 ## Middleware
 

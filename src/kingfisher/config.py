@@ -188,8 +188,11 @@ class ConfigError(RuntimeError):
 #: What configured the `SessionStore`, which went when a session's backend became
 #: where it is kept. Refused where the environment is read rather than ignored, and
 #: kept here rather than beside that reader because they are refusals, not knobs.
-#: The size of the process's thread pool when nothing configured one.
-DEFAULT_THREAD_POOL_SIZE = 64
+#: The size of the process's thread pool when nothing configured one. Not lower: a
+#: turn holds a thread through its ending, which against a remote backend is round
+#: trips, and at 4 fifty concurrent turns took 6.6x as long as at 64. Not higher
+#: either, since past the turns in flight a ceiling only adds threads under a burst.
+DEFAULT_THREAD_POOL_SIZE = 16
 
 REMOVED_STORE_SETTINGS = ("KINGFISHER_SESSION_STORE", "KINGFISHER_SESSION_STORE_FACTORY")
 

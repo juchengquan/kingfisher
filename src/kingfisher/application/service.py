@@ -1097,7 +1097,12 @@ class Kingfisher(Sessions, Disposal):
         Written here and nowhere else, which is what keeps the file's presence a
         truthful mark. Every path out of a turn arrives at this one: answered,
         refused, cut short at a bound -- and each of those is a turn that is no
-        longer waiting, so each of them clears.
+        longer waiting.
+
+        Only a resume has a pause left to clear by then. Setup read the mark for every
+        turn, and dropped it for a request that superseded one; a turn that found none
+        has nothing on disk, and clearing it anyway was three round trips -- two
+        deletes and a read to check them -- at the end of every turn there was.
         """
         harness = prepared.harness
         waiting = runtime.pending_in(snapshot) if snapshot is not None else ()
@@ -1106,7 +1111,8 @@ class Kingfisher(Sessions, Disposal):
             # this service did not open cannot be written out either -- an injected
             # store is the deployment's, and holding its state in a file of ours
             # would be a second copy nobody asked for.
-            drive(clear_pause(harness))
+            if prepared.resume is not None:
+                drive(clear_pause(harness))
             return ()
         drive(harness.store(PAUSED_STATE, paused_state(prepared.saver)))
         # The state first, then the mark. The mark is what every other path tests to

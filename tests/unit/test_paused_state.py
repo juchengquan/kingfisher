@@ -158,3 +158,31 @@ def test_no_checkpoint_is_not_an_error(cfg):
     """Every ordinary turn ends without one, and the resume path asks regardless."""
     start(cfg, "s")
     assert drive(harness_of(cfg, "s").fetch(PAUSED_STATE)) is None
+
+
+def test_a_turn_that_neither_paused_nor_resumed_deletes_nothing_at_its_end(cfg, monkeypatch):
+    """Every turn's ending dropped the pause files whether or not there had been a
+    pause: two deletes and a read to check them, three round trips on a remote backend
+    out of the seven an ending made, for nothing.
+    """
+    from deepagents.backends import CompositeBackend
+
+    from kingfisher import Kingfisher, Request, default_backends
+    from tests.conftest import StubCheckpointer
+    from tests.unit.test_run import StubAgent
+
+    deleted: list[str] = []
+    deleting = CompositeBackend.delete
+
+    def recorded(self, path):
+        deleted.append(path)
+        return deleting(self, path)
+
+    monkeypatch.setattr(CompositeBackend, "delete", recorded)
+    start(cfg, "s")
+    kf = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
+
+    assert kf.run(Request("go", session_id="s")).completed
+    assert deleted == []
