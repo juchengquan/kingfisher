@@ -3508,6 +3508,14 @@ burst than 64; at fifty, 64 still does twice as well, which is why
 `configuration.md` tells a deployment with many turns at once on a remote backend
 to raise it. Making the ending awaited rather than threaded would remove the pool
 from it altogether, and is the change that would reopen *Cancelling waits*.
+
+**The size is per process, not per `Kingfisher`, and nothing is spent until it is
+used.** A deployment building an instance per session shares the one pool across all
+of them -- two instances hold the same pool, and a second size is refused -- so the
+number bounds the process, and measured with an instance per session the turns above
+came out the same. Nor does the ceiling start threads: a pool makes one only when
+work arrives with none idle, and after five turns in a row it held one. A process
+serving a single session therefore uses one or two whatever the number says.
 *(2026-10-05.)*
 
 **Asked and declined: making a turn a langchain `Runnable`.** The question is
