@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage
 
+from kingfisher import backend_at
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
@@ -245,7 +246,7 @@ def test_a_compiled_delegate_reaches_deepagents_as_a_runnable(cfg, session_dir):
 
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("researcher",)),
     )
@@ -269,7 +270,7 @@ def test_the_compiled_shape_is_deepagents_own(cfg, session_dir):
 
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("researcher",)),
     )
@@ -289,7 +290,7 @@ def test_a_build_that_returns_nothing_is_refused(cfg, session_dir):
     with pytest.raises(SubagentError, match="returned None"):
         build_agent(
             cfg,
-            session_dir=session_dir,
+            backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             capabilities=Capabilities(subagents=("researcher",)),
         )
@@ -316,7 +317,7 @@ def test_a_class_under_build_is_refused_rather_than_constructed(cfg, session_dir
     with pytest.raises(SubagentError, match="not a graph"):
         build_agent(
             cfg,
-            session_dir=session_dir,
+            backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             capabilities=Capabilities(subagents=("researcher",)),
         )
@@ -329,7 +330,7 @@ def test_the_refusal_names_what_was_returned_and_the_class_trap(cfg, session_dir
     with pytest.raises(SubagentError) as refused:
         build_agent(
             cfg,
-            session_dir=session_dir,
+            backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             capabilities=Capabilities(subagents=("researcher",)),
         )
@@ -427,7 +428,7 @@ def _tools_given(cfg, session_dir, capabilities):
     """
     build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=capabilities,
     )

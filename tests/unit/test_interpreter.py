@@ -7,6 +7,7 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
+from kingfisher import backend_at
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.interpreter import release_interpreter
@@ -21,13 +22,14 @@ def test_it_is_off_unless_a_deployment_wires_it(cfg, session_dir):
     """A second execution surface, and a beta dependency, should not arrive because
     someone upgraded.
     """
-    graph = build_agent(cfg, session_dir=session_dir, model=_model()).graph
+    graph = build_agent(cfg, backend=backend_at(cfg, session_dir), model=_model()).graph
     assert "eval" not in dispatched(graph)
 
 
 def test_wiring_it_adds_one_tool(cfg, session_dir):
+    wired = replace(cfg, interpreter_enabled=True)
     graph = build_agent(
-        replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model()
+        wired, backend=backend_at(wired, session_dir), model=_model()
     ).graph
     assert "eval" in dispatched(graph)
 
@@ -38,7 +40,7 @@ def test_eval_is_an_ordinary_tool_a_request_may_withhold(cfg, session_dir):
 
     without = build_agent(
         wired,
-        session_dir=session_dir,
+        backend=backend_at(wired, session_dir),
         model=_model(),
         capabilities=Capabilities(builtin_tools=("read_file",)),
     ).graph
@@ -49,9 +51,10 @@ def test_eval_is_an_ordinary_tool_a_request_may_withhold(cfg, session_dir):
 
 def test_a_request_that_withheld_the_shell_cannot_reach_it_from_code(cfg, session_dir):
     """The whole reason for adopting this."""
+    wired = replace(cfg, interpreter_enabled=True)
     built = build_agent(
-        replace(cfg, interpreter_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=_model(),
         capabilities=Capabilities(builtin_tools=("read_file", "eval")),
     )
@@ -64,8 +67,9 @@ def test_a_request_that_withheld_the_shell_cannot_reach_it_from_code(cfg, sessio
 
 def test_an_unrestricted_request_gets_no_allowlist(cfg, session_dir):
     """`None`, not an empty tuple."""
+    wired = replace(cfg, interpreter_enabled=True)
     built = build_agent(
-        replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model()
+        wired, backend=backend_at(wired, session_dir), model=_model()
     )
 
     assert _ptc(_interpreter_in(built)) is None
@@ -90,9 +94,10 @@ def test_withholding_task_also_stops_dispatch_from_code(cfg, session_dir):
     """`task()` is a top-level global in the REPL, not a `tools.*` entry, so the tool
     allowlist does not reach it.
     """
+    wired = replace(cfg, interpreter_enabled=True)
     built = build_agent(
-        replace(cfg, interpreter_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=_model(),
         capabilities=Capabilities(builtin_tools=("eval", "read_file")),  # no task
     )
@@ -105,9 +110,10 @@ def test_granting_task_allows_dispatch_from_code(cfg, session_dir):
     """The negative control: without it the test above would pass just as well if
     dispatch were disabled for everyone.
     """
+    wired = replace(cfg, interpreter_enabled=True)
     built = build_agent(
-        replace(cfg, interpreter_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=_model(),
         capabilities=Capabilities(builtin_tools=("eval", "task")),
     )
@@ -119,9 +125,10 @@ def test_task_is_never_offered_through_the_tool_namespace(cfg, session_dir, monk
     """The library refuses it: `task()` is the global, and routing it through `tools.*`
     as well would give two dispatch paths, the second losing `responseSchema`.
     """
+    wired = replace(cfg, interpreter_enabled=True)
     built = build_agent(
-        replace(cfg, interpreter_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=_model(),
         capabilities=Capabilities(builtin_tools=("eval", "task", "read_file")),
     )
@@ -143,8 +150,9 @@ def test_the_vm_image_is_dropped_rather_than_checkpointed(cfg, session_dir):
     every turn -- measured at a constant 1,280KB, written whether or not `eval` was
     ever called.
     """
+    wired = replace(cfg, interpreter_enabled=True)
     built = build_agent(
-        replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model()
+        wired, backend=backend_at(wired, session_dir), model=_model()
     )
 
     interpreter = _interpreter_in(built)
@@ -165,8 +173,9 @@ def test_the_cap_is_not_the_librarys_default(cfg, session_dir):
     """
     from langchain_quickjs import CodeInterpreterMiddleware
 
+    wired = replace(cfg, interpreter_enabled=True)
     built = build_agent(
-        replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model()
+        wired, backend=backend_at(wired, session_dir), model=_model()
     )
 
     ours = _interpreter_in(built)._max_snapshot_bytes
@@ -240,7 +249,7 @@ def test_the_runtime_is_given_back_when_a_turn_ends_by_exception(cfg, session_di
             ],
         ]
     )
-    graph = build_agent(wired, session_dir=session_dir, model=model).graph
+    graph = build_agent(wired, backend=backend_at(wired, session_dir), model=model).graph
 
     with pytest.raises(GraphRecursionError):
         graph.invoke(
@@ -266,8 +275,9 @@ def test_a_real_build_is_releasable(cfg, session_dir):
     """
     from langchain_quickjs import CodeInterpreterMiddleware
 
+    wired = replace(cfg, interpreter_enabled=True)
     graph = build_agent(
-        replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model()
+        wired, backend=backend_at(wired, session_dir), model=_model()
     ).graph
 
     owners = [
@@ -284,7 +294,7 @@ def test_releasing_costs_nothing_when_the_interpreter_is_off(cfg, session_dir):
     """It runs in the teardown of every turn, including the ones on a deployment that
     never wired a sandbox.
     """
-    graph = build_agent(cfg, session_dir=session_dir, model=_model()).graph
+    graph = build_agent(cfg, backend=backend_at(cfg, session_dir), model=_model()).graph
 
     release_interpreter(cfg, graph)
 

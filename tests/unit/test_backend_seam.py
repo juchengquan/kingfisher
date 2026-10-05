@@ -10,8 +10,7 @@ from kingfisher.application.run import run, stream
 from kingfisher.config import ConfigError
 from kingfisher.domain.ports import CommandResult, CommandRunner
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.harness.agent import _backend_for
+from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import (
     DefaultBackends,
     WorkspaceScopedBackend,
@@ -217,7 +216,7 @@ def test_a_backend_deepagents_will_not_give_a_shell_is_refused(cfg, session_dir)
     unavailable if it reaches for it, and the deployment hears nothing.
     """
     with pytest.raises(ConfigError, match="not recognised by deepagents"):
-        _backend_for(cfg, session_dir, NotABackend(), Definitions.from_config(cfg))
+        build_agent(cfg, backend=NotABackend())
 
 
 def test_a_backend_routing_nothing_a_deny_rule_needs_is_refused(cfg, session_dir):
@@ -232,7 +231,7 @@ def test_a_backend_routing_nothing_a_deny_rule_needs_is_refused(cfg, session_dir
     )
 
     with pytest.raises(ConfigError, match="routes nothing covering"):
-        _backend_for(cfg, session_dir, routeless, Definitions.from_config(cfg))
+        build_agent(cfg, backend=routeless)
 
 
 def test_the_backend_kingfisher_builds_satisfies_what_it_refuses_others_for(
@@ -247,27 +246,6 @@ def test_the_backend_kingfisher_builds_satisfies_what_it_refuses_others_for(
     whatever the checks became.
     """
     refuse_unusable_backend(backend_at(cfg, session_dir))
-
-
-def test_the_harness_still_builds_its_own_for_a_caller_with_only_a_session(
-    cfg, session_dir
-):
-    """`kingfisher --list` reaches `build_agent` with a session and no backend, and has
-    no deployment behind it to have named one. Requiring one at `Kingfisher` is not
-    the same as requiring one here, and this is what holds the two apart.
-    """
-    assert isinstance(
-        _backend_for(cfg, session_dir, None, Definitions.from_config(cfg)),
-        WorkspaceScopedBackend,
-    )
-
-
-def test_a_harness_build_with_neither_is_still_refused(cfg):
-    """The one case with no answer available: nothing to root a backend at, and nothing
-    supplied to use instead.
-    """
-    with pytest.raises(ValueError, match="session_dir to root a backend at"):
-        _backend_for(cfg, None, None, Definitions.from_config(cfg))
 
 
 def test_the_one_liner_keeps_a_default_where_the_constructor_refuses_one(monkeypatch):

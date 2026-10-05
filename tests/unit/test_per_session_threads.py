@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from kingfisher import Kingfisher, default_backends
+from kingfisher import Kingfisher, backend_at, default_backends
 from kingfisher.config import Config
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.workspace import session_bytes
@@ -77,7 +77,7 @@ def test_a_real_graph_checkpoints_into_the_session_database(cfg, session_dir):
     saver = build_session_checkpointer()
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         checkpointer=saver,
         model=FakeToolCallingModel(responses=[AIMessage(content="one"), AIMessage(content="two")]),
     ).graph
@@ -312,7 +312,7 @@ def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
     first_saver = build_session_checkpointer()
     build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         checkpointer=first_saver,
         model=FakeToolCallingModel(
             responses=[
@@ -328,7 +328,7 @@ def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
     # Asserted, so the second half cannot pass by the plan never being written.
     written = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         checkpointer=first_saver,
         model=FakeToolCallingModel(responses=[]),
     ).graph.get_state(config)
@@ -339,7 +339,7 @@ def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
 
     carried = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         checkpointer=second_saver,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     ).graph.get_state(config)

@@ -209,35 +209,6 @@ def _refuse_unknown_gates(
         raise AgentError(msg)
 
 
-def _backend_for(
-    cfg: Config,
-    session_dir: Path | None,
-    backend: Any | None,
-    catalogue: Definitions,
-) -> Any:
-    """The filesystem an agent sees: supplied ready-made, or kingfisher's own rooted
-    at a session.
-
-    A deployment reaches this through `Kingfisher`, which opens the session's backend
-    itself and arrives here with it already made -- runner and all, since the runner
-    belongs to the session backends that open it. What is left is the harness's own two callers --
-    `--list` and this repository's tests -- which have a session, want the default
-    built for them, and have never had a runner to hand it.
-    """
-    if backend is not None:
-        built = backend
-    elif session_dir is not None:
-        built = backend_at(cfg, session_dir, catalogue=catalogue)
-    else:
-        msg = "build_agent needs either a session_dir to root a backend at, or a backend"
-        raise ValueError(msg)
-
-    # Every path that resolves one, the default included, and that is the point: a
-    # check only a supplied backend ran would be a check nothing here exercises.
-    refuse_unusable_backend(built)
-    return built
-
-
 def _wanted_endpoints(
     run_on: Mapping[str, RunOn] | None, activated: tuple[str, ...], granted: Selection
 ) -> Mapping[str, RunOn]:
@@ -333,14 +304,17 @@ def builtin_tool_names(
     """
     import tempfile  # noqa: PLC0415 -- one caller, and only on the branch that probes
 
+    # `EXTERNAL` because this shell never runs a command, and any other mode warns that
+    # it is unconfined -- which `doctor` and `list` would then print on top of their own
+    # report, for a shell nothing uses.
+    probing = replace(cfg, shell_sandbox=EXTERNAL)
     with tempfile.TemporaryDirectory(prefix="kingfisher-builtin-") as scratch:
         return registered_tools(
             build_agent(
-                # `EXTERNAL` because this shell never runs a command, and any other
-                # mode warns that it is unconfined -- which `doctor` and `list` would
-                # then print on top of their own report, for a shell nothing uses.
-                replace(cfg, shell_sandbox=EXTERNAL),
-                session_dir=ensure_session_layout(Path(scratch)),
+                probing,
+                backend=backend_at(
+                    probing, ensure_session_layout(Path(scratch)), catalogue=catalogue
+                ),
                 catalogue=catalogue,
                 workspace_tools=workspace_tools,
                 # No delegates. What a workspace *offers* is answered from the
@@ -360,10 +334,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     cfg: Config,
     *,
     capabilities: Capabilities | None = None,
-    session_dir: Path | None = None,
     middleware_registry: Mapping[str, MiddlewareFactory] | None = None,
     model: Any | None = None,
-    backend: Any | None = None,
+    backend: Any,
     checkpointer: Any | None = None,
     catalogue: Definitions | None = None,
     run_on: Mapping[str, RunOn] | None = None,
@@ -378,7 +351,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     asked = capabilities or Capabilities()
     capabilities = agent.declares(held).intersect(asked) if agent is not None else asked
     roots = catalogue or Definitions.from_config(cfg)
-    resolved_backend = _backend_for(cfg, session_dir, backend, roots)
+    # Every backend, and that is the point: a check only some builds ran would be a
+    # check nothing here exercises.
+    refuse_unusable_backend(backend)
     # The catalogue walked these when the deployment was wired; a caller that
     # has already walked them itself -- `--list` -- still wins. Walked before the
     # stack rather than beside the tools below, because `tool_guards` needs the
@@ -393,7 +368,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # `runtime.context.backend`, and what a tool's `path` is resolved through. Built
     # before the rules are finished, and it reads them when it checks, so what is added
     # below -- memory declined, skills narrowed -- applies to both.
-    under_rules = PermittedBackend(resolved_backend, permissions)
+    under_rules = PermittedBackend(backend, permissions)
     paths = SessionPaths(under_rules, sessions_root(cfg.workspace))
     middleware: list[Any] = [TodoListMiddleware(), *tool_guards(held, paths)]
     extras: dict[str, Any] = {}
@@ -438,7 +413,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             middleware.append(
                 NarrowedSkills(
                     allowed=activated,
-                    backend=resolved_backend,
+                    backend=backend,
                     sources=sources,
                 )
             )
@@ -468,7 +443,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         # than no record, because it is asserted on.
         attached: dict[str, Any] = {
             "model": running,
-            "backend": resolved_backend,
+            "backend": backend,
             "system_prompt": system_prompt(cfg, agent.system_prompt if agent else ""),
             "middleware": middleware,
             "permissions": permissions,
@@ -561,7 +536,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             return as_subagent(
                 defined[name],
                 cfg,
-                backend=resolved_backend,
+                backend=backend,
                 endpoints=capabilities.endpoints,
                 builtin_tools=surface.granted_builtin,
                 tools=surface.granted_workspace,
@@ -600,7 +575,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                         defined[name],
                         cfg=cfg,
                         endpoints=capabilities.endpoints,
-                        backend=resolved_backend,
+                        backend=backend,
                     ),
                 ),
             )
@@ -674,7 +649,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             agent,
             cfg=cfg,
             endpoints=capabilities.endpoints,
-            backend=resolved_backend,
+            backend=backend,
         )
     )
 

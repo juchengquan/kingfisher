@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage
 
+from kingfisher import backend_at
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.kinds.subagents.rules import refuse_cycles
@@ -63,7 +64,7 @@ def _build(cfg, session_dir, *, subagents=("reviewer", "second-opinion")):
     # record -- and each returns something truthy either way, so nothing would say so.
     return build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=subagents),
     ).graph
@@ -275,7 +276,7 @@ def test_a_delegate_consults_its_helper_end_to_end(cfg, session_dir):
 
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(
             responses=[
                 calls("reviewer"),
@@ -493,7 +494,7 @@ def test_a_helper_runs_the_model_of_the_delegate_that_summoned_it(cfg, session_d
 
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=main,
         capabilities=Capabilities(subagents=("reviewer", "second-opinion")),
     )
@@ -513,7 +514,7 @@ def test_one_helper_under_two_parents_is_two_delegates(cfg, session_dir):
 
     assembled = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reviewer", "auditor", "second-opinion")),
     )
@@ -535,7 +536,7 @@ def test_a_helper_under_an_unpinned_delegate_still_runs_the_agents_model(
 
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=main,
         capabilities=Capabilities(subagents=("reviewer", "second-opinion")),
     )

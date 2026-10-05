@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from kingfisher import backend_at
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.activation import available_skills
 from kingfisher.infrastructure.harness.agent import (
@@ -84,7 +85,7 @@ def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, f
 
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")])).graph
     # Only the tools table -- the file has other tables, and scooping up their
     # first columns too is how the first draft of this test "passed" nothing.
@@ -111,9 +112,10 @@ def test_the_readme_call_is_valid(cfg, session_dir, formats_doc):
 
     _materialise((formats_doc).read_text(encoding="utf-8"), cfg)
 
+    wired = replace(cfg, skills_enabled=True)
     build_agent(
-        replace(cfg, skills_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(
             builtin_tools=("read_file", "ls", "glob", "grep", "execute", "task"),
@@ -168,7 +170,7 @@ def test_a_workspace_tool_reaches_the_assembled_agent(cfg, fixture_pack):
     shutil.copytree(fixture_pack / "tools", cfg.workspace / "tools", dirs_exist_ok=True)
 
     tools = dispatched(
-        build_agent(cfg, session_dir=ensure_session_layout(cfg.workspace / "s")).graph
+        build_agent(cfg, backend=backend_at(cfg, ensure_session_layout(cfg.workspace / "s"))).graph
     )
 
     assert "probe" in tools
@@ -191,7 +193,7 @@ def test_a_workspace_tool_may_not_shadow_a_builtin(cfg):
     )
 
     with pytest.raises(CapabilityError, match="read_file"):
-        build_agent(cfg, session_dir=ensure_session_layout(cfg.workspace / "s"))
+        build_agent(cfg, backend=backend_at(cfg, ensure_session_layout(cfg.workspace / "s")))
 
 
 # -- seeding says what it took away ---------------------------------------
@@ -570,7 +572,7 @@ def test_the_readme_run_on_example_is_valid(cfg, session_dir, formats_doc):
 
     build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(
             subagents=("reviewer", "second-opinion"), models=("cheap-model",)

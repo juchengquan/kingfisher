@@ -14,6 +14,7 @@ import pytest
 from deepagents import SubAgent
 from langchain_core.messages import AIMessage
 
+from kingfisher import backend_at
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.agent import build_agent
@@ -85,7 +86,7 @@ def built(cfg, session_dir, capabilities=None):
     """`surveyor`, as deepagents received it."""
     assembled = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=capabilities
         or Capabilities(subagents=("surveyor",), tools=("shared",)),

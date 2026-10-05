@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from kingfisher import backend_at
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.workspace import ensure_session_layout
@@ -72,7 +73,7 @@ def test_a_prewalked_catalogue_is_not_walked_again(cfg, capfd):
 
     build_agent(
         cfg,
-        session_dir=ensure_session_layout(cfg.workspace / "s"),
+        backend=backend_at(cfg, ensure_session_layout(cfg.workspace / "s")),
         model=FakeToolCallingModel(responses=[]),
         workspace_tools=found,
     )
@@ -90,7 +91,7 @@ def test_a_request_naming_an_unknown_tool_is_told_where_the_real_ones_live(cfg):
     with pytest.raises(CapabilityError) as raised:
         build_agent(
             cfg,
-            session_dir=ensure_session_layout(cfg.workspace / "s"),
+            backend=backend_at(cfg, ensure_session_layout(cfg.workspace / "s")),
             model=FakeToolCallingModel(responses=[]),
             capabilities=Capabilities(tools=("find_compny",)),
         )

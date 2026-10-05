@@ -16,6 +16,7 @@ import pytest
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
+from kingfisher import backend_at
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.kinds.agents.reading import read
@@ -64,7 +65,7 @@ def _agent(**fields: str) -> Any:
 def _run(cfg, session_dir, spec, *, checkpointer: Any = _DEFAULT, **kwargs: Any) -> Any:
     agent = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir, catalogue=kwargs.get("catalogue")),
         agent=spec,
         model=FakeToolCallingModel(responses=list(WRITES)),
         checkpointer=InMemorySaver() if checkpointer is _DEFAULT else checkpointer,
@@ -155,7 +156,7 @@ def test_the_gates_reach_deepagents_as_the_argument_a_delegate_inherits(
 
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         agent=_agent(interrupt_on="[write_file]", subagents="[scribe]"),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         checkpointer=InMemorySaver(),
@@ -170,7 +171,7 @@ def test_an_agent_that_gates_nothing_passes_no_gate_argument(cfg, session_dir):
     """
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         agent=_agent(),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         checkpointer=InMemorySaver(),

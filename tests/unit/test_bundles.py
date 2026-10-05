@@ -387,7 +387,7 @@ def built_subagent(cfg, session_dir):
     """The one delegate this workspace defines, as deepagents received it."""
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("surveyor",), tools=("shared",)),
     )
@@ -409,7 +409,7 @@ def test_a_private_tool_survives_a_request_that_granted_no_tools(cfg, session_di
 
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("surveyor",), tools=()),
     )
@@ -482,7 +482,7 @@ def test_the_main_agent_never_holds_another_delegates_private_tool(cfg, session_
 
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("surveyor",)),
     )
@@ -1072,7 +1072,7 @@ def test_a_compiled_delegate_is_handed_the_tools_in_its_own_folder(cfg, session_
     compiled_bundle(cfg)
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("surveyor",)),
     )
@@ -1286,7 +1286,7 @@ def test_the_shipped_bundle_takes_nothing_from_the_catalogue(
     """
     built = build_agent(
         workspace_with_presets,
-        session_dir=session_dir,
+        backend=backend_at(workspace_with_presets, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("redactor",)),
     )

@@ -7,6 +7,7 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
+from kingfisher import backend_at
 from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.request import Request
@@ -55,7 +56,7 @@ def _built(
     """The specs kingfisher handed deepagents, by delegate name."""
     assembled = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=subagents, models=granted_models),
         run_on=run_on,
@@ -184,7 +185,7 @@ def test_an_endpoint_the_request_may_not_reach_is_still_refused(cfg, session_dir
     with pytest.raises(CapabilityError, match="may not"):
         build_agent(
             routed,
-            session_dir=session_dir,
+            backend=backend_at(routed, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             capabilities=Capabilities(
                 subagents=("reviewer",), models=("gpt-5",), endpoints=("fake",)

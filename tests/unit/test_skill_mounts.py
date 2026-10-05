@@ -54,7 +54,7 @@ def _drive(cfg, session_dir, capabilities, tool, args):
     call = AIMessage(content="", tool_calls=[{"name": tool, "id": "1", "args": args}])
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         capabilities=capabilities,
         model=FakeToolCallingModel(responses=[call, AIMessage(content="done")]),
     ).graph

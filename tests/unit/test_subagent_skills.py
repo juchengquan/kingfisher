@@ -7,6 +7,7 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
+from kingfisher import backend_at
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
@@ -27,9 +28,10 @@ def offer_skills(cfg, *names: str) -> None:
 
 
 def build(cfg, session_dir, **caps):
+    wired = replace(cfg, skills_enabled=True)
     return build_agent(
-        replace(cfg, skills_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(**caps),
     )
@@ -52,7 +54,7 @@ def test_a_delegate_gets_no_skills_when_the_deployment_switched_them_off(
 
     built = build_agent(
         cfg,  # the fixture's own, with skills off
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reviewer",), skills=("tabular-qa",)),
     )

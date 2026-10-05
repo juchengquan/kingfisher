@@ -8,7 +8,7 @@ import pytest
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
-from kingfisher import Kingfisher, default_backends
+from kingfisher import Kingfisher, backend_at, default_backends
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.workspace import ensure_session_layout
@@ -34,7 +34,7 @@ def define(cfg, body: str, name: str = "reviewer") -> None:
 def build(cfg, registry=None, **caps):
     return build_agent(
         cfg,
-        session_dir=ensure_session_layout(cfg.workspace / "sessions" / "s"),
+        backend=backend_at(cfg, ensure_session_layout(cfg.workspace / "sessions" / "s")),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         middleware_registry=registry,
         capabilities=Capabilities(**caps),

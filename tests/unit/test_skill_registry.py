@@ -6,6 +6,7 @@ from dataclasses import replace
 
 import pytest
 
+from kingfisher import backend_at
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.activation import available_skills
@@ -84,9 +85,10 @@ def test_activating_a_skill_the_agent_cannot_load_is_refused(cfg, session_dir):
     _skill(cfg.skills_dir, "nodesc", "---\nname: nodesc\n---\nBody.\n")
 
     with pytest.raises(CapabilityError, match="unknown skill"):
+        wired = replace(cfg, skills_enabled=True)
         build_agent(
-            replace(cfg, skills_enabled=True),
-            session_dir=session_dir,
+            wired,
+            backend=backend_at(wired, session_dir),
             model=FakeToolCallingModel(responses=[]),
             capabilities=Capabilities(skills=("nodesc",)),
         )
@@ -96,9 +98,10 @@ def test_a_loadable_skill_still_builds(cfg, session_dir):
     """The negative control: closing the hole must not close the door."""
     _skill(cfg.skills_dir, "good", GOOD.format(name="good", desc="A fine skill."))
 
+    wired = replace(cfg, skills_enabled=True)
     build_agent(
-        replace(cfg, skills_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[]),
         capabilities=Capabilities(skills=("good",)),
     )

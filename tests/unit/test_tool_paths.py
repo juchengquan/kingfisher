@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from kingfisher import backend_at
 from kingfisher.infrastructure.harness.middlewares.workspace_tools import WorkspaceToolPaths
 from kingfisher.infrastructure.harness.tool_guards import guarded_tools
 from tests.conftest import paths_in
@@ -235,7 +236,7 @@ def ran(cfg, session_dir, argument: str) -> str:
         AIMessage(content="done"),
     ]
     agent = build_agent(
-        cfg, session_dir=session_dir, model=FakeToolCallingModel(responses=responses)
+        cfg, backend=backend_at(cfg, session_dir), model=FakeToolCallingModel(responses=responses)
     ).graph
     out = agent.invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
@@ -304,7 +305,7 @@ def test_a_file_argument_with_another_name_cannot_read_another_session(cfg, sess
     call = {"name": "peek_file", "args": {"input_file": str(other / "secret.txt")}, "id": "c1"}
     agent = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(
             responses=[AIMessage(content="", tool_calls=[call]), AIMessage(content="done")]
         ),
@@ -359,7 +360,7 @@ def test_a_link_inside_the_session_does_not_widen_it(cfg, session_dir):
 
     agent = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(
             responses=[
                 AIMessage(

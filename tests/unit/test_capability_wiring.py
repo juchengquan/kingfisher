@@ -67,7 +67,7 @@ def test_no_capabilities_means_no_filtering(cfg, session_dir):
     """The default narrows nothing, which is what it has always meant."""
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
 
     names = {type(m).__name__ for m in built.middleware}
@@ -83,7 +83,7 @@ def test_restricting_tools_removes_the_shell_from_what_the_model_sees(cfg, sessi
     """
     model = RecordingModel(responses=[AIMessage(content="ok")])
 
-    agent = build_agent(cfg, session_dir=session_dir,
+    agent = build_agent(cfg, backend=backend_at(cfg, session_dir),
         model=model,
         capabilities=Capabilities(builtin_tools=("read_file", "write_file")),
     ).graph
@@ -101,7 +101,7 @@ def test_an_unrestricted_run_is_offered_the_shell(cfg, session_dir):
 
     build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=model).graph.invoke({"messages": [{"role": "user", "content": "go"}]})
 
     assert "execute" in model.offered
@@ -114,7 +114,7 @@ def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, session_di
     with_skills = replace(cfg, skills_enabled=True)
     built = build_agent(
         with_skills,
-        session_dir=session_dir,
+        backend=backend_at(with_skills, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(skills=("other",)),
     )
@@ -146,9 +146,10 @@ def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, session_di
 def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, session_dir):
     """Unrestricted is not "restricted to everything": no filter, no deny rules."""
     _write_skill(cfg.workspace, "tabular-qa")
+    wired = replace(cfg, skills_enabled=True)
     built = build_agent(
-        replace(cfg, skills_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
 
@@ -163,7 +164,7 @@ def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, session_dir):
 
 def test_activating_a_subagent_passes_its_definition_through(cfg, session_dir):
     _write_subagent(cfg.workspace)
-    built = build_agent(cfg, session_dir=session_dir,
+    built = build_agent(cfg, backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reviewer",)),
     )
@@ -181,7 +182,7 @@ def test_requesting_no_subagents_is_distinct_from_not_asking(cfg, session_dir):
     offers -- so the reviewer written above is absent here.
     """
     _write_subagent(cfg.workspace)
-    built = build_agent(cfg, session_dir=session_dir,
+    built = build_agent(cfg, backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=()),
     )
@@ -199,9 +200,10 @@ def test_naming_something_the_workspace_lacks_fails_loudly(cfg, session_dir):
         (Capabilities(subagents=("ghost",)), "unknown subagent"),
     ):
         with pytest.raises(CapabilityError, match=message):
+            wired = replace(cfg, skills_enabled=True)
             build_agent(
-                replace(cfg, skills_enabled=True),
-                session_dir=session_dir,
+                wired,
+                backend=backend_at(wired, session_dir),
                 model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
                 capabilities=caps,
             )
@@ -233,7 +235,7 @@ def test_an_injected_graph_cannot_honour_capabilities(cfg, session_dir):
     # supplies there is a compiled graph rather than kingfisher's own record.
     prebuilt = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")])).graph
 
     with pytest.raises(ValueError, match="pre-built graph"):
@@ -260,7 +262,7 @@ def test_a_disallowed_tool_is_refused_even_when_the_model_calls_it_anyway(cfg, s
         AIMessage(content="done"),
     ]
 
-    agent = build_agent(cfg, session_dir=session_dir,
+    agent = build_agent(cfg, backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=responses),
         capabilities=Capabilities(builtin_tools=("read_file", "write_file")),
     ).graph
@@ -280,7 +282,7 @@ def test_a_typo_in_a_tool_name_is_caught(cfg, session_dir):
     crippled -- the same quiet failure skills and subagents refuse.
     """
     with pytest.raises(CapabilityError, match="unknown tool"):
-        build_agent(cfg, session_dir=session_dir,
+        build_agent(cfg, backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             capabilities=Capabilities(builtin_tools=("read_file",), tools=("read_fil",)),
         )
@@ -291,7 +293,7 @@ def test_the_registered_tool_names_are_discoverable(cfg, session_dir):
 
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")])).graph
     names = dispatched(graph)
 
@@ -322,7 +324,7 @@ def test_a_subagent_with_restricted_tools_builds_for_real(cfg, session_dir):
     """
     _write_subagent(cfg.workspace, RESTRICTED_SUBAGENT, "reader.yaml")
 
-    build_agent(cfg, session_dir=session_dir,
+    build_agent(cfg, backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reader",)),
     )
@@ -330,7 +332,7 @@ def test_a_subagent_with_restricted_tools_builds_for_real(cfg, session_dir):
 
 def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, session_dir):
     _write_subagent(cfg.workspace, RESTRICTED_SUBAGENT, "reader.yaml")
-    built = build_agent(cfg, session_dir=session_dir,
+    built = build_agent(cfg, backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reader",)),
     )
@@ -359,7 +361,7 @@ def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch,
     endpoint entirely.
     """
     _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.yaml")
-    built = build_agent(cfg, session_dir=session_dir,
+    built = build_agent(cfg, backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("cheap",)),
     )
@@ -380,7 +382,7 @@ def test_the_environment_cannot_reroute_a_delegate(cfg, monkeypatch, session_dir
     monkeypatch.setenv("KINGFISHER_PROVIDER_SUBAGENT", "openai")
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("cheap",)),
     )
@@ -393,7 +395,7 @@ def test_narrowing_can_only_subtract_from_what_the_deployment_wired(cfg, session
     """The rule that makes two axes safe rather than confusing: `Config` says what is
     wired and shapes the cached prompt; a request narrows within it.
     """
-    built = build_agent(cfg, session_dir=session_dir,  # memory_enabled is False
+    built = build_agent(cfg, backend=backend_at(cfg, session_dir),  # memory_enabled is False
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(memory=True),
     )
@@ -404,9 +406,10 @@ def test_declining_memory_drops_the_mount_and_denies_the_file(cfg, session_dir):
     """The prompt still describes memory -- it is the cached prefix and must not vary
     per request -- so a deny rule is what actually stops the read.
     """
+    wired = replace(cfg, memory_enabled=True)
     built = build_agent(
-        replace(cfg, memory_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(memory=False),
     )
@@ -421,9 +424,10 @@ def test_memory_is_mounted_when_wired_and_not_declined(cfg, session_dir):
     """The negative control: without it the two tests above would pass even if memory
     were never wired at all.
     """
+    wired = replace(cfg, memory_enabled=True)
     built = build_agent(
-        replace(cfg, memory_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
     assert built.memory == ["/memory/AGENTS.md"]
@@ -474,7 +478,7 @@ def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir):
     )
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reviewer",)),
     )
@@ -532,7 +536,8 @@ def test_a_real_build_is_readable(cfg, session_dir):
     from kingfisher.infrastructure.harness.agent import build_agent
     from kingfisher.infrastructure.harness.tools import registered_tools
 
-    names = registered_tools(build_agent(cfg, session_dir=session_dir, model=None).graph)
+    built = build_agent(cfg, backend=backend_at(cfg, session_dir), model=None)
+    names = registered_tools(built.graph)
 
     assert names is not None, "a graph we built must be readable"
     assert names, "and must dispatch something"
@@ -579,7 +584,7 @@ def test_a_plain_function_is_withheld_when_the_grant_withholds_it(cfg, session_d
     model = RecordingModel(responses=[AIMessage(content="ok")])
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=model,
         capabilities=Capabilities(tools=None),  # every built-in, none of ours
     ).graph

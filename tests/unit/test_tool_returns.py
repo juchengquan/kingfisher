@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, ToolMessage
 
+from kingfisher import backend_at
 from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel, tools_dir
 
@@ -78,7 +79,7 @@ def _results(cfg, session_dir, body: str) -> list[ToolMessage]:
 
     graph = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(
             responses=[
                 AIMessage(

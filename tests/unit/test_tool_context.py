@@ -356,9 +356,10 @@ def test_the_backend_a_build_hands_over_carries_this_requests_rules(cfg, session
     """
     (session_dir / "memory" / "AGENTS.md").write_text("remembered\n")
 
+    wired = replace(cfg, memory_enabled=True)
     built = build_agent(
-        replace(cfg, memory_enabled=True),
-        session_dir=session_dir,
+        wired,
+        backend=backend_at(wired, session_dir),
         model=fake_model,
         capabilities=Capabilities(memory=False),
     )
@@ -380,7 +381,7 @@ def test_the_graph_declares_the_context_a_tool_annotates(cfg, session_dir, fake_
     turn would notice the declaration gone. It is what the graph itself says
     `runtime.context` holds, and this is the only thing reading it.
     """
-    built = build_agent(cfg, session_dir=session_dir, model=fake_model)
+    built = build_agent(cfg, backend=backend_at(cfg, session_dir), model=fake_model)
 
     assert built.graph.context_schema is ToolContext
     assert isinstance(built.context, ToolContext)
@@ -466,7 +467,7 @@ def _run(cfg, session_dir, *responses: AIMessage, **keywords: Any) -> list[tuple
     """
     built = build_agent(
         cfg,
-        session_dir=session_dir,
+        backend=backend_at(cfg, session_dir, catalogue=keywords.get("catalogue")),
         model=FakeToolCallingModel(responses=list(responses)),
         **keywords,
     )
