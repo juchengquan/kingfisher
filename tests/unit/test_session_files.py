@@ -22,16 +22,21 @@ from kingfisher import (
 )
 from kingfisher.domain.access import parse
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.harness.backend import DefaultBackends, SessionClaims
+from kingfisher.infrastructure.harness.backend import (
+    DefaultBackends,
+    SessionBackends,
+    SessionClaims,
+)
 from kingfisher.infrastructure.harness.session_files import (
     collect_artifacts,
     local_files,
     place_data,
     read_artifact,
 )
+from kingfisher.infrastructure.steps import drive
 from kingfisher.layout import DATA, HARNESS, SESSION_DIRS, SKILLS_ROUTE, routed_paths
 from kingfisher.presentation.cli.__main__ import main
-from tests.conftest import an_agent, pin, start
+from tests.conftest import Reads, an_agent, pin, start
 from tests.unit.scripted import Scripted
 
 
@@ -55,7 +60,7 @@ class ElsewhereFiles(SessionClaims, CompositeBackend):
         self._session_dir = kept
 
 
-class Elsewhere:
+class Elsewhere(SessionBackends):
     """`SessionBackends` keeping each session under `root`, never in its directory.
 
     What a remote sandbox looks like from here: a working filesystem the agent can
@@ -139,10 +144,10 @@ def _produced(
     return Kingfisher(cfg, backends=backends)
 
 
-def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg):
+def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg, way):
     kf = _produced(cfg, "derived/nested/out.csv", "a,b\n")
 
-    assert kf.artifact("s", "derived/nested/out.csv") == b"a,b\n"
+    assert Reads(kf, way).artifact("s", "derived/nested/out.csv") == b"a,b\n"
 
 
 @pytest.mark.parametrize(
@@ -156,7 +161,7 @@ def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg):
         "derived",
     ],
 )
-def test_only_what_a_turn_produced_can_be_fetched(cfg, name):
+def test_only_what_a_turn_produced_can_be_fetched(cfg, name, way):
     """The backend reaches `/.harness` and `/data` too. A caller entitled to a report is
     not thereby entitled to the pinned agent or someone's inputs.
     """
@@ -164,7 +169,7 @@ def test_only_what_a_turn_produced_can_be_fetched(cfg, name):
     (cfg.workspace / "sessions" / "s" / HARNESS / "agent.yaml").write_text("secret")
 
     with pytest.raises(ArtifactError):
-        kf.artifact("s", name)
+        Reads(kf, way).artifact("s", name)
 
 
 @pytest.mark.parametrize(
@@ -183,25 +188,25 @@ def test_a_refused_name_never_reaches_the_backend(name):
             return []
 
     with pytest.raises(ArtifactError):
-        read_artifact(Spy(), name)
+        drive(read_artifact(Spy(), name))
     assert asked == []
 
 
-def test_a_name_that_is_not_there_is_refused_by_name(cfg):
+def test_a_name_that_is_not_there_is_refused_by_name(cfg, way):
     kf = _produced(cfg)
 
     with pytest.raises(ArtifactError, match=r"derived/missing\.txt"):
-        kf.artifact("s", "derived/missing.txt")
+        Reads(kf, way).artifact("s", "derived/missing.txt")
 
 
-def test_a_session_that_is_not_there_is_the_same_error_as_ever(cfg):
+def test_a_session_that_is_not_there_is_the_same_error_as_ever(cfg, way):
     kf = Kingfisher(cfg, backends=default_backends)
 
     with pytest.raises(UnknownSessionError):
-        kf.artifact("nobody", "derived/out.txt")
+        Reads(kf, way).artifact("nobody", "derived/out.txt")
 
 
-def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg):
+def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg, way):
     """Checked as reading a session is. Holding only the id of a session pinned to an
     agent you cannot reach buys nothing, including its outputs.
     """
@@ -211,9 +216,9 @@ def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg):
     pin(kf, "s", "only_a")
 
     # The control beside the escape: the same call, by a caller who does reach it.
-    assert kf.artifact("s", "derived/out.txt", source_ids=("A",)) == b"result"
+    assert Reads(kf, way).artifact("s", "derived/out.txt", source_ids=("A",)) == b"result"
     with pytest.raises(UnknownSessionError):
-        kf.artifact("s", "derived/out.txt", source_ids=("B",))
+        Reads(kf, way).artifact("s", "derived/out.txt", source_ids=("B",))
 
 
 # -- reading one -------------------------------------------------------------
@@ -232,10 +237,10 @@ class Counting(DefaultBackends):
 
 @pytest.mark.parametrize(
     "read",
-    [lambda kf: kf.artifact("s", "derived/out.txt"), lambda kf: kf.pending("s")],
+    [lambda reads: reads.artifact("s", "derived/out.txt"), lambda reads: reads.pending("s")],
     ids=["artifact", "pending"],
 )
-def test_reading_a_session_opens_its_backend_once(cfg, read):
+def test_reading_a_session_opens_its_backend_once(cfg, read, way):
     """Both opened the session's backend once to decide whether the caller reached it
     and again to read through, so remote session backends handed out two sandboxes
     per query.
@@ -243,8 +248,33 @@ def test_reading_a_session_opens_its_backend_once(cfg, read):
     counting = Counting()
     kf = _produced(cfg, backends=counting)
 
-    read(kf)
+    read(Reads(kf, way))
 
+    assert counting.asked == ["s"]
+
+
+def test_asking_whether_a_session_exists_opens_nothing_where_nothing_narrows(cfg, way):
+    """Opened to read a pin no check would consult, remote session backends handed out
+    a sandbox to say that a session exists.
+    """
+    counting = Counting()
+    kf = _produced(cfg, backends=counting)
+
+    assert Reads(kf, way).session("s") is not None
+    assert counting.asked == []
+
+
+def test_a_session_is_opened_once_where_its_pinned_agent_decides(cfg, way):
+    """The control beside the one above: under a policy the pin decides, and reading it
+    takes the session's backend -- once.
+    """
+    an_agent(cfg, "only_a", source_ids="[A]")
+    policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
+    counting = Counting()
+    kf = _produced(policied, backends=counting)
+    pin(kf, "s", "only_a")
+
+    assert Reads(kf, way).session("s", source_ids=("A",)) is not None
     assert counting.asked == ["s"]
 
 
@@ -259,7 +289,7 @@ def test_data_placed_through_the_default_backend_lands_read_only(cfg, session_di
     source.write_text("x")
     backend = backend_at(cfg, session_dir)
 
-    placement = place_data((source,), backend)
+    placement = drive(place_data((source,), backend))
 
     assert placement.placed == ("in.csv",)
     assert (session_dir / DATA / "in.csv").read_text() == "x"
@@ -287,7 +317,7 @@ def test_a_refused_upload_is_a_data_error_naming_the_file(session_dir, tmp_path)
     )
 
     with pytest.raises(ValueError, match=r"/data/in\.csv: permission_denied"):
-        place_data((source,), backend)
+        drive(place_data((source,), backend))
 
 
 def test_collecting_and_reading_agree_on_every_name(session_dir):
@@ -299,11 +329,11 @@ def test_collecting_and_reading_agree_on_every_name(session_dir):
     (session_dir / "derived" / ".hidden").write_text("h")
     backend = local_files(session_dir)
 
-    names = collect_artifacts(backend)
+    names = drive(collect_artifacts(backend))
 
     assert {"derived/deep/er/x.bin", "derived/.hidden"} <= set(names)
     for name in names:
-        read_artifact(backend, name)
+        drive(read_artifact(backend, name))
 
 
 # -- the command -------------------------------------------------------------

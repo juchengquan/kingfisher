@@ -20,6 +20,7 @@ from langgraph.types import Command, interrupt
 from typing_extensions import TypedDict
 
 from kingfisher.infrastructure.harness.checkpointing import paused_state, resumed_saver
+from kingfisher.infrastructure.steps import drive
 from kingfisher.layout import PAUSED_STATE
 from tests.conftest import harness_of, start
 
@@ -156,4 +157,4 @@ def test_no_part_of_a_checkpoint_resumes():
 def test_no_checkpoint_is_not_an_error(cfg):
     """Every ordinary turn ends without one, and the resume path asks regardless."""
     start(cfg, "s")
-    assert harness_of(cfg, "s").read(PAUSED_STATE) is None
+    assert drive(harness_of(cfg, "s").fetch(PAUSED_STATE)) is None

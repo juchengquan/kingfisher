@@ -11,6 +11,7 @@ from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.prompting import system_prompt
+from kingfisher.infrastructure.steps import drive
 from tests.conftest import FakeToolCallingModel, harness_in
 
 NARROW = """name: narrow
@@ -234,7 +235,7 @@ def test_a_snapshot_is_written_once_and_not_overwritten(tmp_path):
     from kingfisher.infrastructure.workspace import agent_started_with, remember_agent
 
     harness = harness_in(tmp_path)
-    remember_agent(harness, "name: first\ndescription: One.\n")
-    remember_agent(harness, "name: second\ndescription: Two.\n")
+    drive(remember_agent(harness, "name: first\ndescription: One.\n"))
+    drive(remember_agent(harness, "name: second\ndescription: Two.\n"))
 
-    assert agent_started_with(harness).text.startswith("name: first")
+    assert drive(agent_started_with(harness)).text.startswith("name: first")

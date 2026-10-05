@@ -3328,6 +3328,52 @@ built, so a second size is refused there, naming both, rather than queueing behi
 whichever service came first. 64 by default: a pool starts its threads only as work
 arrives, so a generous ceiling costs nothing idle. *(2026-10-02.)*
 
+**The session reads have async twins, and each read is written once.**
+`asession`, `apending` and `aartifact`, asked for by a deployment whose own code runs
+on an event loop -- the witness *Methods on `Kingfisher`* was waiting for, and still
+methods rather than module-level names. They go through the ports' own async methods
+rather than a thread each: a call that blocks for a round trip holds a worker for all
+of it, and at a thousand concurrent 50ms calls the default executor took 4491ms, a
+256-thread pool 257ms and awaiting natively 62ms.
+
+**Written once, as the port calls a read makes.** A sequence is a generator that
+yields each call and is sent the answer; `drive` makes the sync call and `adrive`
+awaits its `a`-prefixed twin, so every check and refusal between the calls, and their
+order, exists once. Two hand-written copies of each read was the alternative, and two
+copies of one thing is what the second copy of the turn was. Every session I/O helper
+is one -- `HarnessFiles`, the transcript and pause formats, the pin, placing data,
+listing and fetching what a turn left -- and sync code that is not one, the turn's
+ending and `reap`, drives them. `HarnessFiles` moved beside the formats in
+`session_store`, because `sessions` needs it and it needs nothing from the harness.
+
+**A sequence called without a driver does nothing, which is how this shape fails
+quietly.** `test_every_sequence_is_driven_or_delegated_to` finds each call by name and
+requires `yield from`, `drive` or `adrive` around it. It found the test helper `pin`
+writing no pin, and every turn that relied on one told it named no agent. Finding calls
+by name needs names nothing else uses, which is why `HarnessFiles` says `fetch`,
+`store` and `drop` and not `read`, `write` and `delete`, the backend's own --
+`test_a_sequence_s_name_is_not_also_a_plain_function_s` keeps it so.
+
+**A cancel waits for a call that changes something, and abandons a read.** *Cancelling
+waits*, one level down: a claim taken or a sandbox opened while the caller was being
+cancelled would otherwise reach nobody, and the sequence that must give it back is
+handed the answer before it is handed the cancel. Disk and CPU work on this host goes
+to kingfisher's pool, and is always waited for, because a thread runs to the end
+whether anyone waits or not.
+
+**`aopen` and `asessions` are defaults on the protocol**, running `open` and
+`sessions` on kingfisher's pool -- deepagents' own `BackendProtocol` gives its async
+methods the same shape. A class that subclasses `SessionBackends` has them; one that
+does not must write them, because `isinstance` asks for every member, and that is the
+breaking half of this. The session's *backend* is read through deepagents' async
+methods, which for its filesystem backends run on the loop's default executor: that is
+deepagents' choice and a local read. A backend whose files are a round trip away
+overrides them.
+
+**`session()` opens a backend only when something reads it.** With nothing to narrow
+the caller, the pin decides nothing, and opening a remote backend to say a session
+exists was a sandbox for nothing. *(2026-10-02.)*
+
 **Asked and declined: making a turn a langchain `Runnable`.** The question is
 reasonable -- `Runnable` is the interface that ecosystem's callers already know,
 and it would bring `batch`, `astream_events` and LCEL composition with it. Three

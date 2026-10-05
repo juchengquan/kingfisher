@@ -18,7 +18,9 @@ import pytest
 import kingfisher
 from kingfisher.domain.result import AWAITING, RunResult
 from kingfisher.domain.result import PendingDecision as Pending
+from kingfisher.infrastructure.steps import drive
 from kingfisher.presentation.cli import __main__ as cli
+from tests.conftest import Reads
 
 PAUSED = RunResult(
     session_id="s-1",
@@ -207,9 +209,11 @@ def test_deciding_nothing_shows_what_is_waiting(cfg, monkeypatch, capsys):
     from tests.conftest import harness_of, start
 
     start(cfg, "s-1")
-    write_pause_mark(
-        harness_of(cfg, "s-1"),
-        {"pending": pending_as_mark([PAUSED.pending[0]])},
+    drive(
+        write_pause_mark(
+            harness_of(cfg, "s-1"),
+            {"pending": pending_as_mark([PAUSED.pending[0]])},
+        )
     )
     monkeypatch.setattr(cli, "config_from_env", lambda: cfg)
 
@@ -318,11 +322,12 @@ def _a_paused_session_only_a_reaches(cfg):
     kf = kingfisher.Kingfisher(policied, backends=kingfisher.default_backends)
     start(policied, "s-1")
     pin(kf, "s-1", "only_a")
-    write_pause_mark(harness_of(policied, "s-1"), {"pending": pending_as_mark([PAUSED.pending[0]])})
+    mark = {"pending": pending_as_mark([PAUSED.pending[0]])}
+    drive(write_pause_mark(harness_of(policied, "s-1"), mark))
     return policied, kf
 
 
-def test_a_caller_who_cannot_reach_the_session_is_not_shown_what_it_waits_on(cfg):
+def test_a_caller_who_cannot_reach_the_session_is_not_shown_what_it_waits_on(cfg, way):
     """It asked as nobody, so anyone holding a session id read the pending calls and
     their arguments -- the one door into a session that did not ask who was calling.
     """
@@ -330,10 +335,12 @@ def test_a_caller_who_cannot_reach_the_session_is_not_shown_what_it_waits_on(cfg
 
     _, kf = _a_paused_session_only_a_reaches(cfg)
 
+    reads = Reads(kf, way)
+
     # The control beside the escape: the caller who does reach it is shown the call.
-    assert [call.call_id for call in kf.pending("s-1", source_ids=("A",))] == ["abc123#0"]
+    assert [call.call_id for call in reads.pending("s-1", source_ids=("A",))] == ["abc123#0"]
     with pytest.raises(UnknownSessionError):
-        kf.pending("s-1", source_ids=("B",))
+        reads.pending("s-1", source_ids=("B",))
 
 
 def test_the_command_asks_as_the_caller_it_names(cfg, monkeypatch, capsys):

@@ -13,7 +13,8 @@ deployment from before #608 may well be from before that too. See *Subagent bund
 `SessionRoot`, `RunResult.log_path` or `RunResult.session_dir`, you probably need
 only the first two items of the checklist.
 
-**If you are already on #617 or later**, only *Renamed after #617* applies to you.
+**If you are already on #617 or later**, only *Renamed after #617* and *Async reads
+after #617* apply to you.
 
 ## Renamed after #617
 
@@ -28,6 +29,21 @@ method that opens a session is named rather than being the object's `__call__`.
 | `__call__(cfg, session_id, /, *, catalogue=None, runner=None)` on your `SessionBackends`, called as `backends(cfg, session_id)` | `open(...)`, with the same arguments, called as `backends.open(cfg, session_id)` |
 | `KINGFISHER_BACKEND_FACTORY` | `KINGFISHER_SESSION_BACKENDS_FACTORY`. The old name is **refused**: startup fails with `KINGFISHER_BACKEND_FACTORY was renamed KINGFISHER_SESSION_BACKENDS_FACTORY; set that instead`. |
 | `Config.backend_factory`, `configured_backend()` | `Config.session_backends_factory`, `configured_backends()` |
+
+## Async reads after #617
+
+`Kingfisher` has `asession`, `apending` and `aartifact`, the async twins of `session`,
+`pending` and `artifact`, for a caller already on an event loop. They reach a session
+through two new methods on `SessionBackends`, `aopen` and `asessions`:
+
+- **If your session backends subclass `DefaultBackends` or `SessionBackends`**, there
+  is nothing to do. Both methods are inherited, running `open` and `sessions` on
+  kingfisher's thread pool. Override them where opening a session or listing them is a
+  round trip you can await.
+- **If yours subclass neither**, they are refused at construction until they have both
+  methods. Subclassing `SessionBackends` is the shortest fix.
+- `SESSION_BACKENDS_CONTRACT` has two more checks: `aopen_reaches_the_session_open_does`
+  and `asessions_lists_what_sessions_does`.
 
 ## Checklist
 

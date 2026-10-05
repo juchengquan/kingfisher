@@ -15,8 +15,10 @@ from kingfisher.domain.session import (
     SessionInfo,
     UnknownSessionError,
     known,
-    sessions_root,
+    session_dir,
 )
+from kingfisher.infrastructure.session_store import HarnessFiles
+from kingfisher.infrastructure.steps import Steps, adrive, drive, reading
 from kingfisher.infrastructure.workspace import (
     agent_started_with,
 )
@@ -41,10 +43,8 @@ class Sessions:
     workspace: Path
     #: Where the sessions are: which there are, how big, when each was used.
     _backends: Any
-    #: The backend one session's files are reached through.
-    _files_for: Callable[..., Any]
-    #: What the instance keeps about one session, through that session's backend.
-    _harness_at: Callable[..., Any]
+    #: The backend one session's files are reached through, as a sequence.
+    _files_for: Callable[..., Steps[Any]]
 
     def _session_id_for(self, request: Request | Resume) -> str:
         """Mint an id, or accept one that already names a session."""
@@ -60,7 +60,7 @@ class Sessions:
         """
         return UnknownSessionError(f"no session {session_id!r}; omit session_id to start one")
 
-    def _reaches_session(self, harness: Any, held: frozenset[str] | None) -> bool:
+    def _reaches_session(self, harness: Any, held: frozenset[str] | None) -> Steps[bool]:
         """Whether a caller holding `held` may touch the session `harness` belongs to.
 
         The one rule reading a session and running a turn in it share: a caller who
@@ -71,7 +71,7 @@ class Sessions:
         """
         if held is None:
             return True
-        kept = agent_started_with(harness)
+        kept = yield from agent_started_with(harness)
         if kept is None:
             return True
         return reaches(read(kept).source_ids, held)
@@ -114,17 +114,29 @@ class Sessions:
         that is not there. The reason is not lost; it is what that caller's audit
         line says.
         """
-        reached = self._reached(session_id, source_ids)
+        return drive(self._session_steps(session_id, source_ids))
+
+    async def asession(
+        self, session_id: str, *, source_ids: Held | None = None
+    ) -> SessionInfo | None:
+        """`session`, for a caller on an event loop."""
+        return await adrive(self._session_steps(session_id, source_ids))
+
+    def _session_steps(self, session_id: str, source_ids: Held | None) -> Steps[SessionInfo | None]:
+        reached = yield from self._reached(session_id, source_ids, files_wanted=False)
         return None if reached is None else reached[0]
 
     def _reached(
-        self, session_id: str, source_ids: Held | None
-    ) -> tuple[SessionInfo, Any] | None:
-        """`session`'s answer, and the backend that was opened to decide it.
+        self, session_id: str, source_ids: Held | None, *, files_wanted: bool
+    ) -> Steps[tuple[SessionInfo, Any] | None]:
+        """`session`'s answer, and the backend opened to decide it or `None` where
+        neither the check nor the caller needed one.
 
         Handed back for a caller that goes on to read the session: opening another
         asks the session backends a second time, which for a remote backend is a
-        second sandbox per query.
+        second sandbox per query. Not opened where nothing narrows the caller and the
+        caller reads nothing, for the same reason: a remote backend would be a sandbox
+        opened to say a session exists.
 
         Filtered from the same listing as `sessions()` rather than stat-ing one path,
         so both answers come from one rule. At fifty sessions that is 0.22ms; it grows
@@ -132,16 +144,18 @@ class Sessions:
         than a cheaper stat.
         """
         held = caller_holds(self.access, source_ids)
-        found = next((s for s in self.sessions() if s.id == session_id), None)
+        listing = yield reading(self._backends, "sessions", self.cfg)
+        found = next((s for s in known(listing) if s.id == session_id), None)
         if found is None:
             return None
-        directory = sessions_root(self.workspace) / session_id
-        files = self._files_for(session_id, directory)
-        harness = self._harness_at(session_id, directory, files)
-        return (found, files) if self._reaches_session(harness, held) else None
+        if held is None and not files_wanted:
+            return found, None
+        files = yield from self._files_for(session_id, session_dir(self.workspace, session_id))
+        reaches_it = yield from self._reaches_session(HarnessFiles(files, session_id), held)
+        return (found, files) if reaches_it else None
 
     @contextmanager
     def _held_session(self, request: Request | Resume) -> Iterator[Session]:
         """This turn's session. Its backend makes it, the first time it is asked for it."""
         session_id = self._session_id_for(request)
-        yield Session(id=session_id, directory=sessions_root(self.workspace) / session_id)
+        yield Session(id=session_id, directory=session_dir(self.workspace, session_id))

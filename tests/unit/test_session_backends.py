@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -49,6 +50,44 @@ class Overwriting(DefaultBackends):
 def _check(name):
     (check,) = [c for c in SESSION_BACKENDS_CONTRACT if c.__name__ == name]
     return check
+
+
+class AsyncElsewhere(DefaultBackends):
+    """An `aopen` written beside `open` rather than through it, reaching a session of
+    its own -- the async path's reads somewhere the sync path never looks.
+    """
+
+    async def aopen(self, cfg, session_id, /, *, catalogue=None, runner=None):
+        return self.open(cfg, f"{session_id}-async", catalogue=catalogue, runner=runner)
+
+
+class ListsNothingAsync(DefaultBackends):
+    """An `asessions` that forgot what `sessions` knows."""
+
+    async def asessions(self, cfg):
+        return ()
+
+
+def test_the_kit_catches_an_aopen_that_reaches_another_session(cfg):
+    with pytest.raises(AssertionError, match="reach different sessions"):
+        _check("aopen_reaches_the_session_open_does")(lambda: (cfg, AsyncElsewhere()))
+
+
+def test_the_kit_catches_an_asessions_that_disagrees_with_sessions(cfg):
+    with pytest.raises(AssertionError, match="does not list the sessions"):
+        _check("asessions_lists_what_sessions_does")(lambda: (cfg, ListsNothingAsync()))
+
+
+def test_the_kit_runs_from_a_test_already_on_an_event_loop(cfg):
+    """A deployment's async suite calls the kit from a coroutine, where `asyncio.run`
+    refuses to start a second loop.
+    """
+
+    async def from_a_coroutine() -> None:
+        for check in SESSION_BACKENDS_CONTRACT:
+            check(lambda: (cfg, default_backends))
+
+    asyncio.run(from_a_coroutine())
 
 
 def test_the_kit_catches_two_sessions_on_one_filesystem(cfg):

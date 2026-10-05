@@ -14,8 +14,9 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain import retention
 from kingfisher.domain.retention import SweepResult
-from kingfisher.domain.session import sessions_root
+from kingfisher.domain.session import session_dir
 from kingfisher.infrastructure.harness.checkpointing import thread_ids
+from kingfisher.infrastructure.steps import drive
 from kingfisher.layout import CLAIM
 
 if TYPE_CHECKING:
@@ -84,11 +85,10 @@ class Disposal:
         Asked only of the sessions old enough to go, because the question is asked of
         each one's backend: a lock is the backend's, and only it knows who holds one.
         """
-        root = sessions_root(self.workspace)
         return tuple(
             session_id
             for session_id in candidates
-            if self._files_for(session_id, root / session_id).held(
+            if drive(self._files_for(session_id, session_dir(self.workspace, session_id))).held(
                 CLAIM, stale_after=self.cfg.claim_stale_after, now=now
             )
         )

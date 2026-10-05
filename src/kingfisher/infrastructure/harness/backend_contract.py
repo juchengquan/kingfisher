@@ -12,6 +12,8 @@ imported a test framework would put one in the runtime wheel.
 
 from __future__ import annotations
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -339,6 +341,52 @@ def a_host_path_stays_in_its_session(make: Callable[[], Any]) -> None:
         raise AssertionError(msg)
 
 
+def _on_a_loop_of_its_own(awaited: Callable[[], Any]) -> Any:
+    """`awaited()` run to the end on a new event loop, in a thread of its own.
+
+    A thread because a deployment may run this kit from a test that is already on a
+    loop, where `asyncio.run` refuses to start a second one.
+    """
+    with ThreadPoolExecutor(max_workers=1) as one:
+        return one.submit(lambda: asyncio.run(awaited())).result()
+
+
+def aopen_reaches_the_session_open_does(make: Callable[[], Any]) -> None:
+    """The async path opens sessions with `aopen`. One that reached another session, or
+    a fresh one, would put an async caller's reads somewhere the sync path never looks.
+    """
+    cfg, backends = make()
+    one, _ = CONTRACT_SESSIONS
+    backends.open(cfg, one).upload_files([("/derived/twins", b"written through open")])
+
+    async def opened() -> Any:
+        return await backends.aopen(cfg, one)
+
+    (seen,) = _on_a_loop_of_its_own(opened).download_files(["/derived/twins"])
+    if seen.error or seen.content != b"written through open":
+        msg = (
+            f"what aopen returned for {one!r} does not hold what open's backend wrote "
+            f"there ({seen.error or seen.content!r}): the two reach different sessions"
+        )
+        raise AssertionError(msg)
+
+
+def asessions_lists_what_sessions_does(make: Callable[[], Any]) -> None:
+    """An async caller's `asession` is answered from `asessions`. A listing that
+    disagreed would make a session exist for one caller and not for another.
+    """
+    cfg, backends = make()
+    one, _ = CONTRACT_SESSIONS
+    backends.open(cfg, one)
+
+    async def listed() -> Any:
+        return await backends.asessions(cfg)
+
+    if _ids(_on_a_loop_of_its_own(listed)) != _ids(backends.sessions(cfg)):
+        msg = "asessions does not list the sessions that sessions does"
+        raise AssertionError(msg)
+
+
 #: Every check a deployment's `SessionBackends` must pass. `make` returns a fresh
 #: `(Config, backends)` pair, because every question a backends object answers is
 #: about one deployment's sessions. These write files, as `filesystem_consistency`,
@@ -350,4 +398,6 @@ SESSION_BACKENDS_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (
     a_session_asked_for_is_listed,
     a_deleted_session_is_gone,
     a_host_path_stays_in_its_session,
+    aopen_reaches_the_session_open_does,
+    asessions_lists_what_sessions_does,
 )
