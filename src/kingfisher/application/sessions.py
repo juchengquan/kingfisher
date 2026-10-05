@@ -14,7 +14,6 @@ from kingfisher.domain.session import (
     SessionInfo,
     UnknownSessionError,
     known,
-    session_dir,
 )
 from kingfisher.infrastructure.session_store import HarnessFiles
 from kingfisher.infrastructure.steps import Steps, adrive, drive, reading
@@ -25,7 +24,6 @@ from kingfisher.kinds.agents.reading import read
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from kingfisher.config import Config
     from kingfisher.domain.access import Held, SourceIds
@@ -39,7 +37,6 @@ class Sessions:
     #: contract nothing checks, which is the shape this repository distrusts.
     cfg: Config
     access: SourceIds | None
-    workspace: Path
     #: Where the sessions are: which there are, how big, when each was used.
     _backends: Any
     #: The backend one session's files are reached through, as a sequence.
@@ -55,7 +52,7 @@ class Sessions:
             session_id = request.session_id
         else:
             raise self._unknown_session(request.session_id)
-        return Session(id=session_id, directory=session_dir(self.workspace, session_id))
+        return Session(id=session_id)
 
     def _unknown_session(self, session_id: str) -> UnknownSessionError:
         """The refusal for an id nobody issued, and for a session this caller may not
