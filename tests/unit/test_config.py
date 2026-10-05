@@ -8,7 +8,7 @@ import pytest
 
 from kingfisher.application import config as config_module
 from kingfisher.application.config import Environment, config_from_env
-from kingfisher.config import ConfigError
+from kingfisher.config import DEFAULT_THREAD_POOL_SIZE, ConfigError
 from kingfisher.domain.access import AccessError
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from tests.conftest import FAKE_CATALOGUE, subagents_dir
@@ -86,7 +86,7 @@ def test_it_defaults_inside_the_workspace(tmp_path):
 
 def test_the_thread_pool_size_is_read_from_its_setting(env):
     """Read but not passed on, every service would run on the default and say nothing."""
-    assert config_from_env(env).thread_pool_size == 64
+    assert config_from_env(env).thread_pool_size == DEFAULT_THREAD_POOL_SIZE
     assert config_from_env({**env, "KINGFISHER_THREAD_POOL_SIZE": "8"}).thread_pool_size == 8
 
 

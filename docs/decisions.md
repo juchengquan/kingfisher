@@ -3418,8 +3418,8 @@ go through `infrastructure.threads` now, which copies the caller's context as
 `to_thread` does. One pool rather than one per `Kingfisher` because threads are the
 process's to spend; `KINGFISHER_THREAD_POOL_SIZE` is asked for when a service is
 built, so a second size is refused there, naming both, rather than queueing behind
-whichever service came first. 64 by default: a pool starts its threads only as work
-arrives, so a generous ceiling costs nothing idle. *(2026-10-02.)*
+whichever service came first. 64 by default then, 16 since: a pool starts its threads
+only as work arrives, so a generous ceiling costs nothing idle. *(2026-10-02.)*
 
 **The session reads have async twins, and each read is written once.**
 `asession`, `apending` and `aartifact`, asked for by a deployment whose own code runs
@@ -3516,6 +3516,34 @@ session and which agent runs, and was read once for each; it is read once and ha
 down. A saver opened for a build that then raised was left open, since no turn
 existed for an ending to close it; `_built_turn` closes what it opened when it does
 not hand it over. *(2026-10-05.)*
+
+**A pause is cleared only where there is one, and the pool defaults to 16.** Measured
+end to end against session backends whose every call takes 50ms
+(`spikes/async_scaling.py`, numbers in `findings.md`): reads scale flat once awaited,
+and what grew with concurrent turns was the ending, which runs on kingfisher's pool
+so that nothing can interrupt it. Three of its seven round trips were `clear_pause`,
+dropping the pause files at the end of every turn whether or not there had been a
+pause. Setup reads the mark for every turn and drops it for one that supersedes it,
+so only a resume has a pause left to clear by its end; every other turn now skips
+the three, on both paths.
+
+The default went from 64 to 16. A smaller pool was asked for, and 4 was measured:
+since each turn holds a thread through its ending, ten concurrent remote turns took
+1.8x as long as one, and two hundred took longer than handing each turn to a thread.
+16 keeps ten concurrent turns at the cost of one and holds fewer threads under a
+burst than 64; at fifty, 64 still does twice as well, which is why
+`configuration.md` tells a deployment with many turns at once on a remote backend
+to raise it. Making the ending awaited rather than threaded would remove the pool
+from it altogether, and is the change that would reopen *Cancelling waits*.
+
+**The size is per process, not per `Kingfisher`, and nothing is spent until it is
+used.** A deployment building an instance per session shares the one pool across all
+of them -- two instances hold the same pool, and a second size is refused -- so the
+number bounds the process, and measured with an instance per session the turns above
+came out the same. Nor does the ceiling start threads: a pool makes one only when
+work arrives with none idle, and after five turns in a row it held one. A process
+serving a single session therefore uses one or two whatever the number says.
+*(2026-10-05.)*
 
 **Asked and declined: making a turn a langchain `Runnable`.** The question is
 reasonable -- `Runnable` is the interface that ecosystem's callers already know,
