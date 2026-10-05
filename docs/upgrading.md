@@ -32,9 +32,9 @@ method that opens a session is named rather than being the object's `__call__`.
 
 ## Async reads after #617
 
-`Kingfisher` has `asession`, `apending`, `aartifact` and `adelete_session`, the async
-twins of `session`, `pending`, `artifact` and `delete_session`, for a caller already on
-an event loop. They reach a session through new methods on `SessionBackends` --
+`Kingfisher` has `asession`, `apending`, `aartifact`, `adelete_session` and
+`afiles_for`, the async twins of `session`, `pending`, `artifact`, `delete_session` and
+`files_for`, for a caller already on an event loop. They reach a session through new methods on `SessionBackends` --
 `aopen`, `asessions`, `adelete`, and for a turn on `astream`, `amark_used` and `asize`
 -- and through `aclaim` on the backend `open` returns:
 

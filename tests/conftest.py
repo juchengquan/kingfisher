@@ -250,6 +250,9 @@ class Through:
     def delete_session(self, *args, **kwargs):
         return self._through("delete_session", *args, **kwargs)
 
+    def files_for(self, *args, **kwargs):
+        return self._through("files_for", *args, **kwargs)
+
 
 def harness_of(cfg, session_id: str):
     """What kingfisher keeps about a session, as a test reads and writes it."""

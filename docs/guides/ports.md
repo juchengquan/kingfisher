@@ -296,7 +296,8 @@ a backend of yours meets the same promise its own way.
 builds a session's backend the way a turn does — through your session backends,
 with the runner you wired — and `run`, `stream`, `arun` and `astream` take it back
 as `files=` and run the turn on it rather than opening another. Where each `open`
-is a sandbox, that is one sandbox rather than two. The request has to name the
+is a sandbox, that is one sandbox rather than two. `afiles_for` is the same for a
+caller on an event loop, opening it with `aopen`. The request has to name the
 session it was opened for: one naming none is refused, because it would start a
 new session and run in another's files. `files_for` does not ask who you are acting
 for, so hand what it returns only to code entitled to that session; the turn still

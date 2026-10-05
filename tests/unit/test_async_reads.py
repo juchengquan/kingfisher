@@ -122,6 +122,22 @@ def test_an_async_turn_makes_no_sync_port_call_on_the_loop(cfg, sync_calls, tmp_
     assert not on_the_loop, f"made on the event loop's thread: {on_the_loop}"
 
 
+def test_opening_a_sessions_files_makes_no_sync_port_call_on_the_loop(cfg, sync_calls):
+    """`files_for` on the loop is a session's backend -- a sandbox, on a remote one --
+    opened while every other coroutine waits for it.
+    """
+    kf = Kingfisher(cfg, backends=default_backends)
+    start(cfg, "s")
+    sync_calls.clear()
+
+    files = asyncio.run(kf.afiles_for("s"))
+
+    assert files is not None
+    assert sync_calls, "no sync port method was reached, on any thread"
+    on_the_loop = sorted({name for name, loop in sync_calls if loop})
+    assert not on_the_loop, f"made on the event loop's thread: {on_the_loop}"
+
+
 def test_a_turn_reads_the_pin_once(cfg, monkeypatch):
     """Read once to decide whether the caller reaches the session and again to decide
     which agent the turn runs, every turn under a policy paid a round trip for a file
