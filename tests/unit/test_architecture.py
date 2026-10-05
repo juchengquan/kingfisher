@@ -1369,6 +1369,10 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
             # list at five would be a second spelling of one name to make a table
             # read smaller.
             "backend",
+            # `refuse_unusable_backend`, on every backend a session opens. `agent`
+            # runs it on the ones it builds on, which beside a pre-built graph is
+            # none of them.
+            "backend_contract",
             "checkpointing",
             "interpreter",
             "kinds.declared_middleware",

@@ -233,6 +233,22 @@ def test_a_backend_routing_nothing_a_deny_rule_needs_is_refused(cfg, session_dir
         build_agent(cfg, backend=routeless)
 
 
+def test_a_session_beside_a_pre_built_graph_is_refused_an_unusable_backend(cfg):
+    """Beside a graph no agent is built, so the check every build runs never saw what
+    `open` returned, and a backend deepagents gives no shell reached kingfisher's own
+    calls on it and failed there, in words that named neither.
+    """
+
+    class Mine(DefaultBackends):
+        def open(self, cfg_, session_id, /, *, catalogue=None):
+            return NotABackend()
+
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=Mine(), threads=StubCheckpointer())
+
+    with pytest.raises(ConfigError, match="not recognised by deepagents"):
+        kf.run(Request("t"))
+
+
 def test_the_backend_kingfisher_builds_satisfies_what_it_refuses_others_for(
     cfg, session_dir
 ):

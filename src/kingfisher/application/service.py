@@ -88,6 +88,7 @@ from kingfisher.infrastructure.harness.backend import (
     DefaultBackends,
     SessionBackends,
 )
+from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
 from kingfisher.infrastructure.harness.checkpointing import (
     SharedThreads,
     build_session_checkpointer,
@@ -454,9 +455,14 @@ class Kingfisher(Sessions, Disposal):
         service's: a runner is about where commands run on a host, and only the
         session backends know which host a session is on.
         """
-        return (
-            yield changing(self._backends, "open", self.cfg, session_id, catalogue=self.catalogue)
+        files = yield changing(
+            self._backends, "open", self.cfg, session_id, catalogue=self.catalogue
         )
+        # Here and not only where an agent is built: beside a pre-built graph none is,
+        # and without one a turn reads the session through this backend before the
+        # build would look at it.
+        refuse_unusable_backend(files)
+        return files
 
     def files_for(self, session_id: str) -> Any:
         """The backend a turn in this session is given, built the way a turn builds it.

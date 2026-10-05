@@ -2734,6 +2734,15 @@ Python still refuses it at runtime for a caller nobody type-checks. The part of 
 message that was not obvious -- a graph needs them too -- is said by `run` and
 `stream`, the only callers that leave `backends` out on purpose. *(2026-10-05.)*
 
+**What a session opens is checked where it is opened.** `refuse_unusable_backend` ran
+only where an agent was built on a backend, which beside a pre-built graph is never,
+so a backend deepagents gives no shell went on to kingfisher's own calls and failed at
+the first of them, `claim`, with an `AttributeError`. It runs in `_files_for` now, on
+every session opened -- a turn, a lookup, a sweep -- for an `isinstance` and a scan of
+the routes. That asks the same of session backends beside a graph as beside none:
+what `open` returns is what a session runs on, and kingfisher cannot see whether a
+graph's own backend is a different one. *(2026-10-05.)*
+
 **The runner belongs to the session backends, not to `Kingfisher`.**
 `Kingfisher(runner=)` built a runner per turn from `<workspace>/sessions/<id>` and
 handed it to `open`. So the service worked out a host path for every session whatever
