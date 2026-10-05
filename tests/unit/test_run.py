@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 from langchain_core.messages import AIMessage
 
+from kingfisher import default_backends
 from kingfisher.application.run import Request, RunResult, normalize_answer, run
 from kingfisher.application.service import Kingfisher
 from kingfisher.domain.result import END_TURN, STOP_REASONS
@@ -75,6 +76,7 @@ def test_run_creates_the_session_triple(cfg):
         Request("count things", session_id="sess123"),
         cfg=cfg,
         graph=agent,
+        backends=default_backends,
         checkpointer=StubCheckpointer(),
     )
 
@@ -96,6 +98,7 @@ def test_run_tells_the_agent_where_to_work_in_the_task(cfg):
         Request("do a thing", session_id="abc"),
         cfg=cfg,
         graph=agent,
+        backends=default_backends,
         checkpointer=StubCheckpointer(),
     )
 
@@ -113,6 +116,7 @@ def test_run_logs_usage_shaped_records(cfg):
         Request("t", session_id="logged"),
         cfg=cfg,
         graph=agent,
+        backends=default_backends,
         checkpointer=StubCheckpointer(),
         run_events=sink,
     )
@@ -138,7 +142,7 @@ def test_a_turn_disposes_of_nothing(cfg):
         start(cfg, name)
     start(cfg, "s4")
 
-    run(Request("t", session_id="s4"), cfg=cfg, graph=StubAgent("ok"),
+    run(Request("t", session_id="s4"), cfg=cfg, graph=StubAgent("ok"), backends=default_backends,
         checkpointer=StubCheckpointer())
 
     for name in ("s1", "s2", "s3", "s4"):
@@ -147,7 +151,13 @@ def test_a_turn_disposes_of_nothing(cfg):
 
 def test_a_bare_task_string_still_works(cfg):
     """`run("do a thing")` must stay readable; Request is for when you need it."""
-    result = run("just this", cfg=cfg, graph=StubAgent("ok"), checkpointer=StubCheckpointer())
+    result = run(
+        "just this",
+        cfg=cfg,
+        graph=StubAgent("ok"),
+        backends=default_backends,
+        checkpointer=StubCheckpointer(),
+    )
     assert result.answer == "ok"
 
 
@@ -194,7 +204,13 @@ def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
 def test_the_framework_never_asks_for_files_of_its_own(cfg):
     """Wanting a written report is one kind of task among many."""
     quiet = StubAgent("ok")
-    run(Request("say hello"), cfg=cfg, graph=quiet, checkpointer=StubCheckpointer())
+    run(
+        Request("say hello"),
+        cfg=cfg,
+        graph=quiet,
+        backends=default_backends,
+        checkpointer=StubCheckpointer(),
+    )
     sent = quiet.state["messages"][0]["content"]
 
     assert "/scratchpad" in sent  # where to work is a fact, and reaches it
@@ -206,6 +222,7 @@ def test_the_framework_never_asks_for_files_of_its_own(cfg):
         Request("Analyse it and write findings.csv"),
         cfg=cfg,
         graph=asked,
+        backends=default_backends,
         checkpointer=StubCheckpointer(),
     )
     # Whatever the caller names, verbatim and unembellished.
@@ -225,12 +242,14 @@ def test_supplied_data_is_still_there_on_the_next_turn(cfg):
         Request("look at it", session_id="keeps", data=(source,)),
         cfg=cfg,
         graph=StubAgent("ok"),
+        backends=default_backends,
         checkpointer=ck,
     )
     second = run(
         Request("and again", session_id="keeps"),
         cfg=cfg,
         graph=StubAgent("ok"),
+        backends=default_backends,
         checkpointer=ck,
     )
 
@@ -251,6 +270,7 @@ def test_the_agent_is_told_what_arrived_in_data(cfg):
         Request("go", session_id="told", data=(source,)),
         cfg=cfg,
         graph=agent,
+        backends=default_backends,
         checkpointer=StubCheckpointer(),
     )
 
@@ -272,7 +292,9 @@ def test_a_result_is_json_all_of_it(cfg):
     """
     import dataclasses
 
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     start(cfg, "s")
     result = service.run(Request("go", session_id="s"))
 
@@ -316,6 +338,8 @@ def test_the_loop_asks_for_what_a_delegate_does(cfg):
     everything the delegate did is missing from the run.
     """
     agent = RecordingAgent("ok")
-    list(Kingfisher(cfg, graph=agent, threads=StubCheckpointer()).stream(Request("go")))
+    list(Kingfisher(
+        cfg, graph=agent, backends=default_backends, threads=StubCheckpointer()
+    ).stream(Request("go")))
 
     assert agent.asked == [True]

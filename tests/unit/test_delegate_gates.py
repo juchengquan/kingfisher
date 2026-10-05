@@ -20,7 +20,7 @@ from deepagents import create_deep_agent
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from kingfisher import Kingfisher
+from kingfisher import Kingfisher, default_backends
 from kingfisher.domain.request import Decision, Request, Resume
 from kingfisher.domain.result import AWAITING, END_TURN
 from tests.conftest import FakeToolCallingModel
@@ -86,7 +86,7 @@ def test_a_delegates_gated_call_stops_the_whole_turn(cfg):
     away is work that escaped the gate -- which is the failure a workspace gating the
     shell would discover by having it run.
     """
-    kf = Kingfisher(cfg, graph=_parent_with("scribe"))
+    kf = Kingfisher(cfg, graph=_parent_with("scribe"), backends=default_backends)
 
     result = kf.run(Request("delegate it"))
 
@@ -101,7 +101,7 @@ def test_the_delegate_is_named_where_one_was_in_flight(cfg):
     The name is not in the interrupt: it is read back off the `task` call in the
     parent's own last message. Nothing else in the suite exercises that.
     """
-    kf = Kingfisher(cfg, graph=_parent_with("scribe"))
+    kf = Kingfisher(cfg, graph=_parent_with("scribe"), backends=default_backends)
 
     result = kf.run(Request("delegate it"))
 
@@ -125,6 +125,7 @@ def test_a_top_level_gate_names_no_delegate(cfg):
             interrupt_on={"write_file": True},
             checkpointer=InMemorySaver(),
         ),
+        backends=default_backends,
     )
 
     result = kf.run(Request("do it yourself"))
@@ -172,6 +173,7 @@ def test_a_parents_own_call_is_not_blamed_on_a_delegate_it_started(cfg):
             ],
             checkpointer=InMemorySaver(),
         ),
+        backends=default_backends,
     )
 
     result = kf.run(Request("both at once"))
@@ -190,7 +192,7 @@ def test_two_delegates_in_flight_name_none_rather_than_guessing(cfg):
     wrong actor asked for it is worse than being told none did. The tool and its
     arguments stay correct either way, which is what makes declining to guess cheap.
     """
-    kf = Kingfisher(cfg, graph=_parent_with("scribe", "clerk"))
+    kf = Kingfisher(cfg, graph=_parent_with("scribe", "clerk"), backends=default_backends)
 
     result = kf.run(Request("delegate both"))
 
@@ -206,7 +208,11 @@ def test_a_delegates_gate_is_answered_the_same_way(cfg, session_dir):
     """
     from kingfisher import backend_at
 
-    kf = Kingfisher(cfg, graph=_parent_with("scribe", backend=backend_at(cfg, session_dir)))
+    kf = Kingfisher(
+        cfg,
+        graph=_parent_with("scribe", backend=backend_at(cfg, session_dir)),
+        backends=default_backends,
+    )
     paused = kf.run(Request("delegate it", session_id=session_dir.name))
     assert paused.pending, "the delegate never paused"
 
@@ -227,7 +233,11 @@ def test_rejecting_a_delegates_call_leaves_it_unrun(cfg, session_dir):
     """The half a test asserting only on the turn's end would miss."""
     from kingfisher import backend_at
 
-    kf = Kingfisher(cfg, graph=_parent_with("scribe", backend=backend_at(cfg, session_dir)))
+    kf = Kingfisher(
+        cfg,
+        graph=_parent_with("scribe", backend=backend_at(cfg, session_dir)),
+        backends=default_backends,
+    )
     paused = kf.run(Request("delegate it", session_id=session_dir.name))
 
     kf.run(

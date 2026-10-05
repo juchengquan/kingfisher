@@ -2177,11 +2177,12 @@ def test_the_cycle_finder_finds_one_in_this_tree():
 #: that makes it worth having: it names no foreign package at all, passes that table
 #: cleanly, and loads three provider SDKs through one import two hops away.
 SDK_LOADING: frozenset[str] = frozenset({
-    # The harness, where speaking to deepagents is the job. Six in that package are
+    # The harness, where speaking to deepagents is the job. Seven in that package are
     # not here. `models` and `interpreter` name their foreign classes as strings and
     # resolve them on demand, `tools` reads a graph it is handed, `host_paths` and
-    # `session_paths` are plain path rules the middleware is built on, and
-    # `tool_context` is a record with one untyped field.
+    # `session_paths` are plain path rules the middleware is built on,
+    # `tool_context` is a record with one untyped field, and `session_files` only
+    # calls methods on a backend it is handed.
     "kingfisher.infrastructure.harness.activation",
     "kingfisher.infrastructure.harness.agent",
     "kingfisher.infrastructure.harness.backend",
@@ -2208,9 +2209,6 @@ SDK_LOADING: frozenset[str] = frozenset({
     "kingfisher.infrastructure.harness.declared_middleware",
     "kingfisher.infrastructure.harness.runlog",
     "kingfisher.infrastructure.harness.runtime",
-    # Builds `local_files`, a `CompositeBackend`, for a graph kingfisher did not
-    # build. Imported by `service` alone, which already pays for `backend`.
-    "kingfisher.infrastructure.harness.session_files",
     "kingfisher.infrastructure.harness.subagents",
     # The application layer's half: what a turn needs on the way to running one. Each
     # is imported by `service` and by nothing else, so being heavy costs no caller that

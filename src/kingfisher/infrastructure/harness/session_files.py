@@ -12,38 +12,12 @@ import logging
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from deepagents.backends import CompositeBackend, FilesystemBackend
-
 from kingfisher.domain.result import ArtifactError
-from kingfisher.infrastructure.harness.backend import DataBackend, SessionClaims
 from kingfisher.infrastructure.steps import Steps, changing, on_host, reading
 from kingfisher.infrastructure.workspace.placement import DataError, DataPlacement, checked
 from kingfisher.layout import ARTIFACT_DIRS, DATA_ROUTE
 
 _log = logging.getLogger(__name__)
-
-
-class LocalFiles(SessionClaims, CompositeBackend):
-    """A session's directory on this host, for a graph kingfisher did not build.
-
-    Such a graph carries its own backend and nothing hands it over, so the session
-    directory is the only place kingfisher knows to look. `/data` keeps its own
-    route because it is read-only on disk and only `DataBackend` opens it.
-    """
-
-    def __init__(self, session_dir: Path) -> None:
-        super().__init__(
-            default=FilesystemBackend(root_dir=str(session_dir)),
-            routes={DATA_ROUTE: DataBackend(session_dir)},
-        )
-        self._session_dir = Path(session_dir)
-        #: What `protect_data` could not harden, for the turn to report.
-        self.unprotected: tuple[str, ...] = ()
-
-
-def local_files(session_dir: Path) -> LocalFiles:
-    """See `LocalFiles`."""
-    return LocalFiles(session_dir)
 
 
 def place_data(sources: tuple[Path, ...], backend: Any) -> Steps[DataPlacement]:

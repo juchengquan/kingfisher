@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
+from kingfisher import default_backends
 from kingfisher.application.service import Kingfisher
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import SessionBusyError
@@ -22,7 +23,9 @@ from tests.unit.test_run import StubAgent
 
 
 def service(cfg, graph=None):
-    return Kingfisher(cfg, graph=graph or StubAgent("ok"), threads=StubCheckpointer())
+    return Kingfisher(
+        cfg, graph=graph or StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
 
 
 def _claim(cfg, session_id: str) -> Path:
@@ -207,7 +210,9 @@ def test_disposing_of_a_session_does_not_happen_on_the_event_loop(cfg, monkeypat
         StubCheckpointer, "delete_thread", watched("thread", StubCheckpointer.delete_thread)
     )
     session = start(cfg, "s")
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    kf = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
 
     asyncio.run(kf.arun(Request("go", session_id=session), delete_session=True))
 
@@ -496,7 +501,9 @@ def test_cancelling_at_any_step_of_setup_leaves_the_session_free(cfg, monkeypatc
     data = tmp_path / "in.csv"
     data.write_text("a,b\n")
     session = start(policied, "s")
-    kf = Kingfisher(policied, graph=StubAgent("ok"), threads=StubCheckpointer())
+    kf = Kingfisher(
+        policied, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     asked, held = Request("go", agent="only_a", session_id=session, data=(data,)), ("A",)
     real = steps_module._awaited
     # The first turn pins the agent and every later one reads the pin instead, so the

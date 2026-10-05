@@ -254,22 +254,35 @@ class Through:
         return self._through("files_for", *args, **kwargs)
 
 
+def on_disk(session_dir: Path):
+    """A session directory as a backend, with none of what `backend_at` asks first: a
+    `Config`, and a directory already laid out as a session.
+    """
+    from deepagents.backends import CompositeBackend, FilesystemBackend
+
+    from kingfisher.infrastructure.harness.backend import DataBackend
+    from kingfisher.layout import DATA_ROUTE
+
+    return CompositeBackend(
+        default=FilesystemBackend(root_dir=str(session_dir)),
+        routes={DATA_ROUTE: DataBackend(Path(session_dir))},
+    )
+
+
 def harness_of(cfg, session_id: str):
     """What kingfisher keeps about a session, as a test reads and writes it."""
-    from kingfisher.infrastructure.harness.session_files import local_files
     from kingfisher.infrastructure.session_store import HarnessFiles
 
-    return HarnessFiles(local_files(cfg.workspace / "sessions" / session_id), session_id)
+    return HarnessFiles(on_disk(cfg.workspace / "sessions" / session_id), session_id)
 
 
 def harness_in(session_dir: Path):
     """The same, for a session directory a test already holds -- including one a
     `SessionRoot` put somewhere other than under the workspace.
     """
-    from kingfisher.infrastructure.harness.session_files import local_files
     from kingfisher.infrastructure.session_store import HarnessFiles
 
-    return HarnessFiles(local_files(session_dir), Path(session_dir).name)
+    return HarnessFiles(on_disk(session_dir), Path(session_dir).name)
 
 
 def paths_in(session_dir: Path):
@@ -278,10 +291,9 @@ def paths_in(session_dir: Path):
     """
     from kingfisher.infrastructure.harness.agent import read_only_permissions
     from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
-    from kingfisher.infrastructure.harness.session_files import local_files
     from kingfisher.infrastructure.harness.session_paths import SessionPaths
 
-    under_rules = PermittedBackend(local_files(session_dir), read_only_permissions())
+    under_rules = PermittedBackend(on_disk(session_dir), read_only_permissions())
     return SessionPaths(under_rules, Path(session_dir).parent)
 
 

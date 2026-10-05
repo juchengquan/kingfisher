@@ -24,7 +24,9 @@ from tests.unit.test_run import StubAgent
 
 
 def service(cfg, **kwargs):
-    return Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), **kwargs)
+    return Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer(), **kwargs
+    )
 
 
 # -- T2: a session id is a bearer credential ------------------------------
@@ -120,7 +122,9 @@ def test_a_second_turn_on_a_busy_session_is_refused(cfg):
     """Refused, not queued: a queue hides a wait as long as whatever the other turn is
     doing, and tells a racing caller nothing.
     """
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     session = start(cfg, "s")
 
     assert _slot(cfg, session).claim(CLAIM, stale_after=3600)
@@ -131,7 +135,9 @@ def test_a_second_turn_on_a_busy_session_is_refused(cfg):
 
 def test_the_slot_goes_back_when_the_turn_ends(cfg):
     """Or the first turn would wedge the session for an hour."""
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     start(cfg, "s")
 
     first = service.run(Request("first", session_id="s"))
@@ -145,7 +151,9 @@ def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
     """Every check after the claim can raise, and each one holding the slot on the way
     out would wedge the session over a typo.
     """
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     start(cfg, "s")
 
     with pytest.raises(ValueError):
@@ -189,7 +197,9 @@ def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
 
 def test_two_sessions_do_not_block_each_other(cfg):
     """The slot is per session. One busy conversation must not stop another."""
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     busy = start(cfg, "busy")
     other = start(cfg, "other")
 
@@ -237,7 +247,9 @@ def test_turns_in_separate_sessions_are_in_flight_at_once(cfg):
     notices.
     """
     barrier = threading.Barrier(CONCURRENT, timeout=10)
-    kf = Kingfisher(cfg, graph=_BarrierAgent(barrier), threads=StubCheckpointer())
+    kf = Kingfisher(
+        cfg, graph=_BarrierAgent(barrier), backends=default_backends, threads=StubCheckpointer()
+    )
     for n in range(CONCURRENT):
         start(cfg, f"s{n}")
 
@@ -255,7 +267,9 @@ def test_the_overlap_check_fails_when_the_turns_do_not_overlap(cfg):
     serialised every turn in the process.
     """
     barrier = threading.Barrier(CONCURRENT, timeout=0.5)
-    kf = Kingfisher(cfg, graph=_BarrierAgent(barrier), threads=StubCheckpointer())
+    kf = Kingfisher(
+        cfg, graph=_BarrierAgent(barrier), backends=default_backends, threads=StubCheckpointer()
+    )
     start(cfg, "alone")
 
     with pytest.raises(threading.BrokenBarrierError):

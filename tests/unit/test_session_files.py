@@ -29,7 +29,6 @@ from kingfisher.infrastructure.harness.backend import (
 )
 from kingfisher.infrastructure.harness.session_files import (
     collect_artifacts,
-    local_files,
     place_data,
     read_artifact,
 )
@@ -320,14 +319,14 @@ def test_a_refused_upload_is_a_data_error_naming_the_file(session_dir, tmp_path)
         drive(place_data((source,), backend))
 
 
-def test_collecting_and_reading_agree_on_every_name(session_dir):
+def test_collecting_and_reading_agree_on_every_name(cfg, session_dir):
     """Whatever `collect_artifacts` reports, `read_artifact` accepts: a name handed to a
     caller that the fetch then refused would be a result nobody can open.
     """
     (session_dir / "derived" / "deep" / "er").mkdir(parents=True)
     (session_dir / "derived" / "deep" / "er" / "x.bin").write_bytes(b"\x00\x01")
     (session_dir / "derived" / ".hidden").write_text("h")
-    backend = local_files(session_dir)
+    backend = backend_at(cfg, session_dir)
 
     names = drive(collect_artifacts(backend))
 

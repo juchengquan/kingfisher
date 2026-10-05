@@ -156,7 +156,9 @@ def test_a_turn_refuses_while_the_backend_says_the_session_is_claimed(cfg):
     """
     from kingfisher import Request, SessionBusyError
 
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    kf = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     session_id = kf.run(Request("first")).session_id
     assert backend_at(cfg, cfg.workspace / "sessions" / session_id).claim(
         CLAIM, stale_after=3600

@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
+from kingfisher import default_backends
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.activation import available_skills
 from kingfisher.infrastructure.harness.agent import (
@@ -240,10 +241,13 @@ def test_an_injected_graph_cannot_honour_capabilities(cfg, session_dir):
             Request(task="go", capabilities=Capabilities(builtin_tools=("read_file",))),
             cfg=cfg,
             graph=prebuilt,
+            backends=default_backends,
         )
 
     # The unrestricted case still works, so the guard is not just "reject graph=".
-    assert run(Request(task="go"), cfg=cfg, graph=prebuilt).answer == "ok"
+    assert run(
+        Request(task="go"), cfg=cfg, graph=prebuilt, backends=default_backends
+    ).answer == "ok"
 
 
 def test_a_disallowed_tool_is_refused_even_when_the_model_calls_it_anyway(cfg, session_dir):

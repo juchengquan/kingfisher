@@ -104,7 +104,6 @@ from kingfisher.infrastructure.harness.interpreter import release_interpreter
 from kingfisher.infrastructure.harness.runlog import LoggedRunEvents, RunLogger
 from kingfisher.infrastructure.harness.session_files import (
     collect_artifacts,
-    local_files,
     place_data,
     read_artifact,
 )
@@ -134,8 +133,6 @@ from kingfisher.infrastructure.workspace import (
     STARTER_AGENT,
     agent_started_with,
     ensure_layout,
-    ensure_session_layout,
-    protect_data,
     remember_agent,
 )
 from kingfisher.kinds.agents.reading import read
@@ -176,13 +173,6 @@ class _Turn:
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
 #: run without a checkpointer at all.
 _UNSET: Any = object()
-
-
-def _local_files(session_dir: Path) -> Any:
-    """A session's directory on this host, laid out, with `/data` hardened."""
-    files = local_files(ensure_session_layout(session_dir))
-    files.unprotected = protect_data(session_dir)
-    return files
 
 
 def _asked(value: str | Request | Resume) -> Request | Resume:
@@ -319,10 +309,6 @@ class Kingfisher(Sessions, Disposal):
                 "SessionBackends, which brings aopen and asessions with it"
             )
             raise TypeError(msg)
-        # Where the sessions are, for the questions no single session answers: which
-        # there are, how big, when each was used. A deployment that supplied a graph
-        # rather than session backends keeps its sessions where the default does.
-        self._backends: SessionBackends = backends if backends is not None else default_backends
         # Where each turn's record of itself goes. The default is the `kingfisher.run`
         # logger, which the default logging configuration discards: a deployment
         # decides whether it keeps them by configuring logging or by passing a sink.
@@ -355,34 +341,33 @@ class Kingfisher(Sessions, Disposal):
         # caller unlucky enough to reach the wrong name. `_instantiate` keeps
         # its own guard for `build_agent`, which takes a registry directly.
         refuse_unbuildable_middleware(self.middlewares)
-        # Exactly one answer to what filesystem a turn runs against, said at
-        # construction for the reason the catalogue is read there: it is a wiring
-        # mistake, and this is the last moment it is cheap to say so.
+        # Required, and said at construction for the reason the catalogue is read
+        # there: it is a wiring mistake, and this is the last moment it is cheap to say
+        # so. `None` stays the default only so that leaving it out gets this message.
         #
-        # Two of them is somebody's wiring silently discarded -- a pre-built graph
-        # already holds a backend, and `_graph_for` returns it without ever opening
-        # another. None of them used to mean kingfisher picked one, and the
-        # reason it no longer does is that the backend is the sandbox: it wraps every
-        # command in `sandbox-exec` or Landlock, refuses host paths, and carries the
-        # route table a read-only rule is only legal against. Inheriting that in
-        # silence was never unsafe -- the default is the strict option, and still is
-        # -- but it meant a deployment could wire the whole service without learning
-        # there was a boundary at all.
-        if graph is not None and backends is not None:
-            msg = (
-                "graph= and backends= are two answers to what filesystem a turn runs "
-                "against, and a pre-built graph already carries one: pass the graph, "
-                "or pass backends and let kingfisher build the graph"
-            )
-            raise ValueError(msg)
-        if graph is None and backends is None:
+        # None used to mean kingfisher picked one, and the reason it no longer does is
+        # that the backend is the sandbox: it wraps every command in `sandbox-exec` or
+        # Landlock, refuses host paths, and carries the route table a read-only rule is
+        # only legal against. Inheriting that in silence was never unsafe -- the
+        # default is the strict option, and still is -- but it meant a deployment could
+        # wire the whole service without learning there was a boundary at all.
+        #
+        # Beside a pre-built graph too. Its agent runs on the backend it was compiled
+        # with, but kingfisher places a request's data, collects what a turn left and
+        # takes the turn lock through one of these -- and only the graph's builder
+        # knows which session backends reach where that backend keeps a session.
+        if backends is None:
             msg = (
                 "kingfisher does not pick the filesystem its agents run on: pass "
-                "backends=default_backends for the one it used to build for you, "
-                "session backends of your own for something else, or a pre-built graph "
-                "that already carries one"
+                "backends=default_backends for the one it used to build for you, or "
+                "session backends of your own for something else. A pre-built graph "
+                "needs them too: they are how kingfisher reaches the sessions its "
+                "backend keeps"
             )
             raise ValueError(msg)
+        # Where the sessions are: what each turn opens, and what answers the questions
+        # no single session does -- which there are, how big, when each was used.
+        self._backends: SessionBackends = backends
         self._graph = graph
         # There is nothing to reconcile, and that is the shape of the design rather than
         # an omission. Audiences live in the definitions, so a definition *is* the asset
@@ -501,15 +486,13 @@ class Kingfisher(Sessions, Disposal):
         )
 
     def _files_for(self, session_id: str, session_dir: Path) -> Steps[Any]:
-        """The backend a session's files are reached through, for kingfisher and agent alike.
+        """The backend a session's files are reached through, by kingfisher and any agent it builds.
 
         The runner goes into `open` rather than alongside it: a deployment that
         replaced the backend owns what runs its commands, and handing the same runner
         to `build_agent` as well would leave two answers to that. It is still built
         from the directory: a runner is about where commands run on *this* host.
         """
-        if self._graph is not None:
-            return (yield on_host(_local_files, session_dir))
         return (
             yield changing(
                 self._backends,

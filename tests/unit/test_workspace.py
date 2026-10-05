@@ -5,6 +5,7 @@ import shutil
 
 import pytest
 
+from kingfisher import default_backends
 from kingfisher.infrastructure.workspace import (
     EXAMPLE,
     LocalSessionDirs,
@@ -119,7 +120,7 @@ def sweep(workspace, keep, checkpointer):
     from tests.unit.test_run import StubAgent
 
     cfg = Config(workspace=workspace, models=FAKE_CATALOGUE)
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=checkpointer)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends, threads=checkpointer)
     return kf.reap(older_than_seconds=keep, now=time.time())
 
 

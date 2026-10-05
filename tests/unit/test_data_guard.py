@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.infrastructure.harness.session_files import local_files, place_data
+from kingfisher import backend_at
+from kingfisher.infrastructure.harness.session_files import place_data
 from kingfisher.infrastructure.steps import drive
 from kingfisher.infrastructure.workspace import (
     DataError,
@@ -112,30 +113,30 @@ def test_an_input_can_still_be_added_beside_a_file_we_do_not_own(workspace, monk
 # -- durable session data --------------------------------------------------
 
 
-def test_a_supplied_file_lands_in_the_sessions_data(session_dir, tmp_path):
+def test_a_supplied_file_lands_in_the_sessions_data(cfg, session_dir, tmp_path):
     """The point of the feature: somewhere the next turn can still see it."""
     source = tmp_path / "sales.csv"
     source.write_text("a,b\n1,2\n")
 
-    placement = drive(place_data((source,), local_files(session_dir)))
+    placement = drive(place_data((source,), backend_at(cfg, session_dir)))
 
     assert placement.placed == ("sales.csv",)
     assert (session_dir / "data" / "sales.csv").read_text() == "a,b\n1,2\n"
 
 
-def test_data_is_read_only_again_afterwards(session_dir, tmp_path):
+def test_data_is_read_only_again_afterwards(cfg, session_dir, tmp_path):
     """Nobody may hand-chmod /data."""
     source = tmp_path / "sales.csv"
     source.write_text("x")
 
-    drive(place_data((source,), local_files(session_dir)))
+    drive(place_data((source,), backend_at(cfg, session_dir)))
 
     assert not os.access(session_dir / "data", os.W_OK)
     with pytest.raises(PermissionError):
         (session_dir / "data" / "sales.csv").write_text("clobbered")
 
 
-def test_data_is_read_only_again_even_when_a_copy_fails(session_dir, tmp_path, monkeypatch):
+def test_data_is_read_only_again_even_when_a_copy_fails(cfg, session_dir, tmp_path, monkeypatch):
     """`writable_data`'s finally is what makes this safe."""
     source = tmp_path / "sales.csv"
     source.write_text("x")
@@ -150,13 +151,13 @@ def test_data_is_read_only_again_even_when_a_copy_fails(session_dir, tmp_path, m
     )
 
     with pytest.raises(OSError, match=gone):
-        drive(place_data((source,), local_files(session_dir)))
+        drive(place_data((source,), backend_at(cfg, session_dir)))
 
     monkeypatch.undo()
     assert not os.access(session_dir / "data", os.W_OK)
 
 
-def test_two_sources_with_one_basename_are_refused(session_dir, tmp_path):
+def test_two_sources_with_one_basename_are_refused(cfg, session_dir, tmp_path):
     """Silently keeping the last one loses a file the caller asked for."""
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
@@ -166,17 +167,17 @@ def test_two_sources_with_one_basename_are_refused(session_dir, tmp_path):
     second.write_text("two")
 
     with pytest.raises(DataError, match=r"report\.pdf"):
-        drive(place_data((first, second), local_files(session_dir)))
+        drive(place_data((first, second), backend_at(cfg, session_dir)))
 
     assert not (session_dir / "data" / "report.pdf").exists()
 
 
-def test_a_missing_source_is_refused_before_anything_is_written(session_dir, tmp_path):
+def test_a_missing_source_is_refused_before_anything_is_written(cfg, session_dir, tmp_path):
     good = tmp_path / "good.csv"
     good.write_text("x")
 
     with pytest.raises(DataError, match=r"ghost\.csv"):
-        drive(place_data((good, tmp_path / "ghost.csv"), local_files(session_dir)))
+        drive(place_data((good, tmp_path / "ghost.csv"), backend_at(cfg, session_dir)))
 
     assert not (session_dir / "data" / "good.csv").exists()
 
@@ -191,30 +192,30 @@ def test_a_missing_source_is_refused_before_anything_is_written(session_dir, tmp
 # `runs/t001/input/present.csv` behind.
 
 
-def test_resupplying_replaces_and_says_so(session_dir, tmp_path):
+def test_resupplying_replaces_and_says_so(cfg, session_dir, tmp_path):
     """`--data` is the only supported way to write there, so refusing would make
     updating a dataset impossible.
     """
     source = tmp_path / "sales.csv"
     source.write_text("first")
-    drive(place_data((source,), local_files(session_dir)))
+    drive(place_data((source,), backend_at(cfg, session_dir)))
 
     source.write_text("second")
-    placement = drive(place_data((source,), local_files(session_dir)))
+    placement = drive(place_data((source,), backend_at(cfg, session_dir)))
 
     assert (session_dir / "data" / "sales.csv").read_text() == "second"
     assert placement.replaced == ("sales.csv",)
 
 
-def test_nothing_is_replaced_on_a_first_supply(session_dir, tmp_path):
+def test_nothing_is_replaced_on_a_first_supply(cfg, session_dir, tmp_path):
     source = tmp_path / "new.csv"
     source.write_text("x")
 
-    assert drive(place_data((source,), local_files(session_dir))).replaced == ()
+    assert drive(place_data((source,), backend_at(cfg, session_dir))).replaced == ()
 
 
-def test_supplying_nothing_touches_nothing(session_dir):
-    placement = drive(place_data((), local_files(session_dir)))
+def test_supplying_nothing_touches_nothing(cfg, session_dir):
+    placement = drive(place_data((), backend_at(cfg, session_dir)))
 
     assert placement.placed == ()
     assert placement.replaced == ()
@@ -223,13 +224,13 @@ def test_supplying_nothing_touches_nothing(session_dir):
 # -- removal has to undo the hardening ------------------------------------
 
 
-def test_a_session_that_was_given_data_can_still_be_removed(session_dir, tmp_path):
+def test_a_session_that_was_given_data_can_still_be_removed(cfg, session_dir, tmp_path):
     """`protect_data` drops the write bit off `data/`, and deletion is governed by the
     directory's write bit -- so hardening made the session undeletable.
     """
     source = tmp_path / "orders.csv"
     source.write_text("a,b\n1,2\n")
-    drive(place_data((source,), local_files(session_dir)))
+    drive(place_data((source,), backend_at(cfg, session_dir)))
     assert not os.access(session_dir / "data", os.W_OK), "not hardened; test proves nothing"
 
     failure = LocalSessionDirs().remove_tree(session_dir)

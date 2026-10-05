@@ -66,7 +66,9 @@ def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wir
     an_agent(cfg, "only_a", source_ids="[A]")
     policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
     kf = (
-        Kingfisher(policied, graph=StubAgent("ok"), threads=StubCheckpointer())
+        Kingfisher(
+            policied, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        )
         if wiring == "graph"
         else Kingfisher(policied, backends=default_backends)
     )
@@ -109,7 +111,9 @@ def test_an_async_turn_makes_no_sync_port_call_on_the_loop(cfg, sync_calls, tmp_
     )
     data = tmp_path / "in.csv"
     data.write_text("a,b\n")
-    kf = Kingfisher(policied, graph=StubAgent("ok"), threads=StubCheckpointer())
+    kf = Kingfisher(
+        policied, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     start(policied, "s")
     sync_calls.clear()
 
@@ -147,7 +151,9 @@ def test_a_turn_reads_the_pin_once(cfg, monkeypatch):
 
     an_agent(cfg, "only_a", source_ids="[A]")
     policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
-    kf = Kingfisher(policied, graph=StubAgent("ok"), threads=StubCheckpointer())
+    kf = Kingfisher(
+        policied, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     start(policied, "s")
     asked = Request("go", agent="only_a", session_id="s")
     kf.run(asked, source_ids=("A",))  # pins the agent

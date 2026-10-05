@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from kingfisher import Kingfisher
+from kingfisher import Kingfisher, default_backends
 from kingfisher.config import Config
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.workspace import session_bytes
@@ -33,7 +33,7 @@ def _session_dir(cfg: Config, session_id: str):
 
 
 def test_the_conversation_is_a_file_inside_the_session(cfg):
-    kf = Kingfisher(cfg, graph=StubAgent("ok"))
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends)
 
     result = kf.run(Request("go"))
 
@@ -42,7 +42,7 @@ def test_the_conversation_is_a_file_inside_the_session(cfg):
 
 def test_nothing_is_written_to_a_workspace_wide_database(cfg):
     """The shared file is what orphans came from."""
-    kf = Kingfisher(cfg, graph=StubAgent("ok"))
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends)
 
     kf.run(Request("go"))
 
@@ -54,7 +54,7 @@ def test_the_conversation_counts_against_the_session_quota(cfg):
     while it sat above every session -- the same blind spot the tool caches had
     before `HOME` moved into the session.
     """
-    kf = Kingfisher(cfg, graph=StubAgent("ok"))
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends)
     result = kf.run(Request("go"))
 
     directory = _session_dir(cfg, result.session_id)
@@ -96,7 +96,7 @@ def test_a_real_graph_checkpoints_into_the_session_database(cfg, session_dir):
 
 def test_two_sessions_keep_separate_conversations(cfg):
     """Structural, not enforced: they are different files."""
-    kf = Kingfisher(cfg, graph=StubAgent("ok"))
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends)
 
     one, two = kf.run(Request("a")), kf.run(Request("b"))
 
@@ -108,7 +108,7 @@ def test_two_sessions_keep_separate_conversations(cfg):
 
 def test_deleting_a_session_takes_its_conversation_with_it(cfg, way):
     """No shared checkpointer involved, which is the point."""
-    kf = Kingfisher(cfg, graph=StubAgent("ok"))
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends)
     result = kf.run(Request("go"))
     directory = _session_dir(cfg, result.session_id)
     assert (directory / TRANSCRIPT).is_file()
@@ -124,7 +124,7 @@ def test_deleting_a_session_takes_its_conversation_with_it(cfg, way):
 def test_an_injected_store_is_used_as_it_is_and_not_closed(cfg):
     """A deployment's own store outlives every turn."""
     store = StubCheckpointer()
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=store)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends, threads=store)
 
     kf.run(Request("go"))
     kf.run(Request("go"))
@@ -143,7 +143,7 @@ def test_a_factory_is_asked_once_per_session(cfg):
         seen.append(session_dir.name)
         return StubCheckpointer()
 
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=factory)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends, threads=factory)
     first = kf.run(Request("a"))
     kf.run(Request("b", session_id=first.session_id))
 
@@ -162,7 +162,9 @@ def test_the_connection_does_not_outlive_the_turn(cfg):
         def close(self) -> None:
             closed.append(self)
 
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=lambda _dir: Recorder())
+    kf = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=lambda _dir: Recorder()
+    )
     kf.run(Request("go"))
 
     assert len(closed) == 1, "the saver this service opened was not released"
@@ -184,7 +186,9 @@ def test_a_turn_that_fails_to_build_closes_the_saver_it_opened(cfg):
         def close(self) -> None:
             closed.append(self)
 
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=lambda _dir: Recorder())
+    kf = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=lambda _dir: Recorder()
+    )
     # A supplied graph cannot be narrowed, so asking it to be is a build that raises.
     narrowed = Request("go", capabilities=Capabilities(builtin_tools=("read_file",)))
 
@@ -198,7 +202,7 @@ def test_a_sweep_needs_no_thread_store_at_all(cfg):
     """`reap` deleted threads because they lived elsewhere."""
     import time
 
-    kf = Kingfisher(cfg, graph=StubAgent("ok"))
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends)
     result = kf.run(Request("go"))
 
     swept = kf.reap(older_than_seconds=0, now=time.time())
@@ -212,7 +216,7 @@ def test_the_default_and_a_factory_both_survive_two_turns(cfg):
     """The two shapes this service opens for itself, driven rather than inspected."""
     for injected in [None, "factory"]:
         threads = None if injected is None else (lambda _dir: StubCheckpointer())
-        kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
+        kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends, threads=threads)
 
         first = kf.run(Request("one"))
         second = kf.run(Request("two", session_id=first.session_id))
@@ -228,7 +232,7 @@ def test_conversation_can_be_turned_off_entirely(cfg):
     from dataclasses import replace as replace_cfg
 
     stateless = replace_cfg(cfg, conversation_enabled=False)
-    kf = Kingfisher(stateless, graph=StubAgent("ok"))
+    kf = Kingfisher(stateless, graph=StubAgent("ok"), backends=default_backends)
 
     result = kf.run(Request("go"))
 
@@ -244,7 +248,7 @@ def test_files_survive_a_stateless_turn(cfg):
     from dataclasses import replace as replace_cfg
 
     stateless = replace_cfg(cfg, conversation_enabled=False)
-    kf = Kingfisher(stateless, graph=StubAgent("ok"))
+    kf = Kingfisher(stateless, graph=StubAgent("ok"), backends=default_backends)
     first = kf.run(Request("go"))
     directory = _session_dir(cfg, first.session_id)
     (directory / "derived" / "kept.txt").write_text("still here", encoding="utf-8")
@@ -263,7 +267,7 @@ def test_the_flag_wins_over_an_injected_store(cfg):
 
     store = StubCheckpointer()
     stateless = replace_cfg(cfg, conversation_enabled=False)
-    service = Kingfisher(stateless, graph=StubAgent("ok"), threads=store)
+    service = Kingfisher(stateless, graph=StubAgent("ok"), backends=default_backends, threads=store)
 
     saver, release = service._checkpointer_for(_session_dir(cfg, "anything"))
 

@@ -57,7 +57,7 @@ def test_an_injected_thread_store_is_opened_once_and_reused(cfg):
     """
     CountingCheckpointer.built = 0
     store = CountingCheckpointer()
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=store)
+    service = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends, threads=store)
 
     for _ in range(3):
         service.run(Request("go"))
@@ -69,7 +69,9 @@ def test_an_injected_thread_store_is_opened_once_and_reused(cfg):
 def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
     """Wiring is shared; per-turn state is not."""
     start(cfg, "s")
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
 
     asked = Request("go", agent="only", session_id="s")
     turns = [service.run(asked).turn_id for _ in range(3)]
@@ -93,7 +95,7 @@ def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
     elsewhere cannot honour restrictions it never saw.
     """
     agent = StubAgent("ok")
-    service = Kingfisher(cfg, graph=agent, threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=agent, backends=default_backends, threads=StubCheckpointer())
 
     # No spec and no source ids: a supplied graph is handed back before either is
     # looked at, which is the thing this asserts.
@@ -136,7 +138,9 @@ def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
     every later turn of that session with it.
     """
     start(cfg, "s")
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
 
     real_chmod = Path.chmod
 
@@ -159,10 +163,12 @@ def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
     """
     start(cfg, "s")
     monkeypatch.setattr(
-        "kingfisher.application.service.protect_data",
+        "kingfisher.infrastructure.harness.backend.protect_data",
         lambda _dir: ("theirs.pdf: Operation not permitted",),
     )
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
 
     events = list(service.stream(Request("go", agent="only", session_id="s")))
     (failed,) = [e for e in events if e.kind == "protect_failed"]
@@ -177,7 +183,13 @@ def test_the_module_level_helpers_are_unchanged(cfg):
     """
     from kingfisher import run
 
-    result = run("say hello", cfg=cfg, graph=StubAgent("hello"), checkpointer=StubCheckpointer())
+    result = run(
+        "say hello",
+        cfg=cfg,
+        graph=StubAgent("hello"),
+        backends=default_backends,
+        checkpointer=StubCheckpointer(),
+    )
     assert result.answer == "hello"
 
 
@@ -289,7 +301,11 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how)
     (budgeted.workspace / "sessions" / session / "derived" / "big.txt").write_text("x" * 64)
     recorded = RecordedEvents()
     kf = Kingfisher(
-        budgeted, graph=StubAgent("ok"), threads=StubCheckpointer(), run_events=recorded
+        budgeted,
+        graph=StubAgent("ok"),
+        backends=default_backends,
+        threads=StubCheckpointer(),
+        run_events=recorded,
     )
 
     with pytest.raises((DataError, QuotaExceededError)):
@@ -447,7 +463,9 @@ def test_a_caller_who_stops_reading_still_gives_the_session_back(cfg):
     open and the interpreter running. A later turn on the same session proves the
     slot went back.
     """
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     opened = service.run(Request(task="anything"))
 
     events = service.stream(Request(task="again", session_id=opened.session_id))
@@ -460,7 +478,9 @@ def test_a_caller_who_stops_reading_still_gives_the_session_back(cfg):
 
 def test_the_graph_is_sent_the_whole_conversation_not_only_the_question(cfg):
     """Where history comes from now."""
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     first = service.run(Request(task="the number is forty"))
     service.run(Request(task="and now?", session_id=first.session_id))
 
@@ -608,7 +628,9 @@ def test_a_turn_translates_a_rejected_key_rather_than_raising_the_providers_erro
         def get_state(self, config):
             return None
 
-    service = Kingfisher(cfg, graph=Rejects(), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=Rejects(), backends=default_backends, threads=StubCheckpointer()
+    )
 
     with pytest.raises(ConfigError, match="rejected the key"):
         service.run(Request(task="anything"))
@@ -683,7 +705,9 @@ def test_a_supplied_graph_with_no_policy_is_never_asked_which_agent(cfg, monkeyp
     mid-conversation -- which for a supplied graph it does not.
     """
     an_agent(cfg, "only")
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+    )
     reads = _snapshot_reads(monkeypatch)
 
     service.run(Request("go", agent="only"))
@@ -700,7 +724,7 @@ def test_a_supplied_graph_under_a_policy_still_resolves_one(cfg, monkeypatch):
     from kingfisher.application import service as service_module
 
     service = Kingfisher(
-        _policied(cfg), graph=StubAgent("ok"), threads=StubCheckpointer()
+        _policied(cfg), graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
     )
     reads = _snapshot_reads(monkeypatch)
     reported: list[object] = []

@@ -7,7 +7,7 @@ import logging
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 
-from kingfisher import Kingfisher
+from kingfisher import Kingfisher, default_backends
 from kingfisher.domain.ports import RunEvents
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.runlog import (
@@ -86,7 +86,13 @@ def test_a_sink_that_fails_does_not_fail_the_turn(cfg, caplog):
             raise ConnectionRefusedError
 
     start(cfg, "s")
-    kf = Kingfisher(cfg, graph=StubAgent("42"), threads=StubCheckpointer(), run_events=Broken())
+    kf = Kingfisher(
+        cfg,
+        graph=StubAgent("42"),
+        backends=default_backends,
+        threads=StubCheckpointer(),
+        run_events=Broken(),
+    )
 
     with caplog.at_level(logging.WARNING):
         result = kf.run(Request("t", session_id="s"))
@@ -98,7 +104,13 @@ def test_a_sink_that_fails_does_not_fail_the_turn(cfg, caplog):
 def test_a_turn_records_its_start_and_end(cfg):
     sink = RecordedEvents()
     start(cfg, "s")
-    kf = Kingfisher(cfg, graph=StubAgent("42"), threads=StubCheckpointer(), run_events=sink)
+    kf = Kingfisher(
+        cfg,
+        graph=StubAgent("42"),
+        backends=default_backends,
+        threads=StubCheckpointer(),
+        run_events=sink,
+    )
 
     result = kf.run(Request("t", session_id="s"))
 
@@ -118,7 +130,13 @@ def test_a_sink_that_is_empty_is_still_the_one_used(cfg):
 
     sink = Kept()
     start(cfg, "s")
-    kf = Kingfisher(cfg, graph=StubAgent("42"), threads=StubCheckpointer(), run_events=sink)
+    kf = Kingfisher(
+        cfg,
+        graph=StubAgent("42"),
+        backends=default_backends,
+        threads=StubCheckpointer(),
+        run_events=sink,
+    )
 
     kf.run(Request("t", session_id="s"))
 
@@ -131,7 +149,9 @@ def test_with_nothing_wired_the_events_go_to_the_run_logger(cfg, caplog):
     ships structured logs.
     """
     start(cfg, "s")
-    kf = Kingfisher(cfg, graph=StubAgent("42"), threads=StubCheckpointer())
+    kf = Kingfisher(
+        cfg, graph=StubAgent("42"), backends=default_backends, threads=StubCheckpointer()
+    )
 
     with caplog.at_level(logging.INFO, logger=RUN_LOGGER):
         kf.run(Request("t", session_id="s"))
