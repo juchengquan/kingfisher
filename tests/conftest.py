@@ -226,8 +226,8 @@ def way(request) -> str:
     return request.param
 
 
-class Reads:
-    """`session`, `pending` and `artifact` on `kf`, through the way `way` names."""
+class Through:
+    """The session methods that have async twins, on `kf`, through the way `way` names."""
 
     def __init__(self, kf, way: str) -> None:
         self._kf = kf
@@ -246,6 +246,9 @@ class Reads:
 
     def artifact(self, *args, **kwargs):
         return self._through("artifact", *args, **kwargs)
+
+    def delete_session(self, *args, **kwargs):
+        return self._through("delete_session", *args, **kwargs)
 
 
 def harness_of(cfg, session_id: str):

@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
+from kingfisher.infrastructure.threads import off_loop, thread_pool
+
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
@@ -102,21 +104,52 @@ def resumed_saver(state: bytes) -> Any:
     return saver
 
 
-def thread_ids(store: Any) -> tuple[str, ...] | None:
-    """Every thread the store holds, or `None` when it cannot say.
+class SharedThreads:
+    """A checkpointer every session shares, as kingfisher asks things of it: forget one
+    session's thread, and say which threads there are where the saver can.
 
-    Through the saver's public `list`, not a `SELECT DISTINCT thread_id`. Direct SQL
-    measured 411x faster on a real database -- under a millisecond against 175ms --
-    and was still the wrong trade: this runs on a janitor's schedule, never on a
-    request, and the public call cannot be broken by an upstream schema change. The
-    cost is that `list` deserialises every checkpoint, so that 175ms was for 1,894 of
-    them and grows with the database. If it ever matters, that is a reason to page
-    rather than to reach into the schema.
+    Wrapped rather than typed, because a deployment's saver is langgraph's and
+    subclasses nothing of ours. What kingfisher asks of it, and what it does where a
+    saver cannot answer, is written here once instead of in a protocol every saver
+    would have to be checked against.
     """
-    lister = getattr(store, "list", None)
-    if lister is None:
+
+    def __init__(self, store: Any) -> None:
+        self.store = store
+
+    def forget(self, thread_id: str) -> None:
+        """Delete this thread's checkpoints."""
+        self.store.delete_thread(thread_id)
+
+    async def aforget(self, thread_id: str) -> None:
+        """`forget`, awaited where the saver can be, and on kingfisher's pool where not.
+
+        langgraph's base saver raises `NotImplementedError` from `adelete_thread`, and a
+        saver that is sync throughout still deletes: refusing it would make deleting a
+        session fail on the async path alone.
+        """
+        adelete = getattr(self.store, "adelete_thread", None)
+        if adelete is not None:
+            with suppress(NotImplementedError):
+                return await adelete(thread_id)
+        await off_loop(thread_pool(), self.store.delete_thread, thread_id)
         return None
-    return tuple({item.config["configurable"]["thread_id"] for item in lister(None)})
+
+    def ids(self) -> tuple[str, ...] | None:
+        """Every thread the store holds, or `None` when it cannot say.
+
+        Through the saver's public `list`, not a `SELECT DISTINCT thread_id`. Direct SQL
+        measured 411x faster on a real database -- under a millisecond against 175ms --
+        and was still the wrong trade: this runs on a janitor's schedule, never on a
+        request, and the public call cannot be broken by an upstream schema change. The
+        cost is that `list` deserialises every checkpoint, so that 175ms was for 1,894 of
+        them and grows with the database. If it ever matters, that is a reason to page
+        rather than to reach into the schema.
+        """
+        lister = getattr(self.store, "list", None)
+        if lister is None:
+            return None
+        return tuple({item.config["configurable"]["thread_id"] for item in lister(None)})
 
 
 def release_checkpointer(saver: Any) -> None:

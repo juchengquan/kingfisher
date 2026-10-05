@@ -36,7 +36,7 @@ from kingfisher.infrastructure.harness.session_files import (
 from kingfisher.infrastructure.steps import drive
 from kingfisher.layout import DATA, HARNESS, SESSION_DIRS, SKILLS_ROUTE, routed_paths
 from kingfisher.presentation.cli.__main__ import main
-from tests.conftest import Reads, an_agent, pin, start
+from tests.conftest import Through, an_agent, pin, start
 from tests.unit.scripted import Scripted
 
 
@@ -147,7 +147,7 @@ def _produced(
 def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg, way):
     kf = _produced(cfg, "derived/nested/out.csv", "a,b\n")
 
-    assert Reads(kf, way).artifact("s", "derived/nested/out.csv") == b"a,b\n"
+    assert Through(kf, way).artifact("s", "derived/nested/out.csv") == b"a,b\n"
 
 
 @pytest.mark.parametrize(
@@ -169,7 +169,7 @@ def test_only_what_a_turn_produced_can_be_fetched(cfg, name, way):
     (cfg.workspace / "sessions" / "s" / HARNESS / "agent.yaml").write_text("secret")
 
     with pytest.raises(ArtifactError):
-        Reads(kf, way).artifact("s", name)
+        Through(kf, way).artifact("s", name)
 
 
 @pytest.mark.parametrize(
@@ -196,14 +196,14 @@ def test_a_name_that_is_not_there_is_refused_by_name(cfg, way):
     kf = _produced(cfg)
 
     with pytest.raises(ArtifactError, match=r"derived/missing\.txt"):
-        Reads(kf, way).artifact("s", "derived/missing.txt")
+        Through(kf, way).artifact("s", "derived/missing.txt")
 
 
 def test_a_session_that_is_not_there_is_the_same_error_as_ever(cfg, way):
     kf = Kingfisher(cfg, backends=default_backends)
 
     with pytest.raises(UnknownSessionError):
-        Reads(kf, way).artifact("nobody", "derived/out.txt")
+        Through(kf, way).artifact("nobody", "derived/out.txt")
 
 
 def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg, way):
@@ -216,9 +216,9 @@ def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg, way):
     pin(kf, "s", "only_a")
 
     # The control beside the escape: the same call, by a caller who does reach it.
-    assert Reads(kf, way).artifact("s", "derived/out.txt", source_ids=("A",)) == b"result"
+    assert Through(kf, way).artifact("s", "derived/out.txt", source_ids=("A",)) == b"result"
     with pytest.raises(UnknownSessionError):
-        Reads(kf, way).artifact("s", "derived/out.txt", source_ids=("B",))
+        Through(kf, way).artifact("s", "derived/out.txt", source_ids=("B",))
 
 
 # -- reading one -------------------------------------------------------------
@@ -248,7 +248,7 @@ def test_reading_a_session_opens_its_backend_once(cfg, read, way):
     counting = Counting()
     kf = _produced(cfg, backends=counting)
 
-    read(Reads(kf, way))
+    read(Through(kf, way))
 
     assert counting.asked == ["s"]
 
@@ -260,7 +260,7 @@ def test_asking_whether_a_session_exists_opens_nothing_where_nothing_narrows(cfg
     counting = Counting()
     kf = _produced(cfg, backends=counting)
 
-    assert Reads(kf, way).session("s") is not None
+    assert Through(kf, way).session("s") is not None
     assert counting.asked == []
 
 
@@ -274,7 +274,7 @@ def test_a_session_is_opened_once_where_its_pinned_agent_decides(cfg, way):
     kf = _produced(policied, backends=counting)
     pin(kf, "s", "only_a")
 
-    assert Reads(kf, way).session("s", source_ids=("A",)) is not None
+    assert Through(kf, way).session("s", source_ids=("A",)) is not None
     assert counting.asked == ["s"]
 
 

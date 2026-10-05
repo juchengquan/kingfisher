@@ -32,18 +32,23 @@ method that opens a session is named rather than being the object's `__call__`.
 
 ## Async reads after #617
 
-`Kingfisher` has `asession`, `apending` and `aartifact`, the async twins of `session`,
-`pending` and `artifact`, for a caller already on an event loop. They reach a session
-through two new methods on `SessionBackends`, `aopen` and `asessions`:
+`Kingfisher` has `asession`, `apending`, `aartifact` and `adelete_session`, the async
+twins of `session`, `pending`, `artifact` and `delete_session`, for a caller already on
+an event loop. They reach a session through three new methods on `SessionBackends`,
+`aopen`, `asessions` and `adelete`:
 
 - **If your session backends subclass `DefaultBackends` or `SessionBackends`**, there
-  is nothing to do. Both methods are inherited, running `open` and `sessions` on
-  kingfisher's thread pool. Override them where opening a session or listing them is a
-  round trip you can await.
-- **If yours subclass neither**, they are refused at construction until they have both
-  methods. Subclassing `SessionBackends` is the shortest fix.
-- `SESSION_BACKENDS_CONTRACT` has two more checks: `aopen_reaches_the_session_open_does`
-  and `asessions_lists_what_sessions_does`.
+  is nothing to do. All three are inherited, running `open`, `sessions` and `delete` on
+  kingfisher's thread pool. Override one where it is a round trip you can await.
+- **If yours subclass neither**, they are refused at construction until they have all
+  three. Subclassing `SessionBackends` is the shortest fix.
+- `SESSION_BACKENDS_CONTRACT` has three more checks: `aopen_reaches_the_session_open_does`,
+  `asessions_lists_what_sessions_does` and `adelete_removes_the_session`.
+- **A checkpointer passed as `threads=`** is deleted from with its own `adelete_thread`
+  on the async path, or on kingfisher's thread pool where it has none or raises
+  `NotImplementedError` as langgraph's base saver does. `arun(delete_session=True)`
+  deletes this way too. `kingfisher.domain.ports.ThreadStore` is gone; `threads=` is
+  typed `Any`, and is still a langgraph checkpointer.
 
 ## Checklist
 

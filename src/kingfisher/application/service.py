@@ -90,6 +90,7 @@ from kingfisher.infrastructure.harness.backend import (
     default_backends,
 )
 from kingfisher.infrastructure.harness.checkpointing import (
+    SharedThreads,
     build_session_checkpointer,
     harness_mark,
     paused_state,
@@ -141,7 +142,6 @@ if TYPE_CHECKING:
     from kingfisher.domain.ports import (
         CommandRunner,
         RunEvents,
-        ThreadStore,
     )
 
 
@@ -230,10 +230,11 @@ class Kingfisher(Sessions, Disposal):
         self,
         cfg: Config | None = None,
         *,
-        # A store, or a factory given a session directory, or nothing for the
-        # default -- see `_checkpointer_for`. The union is the contract, so it
-        # is written here rather than left for a reader to infer from a branch.
-        threads: ThreadStore | Callable[[Path], Any] | None = None,
+        # A langgraph checkpointer every session shares, a factory given a session
+        # directory, or nothing for the default -- see `_checkpointer_for`. The
+        # checkpointer is langgraph's own type, which this layer may not name, so
+        # it is `Any` and `SharedThreads` is what kingfisher asks of it.
+        threads: Any = None,
         runner: Callable[[Path], CommandRunner] | None = None,
         backends: SessionBackends | None = None,
         catalogue: Definitions | Mapping[str, Path] | None = None,
@@ -327,7 +328,9 @@ class Kingfisher(Sessions, Disposal):
         # service calls per session and closes after the turn; `None` means the default,
         # which is `InMemorySaver` and holds nothing after the turn that made it.
         self.threads: Any = threads
-        self._shared: Any = threads if (threads is not None and not callable(threads)) else None
+        self._shared = (
+            SharedThreads(threads) if (threads is not None and not callable(threads)) else None
+        )
         # What this deployment permits, before any request asks for anything.
         # Unrestricted by default, so a single-caller deployment is unaffected;
         # a service in front of many callers sets it, and `intersect` can only
@@ -1295,15 +1298,17 @@ class Kingfisher(Sessions, Disposal):
         for event in self.stream(request, source_ids=source_ids):
             if event.kind == "finished":
                 result = event.result
-        return self._drained(result, delete_session=delete_session)
+        return drive(self._drained_steps(result, delete_session=delete_session))
 
-    def _drained(self, result: RunResult | None, *, delete_session: bool) -> RunResult:
+    def _drained_steps(
+        self, result: RunResult | None, *, delete_session: bool
+    ) -> Steps[RunResult]:
         """What both drains do once the stream they read has ended."""
         if result is None:  # pragma: no cover -- a stream always ends with `finished`
             msg = "the stream ended without a finished event"
             raise RuntimeError(msg)
         if delete_session and result.completed:
-            failure = self.delete_session(result.session_id)
+            failure = yield from self._delete_session_steps(result.session_id)
             if failure:
                 result = replace(result, deletion_failure=failure)
         return result
@@ -1354,15 +1359,4 @@ class Kingfisher(Sessions, Disposal):
         async for event in events:
             if event.kind == "finished":
                 result = event.result
-        if not delete_session:
-            return self._drained(result, delete_session=False)
-        # On a thread, because disposal reaches the store as well as the disk and
-        # a deployment's store may be a network away -- 0.75ms locally, a round
-        # trip wherever `KINGFISHER_SESSION_STORE_FACTORY` points. The whole tail
-        # goes rather than the deletion alone, which keeps `_drained` the one copy.
-        drained, cancelled = await finished(
-            off_loop(self._pool, self._drained, result, delete_session=True)
-        )
-        if cancelled is not None:
-            raise cancelled
-        return drained
+        return await adrive(self._drained_steps(result, delete_session=delete_session))

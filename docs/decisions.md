@@ -3416,6 +3416,24 @@ overrides them.
 the caller, the pin decides nothing, and opening a remote backend to say a session
 exists was a sandbox for nothing. *(2026-10-02.)*
 
+**Deleting a session has an async twin, and the shared checkpointer is wrapped
+rather than typed.** `adelete_session`, and `arun(delete_session=True)` with it: both
+drains end in one sequence, so the disposal tail `arun` used to push onto a thread
+whole is written once and awaited. `adelete` joins `open` and `sessions` as a default
+on the protocol, and the kit checks it.
+
+`ThreadStore` is gone. It typed `threads=` as something with `delete_thread`, because
+the application layer may not name langgraph's saver -- but that under-described a
+shared saver, which langgraph reads and writes every turn and `reap` asks to `list`,
+and nothing checked it. `SharedThreads` in `checkpointing` wraps whatever was passed
+and holds what kingfisher asks of a saver in one place: `forget`, `aforget` and `ids`.
+`aforget` awaits the saver's own `adelete_thread`, and falls back to kingfisher's pool
+where it has none or raises `NotImplementedError`, as langgraph's base class does --
+refused instead, a sync-only saver would make deleting a session fail on the async
+path alone, which is the rule `SessionBackends`' defaults already follow. `_exists`
+and `_known` were two listings asking one question; `_known_steps` is the one.
+*(2026-10-05.)*
+
 **Asked and declined: making a turn a langchain `Runnable`.** The question is
 reasonable -- `Runnable` is the interface that ecosystem's callers already know,
 and it would bring `batch`, `astream_events` and LCEL composition with it. Three

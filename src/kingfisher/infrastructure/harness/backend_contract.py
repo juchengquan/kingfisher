@@ -387,6 +387,23 @@ def asessions_lists_what_sessions_does(make: Callable[[], Any]) -> None:
         raise AssertionError(msg)
 
 
+def adelete_removes_the_session(make: Callable[[], Any]) -> None:
+    """`adelete_session` deletes with `adelete`. One that left the session listed would
+    leave an async caller's deletion undone, with nothing said.
+    """
+    cfg, backends = make()
+    one, _ = CONTRACT_SESSIONS
+    backends.open(cfg, one)
+
+    async def deleted() -> Any:
+        return await backends.adelete(cfg, one)
+
+    failure = _on_a_loop_of_its_own(deleted)
+    if failure is not None or one in _ids(backends.sessions(cfg)):
+        msg = f"adelete({one!r}) answered {failure!r} and the session is still listed"
+        raise AssertionError(msg)
+
+
 #: Every check a deployment's `SessionBackends` must pass. `make` returns a fresh
 #: `(Config, backends)` pair, because every question a backends object answers is
 #: about one deployment's sessions. These write files, as `filesystem_consistency`,
@@ -400,4 +417,5 @@ SESSION_BACKENDS_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (
     a_host_path_stays_in_its_session,
     aopen_reaches_the_session_open_does,
     asessions_lists_what_sessions_does,
+    adelete_removes_the_session,
 )

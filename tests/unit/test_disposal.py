@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+
+import pytest
+
 from kingfisher import DefaultBackends, Kingfisher, backend_at
 from kingfisher.domain import retention
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import still_held
 from kingfisher.layout import CLAIM
-from tests.conftest import StubCheckpointer, start
+from tests.conftest import StubCheckpointer, Through, start
 from tests.unit.test_run import StubAgent
 
 # The two helpers both halves of the old file build against, left where the other
@@ -38,19 +42,55 @@ def test_a_turn_disposes_of_nothing(cfg):
     assert (cfg.workspace / "sessions" / quiet).is_dir()
 
 
-def test_delete_session_removes_the_directory_and_the_thread(cfg):
+def test_delete_session_removes_the_directory_and_the_thread(cfg, way):
     threads = StubCheckpointer()
     kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
     session_id = kf.run(Request("go")).session_id
 
-    assert kf.delete_session(session_id) is None
+    assert Through(kf, way).delete_session(session_id) is None
     assert not (cfg.workspace / "sessions" / session_id).exists()
     assert threads.deleted == [session_id]
 
 
-def test_deleting_an_unknown_session_is_not_an_error(cfg):
+class AwaitedCheckpointer(StubCheckpointer):
+    """A saver with an async delete of its own, as langgraph's in-memory one has."""
+
+    async def adelete_thread(self, thread_id: str) -> None:
+        self.deleted.append(f"awaited {thread_id}")
+
+
+class SyncOnlyCheckpointer(StubCheckpointer):
+    """langgraph's base saver, whose `adelete_thread` raises `NotImplementedError`."""
+
+    async def adelete_thread(self, thread_id: str) -> None:
+        raise NotImplementedError
+
+
+@pytest.mark.parametrize(
+    ("saver", "deleted"),
+    [(AwaitedCheckpointer, "awaited s"), (SyncOnlyCheckpointer, "s"), (StubCheckpointer, "s")],
+    ids=["its own async delete", "the base class's that raises", "none at all"],
+)
+def test_an_async_delete_awaits_the_saver_where_it_can_and_falls_back_where_not(
+    cfg, saver, deleted
+):
+    """Refused, a saver that is sync throughout -- which langgraph's base class answers
+    for with `NotImplementedError` -- would make `adelete_session` fail where
+    `delete_session` works. Awaited only that far, one with a real async delete would
+    hold a thread it never needed.
+    """
+    threads = saver()
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
+    start(cfg, "s")
+
+    assert asyncio.run(kf.adelete_session("s")) is None
+    assert threads.deleted == [deleted]
+    assert not (cfg.workspace / "sessions" / "s").exists()
+
+
+def test_deleting_an_unknown_session_is_not_an_error(cfg, way):
     """A caller that retries a delete should not have to care."""
-    assert service(cfg).delete_session("never-existed") is None
+    assert Through(service(cfg), way).delete_session("never-existed") is None
 
 
 def test_reap_disposes_of_the_idle_and_leaves_the_rest(cfg):
@@ -81,7 +121,7 @@ class ListingCheckpointer(StubCheckpointer):
         self.held = held
 
     # Named `list` because that is the saver's own method, which is what
-    # `thread_ids` looks for. It shadows the builtin inside this class, so
+    # `SharedThreads.ids` looks for. It shadows the builtin inside this class, so
     # `held` is annotated as a tuple rather than a `list[str]` that would
     # resolve to this method.
     def list(self, _config):
@@ -139,7 +179,7 @@ def test_orphans_are_reported_apart_from_sessions_this_sweep_ended(cfg):
 
 
 def test_a_store_that_cannot_enumerate_still_sweeps(cfg):
-    """`ThreadStore` is only `delete_thread`."""
+    """A saver need answer nothing but `delete_thread`; `list` is asked for, not required."""
     import time
 
     kf = service(cfg)
@@ -329,23 +369,23 @@ def test_a_sweep_leaves_no_claim_behind(cfg):
     assert not (cfg.workspace / "sessions" / crashed).exists()
 
 
-def test_deleting_a_session_takes_its_claim_with_it(cfg):
+def test_deleting_a_session_takes_its_claim_with_it(cfg, way):
     kf = service(cfg)
     session = start(cfg, "s")
     claim = _claim(cfg, session)
     claim.mkdir(parents=True, exist_ok=True)
 
-    kf.delete_session(session)
+    Through(kf, way).delete_session(session)
 
     assert not claim.exists()
 
 
-def test_reopening_a_deleted_id_is_not_refused_as_busy(cfg):
+def test_reopening_a_deleted_id_is_not_refused_as_busy(cfg, way):
     """Why the leftover mattered rather than merely accumulated."""
     kf = service(cfg)
     start(cfg, "reused")
     _claim(cfg, "reused").mkdir(parents=True, exist_ok=True)
-    kf.delete_session("reused")
+    Through(kf, way).delete_session("reused")
 
     start(cfg, "reused")
 
