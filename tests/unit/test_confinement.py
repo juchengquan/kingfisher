@@ -967,6 +967,83 @@ def test_a_profile_is_replaced_rather_than_truncated(tmp_path):
 
 
 @macos
+def test_no_turn_can_read_the_profile_half_written(tmp_path, monkeypatch):
+    """The window the replace closes, asserted by looking through it.
+
+    A plain `write_text` truncates before it fills, and `sandbox-exec -f` re-reads the
+    file at the start of every command -- so a concurrent turn binds itself to whatever
+    is there. That is not a broken file failing closed: the profile is `(version 1)`
+    then `(allow default)` then the denies, so its first two lines are a valid profile
+    permitting everything. Measured by truncating a real 22-line profile and running
+    `cat` on a file under the operator's home through `confined.wrap`: exit 1 and
+    "Operation not permitted" at full length, exit 0 and the file's contents at two
+    lines.
+
+    Driven by watching the rename, because the race cannot be provoked reliably: what
+    sits at the profile's path the instant before the replace is what any reader could
+    have seen, and it has to be the whole of the last profile rather than a prefix of
+    the next. The two rules below assert that no scratch file is *left* -- which a
+    truncating write satisfies too, so neither of them held this: replacing the body
+    with `write_text` left all 2,390 tests green.
+    """
+    workspace = tmp_path / "ws"
+    confinement.resolve(confinement.AUTO, workspace=workspace)
+    path = confinement.profile_path(workspace)
+    whole = path.read_text(encoding="utf-8")
+
+    seen: list[str] = []
+    renaming = Path.replace
+
+    def watched(self, target):
+        if Path(target) == path:
+            seen.append(path.read_text(encoding="utf-8") if path.exists() else "")
+        return renaming(self, target)
+
+    monkeypatch.setattr(Path, "replace", watched)
+    confinement.resolve(confinement.AUTO, workspace=workspace)
+
+    assert seen == [whole], "the profile was not replaced by a rename over a whole file"
+
+
+def test_every_rule_reading_the_written_profile_is_marked_for_macos():
+    """A rule that both drives `resolve` and reads the file it writes needs the marker:
+    on Linux `resolve` returns a fence that writes no profile, so the assertion is a
+    `FileNotFoundError` rather than a skip.
+
+    Written because `test_no_turn_can_read_the_profile_half_written` arrived without the
+    marker and CI's Linux job is what found it -- every other job here is macOS, where
+    the mistake cannot show. Both halves are needed: eight rules drive `resolve` for the
+    mechanism it picks and are platform-independent, and two build the profile text
+    without driving anything.
+
+    Matched over the syntax tree rather than the source text, so the predicate does not
+    find its own description -- the first version of this rule named itself.
+    """
+    import ast
+
+    source = Path(__file__).read_text(encoding="utf-8")
+
+    def reads_the_written_profile(node: ast.FunctionDef) -> bool:
+        drives = reads = False
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute):
+                drives = drives or inner.func.attr == "resolve"
+                reads = reads or inner.func.attr == "profile_path"
+        return drives and reads
+
+    unmarked = [
+        node.name
+        for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef)
+        and node.name.startswith("test_")
+        and reads_the_written_profile(node)
+        and not any("macos" in ast.unparse(mark) for mark in node.decorator_list)
+    ]
+
+    assert not unmarked, f"{unmarked} read the profile `resolve` writes, without @macos"
+
+
+@macos
 def test_concurrent_writers_do_not_share_one_scratch_file(tmp_path):
     """Written concurrently, because the test above writes twice in a row -- the one
     arrangement in which a scratch file named after the process cannot collide.
