@@ -3350,6 +3350,53 @@ named after the process, and every thread of a process shares a pid. The advice 
 this entry was unrunnable on the platform it is developed on for as long as it has
 stood. Fixed where the mistake was, in `_write_atomically`. *(2026-09-18.)*
 
+
+**What `_write_atomically` prevents was itself unheld, and the window is fail-open.**
+Two rules are named for it -- one that no temporary profile is left beside the real one,
+one that eight concurrent writers all succeed -- and a plain truncating `write_text`
+satisfies both: it leaves no scratch file and raises nothing. Measured on 2026-10-06 by
+replacing the body with one, which left all 2,390 tests green.
+
+The cost of that gap is not a torn file that fails closed. The profile is `(version 1)`,
+then `(allow default)`, then the denies, so a prefix of it is a *valid* profile that
+permits everything -- and `sandbox-exec -f` re-reads the file at the start of every
+command while `resolve` rewrites it per backend build. Driven through a real 22-line
+profile and `confined.wrap`: `cat` of a file under the operator's home is refused with
+"Operation not permitted" at full length and **prints the file** at two lines.
+
+So the rule watches the rename rather than the file. What sits at the profile's path the
+instant before the replace is what any concurrent reader could have seen, and it has to
+be the whole of the last profile rather than a prefix of the next -- which also kills a
+scratch written and then *copied* over the profile, the plausible wrong fix. The race
+itself is not provoked: a test that tried would be timing-dependent, and the property
+does not need it.
+
+**A rule was written and withdrawn here.** It asserted that a prefix of the profile
+denies nothing -- true, and the premise the rule above rests on. But it would have gone
+red the day somebody made the profile deny-by-default, which is an improvement, so it
+was a rule against a better version of the code. The premise is prose in the surviving
+rule's docstring instead, where changing the profile's shape sends a reader to the
+sentence that stops mattering.
+
+`_write_atomically`'s own docstring justified writing beside the profile by
+`KINGFISHER_STATE_DIR` being relocatable, a setting `profile_path` records six lines
+below as gone. The argument survives the setting -- `os.replace` is atomic only within a
+filesystem, and a workspace may be on any of them -- so the reason is restated rather
+than the code changed.
+
+**The new rule shipped without `@macos` and CI's Linux job is what found it.** `resolve`
+returns whichever mechanism the host has, so on Linux it writes no profile at all and an
+assertion about `shell.sb` is a `FileNotFoundError` rather than a skip. Every other job
+here is macOS, where the mistake cannot show; it was missed by reading the file from the
+`def` line down, with the neighbour's decorator one line above the window.
+
+So the marker has a rule of its own now, and the predicate took two attempts. "Calls
+`resolve`" named eight rules that drive it for the mechanism it picks and are
+platform-independent -- and named itself, because `"resolve("` appears as a literal in
+its own body. It matches the syntax tree instead: a rule that *both* drives `resolve`
+and calls `profile_path` is the one that needs the marker, and the two that only build
+the profile text stay correctly unmarked.
+*(2026-10-06, from an architecture review.)*
 **Reversed in half: `astream` and `arun` are back, the second copy of the turn is
 not.** What the removal missed is an asymmetry it never mentioned. A caller on an
 event loop who wants an *answer* writes `asyncio.to_thread(kf.run, ...)` and is

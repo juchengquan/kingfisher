@@ -553,8 +553,11 @@ def _write_atomically(path: Path, text: str) -> None:
     turns, every input to `profile` coming from one `Config`, so what this
     prevents is a torn read rather than a disagreement.
 
-    Beside the profile rather than in a temp directory: `os.replace` is atomic
-    only within a filesystem, and the state directory is relocatable.
+    Beside the profile rather than in a temp directory: `os.replace` is atomic only
+    within a filesystem, and a workspace may be on any of them. The reason used to be
+    given as `KINGFISHER_STATE_DIR` moving this file, which `profile_path` records as
+    gone -- the argument survives the setting, because the temp directory is still not
+    guaranteed to be the workspace's filesystem.
     """
     # Per thread as well as per process. Every thread in a process shares one pid,
     # so a pid-named scratch is one file that concurrent turns all write and then
