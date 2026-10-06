@@ -69,7 +69,8 @@ def test_a_backend_missing_a_route_a_deny_rule_names_is_caught(cfg, session_dir)
     thinned = WorkspaceScopedBackend(
         default=real.default,
         routes={path: at for path, at in real.routes.items() if path != "/data/"},
-        workspace=session_dir,
+        session_dir=session_dir,
+        workspace=cfg.workspace,
     )
 
     with pytest.raises(AssertionError, match="/data/"):
@@ -87,7 +88,12 @@ def test_a_shell_that_cannot_see_what_the_tools_wrote_is_caught(cfg, session_dir
             return replace(outcome, output="")
 
     real = backend_at(cfg, session_dir)
-    blind = Blind(default=real.default, routes=dict(real.routes), workspace=session_dir)
+    blind = Blind(
+        default=real.default,
+        routes=dict(real.routes),
+        session_dir=session_dir,
+        workspace=cfg.workspace,
+    )
 
     with pytest.raises(AssertionError, match="one filesystem"):
         filesystem_consistency(lambda: blind)
@@ -106,7 +112,10 @@ def test_a_host_path_refused_with_the_wrong_type_is_caught(cfg, session_dir):
 
     real = backend_at(cfg, session_dir)
     wrong = WrongRefusal(
-        default=real.default, routes=dict(real.routes), workspace=session_dir
+        default=real.default,
+        routes=dict(real.routes),
+        session_dir=session_dir,
+        workspace=cfg.workspace,
     )
 
     with pytest.raises(AssertionError, match="HostPathGuard does not catch"):
@@ -126,7 +135,12 @@ def test_a_backend_that_allows_host_paths_is_not_asked_to_refuse_them(cfg, sessi
             return super().read(file_path, offset, limit)
 
     real = backend_at(cfg, session_dir)
-    allows = Allows(default=real.default, routes=dict(real.routes), workspace=session_dir)
+    allows = Allows(
+        default=real.default,
+        routes=dict(real.routes),
+        session_dir=session_dir,
+        workspace=cfg.workspace,
+    )
 
     host_path_refusal(lambda: allows)
 

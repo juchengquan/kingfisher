@@ -277,16 +277,20 @@ class WorkspaceScopedBackend(SessionClaims, CompositeBackend):
         default: Any,
         routes: dict[str, Any],
         *,
+        session_dir: Path,
         workspace: Path,
     ) -> None:
         super().__init__(default=default, routes=routes)
-        self.workspace = workspace
-        self._session_dir = Path(workspace)
+        #: The deployment's workspace, which is what a host path is refused against.
+        #: Separate from the session below, and they were one value: see
+        #: `reject_host_path`, where the session is what the suggestion needs.
+        self.workspace = Path(workspace)
+        self._session_dir = Path(session_dir)
         #: What `protect_data` could not harden, for the turn to report.
         self.unprotected: tuple[str, ...] = ()
 
     def _get_backend_and_key(self, key: str) -> tuple[Any, str]:
-        reject_host_path(key, self.workspace)
+        reject_host_path(key, self.workspace, session_dir=self._session_dir)
         return super()._get_backend_and_key(key)
 
 
@@ -625,7 +629,9 @@ def backend_at(
         for label, mount in skills.mounts.items()
     })
 
-    return WorkspaceScopedBackend(default=shell, routes=routes, workspace=session_dir)
+    return WorkspaceScopedBackend(
+        default=shell, routes=routes, session_dir=session_dir, workspace=cfg.workspace
+    )
 
 
 class DefaultBackends(SessionBackends):

@@ -35,7 +35,15 @@ class Substitute(WorkspaceScopedBackend):
     """
 
     def __init__(self, given: WorkspaceScopedBackend) -> None:
-        super().__init__(given.default, given.routes, workspace=given.workspace)
+        # Both, since they are two values now: the deployment's workspace and this
+        # session. Read off what it wraps rather than re-derived, so a wrapper cannot
+        # be the one place they disagree.
+        super().__init__(
+            given.default,
+            given.routes,
+            session_dir=given._session_dir,
+            workspace=given.workspace,
+        )
         self.wrapping = given
 
 
