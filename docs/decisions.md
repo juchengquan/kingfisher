@@ -4340,6 +4340,42 @@ because `ports.md` tells an adapter to raise it and the address it had given was
 a module that has stopped being where it lives; `backend` still re-exports it for
 anybody who copied that address.
 
+**`reject_host_path` is scoped to the workspace, and was scoped to one session.**
+`WorkspaceScopedBackend` took a parameter called `workspace`, stored it as
+`self.workspace`, and was handed `session_dir`. The field had exactly one reader -- the
+guard -- so the whole of what "workspace" meant there was the wrong value.
+
+How it got that way is the useful part, because the wiring was not careless. The first
+clause turns the prefix into the virtual path the caller meant --
+`/{key[len(prefix):]}` -- and that only works if the prefix *is* this session:
+`<workspace>/sessions/s/scratchpad/report.md` minus the workspace is
+`/sessions/s/scratchpad/report.md`, which resolves somewhere else again. Somebody wired
+the one value that made the message right, and the scope came with it.
+
+So the clause covering "a host path inside the workspace" covered one session, and
+every other directory fell through to `HOST_ROOTS`, which names no workspace. Measured
+on 2026-10-01 at the two shapes: on a developer machine all four probes are refused, and
+the reason is that a pytest `tmp_path` sits under `/private/` -- the host-root clause,
+not the workspace one. At `/workspace`, which `Dockerfile` sets, a sibling session's
+file, a skill, `models.yaml` and an agent definition were all **accepted**, and a write
+to one was mirrored inside the session -- which is what `system.md` promises the model is
+refused.
+
+The guard takes both now: the session for the suggestion, the workspace for the scope.
+The two refusals differ deliberately -- a path in this session is offered its virtual
+spelling, and anything else under the workspace is not, because there is none to offer
+and inventing one would send the model somewhere else a third time.
+
+**The rule that named this case could not reach it.**
+`test_a_host_path_to_a_file_tool_is_refused_not_mirrored` was written for exactly this,
+using `f"{cfg.workspace}/sessions/s1/..."` -- a *sibling* of the fixture's
+`sessions/test-session`. It passed throughout, on the host-root clause. Every workspace
+in the suite is a `tmp_path`, so the workspace clause had no case anywhere, and
+`reject_host_path` is now driven directly against a `/workspace`-shaped one: a backend
+needs its directories to exist, and that is a path a test may not make. The wiring has a
+rule of its own as well, because the behaviour alone did not say which of the two values
+was wrong. *(2026-10-06, from an architecture review.)*
+
 **Regrouped a week later, by what a class is rather than by what is edited with
 it.** *(2026-09-30.)* Kingfisher's own middleware is one package,
 `infrastructure/harness/middlewares/`: `narrowing` holds the three that apply a

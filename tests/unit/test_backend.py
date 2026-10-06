@@ -11,6 +11,7 @@ from kingfisher.infrastructure.harness.backend import (
     backend_at,
     shell_env,
 )
+from kingfisher.infrastructure.harness.host_paths import HostPathError, reject_host_path
 from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
@@ -135,6 +136,65 @@ def test_a_host_path_to_a_file_tool_is_refused_not_mirrored(cfg, session_dir):
 
     assert not (cfg.workspace / "Users").exists()
     assert not (cfg.workspace / str(cfg.workspace).lstrip("/")).exists()
+
+
+def test_the_backend_is_scoped_to_the_workspace_and_not_to_one_session(cfg, session_dir):
+    """The wiring, named rather than inferred from behaviour. `workspace` was handed the
+    session directory -- the two were one value, because the session is the only prefix
+    the refusal's suggestion can be built from -- which left the clause covering "a host
+    path inside the workspace" covering one session.
+    """
+    backend = backend_at(cfg, session_dir)
+
+    assert backend.workspace == cfg.workspace
+    assert backend._session_dir == session_dir
+
+
+#: A workspace outside every `HOST_ROOTS` prefix. `/workspace` is what the shipped
+#: `Dockerfile` sets, and it is the shape no test had: a pytest `tmp_path` always sits
+#: under `/private/` or `/tmp/`, so a path anywhere in it was refused by the host-root
+#: clause for an unrelated reason and the workspace clause was never reached.
+CONTAINER = Path("/workspace")
+
+
+@pytest.mark.parametrize(
+    "probe",
+    [
+        "sessions/another/derived/secret.txt",
+        "skills/report/SKILL.md",
+        "models.yaml",
+        "agents/analyst.yaml",
+    ],
+)
+def test_a_workspace_the_host_roots_do_not_name_still_refuses_its_own_paths(probe):
+    """Everything in the workspace is a host path to a file tool, not just this session.
+
+    Driven against `reject_host_path` rather than a built backend, because a backend
+    needs its directories to exist and `/workspace` is not a path a test may make. That
+    is the same reason this went unnoticed: the only workspace shape the suite builds is
+    one the host-root clause happens to catch.
+    """
+    session = CONTAINER / "sessions" / "s1"
+
+    with pytest.raises(HostPathError, match="is a host path"):
+        reject_host_path(str(CONTAINER / probe), CONTAINER, session_dir=session)
+
+
+def test_only_a_path_in_this_session_is_offered_a_virtual_one(cfg, session_dir):
+    """The two refusals differ, and the difference is the whole reason the session is
+    passed separately: `/sessions/another/...` has no virtual spelling to suggest, so
+    offering one would send the model to a path that resolves somewhere else again.
+    """
+    backend = backend_at(cfg, session_dir)
+
+    with pytest.raises(HostPathError, match=r"Use '/scratchpad/report\.md' instead"):
+        backend.write(f"{session_dir}/scratchpad/report.md", "x")
+
+    with pytest.raises(HostPathError) as raised:
+        backend.write(f"{cfg.workspace}/sessions/another/scratchpad/report.md", "x")
+
+    assert "Use '/" not in str(raised.value)
+    assert "Use the shell for host paths" in str(raised.value)
 
 
 def test_the_refusal_names_the_path_that_was_meant(cfg, session_dir):

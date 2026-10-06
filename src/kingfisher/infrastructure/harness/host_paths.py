@@ -30,12 +30,22 @@ class HostPathError(ValueError):
     """A host path reached a file tool."""
 
 
-def reject_host_path(key: str, workspace: Path) -> None:
-    """Refuse a host path handed to a file tool."""
+def reject_host_path(key: str, workspace: Path, *, session_dir: Path) -> None:
+    """Refuse a host path handed to a file tool.
+
+    Two prefixes, because they can be answered differently. A path inside *this*
+    session can be turned into the virtual path the caller meant, so that refusal
+    carries it; anything else under the workspace -- another session, a catalogue,
+    `models.yaml` -- has no virtual path to offer and gets the general sentence.
+
+    Both, and not one: the session is the only prefix a suggestion can be built from,
+    and passing it as the scope narrows the refusal to one session -- leaving the rest
+    of the workspace to `HOST_ROOTS`, which names no workspace at all.
+    """
     if not key.startswith("/"):
         return
 
-    prefix = f"{workspace}/"
+    prefix = f"{session_dir}/"
     if key.startswith(prefix):
         suggestion = f"/{key[len(prefix) :]}"
         msg = (
@@ -45,7 +55,7 @@ def reject_host_path(key: str, workspace: Path) -> None:
         )
         raise HostPathError(msg)
 
-    if key.startswith(HOST_ROOTS):
+    if key.startswith((f"{workspace}/", *HOST_ROOTS)):
         msg = (
             f"{key!r} is a host path, and file tools take virtual paths rooted at the "
             f"workspace — it would have been created inside the workspace, not where "
