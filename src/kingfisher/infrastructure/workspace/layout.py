@@ -7,7 +7,9 @@ from importlib import resources
 from pathlib import Path
 
 from kingfisher.config import ConfigError
+from kingfisher.domain.session import sessions_root
 from kingfisher.layout import (
+    HARNESS_OWNED,
     LAYOUT_DIRS,
     LAYOUT_VERSION,
     MARKER,
@@ -49,6 +51,20 @@ def _layout_of(marker: Path) -> int:
     return 1
 
 
+#: Where layout 1 kept a session's agent, conversation, turn lock and run log, under
+#: `HARNESS_OWNED`. The refusal names these, and what it names is what is looked for:
+#: an operator who deletes exactly what the message says has to be let through.
+OLD_STATE = ("agents", "runs", "claims", "tmp")
+
+
+def _left_from_before(workspace: Path) -> bool:
+    """Whether anything an older layout wrote is still where it wrote it."""
+    sessions = sessions_root(workspace)
+    if sessions.is_dir() and any(sessions.iterdir()):
+        return True
+    return any((workspace / HARNESS_OWNED / name).exists() for name in OLD_STATE)
+
+
 def check_layout(workspace: Path) -> None:
     """Refuse a workspace laid out by a version that arranged it differently.
 
@@ -68,15 +84,19 @@ def check_layout(workspace: Path) -> None:
     if not marker.is_file():
         return
     found = _layout_of(marker)
-    if found == LAYOUT_VERSION:
+    # Nothing left to lose, so nothing to refuse, and `ensure_layout` brings the
+    # marker up to date. Deleting the marker is not the way through: a workspace
+    # without one reads as new, and the integration driver seeds over a new one.
+    if found == LAYOUT_VERSION or not _left_from_before(Path(workspace)):
         return
     msg = (
         f"{workspace} was laid out by kingfisher layout {found}, and this is layout "
         f"{LAYOUT_VERSION}. A session's agent, conversation, turn lock and run log "
         f"moved into <session>/.harness, and the old ones are not where this looks -- "
         f"a session opened under {found} would silently lose its conversation and "
-        f"could change agent mid-way. Delete sessions/ and .kingfisher/"
-        f"{{agents,runs,claims,tmp}} in that workspace, or point KINGFISHER_WORKSPACE "
+        f"could change agent mid-way. Delete what is in sessions/ and "
+        f"{HARNESS_OWNED}/{{{','.join(OLD_STATE)}}} in that workspace, and the marker "
+        f"is brought up to date on the next start; or point KINGFISHER_WORKSPACE "
         f"at a new one; definitions relocate with KINGFISHER_SKILLS_DIR and its "
         f"siblings and do not have to move."
     )
@@ -106,7 +126,7 @@ def ensure_layout(workspace: Path, *, authored: Mapping[str, Path] | None = None
         (workspace / name).mkdir(parents=True, exist_ok=True)
 
     marker = workspace / MARKER
-    if not marker.exists():
+    if not marker.exists() or _layout_of(marker) != LAYOUT_VERSION:
         marker.write_text(MARKER_TEXT, encoding="utf-8")
 
     _place_example(workspace, authored)
