@@ -12,8 +12,8 @@ from kingfisher.domain.session import (
     QuotaExceededError,
     Session,
     SessionInfo,
-    UnknownSessionError,
     known,
+    unknown_session,
 )
 from kingfisher.infrastructure.session_store import HarnessFiles, agent_started_with
 from kingfisher.infrastructure.steps import Steps, adrive, drive, reading
@@ -51,13 +51,7 @@ class Sessions:
     def _refuse_if_unissued(self, session_id: str) -> Steps[None]:
         """Refuse an id the session backends do not list, before anything opens it."""
         if session_id not in (yield from self._known_steps()):
-            raise self._unknown_session(session_id)
-
-    def _unknown_session(self, session_id: str) -> UnknownSessionError:
-        """The refusal for an id nobody issued, and for a session this caller may not
-        touch. One wording for both, so that holding a real id teaches nothing.
-        """
-        return UnknownSessionError(f"no session {session_id!r}; omit session_id to start one")
+            raise unknown_session(session_id)
 
     def _reaches_session(self, harness: Any, held: frozenset[str] | None) -> Steps[bool]:
         """Whether a caller holding `held` may touch the session `harness` belongs to.

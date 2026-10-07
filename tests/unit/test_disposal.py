@@ -110,6 +110,20 @@ def test_reap_disposes_of_the_idle_and_leaves_the_rest(cfg):
     assert (cfg.workspace / "sessions" / fresh).is_dir()
 
 
+def test_a_session_named_with_a_backslash_is_swept_like_any_other(cfg):
+    """A session id rule refusing `\\`, which a POSIX name may hold, left such a session
+    listed but unopenable, and `reap` raised at it and swept nothing.
+    """
+    import time
+
+    kf = service(cfg)
+    odd, plain = start(cfg, "a\\b"), start(cfg, "plain")
+
+    result = kf.reap(older_than_seconds=0, now=time.time() + 60)
+
+    assert set(result.removed) == {odd, plain}
+
+
 # -- threads that outlived their session -----------------------------------
 
 

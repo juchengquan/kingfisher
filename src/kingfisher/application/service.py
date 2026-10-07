@@ -72,7 +72,7 @@ from kingfisher.domain.result import (
     RunResult,
     normalize_answer,
 )
-from kingfisher.domain.session import Session, SessionBusyError
+from kingfisher.domain.session import Session, SessionBusyError, unknown_session
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.activation import (
@@ -515,7 +515,7 @@ class Kingfisher(Sessions, Disposal):
     ) -> Steps[tuple[PendingDecision, ...]]:
         reached = yield from self._reached(session_id, source_ids, files_wanted=True)
         if reached is None:
-            raise self._unknown_session(session_id)
+            raise unknown_session(session_id)
         _, files = reached
         mark = yield from read_pause_mark(HarnessFiles(files, session_id))
         return pending_from_mark(mark or {})
@@ -540,7 +540,7 @@ class Kingfisher(Sessions, Disposal):
     def _artifact_steps(self, session_id: str, name: str, source_ids: Held | None) -> Steps[bytes]:
         reached = yield from self._reached(session_id, source_ids, files_wanted=True)
         if reached is None:
-            raise self._unknown_session(session_id)
+            raise unknown_session(session_id)
         _, files = reached
         return (yield from read_artifact(files, name))
 
@@ -666,7 +666,7 @@ class Kingfisher(Sessions, Disposal):
             else None
         )
         if not self._reaches_pin(pinned, held):
-            raise self._unknown_session(session.id)
+            raise unknown_session(session.id)
         # A turn writes inside the session, never to the session itself, so the
         # timestamp `retention.expired` reads would still say "idle" for a
         # conversation in daily use. Recorded here, at the top of a turn, rather
