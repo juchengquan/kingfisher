@@ -2231,6 +2231,15 @@ day the old paths are gone, nothing says so. `.kingfisher/WORKSPACE` had always
 held one line nothing ever read, so the version cost nothing and the next layout
 change inherits the check.
 
+*The refusal is on what is left, not on the number.* It refused on the number
+alone, so an operator who deleted everything the message listed was still
+refused, and the one way out it did not name -- deleting the marker -- makes the
+workspace read as new, which the integration driver seeds over. It refuses now
+while anything in `sessions/` or `.kingfisher/{agents,runs,claims,tmp}` remains,
+and `ensure_layout` rewrites the marker once nothing does. Still no migration:
+nothing is moved, and a workspace with old state in it is refused as before.
+*(2026-10-06.)*
+
 **`KINGFISHER_STATE_DIR` and `KINGFISHER_SCRATCH_DIR` are gone.** Scratch first:
 per-session and relocatable are not both expressible, because `session_bytes`
 counts one directory and anywhere else is a cost the quota cannot see. Then
