@@ -307,9 +307,12 @@ as `files=` and run the turn on it rather than opening another. Where each `open
 is a sandbox, that is one sandbox rather than two. `afiles_for` is the same for a
 caller on an event loop, opening it with `aopen`. The request has to name the
 session it was opened for: one naming none is refused, because it would start a
-new session and run in another's files. `files_for` does not ask who you are acting
-for, so hand what it returns only to code entitled to that session; the turn still
-checks the caller it is given.
+new session and run in another's files. And the session has to exist already: an
+id your `sessions` does not list is refused with `UnknownSessionError`, as a turn
+naming it is, and nothing is opened. So a new session's first turn runs without
+`files=`, and its result carries the id to open. `files_for` does not ask who you
+are acting for, so hand what it returns only to code entitled to that session; the
+turn still checks the caller it is given.
 
 **And what it keeps about the session, under `/.harness`.** The agent the session is
 pinned to, its conversation, and a turn paused at an approval gate are all written

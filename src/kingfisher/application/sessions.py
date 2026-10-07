@@ -44,12 +44,14 @@ class Sessions:
         backend makes it, the first time it is asked for it.
         """
         if request.session_id is None:
-            session_id = uuid4().hex
-        elif request.session_id in (yield from self._known_steps()):
-            session_id = request.session_id
-        else:
-            raise self._unknown_session(request.session_id)
-        return Session(id=session_id)
+            return Session(id=uuid4().hex)
+        yield from self._refuse_if_unissued(request.session_id)
+        return Session(id=request.session_id)
+
+    def _refuse_if_unissued(self, session_id: str) -> Steps[None]:
+        """Refuse an id the session backends do not list, before anything opens it."""
+        if session_id not in (yield from self._known_steps()):
+            raise self._unknown_session(session_id)
 
     def _unknown_session(self, session_id: str) -> UnknownSessionError:
         """The refusal for an id nobody issued, and for a session this caller may not
