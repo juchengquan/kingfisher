@@ -30,6 +30,7 @@ from kingfisher.infrastructure.harness.host_paths import (
 from kingfisher.infrastructure.harness.host_paths import reject_host_path
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.threads import off_loop, thread_pool
+from kingfisher.infrastructure.workspace.layout import check_sessions
 from kingfisher.infrastructure.workspace.permissions import protect_inputs, writable_inputs
 from kingfisher.infrastructure.workspace.sessions import (
     LocalSessionDirs,
@@ -636,7 +637,8 @@ def backend_at(
 
 class DefaultBackends(SessionBackends):
     """Kingfisher's own `SessionBackends`: each session a directory under
-    `<workspace>/sessions`, each backend `backend_at` that directory.
+    `<workspace>/sessions` -- or `sessions/` itself, where `cfg.session_id` says the
+    workspace holds one -- each backend `backend_at` that directory.
 
     `default_backends` runs each session's commands here, under kingfisher's own
     fence. A deployment whose commands run somewhere else builds one with `runner=`,
@@ -672,7 +674,12 @@ class DefaultBackends(SessionBackends):
         *,
         catalogue: Definitions | None = None,
     ) -> WorkspaceScopedBackend:
-        directory = ensure_session_layout(session_dir(cfg.workspace, session_id))
+        where = _where(cfg, session_id)
+        # Here as well as at startup, because a deployment may drive these without a
+        # `Kingfisher` to have checked, and because this is the call that would lay one
+        # mode's session out over the other's.
+        check_sessions(cfg.workspace, one_session=cfg.session_id is not None)
+        directory = ensure_session_layout(where)
         # Kernel-level, because the deny rule covers only the file tools. What it
         # could not harden is reported by the turn rather than raised: raising here
         # used to make one file owned by another user a session unusable for good.
@@ -683,16 +690,36 @@ class DefaultBackends(SessionBackends):
         return built
 
     def sessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
-        return LocalSessionDirs().listing(sessions_root(cfg.workspace))
+        # Before listing, because a listing is what `reap` deletes from: read in the
+        # wrong mode, a lone session's `inputs/` and `memory/` are sessions of their own.
+        check_sessions(cfg.workspace, one_session=cfg.session_id is not None)
+        root = sessions_root(cfg.workspace)
+        if cfg.session_id is not None:
+            # Whether or not a turn has made it, and after a delete: it exists because
+            # the workspace is configured to hold it, so a first turn naming it is one
+            # naming an issued id.
+            return ((cfg.session_id, LocalSessionDirs().used_at(root)),)
+        return LocalSessionDirs().listing(root)
 
     def mark_used(self, cfg: Config, session_id: str) -> None:
-        LocalSessionDirs().mark_used(session_dir(cfg.workspace, session_id))
+        LocalSessionDirs().mark_used(_where(cfg, session_id))
 
     def size(self, cfg: Config, session_id: str) -> int:
-        return session_bytes(session_dir(cfg.workspace, session_id))
+        return session_bytes(_where(cfg, session_id))
 
     def delete(self, cfg: Config, session_id: str) -> str | None:
-        return LocalSessionDirs().remove_tree(session_dir(cfg.workspace, session_id))
+        where = _where(cfg, session_id)
+        if cfg.session_id is not None:
+            # Emptied and not removed: `sessions/` is the workspace's own folder, made by
+            # its layout and the place a deployment mounts storage, and a mountpoint
+            # cannot be removed -- every delete would report a failure after succeeding.
+            return LocalSessionDirs().empty(where)
+        return LocalSessionDirs().remove_tree(where)
+
+
+def _where(cfg: Config, session_id: str) -> Path:
+    """Where kingfisher's own backends keep one session of this workspace."""
+    return session_dir(cfg.workspace, session_id, only=cfg.session_id)
 
 
 #: Kingfisher's own sessions, with their commands run on this host.

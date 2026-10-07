@@ -9,6 +9,7 @@ from pathlib import Path
 from kingfisher.config import ConfigError, definition_roots_for
 from kingfisher.domain.session import sessions_root
 from kingfisher.layout import (
+    HARNESS,
     HARNESS_OWNED,
     LAYOUT_DIRS,
     LAYOUT_VERSION,
@@ -112,11 +113,56 @@ def check_layout(workspace: Path) -> None:
     raise ConfigError(msg)
 
 
+#: How many sessions the mixed-mode refusal names before it counts the rest: enough to
+#: recognise a workspace by, and a shared one may hold thousands.
+SESSIONS_NAMED = 3
+
+
+def check_sessions(workspace: Path, *, one_session: bool) -> None:
+    """Refuse a `sessions/` laid out for the other mode.
+
+    Read off `.harness/` and nothing else, because no agent can make or remove one where
+    this looks: a session's own is denied to its shell under every fence, and so is
+    `sessions/.harness` to a session inside it. A test of "anything but the session's own
+    folders" could be set off from inside: under bubblewrap and on macOS the shell may
+    make a folder at the session root, and that stray folder would lock the workspace.
+    """
+    sessions = sessions_root(workspace)
+    own = (sessions / HARNESS).is_dir()
+    if not one_session and own:
+        msg = (
+            f"{sessions} holds one session laid out directly in it -- {HARNESS}/ is there "
+            "-- which is how a workspace with KINGFISHER_SESSION_ID set keeps its session. "
+            "With it unset, every folder in there is listed as a session of its own, and "
+            "reap deletes them. Set KINGFISHER_SESSION_ID to that session's id, clear "
+            f"{sessions}, or point KINGFISHER_WORKSPACE at another workspace"
+        )
+        raise ConfigError(msg)
+    # Only while there is no `.harness/` of its own. Once there is, `sessions/` is the
+    # one session and a folder in it is that session's, whatever the agent put inside
+    # it: a file tool writes `/outputs/.harness/notes.md` as readily as anything else.
+    if not one_session or own or not sessions.is_dir():
+        return
+    held = sorted(p.name for p in sessions.iterdir() if (p / HARNESS).is_dir())
+    if held:
+        shown, rest = held[:SESSIONS_NAMED], len(held) - SESSIONS_NAMED
+        named = ", ".join(shown) + (f" and {rest} more" if rest > 0 else "")
+        msg = (
+            f"KINGFISHER_SESSION_ID is set, and {sessions} holds sessions of their own -- "
+            f"{named} -- which is how a workspace without it keeps them. Laid "
+            "out over them, the one session's agent would read every one. Clear "
+            f"{sessions}, unset KINGFISHER_SESSION_ID, or point KINGFISHER_WORKSPACE at "
+            "another workspace"
+        )
+        raise ConfigError(msg)
+
+
 def ensure_layout(
     workspace: Path,
     *,
     authored: Mapping[str, Path] | None = None,
     catalogue_roots: Mapping[str, Path] | None = None,
+    one_session: bool | None = None,
 ) -> Path:
     """Create the workspace layout, and each kind's folder where it is read from. Idempotent.
 
@@ -136,6 +182,11 @@ def ensure_layout(
     # is refused rather than half-relaid. An empty path has no marker and is not
     # an old workspace; `check_layout` says nothing about it.
     check_layout(workspace)
+    # Asked only by a caller that says which mode it serves sessions in. Seeding serves
+    # none and reads no session setting, so in a workspace holding one session it would
+    # be refused for the mode it never asked about.
+    if one_session is not None:
+        check_sessions(workspace, one_session=one_session)
     for name in LAYOUT_DIRS:
         (workspace / name).mkdir(parents=True, exist_ok=True)
     # Where the catalogue is read from and nowhere else: a kind that was moved gets no

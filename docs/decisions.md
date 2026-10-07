@@ -2451,6 +2451,95 @@ one thing again, which is what the merge removed. Entries in this file that say
 `--data`, `Request.data`, `place_data` or `data_placed` meant these.
 *(2026-10-07.)*
 
+**A workspace can hold one session.** In some services a workspace *is* a session:
+the service names it, and everything under the workspace belongs to it. Setting
+`KINGFISHER_SESSION_ID` says so, and its value is that session's id. The session is
+laid out in `<workspace>/sessions` itself -- `inputs/`, `outputs/`, `memory/`,
+`scratchpad/` and `.harness/`, with no level per id -- and kingfisher's own backends
+know no other id. Unset, nothing changes.
+
+*A setting, not an argument to `DefaultBackends`.* `default_backends` is one object
+serving every workspace a process opens, and every `SessionBackends` method is already
+handed the `Config`, so `Config.session_id` reaches each call where a constructor
+argument would have fixed one answer for all of them. The id is held to
+`is_one_path_segment` and refused at startup in words naming the setting, though it is
+never joined onto a path.
+
+*`sessions/` itself, not a new `session/` folder*, so the two layouts differ by one
+level and nothing else: what a deployment mounts at `<workspace>/sessions` is still
+where sessions are, `doctor` measures the same folder, and `SessionPaths` and
+`reject_host_path` refuse the same prefix. `session_dir` makes the mapping in one place,
+given `only=` the configured id: that id is `sessions/`, and any other is refused with
+the `unknown_session` wording.
+
+*The request rules.* The listing names the configured id always -- before any turn has
+run and after a delete -- because the session exists by configuration, so a first turn
+naming it names an issued id. A request naming no id runs in it, and its `RunResult`
+says so; that includes one handed `files=`, which elsewhere is refused because it would
+mint a session and run in another's files. Any other id is refused as an id nobody
+issued. The no-id rule reads `cfg` in `_session_for`, where a uuid used to be minted,
+rather than asking the backends: minting is the application's, the setting replaces
+it, and asking the backends would be a port method every deployment's own had to grow
+for one `Config` field. `_session_for` is the step sequence both loops drive, so it
+holds on `astream` and `arun` as on `stream` and `run`.
+
+*Delete and `reap` work as for any session*, and the next turn starts a fresh
+conversation under the same id. Deleting empties `sessions/` rather than removing it:
+it is the workspace's own folder, made by its layout and the place a deployment mounts
+storage, and a mountpoint cannot be removed, so every delete would have reported a
+failure after it had worked. `mark_used` touches `sessions/`, and its mtime is the idle
+clock `reap` reads -- last turn, or when the session was last emptied, which for a
+session that exists by configuration is when it last started fresh.
+
+*The macOS profile names the session's `.harness` where it is.* The pattern was
+`sessions/[^/]+/.harness`, which does not match `sessions/.harness`, so in this layout
+the shell could have rewritten the pinned agent, the conversation and a paused turn.
+`resolve` is handed the mode by `shell_confinement`, and the profile is still one text
+per workspace because every input to it is the workspace's: `sessions/.harness` here,
+and `sessions/` followed by an optional segment and `.harness` in a workspace of many.
+That optional segment is new and has a reason of its own, below. Bubblewrap and
+Landlock needed no change: built from the session directory, the first binds
+`sessions/` writable and `sessions/.harness` read-only over it, and the second grants
+the session's folders one by one and never `sessions/`. So `FENCES_HARNESS` stays true of all
+three, and doctor's `session files` check with it.
+
+*A workspace used both ways is refused.* A workspace of many, started with the
+setting, would lay the one session out over the others, and its agent would read each
+of them at `/<id>/`; a workspace of one, started without it, would list `inputs/` and
+`memory/` as sessions, and `reap` would delete them. So `check_sessions` refuses on
+what is in the folder, as the layout check does -- *the refusal is on what is left*
+(2026-10-06) -- and says what it found and the ways out: clear `sessions/`, set or
+unset the setting, or use another workspace.
+
+The test is `.harness/`, because no agent can make or remove one where it looks, so
+nothing done from inside a session sets it off. "Anything but the session's own
+folders" would be simpler and wrong: under bubblewrap and on macOS the shell can
+`mkdir` where it starts, which here is `sessions/`, and one stray folder would lock the
+workspace. Measured before building on it, and it moved the rule once: the file tools
+write `/outputs/.harness/notes.md` and `/stray/.harness/notes.md` without complaint --
+only `/.harness/` is denied them -- so "a folder holding its own `.harness/`" could be
+set off from inside too. A workspace of one therefore refuses folders holding
+`.harness/` only while `sessions/.harness` does not exist; once it does, `sessions/` is
+the one session and its folders are that session's. A workspace of many refuses
+`sessions/.harness`, and the macOS profile now denies a shell in any session the making
+of it -- that is the optional segment above, since without it the shell could stop a
+shared workspace starting with one `mkdir ../.harness`.
+
+It runs where `ensure_layout` runs for a service, and in `DefaultBackends.open` and
+`sessions` as well, because a deployment may drive those without a `Kingfisher` to have
+checked, and they are the calls that would lay one mode's session over the other's or
+list one as the other. `ensure_layout` asks it only of a caller that says which mode it
+serves: seeding serves none and reads no session setting, and asked, it would refuse a
+workspace of one for a setting it never read.
+
+*Not a reversal of "Session ids are issued, not accepted"* (2026-08-16). A caller still
+cannot choose an id: in a workspace of many, one the backends do not list is refused,
+as before. Here the deployment issues the one id by configuration, before any caller
+arrives, which is issuing. A deployment's own `SessionBackends` is told the mode
+through `cfg` as `default_backends` is, and what it does with it is its own; the
+contract kit's checks open several ids and do not hold of a workspace of one.
+*(2026-10-07.)*
+
 ## Wiring a store
 
 *Much of this was reversed on 2026-09-30: `SessionStore` and `SessionRoot` are gone,

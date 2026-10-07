@@ -248,6 +248,7 @@ def shell_confinement(cfg: Config, *, skills: tuple[Path, ...] | None = None) ->
         skills=(cfg.skills_dir, *cfg.skills_mounts.values()) if skills is None else skills,
         definitions=tuple(cfg.catalogue_roots.values()),
         authored=tuple(cfg.authored_files.values()),
+        one_session=cfg.session_id is not None,
     )
 
 
@@ -278,6 +279,7 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     itself: Path,
     protected: tuple[Path, ...] = (),
     protected_files: tuple[Path, ...] = (),
+    one_session: bool = False,
 ) -> str:
     """A `sandbox-exec` profile denying the operator's home, minus what runs code.
 
@@ -369,12 +371,13 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     # the one a `subpath` deny on the parent directory would have been reached
     # for to catch.
     lines.append(f"(deny file-write* (path {_sb(itself)}))")
-    lines.append(_harness_denial(workspace))
+    lines.append(_harness_denial(workspace, one_session=one_session))
     return "\n".join(lines) + "\n"
 
 
-def _harness_denial(workspace: Path) -> str:
-    """Refuse `<workspace>/sessions/*/.harness`, for every session at once.
+def _harness_denial(workspace: Path, *, one_session: bool) -> str:
+    """Refuse every session's `.harness` at once: `sessions/.harness` itself, in a
+    workspace holding one session, and `sessions/*/.harness` in one holding many.
 
     A regex rather than one `subpath` per session, and that is what keeps the
     profile static. `shell.sb` has a single fixed path, so a profile naming the
@@ -384,10 +387,16 @@ def _harness_denial(workspace: Path) -> str:
 
     The character class is `[^/]+`, so it matches one session and not a path
     walking through several: `sessions/a/.harness` is denied and
-    `sessions/a/outputs/.harness` is not this rule's business.
+    `sessions/a/outputs/.harness` is not this rule's business -- nor is
+    `sessions/outputs/.harness` where `sessions/` is the session.
+
+    Where there are many, `sessions/.harness` is denied as well, though no session's
+    files are there: its presence is how `check_sessions` tells a workspace holding
+    one session, so a shell that could make it could lock this workspace.
     """
     root = re.escape(f"{Path(workspace).resolve()}/sessions/")
-    return f'(deny file-write* (regex #"^{root}[^/]+/{re.escape(HARNESS)}(/|$)"))'
+    session = "" if one_session else "([^/]+/)?"
+    return f'(deny file-write* (regex #"^{root}{session}{re.escape(HARNESS)}(/|$)"))'
 
 
 def _sb(path: Path) -> str:
@@ -482,6 +491,7 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
     extra: tuple[str, ...] = (), skills: tuple[Path, ...] = (),
     definitions: tuple[Path, ...] = (),
     authored: tuple[Path, ...] = (),
+    one_session: bool = False,
 ) -> Confinement:
     """Choose a confinement for this deployment, writing any profile it needs."""
     if mode == BUBBLEWRAP:
@@ -538,6 +548,9 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
             # `/tmp` or `/var` is really under `/private`. A file that does not exist
             # yet is named anyway: the shell must not be the one to create it.
             protected_files=tuple(dict.fromkeys(Path(p).resolve() for p in authored)),
+            # Where the session's `.harness` is, which the workspace's setting decides --
+            # and the profile is still one text per workspace, as every input to it is.
+            one_session=one_session,
         ),
     )
     return Confinement(wrap=_sandbox_exec(path), mechanism=SANDBOX_EXEC)

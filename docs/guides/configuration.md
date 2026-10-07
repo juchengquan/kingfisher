@@ -31,6 +31,7 @@ mentions.
 | `KINGFISHER_SUBAGENTS_DIR` | Relocate the subagents catalogue. | inside the workspace |
 | `KINGFISHER_TOOLS_DIR` | Relocate the tools catalogue. | inside the workspace |
 | `KINGFISHER_SESSION_BACKENDS_FACTORY` | `module:name` naming something callable with no arguments that returns a `SessionBackends`, for the `kingfisher` command. Only the command reads it — `Kingfisher` takes its session backends as `backends=` — and it is how `sessions`, `reap` and `artifact` see sessions yours keep elsewhere. `KINGFISHER_SESSION_STORE` and `KINGFISHER_SESSION_STORE_FACTORY`, which configured the store this replaced, are refused if still set, and so is `KINGFISHER_BACKEND_FACTORY`, this setting's old name. | `default_backends` |
+| `KINGFISHER_SESSION_ID` | Makes the workspace hold one session, under this id, laid out in `<workspace>/sessions` itself rather than in a folder of its own. A request naming no session runs in it, a request naming any other id is refused as one nobody issued, and deleting it empties the folder for a fresh conversation under the same id. Must be one name — not `.` or `..`, holding neither `/` nor NUL. A workspace holding sessions the other way is refused at startup, set or unset. | unset — a folder per session |
 | *(none)* | Where session directories are, while a turn runs. No setting moves them; mount `<workspace>/sessions` on whatever device you want them on. | `<workspace>/sessions` |
 
 **The last row is in the table rather than left out of it.** A reader asking how

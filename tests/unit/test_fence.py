@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import sys
 import types
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from kingfisher import default_backends
 from kingfisher.domain.ports import CommandResult
+from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.sandbox.confinement import (
     REQUIRED_LANDLOCK_ABI,
     Confinement,
+    _unwrapped,
     landlock_ready,
 )
 from kingfisher.infrastructure.sandbox.fence import SYSTEM_PATHS, LandlockRunner, policy_for
@@ -449,3 +452,44 @@ def test_every_directory_on_the_agent_s_path_is_reachable(cfg, tmp_path, monkeyp
         "A fenced shell does not refuse them, it silently runs whatever it finds "
         "next -- see toolchain_roots"
     )
+
+
+# -- the Linux fences, as `default_backends` builds them -------------------
+
+
+def _fenced_by(monkeypatch, mechanism: str) -> None:
+    monkeypatch.setattr(
+        confinement,
+        "shell_confinement",
+        lambda cfg, *, skills=None: Confinement(wrap=_unwrapped, mechanism=mechanism),
+    )
+
+
+def test_bubblewrap_binds_the_one_session_s_harness_read_only(cfg, monkeypatch):
+    """With the session at `sessions/`, the session bind is writable over `.harness` too,
+    and only a read-only bind laid after it takes that back."""
+    _fenced_by(monkeypatch, confinement.BUBBLEWRAP)
+    one = replace(cfg, session_id="the-one")
+    sessions = str(one.workspace.resolve() / "sessions")
+    harness = f"{sessions}/{HARNESS}"
+
+    argv = default_backends.open(one, "the-one").default.runner.argv
+
+    bound = [(argv[i], argv[i + 1]) for i in range(len(argv) - 1)]
+    assert ("--bind", sessions) in bound
+    assert ("--ro-bind", harness) in bound
+    assert bound.index(("--ro-bind", harness)) > bound.index(("--bind", sessions))
+
+
+def test_landlock_grants_no_rule_above_the_one_session_s_harness(cfg, monkeypatch, sandlock):
+    """Landlock grants and never takes back, so a writable rule on `sessions/` -- the
+    session, here -- would re-open `.harness` beneath it."""
+    _fenced_by(monkeypatch, confinement.LANDLOCK)
+    one = replace(cfg, session_id="the-one")
+    harness = one.workspace.resolve() / "sessions" / HARNESS
+
+    policy = default_backends.open(one, "the-one").default.runner.policy
+
+    assert policy.fs_writable, "nothing granted -- this checks nothing"
+    for granted in policy.fs_writable:
+        assert not harness.is_relative_to(granted), f"{granted} re-opens {HARNESS}"

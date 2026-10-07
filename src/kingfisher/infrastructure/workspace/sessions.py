@@ -39,12 +39,35 @@ class LocalSessionDirs:
             return ()
         return tuple((p.name, p.stat().st_mtime) for p in path.iterdir() if p.is_dir())
 
+    def used_at(self, path: Path) -> float:
+        """The timestamp `mark_used` moves, for one session directory: `0` for one not made."""
+        try:
+            return path.stat().st_mtime
+        except FileNotFoundError:
+            return 0.0
+
     def remove_tree(self, path: Path) -> str | None:
         try:
             # not ignore_errors: partials must surface
             shutil.rmtree(path, onexc=unlock_and_retry)
         except OSError as exc:
             return f"directory not removed ({exc.strerror})"
+        return None
+
+    def empty(self, path: Path) -> str | None:
+        """Remove everything in `path` and leave `path` itself. Nothing there is not a failure."""
+        if not path.is_dir():
+            return None
+        for child in list(path.iterdir()):
+            if child.is_dir() and not child.is_symlink():
+                failure = self.remove_tree(child)
+                if failure:
+                    return failure
+                continue
+            try:
+                child.unlink()
+            except OSError as exc:
+                return f"{child.name} not removed ({exc.strerror})"
         return None
 
 

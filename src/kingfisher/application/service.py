@@ -259,6 +259,7 @@ class Kingfisher(Sessions, Disposal):
             # the configured ones are not read, so one made there would be a place to
             # put a definition that never loads.
             catalogue_roots=self.cfg.catalogue_roots if catalogue is None else {},
+            one_session=self.cfg.session_id is not None,
         )
 
         # Where the reviewed definitions are read from, settled once. Omitted,
@@ -646,7 +647,8 @@ class Kingfisher(Sessions, Disposal):
         """
         cfg = self.cfg
         # Without an id this turn would mint a new session and run it in another's files.
-        if files is not None and request.session_id is None:
+        # A workspace holding one session mints nothing, and its no-id turn is that one.
+        if files is not None and request.session_id is None and cfg.session_id is None:
             msg = (
                 "files= is one session's backend and this request names no session: "
                 "pass the session_id the backend was opened for"

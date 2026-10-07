@@ -44,7 +44,11 @@ class Sessions:
         backend makes it, the first time it is asked for it.
         """
         if request.session_id is None:
-            return Session(id=uuid4().hex)
+            # From the setting and not from the backends, because minting is this
+            # layer's job and the setting replaces it: a workspace that holds one session
+            # has nowhere to put a second, and asking the backends would be a port
+            # method every deployment's own had to grow for one `Config` field.
+            return Session(id=self.cfg.session_id or uuid4().hex)
         yield from self._refuse_if_unissued(request.session_id)
         return Session(id=request.session_id)
 
