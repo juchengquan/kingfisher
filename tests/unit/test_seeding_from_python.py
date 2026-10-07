@@ -29,7 +29,9 @@ def test_the_readme_flow_seeds_a_workspace(tmp_path, assets_examples):
     """The four calls from the README, in the order it gives them."""
     paths = WorkspacePaths(tmp_path / "ws")
 
-    ensure_layout(paths.workspace, authored=paths.authored_files)
+    ensure_layout(
+        paths.workspace, authored=paths.authored_files, catalogue_roots=paths.catalogue_roots
+    )
     source = definitions_source(paths, assets_examples)
     done = seed(paths, source)
 
@@ -65,6 +67,19 @@ def test_the_flow_follows_a_relocated_catalogue(tmp_path, assets_examples):
     assert (shared / "models.yaml.example").is_file(), (
         "seeding wrote the example where the catalogue is not read from"
     )
+
+
+def test_the_flow_makes_no_folder_for_a_moved_kind(tmp_path, assets_examples):
+    """`seed` laid the workspace out with every kind in it, so a deployment that moved
+    its skills got them seeded where it pointed and an empty `skills/` beside them.
+    """
+    elsewhere = tmp_path / "shared" / "skills"
+    paths = WorkspacePaths(tmp_path / "ws", skills_root=elsewhere)
+
+    seed(paths, definitions_source(paths, assets_examples))
+
+    assert any(elsewhere.iterdir()), "the moved catalogue was not seeded"
+    assert not (paths.workspace / "skills").exists(), "a skills/ nothing reads"
 
 
 def test_the_flow_reports_what_it_left_behind(tmp_path, assets_examples):

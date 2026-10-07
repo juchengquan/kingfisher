@@ -512,21 +512,24 @@ def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, shipped, m
     assert reachable(cfg.skills_dir)
 
 
-def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, shipped, monkeypatch):
-    """The third catalogue, and the third chance to seed where nothing reads."""
+def test_seeding_puts_tools_in_the_tool_catalogue(tmp_path, shipped, monkeypatch):
+    """The third catalogue, and the third chance to seed where nothing reads -- or,
+    short of that, to leave an empty `tools/` in the workspace looking like the place.
+    """
     from kingfisher.kinds.tools.catalogue import LocalToolRepository
 
+    # A fresh workspace rather than `cfg`'s, which the fixture laid out before any
+    # setting moved a kind, so its `tools/` would be there whatever seeding did.
+    workspace = tmp_path / "fresh"
     catalogue = tmp_path / "catalogue"
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(workspace))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
     monkeypatch.setenv("KINGFISHER_TOOLS_DIR", str(catalogue / "tools"))
 
     assert main(["seed"]) == 0
 
     assert "http_fetch" in LocalToolRepository(catalogue / "tools").names
-    # `ensure_layout` still makes the workspace directory, so the place to put
-    # one is obvious. What must not happen is a preset landing in it.
-    assert LocalToolRepository(cfg.workspace / "tools").names == ()
+    assert not (workspace / "tools").exists(), "a tools/ in the workspace that nothing reads"
 
 
 # -- `sessions` and `reap`, the workspace's own housekeeping -----------------

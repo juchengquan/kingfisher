@@ -46,7 +46,9 @@ rather than produced by a run — one per definition kind, and
 `test_every_definition_kind_relocates_by_its_own_variable` is what keeps it one
 per kind as kinds are added. Relocating them is safe for the reason relocating
 the state directory is: the agent reaches a catalogue through a route, and the
-shell has no business there.
+shell has no business there. A relocated kind's folder is made where the setting
+points and none is made for it in the workspace; one left there from before
+stays, unread, until you delete it.
 
 ## Limits
 

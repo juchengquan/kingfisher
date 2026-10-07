@@ -22,7 +22,6 @@ _EXPORTS = {
     "writable_data": "kingfisher.infrastructure.workspace.permissions",
     "DESTINATION": "kingfisher.infrastructure.workspace.seeding",
     "SEED_HINT": "kingfisher.infrastructure.workspace.seeding",
-    "STARTER_AGENT": "kingfisher.infrastructure.workspace.seeding",
     "SUGGESTION": "kingfisher.infrastructure.workspace.seeding",
     "Destination": "kingfisher.infrastructure.workspace.seeding",
     "Seeded": "kingfisher.infrastructure.workspace.seeding",
@@ -34,6 +33,7 @@ _EXPORTS = {
     "middleware_named": "kingfisher.infrastructure.workspace.seeding",
     "seed": "kingfisher.infrastructure.workspace.seeding",
     "source_ids_named": "kingfisher.infrastructure.workspace.seeding",
+    "starter_agent": "kingfisher.infrastructure.workspace.seeding",
     "LocalSessionDirs": "kingfisher.infrastructure.workspace.sessions",
     "ensure_session_layout": "kingfisher.infrastructure.workspace.sessions",
     "scaffold_memory": "kingfisher.infrastructure.workspace.sessions",
@@ -45,7 +45,6 @@ __all__ = [
     "EXAMPLE",
     "EXAMPLES",
     "SEED_HINT",
-    "STARTER_AGENT",
     "SUGGESTION",
     "TEMPLATES",
     "Destination",
@@ -67,6 +66,7 @@ __all__ = [
     "seed",
     "session_bytes",
     "source_ids_named",
+    "starter_agent",
     "writable_data",
 ]
 
@@ -82,7 +82,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.permissions import writable_data as writable_data
     from kingfisher.infrastructure.workspace.seeding import DESTINATION as DESTINATION
     from kingfisher.infrastructure.workspace.seeding import SEED_HINT as SEED_HINT
-    from kingfisher.infrastructure.workspace.seeding import STARTER_AGENT as STARTER_AGENT
     from kingfisher.infrastructure.workspace.seeding import SUGGESTION as SUGGESTION
     from kingfisher.infrastructure.workspace.seeding import Destination as Destination
     from kingfisher.infrastructure.workspace.seeding import Seeded as Seeded
@@ -96,6 +95,7 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.seeding import middleware_named as middleware_named
     from kingfisher.infrastructure.workspace.seeding import seed as seed
     from kingfisher.infrastructure.workspace.seeding import source_ids_named as source_ids_named
+    from kingfisher.infrastructure.workspace.seeding import starter_agent as starter_agent
     from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs as LocalSessionDirs
     from kingfisher.infrastructure.workspace.sessions import (
         ensure_session_layout as ensure_session_layout,

@@ -5,7 +5,8 @@ import shutil
 
 import pytest
 
-from kingfisher import default_backends
+from kingfisher import WorkspacePaths, default_backends
+from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.workspace import (
     EXAMPLE,
     LocalSessionDirs,
@@ -23,9 +24,55 @@ from tests.conftest import StubCheckpointer
 def test_layout_is_created_and_idempotent(tmp_path):
     ws = ensure_layout(tmp_path / "ws")
     ensure_layout(ws)
-    for name in LAYOUT_DIRS:
+    for name in (*LAYOUT_DIRS, *DEFINITION_KINDS):
         assert (ws / name).is_dir()
     assert (ws / ".kingfisher" / "WORKSPACE").exists()
+
+
+@pytest.mark.parametrize("kind", DEFINITION_KINDS)
+def test_a_moved_kind_is_made_where_it_points_and_not_in_the_workspace(kind, tmp_path):
+    """The layout made all five kinds in the workspace whatever `KINGFISHER_*_DIR` said,
+    so a deployment that moved one still got an empty folder there that nothing read.
+    """
+    elsewhere = tmp_path / "catalogue" / kind
+    paths = WorkspacePaths(tmp_path / "ws", **{f"{kind}_root": elsewhere})
+
+    ws = ensure_layout(paths.workspace, catalogue_roots=paths.catalogue_roots)
+
+    assert elsewhere.is_dir(), "the moved kind has no folder where it is read from"
+    assert not (ws / kind).exists(), "a folder in the workspace that nothing reads"
+    assert all((ws / other).is_dir() for other in DEFINITION_KINDS if other != kind), (
+        "a kind that did not move lost its folder"
+    )
+
+
+def test_a_folder_a_moved_kind_left_behind_is_kept(tmp_path):
+    """A layout that tidied away a moved kind's old folder would delete an operator's
+    directory on the first start after the setting changed.
+    """
+    ws = ensure_layout(tmp_path / "ws")
+    moved = WorkspacePaths(ws, skills_root=tmp_path / "catalogue" / "skills")
+
+    ensure_layout(ws, catalogue_roots=moved.catalogue_roots)
+
+    assert (ws / "skills").is_dir()
+
+
+def test_the_service_makes_a_moved_kind_where_it_points(tmp_path):
+    """`Kingfisher` laid out every kind in the workspace, so a deployment that moved its
+    skills started with an empty `skills/` beside its sessions as well.
+    """
+    from kingfisher import Kingfisher
+    from kingfisher.config import Config
+    from tests.conftest import FAKE_CATALOGUE
+
+    elsewhere = tmp_path / "catalogue" / "skills"
+    cfg = Config(workspace=tmp_path / "ws", models=FAKE_CATALOGUE, skills_root=elsewhere)
+
+    kf = Kingfisher(cfg, backends=default_backends)
+
+    assert elsewhere.is_dir()
+    assert not (kf.workspace / "skills").exists(), "a folder in the workspace nothing reads"
 
 
 def test_the_layout_carries_the_catalogue_example(tmp_path):

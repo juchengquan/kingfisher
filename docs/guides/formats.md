@@ -1007,7 +1007,7 @@ system_prompt: |
   skill; it is the whole procedure.
 ```
 
-`source` takes `shared`, the workspace's own `tools/` or `skills/`, and
+`source` takes `shared`, the catalogue's own `tools/` or `skills/`, and
 `bundled`, this delegate's folder. A plain name means `shared`, so every other
 line you have written keeps its meaning. `redactor` lists nothing shared, so it
 gets no catalogue tool; to keep every catalogue tool as well, write
