@@ -7,6 +7,7 @@ import os
 import platform
 import time
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -15,7 +16,7 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.session import unknown_session
 from kingfisher.infrastructure.workspace import ensure_layout, ensure_session_layout
 from kingfisher.infrastructure.workspace.layout import check_sessions
-from kingfisher.layout import HARNESS, PINNED_AGENT, SESSION_DIRS
+from kingfisher.layout import HARNESS, PINNED_AGENT, SESSION_DIRS, SESSION_ID_RECORD
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import StubCheckpointer, Through
 from tests.unit.test_files_for import DOORS, _turn
@@ -308,7 +309,126 @@ def test_the_refusal_names_a_few_and_counts_the_rest(cfg):
         ensure_session_layout(cfg.workspace / "sessions" / name)
 
     with pytest.raises(ConfigError, match=r"a, b, c and 2 more"):
-        check_sessions(cfg.workspace, one_session=True)
+        check_sessions(cfg.workspace, only=THE_ONE)
+
+
+# -- the id it was laid out for ---------------------------------------------
+
+ANOTHER = "another"
+
+
+def _record(cfg) -> Path:
+    return cfg.workspace / "sessions" / HARNESS / SESSION_ID_RECORD
+
+
+def _start(cfg) -> None:
+    Kingfisher(cfg, backends=default_backends)
+
+
+def _open(cfg) -> None:
+    default_backends.open(cfg, cfg.session_id)
+
+
+def _list(cfg) -> None:
+    default_backends.sessions(cfg)
+
+
+@pytest.mark.parametrize("asking", [_start, _open, _list], ids=["startup", "open", "listing"])
+def test_a_changed_id_is_refused(one, asking):
+    """Mapped onto the same `sessions/`, a changed `KINGFISHER_SESSION_ID` carried the
+    old session's conversation, agent and memory on under the new id, and a caller
+    still holding the old one was refused.
+    """
+    _service(one).run(Request(task="the number is forty"))
+    harness = one.workspace / "sessions" / HARNESS
+    held = {p.name: p.read_bytes() for p in harness.iterdir()}
+
+    with pytest.raises(ConfigError) as refused:
+        asking(replace(one, session_id=ANOTHER))
+
+    said = str(refused.value)
+    assert f"KINGFISHER_SESSION_ID back to {THE_ONE!r}" in said, said
+    assert f"to start {ANOTHER!r} afresh" in said, said
+    assert "KINGFISHER_WORKSPACE" in said, said
+    assert {p.name: p.read_bytes() for p in harness.iterdir()} == held
+
+
+def test_the_same_id_is_accepted_again(one):
+    """So the refusal above is not passing because a recorded workspace is refused
+    whatever it is started with -- which would stop every one at its second start.
+    """
+    _service(one).run(Request(task="the number is forty"))
+
+    again = _service(one)
+    again.run(Request(task="and now?"))
+
+    assert "forty" in _sent(again), "the restart did not continue the conversation"
+    assert _record(one).read_text(encoding="utf-8") == THE_ONE
+
+
+@pytest.mark.parametrize("deleting", [_delete_session, _delete_after_the_turn, _reap_it])
+def test_a_new_id_is_accepted_once_the_session_is_gone(one, deleting):
+    """Kept anywhere a delete does not empty, the record would refuse the new id that
+    the refusal itself says clearing `sessions/` will admit.
+    """
+    kf = _service(one)
+    kf.run(Request(task="the number is forty"))
+    deleting(kf)
+    other = replace(one, session_id=ANOTHER)
+
+    result = _service(other).run(Request(task="and now?"))
+
+    assert result.session_id == ANOTHER
+    assert _record(one).read_text(encoding="utf-8") == ANOTHER
+
+
+def test_a_session_laid_out_before_the_record_is_accepted_and_given_one(one):
+    """Refused for lacking a record, every workspace holding one session laid out
+    before the id was recorded would stop starting; let through and never given one,
+    it would stay open to the change this refuses.
+    """
+    default_backends.open(one, THE_ONE)
+    _record(one).unlink()
+
+    _start(one)
+    _open(one)
+
+    assert _record(one).read_text(encoding="utf-8") == THE_ONE
+    with pytest.raises(ConfigError, match=ANOTHER):
+        _start(replace(one, session_id=ANOTHER))
+
+
+def test_a_shared_workspace_records_no_id(cfg):
+    """Shared mode is untouched: written whatever the mode, every session there would
+    carry an id its folder's name already says, in a file nothing reads.
+    """
+    for name in ("abc123", "def456"):
+        default_backends.open(cfg, name)
+
+    kf = Kingfisher(cfg, backends=default_backends)
+
+    assert sorted(info.id for info in kf.sessions()) == ["abc123", "def456"]
+    assert not list((cfg.workspace / "sessions").glob(f"*/{HARNESS}/{SESSION_ID_RECORD}"))
+
+
+def test_no_file_tool_reaches_the_record(one):
+    """Driven through real file tools, because the record is only as safe as the
+    folder it is kept in: moved out of `.harness/`, the agent could read it, or
+    rewrite it and hand its session to another id.
+    """
+    default_backends.open(one, THE_ONE)
+    sessions = one.workspace / "sessions"
+    # From `_record` rather than spelled here, so a record moved elsewhere moves what
+    # the tools are asked for, instead of leaving them refused at a path it has left.
+    path = "/" + _record(one).relative_to(sessions).as_posix()
+
+    read = _drive(one, sessions, "read_file", {"file_path": path})
+    _drive(one, sessions, "write_file", {"file_path": path, "content": ANOTHER})
+    listed = _drive(one, sessions, "ls", {"path": "/"})
+
+    assert THE_ONE not in read, read
+    assert _record(one).read_text(encoding="utf-8") == THE_ONE
+    assert HARNESS not in listed, listed
 
 
 # -- the shell, which no file tool rule reaches ---------------------------
@@ -333,6 +453,20 @@ def test_the_shell_cannot_write_or_remove_the_one_session_s_harness(one):
 
 
 @macos
+def test_the_shell_cannot_rewrite_or_remove_the_record(one):
+    """The half no file tool rule reaches: rewritten, the session would answer to
+    another id; removed, a changed id would be let through as one never recorded.
+    """
+    backend = default_backends.open(one, THE_ONE)
+    record = _record(one)
+
+    backend.execute(f'printf "{ANOTHER}" > "{record}"')
+    backend.execute(f'rm -f "{record}"')
+
+    assert record.read_text(encoding="utf-8") == THE_ONE
+
+
+@macos
 def test_the_shell_can_still_write_the_rest_of_the_one_session(one):
     """The bound on the rule: `.harness` one level down is the session's own folder
     with a name, not the harness, here."""
@@ -352,4 +486,4 @@ def test_a_shell_in_a_shared_session_cannot_make_sessions_harness(cfg, session_d
     outcome = backend.execute(f'mkdir "{cfg.workspace / "sessions" / HARNESS}"')
 
     assert outcome.exit_code != 0
-    check_sessions(cfg.workspace, one_session=False)
+    check_sessions(cfg.workspace, only=None)

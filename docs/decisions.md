@@ -2563,6 +2563,29 @@ through `cfg` as `default_backends` is, and what it does with it is its own; the
 contract kit's checks open several ids and do not hold of a workspace of one.
 *(2026-10-07.)*
 
+*A changed id is refused.* Nothing recorded which id `sessions/` was laid out for, so
+a workspace holding session `a`, started with the setting changed to `b`, mapped `b`
+onto the same folder: `b` carried on `a`'s conversation, pinned agent and memory as its
+own, and a caller still holding `a` was refused as holding an id nobody issued -- the
+quiet failure the layout version was added to make loud. The one session now records
+its id in `.harness/session-id` when `open` first lays it out, and `check_sessions`
+refuses any other id, at startup and in `open` and `sessions`, naming both ids and the
+ways out: set the setting back, clear `sessions/`, or use another workspace. A delete
+empties `sessions/` and the record with it, so the next id is accepted. A `sessions/`
+laid out before the record holds none, and is let through and given one on its next
+`open` rather than refused for lacking what it could not have had; a changed id is
+undetectable there exactly once.
+
+The record is written on disk by `DefaultBackends`, not through `HarnessFiles` with the
+pin and the transcript. *Every read and write of a session's files goes through that
+session's backend* is about kingfisher reaching a session; this is the default backends'
+own mapping of the id onto `sessions/`, and `check_sessions` reads it off that disk
+before any backend is open. Written by a turn, it would land in a deployment's own
+backends as well, where nothing reads it. Carrying the id is also why the service now
+calls `check_sessions` itself, just before `ensure_layout`, which no longer takes a
+mode: a flag could not carry it, and the id would have needed a third value for
+seeding, which asks nothing and now simply does not call it. *(2026-10-07.)*
+
 ## Wiring a store
 
 *Much of this was reversed on 2026-09-30: `SessionStore` and `SessionRoot` are gone,

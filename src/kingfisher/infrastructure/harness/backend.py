@@ -30,7 +30,7 @@ from kingfisher.infrastructure.harness.host_paths import (
 from kingfisher.infrastructure.harness.host_paths import reject_host_path
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.threads import off_loop, thread_pool
-from kingfisher.infrastructure.workspace.layout import check_sessions
+from kingfisher.infrastructure.workspace.layout import check_sessions, record_session_id
 from kingfisher.infrastructure.workspace.permissions import protect_inputs, writable_inputs
 from kingfisher.infrastructure.workspace.sessions import (
     LocalSessionDirs,
@@ -678,8 +678,15 @@ class DefaultBackends(SessionBackends):
         # Here as well as at startup, because a deployment may drive these without a
         # `Kingfisher` to have checked, and because this is the call that would lay one
         # mode's session out over the other's.
-        check_sessions(cfg.workspace, one_session=cfg.session_id is not None)
+        check_sessions(cfg.workspace, only=cfg.session_id)
         directory = ensure_session_layout(where)
+        if cfg.session_id is not None:
+            # On this disk rather than through the session's backend, as the pin and the
+            # transcript go: which id `sessions/` stands for is this class's own mapping,
+            # and `check_sessions` reads it off this disk before any backend is open. A
+            # turn writing it through `HarnessFiles` would put it in a deployment's own
+            # backends too, which map ids their own way and where nothing reads it.
+            record_session_id(directory, cfg.session_id)
         # Kernel-level, because the deny rule covers only the file tools. What it
         # could not harden is reported by the turn rather than raised: raising here
         # used to make one file owned by another user a session unusable for good.
@@ -692,7 +699,7 @@ class DefaultBackends(SessionBackends):
     def sessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
         # Before listing, because a listing is what `reap` deletes from: read in the
         # wrong mode, a lone session's `inputs/` and `memory/` are sessions of their own.
-        check_sessions(cfg.workspace, one_session=cfg.session_id is not None)
+        check_sessions(cfg.workspace, only=cfg.session_id)
         root = sessions_root(cfg.workspace)
         if cfg.session_id is not None:
             # Whether or not a turn has made it, and after a delete: it exists because
