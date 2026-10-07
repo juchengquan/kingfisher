@@ -123,6 +123,21 @@ the caller made up became a session a later turn accepted.
   `files_for` with the `session_id` its result carries. A session's id is only ever
   one kingfisher issued.
 
+## Host paths refused anywhere under the workspace, after #658
+
+A file tool handed a host path is refused with `HostPathError` wherever under the
+workspace it points (#659). It used to be refused only inside the turn's own session.
+Another session's file, a skill, `models.yaml` or an agent definition named by its
+host path was accepted wherever the workspace sits outside the host roots kingfisher
+lists -- at `/workspace`, which the `Dockerfile` sets, for one -- and a write to it
+was mirrored inside the session rather than reaching the path named.
+
+- **A path inside the session** is refused as before, with the virtual path to use.
+- **Any other path under the workspace** gets the general refusal, because it has no
+  virtual path to offer. An agent or tool of yours that handed the file tools
+  absolute paths into the workspace should use virtual paths, or the shell for host
+  paths.
+
 ## Session backends always given, after #639
 
 Session backends are always passed now, so what kingfisher used to work out from a
@@ -357,6 +372,7 @@ backend* and *A tool's path is the backend's path*, explains why.
 |---|---|---|
 | `… was laid out by kingfisher layout 2, and this is layout 3 …` | The workspace still holds sessions from before `data/` and `derived/` were renamed | Delete what the message lists, or use a new workspace; see *Session folders named for which way files go* |
 | `UnknownSessionError: no session '…'; omit session_id to start one`, from `files_for` | An id no turn issued, such as one made up to start a session, or one that is not a single path segment | Run the session's first turn without `files=`, then open the id its result carries; see *`files_for` opens only a session a turn issued* |
+| `HostPathError: '…' is a host path, and file tools take virtual paths rooted at the workspace — …` | A file tool given an absolute path under the workspace but outside this session, such as another session's file or `models.yaml` | Use a virtual path, or the shell for host paths; see *Host paths refused anywhere under the workspace* |
 | `KINGFISHER_SESSION_STORE was removed: …` | The old store setting is still set | Unset it; see *Settings* |
 | `TypeError: backends= takes a SessionBackends …` | A plain factory function, or one backend, passed as `backends=` | Subclass `DefaultBackends` |
 | `TypeError: … missing 1 required keyword-only argument: 'backends'` | `Kingfisher(...)` called without `backends=`, with or without a graph | Pass `backends=default_backends`, or session backends of your own; see *Session backends always given* |
