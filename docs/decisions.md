@@ -1863,6 +1863,29 @@ two concurrent turns would then race to write different bytes to the file each i
 bound by. On Linux, bubblewrap binds the directory read-only over the session it
 has already mounted. *(2026-09-08.)*
 
+**Known gap, not measured: a pattern holds a path, and nothing stops the path
+moving.** The macOS denial matches `.harness` by where it is. The shell may write
+anywhere in the workspace, and no rule denies a write on `sessions/` itself or on the
+folders above it, so a shell may be able to rename `sessions/`, rewrite the moved
+`.harness` where the pattern no longer matches, and rename it back. That holds in a
+shared workspace and in one holding a single session alike. A hard link may be a
+second way round: Apple's own profiles name `file-link` beside `file-write*`, so a
+link made into a writable folder may not be a write the pattern ever sees.
+
+Neither has been run. Both were found by reading the profile while the single-session
+layout was added, and an attempt to measure them with a real `sandbox-exec` stopped
+before any probe ran, so this records the suspicion rather than a result. The Linux
+fences should not share it, by reasoning and not by run. Bubblewrap mounts `.harness`
+read-only, and a mount can neither be renamed out from under its path nor linked
+across. Landlock never grants `sessions/` or the workspace, so the shell cannot rename
+either, and it refuses a link that would give a file more rights at its new path than
+it had at its old one.
+
+What closes it is likely a deny on writes to `sessions/` and the folders above it, and
+on links into `.harness`. Each has to be measured first against the profile
+kingfisher writes, in both layouts, with the shell still able to create, rename and
+delete inside the session's own folders. *(2026-10-07.)*
+
 **Landlock cannot take back what it has granted, and the Linux job is what
 established that.** The first version of this granted the session writable and
 `<session>/.harness` readable, on the reading that the kernel resolves a path by
