@@ -11,7 +11,8 @@ deployment from before #608 may well be from before that too. See *Subagent bund
 
 **If you run the default backend on one machine** and don't use `SessionStore`,
 `SessionRoot`, `RunResult.log_path` or `RunResult.session_dir`, you probably need
-only the first two items of the checklist.
+only the first two items of the checklist, and the sections titled *after #667* and
+*after #668*, whose renames reach every deployment.
 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
@@ -58,6 +59,69 @@ the paths the agent is given. `memory/` keeps its name. The workspace layout is 
   `data_placed` event, and `protect_data`, `writable_data`, `place_data`,
   `DataBackend`, `DataError` and `DataPlacement`. They are renamed in the section
   above, *A caller's files named for `inputs/`*.
+
+## Memory guidelines that say memory lasts its session, after #666
+
+With memory on, the model is given guidelines for using it after kingfisher's own
+memory section. They are kingfisher's now (#667), `prompts/memory_guidelines.md`,
+where they were deepagents' `MEMORY_SYSTEM_PROMPT`: the same template, except that
+five lines which promised memory to future conversations say later turns of this
+conversation, because `/memory` is deleted with its session. Kingfisher's own memory
+section has said the same since #663. Nothing has to change, and two things follow:
+
+- **A deepagents upgrade no longer changes what the model is told about memory.**
+  Kingfisher's copy is not re-synced from the library's.
+- **A middleware of yours whose class is named `MemoryMiddleware`** still takes the
+  memory slot, as it took deepagents' before, so the model gets what yours sends and
+  not kingfisher's guidelines.
+
+## Definition folders made only where they are read, after #665
+
+Each kind of definition gets its folder where it is read from, and nowhere else
+(#666). A kind moved with `KINGFISHER_SKILLS_DIR` or one of its siblings used to get
+an empty folder in the workspace too, which looked like the place to put a definition
+and was never read.
+
+| Before | Now |
+|---|---|
+| `ensure_layout(workspace, authored=...)` made `agents`, `middlewares`, `skills`, `subagents` and `tools` in the workspace | It still does without `catalogue_roots=`. Pass `catalogue_roots=paths.catalogue_roots`, as the README now does, and each is made where it is read from. A `Config` has the same property, and `seed` passes it already. |
+| `Kingfisher(cfg, ...)` made all five in the workspace | Makes each where `cfg` reads it from, and none when given `catalogue=`: whoever staged that catalogue made its folders. |
+| `LAYOUT_DIRS` in `kingfisher.layout` named the five kinds beside `sessions` and `.kingfisher` | Names only `sessions` and `.kingfisher`, which are always in the workspace. |
+| `STARTER_AGENT` in `kingfisher.infrastructure.workspace` | `starter_agent(agents_dir)`, which names the directory it is given. Neither was exported from `kingfisher`. |
+
+- **A folder an earlier start made in the workspace stays**, empty or not. If a
+  setting moves that kind elsewhere, nothing reads it, so delete it.
+- **Messages name where a kind is read from.** A workspace with no agents says to
+  write one in the directory agents are read from, not in `agents/`. The help for
+  `run --agent` and the refusal of an unknown `source:` no longer call a kind's
+  folder the workspace's.
+
+## Session ids refused unless they are one path segment, after #664
+
+`DefaultBackends` refuses a session id that is not one path segment (empty, `.`,
+`..`, or holding `/` or NUL) wherever it builds a path from one: `open`,
+`mark_used`, `size` and `delete` (#665). The refusal is the `UnknownSessionError` an
+id nobody issued gets. Such an id used to act on whatever path it formed:
+`files_for("..")` laid a session out in the workspace's own folder, an absolute id
+laid one out wherever it pointed, and `DefaultBackends.delete(cfg, "")` removed every
+session in the workspace and reported success.
+
+- **Every id kingfisher issued passes**, as does every folder under `sessions/`.
+- **Session backends of your own are not checked for you**, unless they subclass
+  `DefaultBackends` and call through to it. Kingfisher hands them only ids it issued
+  or they listed, except `Kingfisher.session_size`, which passes on the id it is given.
+
+## `files_for` opens only a session a turn issued, after #663
+
+`Kingfisher.files_for(id)` and `afiles_for` refuse an id your session backends don't
+list, with the `UnknownSessionError` a turn naming it gets, and open nothing (#664).
+They used to open it through `open`, which makes a session it is asked for, so an id
+the caller made up became a session a later turn accepted.
+
+- **If you called `files_for` to start a session under an id of your choosing**, run
+  the session's first turn with no `session_id` and no `files=`, then call
+  `files_for` with the `session_id` its result carries. A session's id is only ever
+  one kingfisher issued.
 
 ## Session backends always given, after #639
 
@@ -292,6 +356,7 @@ backend* and *A tool's path is the backend's path*, explains why.
 | Message | Cause | Fix |
 |---|---|---|
 | `… was laid out by kingfisher layout 2, and this is layout 3 …` | The workspace still holds sessions from before `data/` and `derived/` were renamed | Delete what the message lists, or use a new workspace; see *Session folders named for which way files go* |
+| `UnknownSessionError: no session '…'; omit session_id to start one`, from `files_for` | An id no turn issued, such as one made up to start a session, or one that is not a single path segment | Run the session's first turn without `files=`, then open the id its result carries; see *`files_for` opens only a session a turn issued* |
 | `KINGFISHER_SESSION_STORE was removed: …` | The old store setting is still set | Unset it; see *Settings* |
 | `TypeError: backends= takes a SessionBackends …` | A plain factory function, or one backend, passed as `backends=` | Subclass `DefaultBackends` |
 | `TypeError: … missing 1 required keyword-only argument: 'backends'` | `Kingfisher(...)` called without `backends=`, with or without a graph | Pass `backends=default_backends`, or session backends of your own; see *Session backends always given* |
