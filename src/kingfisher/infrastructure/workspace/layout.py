@@ -15,6 +15,7 @@ from kingfisher.layout import (
     LAYOUT_VERSION,
     MARKER,
     MARKER_TEXT,
+    SESSION_ID_RECORD,
 )
 
 #: Where the shipped templates sit, as an import path rather than a filesystem one -- an
@@ -118,8 +119,10 @@ def check_layout(workspace: Path) -> None:
 SESSIONS_NAMED = 3
 
 
-def check_sessions(workspace: Path, *, one_session: bool) -> None:
-    """Refuse a `sessions/` laid out for the other mode.
+def check_sessions(workspace: Path, *, only: str | None) -> None:
+    """Refuse a `sessions/` laid out for the other mode, or for a session other than
+    `only`: the id a workspace holding one session is configured with, or `None` where
+    it holds any number.
 
     Read off `.harness/` and nothing else, because no agent can make or remove one where
     this looks: a session's own is denied to its shell under every fence, and so is
@@ -129,6 +132,7 @@ def check_sessions(workspace: Path, *, one_session: bool) -> None:
     """
     sessions = sessions_root(workspace)
     own = (sessions / HARNESS).is_dir()
+    one_session = only is not None
     if not one_session and own:
         msg = (
             f"{sessions} holds one session laid out directly in it -- {HARNESS}/ is there "
@@ -138,6 +142,21 @@ def check_sessions(workspace: Path, *, one_session: bool) -> None:
             f"{sessions}, or point KINGFISHER_WORKSPACE at another workspace"
         )
         raise ConfigError(msg)
+    if one_session and own:
+        recorded = _recorded_id(sessions)
+        # Missing is let through rather than refused: a `sessions/` laid out before the
+        # id was recorded holds none, and `record_session_id` gives it one on its next
+        # open.
+        if recorded is not None and recorded != only:
+            msg = (
+                f"KINGFISHER_SESSION_ID is {only!r}, and {sessions} holds the session laid "
+                f"out for {recorded!r}. Opened under {only!r}, that conversation, its agent "
+                f"and its memory would carry on under the new id, and a caller holding "
+                f"{recorded!r} would be refused. Set KINGFISHER_SESSION_ID back to "
+                f"{recorded!r}, clear {sessions} to start {only!r} afresh, or point "
+                "KINGFISHER_WORKSPACE at another workspace"
+            )
+            raise ConfigError(msg)
     # Only while there is no `.harness/` of its own. Once there is, `sessions/` is the
     # one session and a folder in it is that session's, whatever the agent put inside
     # it: a file tool writes `/outputs/.harness/notes.md` as readily as anything else.
@@ -157,12 +176,25 @@ def check_sessions(workspace: Path, *, one_session: bool) -> None:
         raise ConfigError(msg)
 
 
+def _recorded_id(session: Path) -> str | None:
+    """The id this session was laid out for, or `None` where none was recorded."""
+    try:
+        return (session / HARNESS / SESSION_ID_RECORD).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+
+
+def record_session_id(session: Path, session_id: str) -> None:
+    """Record that `session` was laid out for `session_id`, unless something already is."""
+    if _recorded_id(session) is None:
+        (session / HARNESS / SESSION_ID_RECORD).write_text(session_id, encoding="utf-8")
+
+
 def ensure_layout(
     workspace: Path,
     *,
     authored: Mapping[str, Path] | None = None,
     catalogue_roots: Mapping[str, Path] | None = None,
-    one_session: bool | None = None,
 ) -> Path:
     """Create the workspace layout, and each kind's folder where it is read from. Idempotent.
 
@@ -182,11 +214,6 @@ def ensure_layout(
     # is refused rather than half-relaid. An empty path has no marker and is not
     # an old workspace; `check_layout` says nothing about it.
     check_layout(workspace)
-    # Asked only by a caller that says which mode it serves sessions in. Seeding serves
-    # none and reads no session setting, so in a workspace holding one session it would
-    # be refused for the mode it never asked about.
-    if one_session is not None:
-        check_sessions(workspace, one_session=one_session)
     for name in LAYOUT_DIRS:
         (workspace / name).mkdir(parents=True, exist_ok=True)
     # Where the catalogue is read from and nowhere else: a kind that was moved gets no

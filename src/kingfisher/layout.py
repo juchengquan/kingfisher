@@ -96,6 +96,10 @@ PAUSED_STATE = "paused.state"
 #: is not: a checkpoint written by libraries that have since moved is exactly the
 #: case this answers, and answering it means reading this without reading that.
 PAUSED_MARK = "paused.json"
+#: Which id `sessions/` was laid out for, in a workspace holding one session. Without
+#: it a changed `KINGFISHER_SESSION_ID` maps onto the same folder, and the new id
+#: carries on the old one's conversation, agent and memory as its own.
+SESSION_ID_RECORD = "session-id"
 
 #: What a run produces and would lose. `/inputs` is read-only and came from the
 #: caller; `/scratchpad` is disposable and says so. These two are the ones the agent

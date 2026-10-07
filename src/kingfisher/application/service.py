@@ -136,6 +136,7 @@ from kingfisher.infrastructure.workspace import (
     ensure_layout,
     starter_agent,
 )
+from kingfisher.infrastructure.workspace.layout import check_sessions
 from kingfisher.kinds.agents.reading import read
 from kingfisher.kinds.agents.spec import AgentSpec
 from kingfisher.layout import CLAIM, PAUSED_STATE
@@ -250,6 +251,11 @@ class Kingfisher(Sessions, Disposal):
         # one process is refused where the service is built.
         self._pool = thread_pool(self.cfg.thread_pool_size)
 
+        # Before anything is made, and here rather than inside `ensure_layout`, because
+        # this is the caller serving sessions under a setting. Seeding lays the workspace
+        # out too, reads no session setting, and asked would refuse a workspace holding
+        # one session for a setting it never read.
+        check_sessions(self.cfg.workspace, only=self.cfg.session_id)
         # Only what sessions share. Each session's own layout is made per
         # request, because its path is not known until the request names it.
         self.workspace: Path = ensure_layout(
@@ -259,7 +265,6 @@ class Kingfisher(Sessions, Disposal):
             # the configured ones are not read, so one made there would be a place to
             # put a definition that never loads.
             catalogue_roots=self.cfg.catalogue_roots if catalogue is None else {},
-            one_session=self.cfg.session_id is not None,
         )
 
         # Where the reviewed definitions are read from, settled once. Omitted,
