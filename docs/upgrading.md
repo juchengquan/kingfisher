@@ -17,6 +17,28 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## One session per workspace, after #671
+
+A workspace can hold exactly one session (#672). Nothing changes unless you set
+`KINGFISHER_SESSION_ID`; set it, and the workspace holds that one session, laid out
+in `sessions/` itself rather than in `sessions/<id>/`.
+
+- **A request naming no session runs in that one**, and its result carries the
+  configured id. A request naming any other id is refused as an unissued one is.
+  `delete_session` and `reap` empty `sessions/` rather than removing it, and the next
+  turn starts a fresh conversation under the same id.
+- **A workspace is used one way or the other.** Turning the setting on for a
+  workspace whose `sessions/` holds sessions of their own is refused at startup, and
+  so is turning it off for one laid out by it. Clear `sessions/`, or use another
+  workspace.
+- **Session backends of your own** are handed the same `cfg`, and a request naming
+  no id runs under `cfg.session_id`. List that id from `sessions(cfg)` if a first turn
+  may name it, or the turn is refused. `SESSION_BACKENDS_CONTRACT` opens several ids,
+  so it cannot pass against backends serving this mode.
+- **On macOS, a shell in a shared workspace can no longer make `sessions/.harness`.**
+  Its presence is how a workspace holding one session is told apart, so a shell able
+  to make it could lock the workspace. Nothing legitimate wrote there.
+
 ## A caller's files named for `inputs/`, after #668
 
 The names for the files a caller hands a turn follow the folder they land in. The
@@ -373,6 +395,8 @@ backend* and *A tool's path is the backend's path*, explains why.
 | `… was laid out by kingfisher layout 2, and this is layout 3 …` | The workspace still holds sessions from before `data/` and `derived/` were renamed | Delete what the message lists, or use a new workspace; see *Session folders named for which way files go* |
 | `UnknownSessionError: no session '…'; omit session_id to start one`, from `files_for` | An id no turn issued, such as one made up to start a session, or one that is not a single path segment | Run the session's first turn without `files=`, then open the id its result carries; see *`files_for` opens only a session a turn issued* |
 | `HostPathError: '…' is a host path, and file tools take virtual paths rooted at the workspace — …` | A file tool given an absolute path under the workspace but outside this session, such as another session's file or `models.yaml` | Use a virtual path, or the shell for host paths; see *Host paths refused anywhere under the workspace* |
+| `… holds one session laid out directly in it -- .harness/ is there -- …` | `KINGFISHER_SESSION_ID` is unset on a workspace that was run with it | Set it to that session's id, clear `sessions/`, or use another workspace; see *One session per workspace* |
+| `KINGFISHER_SESSION_ID is set, and … holds sessions of their own -- …` | The setting was turned on for a workspace that already holds sessions | Clear `sessions/`, unset it, or use another workspace; see *One session per workspace* |
 | `KINGFISHER_SESSION_STORE was removed: …` | The old store setting is still set | Unset it; see *Settings* |
 | `TypeError: backends= takes a SessionBackends …` | A plain factory function, or one backend, passed as `backends=` | Subclass `DefaultBackends` |
 | `TypeError: … missing 1 required keyword-only argument: 'backends'` | `Kingfisher(...)` called without `backends=`, with or without a graph | Pass `backends=default_backends`, or session backends of your own; see *Session backends always given* |
