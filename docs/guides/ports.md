@@ -206,7 +206,10 @@ keeps each session as a directory under `<workspace>/sessions`, and refuses an i
 that is not one name in it — empty, `.`, `..`, or holding `/` or NUL — with
 the `UnknownSessionError` an id nobody issued gets. Where `KINGFISHER_SESSION_ID`
 is set, it keeps that one session in `<workspace>/sessions` itself, lists it
-whether or not a turn has run, and refuses every other id the same way.
+whether or not a turn has run, and refuses every other id the same way. Session
+backends of your own are handed the same `cfg`, and a request naming no id runs under
+`cfg.session_id`: list it from `sessions(cfg)` if a first turn may name it, or that
+turn is refused as naming an id nobody issued.
 
 **Try a mount before replacing it.** Sessions that must outlive the machine, or
 never touch its disk, get durable or memory-backed storage mounted at
