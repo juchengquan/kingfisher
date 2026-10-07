@@ -2323,6 +2323,34 @@ guidelines deepagents appends beside it still say "future conversations":
 `create_deep_agent` builds `MemoryMiddleware` without passing its `system_prompt`,
 so that text is the library's and is not changed here. *(2026-10-07.)*
 
+**A session id is one path segment, checked where it becomes a path.** Nothing
+checked it. A turn never met the gap, because it accepts only an id the backends
+already list, but `files_for`, `session_size` and `DefaultBackends`' own `mark_used`,
+`size` and `delete` joined the id onto `sessions/` as given. Measured:
+`files_for("..")` laid a session out in the workspace's own folder, an absolute id
+laid one out wherever it pointed, and `DefaultBackends.delete(cfg, "")` removed every
+session in the workspace and reported success. So `session_dir` refuses it rather
+than any one door: a door is one caller, and every path built from an id is built
+there, `open`'s and `delete`'s included.
+
+**One segment means a POSIX file name**: not empty, not `.` or `..`, and holding
+neither `/` nor NUL. `\` was weighed and is allowed. Windows paths and URL parsers
+read it as `/`, but every folder under `sessions/` is listed as a session and POSIX
+lets a folder be named with one. Refused, such a session was listed and could never
+be opened, and `reap`, which opens each expired session to ask whether a turn holds
+it, raised there and swept nothing. A rule narrower than the filesystem's names makes
+sessions nothing can remove; covering Windows would take `:` and its reserved names
+as well, for a host none of kingfisher's fences runs on.
+
+**The refusal is `UnknownSessionError`, worded as an unissued id's.** It is one: no
+session could have been given such an id. And every caller already handles that
+answer -- the command line reports it among its `REFUSALS` rather than as a
+traceback, and a deployment that maps it to a 404 needs nothing new -- where a
+`ValueError` of its own would be a second way of saying "no such session" for each
+of them to learn. The rule is `is_one_path_segment`, apart from the refusal, so that
+a setting naming a session can be held to it and refused in its own words.
+*(2026-10-07.)*
+
 ## Wiring a store
 
 *Much of this was reversed on 2026-09-30: `SessionStore` and `SessionRoot` are gone,

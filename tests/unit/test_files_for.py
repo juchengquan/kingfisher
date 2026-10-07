@@ -15,6 +15,7 @@ from kingfisher.infrastructure.harness.backend import DefaultBackends
 from tests.conftest import StubCheckpointer, Through, an_agent, start
 from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
+from tests.unit.test_session import NOT_ONE_SEGMENT
 from tests.unit.test_session_files import Elsewhere, _calls
 
 DOORS = ("stream", "astream", "run", "arun")
@@ -92,6 +93,28 @@ def test_files_for_opens_the_session_with_the_deployments_runner(cfg, way):
     assert files is counting.opened[0]
     assert counting.asked == ["s"]
     assert built == [(session_dir(cfg.workspace, "s"), files.default.runner)]
+
+
+@pytest.mark.parametrize("session_id", NOT_ONE_SEGMENT)
+def test_files_for_an_id_that_is_not_one_path_segment_lays_nothing_out(
+    cfg, tmp_path, way, session_id
+):
+    """`files_for("..")` laid a session out in the workspace's own folder, and an
+    absolute id one wherever it pointed, where `pending` refused both as ids nobody issued.
+    """
+    # Under `tmp_path`, so an escape lands where this test looks rather than in `/etc`.
+    if session_id.startswith("/"):
+        session_id = str(tmp_path / "escaped")
+    kf = Kingfisher(cfg, backends=DefaultBackends())
+    before = sorted(tmp_path.rglob("*"))
+
+    with pytest.raises(UnknownSessionError) as refused:
+        Through(kf, way).files_for(session_id)
+    with pytest.raises(UnknownSessionError) as unissued:
+        Through(kf, way).pending(session_id)
+
+    assert sorted(tmp_path.rglob("*")) == before
+    assert str(refused.value) == str(unissued.value)
 
 
 @pytest.mark.parametrize("door", DOORS)

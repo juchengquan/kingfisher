@@ -46,8 +46,29 @@ def sessions_root(workspace: Path | str) -> Path:
     return Path(workspace) / "sessions"
 
 
+def unknown_session(session_id: str) -> UnknownSessionError:
+    """The refusal for an id nobody issued, and for a session this caller may not touch.
+    One wording for both, so that holding a real id teaches nothing -- and for an id
+    that could not name a session, which nobody could have issued either.
+    """
+    return UnknownSessionError(f"no session {session_id!r}; omit session_id to start one")
+
+
+def is_one_path_segment(session_id: str) -> bool:
+    """Whether a session id names one entry in a directory, and nowhere else."""
+    # A POSIX file name, and nothing narrower: every folder under `sessions/` is listed
+    # as a session, and one whose name this refused could never be opened -- `reap`
+    # would stop at it and sweep nothing.
+    return session_id not in {"", ".", ".."} and "/" not in session_id and "\0" not in session_id
+
+
 def session_dir(workspace: Path | str, session_id: str) -> Path:
     """Where a workspace keeps one session."""
+    # Here rather than at a door, because every path built from an id is built here --
+    # `open` makes folders where it points and `delete` removes them. Joined as given,
+    # `""` is every session, `..` the workspace, and an absolute id replaces the path.
+    if not is_one_path_segment(session_id):
+        raise unknown_session(session_id)
     return sessions_root(workspace) / session_id
 
 

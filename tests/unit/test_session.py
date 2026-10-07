@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from kingfisher.domain.session import Session, session_dir
+from uuid import uuid4
+
+import pytest
+
+from kingfisher.domain.session import Session, UnknownSessionError, session_dir
+
+#: One of each form of id that is not one path segment.
+NOT_ONE_SEGMENT = ("", ".", "..", "../../escaped", "/etc", "a/b", "a\x00b")
 
 
 def test_a_callers_own_turn_id_wins():
@@ -34,6 +41,23 @@ def test_a_session_directory_is_the_default_backends_root(workspace):
     address outside that root.
     """
     assert session_dir(workspace, "s1") == workspace / "sessions" / "s1"
+
+
+@pytest.mark.parametrize("session_id", NOT_ONE_SEGMENT)
+def test_an_id_that_is_not_one_path_segment_names_no_session(workspace, session_id):
+    """Joined as given, `""` named every session -- `DefaultBackends.delete(cfg, "")`
+    removed them all and reported success -- and `..` or an absolute id named somewhere
+    outside them.
+    """
+    with pytest.raises(UnknownSessionError, match="omit session_id to start one"):
+        session_dir(workspace, session_id)
+
+
+def test_an_id_kingfisher_issues_is_one_path_segment(workspace):
+    """The control beside the refusals: a rule refusing every id would pass all of them."""
+    issued = uuid4().hex
+
+    assert session_dir(workspace, issued) == workspace / "sessions" / issued
 
 
 def test_the_turn_message_names_both_forms_of_the_scratch_path(workspace):
