@@ -369,6 +369,12 @@ class Config:
     # mistyped or emptied source is the likeliest thing standing between an
     # install and a run once the definitions stop arriving with the wheel.
     assets: Path | None = None
+    # The one session this workspace holds, or `None` for a workspace holding any
+    # number. Set, kingfisher's own backends keep that session in `sessions/` itself
+    # and know no other id, and a request naming none runs in it. A setting rather than
+    # an argument to `DefaultBackends`, because `default_backends` is one object
+    # serving every workspace and is handed this `Config` on every call.
+    session_id: str | None = None
     # The session backends the command line runs on, named rather than built here:
     # `module:name` for something callable with no arguments that returns a
     # `SessionBackends`. Only the command line reads it -- `Kingfisher` takes them as

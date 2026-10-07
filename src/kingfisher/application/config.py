@@ -15,6 +15,7 @@ from kingfisher.config import (
     ConfigError,
     WorkspacePaths,
 )
+from kingfisher.domain.session import is_one_path_segment
 from kingfisher.infrastructure import access_policy, model_catalogue
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
@@ -106,6 +107,20 @@ class Environment:
         """A string this deployment may or may not have set."""
         raw = (self.values.get(key) or "").strip()
         return raw or None
+
+    def session_id(self) -> str | None:
+        """The one session this workspace holds, or `None` where it holds any number."""
+        found = self.optional_text("KINGFISHER_SESSION_ID")
+        # Held to the rule every issued id meets, though this one is never joined onto a
+        # path -- `sessions/` is the session whatever it is called. A caller hands it on
+        # wherever it hands any other id.
+        if found is not None and not is_one_path_segment(found):
+            msg = (
+                f"KINGFISHER_SESSION_ID is {found!r}, and a session id is one name: "
+                "not '.' or '..', and holding neither '/' nor NUL"
+            )
+            raise ConfigError(msg)
+        return found
 
     def paths(self) -> WorkspacePaths:
         """Where this deployment keeps things, without reading the model catalogue."""
@@ -200,6 +215,7 @@ class Environment:
             middlewares_root=paths.middlewares_root,
             skills_mounts=paths.skills_mounts,
             assets=paths.assets,
+            session_id=self.session_id(),
             session_backends_factory=self.optional_text("KINGFISHER_SESSION_BACKENDS_FACTORY"),
             skills_enabled=self.flag("KINGFISHER_SKILLS_ENABLED"),
             memory_enabled=self.flag("KINGFISHER_MEMORY_ENABLED"),

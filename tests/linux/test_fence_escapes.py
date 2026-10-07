@@ -216,6 +216,32 @@ def test_the_shell_cannot_write_the_sessions_own_harness(two_sessions):
 
 
 @needs_landlock
+def test_the_shell_cannot_write_the_harness_of_a_workspace_holding_one_session(cfg):
+    """There the session is `sessions/` itself, so the policy is generated from the
+    folder every session used to sit in -- driven through `default_backends`, which is
+    what decides that, rather than handed a path.
+    """
+    from dataclasses import replace
+
+    from kingfisher import default_backends
+    from kingfisher.layout import HARNESS
+
+    one = replace(cfg, session_id="the-one")
+    shell = default_backends.open(one, "the-one")
+    harness = one.workspace / "sessions" / HARNESS
+    pinned = harness / "agent.yaml"
+    pinned.write_text("name: pinned\n", encoding="utf-8")
+
+    shell.execute(f'printf "name: mine" > {pinned}')
+    shell.execute(f"rm -rf {harness}")
+
+    assert pinned.read_text(encoding="utf-8") == "name: pinned\n", (
+        "the shell rewrote the agent definition the one session is pinned to"
+    )
+    assert shell.execute("echo fine > outputs/ok.txt").exit_code == 0
+
+
+@needs_landlock
 def test_the_rest_of_the_session_stays_writable(two_sessions):
     """The bound on the rule above: one directory is left out of the grants, not the
     session's own.

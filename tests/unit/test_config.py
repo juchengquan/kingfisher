@@ -12,6 +12,7 @@ from kingfisher.config import DEFAULT_THREAD_POOL_SIZE, ConfigError
 from kingfisher.domain.access import AccessError
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from tests.conftest import FAKE_CATALOGUE, subagents_dir
+from tests.unit.test_session import NOT_ONE_SEGMENT
 
 CATALOGUE = """
 endpoints:
@@ -611,3 +612,20 @@ def test_the_two_forms_of_the_test_catalogue_agree(tmp_path):
     assert {n: (e.api, e.base_url, e.key_env) for n, e in loaded.endpoints.items()} == {
         n: (e.api, e.base_url, e.key_env) for n, e in FAKE_CATALOGUE.endpoints.items()
     }
+
+
+# -- a workspace holding one session ---------------------------------------
+
+
+@pytest.mark.parametrize("session_id", [bad for bad in NOT_ONE_SEGMENT if bad])
+def test_a_session_id_that_is_not_one_name_is_refused_at_startup(env, session_id):
+    """A value that is not one path segment started the workspace, where every other way
+    an id arrives refuses it."""
+    with pytest.raises(ConfigError, match="KINGFISHER_SESSION_ID"):
+        config_from_env({**env, "KINGFISHER_SESSION_ID": session_id})
+
+
+def test_a_session_id_that_is_one_name_is_read(env):
+    """The control beside the refusals: a rule refusing every value passes all of them."""
+    assert config_from_env({**env, "KINGFISHER_SESSION_ID": "the-one"}).session_id == "the-one"
+    assert config_from_env(env).session_id is None

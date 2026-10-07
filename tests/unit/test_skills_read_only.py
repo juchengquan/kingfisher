@@ -7,6 +7,7 @@ It was writable. Measured against a catalogue on disk, `backend.write` created
 from __future__ import annotations
 
 import platform
+from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -159,7 +160,7 @@ def test_a_profile_with_nothing_protected_is_unchanged(tmp_path):
     """The parameter defaults to empty, so a caller that names nothing gets the profile
     it always got.
     """
-    args = {"home": tmp_path / "home", "workspace": tmp_path / "ws",
+    args: dict[str, Any] = {"home": tmp_path / "home", "workspace": tmp_path / "ws",
             "readable": (tmp_path / "ws",), "writable": (tmp_path / "ws",),
             "itself": tmp_path / "ws" / ".kingfisher" / "shell.sb"}
 
