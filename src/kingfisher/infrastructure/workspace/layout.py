@@ -134,11 +134,15 @@ def check_sessions(workspace: Path, *, only: str | None) -> None:
     own = (sessions / HARNESS).is_dir()
     one_session = only is not None
     if not one_session and own:
+        recorded = _recorded_id(sessions)
+        # The record is the only place the id is still written down once the setting is
+        # gone, so a refusal that sends the operator to set it has to say what to.
+        to = "that session's id" if recorded is None else repr(recorded)
         msg = (
             f"{sessions} holds one session laid out directly in it -- {HARNESS}/ is there "
             "-- which is how a workspace with KINGFISHER_SESSION_ID set keeps its session. "
             "With it unset, every folder in there is listed as a session of its own, and "
-            "reap deletes them. Set KINGFISHER_SESSION_ID to that session's id, clear "
+            f"reap deletes them. Set KINGFISHER_SESSION_ID to {to}, clear "
             f"{sessions}, or point KINGFISHER_WORKSPACE at another workspace"
         )
         raise ConfigError(msg)

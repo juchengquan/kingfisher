@@ -263,6 +263,26 @@ def test_many_sessions_refuse_a_workspace_holding_one(cfg, one):
         default_backends.sessions(cfg)
 
 
+def test_unsetting_the_id_is_told_what_it_was(cfg, one):
+    """With the setting gone, the record is the one place its value survives, and a
+    refusal saying "set it to that session's id" sends the operator hunting for it.
+    """
+    default_backends.open(one, THE_ONE)
+
+    with pytest.raises(ConfigError, match=f"KINGFISHER_SESSION_ID to '{THE_ONE}'"):
+        Kingfisher(cfg, backends=default_backends)
+
+
+def test_a_session_laid_out_before_the_record_is_still_refused_without_one(cfg):
+    """A `sessions/` from before ids were recorded has none to name, and must not be let
+    through for lacking it.
+    """
+    ensure_session_layout(cfg.workspace / "sessions")
+
+    with pytest.raises(ConfigError, match="that session's id"):
+        Kingfisher(cfg, backends=default_backends)
+
+
 def test_a_stray_folder_at_the_session_root_does_not_lock_the_workspace(one):
     """Under bubblewrap and on macOS the shell may `mkdir` where it starts, which here is
     `sessions/` -- so a refusal of anything but the session's own folders would let one
