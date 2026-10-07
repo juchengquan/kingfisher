@@ -471,12 +471,23 @@ class Kingfisher(Sessions, Disposal):
         to the turn as `files=` and the turn runs on it rather than opening another,
         which on a remote backend is a second sandbox. Nothing here asks who the
         caller is acting for -- the turn still does, through the backend it is handed.
+
+        An id no turn issued is refused with `UnknownSessionError`, as a turn naming
+        it is.
         """
-        return drive(self._files_for(session_id))
+        return drive(self._issued_files_for(session_id))
 
     async def afiles_for(self, session_id: str) -> Any:
         """`files_for`, for a caller on an event loop."""
-        return await adrive(self._files_for(session_id))
+        return await adrive(self._issued_files_for(session_id))
+
+    def _issued_files_for(self, session_id: str) -> Steps[Any]:
+        # `open` makes a session it is asked for, and a turn accepts any id the listing
+        # holds, so opening an unlisted id would start a session under a name the
+        # caller chose. Checked here and not in `_files_for`, because a turn opens the
+        # session it has just minted, which no listing holds yet.
+        yield from self._refuse_if_unissued(session_id)
+        return (yield from self._files_for(session_id))
 
     def pending(
         self, session_id: str, *, source_ids: Held | None = None

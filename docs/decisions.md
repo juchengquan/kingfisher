@@ -3709,7 +3709,20 @@ holding rather than opening one itself. The pre-turn route had cost a data-loss
 bug twice over -- a stub session laid out under the workspace whatever
 `session_root` answered, swept by `reap` out of its own store, and a pin written
 where a custom root's turn would not look -- and what is left cannot produce
-either. *(2026-09-16.)*
+either. *(2026-09-16.)* *Reopened by `files_for` 2026-10-05 and closed again
+2026-10-07, next entry.*
+
+**`files_for` opens only a session a turn issued.** It was added so a caller could
+open a session's backend once and hand it to the turn, and it opened through the
+session backends' `open`, which makes a session it is asked for. So an id the
+caller made up became a session the listing held, and a turn naming it was
+accepted: the route the entry above closed, back by another door. `files_for` and
+`afiles_for` now ask the listing a turn asks and refuse an id it lacks with the same
+`UnknownSessionError`, before anything is opened, so a refusal leaves nothing for a
+later turn to accept. The check is at those two doors and not in `_files_for`,
+where it would refuse every turn that starts a session -- that turn opens the id it
+has just minted -- and repeat a question `reap` and the session reads have just
+asked. *(2026-10-07.)*
 
 **Taken: definitions passed by id go.** `Request.skill_refs` and
 `subagent_refs` let a caller send catalogue ids for skills and subagents of its

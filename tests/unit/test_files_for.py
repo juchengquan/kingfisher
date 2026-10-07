@@ -7,12 +7,12 @@ import asyncio
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import Kingfisher, Request
+from kingfisher import Kingfisher, Request, UnknownSessionError
 from kingfisher.application import service as service_module
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.session import session_dir
 from kingfisher.infrastructure.harness.backend import DefaultBackends
-from tests.conftest import StubCheckpointer, Through, an_agent
+from tests.conftest import StubCheckpointer, Through, an_agent, start
 from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
 from tests.unit.test_session_files import Elsewhere, _calls
@@ -85,6 +85,7 @@ def test_files_for_opens_the_session_with_the_deployments_runner(cfg, way):
 
     counting = Counting(runner=runner)
     kf = Kingfisher(cfg, backends=counting)
+    start(cfg, "s")
 
     files = Through(kf, way).files_for("s")
 
@@ -109,6 +110,7 @@ def test_a_turn_handed_its_files_opens_no_others(cfg, monkeypatch, door, way):
     named = an_agent(cfg)
     counting = Counting()
     kf = Kingfisher(cfg, backends=counting, threads=StubCheckpointer())
+    start(cfg, "s")
     files = Through(kf, way).files_for("s")
 
     result = _turn(kf, door, Request("go", agent=named, session_id="s"), files=files)
@@ -129,6 +131,7 @@ def test_the_callers_backend_is_the_one_the_agent_works_in(scripted, tmp_path):
         AIMessage(content="done"),
     ])
     sandboxes = Sandboxes(tmp_path / "remote")
+    (sandboxes.root / "s").mkdir(parents=True)  # listed, as a turn would leave it
     kf = Kingfisher(scripted, backends=sandboxes)
     files = kf.files_for("s")
     files.upload_files([("/data/brief.md", b"the brief")])
@@ -151,6 +154,7 @@ def test_files_for_a_request_that_names_no_session_are_refused(cfg, door):
     named = an_agent(cfg)
     counting = Counting()
     kf = Kingfisher(cfg, backends=counting, threads=StubCheckpointer())
+    start(cfg, "s")
     files = kf.files_for("s")
 
     with pytest.raises(ValueError, match="names no session"):
@@ -158,3 +162,32 @@ def test_files_for_a_request_that_names_no_session_are_refused(cfg, door):
 
     assert counting.asked == ["s"]
     assert [s.id for s in kf.sessions()] == ["s"]
+
+
+def test_files_for_an_id_nobody_issued_is_refused_and_makes_nothing(cfg, way):
+    """Opening an id nobody issued made its session, so a caller could start one under a
+    name of its choosing and a turn naming it was accepted.
+    """
+    counting = Counting()
+    kf = Kingfisher(cfg, backends=counting)
+
+    with pytest.raises(UnknownSessionError, match="no session 'invented'"):
+        Through(kf, way).files_for("invented")
+
+    assert counting.asked == []
+    assert kf.sessions() == ()
+    assert not session_dir(cfg.workspace, "invented").exists()
+
+
+def test_files_for_an_id_a_turn_issued_opens_it(cfg, way):
+    """The control: a refusal that caught an issued id too would leave `files=` nothing
+    it could be opened for.
+    """
+    counting = Counting()
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=counting, threads=StubCheckpointer())
+    issued = kf.run(Request("go")).session_id
+
+    files = Through(kf, way).files_for(issued)
+
+    assert counting.asked == [issued, issued]
+    assert files is counting.opened[-1]
