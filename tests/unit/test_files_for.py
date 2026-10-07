@@ -149,22 +149,22 @@ def test_the_callers_backend_is_the_one_the_agent_works_in(scripted, tmp_path):
     """
     an_agent(scripted)
     Scripted.script.extend([
-        _calls("read_file", file_path="/data/brief.md"),
-        _calls("write_file", file_path="/derived/report.txt", content="made from the brief"),
+        _calls("read_file", file_path="/inputs/brief.md"),
+        _calls("write_file", file_path="/outputs/report.txt", content="made from the brief"),
         AIMessage(content="done"),
     ])
     sandboxes = Sandboxes(tmp_path / "remote")
     (sandboxes.root / "s").mkdir(parents=True)  # listed, as a turn would leave it
     kf = Kingfisher(scripted, backends=sandboxes)
     files = kf.files_for("s")
-    files.upload_files([("/data/brief.md", b"the brief")])
+    files.upload_files([("/inputs/brief.md", b"the brief")])
 
     events = list(kf.stream(Request("go", agent="only", session_id="s"), files=files))
 
     read = next(e.text for e in events if e.kind == "tool_result" and e.tool == "read_file")
     assert "the brief" in read, f"the agent never saw what the caller put in: {read!r}"
-    assert "derived/report.txt" in events[-1].result.artifacts
-    (fetched,) = files.download_files(["/derived/report.txt"])
+    assert "outputs/report.txt" in events[-1].result.artifacts
+    (fetched,) = files.download_files(["/outputs/report.txt"])
     assert fetched.content == b"made from the brief"
     assert sandboxes.count == 1
 

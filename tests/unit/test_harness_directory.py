@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import platform
 import re
+import shutil
 from pathlib import Path
 
 import pytest
@@ -106,7 +107,7 @@ def test_a_listing_does_not_show_the_harness(cfg, session_dir):
     """
     said = _drive(cfg, session_dir, "ls", {"path": "/"})
 
-    assert "derived" in said, said
+    assert "outputs" in said, said
     assert ".harness" not in said, said
 
 
@@ -133,7 +134,7 @@ def test_the_shell_can_still_write_the_rest_of_the_session(cfg, session_dir):
     """The bound on the rule: one directory is carved out, not the session."""
     shell = backend_at(cfg, session_dir)
 
-    assert shell.execute(f'echo fine > "{session_dir}/derived/ok.txt"').exit_code == 0
+    assert shell.execute(f'echo fine > "{session_dir}/outputs/ok.txt"').exit_code == 0
     assert shell.execute('echo fine > "$TMPDIR/ok.txt"').exit_code == 0
 
 
@@ -145,7 +146,7 @@ def test_one_session_s_harness_is_not_denied_by_naming_another(cfg, workspace):
     from kingfisher.infrastructure.workspace import ensure_session_layout
 
     session = ensure_session_layout(workspace / "sessions" / "second")
-    decoy = session / "derived" / ".harness"
+    decoy = session / "outputs" / ".harness"
     decoy.mkdir(parents=True, exist_ok=True)
     shell = backend_at(cfg, session)
 
@@ -198,46 +199,64 @@ def test_the_harness_owned_directory_is_protected_too(cfg):
 LAYOUT_1_STATE = (".kingfisher/agents", ".kingfisher/runs", ".kingfisher/claims", ".kingfisher/tmp")
 
 
-def _laid_out_by_layout_1(workspace, *left):
+def _laid_out_by(layout, workspace, *left):
+    """A workspace an older version made, with `left` still where it wrote it."""
     (workspace / ".kingfisher").mkdir(parents=True)
-    (workspace / MARKER).write_text("kingfisher workspace\n", encoding="utf-8")
+    # Layout 1's marker carried no number, which is how it is told apart.
+    number = "" if layout == 1 else f"layout {layout}\n"
+    (workspace / MARKER).write_text(f"kingfisher workspace\n{number}", encoding="utf-8")
     for one in left:
         (workspace / one).mkdir(parents=True)
     return workspace
 
 
-@pytest.mark.parametrize("left", ["sessions/abc", *LAYOUT_1_STATE])
-def test_an_older_workspace_is_refused_rather_than_silently_relaid(tmp_path, left):
-    """Silence is the danger, not breakage. Code looking in `.harness` for a pin that
-    is still at the old path does not error -- it finds none and re-pins, possibly
-    under a different agent, and finds no transcript and starts the conversation
-    again from nothing.
+@pytest.mark.parametrize(
+    ("layout", "left"),
+    [(1, "sessions/abc"), *((1, one) for one in LAYOUT_1_STATE), (2, "sessions/abc")],
+)
+def test_an_older_workspace_is_refused_rather_than_silently_relaid(tmp_path, layout, left):
+    """Silence is the danger, not breakage. Code looking for a session's files where
+    this layout keeps them does not error -- it finds no pin and re-pins, finds no
+    transcript and starts again, finds no inputs and says nothing.
     """
-    workspace = _laid_out_by_layout_1(tmp_path / "old", left)
+    workspace = _laid_out_by(layout, tmp_path / "old", left)
 
-    with pytest.raises(ConfigError, match="layout 1"):
+    with pytest.raises(ConfigError, match=f"layout {layout}"):
         ensure_layout(workspace)
 
 
-def test_doing_what_the_refusal_says_clears_it(tmp_path):
+@pytest.mark.parametrize(
+    ("layout", "left"),
+    [
+        (1, ("sessions/abc", *LAYOUT_1_STATE)),
+        (1, (".kingfisher/runs",)),
+        (2, ("sessions/abc",)),
+    ],
+)
+def test_doing_what_the_refusal_says_clears_it(tmp_path, layout, left):
     """It refused on the marker's number alone, so deleting everything the message
     listed left it refusing still, and the way out it did not name -- deleting the
     marker -- makes the workspace read as new, which the integration driver seeds
-    over. The paths deleted here are the ones read out of the message, so a list in
-    the message that drifts from the one checked goes red.
+    over. It also listed layout 1's leftovers to a workspace that had none of them.
+    The paths deleted here are read out of the message, so one it leaves out keeps
+    the refusal and one that is not there fails to delete.
     """
-    workspace = _laid_out_by_layout_1(
-        tmp_path / "old", "sessions/abc", *LAYOUT_1_STATE
-    )
+    workspace = _laid_out_by(layout, tmp_path / "old", *left)
     with pytest.raises(ConfigError) as refused:
         ensure_layout(workspace)
-    listed = re.search(r"\.kingfisher/\{([^}]*)\}", str(refused.value))
+    listed = re.search(r"left from layout \d+ -- (.*?) -- ", str(refused.value))
     assert listed is not None, f"the message no longer lists what to delete: {refused.value}"
 
-    for child in (workspace / "sessions").iterdir():
-        child.rmdir()
-    for name in listed.group(1).split(","):
-        (workspace / ".kingfisher" / name).rmdir()
+    for one in listed.group(1).split(", "):
+        target = workspace / one.removeprefix("everything in ")
+        # An empty name is the workspace itself, and deleting that passes: what is
+        # left reads as new.
+        assert workspace in target.parents, f"{one!r} is not a path in the workspace"
+        if one.startswith("everything in "):
+            for child in target.iterdir():
+                shutil.rmtree(child)
+        else:
+            shutil.rmtree(target)
 
     assert ensure_layout(workspace) == workspace.resolve()
     assert f"layout {LAYOUT_VERSION}" in (workspace / MARKER).read_text(encoding="utf-8")

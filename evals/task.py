@@ -19,9 +19,9 @@ from evals.dataset import SAMPLE_NAME
 ISSUE_KINDS = ("duplicate_rows", "missing_values", "outlier", "inconsistent_casing")
 
 SMOKE_TASK = f"""\
-Analyse /data/{SAMPLE_NAME}.
+Analyse /inputs/{SAMPLE_NAME}.
 
-Write result.json into /derived, as a whole file in exactly this
+Write result.json into /outputs, as a whole file in exactly this
 shape — note that the findings go inside "answer", alongside the usual
 top-level keys:
 
@@ -53,4 +53,4 @@ The issue kinds mean:
   capitalisation or surrounding whitespace.
 
 Include one entry per kind you actually find; omit kinds that do not apply.
-Report the same findings in prose in report.md, in /derived too."""
+Report the same findings in prose in report.md, in /outputs too."""

@@ -46,7 +46,7 @@ def line_count(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     """Count the lines in a text file. Use before reading a file you expect to
     be long, so you can ask `read_file` for the part you want.
 
-    `file_path` is the same virtual path the file tools take -- `/data/<name>` --
+    `file_path` is the same virtual path the file tools take -- `/inputs/<name>` --
     rooted at this session, read through the session's backend.
 
     Reports the count and whether the last line ends in a newline, because a

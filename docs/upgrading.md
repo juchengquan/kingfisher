@@ -16,6 +16,32 @@ only the first two items of the checklist.
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## Session folders named for which way files go, after #667
+
+A session's `data/` is `inputs/` and its `derived/` is `outputs/`, on disk and in
+the paths the agent is given. `memory/` keeps its name. The workspace layout is 3.
+
+| Before | Now |
+|---|---|
+| `sessions/<id>/data/`, which the agent reads as `/data/<name>` | `sessions/<id>/inputs/`, read as `/inputs/<name>` |
+| `sessions/<id>/derived/`, which the agent writes as `/derived/<name>` | `sessions/<id>/outputs/`, written as `/outputs/<name>` |
+| Artifact names such as `derived/report.md`, in `RunResult.artifacts` and for `Kingfisher.artifact` and `kingfisher artifact` | `outputs/report.md`. A name under `derived/` is refused as not an artifact. |
+| Agent and subagent prompts, skills and tool descriptions that say `/data/...` or `/derived/...` | Say `/inputs/...` and `/outputs/...`. Nothing translates the old paths: a read under `/data/` finds nothing, and a file written under `/derived/` is not returned to the caller. |
+
+- **Delete what an older workspace holds before starting on it.** A workspace with
+  sessions in it from layout 2 or earlier is refused at startup, and the message
+  lists exactly what to delete: everything in `sessions/`, and for a workspace from
+  layout 1, whichever of `.kingfisher/agents`, `runs`, `claims` and `tmp` are still
+  there. The marker is brought up to date on the next start. Or point
+  `KINGFISHER_WORKSPACE` at a new workspace. There is no migration, so copy anything
+  you want to keep out of a session's `derived/` first.
+- **If you wrote your own backend**, route `/inputs/` where you routed `/data/`.
+  `route_coverage` in `BACKEND_CONTRACT` names a route your backend leaves out, and
+  `shell_denied` now checks that the shell cannot write under `/inputs`.
+- **What stays for now:** `kingfisher run --data`, `Request.data`, the
+  `data_placed` event, and `protect_data`, `writable_data`, `place_data`,
+  `DataBackend`, `DataError` and `DataPlacement`. They are renamed in a later change.
+
 ## Session backends always given, after #639
 
 Session backends are always passed now, so what kingfisher used to work out from a
@@ -132,7 +158,7 @@ method that opens a session is named rather than being the object's `__call__`.
   `session_id` and `turn_id`. `kingfisher run` and `decide` keep no log file unless
   given `--log FILE`, which appends one JSON line per event.
 - **`session_dir` is removed.** `artifacts` lists what a turn left, as names
-  relative to the session (`derived/report.md`). Fetch one with
+  relative to the session (`outputs/report.md`). Fetch one with
   `Kingfisher.artifact(session_id, name)` or `kingfisher artifact --session ID NAME`.
 - **A whole `RunResult` now serialises to JSON**, because nothing in it is a host
   path.
@@ -229,15 +255,15 @@ backend per turn, and also answers for every session.
 - **The backend you return holds the turn lock:** `claim(name, *, stale_after)`
   (which must fail while a live claim holds the name), `release(name)` and
   `held(name, *, stale_after)`. `SessionClaims` implements these over a local folder.
-- **Kingfisher reads and writes the session through it:** it places `/data` with
-  `upload_files`, lists `/derived` and `/memory` with `glob`, fetches artifacts with
+- **Kingfisher reads and writes the session through it:** it places `/inputs` with
+  `upload_files`, lists `/outputs` and `/memory` with `glob`, fetches artifacts with
   `download_files`, and reads and writes `/.harness` for the pin, conversation and
-  pauses. `/data` has to accept that upload while staying read-only to the agent.
+  pauses. `/inputs` has to accept that upload while staying read-only to the agent.
 - **Optional:** `host_path(virtual) -> Path | None`, if your files are on this host
   by some means Kingfisher can't see, such as a network mount. It must never name
   another session's file.
 - **Check it** with `BACKEND_CONTRACT` (now five checks, including `shell_denied`:
-  the shell may not write `/.harness` or `/data`) and the new
+  the shell may not write `/.harness` or `/inputs`) and the new
   `SESSION_BACKENDS_CONTRACT` (sessions kept apart, persistence across turns, an
   exclusive claim, listing and deleting, and `host_path` staying in its session).
 
@@ -248,6 +274,7 @@ backend* and *A tool's path is the backend's path*, explains why.
 
 | Message | Cause | Fix |
 |---|---|---|
+| `… was laid out by kingfisher layout 2, and this is layout 3 …` | The workspace still holds sessions from before `data/` and `derived/` were renamed | Delete what the message lists, or use a new workspace; see *Session folders named for which way files go* |
 | `KINGFISHER_SESSION_STORE was removed: …` | The old store setting is still set | Unset it; see *Settings* |
 | `TypeError: backends= takes a SessionBackends …` | A plain factory function, or one backend, passed as `backends=` | Subclass `DefaultBackends` |
 | `TypeError: … missing 1 required keyword-only argument: 'backends'` | `Kingfisher(...)` called without `backends=`, with or without a graph | Pass `backends=default_backends`, or session backends of your own; see *Session backends always given* |

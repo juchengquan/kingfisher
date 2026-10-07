@@ -71,7 +71,7 @@ def test_a_paused_turn_cut_short_is_refused_with_a_reason(cfg):
     and what the caller is told is that, rather than msgpack's own error.
     """
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/derived/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
     )
     paused = kf.run(Request("write it"))
     state = _harness_file(cfg, paused.session_id, PAUSED_STATE)
@@ -87,14 +87,14 @@ def test_a_paused_turn_cut_short_is_refused_with_a_reason(cfg):
 
 
 def test_the_kit_catches_a_shell_that_can_write_the_harness(cfg, session_dir):
-    """Run against the default with the sandbox off: `/data` is still refused by its
+    """Run against the default with the sandbox off: `/inputs` is still refused by its
     permission bits, and `/.harness` is not refused by anything.
     """
     unfenced = replace(cfg, shell_sandbox="off")
 
     with pytest.raises(AssertionError, match=r"under /\.harness") as caught:
         shell_denied(lambda: backend_at(unfenced, session_dir))
-    assert "/data" not in str(caught.value), "the permission bits stopped holding /data"
+    assert "/inputs" not in str(caught.value), "the permission bits stopped holding /inputs"
 
 
 @pytest.mark.parametrize(

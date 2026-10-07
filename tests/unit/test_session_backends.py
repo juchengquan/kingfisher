@@ -227,18 +227,18 @@ def test_the_command_reaps_where_the_named_backend_keeps_them(told_about_a_remot
 
 
 def test_building_a_session_s_backend_makes_its_data_read_only(cfg):
-    """Not only after a placement: a session whose `/data` was left writable -- by
+    """Not only after a placement: a session whose `/inputs` was left writable -- by
     hand, or by a process that died between unlocking and hardening -- is hardened the
     next time a turn asks for its backend, which is before the agent can touch it.
     """
     directory = cfg.workspace / "sessions" / "s"
     default_backends.open(cfg, "s")
-    (directory / "data").chmod(0o755)
-    assert os.access(directory / "data", os.W_OK), "not left writable; test proves nothing"
+    (directory / "inputs").chmod(0o755)
+    assert os.access(directory / "inputs", os.W_OK), "not left writable; test proves nothing"
 
     built = default_backends.open(cfg, "s")
 
-    assert not os.access(directory / "data", os.W_OK)
+    assert not os.access(directory / "inputs", os.W_OK)
     assert built.unprotected == ()
 
 

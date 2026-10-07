@@ -350,9 +350,9 @@ def test_the_workspace_itself_stays_fully_usable(cfg, session_dir):
     straight back out.
     """
     backend = backend_at(cfg, session_dir)
-    backend.write("/derived/note.txt", "hello")
+    backend.write("/outputs/note.txt", "hello")
 
-    result = backend.execute("cat derived/note.txt")
+    result = backend.execute("cat outputs/note.txt")
 
     assert result.exit_code == 0
     assert "hello" in str(result.output)
@@ -480,19 +480,19 @@ def test_redirecting_to_dev_null_still_works(cfg, session_dir):
 @macos
 def test_the_agent_can_still_write_everything_it_is_meant_to(cfg, session_dir):
     """Confinement that broke the deliverable would be reverted, so this is the other
-    half of the bargain: `/derived` survives the turn, the working-files directory
+    half of the bargain: `/outputs` survives the turn, the working-files directory
     holds scratch, and both are the agent's to write.
     """
     backend = backend_at(cfg, session_dir)
 
     for command in (
-        "echo kept > derived/report.md",
+        "echo kept > outputs/report.md",
         "echo scratch > scratchpad/notes.txt",
     ):
         result = backend.execute(command)
         assert result.exit_code == 0, f"{command!r} was refused: {result.output}"
 
-    assert (session_dir / "derived" / "report.md").read_text().strip() == "kept"
+    assert (session_dir / "outputs" / "report.md").read_text().strip() == "kept"
 
 
 @macos
@@ -822,7 +822,7 @@ def test_the_shell_cannot_change_the_files_a_deployment_authors(cfg, session_dir
     for written in (models, beside):
         written.write_text("as written\n", encoding="utf-8")
     source_ids.unlink(missing_ok=True)
-    scratch = session_dir / "derived" / "swap"
+    scratch = session_dir / "outputs" / "swap"
     backend = backend_at(cfg, session_dir)
 
     for target in (models, beside):

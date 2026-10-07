@@ -14,10 +14,10 @@ from kingfisher.infrastructure.harness.runtime import as_transcript, user_payloa
 def a_conversation():
     """One exchange with a tool call in the middle -- the shape that matters."""
     return [
-        HumanMessage(content="summarise /data/x.csv"),
+        HumanMessage(content="summarise /inputs/x.csv"),
         AIMessage(
             content="",
-            tool_calls=[{"name": "csv_profile", "args": {"path": "/data/x.csv"}, "id": "c1"}],
+            tool_calls=[{"name": "csv_profile", "args": {"path": "/inputs/x.csv"}, "id": "c1"}],
         ),
         ToolMessage(content="40 rows", tool_call_id="c1", name="csv_profile"),
         AIMessage(content="Forty rows."),
@@ -39,7 +39,7 @@ def test_what_the_agent_did_is_kept_not_only_what_it_said():
 
     assert [m.role for m in records] == ["user", "assistant", "tool", "assistant"]
     assert records[1].tool_calls == (
-        ToolCall(name="csv_profile", args={"path": "/data/x.csv"}, id="c1"),
+        ToolCall(name="csv_profile", args={"path": "/inputs/x.csv"}, id="c1"),
     )
     assert records[2].call_id == "c1", "a tool result that answers nothing is not a result"
     assert records[2].content == "40 rows"

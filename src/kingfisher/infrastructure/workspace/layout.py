@@ -52,27 +52,35 @@ def _layout_of(marker: Path) -> int:
 
 
 #: Where layout 1 kept a session's agent, conversation, turn lock and run log, under
-#: `HARNESS_OWNED`. The refusal names these, and what it names is what is looked for:
-#: an operator who deletes exactly what the message says has to be let through.
+#: `HARNESS_OWNED`. The refusal names the ones still there, and what it names is what
+#: is looked for: an operator who deletes exactly what the message says has to be
+#: let through.
 OLD_STATE = ("agents", "runs", "claims", "tmp")
 
 
-def _left_from_before(workspace: Path) -> bool:
-    """Whether anything an older layout wrote is still where it wrote it."""
+def _left_from_before(workspace: Path) -> tuple[str, ...]:
+    """What an older layout wrote that is still where it wrote it, as the refusal
+    names it. Empty when nothing is."""
+    left = []
     sessions = sessions_root(workspace)
     if sessions.is_dir() and any(sessions.iterdir()):
-        return True
-    return any((workspace / HARNESS_OWNED / name).exists() for name in OLD_STATE)
+        left.append(f"everything in {sessions.name}/")
+    left.extend(
+        f"{HARNESS_OWNED}/{name}"
+        for name in OLD_STATE
+        if (workspace / HARNESS_OWNED / name).exists()
+    )
+    return tuple(left)
 
 
 def check_layout(workspace: Path) -> None:
     """Refuse a workspace laid out by a version that arranged it differently.
 
-    Loudly, because the failure without it is silent: a session's pinned agent
-    and its transcript moved into `<session>/.harness`, and code looking there
-    for files that are still at the old paths does not error -- it finds no pin
-    and re-pins from the current catalogue, possibly under a different agent, and
-    finds no transcript and starts the conversation again from nothing.
+    Loudly, because the failure without it is silent: code looking for a
+    session's files where this layout keeps them does not error when they are
+    somewhere else. A pin it cannot find re-pins, possibly under a different
+    agent; a transcript it cannot find starts the conversation from nothing; a
+    caller's files in a folder no route reaches are never shown to the agent.
 
     There is no migration and no fallback reader on purpose. A fallback would
     have to stay for as long as anyone might have an old workspace, which is
@@ -84,21 +92,22 @@ def check_layout(workspace: Path) -> None:
     if not marker.is_file():
         return
     found = _layout_of(marker)
+    if found == LAYOUT_VERSION:
+        return
+    left = _left_from_before(Path(workspace))
     # Nothing left to lose, so nothing to refuse, and `ensure_layout` brings the
     # marker up to date. Deleting the marker is not the way through: a workspace
     # without one reads as new, and the integration driver seeds over a new one.
-    if found == LAYOUT_VERSION or not _left_from_before(Path(workspace)):
+    if not left:
         return
     msg = (
         f"{workspace} was laid out by kingfisher layout {found}, and this is layout "
-        f"{LAYOUT_VERSION}. A session's agent, conversation, turn lock and run log "
-        f"moved into <session>/.harness, and the old ones are not where this looks -- "
-        f"a session opened under {found} would silently lose its conversation and "
-        f"could change agent mid-way. Delete what is in sessions/ and "
-        f"{HARNESS_OWNED}/{{{','.join(OLD_STATE)}}} in that workspace, and the marker "
-        f"is brought up to date on the next start; or point KINGFISHER_WORKSPACE "
-        f"at a new one; definitions relocate with KINGFISHER_SKILLS_DIR and its "
-        f"siblings and do not have to move."
+        f"{LAYOUT_VERSION}. Its sessions keep files where this layout does not look, "
+        f"and one opened here would carry on without them; there is no migration. "
+        f"Delete what is left from layout {found} -- {', '.join(left)} -- and the "
+        f"marker is brought up to date on the next start; or point "
+        f"KINGFISHER_WORKSPACE at a new workspace. Definitions relocate with "
+        f"KINGFISHER_SKILLS_DIR and its siblings and do not have to move."
     )
     raise ConfigError(msg)
 

@@ -384,7 +384,7 @@ def _harness_denial(workspace: Path) -> str:
 
     The character class is `[^/]+`, so it matches one session and not a path
     walking through several: `sessions/a/.harness` is denied and
-    `sessions/a/derived/.harness` is not this rule's business.
+    `sessions/a/outputs/.harness` is not this rule's business.
     """
     root = re.escape(f"{Path(workspace).resolve()}/sessions/")
     return f'(deny file-write* (regex #"^{root}[^/]+/{re.escape(HARNESS)}(/|$)"))'

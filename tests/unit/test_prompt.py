@@ -9,7 +9,7 @@ from kingfisher.infrastructure.prompting import (
     render_system_prompt,
     system_prompt,
 )
-from kingfisher.layout import DATA, DERIVED, SCRATCH
+from kingfisher.layout import INPUTS, OUTPUTS, SCRATCH
 from tests.conftest import a_subagent
 
 
@@ -44,8 +44,8 @@ def test_structural_contract_survives_every_combination():
     for skills in (False, True):
         for memory in (False, True):
             text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
-            assert "/data" in text
-            assert "/derived" in text
+            assert "/inputs" in text
+            assert "/outputs" in text
 
 
 def test_the_prompt_s_path_table_spells_the_directories_the_session_has():
@@ -57,7 +57,7 @@ def test_the_prompt_s_path_table_spells_the_directories_the_session_has():
     """
     text = render_system_prompt()
 
-    for name in (DATA, DERIVED, SCRATCH):
+    for name in (INPUTS, OUTPUTS, SCRATCH):
         assert f"| `/{name}/<name>` | `{name}/<name>` |" in text, name
 
 
@@ -79,7 +79,7 @@ def test_user_prompt_is_appended_when_the_workspace_has_one(cfg):
     text = system_prompt(cfg)
     assert "Prefer polars over pandas" in text
     # Appended, not replacing the structural contract.
-    assert "/derived" in text
+    assert "/outputs" in text
 
 
 def test_no_user_prompt_leaves_the_base_prompt_untouched(cfg):
@@ -151,7 +151,7 @@ def test_the_shell_mapping_the_prompt_promises_is_the_one_the_backend_implements
     backend = backend_at(cfg, session_dir)
     cwd = Path(backend.default.cwd).resolve()
 
-    for virtual in ("/scratchpad/x.txt", "/derived/x.txt", "/data/x.txt"):
+    for virtual in ("/scratchpad/x.txt", "/outputs/x.txt", "/inputs/x.txt"):
         backend.write(virtual, "x")
         landed = (cwd / virtual.lstrip("/")).resolve()
         assert landed.is_file(), (
@@ -222,7 +222,7 @@ def test_a_delegate_is_not_given_the_harnesss_own_prompt(cfg):
     prompt = _delegate(cfg)
 
     assert len(prompt) < 200
-    assert "/data" not in prompt
+    assert "/inputs" not in prompt
 
 
 def test_both_levels_separate_the_addition_the_same_way(cfg):

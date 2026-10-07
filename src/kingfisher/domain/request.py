@@ -79,7 +79,7 @@ class Resume:
 
     Not a `Request` with the task left out. A resume is not asking for anything, which
     is why there is no `data` here -- placing files on a turn that is finishing work
-    already proposed would put them in `/data` with nothing in the conversation saying
+    already proposed would put them in `/inputs` with nothing in the conversation saying
     where they came from.
 
     What it does carry is what `Request` carries to build a graph with, because the

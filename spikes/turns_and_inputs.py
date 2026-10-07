@@ -7,7 +7,7 @@ Exercises the turn tier against a live model:
   continuous the thread still carries context across turns, which is what makes
              them a conversation rather than two unrelated requests
   scoped     a file supplied with a request lands in that turn's input/, never
-             in /data, and is gone when the turn is swept
+             in /inputs, and is gone when the turn is swept
 
     uv run python spikes/turns_and_inputs.py
 """
@@ -67,7 +67,7 @@ def main() -> int:
         and (second.session_dir / "report.md").exists(),
         "continuous": "design" in second.answer.lower(),
         "scoped": (first.session_dir / "input" / UPLOAD_NAME).exists()
-        and not (workspace / "data" / UPLOAD_NAME).exists(),
+        and not (workspace / "inputs" / UPLOAD_NAME).exists(),
         "totalled": "50" in first.answer,
     }
 

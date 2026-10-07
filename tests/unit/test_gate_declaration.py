@@ -30,7 +30,7 @@ WRITES = [
         tool_calls=[
             {
                 "name": "write_file",
-                "args": {"file_path": "/derived/a.txt", "content": "x"},
+                "args": {"file_path": "/outputs/a.txt", "content": "x"},
                 "id": "c1",
             }
         ],
@@ -82,7 +82,7 @@ def test_a_declared_gate_stops_the_call(cfg, session_dir):
     out = _run(cfg, session_dir, _agent(interrupt_on="[write_file]"))
 
     assert "__interrupt__" in out, "the gated call ran without stopping for anyone"
-    assert not (session_dir / "derived" / "a.txt").exists()
+    assert not (session_dir / "outputs" / "a.txt").exists()
 
 
 def test_the_same_agent_without_the_line_does_not_stop(cfg, session_dir):
@@ -92,7 +92,7 @@ def test_the_same_agent_without_the_line_does_not_stop(cfg, session_dir):
     out = _run(cfg, session_dir, _agent())
 
     assert "__interrupt__" not in out
-    assert (session_dir / "derived" / "a.txt").read_text() == "x"
+    assert (session_dir / "outputs" / "a.txt").read_text() == "x"
 
 
 def test_only_the_named_tool_is_gated(cfg, session_dir):
@@ -102,7 +102,7 @@ def test_only_the_named_tool_is_gated(cfg, session_dir):
     out = _run(cfg, session_dir, _agent(interrupt_on="[execute]"))
 
     assert "__interrupt__" not in out
-    assert (session_dir / "derived" / "a.txt").read_text() == "x"
+    assert (session_dir / "outputs" / "a.txt").read_text() == "x"
 
 
 def test_a_gate_on_a_name_no_tool_answers_to_is_refused(cfg, session_dir):
@@ -198,4 +198,4 @@ def test_a_gate_on_a_tool_this_caller_was_not_granted_is_allowed(cfg, session_di
     )
 
     assert "__interrupt__" not in out, "a tool nobody was granted still gated something"
-    assert (session_dir / "derived" / "a.txt").read_text() == "x"
+    assert (session_dir / "outputs" / "a.txt").read_text() == "x"

@@ -15,7 +15,7 @@ from kingfisher.infrastructure.workspace import (
 )
 
 
-def test_data_becomes_read_only_to_the_os(workspace):
+def test_inputs_become_read_only_to_the_os(workspace):
     """The layer the deny rule cannot provide: the kernel enforces this against
     `execute` too, which tool-level permissions never covered.
     """
@@ -25,7 +25,7 @@ def test_data_becomes_read_only_to_the_os(workspace):
     protect_data(workspace)
 
     with pytest.raises(PermissionError):
-        (workspace / "data" / "input.csv").write_text("clobbered")
+        (workspace / "inputs" / "input.csv").write_text("clobbered")
 
 
 def test_directory_write_bit_is_dropped_so_files_cannot_be_deleted(workspace):
@@ -34,7 +34,7 @@ def test_directory_write_bit_is_dropped_so_files_cannot_be_deleted(workspace):
         (data / "input.csv").write_text("x")
     protect_data(workspace)
 
-    assert not os.access(workspace / "data", os.W_OK)
+    assert not os.access(workspace / "inputs", os.W_OK)
 
 
 def test_writable_data_restores_protection_afterwards(workspace):
@@ -42,13 +42,13 @@ def test_writable_data_restores_protection_afterwards(workspace):
         (data / "new.csv").write_text("y")
         assert os.access(data, os.W_OK)
 
-    assert not os.access(workspace / "data", os.W_OK)
+    assert not os.access(workspace / "inputs", os.W_OK)
 
 
 def test_protect_data_is_idempotent(workspace):
     protect_data(workspace)
     protect_data(workspace)
-    assert not os.access(workspace / "data", os.W_OK)
+    assert not os.access(workspace / "inputs", os.W_OK)
 
 
 def _refuse(name: str, monkeypatch):
@@ -89,9 +89,9 @@ def test_the_rest_of_the_directory_is_still_hardened(workspace, monkeypatch):
     protect_data(workspace)
     monkeypatch.undo()
 
-    assert not os.access(workspace / "data", os.W_OK)
+    assert not os.access(workspace / "inputs", os.W_OK)
     with pytest.raises(PermissionError):
-        (workspace / "data" / "ours.csv").write_text("clobbered")
+        (workspace / "inputs" / "ours.csv").write_text("clobbered")
 
 
 def test_an_input_can_still_be_added_beside_a_file_we_do_not_own(workspace, monkeypatch):
@@ -106,13 +106,13 @@ def test_an_input_can_still_be_added_beside_a_file_we_do_not_own(workspace, monk
         (data / "fresh.csv").write_text("a,b\n")
 
     monkeypatch.undo()
-    assert (workspace / "data" / "fresh.csv").read_text() == "a,b\n"
+    assert (workspace / "inputs" / "fresh.csv").read_text() == "a,b\n"
 
 
-# -- durable session data --------------------------------------------------
+# -- a session's inputs ----------------------------------------------------
 
 
-def test_a_supplied_file_lands_in_the_sessions_data(cfg, session_dir, tmp_path):
+def test_a_supplied_file_lands_in_the_sessions_inputs(cfg, session_dir, tmp_path):
     """The point of the feature: somewhere the next turn can still see it."""
     source = tmp_path / "sales.csv"
     source.write_text("a,b\n1,2\n")
@@ -120,22 +120,39 @@ def test_a_supplied_file_lands_in_the_sessions_data(cfg, session_dir, tmp_path):
     placement = drive(place_data((source,), backend_at(cfg, session_dir)))
 
     assert placement.placed == ("sales.csv",)
-    assert (session_dir / "data" / "sales.csv").read_text() == "a,b\n1,2\n"
+    assert (session_dir / "inputs" / "sales.csv").read_text() == "a,b\n1,2\n"
 
 
-def test_data_is_read_only_again_afterwards(cfg, session_dir, tmp_path):
-    """Nobody may hand-chmod /data."""
+def test_inputs_are_read_only_again_afterwards(cfg, session_dir, tmp_path):
+    """Nobody may hand-chmod /inputs."""
     source = tmp_path / "sales.csv"
     source.write_text("x")
 
     drive(place_data((source,), backend_at(cfg, session_dir)))
 
-    assert not os.access(session_dir / "data", os.W_OK)
+    assert not os.access(session_dir / "inputs", os.W_OK)
     with pytest.raises(PermissionError):
-        (session_dir / "data" / "sales.csv").write_text("clobbered")
+        (session_dir / "inputs" / "sales.csv").write_text("clobbered")
 
 
-def test_data_is_read_only_again_even_when_a_copy_fails(cfg, session_dir, tmp_path, monkeypatch):
+def test_the_folder_an_upload_lands_in_is_the_one_hardened(cfg, session_dir, tmp_path):
+    """`protect_data` spelled `data/` by hand while `DataBackend` uploaded under the
+    layout's constant, so renaming the constant would have left a caller's inputs
+    writable to the shell.
+    """
+    source = tmp_path / "sales.csv"
+    source.write_text("x")
+
+    drive(place_data((source,), backend_at(cfg, session_dir)))
+
+    # Found rather than named: a folder spelled here would agree with whichever side
+    # spelled it the same way, and pass against the drift it is meant to catch.
+    (landed,) = session_dir.rglob(source.name)
+    assert not os.access(landed.parent, os.W_OK), f"{landed.parent} was left writable"
+    assert not os.access(landed, os.W_OK), f"{landed} was left writable"
+
+
+def test_inputs_are_read_only_again_even_when_a_copy_fails(cfg, session_dir, tmp_path, monkeypatch):
     """`writable_data`'s finally is what makes this safe."""
     source = tmp_path / "sales.csv"
     source.write_text("x")
@@ -153,7 +170,7 @@ def test_data_is_read_only_again_even_when_a_copy_fails(cfg, session_dir, tmp_pa
         drive(place_data((source,), backend_at(cfg, session_dir)))
 
     monkeypatch.undo()
-    assert not os.access(session_dir / "data", os.W_OK)
+    assert not os.access(session_dir / "inputs", os.W_OK)
 
 
 def test_two_sources_with_one_basename_are_refused(cfg, session_dir, tmp_path):
@@ -168,7 +185,7 @@ def test_two_sources_with_one_basename_are_refused(cfg, session_dir, tmp_path):
     with pytest.raises(DataError, match=r"report\.pdf"):
         drive(place_data((first, second), backend_at(cfg, session_dir)))
 
-    assert not (session_dir / "data" / "report.pdf").exists()
+    assert not (session_dir / "inputs" / "report.pdf").exists()
 
 
 def test_a_missing_source_is_refused_before_anything_is_written(cfg, session_dir, tmp_path):
@@ -178,7 +195,7 @@ def test_a_missing_source_is_refused_before_anything_is_written(cfg, session_dir
     with pytest.raises(DataError, match=r"ghost\.csv"):
         drive(place_data((good, tmp_path / "ghost.csv"), backend_at(cfg, session_dir)))
 
-    assert not (session_dir / "data" / "good.csv").exists()
+    assert not (session_dir / "inputs" / "good.csv").exists()
 
 
 # -- a turn's input/ gets the same two guarantees ------------------------
@@ -202,7 +219,7 @@ def test_resupplying_replaces_and_says_so(cfg, session_dir, tmp_path):
     source.write_text("second")
     placement = drive(place_data((source,), backend_at(cfg, session_dir)))
 
-    assert (session_dir / "data" / "sales.csv").read_text() == "second"
+    assert (session_dir / "inputs" / "sales.csv").read_text() == "second"
     assert placement.replaced == ("sales.csv",)
 
 
@@ -224,13 +241,13 @@ def test_supplying_nothing_touches_nothing(cfg, session_dir):
 
 
 def test_a_session_that_was_given_data_can_still_be_removed(cfg, session_dir, tmp_path):
-    """`protect_data` drops the write bit off `data/`, and deletion is governed by the
+    """`protect_data` drops the write bit off `inputs/`, and deletion is governed by the
     directory's write bit -- so hardening made the session undeletable.
     """
     source = tmp_path / "orders.csv"
     source.write_text("a,b\n1,2\n")
     drive(place_data((source,), backend_at(cfg, session_dir)))
-    assert not os.access(session_dir / "data", os.W_OK), "not hardened; test proves nothing"
+    assert not os.access(session_dir / "inputs", os.W_OK), "not hardened; test proves nothing"
 
     failure = LocalSessionDirs().remove_tree(session_dir)
 
@@ -239,7 +256,7 @@ def test_a_session_that_was_given_data_can_still_be_removed(cfg, session_dir, tm
 
 
 def test_removal_reaches_through_nested_hardened_directories(session_dir):
-    """`protect_data` hardens every directory under `data/`, not just the top, so
+    """`protect_data` hardens every directory under `inputs/`, not just the top, so
     unlocking one level would strand anything deeper.
     """
     with writable_data(session_dir) as data:
@@ -256,7 +273,7 @@ def test_a_directory_we_cannot_unlock_is_reported_not_raised(session_dir, monkey
     with writable_data(session_dir) as data:
         (data / "theirs.pdf").write_text("x")
     protect_data(session_dir)
-    _refuse("data", monkeypatch)
+    _refuse("inputs", monkeypatch)
 
     failure = LocalSessionDirs().remove_tree(session_dir)
 
@@ -286,6 +303,6 @@ def test_an_unrelated_failure_leaves_data_hardened(session_dir, monkeypatch):
 
     assert failure is not None, "reported success despite a failed unlink"
     assert session_dir.exists()
-    assert not os.access(session_dir / "data", os.W_OK), (
-        "/data was left writable on a session that survived the sweep"
+    assert not os.access(session_dir / "inputs", os.W_OK), (
+        "/inputs was left writable on a session that survived the sweep"
     )

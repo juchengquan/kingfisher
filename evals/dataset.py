@@ -18,6 +18,7 @@ from pathlib import Path
 from random import Random
 
 from kingfisher.infrastructure.workspace import writable_data
+from kingfisher.layout import INPUTS
 
 SAMPLE_NAME = "orders.csv"
 
@@ -122,15 +123,15 @@ GROUND_TRUTH = build_dataset()[1]
 def seed_sample_data(session_dir: Path) -> bool:
     """Write the sample dataset, refreshing it if the generator has changed.
 
-    Takes a *session* directory, not the workspace. `/data` is rooted at a
+    Takes a *session* directory, not the workspace. `/inputs` is rooted at a
     session, so a fixture written at workspace level lands where no route
-    reaches it -- the seeding reports success and the agent finds `/data`
+    reaches it -- the seeding reports success and the agent finds `/inputs`
     empty.
 
     Self-healing rather than write-once: a fixture that silently goes stale
     while `GROUND_TRUTH` moves would turn every check into a false failure.
     """
-    target = Path(session_dir) / "data" / SAMPLE_NAME
+    target = Path(session_dir) / INPUTS / SAMPLE_NAME
     csv, _ = build_dataset()
     if target.exists() and target.read_text(encoding="utf-8") == csv:
         return False

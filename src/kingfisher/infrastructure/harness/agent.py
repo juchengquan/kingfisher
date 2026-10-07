@@ -151,7 +151,7 @@ def read_only_permissions() -> list[FilesystemPermission]:
     and `delete` -- `FilesystemOperation` is read|write and delete maps to write --
     and `execute` bypasses them entirely. The other half of each rule is elsewhere
     and neither half is sufficient: `infrastructure.workspace.permissions` drops the
-    write bits under `/data`, and `confinement.resolve` denies writes to the skills
+    write bits under `/inputs`, and `confinement.resolve` denies writes to the skills
     directory in the sandbox profile, which is macOS-only and can be switched off.
     """
     return [

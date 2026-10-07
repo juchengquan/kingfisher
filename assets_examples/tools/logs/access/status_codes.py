@@ -43,7 +43,7 @@ def status_codes(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     an outage -- how many requests failed, and with which codes -- without reading
     the log.
 
-    `file_path` is the same virtual path the file tools take -- `/data/<name>` --
+    `file_path` is the same virtual path the file tools take -- `/inputs/<name>` --
     rooted at this session, read through the session's backend.
     """
     codes: Counter[str] = Counter()

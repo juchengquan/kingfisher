@@ -44,8 +44,13 @@ SKILLS_VIEW = "skills-view"
 #: the names the agent addresses, so they mean the same thing in every session
 #: while pointing somewhere different in each. That is what makes one prompt serve
 #: every session. Named one at a time so nothing below has to spell them again.
-DATA = "data"
-DERIVED = "derived"
+#:
+#: The two that carry files between the caller and the agent are named for which
+#: way files go, because the name is most of what the agent knows about a folder:
+#: it reads `inputs` and may not write there, and what it writes to `outputs` is
+#: handed back.
+INPUTS = "inputs"
+OUTPUTS = "outputs"
 MEMORY = "memory"
 #: Where the agent works. Disposable by contract: never returned to the caller,
 #: never saved, swept when the session goes.
@@ -57,7 +62,7 @@ MEMORY = "memory"
 #: a name the agent addresses belongs in this tuple rather than beside the lock.
 SCRATCH = "scratchpad"
 
-SESSION_DIRS: tuple[str, ...] = (DATA, DERIVED, MEMORY, SCRATCH)
+SESSION_DIRS: tuple[str, ...] = (INPUTS, OUTPUTS, MEMORY, SCRATCH)
 
 #: Where skills live.
 SKILLS = "skills"
@@ -92,11 +97,11 @@ PAUSED_STATE = "paused.state"
 #: case this answers, and answering it means reading this without reading that.
 PAUSED_MARK = "paused.json"
 
-#: What a run produces and would lose. `/data` is read-only and came from the
+#: What a run produces and would lose. `/inputs` is read-only and came from the
 #: caller; `/scratchpad` is disposable and says so. These two are the ones the agent
 #: is told will outlive the run, so these are what a reaped session takes with it
 #: unless the caller is handed a list.
-ARTIFACT_DIRS: tuple[str, ...] = (DERIVED, MEMORY)
+ARTIFACT_DIRS: tuple[str, ...] = (OUTPUTS, MEMORY)
 
 
 #: The folder name a catalogue may not use for its own skills, because a
@@ -109,20 +114,20 @@ def _route(*parts: str) -> str:
     return "/" + "/".join(parts) + "/"
 
 
-DATA_ROUTE = _route(DATA)
+INPUTS_ROUTE = _route(INPUTS)
 MEMORY_ROUTE = _route(MEMORY)
 SKILLS_ROUTE = _route(SKILLS)
 BUNDLED_SKILLS_ROUTE = _route(SKILLS, RESERVED_SKILL_FOLDER)
 
 #: The paths that are *not* routed, kept in the table rather than left out of it:
 #: they reach the default backend -- the shell's, rooted at the session -- and a
-#: reader asking "what happens to /derived" should find the answer here rather
+#: reader asking "what happens to /outputs" should find the answer here rather
 #: than by noticing an absence.
 #:
 #: `/scratchpad` is among them, and that is what lets the shell and the file tools
 #: write the same place: `TMPDIR` points at it on disk, and the virtual path is
 #: the same name with a slash.
-DERIVED_ROUTE = _route(DERIVED)
+OUTPUTS_ROUTE = _route(OUTPUTS)
 SCRATCH_ROUTE = _route(SCRATCH)
 
 #: A route the agent may not read or write, which is the only reason it is one:
@@ -170,7 +175,7 @@ ROUTES: tuple[Route, ...] = (
     # tools only -- the shell bypasses them entirely, which is why
     # `infrastructure.workspace.permissions.protect_data` drops the write bits
     # underneath it.
-    Route(DATA_ROUTE, deny_write_under=f"{DATA_ROUTE}**"),
+    Route(INPUTS_ROUTE, deny_write_under=f"{INPUTS_ROUTE}**"),
     # Routed so a request that declines the memory a deployment wired has
     # somewhere to hang a deny rule, not because memory needs isolating.
     Route(MEMORY_ROUTE),
@@ -189,7 +194,7 @@ ROUTES: tuple[Route, ...] = (
     Route(BUNDLED_SKILLS_ROUTE, deny_write_under=f"{SKILLS_ROUTE}**", family=True),
     # Unrouted, and deliberately. What a run produces is the agent's to write, and
     # it reaches the default backend along with everything else the session holds.
-    Route(DERIVED_ROUTE, routed=False),
+    Route(OUTPUTS_ROUTE, routed=False),
     Route(SCRATCH_ROUTE, routed=False),
     # The one route that exists to be refused. Denied both ways: a run able to
     # write here could rewrite the agent definition it is running under, or the
@@ -219,7 +224,7 @@ def denied_read_scopes() -> tuple[str, ...]:
 
     A second function rather than a parameter on the first, because the two
     answers go to two rules and a caller asking for one never wants the other:
-    a read deny on `/data/` would break the thing `/data/` is for.
+    a read deny on `/inputs/` would break the thing `/inputs/` is for.
     """
     return tuple(sorted({r.deny_read_under for r in ROUTES if r.deny_read_under}))
 
@@ -244,7 +249,7 @@ MARKER = f"{HARNESS_OWNED}/WORKSPACE"
 #: over both and have nothing to make anyone remove them -- the day the old paths
 #: are gone, nothing says so. A refusal is loud, and the next layout change
 #: inherits this rather than needing its own.
-LAYOUT_VERSION = 2
+LAYOUT_VERSION = 3
 MARKER_TEXT = f"kingfisher workspace\nlayout {LAYOUT_VERSION}\n"
 
 AGENTS_SCAFFOLD = """\

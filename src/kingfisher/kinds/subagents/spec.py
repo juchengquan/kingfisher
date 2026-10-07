@@ -140,7 +140,7 @@ REFUSED: Mapping[str, str] = MappingProxyType(
         "permissions": (
             "deepagents' permissions *replace* the parent's rather than narrowing "
             "them, so writing this to tighten a delegate would drop the rules it "
-            "already inherits -- including the one making /data read-only"
+            "already inherits -- including the one making /inputs read-only"
         ),
         "interrupt_on": (
             "a delegate inherits its parent's gates rather than declaring its own -- "
@@ -299,7 +299,7 @@ NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
             "deepagents merges a spec's middleware into the stack it builds by name, "
             "so an entry sharing one replaces what was there -- and the "
             "FilesystemMiddleware its own docs suggest here would replace the one "
-            "carrying this deployment's backend and every rule on it, /data "
+            "carrying this deployment's backend and every rule on it, /inputs "
             "read-only included. Middleware reaches a delegate only by the "
             "deployment registering it; write 'build' and wrap the graph yourself "
             "if this one needs some"

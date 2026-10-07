@@ -270,7 +270,7 @@ def test_the_layout_names_no_genre_of_output():
     """`/reports` privileged one kind of result in the workspace structure itself."""
     assert "reports" not in LAYOUT_DIRS
     assert "reports" not in SESSION_DIRS
-    assert "derived" in SESSION_DIRS
+    assert "outputs" in SESSION_DIRS
 
 
 def test_one_pass_makes_a_whole_session(tmp_path):

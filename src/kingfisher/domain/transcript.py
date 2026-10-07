@@ -2,7 +2,7 @@
 
 **Tool calls are kept, not only the human and assistant text.** Keeping just the
 question and the final answer makes the agent forget its own work: the next turn would
-see *"summarise /data/x.csv"* -> *"Done, 40 rows"* with no record that `csv_profile`
+see *"summarise /inputs/x.csv"* -> *"Done, 40 rows"* with no record that `csv_profile`
 ran, so it re-does things and cannot refer to what it did.
 """
 

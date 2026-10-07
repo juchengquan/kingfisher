@@ -39,11 +39,11 @@ from kingfisher.infrastructure.workspace.sessions import (
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
-    DATA,
-    DATA_ROUTE,
     HARNESS,
     HARNESS_OWNED,
     HARNESS_ROUTE,
+    INPUTS,
+    INPUTS_ROUTE,
     MEMORY,
     MEMORY_ROUTE,
     RESERVED_SKILL_FOLDER,
@@ -248,7 +248,7 @@ class WorkspaceScopedBackend(SessionClaims, CompositeBackend):
     """A `CompositeBackend` that refuses host paths instead of re-rooting them.
 
     `glob` and `grep` are deduplicated. They merge every backend's answer, and two
-    of the routes here point *inside* the default backend's own root -- `/data` and
+    of the routes here point *inside* the default backend's own root -- `/inputs` and
     `/memory` are real directories under the session -- so each saw the same file
     twice: measured, one file supplied with `--data` came back as two matches with
     one path between them, on every pattern.
@@ -295,18 +295,18 @@ class WorkspaceScopedBackend(SessionClaims, CompositeBackend):
 
 
 class DataBackend(FilesystemBackend):
-    """A session's `/data`, which is read-only on disk and opened only for an upload.
+    """A session's `/inputs`, which is read-only on disk and opened only for an upload.
 
     `upload_files` is how kingfisher places a caller's files, and the only way in.
     The agent never reaches it: its file tools write through `write` and `edit`,
-    which the permission bits still refuse, and a tool's backend refuses `/data`
+    which the permission bits still refuse, and a tool's backend refuses `/inputs`
     before the call arrives here. Unlocking inside the backend rather than around
     the call is what lets `place_data` work on any backend -- a remote one has no
     permission bits to lift, and meets the same promise its own way.
     """
 
     def __init__(self, session_dir: Path) -> None:
-        super().__init__(root_dir=str(Path(session_dir) / DATA))
+        super().__init__(root_dir=str(Path(session_dir) / INPUTS))
         self._session_dir = Path(session_dir)
 
     def upload_files(self, files: list[tuple[str, bytes]]) -> Any:
@@ -399,7 +399,7 @@ def _fence_for(
     # the *workspace*, which is right where the home is denied and the workspace
     # re-allowed inside it, and catastrophic here. Sessions live under the workspace, so
     # granting it hands every tenant back the directory this fence exists to take away
-    # -- measured, before the fence: tenant B read tenant A's `derived/secret.txt` with
+    # -- measured, before the fence: tenant B read tenant A's `outputs/secret.txt` with
     # `cat ../<A>/...`, exit 0.
     readable = [*confinement.toolchain_roots(cfg.shell_path_extra), *skills]
     # Nothing beyond the session, which both fences grant already: `TMPDIR` is
@@ -597,7 +597,7 @@ def backend_at(
     # the backend is built, instead of reaching a turn as a path that resolves
     # to the default backend and quietly ignores its own deny rule.
     backing = {
-        DATA_ROUTE: lambda: DataBackend(session_dir),
+        INPUTS_ROUTE: lambda: DataBackend(session_dir),
         SKILLS_ROUTE: lambda: FilesystemBackend(root_dir=str(skills_dir)),
         MEMORY_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / MEMORY)),
         # Mounted so it can be refused. Every operation through it is denied by

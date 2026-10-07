@@ -61,7 +61,7 @@ REFUSED: Mapping[str, str] = MappingProxyType(
         "permissions": (
             "deepagents' permissions *replace* rather than narrow, so writing this "
             "here would drop the rules an agent already has -- including the ones "
-            "making /data and /skills read-only"
+            "making /inputs and /skills read-only"
         ),
         "response_format": (
             "an agent answers a real caller who may well want a schema, and there is "

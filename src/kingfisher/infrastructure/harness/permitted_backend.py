@@ -353,7 +353,7 @@ def _in_order[Response: (FileUploadResponse, FileDownloadResponse)](
 
     Under the spelling asked, too. The backend answers with the one it was handed,
     which is the normalised path, and a tool matching answers to what it sent would
-    find `data/a.csv` missing from a batch that uploaded it.
+    find `inputs/a.csv` missing from a batch that uploaded it.
     """
     landed = {
         at: replace(answer, path=asked[at])

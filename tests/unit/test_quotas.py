@@ -178,7 +178,7 @@ def test_a_session_over_its_disk_bound_cannot_start_another_turn(cfg):
         threads=StubCheckpointer(),
     )
     session_id = start(cfg, "s")
-    (cfg.workspace / "sessions" / session_id / "derived" / "big.bin").write_bytes(b"x" * 100)
+    (cfg.workspace / "sessions" / session_id / "outputs" / "big.bin").write_bytes(b"x" * 100)
 
     with pytest.raises(QuotaExceededError, match="over the 10 allowed"):
         kf.run(Request("go", session_id=session_id))
@@ -194,7 +194,7 @@ def test_the_disk_bound_is_off_unless_a_deployment_sets_one(cfg):
         cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
     )
     session_id = start(cfg, "s")
-    (cfg.workspace / "sessions" / session_id / "derived" / "big.bin").write_bytes(b"x" * 10_000)
+    (cfg.workspace / "sessions" / session_id / "outputs" / "big.bin").write_bytes(b"x" * 10_000)
 
     assert kf.run(Request("go", session_id=session_id)).answer == "ok"
 
@@ -203,7 +203,7 @@ def test_session_bytes_counts_everything_the_session_holds(cfg, session_dir):
     """Run scratch counts too: the question is what the session costs the host, not what
     is worth keeping.
     """
-    (session_dir / "derived" / "kept.bin").write_bytes(b"x" * 100)
+    (session_dir / "outputs" / "kept.bin").write_bytes(b"x" * 100)
     (session_dir / "scratchpad").mkdir(exist_ok=True)
     (session_dir / "scratchpad" / "scratch.bin").write_bytes(b"y" * 50)
 
@@ -242,9 +242,9 @@ def test_a_session_over_budget_is_refused_before_its_data_is_placed(cfg, tmp_pat
     )
     session_id = start(cfg, "s")
     session = cfg.workspace / "sessions" / session_id
-    (session / "derived" / "already.bin").write_bytes(b"x" * 100)
+    (session / "outputs" / "already.bin").write_bytes(b"x" * 100)
 
     with pytest.raises(QuotaExceededError):
         kf.run(Request("go", session_id=session_id, data=(supplied,)))
 
-    assert not (session / "data" / "report.pdf").exists(), "placed despite the refusal"
+    assert not (session / "inputs" / "report.pdf").exists(), "placed despite the refusal"

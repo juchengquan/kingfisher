@@ -2689,7 +2689,7 @@ def _mode_changes(path: Path) -> list[int]:
 
 
 def test_only_one_workspace_module_changes_a_mode():
-    """`permissions` owns the write bits on `/data`, and used to own them by being a
+    """`permissions` owns the write bits on `/inputs`, and used to own them by being a
     file.
 
     `harness/backend.py` chmods too and is deliberately out of scope: `prepare_scratch`

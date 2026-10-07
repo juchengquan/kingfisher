@@ -111,7 +111,7 @@ with `None` but guess.
 
 Only *running* the command is delegated. File access is not, and deliberately:
 the shell backend is also the filesystem for every unrouted path, so handing over
-"the shell" would hand over `/derived` with it.
+"the shell" would hand over `/outputs` with it.
 
 ## `RunEvents` — where each turn's record goes
 
@@ -185,7 +185,7 @@ costs you nothing and buys the rest of this section a reader.
 
 **Why it is the one thing on this page you cannot leave out.** The backend is the
 sandbox. It wraps every shell command in `sandbox-exec` or Landlock. It refuses a
-host path handed to a file tool. Its route table is what makes `/data` read-only
+host path handed to a file tool. Its route table is what makes `/inputs` read-only
 legal at all — deepagents refuses read-only rules outright on a backend that
 executes unless every rule sits under a route. And it is the filesystem for every
 unrouted path, which is why the model can be told, in a table it reads every turn,
@@ -294,10 +294,10 @@ built-in tools happen to use. A pre-built graph is the exception: kingfisher
 drives it with no context, and such a tool finds `runtime.context` is `None`.
 
 **Kingfisher reaches the session through it too.** A request's `data` is placed
-with `upload_files` under `/data/`, what a turn left is listed with `glob` under
-`/derived/` and `/memory/`, and `Kingfisher.artifact` fetches one with
+with `upload_files` under `/inputs/`, what a turn left is listed with `glob` under
+`/outputs/` and `/memory/`, and `Kingfisher.artifact` fetches one with
 `download_files`. So those three work on a backend that keeps the session
-somewhere other than the directory it was handed. `/data` has to take that upload
+somewhere other than the directory it was handed. `/inputs` has to take that upload
 while refusing the agent's own writes: `default_backends` routes it to
 `DataBackend`, which lifts the permission bits for kingfisher's upload alone, and
 a backend of yours meets the same promise its own way.
@@ -322,7 +322,7 @@ and read through your backend — which means your agent's shell can reach them 
 unless your backend keeps it out. Nothing signs them, so what stands between the
 agent and rewriting its own pinned agent is that fence, and it is yours to get
 right: **`shell_denied`**, in the kit below, drives `execute` at `/.harness` and
-`/data` and fails if the shell can write either. `kingfisher doctor` warns when
+`/inputs` and fails if the shell can write either. `kingfisher doctor` warns when
 `KINGFISHER_SESSION_BACKENDS_FACTORY` names session backends of yours, because it
 cannot look inside them.
 
@@ -399,7 +399,7 @@ path by dropping its leading slash; the prompt says so in a table the model read
 every turn. Route a path somewhere the shell cannot follow and the agent can read
 its inputs and run nothing over them, with a confused model as the only symptom.
 
-**The shell may not write under `/.harness` or `/data`.** `shell_denied` writes a
+**The shell may not write under `/.harness` or `/inputs`.** `shell_denied` writes a
 file there through the backend, then has the shell try to overwrite it and to create
 another beside it. `default_backends` passes on the strength of its sandbox; with the
 sandbox off it fails on `/.harness`, which is exactly the deployment that needs a

@@ -131,8 +131,8 @@ def test_the_shell_can_still_read_a_skill_and_write_elsewhere(cfg, session_dir):
     shell = backend_at(cfg, session_dir)
 
     assert shell.execute(f"cat {directory}/SKILL.md").exit_code == 0
-    assert shell.execute(f"echo fine > {session_dir}/derived/allowed.txt").exit_code == 0
-    assert (session_dir / "derived" / "allowed.txt").exists()
+    assert shell.execute(f"echo fine > {session_dir}/outputs/allowed.txt").exit_code == 0
+    assert (session_dir / "outputs" / "allowed.txt").exists()
 
 
 def test_the_profile_denies_after_it_allows(tmp_path):

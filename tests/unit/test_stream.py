@@ -159,7 +159,7 @@ def test_a_large_tool_argument_cannot_flood_the_line(cfg):
                             tool_calls=[
                                 {
                                     "name": "write_file",
-                                    "args": {"file_path": "/data/x", "content": "x" * 5000},
+                                    "args": {"file_path": "/inputs/x", "content": "x" * 5000},
                                     "id": "c1",
                                 }
                             ],
@@ -171,7 +171,7 @@ def test_a_large_tool_argument_cannot_flood_the_line(cfg):
     )
     (call,) = [e for e in _events(cfg, agent) if e.kind == "model_call"]
 
-    assert "/data/x" in str(call)  # the argument you needed is there
+    assert "/inputs/x" in str(call)  # the argument you needed is there
     assert len(str(call)) < 300  # the one you did not is bounded
     assert "…" in str(call)
 

@@ -32,7 +32,7 @@ class Turn:
 
     A name and nothing else. It held a directory until `/runs` went: a turn's
     working files are the session's `/scratchpad` and its outputs the session's
-    `/derived`, so there was nothing left for a per-turn folder to hold -- and
+    `/outputs`, so there was nothing left for a per-turn folder to hold -- and
     the folders had been the turn counter, which is why the id is now made
     rather than counted.
     """

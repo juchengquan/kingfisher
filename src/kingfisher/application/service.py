@@ -654,7 +654,7 @@ class Kingfisher(Sessions, Disposal):
             raise ValueError(msg)
         session = yield from self._session_for(request)
         # Who is calling, before the session is marked, claimed or written to. Any
-        # later and a refused caller's files are already in the `/data` of a session
+        # later and a refused caller's files are already in the `/inputs` of a session
         # that was never theirs; after the claim, and a turn running in it would
         # answer "busy" where an id nobody issued answers "no session". The grant
         # is asked for here only for its refusals, and again below for itself.
@@ -727,7 +727,7 @@ class Kingfisher(Sessions, Disposal):
 
         # Before the turn exists, and before anything is destroyed: a request
         # naming a file that is not there must fail without having placed the
-        # ones that were. `place_data` re-hardens `/data` on its way out.
+        # ones that were. `place_data` re-hardens `/inputs` on its way out.
         #
         # A resume places nothing. It is finishing work already proposed rather
         # than asking for something, so there is no `data` on it to place -- see

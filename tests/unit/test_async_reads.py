@@ -73,7 +73,7 @@ def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wir
         else Kingfisher(policied, backends=default_backends)
     )
     start(policied, "s")
-    produced = policied.workspace / "sessions" / "s" / "derived" / "out.txt"
+    produced = policied.workspace / "sessions" / "s" / "outputs" / "out.txt"
     produced.parent.mkdir(parents=True, exist_ok=True)
     produced.write_text("result")
     pin(kf, "s", "only_a")
@@ -84,7 +84,7 @@ def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wir
         return (
             await kf.asession("s", source_ids=held),
             await kf.apending("s", source_ids=held),
-            await kf.aartifact("s", "derived/out.txt", source_ids=held),
+            await kf.aartifact("s", "outputs/out.txt", source_ids=held),
         )
 
     found, waiting, content = asyncio.run(read_all())

@@ -24,7 +24,13 @@ from deepagents.backends.protocol import SandboxBackendProtocol
 from kingfisher.config import ConfigError
 from kingfisher.infrastructure.harness.host_paths import HostPathError
 from kingfisher.infrastructure.harness.permitted_backend import host_path
-from kingfisher.layout import denied_read_scopes, denied_scopes
+from kingfisher.layout import (
+    HARNESS_ROUTE,
+    INPUTS_ROUTE,
+    OUTPUTS_ROUTE,
+    denied_read_scopes,
+    denied_scopes,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -105,9 +111,9 @@ def filesystem_consistency(make: Callable[[], Any]) -> None:
         return
     body, name = uuid4().hex, uuid4().hex
     for virtual, write in (
-        (f"/derived/{name}-tools.txt", lambda path: backend.write(path, body)),
+        (f"{OUTPUTS_ROUTE}{name}-tools.txt", lambda path: backend.write(path, body)),
         (
-            f"/derived/{name}-shell.txt",
+            f"{OUTPUTS_ROUTE}{name}-shell.txt",
             lambda path: backend.execute(f"printf %s {body} > {path.lstrip('/')}"),
         ),
     ):
@@ -131,10 +137,10 @@ def filesystem_consistency(make: Callable[[], Any]) -> None:
 
 
 def shell_denied(make: Callable[[], Any]) -> None:
-    """The agent's shell may not write under `/.harness` or `/data`.
+    """The agent's shell may not write under `/.harness` or `/inputs`.
 
     `/.harness` is what kingfisher reads back and trusts -- the pinned agent, the
-    conversation, a paused turn -- and `/data` is the caller's input, which the agent
+    conversation, a paused turn -- and `/inputs` is the caller's input, which the agent
     is promised it cannot change. The file tools are refused both by the turn's
     permissions; the shell bypasses those, so on any backend but kingfisher's own this
     is the only thing that says the shell is refused too.
@@ -149,16 +155,16 @@ def shell_denied(make: Callable[[], Any]) -> None:
     token = uuid4().hex
     written: list[str] = []
     for route, what in (
-        ("/.harness", "what kingfisher reads back and trusts"),
-        ("/data", "the caller's input"),
+        (HARNESS_ROUTE, "what kingfisher reads back and trusts"),
+        (INPUTS_ROUTE, "the caller's input"),
     ):
-        kept, fresh = f"{route}/{token}-kept", f"{route}/{token}-fresh"
+        kept, fresh = f"{route}{token}-kept", f"{route}{token}-fresh"
         backend.upload_files([(kept, b"as written")])
         for path in (kept, fresh):
             backend.execute(f"printf %s {token} > {path.lstrip('/')}")
         after_kept, after_fresh = backend.download_files([kept, fresh])
         if after_kept.content != b"as written" or after_fresh.error is None:
-            written.append(f"{route}, {what}")
+            written.append(f"{route.rstrip('/')}, {what}")
     if written:
         msg = (
             f"the shell wrote under {'; and under '.join(written)}. Each is only safe "
@@ -260,10 +266,11 @@ def two_sessions_are_kept_apart(make: Callable[[], Any]) -> None:
     """
     cfg, backends = make()
     one, other = CONTRACT_SESSIONS
-    backends.open(cfg, one).upload_files([("/derived/kept-apart", b"one's")])
-    (seen,) = backends.open(cfg, other).download_files(["/derived/kept-apart"])
+    kept = f"{OUTPUTS_ROUTE}kept-apart"
+    backends.open(cfg, one).upload_files([(kept, b"one's")])
+    (seen,) = backends.open(cfg, other).download_files([kept])
     if seen.error is None:
-        msg = f"{other!r} reads {one!r}'s /derived: two sessions share one filesystem"
+        msg = f"{other!r} reads {one!r}'s {kept}: two sessions share one filesystem"
         raise AssertionError(msg)
 
 
@@ -271,8 +278,9 @@ def a_session_is_there_on_the_next_turn(make: Callable[[], Any]) -> None:
     """Each turn builds its backend again. What one turn wrote, the next must find."""
     cfg, backends = make()
     one = CONTRACT_SESSIONS[0]
-    backends.open(cfg, one).upload_files([("/derived/again", b"still here")])
-    (seen,) = backends.open(cfg, one).download_files(["/derived/again"])
+    again = f"{OUTPUTS_ROUTE}again"
+    backends.open(cfg, one).upload_files([(again, b"still here")])
+    (seen,) = backends.open(cfg, one).download_files([again])
     if seen.content != b"still here":
         msg = f"a second backend for {one!r} did not find what the first wrote: {seen!r}"
         raise AssertionError(msg)
@@ -323,20 +331,21 @@ def a_host_path_stays_in_its_session(make: Callable[[], Any]) -> None:
     cfg, backends = make()
     one, other = CONTRACT_SESSIONS
     mine, theirs = backends.open(cfg, one), backends.open(cfg, other)
-    mine.upload_files([("/derived/whose", f"{one}'s".encode())])
-    theirs.upload_files([("/derived/whose", f"{other}'s".encode())])
-    answered = host_path(mine, "/derived/whose")
+    whose = f"{OUTPUTS_ROUTE}whose"
+    mine.upload_files([(whose, f"{one}'s".encode())])
+    theirs.upload_files([(whose, f"{other}'s".encode())])
+    answered = host_path(mine, whose)
     if answered is None:
         return
     _, where = answered
     try:
         held = where.read_bytes()
     except OSError as unreadable:
-        msg = f"{one!r}'s backend says /derived/whose is {where}, which cannot be read"
+        msg = f"{one!r}'s backend says {whose} is {where}, which cannot be read"
         raise AssertionError(msg) from unreadable
     if held != f"{one}'s".encode():
         msg = (
-            f"{one!r}'s backend says /derived/whose is {where}, which holds {held!r}: "
+            f"{one!r}'s backend says {whose} is {where}, which holds {held!r}: "
             "a tool handed that path opens a file that is not this session's"
         )
         raise AssertionError(msg)
@@ -358,12 +367,13 @@ def aopen_reaches_the_session_open_does(make: Callable[[], Any]) -> None:
     """
     cfg, backends = make()
     one, _ = CONTRACT_SESSIONS
-    backends.open(cfg, one).upload_files([("/derived/twins", b"written through open")])
+    twins = f"{OUTPUTS_ROUTE}twins"
+    backends.open(cfg, one).upload_files([(twins, b"written through open")])
 
     async def opened() -> Any:
         return await backends.aopen(cfg, one)
 
-    (seen,) = _on_a_loop_of_its_own(opened).download_files(["/derived/twins"])
+    (seen,) = _on_a_loop_of_its_own(opened).download_files([twins])
     if seen.error or seen.content != b"written through open":
         msg = (
             f"what aopen returned for {one!r} does not hold what open's backend wrote "
@@ -460,7 +470,7 @@ def asize_counts_what_size_does(make: Callable[[], Any]) -> None:
     """
     cfg, backends = make()
     one = CONTRACT_SESSIONS[0]
-    backends.open(cfg, one).upload_files([("/derived/weighed", b"x" * 1024)])
+    backends.open(cfg, one).upload_files([(f"{OUTPUTS_ROUTE}weighed", b"x" * 1024)])
 
     async def counted() -> Any:
         return await backends.asize(cfg, one)
