@@ -1343,10 +1343,10 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # 1.2ms and two modules on top of `model_catalogue`, and pulls in no
     # provider SDK at all.
     "model_catalogue": frozenset({"models"}),
-    # The one-liner names the default in its own signature, which is the whole point
-    # of it being there: `Kingfisher` refuses to pick a filesystem, and `run` is what
-    # spares a caller from saying so. A caller can see the name and replace it, and
-    # neither is possible if the default hides in the body.
+    # Fills in `default_backends` where `Kingfisher` refuses to pick a filesystem: for
+    # `run` and `stream` without a graph, and in `configured_backends` for a command
+    # line with no factory set. Sparing a caller that choice is what the module is
+    # for, so the edge is the point of it.
     "run": frozenset({"backend"}),
     # The service is the harness's largest consumer, and was never in this table
     # because the rule only walked `infrastructure/`. Running a turn *is* driving
