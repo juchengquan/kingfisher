@@ -62,10 +62,10 @@ class Prepared:
     #: end of the turn as well as announced at its start, because `run` drains the
     #: stream for a result and would otherwise be the one caller never told.
     discarded: tuple[str, ...] = ()
-    #: Paths `protect_data` could not harden. Reported to the caller rather
+    #: Paths `protect_inputs` could not harden. Reported to the caller rather
     #: than raised, so they cross the boundary instead of stopping at it.
     unprotected: tuple[str, ...] = ()
-    #: What this request's `data` placed in `/inputs`, and what that replaced.
+    #: What this request's `inputs` placed in `/inputs`, and what that replaced.
     placement: Any = None
     #: `(what, names)` for each thing this workspace offers that the request did
     #: not grant -- tools, skills, subagents. Crosses rather than stopping: a

@@ -25,7 +25,7 @@ class Request:
     agent: str | None = None
     session_id: str | None = None
     turn_id: str | None = None
-    data: tuple[Path, ...] = ()
+    inputs: tuple[Path, ...] = ()
     capabilities: Capabilities = field(default_factory=Capabilities)
     #: Delegate name -> where this request wants it to run. Empty by default.
     #:
@@ -40,7 +40,7 @@ class Request:
             msg = "task must not be empty"
             raise ValueError(msg)
         # Normalise at the edge so everything downstream sees real paths.
-        object.__setattr__(self, "data", tuple(Path(p) for p in self.data))
+        object.__setattr__(self, "inputs", tuple(Path(p) for p in self.inputs))
 
     @classmethod
     def coerce(cls, value: str | Request) -> Request:
@@ -78,7 +78,7 @@ class Resume:
     """An answer to a turn that stopped for one: the other shape a turn starts in.
 
     Not a `Request` with the task left out. A resume is not asking for anything, which
-    is why there is no `data` here -- placing files on a turn that is finishing work
+    is why there is no `inputs` here -- placing files on a turn that is finishing work
     already proposed would put them in `/inputs` with nothing in the conversation saying
     where they came from.
 

@@ -99,7 +99,7 @@ def test_a_backend_keeping_sessions_elsewhere_on_this_host_still_serves_a_path(
     Scripted.script.extend([_calls(path="/inputs/notes.txt"), AIMessage("done")])
     kf = Kingfisher(scripted, backends=Elsewhere(tmp_path / "remote"))
 
-    events = list(kf.stream(Request("go", agent="only", data=(source,))))
+    events = list(kf.stream(Request("go", agent="only", inputs=(source,))))
 
     assert _said(events) == "alpha"
 
@@ -122,13 +122,13 @@ def test_a_backend_with_some_routes_here_serves_those_and_refuses_the_rest(tmp_p
     """The `ports.md` shape: `/inputs` on a local directory, everything else remote.
     Asked per path, because the answer is different for two paths on one backend.
     """
-    data = tmp_path / "inputs"
-    data.mkdir()
-    (data / "in.csv").write_text("a,b\n")
-    mixed = CompositeBackend(default=Remote(), routes={"/inputs/": FilesystemBackend(data)})
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    (inputs / "in.csv").write_text("a,b\n")
+    mixed = CompositeBackend(default=Remote(), routes={"/inputs/": FilesystemBackend(inputs)})
     paths = _paths(mixed, tmp_path)
 
-    assert paths.real("/inputs/in.csv") == str((data / "in.csv").resolve())
+    assert paths.real("/inputs/in.csv") == str((inputs / "in.csv").resolve())
     with pytest.raises(UnsafeReferenceError, match=r"not kept on this host.*ToolContext"):
         paths.real("/outputs/report.txt")
 

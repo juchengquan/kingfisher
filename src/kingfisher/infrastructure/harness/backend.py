@@ -30,7 +30,7 @@ from kingfisher.infrastructure.harness.host_paths import (
 from kingfisher.infrastructure.harness.host_paths import reject_host_path
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.threads import off_loop, thread_pool
-from kingfisher.infrastructure.workspace.permissions import protect_data, writable_data
+from kingfisher.infrastructure.workspace.permissions import protect_inputs, writable_inputs
 from kingfisher.infrastructure.workspace.sessions import (
     LocalSessionDirs,
     ensure_session_layout,
@@ -250,7 +250,7 @@ class WorkspaceScopedBackend(SessionClaims, CompositeBackend):
     `glob` and `grep` are deduplicated. They merge every backend's answer, and two
     of the routes here point *inside* the default backend's own root -- `/inputs` and
     `/memory` are real directories under the session -- so each saw the same file
-    twice: measured, one file supplied with `--data` came back as two matches with
+    twice: measured, one file supplied with `--input` came back as two matches with
     one path between them, on every pattern.
     """
 
@@ -286,7 +286,7 @@ class WorkspaceScopedBackend(SessionClaims, CompositeBackend):
         #: `reject_host_path`, where the session is what the suggestion needs.
         self.workspace = Path(workspace)
         self._session_dir = Path(session_dir)
-        #: What `protect_data` could not harden, for the turn to report.
+        #: What `protect_inputs` could not harden, for the turn to report.
         self.unprotected: tuple[str, ...] = ()
 
     def _get_backend_and_key(self, key: str) -> tuple[Any, str]:
@@ -294,14 +294,14 @@ class WorkspaceScopedBackend(SessionClaims, CompositeBackend):
         return super()._get_backend_and_key(key)
 
 
-class DataBackend(FilesystemBackend):
+class InputsBackend(FilesystemBackend):
     """A session's `/inputs`, which is read-only on disk and opened only for an upload.
 
     `upload_files` is how kingfisher places a caller's files, and the only way in.
     The agent never reaches it: its file tools write through `write` and `edit`,
     which the permission bits still refuse, and a tool's backend refuses `/inputs`
     before the call arrives here. Unlocking inside the backend rather than around
-    the call is what lets `place_data` work on any backend -- a remote one has no
+    the call is what lets `place_inputs` work on any backend -- a remote one has no
     permission bits to lift, and meets the same promise its own way.
     """
 
@@ -310,7 +310,7 @@ class DataBackend(FilesystemBackend):
         self._session_dir = Path(session_dir)
 
     def upload_files(self, files: list[tuple[str, bytes]]) -> Any:
-        with writable_data(self._session_dir):
+        with writable_inputs(self._session_dir):
             return super().upload_files(files)
 
 
@@ -597,7 +597,7 @@ def backend_at(
     # the backend is built, instead of reaching a turn as a path that resolves
     # to the default backend and quietly ignores its own deny rule.
     backing = {
-        INPUTS_ROUTE: lambda: DataBackend(session_dir),
+        INPUTS_ROUTE: lambda: InputsBackend(session_dir),
         SKILLS_ROUTE: lambda: FilesystemBackend(root_dir=str(skills_dir)),
         MEMORY_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / MEMORY)),
         # Mounted so it can be refused. Every operation through it is denied by
@@ -676,7 +676,7 @@ class DefaultBackends(SessionBackends):
         # Kernel-level, because the deny rule covers only the file tools. What it
         # could not harden is reported by the turn rather than raised: raising here
         # used to make one file owned by another user a session unusable for good.
-        unprotected = protect_data(directory)
+        unprotected = protect_inputs(directory)
         runner = self._runner(directory) if self._runner is not None else None
         built = backend_at(cfg, directory, catalogue=catalogue, runner=runner)
         built.unprotected = unprotected

@@ -178,7 +178,7 @@ def test_a_refused_turn_leaves_nothing_in_the_session(two_agents, tmp_path):
     planted.write_text("somebody else's\n", encoding="utf-8")
 
     with pytest.raises(UnknownSessionError):
-        _first_event(kf, Request(task="again", session_id=session_id, data=(planted,)), ("B",))
+        _first_event(kf, Request(task="again", session_id=session_id, inputs=(planted,)), ("B",))
 
     assert not (directory / "inputs" / "planted.csv").exists()
     assert directory.stat().st_mtime_ns == touched
@@ -192,7 +192,7 @@ def test_a_turn_naming_nobody_is_refused_before_it_writes(two_agents, tmp_path):
     planted.write_text("somebody else's\n", encoding="utf-8")
 
     with pytest.raises(AccessError, match="source_ids="):
-        _first_event(kf, Request(task="again", session_id=session_id, data=(planted,)), None)
+        _first_event(kf, Request(task="again", session_id=session_id, inputs=(planted,)), None)
 
     assert not (two_agents.workspace / "sessions" / session_id / "inputs" / "planted.csv").exists()
 

@@ -229,7 +229,7 @@ def test_the_framework_never_asks_for_files_of_its_own(cfg):
     assert "findings.csv" in asked.state["messages"][0]["content"]
 
 
-def test_supplied_data_is_still_there_on_the_next_turn(cfg):
+def test_supplied_inputs_are_still_there_on_the_next_turn(cfg):
     """The property the old per-turn `input/` deliberately lacked, and the whole reason
     this exists: that left with the turn, and `/inputs` does not.
     """
@@ -239,7 +239,7 @@ def test_supplied_data_is_still_there_on_the_next_turn(cfg):
     start(cfg, "keeps")
     ck = StubCheckpointer()
     first = run(
-        Request("look at it", session_id="keeps", data=(source,)),
+        Request("look at it", session_id="keeps", inputs=(source,)),
         cfg=cfg,
         graph=StubAgent("ok"),
         backends=default_backends,
@@ -259,7 +259,7 @@ def test_supplied_data_is_still_there_on_the_next_turn(cfg):
     assert not (session / "input").exists()  # nothing was re-supplied
 
 
-def test_the_agent_is_told_what_arrived_in_data(cfg):
+def test_the_agent_is_told_what_arrived_in_inputs(cfg):
     """It may already have looked at /inputs this session."""
     source = cfg.workspace / "fresh.csv"
     source.write_text("x")
@@ -267,7 +267,7 @@ def test_the_agent_is_told_what_arrived_in_data(cfg):
     start(cfg, "told")
     agent = StubAgent("ok")
     run(
-        Request("go", session_id="told", data=(source,)),
+        Request("go", session_id="told", inputs=(source,)),
         cfg=cfg,
         graph=agent,
         backends=default_backends,

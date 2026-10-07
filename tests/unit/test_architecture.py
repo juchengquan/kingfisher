@@ -2708,7 +2708,7 @@ def test_only_one_workspace_module_changes_a_mode():
 
     assert not offenders, (
         f"{offenders} change a file mode inside the workspace package — "
-        "`permissions` is the one module allowed to, and `writable_data` is how "
+        "`permissions` is the one module allowed to, and `writable_inputs` is how "
         "the rest of it asks"
     )
 
@@ -3107,7 +3107,7 @@ DEPLOYMENT_ERRORS = frozenset({
     # while `SubagentError` sits above: a caller may upload a subagent and cannot
     # upload middleware, so a `middlewares/` file that will not load is always the
     # deployment's own.
-    "AccessError", "AgentError", "ConfigError", "DataError", "HostPathError",
+    "AccessError", "AgentError", "ConfigError", "HostPathError", "InputsError",
     "LoadError", "MiddlewareError", "ToolError",
 })
 

@@ -163,7 +163,7 @@ def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
     """
     start(cfg, "s")
     monkeypatch.setattr(
-        "kingfisher.infrastructure.harness.backend.protect_data",
+        "kingfisher.infrastructure.harness.backend.protect_inputs",
         lambda _dir: ("theirs.pdf: Operation not permitted",),
     )
     service = Kingfisher(
@@ -213,20 +213,20 @@ def test_a_quiet_turn_opens_with_only_run_start():
     assert [(e.kind, e.text) for e in events] == [("run_start", "t001")]
 
 
-def test_replacing_durable_data_is_counted_not_just_listed():
-    """Durable data silently overwritten is the one dangerous case, so the count is
-    named.
+def test_replacing_an_input_is_counted_not_just_listed():
+    """A caller's input silently overwritten is the one dangerous case, so the
+    count is named.
     """
     events = opening_events("t001", (), FakePlacement(("a.csv", "b.csv"), ("a.csv",)))
 
-    (placed,) = [e for e in events if e.kind == "data_placed"]
+    (placed,) = [e for e in events if e.kind == "inputs_placed"]
     assert placed.text == "a.csv, b.csv (1 replaced)"
 
 
 def test_placing_without_replacing_says_nothing_about_replacement():
     events = opening_events("t001", (), FakePlacement(("fresh.csv",)))
 
-    (placed,) = [e for e in events if e.kind == "data_placed"]
+    (placed,) = [e for e in events if e.kind == "inputs_placed"]
     assert placed.text == "fresh.csv"
 
 
@@ -248,7 +248,7 @@ def test_a_bare_task_is_told_only_where_to_work():
 
 
 def test_files_supplied_with_the_request_are_named():
-    """They went to a directory of the turn's own and are session data now, so the
+    """They went to a directory of the turn's own and are session inputs now, so the
     one line that used to name two places names one.
     """
     message = turn_message("analyse", ("fresh.csv",))
@@ -273,7 +273,7 @@ def test_the_turn_message_carries_no_output_convention():
 
 #: Every way a request is turned down after its session is claimed: over the files
 #: it names, and over the session already being too large.
-REFUSALS = ["data names a missing file", "data names one file twice", "session over budget"]
+REFUSALS = ["inputs name a missing file", "inputs name one file twice", "session over budget"]
 
 
 @pytest.mark.parametrize("how", REFUSALS)
@@ -283,7 +283,7 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how)
     never ran.
     """
     from kingfisher.domain.session import QuotaExceededError
-    from kingfisher.infrastructure.session_files import DataError
+    from kingfisher.infrastructure.session_files import InputsError
     from tests.conftest import RecordedEvents, start
     from tests.unit.test_tenancy import _claim
 
@@ -291,9 +291,9 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how)
     (tmp_path / "b").mkdir()
     (tmp_path / "a" / "same.csv").write_text("one")
     (tmp_path / "b" / "same.csv").write_text("two")
-    data = {
-        "data names a missing file": (tmp_path / "nope.csv",),
-        "data names one file twice": (tmp_path / "a" / "same.csv", tmp_path / "b" / "same.csv"),
+    inputs = {
+        "inputs name a missing file": (tmp_path / "nope.csv",),
+        "inputs name one file twice": (tmp_path / "a" / "same.csv", tmp_path / "b" / "same.csv"),
         "session over budget": (),
     }[how]
     budgeted = replace(cfg, session_max_bytes=1) if how == "session over budget" else cfg
@@ -308,8 +308,8 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how)
         run_events=recorded,
     )
 
-    with pytest.raises((DataError, QuotaExceededError)):
-        kf.run(Request("go", session_id=session, data=data))
+    with pytest.raises((InputsError, QuotaExceededError)):
+        kf.run(Request("go", session_id=session, inputs=inputs))
 
     assert recorded.named("run_start") == []
     assert not _claim(budgeted, session).exists()

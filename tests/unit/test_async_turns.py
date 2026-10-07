@@ -479,7 +479,7 @@ def test_cancelling_during_setup_any_way_leaves_the_session_free(cfg, monkeypatc
 
 def test_cancelling_at_any_step_of_setup_leaves_the_session_free(cfg, monkeypatch, tmp_path):
     """A cancel landing at any one of setup's awaits -- the lookup, the open, the pin,
-    the claim, the quota, the data, the pause, the transcript, the build -- must leave
+    the claim, the quota, the inputs, the pause, the transcript, the build -- must leave
     the session unclaimed and usable. Before setup was a sequence the only await was
     one thread; each step is a place a cancel can land now, and a claim or a built
     turn dropped at any of them holds the session until the claim goes stale.
@@ -498,13 +498,13 @@ def test_cancelling_at_any_step_of_setup_leaves_the_session_free(cfg, monkeypatc
         access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"),
         session_max_bytes=10**9,
     )
-    data = tmp_path / "in.csv"
-    data.write_text("a,b\n")
+    supplied = tmp_path / "in.csv"
+    supplied.write_text("a,b\n")
     session = start(policied, "s")
     kf = Kingfisher(
         policied, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
     )
-    asked, held = Request("go", agent="only_a", session_id=session, data=(data,)), ("A",)
+    asked, held = Request("go", agent="only_a", session_id=session, inputs=(supplied,)), ("A",)
     real = steps_module._awaited
     # The first turn pins the agent and every later one reads the pin instead, so the
     # count is taken on a turn like the ones cancelled below.

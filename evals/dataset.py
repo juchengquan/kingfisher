@@ -17,7 +17,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from random import Random
 
-from kingfisher.infrastructure.workspace import writable_data
+from kingfisher.infrastructure.workspace import writable_inputs
 from kingfisher.layout import INPUTS
 
 SAMPLE_NAME = "orders.csv"
@@ -135,6 +135,6 @@ def seed_sample_data(session_dir: Path) -> bool:
     csv, _ = build_dataset()
     if target.exists() and target.read_text(encoding="utf-8") == csv:
         return False
-    with writable_data(session_dir) as data:
-        (data / SAMPLE_NAME).write_text(csv, encoding="utf-8")
+    with writable_inputs(session_dir) as inputs:
+        (inputs / SAMPLE_NAME).write_text(csv, encoding="utf-8")
     return True

@@ -16,6 +16,22 @@ only the first two items of the checklist.
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## A caller's files named for `inputs/`, after #668
+
+The names for the files a caller hands a turn follow the folder they land in. The
+old names are gone rather than kept beside the new ones, so each of these fails
+until it is changed.
+
+| Before | Now |
+|---|---|
+| `kingfisher run --data PATH`, repeatable | `kingfisher run --input PATH`, repeatable. `--data` is refused as an unrecognised argument. |
+| `Request(..., data=(path, ...))`, and reading `request.data` | `Request(..., inputs=(path, ...))` and `request.inputs`. `data=` raises `TypeError`. |
+| A `RunEvent` of kind `data_placed`, which `kingfisher run` prints as `[data_placed] ...` | `inputs_placed`, with the same text. A consumer switching on `data_placed` never sees one again. |
+| `place_data`, `DataPlacement` and `DataError` in `kingfisher.infrastructure.session_files`; `DataBackend` in `kingfisher.infrastructure.harness.backend`; `protect_data` and `writable_data` in `kingfisher.infrastructure.workspace` | `place_inputs`, `InputsPlacement`, `InputsError`, `InputsBackend`, `protect_inputs` and `writable_inputs`, in the same modules. None was ever exported from `kingfisher`. |
+
+- **If you catch `DataError`** around a turn, for a file that is missing, named twice
+  or refused by the backend, catch `InputsError`. It is still a `ValueError`.
+
 ## Session folders named for which way files go, after #667
 
 A session's `data/` is `inputs/` and its `derived/` is `outputs/`, on disk and in
@@ -38,9 +54,10 @@ the paths the agent is given. `memory/` keeps its name. The workspace layout is 
 - **If you wrote your own backend**, route `/inputs/` where you routed `/data/`.
   `route_coverage` in `BACKEND_CONTRACT` names a route your backend leaves out, and
   `shell_denied` now checks that the shell cannot write under `/inputs`.
-- **What stays for now:** `kingfisher run --data`, `Request.data`, the
+- **What stayed for this change:** `kingfisher run --data`, `Request.data`, the
   `data_placed` event, and `protect_data`, `writable_data`, `place_data`,
-  `DataBackend`, `DataError` and `DataPlacement`. They are renamed in a later change.
+  `DataBackend`, `DataError` and `DataPlacement`. They are renamed in the section
+  above, *A caller's files named for `inputs/`*.
 
 ## Session backends always given, after #639
 

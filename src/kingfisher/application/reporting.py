@@ -189,11 +189,11 @@ def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning
     for name, why in indistinct:
         events.append(RunEvent(kind="indistinct", text=f"{name} {why}", agent=name))
     if placement.placed:
-        # Replacement is the one dangerous case -- durable data, silently
+        # Replacement is the one dangerous case -- a caller's file, silently
         # overwritten -- so it is named rather than assumed.
         replaced = f" ({len(placement.replaced)} replaced)" if placement.replaced else ""
         events.append(
-            RunEvent(kind="data_placed", text=f"{', '.join(placement.placed)}{replaced}")
+            RunEvent(kind="inputs_placed", text=f"{', '.join(placement.placed)}{replaced}")
         )
     # The turn's name, where this used to be its directory. A turn has none now --
     # it works in the session's `/scratchpad` like every other turn -- so the one fact

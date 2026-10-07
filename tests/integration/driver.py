@@ -129,7 +129,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-checks", action="store_true", help="skip the smoke's pass/fail gate")
     parser.add_argument("--session", metavar="ID", help="continue an existing session")
     parser.add_argument(
-        "--data",
+        "--input",
         metavar="PATH",
         action="append",
         default=[],
@@ -315,11 +315,11 @@ def main(argv: list[str]) -> int:
         task=task,
         agent=args.agent,
         session_id=session_id,
-        data=tuple(Path(p).expanduser() for p in args.data),
+        inputs=tuple(Path(p).expanduser() for p in args.input),
         capabilities=capabilities,
     )
 
-    missing = [p for p in request.data if not p.is_file()]
+    missing = [p for p in request.inputs if not p.is_file()]
     if missing:
         print(f"no such input file(s): {', '.join(str(p) for p in missing)}", file=sys.stderr)
         return 2
@@ -336,8 +336,8 @@ def main(argv: list[str]) -> int:
                 print(f"{kind.replace('_', ' '):<14}: {', '.join(selected) or '(none)'}")
         if capabilities.memory is not None:
             print(f"{'memory':<10}: {'on' if capabilities.memory else 'off'}")
-    if request.data:
-        print(f"data      : {', '.join(p.name for p in request.data)}")
+    if request.inputs:
+        print(f"inputs    : {', '.join(p.name for p in request.inputs)}")
     print(f"task      : {task}\n")
 
     # Streaming rather than run(): with no UI, a multi-minute analysis would

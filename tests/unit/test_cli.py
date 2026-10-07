@@ -458,7 +458,7 @@ def test_a_file_that_is_not_there_is_refused_before_the_model(cfg, monkeypatch, 
     """The one mistake that would otherwise cost money to discover."""
     _ran(monkeypatch, [_finished()], cfg)
 
-    assert main(["run", "t", "--agent", "a", "--data", "/nope/missing.csv"]) == 2
+    assert main(["run", "t", "--agent", "a", "--input", "/nope/missing.csv"]) == 2
     assert "no such file" in capsys.readouterr().err
 
 

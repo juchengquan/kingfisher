@@ -69,7 +69,7 @@ def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
 
 def test_backend_is_rooted_at_the_session(cfg, session_dir):
     """One session is one root: virtual paths anchor there, so /inputs means this
-    session's data and no path leads to another session's.
+    session's inputs and no path leads to another session's.
     """
     backend = backend_at(cfg, session_dir)
     assert str(session_dir.resolve()) == str(backend.default.cwd)
@@ -431,7 +431,7 @@ INSIDE_THE_ROOT = {
 
 
 def test_a_routed_file_is_globbed_once(cfg, session_dir):
-    """Measured before this: `--data orders.csv` reached the model as
+    """Measured before this: `--input orders.csv` reached the model as
     `['/inputs/orders.csv', '/inputs/orders.csv']`, on every pattern tried.
     """
     backend = backend_at(cfg, session_dir)
@@ -465,9 +465,9 @@ def test_a_routed_file_is_grepped_once(cfg, session_dir):
 def test_a_file_matching_twice_still_reports_both(cfg, session_dir):
     """The half that says this is deduplication and not collapsing."""
     backend = backend_at(cfg, session_dir)
-    data = session_dir / "inputs"
-    data.mkdir(parents=True, exist_ok=True)
-    (data / "probe.txt").write_text("needle one\nquiet\nneedle two\n", encoding="utf-8")
+    inputs = session_dir / "inputs"
+    inputs.mkdir(parents=True, exist_ok=True)
+    (inputs / "probe.txt").write_text("needle one\nquiet\nneedle two\n", encoding="utf-8")
 
     matches = _rows(backend.grep("needle", path="/inputs"))
 
@@ -480,10 +480,10 @@ def test_two_different_files_are_both_still_listed(cfg, session_dir):
     thing twice.
     """
     backend = backend_at(cfg, session_dir)
-    data = session_dir / "inputs"
-    data.mkdir(parents=True, exist_ok=True)
+    inputs = session_dir / "inputs"
+    inputs.mkdir(parents=True, exist_ok=True)
     for name in ("one.txt", "two.txt"):
-        (data / name).write_text("needle\n", encoding="utf-8")
+        (inputs / name).write_text("needle\n", encoding="utf-8")
 
     found = sorted(one["path"] for one in _rows(backend.glob("/inputs/*.txt")))
 

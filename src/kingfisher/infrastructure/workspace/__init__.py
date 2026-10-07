@@ -18,8 +18,8 @@ _EXPORTS = {
     "TEMPLATES": "kingfisher.infrastructure.workspace.layout",
     "ensure_layout": "kingfisher.infrastructure.workspace.layout",
     "is_new_workspace": "kingfisher.infrastructure.workspace.layout",
-    "protect_data": "kingfisher.infrastructure.workspace.permissions",
-    "writable_data": "kingfisher.infrastructure.workspace.permissions",
+    "protect_inputs": "kingfisher.infrastructure.workspace.permissions",
+    "writable_inputs": "kingfisher.infrastructure.workspace.permissions",
     "DESTINATION": "kingfisher.infrastructure.workspace.seeding",
     "SEED_HINT": "kingfisher.infrastructure.workspace.seeding",
     "SUGGESTION": "kingfisher.infrastructure.workspace.seeding",
@@ -61,13 +61,13 @@ __all__ = [
     "kinds_at",
     "memory_backing",
     "middleware_named",
-    "protect_data",
+    "protect_inputs",
     "scaffold_memory",
     "seed",
     "session_bytes",
     "source_ids_named",
     "starter_agent",
-    "writable_data",
+    "writable_inputs",
 ]
 
 if TYPE_CHECKING:
@@ -78,8 +78,8 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.layout import TEMPLATES as TEMPLATES
     from kingfisher.infrastructure.workspace.layout import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace.layout import is_new_workspace as is_new_workspace
-    from kingfisher.infrastructure.workspace.permissions import protect_data as protect_data
-    from kingfisher.infrastructure.workspace.permissions import writable_data as writable_data
+    from kingfisher.infrastructure.workspace.permissions import protect_inputs as protect_inputs
+    from kingfisher.infrastructure.workspace.permissions import writable_inputs as writable_inputs
     from kingfisher.infrastructure.workspace.seeding import DESTINATION as DESTINATION
     from kingfisher.infrastructure.workspace.seeding import SEED_HINT as SEED_HINT
     from kingfisher.infrastructure.workspace.seeding import SUGGESTION as SUGGESTION

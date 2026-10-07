@@ -20,7 +20,7 @@ from kingfisher.layout import ARTIFACT_DIRS, INPUTS_ROUTE
 _log = logging.getLogger(__name__)
 
 
-class DataError(ValueError):
+class InputsError(ValueError):
     """A caller-supplied file cannot be placed in a session's `/inputs`."""
 
 
@@ -31,30 +31,30 @@ def checked(sources: tuple[Path, ...]) -> dict[str, Path]:
         name = Path(source).name
         if name in {"", ".", ".."}:
             msg = f"{source}: has no filename to place it under"
-            raise DataError(msg)
+            raise InputsError(msg)
         if not Path(source).is_file():
             msg = f"{source}: no such file"
-            raise DataError(msg)
+            raise InputsError(msg)
         if name in seen:
             # Keeping the last one silently loses a file the caller asked for.
             msg = f"{name}: supplied twice, from {seen[name]} and {source}"
-            raise DataError(msg)
+            raise InputsError(msg)
         seen[name] = Path(source)
     return seen
 
 
 @dataclass(frozen=True)
-class DataPlacement:
-    """What `place_data` did. `replaced` is a subset of `placed`."""
+class InputsPlacement:
+    """What `place_inputs` did. `replaced` is a subset of `placed`."""
 
     placed: tuple[str, ...] = ()
     replaced: tuple[str, ...] = ()
 
 
-def place_data(sources: tuple[Path, ...], backend: Any) -> Steps[DataPlacement]:
+def place_inputs(sources: tuple[Path, ...], backend: Any) -> Steps[InputsPlacement]:
     """Copy caller-supplied files into a session's `/inputs`, through its backend."""
     if not sources:
-        return DataPlacement()
+        return InputsPlacement()
     # Before anything is read or sent: a request naming a file that is not there
     # must fail without having placed the ones that were.
     seen = yield on_host(checked, sources)
@@ -64,8 +64,8 @@ def place_data(sources: tuple[Path, ...], backend: Any) -> Steps[DataPlacement]:
     answers = yield changing(backend, "upload_files", contents)
     if refused := [f"{answer.path}: {answer.error}" for answer in answers if answer.error]:
         msg = f"the session's backend refused {', '.join(refused)}"
-        raise DataError(msg)
-    return DataPlacement(
+        raise InputsError(msg)
+    return InputsPlacement(
         placed=tuple(seen),
         replaced=tuple(name for name in seen if name in existing),
     )

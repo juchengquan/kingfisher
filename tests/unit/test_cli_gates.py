@@ -46,7 +46,7 @@ CUT_SHORT = RunResult(
 def _args(**over: Any) -> argparse.Namespace:
     return argparse.Namespace(
         **{
-            "data": (),
+            "input": (),
             "task": "go",
             "agent": None,
             "session": None,
