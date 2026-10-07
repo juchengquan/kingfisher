@@ -105,7 +105,7 @@ from kingfisher.infrastructure.harness.kinds.declared_middleware import (
 from kingfisher.infrastructure.harness.runlog import LoggedRunEvents, RunLogger
 from kingfisher.infrastructure.session_files import (
     collect_artifacts,
-    place_data,
+    place_inputs,
     read_artifact,
 )
 from kingfisher.infrastructure.session_store import (
@@ -234,7 +234,7 @@ class Kingfisher(Sessions, Disposal):
         # carries the route table a read-only rule is only legal against -- and a
         # default would let a deployment wire the whole service without learning
         # there was a boundary at all. A pre-built graph names them too: kingfisher
-        # places a request's data, collects what a turn left and takes the turn lock
+        # places a request's inputs, collects what a turn left and takes the turn lock
         # through them, and only the graph's builder knows where its backend keeps a
         # session.
         backends: SessionBackends,
@@ -436,10 +436,10 @@ class Kingfisher(Sessions, Disposal):
             # the second read that pin back and parsed it.
             agent=agent,
             held=held,
-            # The one setup opened or was handed, which placed this turn's data.
+            # The one setup opened or was handed, which placed this turn's inputs.
             # Opened again here, a remote backend would be asked for two sessions'
             # worth of sandbox, and the agent could run in the one that was never
-            # given the data.
+            # given the inputs.
             backend=files,
             # What the deployment permits, narrowed by what the request asked for,
             # and never the request's own: they are equal only where the deployment
@@ -720,19 +720,19 @@ class Kingfisher(Sessions, Disposal):
         # rather than raised; see `DefaultBackends`.
         unprotected = tuple(getattr(files, "unprotected", ()))
 
-        # Before the data is placed, not after: placing it grows the session,
+        # Before the inputs are placed, not after: placing them grows the session,
         # so checking afterwards would let a request that is already over
         # budget add to it and only then be refused.
         yield from self._refuse_if_over_budget(session)
 
         # Before the turn exists, and before anything is destroyed: a request
         # naming a file that is not there must fail without having placed the
-        # ones that were. `place_data` re-hardens `/inputs` on its way out.
+        # ones that were. `place_inputs` re-hardens `/inputs` on its way out.
         #
         # A resume places nothing. It is finishing work already proposed rather
-        # than asking for something, so there is no `data` on it to place -- see
+        # than asking for something, so there is no `inputs` on it to place -- see
         # `Resume`, where the absence of the field carries the reason.
-        placement = yield from place_data(getattr(request, "data", ()), files)
+        placement = yield from place_inputs(getattr(request, "inputs", ()), files)
 
         # What this deployment permits, narrowed by what the request asked for.
         allowed = self._effective_grants(source_ids).intersect(request.capabilities)

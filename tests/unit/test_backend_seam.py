@@ -78,7 +78,7 @@ def test_a_service_with_no_filesystem_named_is_refused(cfg):
 
 def test_a_pre_built_graph_is_refused_without_backends_named(cfg):
     """A graph carries the backend its agent runs on, and nothing kingfisher can open.
-    Accepted alone, kingfisher guessed a directory on this host for the data it places
+    Accepted alone, kingfisher guessed a directory on this host for the inputs it places
     and the files it collects -- somewhere a graph whose backend runs elsewhere never
     looks.
     """
@@ -94,7 +94,7 @@ def test_the_one_liners_refuse_a_graph_without_backends_named(cfg, door):
 
 
 def test_a_pre_built_graph_reaches_its_session_through_the_backends_named(cfg, tmp_path):
-    """What the guess cost: beside a graph, a request's data went into
+    """What the guess cost: beside a graph, a request's inputs went into
     `<workspace>/sessions/<id>` whatever the deployment kept its sessions in.
     """
     source = tmp_path / "in.csv"
@@ -104,7 +104,7 @@ def test_a_pre_built_graph_reaches_its_session_through_the_backends_named(cfg, t
         cfg, graph=StubAgent("ok"), backends=KeptElsewhere(remote), threads=StubCheckpointer()
     )
 
-    session_id = kf.run(Request("t", data=(source,))).session_id
+    session_id = kf.run(Request("t", inputs=(source,))).session_id
 
     assert (remote / session_id / INPUTS / "in.csv").read_text() == "alpha\n"
     assert not (cfg.workspace / "sessions" / session_id / INPUTS / "in.csv").exists()

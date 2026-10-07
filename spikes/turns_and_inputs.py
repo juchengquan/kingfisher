@@ -44,7 +44,7 @@ def main() -> int:
             "What is the total headcount in the file supplied with this request? "
             "Answer with the number and the filename you read.",
             session_id=session,
-            data=[upload],
+            inputs=[upload],
         ),
         cfg=cfg,
     )

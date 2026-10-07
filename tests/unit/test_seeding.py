@@ -202,7 +202,7 @@ def test_a_workspace_tool_may_not_shadow_a_builtin(cfg):
 # one operation that writes over those copies. It used to do so silently: an
 # edited `reviewer.yaml` came back as the shipped one, reported identically to a
 # file that had never been there. It still overwrites -- refusing would make
-# re-seeding after an upgrade impossible, which is the same trade `place_data`
+# re-seeding after an upgrade impossible, which is the same trade `place_inputs`
 # makes -- but it no longer does it quietly.
 
 

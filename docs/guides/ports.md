@@ -277,7 +277,7 @@ second.
 
 **A pre-built graph names its session backends too.** `Kingfisher(cfg, graph=...)`
 runs its agent on the backend the graph was compiled with, but kingfisher still
-places a request's data, collects what a turn left and takes the turn lock through
+places a request's inputs, collects what a turn left and takes the turn lock through
 the session backends you pass — so a graph is refused without them, and one built on
 kingfisher's own passes `backends=default_backends`. Pass the ones that reach the
 sessions your graph's backend keeps: nothing can check that from outside a compiled
@@ -293,13 +293,13 @@ on yours, `delete` and the two batch ones included, whichever of them the
 built-in tools happen to use. A pre-built graph is the exception: kingfisher
 drives it with no context, and such a tool finds `runtime.context` is `None`.
 
-**Kingfisher reaches the session through it too.** A request's `data` is placed
+**Kingfisher reaches the session through it too.** A request's `inputs` are placed
 with `upload_files` under `/inputs/`, what a turn left is listed with `glob` under
 `/outputs/` and `/memory/`, and `Kingfisher.artifact` fetches one with
 `download_files`. So those three work on a backend that keeps the session
 somewhere other than the directory it was handed. `/inputs` has to take that upload
 while refusing the agent's own writes: `default_backends` routes it to
-`DataBackend`, which lifts the permission bits for kingfisher's upload alone, and
+`InputsBackend`, which lifts the permission bits for kingfisher's upload alone, and
 a backend of yours meets the same promise its own way.
 
 **Open it once if you use it around a turn.** `Kingfisher.files_for(session_id)`

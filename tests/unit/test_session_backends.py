@@ -226,7 +226,7 @@ def test_the_command_reaps_where_the_named_backend_keeps_them(told_about_a_remot
     assert not (REMOTE[-1] / "old").exists()
 
 
-def test_building_a_session_s_backend_makes_its_data_read_only(cfg):
+def test_building_a_session_s_backend_makes_its_inputs_read_only(cfg):
     """Not only after a placement: a session whose `/inputs` was left writable -- by
     hand, or by a process that died between unlocking and hardening -- is hardened the
     next time a turn asks for its backend, which is before the agent can touch it.

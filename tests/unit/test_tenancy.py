@@ -157,7 +157,7 @@ def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
     start(cfg, "s")
 
     with pytest.raises(ValueError):
-        service.run(Request("go", session_id="s", data=(tmp_path / "gone.csv",)))
+        service.run(Request("go", session_id="s", inputs=(tmp_path / "gone.csv",)))
 
     assert not _claim(cfg, "s").exists()
     assert service.run(Request("after", session_id="s")).turn_id

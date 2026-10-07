@@ -152,12 +152,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="which agent runs this (`kingfisher list` shows them, and where they are read from)",
     )
     doing.add_argument("--session", metavar="ID", help="continue an existing session")
-    # One flag, where there were two. `--input` put a file in the turn's own
-    # directory and `--data` in the session's; the turn directory is gone, so
-    # every caller-supplied file lives the length of the session and a name sent
-    # twice replaces the first, which `place_data` reports.
+    # A turn has no directory of its own, so every caller-supplied file lives the
+    # length of the session and a name sent twice replaces the first, which
+    # `place_inputs` reports.
     doing.add_argument(
-        "--data",
+        "--input",
         metavar="PATH",
         action="append",
         default=[],
@@ -504,7 +503,7 @@ def _plain_warnings() -> Iterator[None]:
 
 def _run(args: argparse.Namespace) -> int:
     """Run one task, and say how it ended in the only channel that is left."""
-    missing = [p for p in args.data if not Path(p).expanduser().is_file()]
+    missing = [p for p in args.input if not Path(p).expanduser().is_file()]
     if missing:
         # Before the model, because this is the one mistake that would otherwise
         # cost money to discover.
@@ -524,7 +523,7 @@ def _run(args: argparse.Namespace) -> int:
         task=args.task,
         agent=args.agent,
         session_id=args.session,
-        data=tuple(Path(p).expanduser() for p in args.data),
+        inputs=tuple(Path(p).expanduser() for p in args.input),
     )
     return _drive(kf, request, held=args.held, delete_session=args.delete_session)
 

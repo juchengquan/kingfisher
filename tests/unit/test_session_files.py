@@ -29,7 +29,7 @@ from kingfisher.infrastructure.harness.backend import (
 )
 from kingfisher.infrastructure.session_files import (
     collect_artifacts,
-    place_data,
+    place_inputs,
     read_artifact,
 )
 from kingfisher.infrastructure.steps import drive
@@ -96,11 +96,11 @@ class Elsewhere(SessionBackends):
 # -- a turn ------------------------------------------------------------------
 
 
-def test_a_backend_that_keeps_the_session_elsewhere_gets_the_data_and_gives_back_the_report(
+def test_a_backend_that_keeps_the_session_elsewhere_gets_the_inputs_and_gives_back_the_report(
     scripted, tmp_path
 ):
-    """The failure this exists for: with the session somewhere else, data was placed in
-    a directory the agent never saw and the report it wrote came back as nothing, on a
+    """The failure this exists for: with the session somewhere else, inputs were placed
+    in a directory the agent never saw and the report it wrote came back as nothing, on a
     turn that said it had worked.
     """
     an_agent(scripted)
@@ -114,10 +114,10 @@ def test_a_backend_that_keeps_the_session_elsewhere_gets_the_data_and_gives_back
     ])
     kf = Kingfisher(scripted, backends=Elsewhere(remote))
 
-    events = list(kf.stream(Request("go", agent="only", data=(source,))))
+    events = list(kf.stream(Request("go", agent="only", inputs=(source,))))
 
     read = next(e.text for e in events if e.kind == "tool_result" and e.tool == "read_file")
-    assert "alpha" in read, f"the agent never saw the data it was given: {read!r}"
+    assert "alpha" in read, f"the agent never saw the inputs it was given: {read!r}"
     (finished,) = [e for e in events if e.kind == "finished"]
     session_id = finished.result.session_id
     assert "outputs/report.txt" in finished.result.artifacts
@@ -280,15 +280,15 @@ def test_a_session_is_opened_once_where_its_pinned_agent_decides(cfg, way):
 # -- the pieces --------------------------------------------------------------
 
 
-def test_data_placed_through_the_default_backend_lands_read_only(cfg, session_dir, tmp_path):
-    """`DataBackend` opens `/inputs` for kingfisher's upload and nothing else, so the
+def test_inputs_placed_through_the_default_backend_land_read_only(cfg, session_dir, tmp_path):
+    """`InputsBackend` opens `/inputs` for kingfisher's upload and nothing else, so the
     promise that the agent cannot change its inputs outlives the placing.
     """
     source = tmp_path / "in.csv"
     source.write_text("x")
     backend = backend_at(cfg, session_dir)
 
-    placement = drive(place_data((source,), backend))
+    placement = drive(place_inputs((source,), backend))
 
     assert placement.placed == ("in.csv",)
     assert (session_dir / INPUTS / "in.csv").read_text() == "x"
@@ -296,7 +296,7 @@ def test_data_placed_through_the_default_backend_lands_read_only(cfg, session_di
     assert backend.write("/inputs/other.csv", "y").error, "the agent's write got through"
 
 
-def test_a_refused_upload_is_a_data_error_naming_the_file(session_dir, tmp_path):
+def test_a_refused_upload_is_an_inputs_error_naming_the_file(session_dir, tmp_path):
     """The backend answers per file rather than raising, so an unread answer is a
     placement reported as done with nothing placed.
     """
@@ -316,7 +316,7 @@ def test_a_refused_upload_is_a_data_error_naming_the_file(session_dir, tmp_path)
     )
 
     with pytest.raises(ValueError, match=r"/inputs/in\.csv: permission_denied"):
-        drive(place_data((source,), backend))
+        drive(place_inputs((source,), backend))
 
 
 def test_collecting_and_reading_agree_on_every_name(cfg, session_dir):

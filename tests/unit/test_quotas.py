@@ -229,7 +229,7 @@ def test_reap_falls_back_to_the_configured_ttl(cfg):
     assert kf.reap(now=10_000).removed == (idle,)
 
 
-def test_a_session_over_budget_is_refused_before_its_data_is_placed(cfg, tmp_path):
+def test_a_session_over_budget_is_refused_before_its_inputs_are_placed(cfg, tmp_path):
     """The two features meet here, and the order is the point."""
     supplied = tmp_path / "report.pdf"
     supplied.write_bytes(b"z" * 500)
@@ -245,6 +245,6 @@ def test_a_session_over_budget_is_refused_before_its_data_is_placed(cfg, tmp_pat
     (session / "outputs" / "already.bin").write_bytes(b"x" * 100)
 
     with pytest.raises(QuotaExceededError):
-        kf.run(Request("go", session_id=session_id, data=(supplied,)))
+        kf.run(Request("go", session_id=session_id, inputs=(supplied,)))
 
     assert not (session / "inputs" / "report.pdf").exists(), "placed despite the refusal"

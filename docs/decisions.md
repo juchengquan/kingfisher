@@ -2013,6 +2013,10 @@ of the merge and is stated here rather than discovered.
 **What a reader should expect and not find:** `RunResult.virtual_dir`, which named
 a directory that no longer exists, and `run_dir`, which is `session_dir` now
 because that is what it points at. `kingfisher run --input` went with the field.
+*(2026-10-07: `--input` is back, as the only flag for a caller's files. It is
+`--data` renamed, as `Request.inputs` is `Request.data` renamed -- not the per-turn
+field and flag that went here. See "The names a caller writes follow the folder"
+below.)*
 
 **The three lifetimes are told apart by destination now**, which is what the split
 had been doing by convention: `/data` is the caller's and read-only, `/scratch` is
@@ -2433,6 +2437,19 @@ The names a caller writes follow in a separate change: `--data`, `Request.data`,
 the `data_placed` event, and `protect_data` with its neighbours still say `data`.
 Entries in this file that say `/data` or `/derived` meant these folders under their
 old names. *(2026-10-07.)*
+
+**The names a caller writes follow the folder.** `data` was kept over `inputs` when
+the two fields merged because it named where a caller's files land, and by that
+reason the folder's new name carries over: `kingfisher run --input`,
+`Request.inputs` and the `inputs_placed` event. `Request.inputs` returns with the one
+meaning `data` had -- files kept for the life of the session, in `/inputs`, read-only
+to the agent -- and not the per-turn one it had before the merge. The names inside
+follow too, so the folder and what guards it are spelled one way: `place_inputs`,
+`InputsPlacement`, `InputsError`, `InputsBackend`, `protect_inputs` and
+`writable_inputs`. No alias keeps the old names working: it would be two names for
+one thing again, which is what the merge removed. Entries in this file that say
+`--data`, `Request.data`, `place_data` or `data_placed` meant these.
+*(2026-10-07.)*
 
 ## Wiring a store
 
@@ -3079,6 +3096,12 @@ names nobody is refused by the library, so a `run` without it would be broken on
 exactly the deployments that took access control seriously. Unlike `list --as`,
 an absent one is not the operator's view: a listing is read-only, and a turn
 acts. *(2026-09-04, same document.)*
+
+*(2026-10-07: one flag hands the agent a file now, and it is `--input`. The
+per-turn `--input` named above went when a turn stopped having a directory, and
+`--data` was renamed `--input` once its folder was `/inputs`; the paragraph above
+is about that flag. See "The names a caller writes follow the folder" under
+"Sessions: what persists and where".)*
 
 **The answer goes to stdout and everything watched goes to stderr**, so
 `kingfisher run ... > answer.md` keeps the answer alone and `2>/dev/null` keeps

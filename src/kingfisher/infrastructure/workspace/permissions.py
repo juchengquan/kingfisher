@@ -18,7 +18,7 @@ def _add_write_bits(path: Path) -> None:
 
 
 def unlock_and_retry(func: Callable[[str], object], path: str, exc: BaseException) -> None:
-    """Undo `protect_data` for one path so a sweep can finish, then retry it."""
+    """Undo `protect_inputs` for one path so a sweep can finish, then retry it."""
     if not isinstance(exc, PermissionError):
         raise exc
     try:
@@ -59,17 +59,17 @@ def keep_tmp_private(session_dir: Path) -> None:
         (Path(session_dir) / SCRATCH).chmod(0o700)
 
 
-def protect_data(session_dir: Path) -> tuple[str, ...]:
+def protect_inputs(session_dir: Path) -> tuple[str, ...]:
     """Make `inputs/` read-only at the OS level. Idempotent."""
-    # The layout's name and not a spelling of it: `DataBackend` uploads under the
+    # The layout's name and not a spelling of it: `InputsBackend` uploads under the
     # constant, and a folder named here instead is one the upload never reaches.
-    data = Path(session_dir) / INPUTS
-    if not data.is_dir():
+    inputs = Path(session_dir) / INPUTS
+    if not inputs.is_dir():
         return ()
 
     # Children first, then the directory itself.
     failures = []
-    for path in (*sorted(data.rglob("*"), reverse=True), data):
+    for path in (*sorted(inputs.rglob("*"), reverse=True), inputs):
         try:
             _drop_write_bits(path)
         except OSError as exc:
@@ -78,15 +78,15 @@ def protect_data(session_dir: Path) -> tuple[str, ...]:
 
 
 @contextmanager
-def writable_data(session_dir: Path) -> Iterator[Path]:
+def writable_inputs(session_dir: Path) -> Iterator[Path]:
     """Temporarily make `inputs/` writable, for loading inputs."""
-    data = Path(session_dir) / INPUTS
-    data.mkdir(parents=True, exist_ok=True)
-    _add_write_bits(data)
-    for path in data.rglob("*"):
+    inputs = Path(session_dir) / INPUTS
+    inputs.mkdir(parents=True, exist_ok=True)
+    _add_write_bits(inputs)
+    for path in inputs.rglob("*"):
         with suppress(OSError):
             _add_write_bits(path)
     try:
-        yield data
+        yield inputs
     finally:
-        protect_data(session_dir)
+        protect_inputs(session_dir)

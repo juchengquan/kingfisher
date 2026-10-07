@@ -99,7 +99,7 @@ def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wir
 
 def test_an_async_turn_makes_no_sync_port_call_on_the_loop(cfg, sync_calls, tmp_path):
     """Setup and the turn's ending are round trips to the session's backend: the lookup,
-    the open, the pin, the claim, the data, and at the end the pause, the transcript,
+    the open, the pin, the claim, the inputs, and at the end the pause, the transcript,
     the listing and the claim again. Made on the loop, each holds every other turn up
     for as long as the backend takes, and every answer still comes back right.
     """
@@ -109,15 +109,15 @@ def test_an_async_turn_makes_no_sync_port_call_on_the_loop(cfg, sync_calls, tmp_
         access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"),
         session_max_bytes=10**9,
     )
-    data = tmp_path / "in.csv"
-    data.write_text("a,b\n")
+    supplied = tmp_path / "in.csv"
+    supplied.write_text("a,b\n")
     kf = Kingfisher(
         policied, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
     )
     start(policied, "s")
     sync_calls.clear()
 
-    asked = Request("go", agent="only_a", session_id="s", data=(data,))
+    asked = Request("go", agent="only_a", session_id="s", inputs=(supplied,))
     result = asyncio.run(kf.arun(asked, source_ids=("A",)))
 
     assert result.completed
@@ -175,11 +175,11 @@ def test_a_turn_reads_the_pin_once(cfg, monkeypatch):
 def test_an_async_turn_refused_after_its_claim_gives_it_back_off_the_loop(
     cfg, sync_calls, tmp_path
 ):
-    """Refused once claimed -- here over data naming a file that is not there -- setup
+    """Refused once claimed -- here over inputs naming a file that is not there -- setup
     gave the claim back with the sync `release`, on the loop, a round trip every other
     turn waited through on a remote backend.
     """
-    from kingfisher.infrastructure.session_files import DataError
+    from kingfisher.infrastructure.session_files import InputsError
 
     kf = Kingfisher(
         cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
@@ -187,8 +187,8 @@ def test_an_async_turn_refused_after_its_claim_gives_it_back_off_the_loop(
     start(cfg, "s")
     sync_calls.clear()
 
-    with pytest.raises(DataError):
-        asyncio.run(kf.arun(Request("go", session_id="s", data=(tmp_path / "nope.csv",))))
+    with pytest.raises(InputsError):
+        asyncio.run(kf.arun(Request("go", session_id="s", inputs=(tmp_path / "nope.csv",))))
 
     released = [loop for name, loop in sync_calls if name == "SessionClaims.release"]
     assert released, "the claim was never given back"
