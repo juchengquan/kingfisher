@@ -285,11 +285,11 @@ def test_a_prompt_that_begins_indented_still_loads():
     """`system_prompt: |` takes its indentation from the first line, so a prompt opening
     with a code example *fails to parse*.
     """
-    lines = "      ls -la /data\n  Then report what you found.\n"
+    lines = "      ls -la /inputs\n  Then report what you found.\n"
     header = "name: reviewer\ndescription: d\nsystem_prompt: "
 
     spec = a_subagent(header + "|2\n" + lines, "reviewer.yaml")
-    assert "ls -la /data" in spec.system_prompt
+    assert "ls -la /inputs" in spec.system_prompt
     assert "Then report what you found." in spec.system_prompt
 
     # The same document without the indicator does not load at all.

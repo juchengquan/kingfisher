@@ -255,12 +255,12 @@ def test_files_survive_a_stateless_turn(cfg):
     kf = Kingfisher(stateless, graph=StubAgent("ok"), backends=default_backends)
     first = kf.run(Request("go"))
     directory = _session_dir(cfg, first.session_id)
-    (directory / "derived" / "kept.txt").write_text("still here", encoding="utf-8")
+    (directory / "outputs" / "kept.txt").write_text("still here", encoding="utf-8")
 
     second = kf.run(Request("again", session_id=first.session_id))
 
     assert second.session_id == first.session_id
-    assert (directory / "derived" / "kept.txt").read_text() == "still here"
+    assert (directory / "outputs" / "kept.txt").read_text() == "still here"
 
 
 def test_the_flag_wins_over_an_injected_store(cfg):

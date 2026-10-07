@@ -68,7 +68,7 @@ def _parent_with(*names: str, backend: Any = None) -> Any:
                 "name": name,
                 "description": f"Writes, as {name}.",
                 "system_prompt": "Write the file.",
-                "model": _child(f"/derived/{name}.txt"),
+                "model": _child(f"/outputs/{name}.txt"),
             }
             for name in names
         ],
@@ -92,7 +92,7 @@ def test_a_delegates_gated_call_stops_the_whole_turn(cfg):
 
     assert result.stop_reason == AWAITING
     assert [call.tool for call in result.pending] == ["write_file"]
-    assert result.pending[0].args["file_path"] == "/derived/scribe.txt"
+    assert result.pending[0].args["file_path"] == "/outputs/scribe.txt"
 
 
 def test_the_delegate_is_named_where_one_was_in_flight(cfg):
@@ -117,7 +117,7 @@ def test_a_top_level_gate_names_no_delegate(cfg):
         graph=create_deep_agent(
             model=FakeToolCallingModel(
                 responses=[
-                    AIMessage(content="", tool_calls=[_writes("/derived/own.txt", "x", "c1")]),
+                    AIMessage(content="", tool_calls=[_writes("/outputs/own.txt", "x", "c1")]),
                     AIMessage(content="done"),
                 ]
             ),
@@ -150,7 +150,7 @@ def test_a_parents_own_call_is_not_blamed_on_a_delegate_it_started(cfg):
                     AIMessage(
                         content="",
                         tool_calls=[
-                            _writes("/derived/mine.txt", "the parent's", "c1"),
+                            _writes("/outputs/mine.txt", "the parent's", "c1"),
                             {
                                 "name": "task",
                                 "args": {"description": "go", "subagent_type": "scribe"},
@@ -168,7 +168,7 @@ def test_a_parents_own_call_is_not_blamed_on_a_delegate_it_started(cfg):
                     "name": "scribe",
                     "description": "Writes, as scribe.",
                     "system_prompt": "Write the file.",
-                    "model": _child("/derived/scribe.txt"),
+                    "model": _child("/outputs/scribe.txt"),
                 }
             ],
             checkpointer=InMemorySaver(),
@@ -178,7 +178,7 @@ def test_a_parents_own_call_is_not_blamed_on_a_delegate_it_started(cfg):
 
     result = kf.run(Request("both at once"))
 
-    mine = [call for call in result.pending if call.args["file_path"] == "/derived/mine.txt"]
+    mine = [call for call in result.pending if call.args["file_path"] == "/outputs/mine.txt"]
     assert mine, "the parent's own gated call never paused"
     assert mine[0].agent is None, "the parent's own call was attributed to its delegate"
 
@@ -226,7 +226,7 @@ def test_a_delegates_gate_is_answered_the_same_way(cfg, session_dir):
     )
 
     assert answered.stop_reason == END_TURN
-    assert (session_dir / "derived" / "scribe.txt").read_text() == "from the delegate"
+    assert (session_dir / "outputs" / "scribe.txt").read_text() == "from the delegate"
 
 
 def test_rejecting_a_delegates_call_leaves_it_unrun(cfg, session_dir):
@@ -249,4 +249,4 @@ def test_rejecting_a_delegates_call_leaves_it_unrun(cfg, session_dir):
         )
     )
 
-    assert not (session_dir / "derived" / "scribe.txt").exists()
+    assert not (session_dir / "outputs" / "scribe.txt").exists()

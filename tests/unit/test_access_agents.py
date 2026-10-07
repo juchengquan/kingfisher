@@ -164,7 +164,7 @@ def test_a_later_turn_in_a_session_in_reach_goes_ahead(two_agents):
 
 def test_a_refused_turn_leaves_nothing_in_the_session(two_agents, tmp_path):
     """Refused at the agent, which is the obvious place, the caller's file was already in
-    the session's `/data` and the session marked as used -- measured, before the check
+    the session's `/inputs` and the session marked as used -- measured, before the check
     moved to the top of the turn.
     """
     kf = Kingfisher(two_agents, backends=default_backends)
@@ -180,7 +180,7 @@ def test_a_refused_turn_leaves_nothing_in_the_session(two_agents, tmp_path):
     with pytest.raises(UnknownSessionError):
         _first_event(kf, Request(task="again", session_id=session_id, data=(planted,)), ("B",))
 
-    assert not (directory / "data" / "planted.csv").exists()
+    assert not (directory / "inputs" / "planted.csv").exists()
     assert directory.stat().st_mtime_ns == touched
 
 
@@ -194,7 +194,7 @@ def test_a_turn_naming_nobody_is_refused_before_it_writes(two_agents, tmp_path):
     with pytest.raises(AccessError, match="source_ids="):
         _first_event(kf, Request(task="again", session_id=session_id, data=(planted,)), None)
 
-    assert not (two_agents.workspace / "sessions" / session_id / "data" / "planted.csv").exists()
+    assert not (two_agents.workspace / "sessions" / session_id / "inputs" / "planted.csv").exists()
 
 
 # -- a tuple, a list, a string ----------------------------------------------

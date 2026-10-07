@@ -63,7 +63,7 @@ def test_prose_and_tagged_lines_do_not_jam_together():
     text, _ = _render(
         [
             RunEvent(kind="token", text="I'll write the file."),
-            RunEvent(kind="model_call", tools=("write_file",), args=({"file_path": "/data/x"},)),
+            RunEvent(kind="model_call", tools=("write_file",), args=({"file_path": "/inputs/x"},)),
         ]
     )
 
@@ -208,22 +208,22 @@ def test_listing_the_inventory_leaves_no_session_behind(cfg):
 
 
 def test_the_smoke_seeds_its_dataset_where_the_agent_looks(cfg):
-    """`/data` is a *session's* directory, not the workspace's."""
+    """`/inputs` is a *session's* directory, not the workspace's."""
     seeded = main.prepare_smoke(cfg, cfg.workspace, "smoke1")
 
-    assert (cfg.workspace / "sessions" / "smoke1" / "data" / "orders.csv").is_file()
+    assert (cfg.workspace / "sessions" / "smoke1" / "inputs" / "orders.csv").is_file()
     assert any("dataset" in line for line in seeded)
 
 
-def test_the_smoke_never_creates_a_workspace_level_data_directory(cfg):
+def test_the_smoke_never_creates_a_workspace_level_inputs_directory(cfg):
     """The stray directory is the tell: nothing reads it, so nothing may make it."""
     main.prepare_smoke(cfg, cfg.workspace, "smoke2")
 
-    assert not (cfg.workspace / "data").exists()
+    assert not (cfg.workspace / "inputs").exists()
 
 
 def test_skills_stay_shared_across_sessions(cfg):
-    """Only `data` moved under the session."""
+    """Only `inputs` moved under the session."""
     from dataclasses import replace
 
     main.prepare_smoke(replace(cfg, skills_enabled=True), cfg.workspace, "smoke3")
@@ -617,7 +617,7 @@ def test_a_smoke_run_checks_the_result_it_fetched_through_the_session(cfg, monke
 
     driver = _driver_on(monkeypatch, cfg)
     fetched: list[tuple[str, str]] = []
-    finished = SimpleNamespace(session_id="smoke", artifacts=("derived/result.json",))
+    finished = SimpleNamespace(session_id="smoke", artifacts=("outputs/result.json",))
 
     class Service:
         def __init__(self, *args, **kwargs) -> None:
@@ -635,7 +635,7 @@ def test_a_smoke_run_checks_the_result_it_fetched_through_the_session(cfg, monke
 
     driver.main(["driver.py"])
 
-    assert fetched == [("smoke", "derived/result.json")]
+    assert fetched == [("smoke", "outputs/result.json")]
 
 
 def test_a_smoke_run_reaches_its_end(cfg, tmp_path, monkeypatch):
@@ -649,7 +649,7 @@ def test_a_smoke_run_reaches_its_end(cfg, tmp_path, monkeypatch):
     from types import SimpleNamespace
 
     driver = _driver_on(monkeypatch, cfg)
-    finished = SimpleNamespace(session_id="smoke", artifacts=("derived/report.md",))
+    finished = SimpleNamespace(session_id="smoke", artifacts=("outputs/report.md",))
 
     class Service:
         def __init__(self, *args, **kwargs) -> None:

@@ -17,9 +17,9 @@ of every log you name and prints the warnings and errors in time order, each
 repeat collapsed into one line with a count, and every stretch in which no log
 said anything:
 
-    python3 "$KINGFISHER_SKILLS/incident/timeline/scripts/timeline.py" data/api.log data/worker.log
+    python3 "$KINGFISHER_SKILLS/incident/timeline/scripts/timeline.py" inputs/api.log inputs/worker.log
 
-Those are shell paths: what the file tools call `/data/api.log` is `data/api.log`
+Those are shell paths: what the file tools call `/inputs/api.log` is `inputs/api.log`
 in the shell. `$KINGFISHER_SKILLS` is where the shell finds this catalogue. If it
 is unset, this deployment cannot run skill scripts — say so, and build the
 timeline from `grep` over the same logs instead.

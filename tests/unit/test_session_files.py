@@ -33,7 +33,7 @@ from kingfisher.infrastructure.session_files import (
     read_artifact,
 )
 from kingfisher.infrastructure.steps import drive
-from kingfisher.layout import DATA, HARNESS, SESSION_DIRS, SKILLS_ROUTE, routed_paths
+from kingfisher.layout import HARNESS, INPUTS, SESSION_DIRS, SKILLS_ROUTE, routed_paths
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import Through, an_agent, pin, start
 from tests.unit.scripted import Scripted
@@ -108,8 +108,8 @@ def test_a_backend_that_keeps_the_session_elsewhere_gets_the_data_and_gives_back
     source.write_text("alpha\n")
     remote = tmp_path / "remote"
     Scripted.script.extend([
-        _calls("read_file", file_path="/data/in.csv"),
-        _calls("write_file", file_path="/derived/report.txt", content="made elsewhere"),
+        _calls("read_file", file_path="/inputs/in.csv"),
+        _calls("write_file", file_path="/outputs/report.txt", content="made elsewhere"),
         AIMessage(content="done"),
     ])
     kf = Kingfisher(scripted, backends=Elsewhere(remote))
@@ -120,21 +120,21 @@ def test_a_backend_that_keeps_the_session_elsewhere_gets_the_data_and_gives_back
     assert "alpha" in read, f"the agent never saw the data it was given: {read!r}"
     (finished,) = [e for e in events if e.kind == "finished"]
     session_id = finished.result.session_id
-    assert "derived/report.txt" in finished.result.artifacts
-    assert kf.artifact(session_id, "derived/report.txt") == b"made elsewhere"
+    assert "outputs/report.txt" in finished.result.artifacts
+    assert kf.artifact(session_id, "outputs/report.txt") == b"made elsewhere"
     assert kf.sessions()[0].id == session_id
     # And none of it went through the directory kingfisher holds, which is what makes
     # the answers above ones only the backend could have given.
     local = scripted.workspace / "sessions" / session_id
-    assert not (local / DATA / "in.csv").exists()
-    assert not (local / "derived" / "report.txt").exists()
+    assert not (local / INPUTS / "in.csv").exists()
+    assert not (local / "outputs" / "report.txt").exists()
 
 
 # -- fetching one ------------------------------------------------------------
 
 
 def _produced(
-    cfg, name: str = "derived/out.txt", content: str = "result", *, backends=default_backends
+    cfg, name: str = "outputs/out.txt", content: str = "result", *, backends=default_backends
 ) -> Kingfisher:
     start(cfg, "s")
     target = cfg.workspace / "sessions" / "s" / name
@@ -144,24 +144,24 @@ def _produced(
 
 
 def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg, way):
-    kf = _produced(cfg, "derived/nested/out.csv", "a,b\n")
+    kf = _produced(cfg, "outputs/nested/out.csv", "a,b\n")
 
-    assert Through(kf, way).artifact("s", "derived/nested/out.csv") == b"a,b\n"
+    assert Through(kf, way).artifact("s", "outputs/nested/out.csv") == b"a,b\n"
 
 
 @pytest.mark.parametrize(
     "name",
     [
         ".harness/agent.yaml",
-        "data/in.csv",
+        "inputs/in.csv",
         "scratchpad/tmp.txt",
-        "derived/../.harness/agent.yaml",
-        "/derived/out.txt",
-        "derived",
+        "outputs/../.harness/agent.yaml",
+        "/outputs/out.txt",
+        "outputs",
     ],
 )
 def test_only_what_a_turn_produced_can_be_fetched(cfg, name, way):
-    """The backend reaches `/.harness` and `/data` too. A caller entitled to a report is
+    """The backend reaches `/.harness` and `/inputs` too. A caller entitled to a report is
     not thereby entitled to the pinned agent or someone's inputs.
     """
     kf = _produced(cfg)
@@ -172,7 +172,7 @@ def test_only_what_a_turn_produced_can_be_fetched(cfg, name, way):
 
 
 @pytest.mark.parametrize(
-    "name", ["derived/../.harness/agent.yaml", "memory/../data/in.csv", "derived"]
+    "name", ["outputs/../.harness/agent.yaml", "memory/../inputs/in.csv", "outputs"]
 )
 def test_a_refused_name_never_reaches_the_backend(name):
     """Refused here, not left to the backend: the local one happens to reject `..` on
@@ -194,15 +194,15 @@ def test_a_refused_name_never_reaches_the_backend(name):
 def test_a_name_that_is_not_there_is_refused_by_name(cfg, way):
     kf = _produced(cfg)
 
-    with pytest.raises(ArtifactError, match=r"derived/missing\.txt"):
-        Through(kf, way).artifact("s", "derived/missing.txt")
+    with pytest.raises(ArtifactError, match=r"outputs/missing\.txt"):
+        Through(kf, way).artifact("s", "outputs/missing.txt")
 
 
 def test_a_session_that_is_not_there_is_the_same_error_as_ever(cfg, way):
     kf = Kingfisher(cfg, backends=default_backends)
 
     with pytest.raises(UnknownSessionError):
-        Through(kf, way).artifact("nobody", "derived/out.txt")
+        Through(kf, way).artifact("nobody", "outputs/out.txt")
 
 
 def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg, way):
@@ -215,9 +215,9 @@ def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg, way):
     pin(kf, "s", "only_a")
 
     # The control beside the escape: the same call, by a caller who does reach it.
-    assert Through(kf, way).artifact("s", "derived/out.txt", source_ids=("A",)) == b"result"
+    assert Through(kf, way).artifact("s", "outputs/out.txt", source_ids=("A",)) == b"result"
     with pytest.raises(UnknownSessionError):
-        Through(kf, way).artifact("s", "derived/out.txt", source_ids=("B",))
+        Through(kf, way).artifact("s", "outputs/out.txt", source_ids=("B",))
 
 
 # -- reading one -------------------------------------------------------------
@@ -236,7 +236,7 @@ class Counting(DefaultBackends):
 
 @pytest.mark.parametrize(
     "read",
-    [lambda reads: reads.artifact("s", "derived/out.txt"), lambda reads: reads.pending("s")],
+    [lambda reads: reads.artifact("s", "outputs/out.txt"), lambda reads: reads.pending("s")],
     ids=["artifact", "pending"],
 )
 def test_reading_a_session_opens_its_backend_once(cfg, read, way):
@@ -281,7 +281,7 @@ def test_a_session_is_opened_once_where_its_pinned_agent_decides(cfg, way):
 
 
 def test_data_placed_through_the_default_backend_lands_read_only(cfg, session_dir, tmp_path):
-    """`DataBackend` opens `/data` for kingfisher's upload and nothing else, so the
+    """`DataBackend` opens `/inputs` for kingfisher's upload and nothing else, so the
     promise that the agent cannot change its inputs outlives the placing.
     """
     source = tmp_path / "in.csv"
@@ -291,9 +291,9 @@ def test_data_placed_through_the_default_backend_lands_read_only(cfg, session_di
     placement = drive(place_data((source,), backend))
 
     assert placement.placed == ("in.csv",)
-    assert (session_dir / DATA / "in.csv").read_text() == "x"
-    assert not os.access(session_dir / DATA, os.W_OK)
-    assert backend.write("/data/other.csv", "y").error, "the agent's write got through"
+    assert (session_dir / INPUTS / "in.csv").read_text() == "x"
+    assert not os.access(session_dir / INPUTS, os.W_OK)
+    assert backend.write("/inputs/other.csv", "y").error, "the agent's write got through"
 
 
 def test_a_refused_upload_is_a_data_error_naming_the_file(session_dir, tmp_path):
@@ -312,10 +312,10 @@ def test_a_refused_upload_is_a_data_error_naming_the_file(session_dir, tmp_path)
 
     backend = CompositeBackend(
         default=FilesystemBackend(root_dir=session_dir),
-        routes={"/data/": Refusing(root_dir=session_dir / DATA)},
+        routes={"/inputs/": Refusing(root_dir=session_dir / INPUTS)},
     )
 
-    with pytest.raises(ValueError, match=r"/data/in\.csv: permission_denied"):
+    with pytest.raises(ValueError, match=r"/inputs/in\.csv: permission_denied"):
         drive(place_data((source,), backend))
 
 
@@ -323,14 +323,14 @@ def test_collecting_and_reading_agree_on_every_name(cfg, session_dir):
     """Whatever `collect_artifacts` reports, `read_artifact` accepts: a name handed to a
     caller that the fetch then refused would be a result nobody can open.
     """
-    (session_dir / "derived" / "deep" / "er").mkdir(parents=True)
-    (session_dir / "derived" / "deep" / "er" / "x.bin").write_bytes(b"\x00\x01")
-    (session_dir / "derived" / ".hidden").write_text("h")
+    (session_dir / "outputs" / "deep" / "er").mkdir(parents=True)
+    (session_dir / "outputs" / "deep" / "er" / "x.bin").write_bytes(b"\x00\x01")
+    (session_dir / "outputs" / ".hidden").write_text("h")
     backend = backend_at(cfg, session_dir)
 
     names = drive(collect_artifacts(backend))
 
-    assert {"derived/deep/er/x.bin", "derived/.hidden"} <= set(names)
+    assert {"outputs/deep/er/x.bin", "outputs/.hidden"} <= set(names)
     for name in names:
         drive(read_artifact(backend, name))
 
@@ -339,10 +339,10 @@ def test_collecting_and_reading_agree_on_every_name(cfg, session_dir):
 
 
 def test_the_command_writes_an_artifact_where_it_is_told(at_the_command_line, tmp_path, capsys):
-    _produced(at_the_command_line, "derived/out.txt", "result")
+    _produced(at_the_command_line, "outputs/out.txt", "result")
     out = tmp_path / "copy.txt"
 
-    code = main(["artifact", "--session", "s", "derived/out.txt", "--out", str(out)])
+    code = main(["artifact", "--session", "s", "outputs/out.txt", "--out", str(out)])
 
     assert code == 0
     assert out.read_text() == "result"
@@ -355,11 +355,11 @@ def test_the_command_writes_bytes_to_standard_output_untouched(
     re-encode it on its way out.
     """
     start(at_the_command_line, "s")
-    derived = at_the_command_line.workspace / "sessions" / "s" / "derived"
-    derived.mkdir(parents=True, exist_ok=True)
-    (derived / "blob.bin").write_bytes(b"\xff\x00\xfe")
+    outputs = at_the_command_line.workspace / "sessions" / "s" / "outputs"
+    outputs.mkdir(parents=True, exist_ok=True)
+    (outputs / "blob.bin").write_bytes(b"\xff\x00\xfe")
 
-    code = main(["artifact", "--session", "s", "derived/blob.bin"])
+    code = main(["artifact", "--session", "s", "outputs/blob.bin"])
 
     assert code == 0
     assert capsysbinary.readouterr().out == b"\xff\x00\xfe"

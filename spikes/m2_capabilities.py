@@ -34,7 +34,7 @@ CONVENTION = "report counts as plain integers with no thousands separators"
 # before deciding whether to read the body. A `wc -l` question warrants no
 # skill, and asserting otherwise tests nothing but the wording of the task.
 SESSION_ONE = (
-    f"Profile /data/{SAMPLE_NAME}: report the row count, the number of distinct "
+    f"Profile /inputs/{SAMPLE_NAME}: report the row count, the number of distinct "
     f"regions after normalising them, and any data quality problems you find.\n\n"
     f"Also, for future sessions in this project: always {CONVENTION}."
 )

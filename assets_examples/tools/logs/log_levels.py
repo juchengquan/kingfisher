@@ -47,7 +47,7 @@ def log_levels(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     """Count a log's warnings and errors minute by minute, loudest minutes first.
     Use before reading a long log, to find the minutes worth reading.
 
-    `file_path` is the same virtual path the file tools take -- `/data/<name>` --
+    `file_path` is the same virtual path the file tools take -- `/inputs/<name>` --
     rooted at this session, read through the session's backend.
 
     Reads lines that begin with a timestamp such as `2026-09-01T14:03:22`, and

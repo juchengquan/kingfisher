@@ -54,7 +54,7 @@ def mask_secrets(file_path: str, runtime: ToolRuntime[ToolContext], max_lines: i
     """Read a text file with credentials, emails and IP addresses masked. Use
     when you must quote from a file that may carry secrets.
 
-    `file_path` is the same virtual path the file tools take -- `/data/<name>` --
+    `file_path` is the same virtual path the file tools take -- `/inputs/<name>` --
     rooted at this session, read through the session's backend.
 
     Reports how many lines were returned and how many were masked, so the caller

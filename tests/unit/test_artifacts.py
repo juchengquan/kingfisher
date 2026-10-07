@@ -21,7 +21,7 @@ def test_what_the_turn_left_in_derived_comes_back(cfg):
         checkpointer=StubCheckpointer(),
     )
     session = cfg.workspace / "sessions" / "s"
-    (session / "derived" / "model.pkl").write_bytes(b"fitted")
+    (session / "outputs" / "model.pkl").write_bytes(b"fitted")
 
     again = run(
         Request("t2", session_id="s"),
@@ -31,8 +31,8 @@ def test_what_the_turn_left_in_derived_comes_back(cfg):
         checkpointer=StubCheckpointer(),
     )
 
-    assert "derived/model.pkl" in again.artifacts
-    assert "derived/model.pkl" not in result.artifacts  # not there on the first turn
+    assert "outputs/model.pkl" in again.artifacts
+    assert "outputs/model.pkl" not in result.artifacts  # not there on the first turn
 
 
 def test_memory_is_reported_too(cfg):
@@ -74,7 +74,7 @@ def test_run_scratch_is_not_reported(cfg):
 
 
 def test_inputs_are_not_reported(cfg):
-    """`/data` came from the caller and is read-only; handing it back would be asking
+    """`/inputs` came from the caller and is read-only; handing it back would be asking
     them to store what they already have.
     """
     start(cfg, "s")
@@ -88,38 +88,38 @@ def test_inputs_are_not_reported(cfg):
     )
 
     assert session.is_dir()
-    assert not any(path.startswith("data/") for path in result.artifacts)
+    assert not any(path.startswith("inputs/") for path in result.artifacts)
 
 
 def test_paths_are_relative_to_the_session(cfg, session_dir):
     """A host path would be useless to a caller that does not share the disk."""
-    (session_dir / "derived" / "nested").mkdir(parents=True)
-    (session_dir / "derived" / "nested" / "out.csv").write_text("a,b\n")
+    (session_dir / "outputs" / "nested").mkdir(parents=True)
+    (session_dir / "outputs" / "nested" / "out.csv").write_text("a,b\n")
 
     artifacts = drive(collect_artifacts(backend_at(cfg, session_dir)))
 
-    assert "derived/nested/out.csv" in artifacts
+    assert "outputs/nested/out.csv" in artifacts
     assert not any(path.startswith("/") for path in artifacts)
 
 
 def test_a_shell_write_is_reported_even_though_no_tool_saw_it(cfg, session_dir):
     """The reason this is a filesystem walk and not a record of tool calls: `execute`
-    bypasses the file tools, and running a script is how most of `/derived` gets
+    bypasses the file tools, and running a script is how most of `/outputs` gets
     produced.
     """
     import subprocess
 
     subprocess.run(
-        ["sh", "-c", "echo fitted > derived/model.txt"],
+        ["sh", "-c", "echo fitted > outputs/model.txt"],
         cwd=session_dir,
         check=True,
     )
 
-    assert "derived/model.txt" in drive(collect_artifacts(backend_at(cfg, session_dir)))
+    assert "outputs/model.txt" in drive(collect_artifacts(backend_at(cfg, session_dir)))
 
 
 def test_directories_are_omitted(cfg, session_dir):
     """An empty one carries nothing to persist and reappears with its files."""
-    (session_dir / "derived" / "empty").mkdir(parents=True)
+    (session_dir / "outputs" / "empty").mkdir(parents=True)
 
-    assert "derived/empty" not in drive(collect_artifacts(backend_at(cfg, session_dir)))
+    assert "outputs/empty" not in drive(collect_artifacts(backend_at(cfg, session_dir)))

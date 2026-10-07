@@ -52,12 +52,12 @@ def handed(bridge, request) -> Any:
 
 
 def test_the_name_the_agent_was_taught_now_works(bridge, session):
-    """Measured in a real run before this existed: the model passed `/data/config.ini`,
+    """Measured in a real run before this existed: the model passed `/inputs/config.ini`,
     the tool raised `FileNotFoundError`, and the delegate reported it could not read
     a file that `ls` could see.
     """
-    assert handed(bridge, a_call(path="/data/config.ini")) == {
-        "path": str(session / "data" / "config.ini")
+    assert handed(bridge, a_call(path="/inputs/config.ini")) == {
+        "path": str(session / "inputs" / "config.ini")
     }
 
 
@@ -65,8 +65,8 @@ def test_a_relative_name_lands_in_the_session_too(bridge, session):
     """The shell's spelling of the same file -- `system.md` teaches both, as one path
     with and without its leading slash.
     """
-    assert handed(bridge, a_call(path="data/config.ini")) == {
-        "path": str(session / "data" / "config.ini")
+    assert handed(bridge, a_call(path="inputs/config.ini")) == {
+        "path": str(session / "inputs" / "config.ini")
     }
 
 
@@ -94,7 +94,7 @@ def test_climbing_out_is_refused_with_the_rule(bridge):
     answer = bridge.wrap_tool_call(a_call(path="../other/secret.txt"), lambda r: None)
 
     assert answer.status == "error"
-    assert "/data/<name>" in answer.content
+    assert "/inputs/<name>" in answer.content
 
 
 # -- an argument that is not `path` -------------------------------------------
@@ -106,7 +106,7 @@ def test_climbing_out_is_refused_with_the_rule(bridge):
 
 def test_a_host_path_in_any_other_argument_is_refused(bridge, session):
     """The leak the translation did not cover, because it keys on the name."""
-    other = session.parent / "other" / "data" / "secret.txt"
+    other = session.parent / "other" / "inputs" / "secret.txt"
     seen: list[object] = []
 
     answer = bridge.wrap_tool_call(a_call(input_file=str(other)), seen.append)
@@ -125,7 +125,7 @@ def test_another_session_is_refused_where_no_host_root_would_catch_it(cfg, sessi
     seen: list[object] = []
 
     answer = mine.wrap_tool_call(
-        a_call("peek", input_file="/workspace/sessions/other/data/secret.txt"), seen.append
+        a_call("peek", input_file="/workspace/sessions/other/inputs/secret.txt"), seen.append
     )
 
     assert not seen
@@ -172,18 +172,18 @@ def test_an_argument_that_only_looks_like_a_path_is_handed_over(bridge):
 
 def test_a_tool_that_is_not_a_workspace_tool_is_untouched(bridge):
     """The built-in file tools already resolve against the session, inside the backend."""
-    assert handed(bridge, a_call("read_file", path="/data/config.ini")) == {
-        "path": "/data/config.ini"
+    assert handed(bridge, a_call("read_file", path="/inputs/config.ini")) == {
+        "path": "/inputs/config.ini"
     }
 
 
 def test_arguments_that_do_not_name_files_are_untouched(bridge, session):
     """Only the ones the convention names."""
-    args = handed(bridge, a_call(path="/data/x.csv", pattern="^id$", limit=5))
+    args = handed(bridge, a_call(path="/inputs/x.csv", pattern="^id$", limit=5))
 
     assert args["pattern"] == "^id$"
     assert args["limit"] == 5
-    assert args["path"] == str(session / "data" / "x.csv")
+    assert args["path"] == str(session / "inputs" / "x.csv")
 
 
 def test_something_that_is_not_a_string_is_handed_back_as_it_is(bridge):
@@ -208,7 +208,7 @@ A_TOOL = '''
 def whereami(path: str) -> str:
     """Report what this tool received.
 
-    `path` is the same virtual path the file tools take -- `/data/<name>` --
+    `path` is the same virtual path the file tools take -- `/inputs/<name>` --
     rooted at this session.
     """
     from pathlib import Path
@@ -254,19 +254,19 @@ def test_the_agents_own_name_reaches_the_tool_as_a_real_file(cfg, session_dir):
     and the tool opens a file that is there.
     """
     a_workspace_with_the_tool(cfg)
-    (session_dir / "data").mkdir(parents=True, exist_ok=True)
-    (session_dir / "data" / "report.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    (session_dir / "inputs").mkdir(parents=True, exist_ok=True)
+    (session_dir / "inputs" / "report.csv").write_text("a,b\n1,2\n", encoding="utf-8")
 
-    transcript = ran(cfg, session_dir, "/data/report.csv")
+    transcript = ran(cfg, session_dir, "/inputs/report.csv")
 
-    assert str(session_dir / "data" / "report.csv") in transcript
+    assert str(session_dir / "inputs" / "report.csv") in transcript
     assert "exists=True" in transcript
 
 
 def test_another_sessions_file_is_not_reachable_through_a_tool(cfg, session_dir):
     """The leak, end to end."""
     a_workspace_with_the_tool(cfg)
-    other = session_dir.parent / "another-tenant" / "derived"
+    other = session_dir.parent / "another-tenant" / "outputs"
     other.mkdir(parents=True, exist_ok=True)
     (other / "secret.txt").write_text("TENANT-A-PRIVATE\n", encoding="utf-8")
 
@@ -303,7 +303,7 @@ def test_a_file_argument_with_another_name_cannot_read_another_session(cfg, sess
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "peek_file.py").write_text(A_TOOL_WITH_ANOTHER_NAME, encoding="utf-8")
-    other = session_dir.parent / "another-tenant" / "data"
+    other = session_dir.parent / "another-tenant" / "inputs"
     other.mkdir(parents=True, exist_ok=True)
     (other / "secret.txt").write_text("TENANT-A-PRIVATE", encoding="utf-8")
 
@@ -357,11 +357,11 @@ def test_a_link_inside_the_session_does_not_widen_it(cfg, session_dir):
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "peek.py").write_text(A_READER, encoding="utf-8")
-    other = session_dir.parent / "another-tenant" / "derived"
+    other = session_dir.parent / "another-tenant" / "outputs"
     other.mkdir(parents=True, exist_ok=True)
     (other / "secret.txt").write_text("TENANT-A-PRIVATE", encoding="utf-8")
-    (session_dir / "derived").mkdir(parents=True, exist_ok=True)
-    (session_dir / "derived" / "link.txt").symlink_to(other / "secret.txt")
+    (session_dir / "outputs").mkdir(parents=True, exist_ok=True)
+    (session_dir / "outputs" / "link.txt").symlink_to(other / "secret.txt")
 
     agent = build_agent(
         cfg,
@@ -371,7 +371,7 @@ def test_a_link_inside_the_session_does_not_widen_it(cfg, session_dir):
                 AIMessage(
                     content="",
                     tool_calls=[
-                        {"name": "peek", "args": {"path": "/derived/link.txt"}, "id": "c1"}
+                        {"name": "peek", "args": {"path": "/outputs/link.txt"}, "id": "c1"}
                     ],
                 ),
                 AIMessage(content="done"),
@@ -389,13 +389,13 @@ def test_a_link_inside_the_session_does_not_widen_it(cfg, session_dir):
 
 def test_a_link_that_stays_inside_still_works(session, bridge):
     """The other half, so the check refuses escapes rather than symlinks."""
-    (session / "derived").mkdir(parents=True, exist_ok=True)
-    (session / "data" / "real.csv").write_text("a\n", encoding="utf-8")
-    (session / "derived" / "near.csv").symlink_to(session / "data" / "real.csv")
+    (session / "outputs").mkdir(parents=True, exist_ok=True)
+    (session / "inputs" / "real.csv").write_text("a\n", encoding="utf-8")
+    (session / "outputs" / "near.csv").symlink_to(session / "inputs" / "real.csv")
 
-    args = handed(bridge, a_call(path="/derived/near.csv"))
+    args = handed(bridge, a_call(path="/outputs/near.csv"))
 
-    assert args["path"] == str((session / "data" / "real.csv").resolve())
+    assert args["path"] == str((session / "inputs" / "real.csv").resolve())
 
 
 # -- the tools a compiled delegate is handed ---------------------------------
@@ -416,7 +416,7 @@ def answered(wrapped, **args):
 
 def test_a_compiled_delegates_tool_is_handed_a_real_path(paths, session):
     """The crash this exists for: the shipped `scribe` handed `show-your-work`
-    path-taking tools, and `log_levels('/data/api.log')` raised `FileNotFoundError`
+    path-taking tools, and `log_levels('/inputs/api.log')` raised `FileNotFoundError`
     because a compiled graph has no middleware to translate the path.
     """
     from langchain_core.tools import tool
@@ -426,9 +426,9 @@ def test_a_compiled_delegates_tool_is_handed_a_real_path(paths, session):
         """Report what it was handed."""
         return f"handed={path}"
 
-    answer = answered(guarded(peek, paths), path="/data/notes.txt")
+    answer = answered(guarded(peek, paths), path="/inputs/notes.txt")
 
-    assert answer.content == f"handed={session / 'data' / 'notes.txt'}"
+    assert answer.content == f"handed={session / 'inputs' / 'notes.txt'}"
 
 
 def test_a_tool_that_raises_answers_instead_of_ending_the_run(paths, session):
@@ -444,7 +444,7 @@ def test_a_tool_that_raises_answers_instead_of_ending_the_run(paths, session):
         msg = f"[Errno 2] No such file or directory: {path!r}"
         raise FileNotFoundError(msg)
 
-    answer = answered(guarded(missing, paths), path="/data/gone.txt")
+    answer = answered(guarded(missing, paths), path="/inputs/gone.txt")
 
     assert answer.status == "error"
     assert "FileNotFoundError" in answer.content
@@ -464,7 +464,7 @@ def test_climbing_out_is_refused_as_an_answer_rather_than_an_exception(paths, se
     answer = answered(guarded(peek, paths), path="../other/secret.txt")
 
     assert answer.status == "error"
-    assert "/data/<name>" in answer.content
+    assert "/inputs/<name>" in answer.content
     assert "handed=" not in answer.content
 
 
@@ -479,7 +479,7 @@ def test_a_host_path_in_another_argument_is_refused_here_too(paths, session):
         """Report what it was handed."""
         return f"handed={input_file}"
 
-    other = session.parent / "other" / "data" / "secret.txt"
+    other = session.parent / "other" / "inputs" / "secret.txt"
 
     answer = answered(guarded(peek, paths), input_file=str(other))
 
@@ -505,7 +505,7 @@ def test_a_subclass_keeps_the_arguments_it_declares(paths, session):
     wrapped = guarded(Shout(), paths)
 
     assert wrapped.args == Shout().args
-    assert answered(wrapped, path="/data/x").content == f"shouted {session / 'data' / 'x'}"
+    assert answered(wrapped, path="/inputs/x").content == f"shouted {session / 'inputs' / 'x'}"
 
 
 def test_a_plain_function_arrives_as_the_tool_the_graph_would_have_made(paths, session):
@@ -538,9 +538,9 @@ def test_an_artifact_survives_the_wrapping(paths, session):
         """Return both."""
         return "counted", {"read": path}
 
-    answer = answered(guarded(paired, paths), path="/data/x")
+    answer = answered(guarded(paired, paths), path="/inputs/x")
 
-    assert answer.artifact == {"read": str(session / "data" / "x")}
+    assert answer.artifact == {"read": str(session / "inputs" / "x")}
 
 
 def test_without_a_session_a_failure_is_still_an_answer():
@@ -556,7 +556,7 @@ def test_without_a_session_a_failure_is_still_an_answer():
         msg = f"no such file: {path}"
         raise FileNotFoundError(msg)
 
-    answer = answered(guarded(missing, None), path="/data/gone.txt")
+    answer = answered(guarded(missing, None), path="/inputs/gone.txt")
 
     assert answer.status == "error"
-    assert "/data/gone.txt" in answer.content, "nothing to translate against, so untranslated"
+    assert "/inputs/gone.txt" in answer.content, "nothing to translate against, so untranslated"

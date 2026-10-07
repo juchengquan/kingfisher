@@ -53,7 +53,7 @@ from kingfisher.infrastructure.workspace import (
     is_new_workspace,
     seeding,
 )
-from kingfisher.layout import DERIVED
+from kingfisher.layout import OUTPUTS
 from kingfisher.presentation.cli.progress import show
 
 #: The grants this driver exposes, in the order they are listed and reported.
@@ -98,7 +98,7 @@ def prepare_smoke(cfg: Config, workspace: Path, session_id: str) -> list[str]:
 
     seeded = []
     if seed_sample_data(directory):
-        seeded.append("dataset into /data")
+        seeded.append("dataset into /inputs")
     if cfg.skills_enabled and seed_sample_skill(workspace):
         seeded.append("skill into /skills")
     return seeded
@@ -133,7 +133,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         action="append",
         default=[],
-        help="a file kept for the whole session, in /data (read-only); repeatable",
+        help="a file kept for the whole session, in /inputs (read-only); repeatable",
     )
     for name in GRANTS:
         spoken = name.replace("_", " ")
@@ -293,7 +293,7 @@ def main(argv: list[str]) -> int:
     if is_smoke:
         task = SMOKE_TASK
         # Fixed here rather than minted inside the run: the smoke's fixtures
-        # belong to a session's `/data`, so the session has to be named before
+        # belong to a session's `/inputs`, so the session has to be named before
         # there is anywhere to put them.
         session_id = session_id or uuid4().hex[:12]
         for seeded in prepare_smoke(cfg, workspace, session_id):
@@ -377,7 +377,7 @@ def main(argv: list[str]) -> int:
     print(f"usage     : {_usage_summary(recorded.events)}")
 
     for name in ("report.md", "result.json"):
-        kept = f"{DERIVED}/{name}"
+        kept = f"{OUTPUTS}/{name}"
         if kept in result.artifacts:
             print(f"{name:<12}: written  {kept}")
         elif is_smoke:

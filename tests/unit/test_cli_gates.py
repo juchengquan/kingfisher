@@ -277,7 +277,7 @@ def test_the_whole_loop_runs_through_the_command(cfg, session_dir, monkeypatch, 
                     tool_calls=[
                         {
                             "name": "write_file",
-                            "args": {"file_path": "/derived/done.txt", "content": "ran"},
+                            "args": {"file_path": "/outputs/done.txt", "content": "ran"},
                             "id": "c1",
                         }
                     ],
@@ -303,7 +303,7 @@ def test_the_whole_loop_runs_through_the_command(cfg, session_dir, monkeypatch, 
     )
 
     assert code == 0, capsys.readouterr().err
-    assert (session_dir / "derived" / "done.txt").read_text() == "ran"
+    assert (session_dir / "outputs" / "done.txt").read_text() == "ran"
 
 
 def _a_paused_session_only_a_reaches(cfg):

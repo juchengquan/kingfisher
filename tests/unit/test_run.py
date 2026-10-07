@@ -230,8 +230,8 @@ def test_the_framework_never_asks_for_files_of_its_own(cfg):
 
 
 def test_supplied_data_is_still_there_on_the_next_turn(cfg):
-    """The property `--input` deliberately lacks, and the whole reason this exists: a
-    turn's `input/` leaves with the turn, `/data` does not.
+    """The property the old per-turn `input/` deliberately lacked, and the whole reason
+    this exists: that left with the turn, and `/inputs` does not.
     """
     source = cfg.workspace / "sales.csv"
     source.write_text("a,b\n1,2\n")
@@ -254,13 +254,13 @@ def test_supplied_data_is_still_there_on_the_next_turn(cfg):
     )
 
     session = cfg.workspace / "sessions" / first.session_id
-    assert (session / "data" / "sales.csv").read_text() == "a,b\n1,2\n"
+    assert (session / "inputs" / "sales.csv").read_text() == "a,b\n1,2\n"
     assert second.session_id == first.session_id  # same session, second turn
     assert not (session / "input").exists()  # nothing was re-supplied
 
 
 def test_the_agent_is_told_what_arrived_in_data(cfg):
-    """It may already have looked at /data this session."""
+    """It may already have looked at /inputs this session."""
     source = cfg.workspace / "fresh.csv"
     source.write_text("x")
 
@@ -274,7 +274,7 @@ def test_the_agent_is_told_what_arrived_in_data(cfg):
         checkpointer=StubCheckpointer(),
     )
 
-    assert "New files in /data: fresh.csv." in agent.state["messages"][0]["content"]
+    assert "New files in /inputs/: fresh.csv." in agent.state["messages"][0]["content"]
 
 
 # -- what a caller can be told, and what stays on the host ----------------

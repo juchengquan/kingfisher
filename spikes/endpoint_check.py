@@ -160,7 +160,7 @@ def main() -> int:
     results: list[Result] = []
     for style in styles:
         workspace = Path(tempfile.mkdtemp(prefix=f"kf-spike-{style}-"))
-        (workspace / "data").mkdir()
+        (workspace / "inputs").mkdir()
         print(f"--- {style}  workspace={workspace}")
         results.append(run_style(style, workspace))
         print()

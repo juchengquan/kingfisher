@@ -18,7 +18,7 @@ from kingfisher.infrastructure.sandbox.confinement import (
 )
 from kingfisher.infrastructure.sandbox.fence import SYSTEM_PATHS, LandlockRunner, policy_for
 from kingfisher.infrastructure.workspace import ensure_session_layout
-from kingfisher.layout import DERIVED, HARNESS
+from kingfisher.layout import HARNESS, OUTPUTS
 from tests.conftest import repository_root
 
 #: A message short enough for `TRY003`, since what it says never survives
@@ -71,7 +71,7 @@ def test_the_session_is_writable_and_nothing_above_it_is(sandlock, tmp_path):
     """The claim the fence exists to make."""
     policy = a_policy(tmp_path)
 
-    assert str(tmp_path / "sessions" / "s1" / DERIVED) in policy.fs_writable
+    assert str(tmp_path / "sessions" / "s1" / OUTPUTS) in policy.fs_writable
     assert str(tmp_path / "sessions") not in policy.fs_writable
     assert str(tmp_path) not in policy.fs_writable
 
@@ -104,7 +104,7 @@ def test_the_shell_may_write_exactly_these_places_in_a_session(sandlock, tmp_pat
 
     assert set(policy.fs_writable) == {
         str(session / name)
-        for name in ("data", "derived", "memory", "scratchpad")
+        for name in ("inputs", "outputs", "memory", "scratchpad")
     }
 
 
@@ -365,7 +365,7 @@ def test_the_fence_follows_the_confinement_rather_than_deciding_again(sandlock, 
     fenced = Confinement(wrap=_unwrapped, mechanism="Landlock")
     runner = _fence_for(cfg, session, fenced, (), {})
     assert isinstance(runner, LandlockRunner)
-    assert str(session / DERIVED) in runner.policy.fs_writable
+    assert str(session / OUTPUTS) in runner.policy.fs_writable
 
 
 def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):

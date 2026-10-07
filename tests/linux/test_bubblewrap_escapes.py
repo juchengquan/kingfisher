@@ -27,8 +27,8 @@ def two_sessions(tmp_path):
     mine = tmp_path / "sessions" / "a"
     theirs = tmp_path / "sessions" / "b"
     for session in (mine, theirs):
-        (session / "derived").mkdir(parents=True)
-    (mine / "derived" / "secret.txt").write_text("TENANT-A-PRIVATE\n", encoding="utf-8")
+        (session / "outputs").mkdir(parents=True)
+    (mine / "outputs" / "secret.txt").write_text("TENANT-A-PRIVATE\n", encoding="utf-8")
     return mine, theirs
 
 
@@ -44,7 +44,7 @@ def fenced(two_sessions):
 
 ESCAPES = [
     ("read it directly", "cat {secret}"),
-    ("climb out with a relative path", "cd .. && cat a/derived/secret.txt"),
+    ("climb out with a relative path", "cd .. && cat a/outputs/secret.txt"),
     ("follow a symlink into it", "ln -sf {secret} link.txt && cat link.txt"),
     ("list what else is there", "ls {sessions}"),
 ]
@@ -63,7 +63,7 @@ def test_the_sandbox_holds(fenced, two_sessions):
     leaked = []
     for what, command in ESCAPES:
         spelled = command.format(
-            secret=mine / "derived" / "secret.txt", sessions=theirs.parent
+            secret=mine / "outputs" / "secret.txt", sessions=theirs.parent
         )
 
         result = fenced.run(spelled)
@@ -86,7 +86,7 @@ def test_each_escape_works_when_nothing_is_sandboxing_it(two_sessions):
     blunt = []
     for what, command in portable:
         spelled = command.format(
-            secret=mine / "derived" / "secret.txt", sessions=theirs.parent
+            secret=mine / "outputs" / "secret.txt", sessions=theirs.parent
         )
 
         done = subprocess.run(  # noqa: S602 -- the control, deliberately unsandboxed
@@ -105,7 +105,7 @@ def test_the_session_itself_stays_usable(fenced):
     back out -- and, as the Landlock work found, a fence that cannot run any command
     passes every escape test while protecting nothing.
     """
-    result = fenced.run("echo written > derived/note.txt && cat derived/note.txt")
+    result = fenced.run("echo written > outputs/note.txt && cat outputs/note.txt")
 
     assert result.exit_code == 0
     assert "written" in result.output

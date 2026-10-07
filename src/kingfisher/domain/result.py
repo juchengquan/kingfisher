@@ -79,7 +79,7 @@ class RunResult:
     #: made here. Not a sequence -- nothing compares two.
     turn_id: str
     answer: str
-    #: Everything under `/derived` and `/memory` at the end of this turn, as names
+    #: Everything under `/outputs` and `/memory` at the end of this turn, as names
     #: relative to the session, listed through its backend -- so names, not files to
     #: open: `Kingfisher.artifact` fetches one, wherever the backend keeps it. What is
     #: *present*, not what changed: `execute`
@@ -132,7 +132,7 @@ def _flatten(value: Any, limit: int) -> str:
 
 
 def _render_call(name: str, args: Mapping[str, Any]) -> str:
-    """One tool call: `write_file(file_path=/data/x.csv, content=id,name…)`."""
+    """One tool call: `write_file(file_path=/inputs/x.csv, content=id,name…)`."""
     if not args:
         return name
     inner = ", ".join(f"{key}={_flatten(value, ARG_PREVIEW)}" for key, value in args.items())

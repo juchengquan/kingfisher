@@ -1,4 +1,4 @@
-"""The write bits on `/data`, and the only place allowed to change them."""
+"""The write bits on `/inputs`, and the only place allowed to change them."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 
-from kingfisher.layout import SCRATCH
+from kingfisher.layout import INPUTS, SCRATCH
 
 
 def _drop_write_bits(path: Path) -> None:
@@ -44,7 +44,7 @@ def keep_tmp_private(session_dir: Path) -> None:
     ignored outright when the directory already exists -- which it does for
     every session made before `TMPDIR` moved inside one.
 
-    Not a boundary, and not claimed as one. `derived/` sits beside it holding the
+    Not a boundary, and not claimed as one. `outputs/` sits beside it holding the
     same data at whatever the umask gave it, so this is continuity with what
     `prepare_scratch` did rather than a rule about who may read a session. A
     session that must be private to its uid wants a mode on the session
@@ -60,8 +60,10 @@ def keep_tmp_private(session_dir: Path) -> None:
 
 
 def protect_data(session_dir: Path) -> tuple[str, ...]:
-    """Make `data/` read-only at the OS level. Idempotent."""
-    data = Path(session_dir) / "data"
+    """Make `inputs/` read-only at the OS level. Idempotent."""
+    # The layout's name and not a spelling of it: `DataBackend` uploads under the
+    # constant, and a folder named here instead is one the upload never reaches.
+    data = Path(session_dir) / INPUTS
     if not data.is_dir():
         return ()
 
@@ -77,8 +79,8 @@ def protect_data(session_dir: Path) -> tuple[str, ...]:
 
 @contextmanager
 def writable_data(session_dir: Path) -> Iterator[Path]:
-    """Temporarily make `data/` writable, for loading inputs."""
-    data = Path(session_dir) / "data"
+    """Temporarily make `inputs/` writable, for loading inputs."""
+    data = Path(session_dir) / INPUTS
     data.mkdir(parents=True, exist_ok=True)
     _add_write_bits(data)
     for path in data.rglob("*"):

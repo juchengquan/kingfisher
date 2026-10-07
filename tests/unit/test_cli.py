@@ -567,7 +567,7 @@ def test_the_listing_says_what_a_session_is_costing(cfg, monkeypatch, capsys):
     """
     _looking_at(monkeypatch, cfg)
     start(cfg, "fat")
-    (cfg.workspace / "sessions" / "fat" / "derived" / "big.bin").write_bytes(b"x" * (1 << 20))
+    (cfg.workspace / "sessions" / "fat" / "outputs" / "big.bin").write_bytes(b"x" * (1 << 20))
 
     assert main(["sessions"]) == 0
 
@@ -744,7 +744,7 @@ def test_a_run_not_told_to_keeps_its_session(cfg, monkeypatch):
 def test_a_turn_stopped_at_a_bound_keeps_its_session_and_says_so(cfg, monkeypatch, capsys):
     """The one ending whose leftovers are worth something: the partial work is real and
     the conversation is what a retry on the same session is rebuilt from. Deleting here
-    would also make the line printed just above it -- what it wrote is in /derived and
+    would also make the line printed just above it -- what it wrote is in /outputs and
     /memory -- a lie about a directory that had already gone.
     """
     stub = _ran(monkeypatch, [_finished(stop_reason="max_steps")], cfg)
@@ -762,13 +762,13 @@ def test_what_the_session_takes_with_it_is_named_before_it_goes(cfg, monkeypatch
     `artifacts` nowhere else -- so without it a run that wrote a file and a run that
     wrote nothing end identically.
     """
-    written = ("derived/report.md", "memory/AGENTS.md")
+    written = ("outputs/report.md", "memory/AGENTS.md")
     stub = _ran(monkeypatch, [_finished(artifacts=written)], cfg)
 
     assert main(["run", "t", "--agent", "assistant", "--delete-session"]) == 0
 
     printed = capsys.readouterr().err
-    assert "derived/report.md" in printed
+    assert "outputs/report.md" in printed
     assert "memory/AGENTS.md" in printed
     assert stub.deleted == ["s1"]
 

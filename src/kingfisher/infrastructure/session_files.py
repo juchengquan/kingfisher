@@ -1,4 +1,4 @@
-"""A caller's files into a session's `/data`, and what a turn left back out of it.
+"""A caller's files into a session's `/inputs`, and what a turn left back out of it.
 
 Through the backend the agent runs on, never through the session directory. A
 backend that runs somewhere else holds the session there, and a directory on this
@@ -15,13 +15,13 @@ from typing import Any
 
 from kingfisher.domain.result import ArtifactError
 from kingfisher.infrastructure.steps import Steps, changing, on_host, reading
-from kingfisher.layout import ARTIFACT_DIRS, DATA_ROUTE
+from kingfisher.layout import ARTIFACT_DIRS, INPUTS_ROUTE
 
 _log = logging.getLogger(__name__)
 
 
 class DataError(ValueError):
-    """A caller-supplied file cannot be placed in a session's `/data`."""
+    """A caller-supplied file cannot be placed in a session's `/inputs`."""
 
 
 def checked(sources: tuple[Path, ...]) -> dict[str, Path]:
@@ -52,13 +52,13 @@ class DataPlacement:
 
 
 def place_data(sources: tuple[Path, ...], backend: Any) -> Steps[DataPlacement]:
-    """Copy caller-supplied files into a session's `/data`, through its backend."""
+    """Copy caller-supplied files into a session's `/inputs`, through its backend."""
     if not sources:
         return DataPlacement()
     # Before anything is read or sent: a request naming a file that is not there
     # must fail without having placed the ones that were.
     seen = yield on_host(checked, sources)
-    listing = yield reading(backend, "ls", DATA_ROUTE)
+    listing = yield reading(backend, "ls", INPUTS_ROUTE)
     existing = {PurePosixPath(entry["path"]).name for entry in listing.entries or ()}
     contents = yield on_host(_contents_of, seen)
     answers = yield changing(backend, "upload_files", contents)
@@ -72,14 +72,14 @@ def place_data(sources: tuple[Path, ...], backend: Any) -> Steps[DataPlacement]:
 
 
 def _contents_of(seen: dict[str, Path]) -> list[tuple[str, bytes]]:
-    return [(f"{DATA_ROUTE}{name}", source.read_bytes()) for name, source in seen.items()]
+    return [(f"{INPUTS_ROUTE}{name}", source.read_bytes()) for name, source in seen.items()]
 
 
 def collect_artifacts(backend: Any) -> Steps[tuple[str, ...]]:
     """What this session holds that is worth keeping, relative to the session.
 
     A walk of what is there rather than a record of tool calls: `execute`
-    bypasses the file tools, and running a script is how most of `/derived` gets
+    bypasses the file tools, and running a script is how most of `/outputs` gets
     produced.
     """
     found: list[str] = []
@@ -104,7 +104,7 @@ def collect_artifacts(backend: Any) -> Steps[tuple[str, ...]]:
 def read_artifact(backend: Any, name: str) -> Steps[bytes]:
     """One file a turn produced, as bytes, by the name `collect_artifacts` gave it.
 
-    Only under `ARTIFACT_DIRS`. The same backend reaches `/.harness` and `/data`,
+    Only under `ARTIFACT_DIRS`. The same backend reaches `/.harness` and `/inputs`,
     and a caller who may read what a turn produced may not read what kingfisher
     keeps about the session through the same door.
     """

@@ -460,7 +460,7 @@ def test_a_compiled_delegates_tool_is_wired_to_this_session(cfg, session_dir):
     stopping at `as_subagent`.
 
     The shipped `scribe` is where this was found -- it handed `show-your-work`
-    path-taking tools and the first call died on `log_levels('/data/api.log')`.
+    path-taking tools and the first call died on `log_levels('/inputs/api.log')`.
     """
     _write(cfg.workspace / "tools", "probe.py", PATH_PROBE)
     _write(
@@ -472,9 +472,9 @@ def test_a_compiled_delegates_tool_is_wired_to_this_session(cfg, session_dir):
     given = _tools_given(cfg, session_dir, Capabilities(subagents=("researcher",)))
 
     answer = given[0].invoke(
-        {"type": "tool_call", "id": "c1", "name": "probe", "args": {"path": "/data/api.log"}}
+        {"type": "tool_call", "id": "c1", "name": "probe", "args": {"path": "/inputs/api.log"}}
     )
-    assert answer.content == f"handed={session_dir / 'data' / 'api.log'}"
+    assert answer.content == f"handed={session_dir / 'inputs' / 'api.log'}"
 
 
 def test_a_request_that_withheld_a_tool_withholds_it_from_the_graph(cfg, session_dir):

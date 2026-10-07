@@ -19,7 +19,7 @@ from kingfisher.infrastructure.harness.backend import (
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
 from kingfisher.infrastructure.steps import drive
-from kingfisher.layout import DATA
+from kingfisher.layout import INPUTS
 from tests.conftest import StubCheckpointer, an_agent, harness_in
 from tests.unit.test_run import StubAgent
 from tests.unit.test_session_files import Elsewhere as KeptElsewhere
@@ -106,8 +106,8 @@ def test_a_pre_built_graph_reaches_its_session_through_the_backends_named(cfg, t
 
     session_id = kf.run(Request("t", data=(source,))).session_id
 
-    assert (remote / session_id / DATA / "in.csv").read_text() == "alpha\n"
-    assert not (cfg.workspace / "sessions" / session_id / DATA / "in.csv").exists()
+    assert (remote / session_id / INPUTS / "in.csv").read_text() == "alpha\n"
+    assert not (cfg.workspace / "sessions" / session_id / INPUTS / "in.csv").exists()
 
 
 def test_a_plain_factory_function_is_refused_with_the_way_forward(cfg):

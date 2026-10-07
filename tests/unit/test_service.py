@@ -87,7 +87,7 @@ def test_construction_prepares_only_what_sessions_share(cfg):
     assert service.workspace.is_dir()
     assert (service.workspace / "skills").is_dir()
     assert (service.workspace / "sessions").is_dir()
-    assert not (service.workspace / "data").exists()
+    assert not (service.workspace / "inputs").exists()
 
 
 def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
@@ -133,7 +133,7 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
 
 
 def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
-    """The bug this fixes: hardening `data/` ran before everything else, so one file
+    """The bug this fixes: hardening `inputs/` ran before everything else, so one file
     owned by another user -- a `sudo` run, a restored backup -- aborted the turn, and
     every later turn of that session with it.
     """
@@ -253,7 +253,7 @@ def test_files_supplied_with_the_request_are_named():
     """
     message = turn_message("analyse", ("fresh.csv",))
 
-    assert "New files in /data: fresh.csv." in message
+    assert "New files in /inputs/: fresh.csv." in message
 
 
 def test_the_turn_message_carries_no_output_convention():
@@ -298,7 +298,7 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how)
     }[how]
     budgeted = replace(cfg, session_max_bytes=1) if how == "session over budget" else cfg
     session = start(budgeted, "s")
-    (budgeted.workspace / "sessions" / session / "derived" / "big.txt").write_text("x" * 64)
+    (budgeted.workspace / "sessions" / session / "outputs" / "big.txt").write_text("x" * 64)
     recorded = RecordedEvents()
     kf = Kingfisher(
         budgeted,

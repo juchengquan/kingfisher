@@ -2,7 +2,7 @@
 
 A skill's script, run by the shell and never imported. The skill reaches it as
 `$KINGFISHER_SKILLS/incident/timeline/scripts/timeline.py` and hands it shell
-paths -- `data/api.log`, not the file tools' `/data/api.log`.
+paths -- `inputs/api.log`, not the file tools' `/inputs/api.log`.
 
 Standard library only. A skill travels from one deployment to the next as files,
 and nothing installs a dependency it would need.

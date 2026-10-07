@@ -4,7 +4,7 @@
 there, and `external` -- "the runtime is the fence" -- was the only honest
 setting. That was true while a container held one tenant and stopped being true
 when it held several. Measured in the prototype: tenant B's shell read tenant
-A's file with `cat ../<A>/derived/secret.txt`, exit 0, while B's *file tools*
+A's file with `cat ../<A>/outputs/secret.txt`, exit 0, while B's *file tools*
 were correctly refused. `virtual_mode` roots the file tools at a session; it
 does nothing to `execute`.
 

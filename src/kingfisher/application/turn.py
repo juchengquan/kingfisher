@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.result import PendingDecision, RunEvent
 from kingfisher.infrastructure.harness import runtime
-from kingfisher.layout import SCRATCH, SCRATCH_ROUTE
+from kingfisher.layout import INPUTS_ROUTE, SCRATCH, SCRATCH_ROUTE
 
 if TYPE_CHECKING:
     from kingfisher.config import Config
@@ -65,7 +65,7 @@ class Prepared:
     #: Paths `protect_data` could not harden. Reported to the caller rather
     #: than raised, so they cross the boundary instead of stopping at it.
     unprotected: tuple[str, ...] = ()
-    #: What this request's `data` placed in `/data`, and what that replaced.
+    #: What this request's `data` placed in `/inputs`, and what that replaced.
     placement: Any = None
     #: `(what, names)` for each thing this workspace offers that the request did
     #: not grant -- tools, skills, subagents. Crosses rather than stopping: a
@@ -82,10 +82,10 @@ class Prepared:
 
 def turn_message(task: str, placed: tuple[str, ...]) -> str:
     """The task, plus this turn's facts and nothing more."""
-    # Named because `/data` changed under a session the agent may already have
+    # Named because `/inputs` changed under a session the agent may already have
     # looked at. It is also where a caller's files for *this* request land now --
     # they used to have a turn directory of their own, and this line said where.
-    arrived = f" New files in /data: {', '.join(placed)}." if placed else ""
+    arrived = f" New files in {INPUTS_ROUTE}: {', '.join(placed)}." if placed else ""
     # Both names for the one directory. `system.md` states the rule -- drop the
     # leading slash for the shell -- and stating it there was not enough: over
     # ten runs of one task the agent passed the virtual path to `execute` 4

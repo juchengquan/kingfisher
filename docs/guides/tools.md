@@ -156,7 +156,7 @@ Raise. The exception becomes a failed tool result — its type and its message,
 with `status="error"` — and the model reads it and tries something else:
 
 ```
-Error: FileNotFoundError: /data/x.csv
+Error: FileNotFoundError: /inputs/x.csv
 ```
 
 Write the exception for that reader. Measured on one deployment before this
@@ -253,10 +253,10 @@ rather than read.
 
 ## A file the tool reads is an argument called `path`
 
-The model knows files by the paths the file tools take — `/data/report.csv`,
-`/derived/summary.md` — and never by where they sit on the host. Name the
+The model knows files by the paths the file tools take — `/inputs/report.csv`,
+`/outputs/summary.md` — and never by where they sit on the host. Name the
 argument `path` and the tool is handed the real file, resolved where the session's
-backend keeps it: `/data/report.csv` and `/skills/report/template.md` are the files
+backend keeps it: `/inputs/report.csv` and `/skills/report/template.md` are the files
 `read_file` would read. Say in the docstring that it is the same virtual path the
 file tools take, because the docstring is what the model reads.
 
@@ -274,7 +274,7 @@ Three things are refused, each as a failed result the model can read:
   network mount — and say so with `host_path`; [`ports.md`](ports.md) is its side.
 
 **Only `path` is translated.** An argument with any other name reaches the tool as
-written, so a tool calling its file `input_file` is handed `/data/report.csv`
+written, so a tool calling its file `input_file` is handed `/inputs/report.csv`
 literally and does not find it. One kind of string is refused in every argument: a
 host path — under `/Users/`, `/home/`, `/tmp/`, `/proc/` and the other roots a
 file tool refuses, or under the directory every session is in --
@@ -301,7 +301,7 @@ from kingfisher import ToolContext
 
 def first_line(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     """Return the first line of a text file. `file_path` is the same virtual
-    path the file tools take, such as `/data/report.csv`."""
+    path the file tools take, such as `/inputs/report.csv`."""
     found = runtime.context.backend.read(file_path)
     if found.error:
         raise OSError(found.error)
@@ -324,7 +324,7 @@ stops importing.
 `runtime.context.backend` is a deepagents `BackendProtocol`: `ls`, `read`, `grep`,
 `glob`, `write`, `edit`, `delete`, `upload_files` and `download_files`, and each
 again with an `a` in front for an `async` tool. It is this turn's backend — the
-one the deployment named, rooted at this session — so `/data/report.csv` is the
+one the deployment named, rooted at this session — so `/inputs/report.csv` is the
 file `read_file` would read, and nothing in the tool knows where that is on the
 host.
 

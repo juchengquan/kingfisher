@@ -52,7 +52,7 @@ class GuardedTool(BaseTool):
     There is a fourth graph holding workspace tools, and `tool_guards` cannot reach
     it: a delegate the workspace compiled itself. deepagents runs that graph as
     given, so no middleware of kingfisher's is in front of its tools. Measured:
-    `show-your-work` called `log_levels('/data/api.log')` and the tool raised
+    `show-your-work` called `log_levels('/inputs/api.log')` and the tool raised
     `FileNotFoundError` on a path nothing had translated, ending the run. What
     kingfisher still owns is the list of objects handed to `build`, so the guards
     travel on the tools.
@@ -94,7 +94,7 @@ class GuardedTool(BaseTool):
     def _failed(self, exc: Exception) -> ToolException:
         # The type as well as the message, for the reason `WorkspaceToolErrors`
         # gives: a workspace tool's exceptions were not written to be read by a
-        # model, and `FileNotFoundError: /data/x.csv` reads far better than the path.
+        # model, and `FileNotFoundError: /inputs/x.csv` reads far better than the path.
         msg = f"Error: {type(exc).__name__}: {exc}"
         return ToolException(msg)
 

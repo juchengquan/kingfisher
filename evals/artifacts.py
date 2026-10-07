@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 
 #: Where the smoke asks for its structured result, as `RunResult.artifacts` names it.
-RESULT = "derived/result.json"
+RESULT = "outputs/result.json"
 
 
 def load_result(content: bytes | None) -> dict | None:

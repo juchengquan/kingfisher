@@ -39,22 +39,22 @@ from tests.conftest import (
 )
 from tests.unit.scripted import Scripted
 
-KEY = "/derived/private/key.txt"
-OPEN = "/derived/open.txt"
+KEY = "/outputs/private/key.txt"
+OPEN = "/outputs/open.txt"
 
 #: One rule over one folder, both operations, so every call has a path on each side
 #: of it.
 PRIVATE = FilesystemPermission(
-    operations=["read", "write"], paths=["/derived/private/**"], mode="deny"
+    operations=["read", "write"], paths=["/outputs/private/**"], mode="deny"
 )
 
 
 @pytest.fixture
 def backend(cfg, session_dir):
     """Kingfisher's backend over one session, holding a file either side of `PRIVATE`."""
-    (session_dir / "derived" / "private").mkdir(parents=True)
-    (session_dir / "derived" / "private" / "key.txt").write_text("needle: private\n")
-    (session_dir / "derived" / "open.txt").write_text("needle: open\n")
+    (session_dir / "outputs" / "private").mkdir(parents=True)
+    (session_dir / "outputs" / "private" / "key.txt").write_text("needle: private\n")
+    (session_dir / "outputs" / "open.txt").write_text("needle: open\n")
     return backend_at(cfg, session_dir)
 
 
@@ -90,19 +90,19 @@ def test_a_denied_write_or_edit_leaves_the_file_as_it_was(backend, session_dir):
     and be the opposite.
     """
     handed = PermittedBackend(backend, [PRIVATE])
-    private = session_dir / "derived" / "private"
+    private = session_dir / "outputs" / "private"
 
-    written = handed.write("/derived/private/new.txt", "x")
+    written = handed.write("/outputs/private/new.txt", "x")
     edited = handed.edit(KEY, "private", "changed")
 
-    assert written.error == "permission denied for write on /derived/private/new.txt"
+    assert written.error == "permission denied for write on /outputs/private/new.txt"
     assert edited.error == f"permission denied for write on {KEY}"
     assert not (private / "new.txt").exists()
     assert (private / "key.txt").read_text() == "needle: private\n"
     # And the same two calls go through where no rule matches.
-    assert handed.write("/derived/new.txt", "x").error is None
+    assert handed.write("/outputs/new.txt", "x").error is None
     assert handed.edit(OPEN, "open", "changed").error is None
-    assert (session_dir / "derived" / "open.txt").read_text() == "needle: changed\n"
+    assert (session_dir / "outputs" / "open.txt").read_text() == "needle: changed\n"
 
 
 def test_a_listing_leaves_out_what_may_not_be_read(backend):
@@ -116,13 +116,13 @@ def test_a_listing_leaves_out_what_may_not_be_read(backend):
 
     # Each control is the bare backend answering with the private path, so a filter
     # that matched nothing -- a changed entry shape -- fails here rather than passing.
-    assert seen(backend.ls("/derived").entries) == [OPEN, "/derived/private/"]
-    assert seen(backend.glob("**/*.txt", "/derived").matches) == [OPEN, KEY]
-    assert seen(backend.grep("needle", "/derived").matches) == [OPEN, KEY]
+    assert seen(backend.ls("/outputs").entries) == [OPEN, "/outputs/private/"]
+    assert seen(backend.glob("**/*.txt", "/outputs").matches) == [OPEN, KEY]
+    assert seen(backend.grep("needle", "/outputs").matches) == [OPEN, KEY]
 
-    assert seen(handed.ls("/derived").entries) == [OPEN]
-    assert seen(handed.glob("**/*.txt", "/derived").matches) == [OPEN]
-    assert seen(handed.grep("needle", "/derived").matches) == [OPEN]
+    assert seen(handed.ls("/outputs").entries) == [OPEN]
+    assert seen(handed.glob("**/*.txt", "/outputs").matches) == [OPEN]
+    assert seen(handed.grep("needle", "/outputs").matches) == [OPEN]
     assert seen(handed.grep("needle").matches) == [OPEN], "no path named, and still filtered"
     assert KEY not in seen(handed.glob("**/*.txt").matches)
     assert OPEN in seen(handed.glob("**/*.txt").matches)
@@ -133,16 +133,16 @@ def test_a_listing_of_a_denied_path_is_refused_rather_than_empty(backend):
     empty and sends it looking elsewhere for a file it was never going to be shown.
     """
     handed = PermittedBackend(backend, [PRIVATE])
-    inside = "/derived/private/inner"
+    inside = "/outputs/private/inner"
     refusal = f"permission denied for read on {inside}"
 
     assert handed.ls(inside).error == refusal
     assert handed.glob("*", inside).error == refusal
     assert handed.grep("needle", inside).error == refusal
     # The folder the rule is written over is the one exception, and it is deepagents'
-    # own: `/derived/private/**` matches everything under the folder and not the
+    # own: `/outputs/private/**` matches everything under the folder and not the
     # folder, so it is listed and found empty.
-    assert handed.ls("/derived/private").entries == []
+    assert handed.ls("/outputs/private").entries == []
 
 
 def test_a_rule_that_asks_a_person_is_a_refusal_here(backend, session_dir):
@@ -154,28 +154,28 @@ def test_a_rule_that_asks_a_person_is_a_refusal_here(backend, session_dir):
     handed = PermittedBackend(backend, [ask])
 
     assert handed.read(KEY).error == f"permission denied for read on {KEY}"
-    assert [one["path"] for one in handed.ls("/derived").entries or []] == [OPEN]
-    assert [one["path"] for one in handed.grep("needle", "/derived").matches or []] == [OPEN]
+    assert [one["path"] for one in handed.ls("/outputs").entries or []] == [OPEN]
+    assert [one["path"] for one in handed.grep("needle", "/outputs").matches or []] == [OPEN]
     assert "permission denied for write" in _refusal(handed.delete(KEY))
-    assert (session_dir / "derived" / "private" / "key.txt").exists()
+    assert (session_dir / "outputs" / "private" / "key.txt").exists()
     assert ask.mode == "interrupt", "the caller's rule was rewritten in place"
 
 
 def test_deleting_a_folder_is_refused_for_what_is_under_it(backend, session_dir):
-    """`/derived` matches no rule and holds a path that does. Checked the way a write
+    """`/outputs` matches no rule and holds a path that does. Checked the way a write
     is, the delete goes through and takes the denied file with it.
     """
     handed = PermittedBackend(backend, [PRIVATE])
 
-    refused = _refusal(handed.delete("/derived"))
+    refused = _refusal(handed.delete("/outputs"))
 
-    assert "permission denied for write on /derived" in refused
-    assert "/derived/private/**" in refused, "the rule that stopped it is not named"
-    assert (session_dir / "derived" / "private" / "key.txt").exists()
+    assert "permission denied for write on /outputs" in refused
+    assert "/outputs/private/**" in refused, "the rule that stopped it is not named"
+    assert (session_dir / "outputs" / "private" / "key.txt").exists()
     # A leaf no rule reaches still goes, so the refusal above is not a delete that
     # refuses everything.
     assert handed.delete(OPEN).error is None
-    assert not (session_dir / "derived" / "open.txt").exists()
+    assert not (session_dir / "outputs" / "open.txt").exists()
 
 
 def test_a_batch_marks_what_it_refused_and_keeps_each_answer_in_its_place(backend, session_dir):
@@ -183,35 +183,35 @@ def test_a_batch_marks_what_it_refused_and_keeps_each_answer_in_its_place(backen
     by one: the fourth file would be reported under the third path.
     """
     handed = PermittedBackend(backend, [PRIVATE])
-    derived = session_dir / "derived"
+    outputs = session_dir / "outputs"
 
     sent = handed.upload_files(
         [
             # Written the shell's way, so the answer has a spelling to keep: the
-            # backend is handed `/derived/a.bin` and answers with that.
-            ("derived/a.bin", b"first"),
-            ("/derived/private/b.bin", b"second"),
+            # backend is handed `/outputs/a.bin` and answers with that.
+            ("outputs/a.bin", b"first"),
+            ("/outputs/private/b.bin", b"second"),
             ("../c.bin", b"third"),
-            ("/derived/d.bin", b"fourth"),
+            ("/outputs/d.bin", b"fourth"),
         ]
     )
 
     assert [(one.path, one.error) for one in sent] == [
-        ("derived/a.bin", None),
-        ("/derived/private/b.bin", "permission_denied"),
+        ("outputs/a.bin", None),
+        ("/outputs/private/b.bin", "permission_denied"),
         ("../c.bin", "invalid_path"),
-        ("/derived/d.bin", None),
+        ("/outputs/d.bin", None),
     ]
-    assert (derived / "a.bin").read_bytes() == b"first"
-    assert (derived / "d.bin").read_bytes() == b"fourth"
-    assert not (derived / "private" / "b.bin").exists()
+    assert (outputs / "a.bin").read_bytes() == b"first"
+    assert (outputs / "d.bin").read_bytes() == b"fourth"
+    assert not (outputs / "private" / "b.bin").exists()
 
-    fetched = handed.download_files([KEY, OPEN, "/derived/d.bin"])
+    fetched = handed.download_files([KEY, OPEN, "/outputs/d.bin"])
 
     assert [(one.path, one.error) for one in fetched] == [
         (KEY, "permission_denied"),
         (OPEN, None),
-        ("/derived/d.bin", None),
+        ("/outputs/d.bin", None),
     ]
     assert [one.content for one in fetched] == [None, b"needle: open\n", b"fourth"]
 
@@ -260,7 +260,7 @@ def test_the_shell_is_not_on_the_backend_a_tool_is_handed(backend):
 
 @pytest.mark.parametrize(
     "spelling",
-    ["derived/private/key.txt", "/derived/./private/key.txt", "/derived/private//key.txt"],
+    ["outputs/private/key.txt", "/outputs/./private/key.txt", "/outputs/private//key.txt"],
 )
 def test_another_spelling_of_a_denied_path_is_the_same_path(backend, spelling):
     """The rules are globs, and a path the backend resolves to the denied file while
@@ -292,9 +292,9 @@ def test_a_path_that_climbs_out_is_an_error_on_the_result(backend):
     """
     handed = PermittedBackend(backend, [PRIVATE])
 
-    assert "traversal" in _refusal(handed.read("/derived/../../etc/passwd"))
+    assert "traversal" in _refusal(handed.read("/outputs/../../etc/passwd"))
     assert "traversal" in _refusal(handed.write("../outside.txt", "x"))
-    assert "traversal" in _refusal(handed.delete("/derived/../.."))
+    assert "traversal" in _refusal(handed.delete("/outputs/../.."))
 
 
 def test_the_async_calls_keep_the_same_rules(backend, session_dir):
@@ -307,23 +307,23 @@ def test_the_async_calls_keep_the_same_rules(backend, session_dir):
     async def ask() -> dict[str, Any]:
         return {
             "read": (await handed.aread(KEY)).error,
-            "write": (await handed.awrite("/derived/private/new.txt", "x")).error,
+            "write": (await handed.awrite("/outputs/private/new.txt", "x")).error,
             "edit": (await handed.aedit(KEY, "private", "changed")).error,
-            "delete": (await handed.adelete("/derived")).error,
-            "ls": [one["path"] for one in (await handed.als("/derived")).entries or []],
-            "ls inside": (await handed.als("/derived/private/inner")).error,
-            "glob inside": (await handed.aglob("*", "/derived/private/inner")).error,
-            "grep inside": (await handed.agrep("needle", "/derived/private/inner")).error,
+            "delete": (await handed.adelete("/outputs")).error,
+            "ls": [one["path"] for one in (await handed.als("/outputs")).entries or []],
+            "ls inside": (await handed.als("/outputs/private/inner")).error,
+            "glob inside": (await handed.aglob("*", "/outputs/private/inner")).error,
+            "grep inside": (await handed.agrep("needle", "/outputs/private/inner")).error,
             "glob": [
-                one["path"] for one in (await handed.aglob("**/*.txt", "/derived")).matches or []
+                one["path"] for one in (await handed.aglob("**/*.txt", "/outputs")).matches or []
             ],
             "grep": [
-                one["path"] for one in (await handed.agrep("needle", "/derived")).matches or []
+                one["path"] for one in (await handed.agrep("needle", "/outputs")).matches or []
             ],
             "upload": [
                 one.error
                 for one in await handed.aupload_files(
-                    [("/derived/private/b.bin", b"x"), ("/derived/a.bin", b"y")]
+                    [("/outputs/private/b.bin", b"x"), ("/outputs/a.bin", b"y")]
                 )
             ],
             "download": [one.error for one in await handed.adownload_files([KEY, OPEN])],
@@ -332,17 +332,17 @@ def test_the_async_calls_keep_the_same_rules(backend, session_dir):
     got = asyncio.run(ask())
 
     assert got["read"] == f"permission denied for read on {KEY}"
-    assert got["write"] == "permission denied for write on /derived/private/new.txt"
+    assert got["write"] == "permission denied for write on /outputs/private/new.txt"
     assert got["edit"] == f"permission denied for write on {KEY}"
-    assert "/derived/private/**" in got["delete"]
+    assert "/outputs/private/**" in got["delete"]
     assert got["ls"] == [OPEN]
-    inside = "permission denied for read on /derived/private/inner"
+    inside = "permission denied for read on /outputs/private/inner"
     assert (got["ls inside"], got["glob inside"], got["grep inside"]) == (inside,) * 3
     assert got["glob"] == [OPEN]
     assert got["grep"] == [OPEN]
     assert got["upload"] == ["permission_denied", None]
     assert got["download"] == ["permission_denied", None]
-    private = session_dir / "derived" / "private"
+    private = session_dir / "outputs" / "private"
     assert sorted(one.name for one in private.iterdir()) == ["key.txt"]
     assert (private / "key.txt").read_text() == "needle: private\n"
 
@@ -370,10 +370,10 @@ def test_the_backend_a_build_hands_over_carries_this_requests_rules(cfg, session
         "permission denied for read on /memory/AGENTS.md"
     )
     # The standing ones too, and a path none of them names.
-    assert handed.write("/data/new.txt", "x").error == (
-        "permission denied for write on /data/new.txt"
+    assert handed.write("/inputs/new.txt", "x").error == (
+        "permission denied for write on /inputs/new.txt"
     )
-    assert handed.write("/derived/new.txt", "x").error is None
+    assert handed.write("/outputs/new.txt", "x").error is None
 
 
 def test_the_graph_declares_the_context_a_tool_annotates(cfg, session_dir, fake_model):
@@ -399,7 +399,7 @@ from kingfisher import ToolContext
 
 def first_line({argument}: str, runtime: {annotation}) -> str:
     """Return the first line of a text file. `{argument}` is the same virtual
-    path the file tools take, such as `/data/report.csv`."""
+    path the file tools take, such as `/inputs/report.csv`."""
     found = runtime.context.backend.read({argument})
     if found.error:
         raise OSError(found.error)
@@ -452,7 +452,7 @@ def _a_tool(
 
 
 def _notes(session_dir) -> None:
-    (session_dir / "data" / "notes.txt").write_text("alpha\nbeta\n", encoding="utf-8")
+    (session_dir / "inputs" / "notes.txt").write_text("alpha\nbeta\n", encoding="utf-8")
 
 
 def _calls(name: str, **args: Any) -> AIMessage:
@@ -492,7 +492,7 @@ def _pydantic_complaints(caught: list[warnings.WarningMessage]) -> list[str]:
 
 
 def test_a_workspace_tool_reads_a_session_file_through_the_backend(cfg, session_dir):
-    """The whole change: `/data/notes.txt` means to a caller's tool what it means to
+    """The whole change: `/inputs/notes.txt` means to a caller's tool what it means to
     `read_file`, with no host path anywhere in the tool.
     """
     _a_tool(cfg)
@@ -503,7 +503,7 @@ def test_a_workspace_tool_reads_a_session_file_through_the_backend(cfg, session_
         ((delegated, result),) = _run(
             cfg,
             session_dir,
-            _calls("first_line", file_path="/data/notes.txt"),
+            _calls("first_line", file_path="/inputs/notes.txt"),
             AIMessage(content="done"),
         )
 
@@ -525,7 +525,7 @@ def test_a_bare_runtime_annotation_works_and_warns_on_every_call(cfg, session_di
         ((_, result),) = _run(
             cfg,
             session_dir,
-            _calls("first_line", file_path="/data/notes.txt"),
+            _calls("first_line", file_path="/inputs/notes.txt"),
             AIMessage(content="done"),
         )
 
@@ -542,12 +542,12 @@ def test_an_argument_called_path_never_reaches_the_backend_as_it_was_written(cfg
     _notes(session_dir)
 
     ((_, result),) = _run(
-        cfg, session_dir, _calls("first_line", path="/data/notes.txt"), AIMessage(content="done")
+        cfg, session_dir, _calls("first_line", path="/inputs/notes.txt"), AIMessage(content="done")
     )
 
     assert result.status == "error"
     assert "is a host path" in result.content
-    assert "/data/notes.txt" in result.content, "the refusal does not say what to write instead"
+    assert "/inputs/notes.txt" in result.content, "the refusal does not say what to write instead"
 
 
 def test_a_tool_is_refused_what_the_turn_denies(cfg, session_dir):
@@ -582,7 +582,7 @@ def test_a_class_declaring_its_own_schema_is_called_without_the_runtime(cfg, ses
     ((_, result),) = _run(
         cfg,
         session_dir,
-        _calls("first_line", file_path="/data/notes.txt"),
+        _calls("first_line", file_path="/inputs/notes.txt"),
         AIMessage(content="done"),
     )
 
@@ -614,7 +614,7 @@ def test_a_delegates_tool_is_handed_the_backend_too(cfg, session_dir):
         # One model, shared: the delegate names none and runs its parent's, so the
         # second answer is the delegate's first.
         _calls("task", description="read it", subagent_type="helper"),
-        _calls("first_line", file_path="/data/notes.txt"),
+        _calls("first_line", file_path="/inputs/notes.txt"),
         AIMessage(content="read"),
         AIMessage(content="done"),
         capabilities=Capabilities(subagents=("helper",)),
@@ -635,7 +635,7 @@ def test_the_wrapper_a_compiled_delegates_tools_wear_passes_the_runtime_on(cfg, 
     (wrapped,) = guarded_tools([loaded.tool], paths_in(cfg, session_dir))
     graph = create_agent(
         FakeToolCallingModel(
-            responses=[_calls("first_line", file_path="/data/notes.txt"), AIMessage(content="ok")]
+            responses=[_calls("first_line", file_path="/inputs/notes.txt"), AIMessage(content="ok")]
         ),
         tools=[wrapped],
         context_schema=ToolContext,
@@ -670,7 +670,7 @@ def test_a_turn_the_service_runs_hands_the_tool_its_sessions_backend(scripted):
     _a_tool(scripted)
     an_agent(scripted)
     Scripted.script.extend(
-        [_calls("first_line", file_path="/data/notes.txt"), AIMessage(content="done")]
+        [_calls("first_line", file_path="/inputs/notes.txt"), AIMessage(content="done")]
     )
     kf = Kingfisher(scripted, backends=default_backends)
 
@@ -687,7 +687,7 @@ def test_a_resumed_turn_is_handed_it_again(scripted):
     _a_tool(scripted)
     an_agent(scripted, interrupt_on="[first_line]")
     Scripted.script.extend(
-        [_calls("first_line", file_path="/data/notes.txt"), AIMessage(content="done")]
+        [_calls("first_line", file_path="/inputs/notes.txt"), AIMessage(content="done")]
     )
     kf = Kingfisher(scripted, backends=default_backends)
     paused = kf.run(Request("go", agent="only", session_id=_session(scripted)))

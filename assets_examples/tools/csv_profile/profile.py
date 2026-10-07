@@ -69,7 +69,7 @@ def csv_profile(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     Use before analysing a file you have not seen. Cheaper and more reliable
     than reading it, and the answer does not grow with the file.
 
-    `file_path` is the same virtual path the file tools take -- `/data/<name>` --
+    `file_path` is the same virtual path the file tools take -- `/inputs/<name>` --
     rooted at this session, read through the session's backend.
     """
     header, gathered, seen = _read(runtime, file_path)
@@ -88,7 +88,7 @@ def csv_columns(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     The cheap half of `csv_profile`, for when the question is only what the
     file contains and not what state it is in.
 
-    `file_path` is the same virtual path the file tools take -- `/data/<name>` --
+    `file_path` is the same virtual path the file tools take -- `/inputs/<name>` --
     rooted at this session, read through the session's backend.
     """
     header, _, _ = _read(runtime, file_path)

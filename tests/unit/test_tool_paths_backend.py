@@ -96,7 +96,7 @@ def test_a_backend_keeping_sessions_elsewhere_on_this_host_still_serves_a_path(
     _with_the_tool(scripted)
     source = tmp_path / "notes.txt"
     source.write_text("alpha\n")
-    Scripted.script.extend([_calls(path="/data/notes.txt"), AIMessage("done")])
+    Scripted.script.extend([_calls(path="/inputs/notes.txt"), AIMessage("done")])
     kf = Kingfisher(scripted, backends=Elsewhere(tmp_path / "remote"))
 
     events = list(kf.stream(Request("go", agent="only", data=(source,))))
@@ -119,18 +119,18 @@ def _paths(backend, tmp_path, permissions=None) -> SessionPaths:
 
 
 def test_a_backend_with_some_routes_here_serves_those_and_refuses_the_rest(tmp_path):
-    """The `ports.md` shape: `/data` on a local directory, everything else remote.
+    """The `ports.md` shape: `/inputs` on a local directory, everything else remote.
     Asked per path, because the answer is different for two paths on one backend.
     """
-    data = tmp_path / "data"
+    data = tmp_path / "inputs"
     data.mkdir()
     (data / "in.csv").write_text("a,b\n")
-    mixed = CompositeBackend(default=Remote(), routes={"/data/": FilesystemBackend(data)})
+    mixed = CompositeBackend(default=Remote(), routes={"/inputs/": FilesystemBackend(data)})
     paths = _paths(mixed, tmp_path)
 
-    assert paths.real("/data/in.csv") == str((data / "in.csv").resolve())
+    assert paths.real("/inputs/in.csv") == str((data / "in.csv").resolve())
     with pytest.raises(UnsafeReferenceError, match=r"not kept on this host.*ToolContext"):
-        paths.real("/derived/report.txt")
+        paths.real("/outputs/report.txt")
 
 
 def test_a_backend_that_says_where_its_files_are_is_taken_at_its_word(tmp_path):
@@ -141,7 +141,7 @@ def test_a_backend_that_says_where_its_files_are_is_taken_at_its_word(tmp_path):
         def host_path(self, virtual):
             return mounted / virtual.lstrip("/")
 
-    assert host_path(Mounted(), "/data/x.csv") == (None, mounted / "data" / "x.csv")
+    assert host_path(Mounted(), "/inputs/x.csv") == (None, mounted / "inputs" / "x.csv")
 
 
 def test_a_rule_added_after_the_guards_were_built_still_applies(tmp_path):

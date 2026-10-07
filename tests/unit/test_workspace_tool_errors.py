@@ -35,12 +35,12 @@ def test_a_workspace_tools_exception_becomes_a_failed_tool_result():
     guard = WorkspaceToolErrors(frozenset({"csv_profile"}))
 
     answer = guard.wrap_tool_call(
-        _Request("csv_profile"), _raises(FileNotFoundError("/data/orders.csv"))
+        _Request("csv_profile"), _raises(FileNotFoundError("/inputs/orders.csv"))
     )
 
     assert isinstance(answer, ToolMessage)
     assert answer.status == "error"
-    assert "/data/orders.csv" in answer.content
+    assert "/inputs/orders.csv" in answer.content
     assert answer.tool_call_id == "call-1"
 
 
@@ -50,7 +50,7 @@ def test_the_message_names_the_exception_type():
     """
     guard = WorkspaceToolErrors(frozenset({"probe"}))
 
-    answer = guard.wrap_tool_call(_Request("probe"), _raises(FileNotFoundError("/data/x")))
+    answer = guard.wrap_tool_call(_Request("probe"), _raises(FileNotFoundError("/inputs/x")))
 
     assert "FileNotFoundError" in answer.content
 
@@ -60,7 +60,7 @@ def test_a_built_in_tool_is_left_exactly_as_it_was():
     guard = WorkspaceToolErrors(frozenset({"csv_profile"}))
 
     with pytest.raises(FileNotFoundError):
-        guard.wrap_tool_call(_Request("read_file"), _raises(FileNotFoundError("/data/x")))
+        guard.wrap_tool_call(_Request("read_file"), _raises(FileNotFoundError("/inputs/x")))
 
 
 def test_a_tool_that_works_is_untouched():
@@ -79,7 +79,7 @@ def test_an_interrupt_is_not_a_tool_telling_the_model_something():
 
 
 #: What the failing handler raises, named so the literal is not inline.
-MISSING = "/data/orders.csv"
+MISSING = "/inputs/orders.csv"
 
 
 async def _araises(_request):
@@ -170,7 +170,7 @@ from langchain_core.tools import tool
 @tool
 def always_fails(anything: str) -> str:
     """Raises every time, so a test does not have to hope a model calls it."""
-    raise FileNotFoundError("/data/nothing-here.csv")
+    raise FileNotFoundError("/inputs/nothing-here.csv")
 
 
 TOOLS = [always_fails]
@@ -214,7 +214,7 @@ def test_a_failing_workspace_tool_does_not_stop_a_run(cfg, session_dir):
     ]
     assert failures, "the tool's exception never reached the model"
     assert "FileNotFoundError" in failures[0].content
-    assert "/data/nothing-here.csv" in failures[0].content
+    assert "/inputs/nothing-here.csv" in failures[0].content
 
 
 def test_the_run_carries_on_to_an_answer(cfg, session_dir):

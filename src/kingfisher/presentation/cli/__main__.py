@@ -161,7 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         action="append",
         default=[],
-        help="a file for the agent to read, in /data (read-only); repeatable",
+        help="a file for the agent to read, in /inputs (read-only); repeatable",
     )
     # Unlike `list --as`, an absent one is not the operator's view. A listing is
     # read-only and whoever runs it is on the host with the policy in front of
@@ -339,8 +339,8 @@ def build_parser() -> argparse.ArgumentParser:
         "artifact",
         help="fetch one file a turn produced",
         description=(
-            "Fetches a file a turn left under /derived or /memory, by the name\n"
-            "the run printed for it -- `derived/report.html`, not a path on\n"
+            "Fetches a file a turn left under /outputs or /memory, by the name\n"
+            "the run printed for it -- `outputs/report.html`, not a path on\n"
             "this machine. Read through the session's backend, so it works\n"
             "wherever that backend keeps the session.\n"
             "\n"
@@ -574,7 +574,7 @@ def _drive(
         else:
             print(
                 f"stopped: {result.stop_reason} -- the answer above is what was "
-                f"reached, and what it wrote is in /derived and /memory",
+                f"reached, and what it wrote is in /outputs and /memory",
                 file=sys.stderr,
             )
         if delete_session:

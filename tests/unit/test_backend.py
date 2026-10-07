@@ -60,28 +60,28 @@ def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
     """
     bare = tmp_path / "never-made"
     bare.mkdir()
-    (bare / "data").mkdir()
+    (bare / "inputs").mkdir()
 
-    wanted = r"missing derived, memory, scratchpad, \.harness"
+    wanted = r"missing outputs, memory, scratchpad, \.harness"
     with pytest.raises(ValueError, match=wanted):
         backend_at(cfg, bare)
 
 
 def test_backend_is_rooted_at_the_session(cfg, session_dir):
-    """One session is one root: virtual paths anchor there, so /data means this
+    """One session is one root: virtual paths anchor there, so /inputs means this
     session's data and no path leads to another session's.
     """
     backend = backend_at(cfg, session_dir)
     assert str(session_dir.resolve()) == str(backend.default.cwd)
 
 
-def test_data_is_routed_so_the_deny_rule_is_legal(cfg, session_dir):
+def test_inputs_is_routed_so_the_deny_rule_is_legal(cfg, session_dir):
     """deepagents refuses permissions on an execution backend unless every rule path is
-    scoped to a route -- routing /data/ is what makes Q21 possible.
+    scoped to a route -- routing /inputs/ is what makes Q21 possible.
     """
     backend = backend_at(cfg, session_dir)
-    assert "/data/" in backend.routes
-    assert str((session_dir / "data").resolve()) == str(backend.routes["/data/"].cwd)
+    assert "/inputs/" in backend.routes
+    assert str((session_dir / "inputs").resolve()) == str(backend.routes["/inputs/"].cwd)
 
 
 def test_skills_is_routed_for_the_same_reason(cfg, session_dir):
@@ -108,21 +108,21 @@ def test_every_route_the_layout_declares_is_one_the_backend_mounts(cfg, session_
 
 def test_the_deny_rules_are_the_two_the_layout_declares(cfg, session_dir):
     """Pinned rather than derived twice."""
-    assert denied_scopes() == ("/.harness/**", "/data/**", "/skills/**")
+    assert denied_scopes() == ("/.harness/**", "/inputs/**", "/skills/**")
     assert denied_read_scopes() == ("/.harness/**",)
     assert [p.paths for p in read_only_permissions()] == [
-        ["/.harness/**"], ["/data/**"], ["/skills/**"], ["/.harness/**"],
+        ["/.harness/**"], ["/inputs/**"], ["/skills/**"], ["/.harness/**"],
     ]
     assert {p.mode for p in read_only_permissions()} == {"deny"}
     assert {tuple(p.operations) for p in read_only_permissions()} == {("write",), ("read",)}
 
 
-def test_derived_is_unrouted_and_the_table_says_so(cfg, session_dir):
+def test_outputs_is_unrouted_and_the_table_says_so(cfg, session_dir):
     """The absence used to be the only record of it."""
     backend = backend_at(cfg, session_dir)
     unrouted = {r.path for r in ROUTES if not r.routed}
 
-    assert unrouted == {"/derived/", "/scratchpad/"}
+    assert unrouted == {"/outputs/", "/scratchpad/"}
     assert not (unrouted & set(backend.routes)), "an unrouted path was mounted"
 
 
@@ -160,7 +160,7 @@ CONTAINER = Path("/workspace")
 @pytest.mark.parametrize(
     "probe",
     [
-        "sessions/another/derived/secret.txt",
+        "sessions/another/outputs/secret.txt",
         "skills/report/SKILL.md",
         "models.yaml",
         "agents/analyst.yaml",
@@ -226,7 +226,7 @@ def test_virtual_paths_still_work(cfg, session_dir):
     """The guard must not cost the agent its ordinary vocabulary."""
     backend = backend_at(cfg, session_dir)
 
-    for virtual_path in ("/scratchpad/report.md", "/derived/x.csv"):
+    for virtual_path in ("/scratchpad/report.md", "/outputs/x.csv"):
         backend.write(virtual_path, "content")
 
         assert backend.read(virtual_path), virtual_path
@@ -261,7 +261,7 @@ def test_two_sessions_do_not_share_a_tmpdir(cfg, session_dir, workspace):
 def test_scratch_is_created_private(cfg, session_dir):
     """The mode the shared scratch directory had, kept rather than quietly widened.
 
-    Not a boundary on its own -- `derived/` sits beside it at whatever the umask gave
+    Not a boundary on its own -- `outputs/` sits beside it at whatever the umask gave
     it -- and `ensure_session_layout` says so where it does this.
     """
     assert (session_dir / "scratchpad").stat().st_mode & 0o077 == 0
@@ -410,7 +410,7 @@ def test_the_home_directory_exists_before_a_command_runs(cfg, session_dir):
 
 # -- one file, listed once ------------------------------------------------
 #
-# Two of the routes point *inside* the default backend's own root: `/data` and
+# Two of the routes point *inside* the default backend's own root: `/inputs` and
 # `/memory` are real directories under the session.
 # `CompositeBackend` merges every backend's answer, so each of those files was
 # found twice -- once by the route and once by the default walking past it.
@@ -425,14 +425,14 @@ def _rows(result):
 
 #: Every route that lives under the session root, and so was doubled.
 INSIDE_THE_ROOT = {
-    "/data": ("data",),
+    "/inputs": ("inputs",),
     "/memory": ("memory",),
 }
 
 
 def test_a_routed_file_is_globbed_once(cfg, session_dir):
     """Measured before this: `--data orders.csv` reached the model as
-    `['/data/orders.csv', '/data/orders.csv']`, on every pattern tried.
+    `['/inputs/orders.csv', '/inputs/orders.csv']`, on every pattern tried.
     """
     backend = backend_at(cfg, session_dir)
     for route, parts in INSIDE_THE_ROOT.items():
@@ -465,11 +465,11 @@ def test_a_routed_file_is_grepped_once(cfg, session_dir):
 def test_a_file_matching_twice_still_reports_both(cfg, session_dir):
     """The half that says this is deduplication and not collapsing."""
     backend = backend_at(cfg, session_dir)
-    data = session_dir / "data"
+    data = session_dir / "inputs"
     data.mkdir(parents=True, exist_ok=True)
     (data / "probe.txt").write_text("needle one\nquiet\nneedle two\n", encoding="utf-8")
 
-    matches = _rows(backend.grep("needle", path="/data"))
+    matches = _rows(backend.grep("needle", path="/inputs"))
 
     assert [one["line"] for one in matches] == [1, 3]
     assert [one["text"] for one in matches] == ["needle one", "needle two"]
@@ -480,14 +480,14 @@ def test_two_different_files_are_both_still_listed(cfg, session_dir):
     thing twice.
     """
     backend = backend_at(cfg, session_dir)
-    data = session_dir / "data"
+    data = session_dir / "inputs"
     data.mkdir(parents=True, exist_ok=True)
     for name in ("one.txt", "two.txt"):
         (data / name).write_text("needle\n", encoding="utf-8")
 
-    found = sorted(one["path"] for one in _rows(backend.glob("/data/*.txt")))
+    found = sorted(one["path"] for one in _rows(backend.glob("/inputs/*.txt")))
 
-    assert found == ["/data/one.txt", "/data/two.txt"]
+    assert found == ["/inputs/one.txt", "/inputs/two.txt"]
 
 
 def test_a_hard_failure_is_passed_through_rather_than_emptied(cfg, session_dir):

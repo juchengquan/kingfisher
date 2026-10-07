@@ -2404,6 +2404,36 @@ of them to learn. The rule is `is_one_path_segment`, apart from the refusal, so 
 a setting naming a session can be held to it and refused in its own words.
 *(2026-10-07.)*
 
+**`/data` is `/inputs` and `/derived` is `/outputs`.** The names are for the agent,
+which knows a folder by little more than what it is called. "data" did not say the
+files in it were the caller's and not to be written, and "derived" did not say that
+what goes there is handed back; `inputs` and `outputs` say which way files go.
+`/memory` keeps its name, and the prompt's memory section says it is kept and
+returned as `/outputs` is.
+
+The folder on disk moved with the route, because the agent reaches both. `/outputs`
+is unrouted, so the file tools and the shell write one real folder, and the shell
+sees `inputs/` beside it. A route renamed over a folder left as it was would have
+broken the one rule the path table teaches -- drop the slash -- which is why
+`/scratch` was renamed the same way. Artifact names are paths inside the session,
+so they follow: `derived/report.md` is `outputs/report.md`.
+
+The layout is 3, and a workspace with sessions from an older one is refused, with
+no migration, as the layout version above was added to do. The refusal had been
+written for the move into `.harness`, and told every older workspace to delete
+layout 1's leftovers under `.kingfisher/` whether it had any or not. It now says
+which layout it found and which this is, and lists exactly what is left to delete:
+what is in `sessions/`, and each of `.kingfisher/{agents,runs,claims,tmp}` only
+where it exists. `permissions.py` spelled `"data"` by hand beside the constant
+`DataBackend` uploads under, so renaming the constant alone would have left a
+caller's inputs writable to the shell; both use the constant, and a test finds
+where an upload landed rather than naming the folder.
+
+The names a caller writes follow in a separate change: `--data`, `Request.data`,
+the `data_placed` event, and `protect_data` with its neighbours still say `data`.
+Entries in this file that say `/data` or `/derived` meant these folders under their
+old names. *(2026-10-07.)*
+
 ## Wiring a store
 
 *Much of this was reversed on 2026-09-30: `SessionStore` and `SessionRoot` are gone,

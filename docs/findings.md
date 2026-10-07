@@ -292,8 +292,8 @@ did not work. All of it langchain-core 1.5.5, langgraph 1.2.11, deepagents 0.7.6
   answered before the tool body runs, and a hole for any other caller.
 - **A rule on `/x/**` does not match `/x`.** It matches `/x/` and everything
   under it, so `ls('/x')` is allowed and comes back empty where `ls('/x/y')` is
-  refused. Repeated slashes do not get past a rule: `//data/x.txt` matches
-  `/data/**`.
+  refused. Repeated slashes do not get past a rule: `//inputs/x.txt` matches
+  `/inputs/**`.
 - **The default backend routes on the leading slash.** `skills/x/SKILL.md` and
   `/skills/x/SKILL.md` validate to one path and are two files to the backend: the
   first misses the `/skills/` route and is looked for under the session.

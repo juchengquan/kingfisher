@@ -20,7 +20,7 @@ class WorkspaceToolPaths(AgentMiddleware):
     **It closes a leak and a usability bug with one change, and the second is how the
     first was found.** `system.md` teaches virtual paths and says the two views do
     not mix; the tools wanted host paths and the agent is never told one. Measured in
-    a real run: the model passed `/data/config.ini` and the tool raised
+    a real run: the model passed `/inputs/config.ini` and the tool raised
     `FileNotFoundError`. The only way it could succeed was to go looking -- `pwd` in
     the shell, learn the layout -- and from there it can name *any* session:
     `line_count('/workspace/sessions/<other>/secret.txt')` returned an answer.
@@ -96,7 +96,7 @@ class WorkspaceToolErrors(AgentMiddleware):
         call = request.tool_call
         # The type as well as the message. A workspace tool is somebody else's
         # code and its exceptions were not written to be read by a model, so
-        # `FileNotFoundError: /data/x.csv` reads far better than the path alone.
+        # `FileNotFoundError: /inputs/x.csv` reads far better than the path alone.
         return ToolMessage(
             content=f"Error: {type(exc).__name__}: {exc}",
             tool_call_id=call.get("id", ""),

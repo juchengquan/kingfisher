@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from kingfisher.infrastructure.harness.host_paths import HOST_ROOTS, HostPathError
+from kingfisher.layout import INPUTS_ROUTE, OUTPUTS_ROUTE
 
 #: Which arguments name a file. The convention this repository already keeps --
 #: `test_every_shipped_tool_taking_a_path_says_it_is_a_session_path` walks the shipped
@@ -97,6 +98,6 @@ def refusal_text(escaped: ValueError) -> str:
     """
     return (
         f"Error: {escaped}. Tool paths are the same virtual paths the file "
-        "tools take, rooted at this session -- `/data/<name>`, "
-        "`/derived/<name>` -- and cannot climb out of it."
+        f"tools take, rooted at this session -- `{INPUTS_ROUTE}<name>`, "
+        f"`{OUTPUTS_ROUTE}<name>` -- and cannot climb out of it."
     )

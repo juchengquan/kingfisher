@@ -210,7 +210,7 @@ def test_a_store_that_cannot_enumerate_still_sweeps(cfg):
 # -- a sweep and a session in use -----------------------------------------
 #
 # `expired` names sessions "untouched for longer than X" and reads one
-# timestamp to decide. A turn writes *inside* a session -- `runs/`, `derived/`
+# timestamp to decide. A turn writes *inside* a session -- `runs/`, `outputs/`
 # -- which leaves the session's own timestamp alone, so a conversation in daily
 # use still read as idle. Measured before this: 10,000s idle immediately after
 # a turn completed in it.

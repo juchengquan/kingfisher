@@ -32,7 +32,7 @@ A request then names what it wants:
 from kingfisher import Capabilities, Request, run
 
 run(Request(
-    task="Review the diff in /data/change.patch",
+    task="Review the diff in /inputs/change.patch",
     agent="assistant",
     capabilities=Capabilities(
         tools=("read_file", "ls", "glob", "grep", "execute", "task"),
@@ -120,7 +120,7 @@ same agent again; naming a different one is refused.
 `system_prompt` is the same word a subagent file uses, doing a different job. A
 subagent's *is* the whole prompt. An agent's is the last of three parts:
 
-    prompts/system.md    what the harness is — /data is read-only, /skills is
+    prompts/system.md    what the harness is — /inputs is read-only, /skills is
                          loadable, where memory lives. Ships with kingfisher
     PROMPT.md            what this workspace is about. Yours, optional, and it
                          reaches your delegates too
@@ -239,7 +239,7 @@ Each with its own message rather than a generic "unknown field", because the
 generic one reads as *not supported yet* and sends you looking for a workaround:
 
 - **`permissions`** — deepagents' permissions *replace* the parent's rather than
-  narrowing them, so writing this here would drop `/data` being read-only.
+  narrowing them, so writing this here would drop `/inputs` being read-only.
 - **`response_format`** — it changes what a run *returns*, so the result and
   streaming both have a stake in it.
 
@@ -639,7 +639,7 @@ edge instead of letting YAML infer it from the first line:
 
 ```yaml
 system_prompt: |2           # ✅ first line indented deeper than the rest
-      ls -la /data          #    plain `|` cannot read this, and says so
+      ls -la /inputs        #    plain `|` cannot read this, and says so
   Then report.
 ```
 
@@ -798,7 +798,7 @@ never applies kingfisher's allowlist to it, so `--tools` narrows what `build`
 
 **What `build` receives is wrapped, and that is the only guard a compiled graph
 gets.** Those tools take the same virtual paths as everywhere else —
-`/data/<name>` — resolved before the tool runs; a host path in any other
+`/inputs/<name>` — resolved before the tool runs; a host path in any other
 argument is refused, and a tool that raises comes back as a failed result rather
 than ending the run. It rides on the tool objects because there is no middleware
 in front of a graph kingfisher did not build. A tool the graph closed over
@@ -1170,7 +1170,7 @@ Three shapes:
   `skills/<name>/scripts/` — and give the command in the procedure, reaching it
   through `$KINGFISHER_SKILLS`, which the shell exports as the catalogue's path:
 
-      python3 "$KINGFISHER_SKILLS/incident/timeline/scripts/timeline.py" data/api.log
+      python3 "$KINGFISHER_SKILLS/incident/timeline/scripts/timeline.py" inputs/api.log
 
   Reach for this where a step is mechanical and a model doing it by eye would
   miss things — `skills/incident/timeline/` walks every line of a log so a

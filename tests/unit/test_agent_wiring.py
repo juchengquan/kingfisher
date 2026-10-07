@@ -68,7 +68,7 @@ def test_agent_runs_shell_and_writes_files(cfg, session_dir):
 
 
 def test_planning_and_permissions_are_wired(cfg, session_dir):
-    """deepagents 0.7.6 ships no planning tool, and /data must be write-denied."""
+    """deepagents 0.7.6 ships no planning tool, and /inputs must be write-denied."""
     built = build_agent(
         cfg,
         backend=backend_at(cfg, session_dir),
@@ -78,7 +78,7 @@ def test_planning_and_permissions_are_wired(cfg, session_dir):
     assert "TodoListMiddleware" in middleware_names
 
     # Two routes are read-only for every request, whatever it was granted:
-    # `/data` is the caller's input, and `/skills` is instructions the agent
+    # `/inputs` is the caller's input, and `/skills` is instructions the agent
     # follows. Named rather than counted, so adding a third rule does not fail
     # this and a *removed* one still does.
     # `delete` maps to the `write` operation, so one rule covers write/edit/delete.
@@ -86,7 +86,7 @@ def test_planning_and_permissions_are_wired(cfg, session_dir):
         rule.paths[0] for rule in built.permissions
         if rule.mode == "deny" and "write" in rule.operations
     }
-    assert read_only == {"/.harness/**", "/data/**", "/skills/**"}
+    assert read_only == {"/.harness/**", "/inputs/**", "/skills/**"}
 
     assert built.system_prompt == system_prompt(cfg)
     # M2 capabilities are off by default, so neither is passed through. `is None`
@@ -124,8 +124,8 @@ def test_system_prompt_carries_no_host_paths_or_session_ids():
     assert "/home/" not in text
     assert "session_id" not in text
     # It must still teach the virtual layout.
-    assert "/data" in text
-    assert "/derived" in text
+    assert "/inputs" in text
+    assert "/outputs" in text
 
 
 def test_the_agent_exposes_the_expected_tool_surface(cfg, session_dir):

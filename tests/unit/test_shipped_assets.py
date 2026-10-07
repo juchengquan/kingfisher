@@ -108,17 +108,17 @@ def test_the_timeline_skill_runs_the_script_it_names(shipped, tmp_path):
     script = root / named
     assert script.is_file(), f"SKILL.md runs {named}, which is not in the catalogue"
 
-    (tmp_path / "data").mkdir()
-    (tmp_path / "data" / "api.log").write_text(
+    (tmp_path / "inputs").mkdir()
+    (tmp_path / "inputs" / "api.log").write_text(
         "2026-09-01T14:03:22 WARN pool at 90% of 50 connections\n"
         "2026-09-01T14:03:40 WARN pool at 92% of 50 connections\n"
         "2026-09-01T14:20:00 ERROR request 8f3a2b1c9d failed: timeout\n"
         "a line with no timestamp\n",
         encoding="utf-8",
     )
-    # The shell's view of a session: run from its root, handed `data/...`.
+    # The shell's view of a session: run from its root, handed `inputs/...`.
     done = subprocess.run(  # noqa: S603 -- our own interpreter, a script in this tree
-        [sys.executable, str(script), "data/api.log"],
+        [sys.executable, str(script), "inputs/api.log"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -131,7 +131,7 @@ def test_the_timeline_skill_runs_the_script_it_names(shipped, tmp_path):
     assert "(x2, until 14:03:40)" in out, "a repeat was not collapsed"
     assert "16 minute(s) with no log lines" in out
     assert out.index("WARN") < out.index("16 minute(s)") < out.index("ERROR")
-    assert "data/api.log:3" in out, "an event has to cite the line it came from"
+    assert "inputs/api.log:3" in out, "an event has to cite the line it came from"
 
 
 def test_the_shipped_set_shows_all_three_skill_shapes(shipped):
@@ -538,13 +538,13 @@ def test_the_compiled_preset_records_after_answering(shipped):
 
 def test_the_record_names_the_tool_and_its_arguments(shipped):
     """A model asked which tools it used gives a claim."""
-    graph = compiled(shipped, [line_count], calling("line_count", {"path": "/data/rows.csv"}))
+    graph = compiled(shipped, [line_count], calling("line_count", {"path": "/inputs/rows.csv"}))
 
     answer = graph.invoke({"messages": [HumanMessage(content="how long is it?")]})
 
     final = answer["messages"][-1].content
     assert "line_count" in final
-    assert "/data/rows.csv" in final
+    assert "/inputs/rows.csv" in final
 
 
 def test_the_answer_survives_the_record(shipped):
@@ -1879,10 +1879,10 @@ def test_every_shipped_file_tool_works_on_a_backend_with_nothing_on_this_host(sh
     from tests.conftest import on_backend
 
     held = {
-        "/data/rows.csv": b"region,sales\nnorth,10\nsouth,\n",
-        "/data/app.log": b"2026-09-01T14:17:40 ERROR queue full\n",
-        "/data/access.log": b'1.2.3.4 - - [x] "GET / HTTP/1.1" 503 17\n',
-        "/data/config.ini": b"api_key = sk-live-123\n",
+        "/inputs/rows.csv": b"region,sales\nnorth,10\nsouth,\n",
+        "/inputs/app.log": b"2026-09-01T14:17:40 ERROR queue full\n",
+        "/inputs/access.log": b'1.2.3.4 - - [x] "GET / HTTP/1.1" 503 17\n',
+        "/inputs/config.ini": b"api_key = sk-live-123\n",
     }
 
     class Remote(BackendProtocol):
@@ -1900,12 +1900,12 @@ def test_every_shipped_file_tool_works_on_a_backend_with_nothing_on_this_host(sh
         for one in LocalToolRepository(root).found
     }
     asked = {
-        "line_count": "/data/rows.csv",
-        "csv_profile": "/data/rows.csv",
-        "csv_columns": "/data/rows.csv",
-        "log_levels": "/data/app.log",
-        "status_codes": "/data/access.log",
-        "mask_secrets": "/data/config.ini",
+        "line_count": "/inputs/rows.csv",
+        "csv_profile": "/inputs/rows.csv",
+        "csv_columns": "/inputs/rows.csv",
+        "log_levels": "/inputs/app.log",
+        "status_codes": "/inputs/access.log",
+        "mask_secrets": "/inputs/config.ini",
     }
 
     answers = {name: on_backend(found[name], Remote(), file_path=at) for name, at in asked.items()}

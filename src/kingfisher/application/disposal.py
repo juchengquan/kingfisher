@@ -100,7 +100,7 @@ class Disposal:
 
         `_discard_steps` takes the thread and the session together, so a swept session
         leaves neither behind. A session that goes any other way -- deleted by hand,
-        or one that could not be removed until deleting learned to unlock `/data` --
+        or one that could not be removed until deleting learned to unlock `/inputs` --
         leaves its thread forever, because nothing else looks. One real workspace held
         132 such threads and 1,894 checkpoints after every session had been reaped.
         """

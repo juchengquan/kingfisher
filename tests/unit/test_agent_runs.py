@@ -108,7 +108,7 @@ def test_the_agents_prompt_is_added_after_the_harness_and_the_workspace(cfg):
 
     assembled = system_prompt(cfg, "You read files and say what is in them.")
 
-    harness = assembled.index("/data")
+    harness = assembled.index("/inputs")
     house = assembled.index("House rule")
     mine = assembled.index("You read files")
     assert harness < house < mine

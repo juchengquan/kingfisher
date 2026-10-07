@@ -62,18 +62,18 @@ def test_a_backend_that_inherits_nothing_is_caught(cfg, session_dir):
 
 
 def test_a_backend_missing_a_route_a_deny_rule_names_is_caught(cfg, session_dir):
-    """Without a route under it, `/data/**` is not a rule deepagents will accept, and
+    """Without a route under it, `/inputs/**` is not a rule deepagents will accept, and
     the graph does not build at all.
     """
     real = backend_at(cfg, session_dir)
     thinned = WorkspaceScopedBackend(
         default=real.default,
-        routes={path: at for path, at in real.routes.items() if path != "/data/"},
+        routes={path: at for path, at in real.routes.items() if path != "/inputs/"},
         session_dir=session_dir,
         workspace=cfg.workspace,
     )
 
-    with pytest.raises(AssertionError, match="/data/"):
+    with pytest.raises(AssertionError, match="/inputs/"):
         route_coverage(lambda: thinned)
 
 
@@ -153,4 +153,4 @@ def test_the_kit_is_run_against_the_real_tree_not_a_composite_of_its_own(cfg, se
     real = backend_at(cfg, session_dir)
 
     assert isinstance(real, WorkspaceScopedBackend)
-    assert "/data/" in real.routes
+    assert "/inputs/" in real.routes

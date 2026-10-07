@@ -31,7 +31,7 @@ load_dotenv()
 EXPECTED = {"north": 4983, "east": 5059}
 
 TASK = (
-    f"/data/{SAMPLE_NAME} has a `region` column and a `units` column.\n\n"
+    f"/inputs/{SAMPLE_NAME} has a `region` column and a `units` column.\n\n"
     "Delegate this: use the task tool to spawn one subagent per region for the "
     "regions north and east. Each subagent should compute the total units for "
     "its own region alone (region names compared case-insensitively, ignoring "
