@@ -2318,10 +2318,43 @@ Memory shared between sessions is a separate design, and it has not been made.
 `docs/design/2026-09-10-a-mount-kingfisher-can-name.md` leaves `/memory` off a
 shared mount because a per-caller route on storage every session shares "needs a
 tenancy argument that has not been made", and nothing since has made it. Until
-that design exists, "a future session" does not go back into the prompt. The
-guidelines deepagents appends beside it still say "future conversations":
-`create_deep_agent` builds `MemoryMiddleware` without passing its `system_prompt`,
-so that text is the library's and is not changed here. *(2026-10-07.)*
+that design exists, "a future session" does not go back into the prompt.
+*(2026-10-07.)*
+
+**The guidelines deepagents appends after it say the same, because they are
+kingfisher's.** Straight after kingfisher's section, deepagents' own
+`MEMORY_SYSTEM_PROMPT` called each correction "a chance to improve permanently"
+and told the agent to skip what is "irrelevant in future conversations".
+`prompts/memory_guidelines.md` is that template with five lines changed and
+nothing else: the structure, the trust rules, what not to record and the
+examples are still the library's.
+
+It reaches the model by replacement. `create_deep_agent` builds its
+`MemoryMiddleware` without a `system_prompt` and takes no argument to pass one,
+but it merges middleware by name, in place -- so `build_agent` keeps `memory=` and
+passes a `MemoryMiddleware` of its own, carrying the template, which takes the
+slot deepagents built its own in. Measured by driving a real build with a
+`ChatAnthropic` that records what it is sent, sync and async: the stack unchanged,
+with `MemoryMiddleware` last, after `AnthropicPromptCachingMiddleware`; the memory
+file's contents in the last system block; two cache breakpoints, one on the static
+prompt and one on the memory block, as before. A request declining memory still
+builds no memory middleware.
+
+Two other ways were measured and not taken. `system_prompt=None` appends nothing,
+so the memory file's contents stop reaching the model along with the guidelines,
+and putting them back would be the middleware written again. A `MemoryMiddleware`
+passed *instead of* `memory=` is spliced in with kingfisher's own, ahead of
+`AnthropicPromptCachingMiddleware`, and the system message arrives with one
+breakpoint where it had two: the static prompt is cached only together with the
+memory file, so every edit to that file costs the whole prompt its cache.
+
+`test_the_memory_guidelines_promise_nothing_past_the_session` reads deepagents'
+template off the library and fails if a line kingfisher's copy leaves out reaches
+the model -- a revert to `memory=` alone, a release that stops replacing by name, a
+second memory block beside this one. It does not catch "permanently" written back
+into kingfisher's own copy: that is kingfisher's text, and a test for it could only
+match a phrase. `test_the_memory_block_keeps_a_cache_breakpoint_of_its_own` holds
+the slot. *(2026-10-07.)*
 
 ## Wiring a store
 

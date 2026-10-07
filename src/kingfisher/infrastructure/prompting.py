@@ -38,9 +38,20 @@ CAPABILITY_FILES = {
 #: `/memory/AGENTS.md`, which the agent writes: this file is yours.
 USER_PROMPT_FILE = "PROMPT.md"
 
+#: deepagents' `MEMORY_SYSTEM_PROMPT` with its lifetime claims corrected, and not to
+#: be re-synced from it on an upgrade: the library's own says memory lasts into
+#: "future conversations", and `/memory` is deleted with its session. Sent as
+#: written: deepagents strips HTML comments from the memory file, not from this.
+MEMORY_GUIDELINES = "memory_guidelines.md"
+
 
 def _prompt_text(name: str) -> str:
     return resources.files("kingfisher.prompts").joinpath(name).read_text(encoding="utf-8")
+
+
+def memory_guidelines() -> str:
+    """The template `MemoryMiddleware` puts the memory file into, `{agent_memory}` and all."""
+    return _prompt_text(MEMORY_GUIDELINES)
 
 
 #: Enough for a fleet of agents rather than for one deployment. The cache is

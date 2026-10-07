@@ -150,8 +150,19 @@ for the next reader who reaches for one.*
   so a deployment's class named like one of deepagents' own removes it from the
   stack rather than running beside it. Kingfisher warns about this; the mechanism
   and the reasoning are in `_warn_if_it_replaces_deepagents` in
-  `infrastructure/harness/agent.py`, and the names are discovered at run time
-  rather than listed. *(2026-08-31.)*
+  `infrastructure/harness/kinds/declared_middleware.py`, and the names are
+  discovered at run time rather than listed. *(2026-08-31.)*
+- **The memory block gets a cache breakpoint of its own only in deepagents' slot
+  for it.** With `memory=`, `MemoryMiddleware` runs after
+  `AnthropicPromptCachingMiddleware`, so a `ChatAnthropic` is sent two
+  breakpoints: one on the static prompt, one on the memory block after it. One
+  passed through `middleware=` without `memory=` is spliced in ahead of the
+  caching middleware, both breakpoints land on the memory block, and the static
+  prompt has none of its own; one passed beside `memory=` replaces deepagents'
+  own in that slot. `test_the_memory_block_keeps_a_cache_breakpoint_of_its_own`
+  holds it. And `system_prompt=None` drops the memory file's contents with the
+  guidelines: they are loaded into state and never appended. *(2026-10-07,
+  deepagents 0.7.6.)*
 - **Upstream protects `FilesystemMiddleware` and `SubAgentMiddleware` on one path
   and not the other.** `_apply_excluded_middleware` refuses to strip them;
   `_apply_custom_middleware` will replace them without a word. *(2026-08-31.)*
