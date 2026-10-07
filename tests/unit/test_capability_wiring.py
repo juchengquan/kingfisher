@@ -7,8 +7,12 @@ from dataclasses import replace
 from typing import Annotated, Any
 
 import pytest
+from deepagents.middleware.memory import MEMORY_SYSTEM_PROMPT
+from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 from langgraph.graph import END, START, StateGraph
+from pydantic import Field
 from typing_extensions import TypedDict
 
 from kingfisher import default_backends
@@ -20,7 +24,9 @@ from kingfisher.infrastructure.harness.agent import (
 )
 from kingfisher.infrastructure.harness.backend import backend_at, skills_sources
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.infrastructure.prompting import memory_guidelines
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
+from kingfisher.layout import MEMORY
 from tests.conftest import (
     FakeToolCallingModel,
     declared_subagents,
@@ -432,6 +438,66 @@ def test_memory_is_mounted_when_wired_and_not_declined(cfg, session_dir):
     )
     assert built.memory == ["/memory/AGENTS.md"]
     assert not any(r.paths == ["/memory/**"] for r in built.permissions)
+
+
+class SentToAnthropic(ChatAnthropic):
+    """Keeps the system message it is sent. A `ChatAnthropic` because both prompt-cache
+    breakpoints are placed only for one: a fake model would be sent neither.
+    """
+
+    seen: list[Any] = Field(default_factory=list)
+
+    def bind_tools(self, tools, **kwargs):
+        return self
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        self.seen.append(messages[0])
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="ok"))])
+
+
+def _system_blocks_sent(cfg, session_dir) -> list[dict[str, Any]]:
+    """What one turn with memory on sends the model as its system message."""
+    wired = replace(cfg, memory_enabled=True)
+    (session_dir / MEMORY / "AGENTS.md").write_text(
+        "# Project memory\n\n- The caller is Ada.\n", encoding="utf-8"
+    )
+    model = SentToAnthropic(model="claude-sonnet-4-5", api_key="not-a-real-key")
+    built = build_agent(wired, backend=backend_at(wired, session_dir), model=model)
+
+    built.graph.invoke({"messages": [{"role": "user", "content": "hi"}]}, context=built.context)
+
+    return model.seen[0].content
+
+
+def test_the_memory_guidelines_promise_nothing_past_the_session(cfg, session_dir):
+    """deepagents' own guidelines reaching the model -- by an upgrade, or a revert to
+    `memory=` alone -- tell it memory lasts into "future conversations", and `/memory`
+    is deleted with its session.
+    """
+    sent = "".join(block["text"] for block in _system_blocks_sent(cfg, session_dir))
+    ours = set(memory_guidelines().splitlines())
+    # Read off the library rather than listed: whatever deepagents says that
+    # kingfisher's copy does not is what must not arrive, in whatever words.
+    theirs_only = [
+        line.strip()
+        for line in MEMORY_SYSTEM_PROMPT.splitlines()
+        if line.strip() and line not in ours
+    ]
+
+    assert "The caller is Ada." in sent, "no memory block was sent, so the rest is vacuous"
+    assert theirs_only, "deepagents says nothing kingfisher's copy leaves out"
+    assert [line for line in theirs_only if line in sent] == []
+
+
+def test_the_memory_block_keeps_a_cache_breakpoint_of_its_own(cfg, session_dir):
+    """Kingfisher's `MemoryMiddleware` passed without `memory=` lands ahead of the static
+    prompt's breakpoint, so every edit to the memory file costs the whole prompt its cache.
+    """
+    blocks = _system_blocks_sent(cfg, session_dir)
+
+    assert "The caller is Ada." in blocks[-1]["text"]
+    assert "cache_control" in blocks[-1]
+    assert any("cache_control" in block for block in blocks[:-1])
 
 
 def test_the_catalogue_can_live_outside_the_workspace(cfg, session_dir, tmp_path):

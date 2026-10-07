@@ -13,7 +13,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from deepagents import FilesystemPermission, create_deep_agent
+from deepagents import FilesystemPermission, MemoryMiddleware, create_deep_agent
 from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 from langchain.agents.middleware import TodoListMiddleware
 
@@ -67,7 +67,7 @@ from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
 from kingfisher.infrastructure.harness.session_paths import SessionPaths
 from kingfisher.infrastructure.harness.tool_context import ToolContext
 from kingfisher.infrastructure.harness.tool_guards import tool_guards
-from kingfisher.infrastructure.prompting import system_prompt
+from kingfisher.infrastructure.prompting import memory_guidelines, system_prompt
 from kingfisher.infrastructure.sandbox.confinement import EXTERNAL
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.kinds.agents.spec import AgentError, AgentSpec
@@ -385,6 +385,22 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # `memory=True` against a deployment that wired none stays off.
     if cfg.memory_enabled and capabilities.memory is not False:
         extras["memory"] = MEMORY_SOURCES
+        # Built here for its `system_prompt`: the one deepagents builds tells the
+        # agent memory lasts into "future conversations". Beside `memory=`, not
+        # instead of it: deepagents merges middleware by name, so this takes the
+        # slot it builds its own in, after the breakpoint caching the static prompt.
+        # Passed alone it lands ahead of that breakpoint, and every edit to the
+        # memory file costs the whole prompt its cache.
+        middleware.append(
+            MemoryMiddleware(
+                backend=backend,
+                sources=MEMORY_SOURCES,
+                # What deepagents gives the one this replaces: the memory block's
+                # own breakpoint.
+                add_cache_control=True,
+                system_prompt=memory_guidelines(),
+            )
+        )
     elif cfg.memory_enabled:
         # Wired but declined. The prompt still describes memory, because it is
         # the cached prefix and must not vary per request; this stops the file
