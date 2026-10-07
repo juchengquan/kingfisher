@@ -24,8 +24,8 @@ tools: [csv_profile::csv_profile]
 # models.yaml defines. It names none because a file shipped inside a wheel
 # cannot portably name a vendor's model.
 # Off, not "no opinion". This agent looks at files and reports; it has nothing
-# worth remembering between sessions, and reading the memory file would put a
-# previous caller's notes into a survey that is supposed to describe the data.
+# worth remembering between turns, and reading the memory file would put an
+# earlier turn's notes into a survey that is supposed to describe the data.
 memory: false
 # Required, like `name` and `description`. The ten lines above say everything
 # this agent may *do*; this is the only one that says what it is for, and a
