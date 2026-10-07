@@ -17,6 +17,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## A lone session's id recorded, after #674
+
+A workspace holding one session records the id it was laid out for, in
+`sessions/.harness/session-id`, and refuses to start under any other (#675). Changing
+`KINGFISHER_SESSION_ID` used to carry the old session's conversation, agent and memory
+on under the new id. Set it back, or clear `sessions/` to start the new one afresh. A
+workspace laid out before the record is let through once and given one on its next
+open. Unsetting the setting is refused as before, and the refusal now names the id to
+set it back to.
+
 ## One session per workspace, after #671
 
 A workspace can hold exactly one session (#672). Nothing changes unless you set
@@ -395,7 +405,8 @@ backend* and *A tool's path is the backend's path*, explains why.
 | `… was laid out by kingfisher layout 2, and this is layout 3 …` | The workspace still holds sessions from before `data/` and `derived/` were renamed | Delete what the message lists, or use a new workspace; see *Session folders named for which way files go* |
 | `UnknownSessionError: no session '…'; omit session_id to start one`, from `files_for` | An id no turn issued, such as one made up to start a session, or one that is not a single path segment | Run the session's first turn without `files=`, then open the id its result carries; see *`files_for` opens only a session a turn issued* |
 | `HostPathError: '…' is a host path, and file tools take virtual paths rooted at the workspace — …` | A file tool given an absolute path under the workspace but outside this session, such as another session's file or `models.yaml` | Use a virtual path, or the shell for host paths; see *Host paths refused anywhere under the workspace* |
-| `… holds one session laid out directly in it -- .harness/ is there -- …` | `KINGFISHER_SESSION_ID` is unset on a workspace that was run with it | Set it to that session's id, clear `sessions/`, or use another workspace; see *One session per workspace* |
+| `… holds one session laid out directly in it -- .harness/ is there -- …` | `KINGFISHER_SESSION_ID` is unset on a workspace that was run with it | Set it to the id the message names, clear `sessions/`, or use another workspace; see *One session per workspace* |
+| `KINGFISHER_SESSION_ID is '…', and … holds the session laid out for '…'` | The setting was changed on a workspace already holding a session | Set it back to the id laid out, clear `sessions/` to start the new one afresh, or use another workspace; see *One session per workspace* |
 | `KINGFISHER_SESSION_ID is set, and … holds sessions of their own -- …` | The setting was turned on for a workspace that already holds sessions | Clear `sessions/`, unset it, or use another workspace; see *One session per workspace* |
 | `KINGFISHER_SESSION_STORE was removed: …` | The old store setting is still set | Unset it; see *Settings* |
 | `TypeError: backends= takes a SessionBackends …` | A plain factory function, or one backend, passed as `backends=` | Subclass `DefaultBackends` |
