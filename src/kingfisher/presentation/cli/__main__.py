@@ -149,7 +149,7 @@ def build_parser() -> argparse.ArgumentParser:
     doing.add_argument(
         "--agent",
         required=True,
-        help="which agent runs this, from the workspace's agents/ (`kingfisher list` shows them)",
+        help="which agent runs this (`kingfisher list` shows them, and where they are read from)",
     )
     doing.add_argument("--session", metavar="ID", help="continue an existing session")
     # One flag, where there were two. `--input` put a file in the turn's own
@@ -433,7 +433,9 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
     paths = paths_from_env()
     # The destination has to exist before anything is copied into it, and this is
     # idempotent -- an already-laid-out workspace is untouched.
-    ensure_layout(paths.workspace, authored=paths.authored_files)
+    ensure_layout(
+        paths.workspace, authored=paths.authored_files, catalogue_roots=paths.catalogue_roots
+    )
 
     tree = definitions_source(paths, source)
     written = seed(paths, tree, everything=everything)

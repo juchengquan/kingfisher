@@ -114,6 +114,26 @@ def test_a_supplied_catalogue_must_already_exist(tmp_path, cfg):
     assert not missing.exists()
 
 
+def test_a_supplied_catalogue_gets_no_kind_folder_made_anywhere(tmp_path, cfg):
+    """The layout made every configured kind in the workspace even when `catalogue=`
+    meant none of them would be read.
+    """
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+
+    staged = tmp_path / "staged"
+    supplied = _roots(_staged(staged))
+    fresh = replace(cfg, workspace=tmp_path / "fresh")
+
+    kf = Kingfisher(fresh, catalogue=supplied, backends=default_backends)
+
+    assert not set(DEFINITION_KINDS) & {p.name for p in kf.workspace.iterdir()}, (
+        "a kind folder in the workspace, where a supplied catalogue is not read from"
+    )
+    assert {p.name for p in staged.iterdir()} == set(supplied), (
+        "a folder made beside the staged catalogue, which its caller did not stage"
+    )
+
+
 def test_a_supplied_catalogue_names_all_three(tmp_path, cfg):
     """Leaving one out would mean an empty one, which is never what was meant."""
     roots = _staged(tmp_path / "staged")

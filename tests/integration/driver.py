@@ -157,7 +157,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--agent",
         metavar="NAME",
-        help="which agent runs this, from the workspace's agents/ (--list shows them)",
+        help="which agent runs this (--list shows them, and where they are read from)",
     )
     # Kept when `--seed`, `--from` and `--all` went, and not because it is
     # convenient: `kingfisher list` prints the same block through the same
@@ -259,7 +259,7 @@ def main(argv: list[str]) -> int:
             print(f"configuration error: {exc}", file=sys.stderr)
             print(f"this driver takes no --from; {SEED_HINT} does", file=sys.stderr)
             return 2
-    workspace = ensure_layout(paths.workspace)
+    workspace = ensure_layout(paths.workspace, catalogue_roots=paths.catalogue_roots)
     if fresh:
         print(f"created a new workspace at {workspace}")
 

@@ -14,26 +14,11 @@ from dataclasses import dataclass
 #: by `MARKER`, the sandbox profile and the skills view that live in it.
 HARNESS_OWNED = ".kingfisher"
 
-#: Created once in the workspace: the definitions the sessions share, and the
-#: harness's own directory.
+#: Created in the workspace whatever else is configured: where sessions are, and
+#: the harness's own directory. No definition kind belongs here, because a kind is
+#: made where its setting points and that is not always the workspace -- a kind
+#: listed here gets a folder beside the sessions that nothing reads.
 LAYOUT_DIRS: tuple[str, ...] = (
-    # Every kind, and that is a rule rather than a list: resolving a catalogue
-    # creates all five anyway, so a layout naming three left a workspace with two
-    # answers to which directories it has -- one from `ensure_layout` on a fresh
-    # start and another from the first read. `agents` and `middlewares` were the
-    # two outside it, each because it arrived after this tuple did, and the habit
-    # of making them by hand spread to the three that never needed it.
-    #
-    # No `LAYOUT_VERSION` bump: that number refuses a workspace laid out
-    # differently, and nothing here moves. An existing workspace gains two empty
-    # directories on its next start, which is what `mkdir(exist_ok=True)` is for.
-    "agents",
-    "middlewares",
-    "skills",
-    "subagents",
-    # Python this process imports, not content the agent reads. Created here so
-    # the place to put one is obvious, and routed nowhere.
-    "tools",
     # Sessions are the unit of isolation; each one is a backend root.
     "sessions",
     # The harness's own, which the agent may not write: the marker, the sandbox

@@ -133,8 +133,8 @@ from kingfisher.infrastructure.steps import (
 from kingfisher.infrastructure.threads import finished, thread_pool
 from kingfisher.infrastructure.workspace import (
     SEED_HINT,
-    STARTER_AGENT,
     ensure_layout,
+    starter_agent,
 )
 from kingfisher.kinds.agents.reading import read
 from kingfisher.kinds.agents.spec import AgentSpec
@@ -253,7 +253,12 @@ class Kingfisher(Sessions, Disposal):
         # Only what sessions share. Each session's own layout is made per
         # request, because its path is not known until the request names it.
         self.workspace: Path = ensure_layout(
-            self.cfg.workspace, authored=self.cfg.authored_files
+            self.cfg.workspace,
+            authored=self.cfg.authored_files,
+            # No kind folder for a supplied catalogue: whoever staged it made them, and
+            # the configured ones are not read, so one made there would be a place to
+            # put a definition that never loads.
+            catalogue_roots=self.cfg.catalogue_roots if catalogue is None else {},
         )
 
         # Where the reviewed definitions are read from, settled once. Omitted,
@@ -611,8 +616,11 @@ class Kingfisher(Sessions, Disposal):
         # all. `SEED_HINT` says `--from DIR`, which needs a DIR -- and `SUGGESTION`
         # names none to a reader who installed the package, because neither directory it
         # could name exists for them. Correct, and a dead end: the next thing that
-        # reader needs is the file itself.
-        empty = "" if offered else f" -- try {SEED_HINT}, or write one:\n\n{STARTER_AGENT}"
+        # reader needs is the file itself -- written where the agents are read from,
+        # which a setting may have moved, and offered only where there is a directory.
+        root = self.catalogue.agents.root
+        starter = "" if root is None else f", or write one:\n\n{starter_agent(root)}"
+        empty = "" if offered else f" -- try {SEED_HINT}{starter}"
         if name is None:
             msg = f"this request names no agent; this workspace offers {listing}{empty}"
             raise CapabilityError(msg)

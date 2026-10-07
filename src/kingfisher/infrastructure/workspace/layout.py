@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from importlib import resources
 from pathlib import Path
 
-from kingfisher.config import ConfigError
+from kingfisher.config import ConfigError, definition_roots_for
 from kingfisher.domain.session import sessions_root
 from kingfisher.layout import (
     HARNESS_OWNED,
@@ -103,8 +103,13 @@ def check_layout(workspace: Path) -> None:
     raise ConfigError(msg)
 
 
-def ensure_layout(workspace: Path, *, authored: Mapping[str, Path] | None = None) -> Path:
-    """Create the workspace layout. Idempotent.
+def ensure_layout(
+    workspace: Path,
+    *,
+    authored: Mapping[str, Path] | None = None,
+    catalogue_roots: Mapping[str, Path] | None = None,
+) -> Path:
+    """Create the workspace layout, and each kind's folder where it is read from. Idempotent.
 
     No `.gitignore` is written, and nothing here runs git. A shipped one listed two
     of the five things a workspace holds, so it read as complete while being wrong:
@@ -114,7 +119,7 @@ def ensure_layout(workspace: Path, *, authored: Mapping[str, Path] | None = None
 
     A workspace is runtime state. The 132KB of authored content in it -- `skills`,
     `subagents`, `tools` against 256MB of sessions and harness state -- is what
-    `KINGFISHER_SKILLS_DIR` and its two siblings exist to relocate, and versioning
+    `KINGFISHER_SKILLS_DIR` and its four siblings exist to relocate, and versioning
     belongs there rather than around the sessions.
     """
     workspace = Path(workspace).expanduser().resolve()
@@ -124,6 +129,17 @@ def ensure_layout(workspace: Path, *, authored: Mapping[str, Path] | None = None
     check_layout(workspace)
     for name in LAYOUT_DIRS:
         (workspace / name).mkdir(parents=True, exist_ok=True)
+    # Where the catalogue is read from and nowhere else: a kind that was moved gets no
+    # folder in the workspace, because an empty one there is where a reader puts a
+    # definition that is then never loaded. A caller holding only a directory is
+    # saying the definitions are read from it, which for most deployments is true.
+    # An empty mapping makes none, for a catalogue its caller staged.
+    #
+    # Nothing a moved kind left in the workspace is removed, empty or not: it is the
+    # operator's folder to delete, and this runs on every start.
+    roots = definition_roots_for(workspace) if catalogue_roots is None else catalogue_roots
+    for root in roots.values():
+        Path(root).mkdir(parents=True, exist_ok=True)
 
     marker = workspace / MARKER
     if not marker.exists() or _layout_of(marker) != LAYOUT_VERSION:

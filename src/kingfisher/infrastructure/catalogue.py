@@ -180,10 +180,10 @@ def resolve_definitions(
 ) -> Definitions:
     """Where this deployment's definitions are read from, settled once.
 
-    * **Derived from `cfg`** -- kingfisher's own, so they are created. That extends
-      to a relocated catalogue what `ensure_layout` does for a workspace: without
-      it, `KINGFISHER_SKILLS_DIR` pointing somewhere that does not exist yet yields
-      an empty catalogue and a clean start.
+    * **Derived from `cfg`** -- kingfisher's own, so they are created, at the roots
+      `ensure_layout` makes for the same `cfg`, so the two give one answer about
+      which folders exist. Without it, `KINGFISHER_SKILLS_DIR` pointing somewhere
+      that does not exist yet yields an empty catalogue and a clean start.
     * **Supplied by the caller** -- theirs, so they must already be there.
       Creating one would hide a staging failure behind a catalogue that is
       merely empty, and an agent told about no skills at all is exactly the

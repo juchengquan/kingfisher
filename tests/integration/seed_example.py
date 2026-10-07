@@ -24,7 +24,9 @@ def seed_workspace(
 
     # Belt-and-braces rather than an ordering that has to be got right: `seed` lays the
     # workspace out itself, so `models.yaml.example` arrives either way.
-    ensure_layout(paths.workspace, authored=paths.authored_files)
+    ensure_layout(
+        paths.workspace, authored=paths.authored_files, catalogue_roots=paths.catalogue_roots
+    )
 
     # An explicit path wins, else `KINGFISHER_ASSETS`, else a `ConfigError`
     # naming both ways to say where. Nothing ships with the library, so there is

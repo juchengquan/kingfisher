@@ -260,12 +260,14 @@ it refuses one inside a session. A workspace that
 keeps a populated `middleware/` gets an empty `middlewares/` made beside it and
 offers nothing, with nothing said.
 
-*(`middlewares/` is inside `LAYOUT_DIRS` since 2026-09-24; see below.)*
+*(`middlewares/` is made by the layout since 2026-09-24, and where its setting points
+since 2026-10-07; see below.)*
 
-**The layout names every kind.** It made three of the five, and resolving a
-catalogue makes all five, so a workspace had two answers to which directories it
-has: the layout's on a fresh start and the first read's thereafter. `agents` and
-`middlewares` were the two outside it, each because it arrived after that tuple did.
+**The layout names every kind, and makes each where its setting points.** It made
+three of the five, and resolving a catalogue makes all five, so a workspace had two
+answers to which directories it has: the layout's on a fresh start and the first
+read's thereafter. `agents` and `middlewares` were the two outside it, each because
+it arrived after that tuple did.
 
 What the gap cost was not a failure but a habit. Tests made the missing two by hand,
 and the same call spread to the three that already existed: 69 `mkdir` calls across
@@ -277,9 +279,27 @@ No `LAYOUT_VERSION` bump. That number refuses a workspace laid out *differently*
 and nothing here moves; an existing workspace gains two empty directories on its
 next start, which is what `mkdir(exist_ok=True)` is for. A version bump would have
 refused every workspace in existence in order to add a folder.
-`test_the_layout_names_every_kind_a_catalogue_reads` holds the tuple total in both
-directions -- every kind is in it, and everything in it that is not a kind says what
-it is instead. *(2026-09-24, from an architecture review.)*
+
+Then it made all five in the workspace whatever `KINGFISHER_*_DIR` said, which was
+the same two answers by another road: a deployment that had moved its skills read
+them from where the setting pointed and kept an empty `skills/` beside its sessions
+as well. A folder where nothing reads misleads more than a missing one. It looks
+like the place to put a definition, and one put there is never loaded and nothing
+says so. `ensure_layout` takes the resolved `catalogue_roots` now, the way it takes
+`authored`, and makes each kind there; a caller holding only a directory still gets
+all five in it. `LAYOUT_DIRS` is what is always in the workspace -- `sessions` and
+`.kingfisher` -- and names no kind. A catalogue passed to `Kingfisher(catalogue=...)`
+gets no kind folder anywhere, which is the rule for roots a caller supplies. A
+folder an earlier start left behind is kept, empty or not: the layout runs on every
+start, and deleting an operator's directory is not its call. No version bump here
+either, for the same reason as before.
+
+`test_the_layout_names_every_kind_a_catalogue_reads` drives the layout rather than
+reading the tuple, which no longer has a kind in it to check, and holds
+`LAYOUT_DIRS` to the directories that are not kinds.
+`test_the_layout_and_the_first_read_make_the_same_folders` moves every kind and
+asserts the first read makes nothing the layout did not. *(2026-09-24, from an
+architecture review; each kind where its setting points, 2026-10-07.)*
 
 **The mass noun stays wherever it is still a mass noun.** `middlewares` names the
 kind -- a directory, a field, a key, a table row. `MiddlewareRepository`,

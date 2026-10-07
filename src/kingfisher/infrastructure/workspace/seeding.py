@@ -35,11 +35,18 @@ DESTINATION = Path("assets")
 #: How the four "this workspace is empty" messages tell a reader to fill it.
 SEED_HINT = "`kingfisher seed --from DIR`"
 
-#: The other half of that answer, for the reader `SEED_HINT` cannot help.
-STARTER_AGENT = """\
-An agent is a file in agents/, and three fields are required. A minimal one:
 
-    # agents/assistant.yaml
+def starter_agent(agents: Path) -> str:
+    """How to write an agent by hand, for the reader `SEED_HINT` cannot help.
+
+    Names the directory agents are read from rather than `agents/`, because a setting
+    may have moved it out of the workspace, and a file written where nothing reads it
+    is the dead end this exists to get a reader out of.
+    """
+    return f"""\
+An agent is a file in {agents}/, and three fields are required. A minimal one:
+
+    # {agents / "assistant.yaml"}
     name: assistant
     description: General-purpose agent.
     system_prompt: |
@@ -340,7 +347,9 @@ def seed(into: Destination, source: Path, *, everything: bool = False) -> Seeded
     # example of one. The CLI got the ordering right and nothing made a library caller
     # do the same, so the obvious two-liner produced a workspace that looked seeded and
     # could not start.
-    ensure_layout(into.workspace, authored=into.authored_files)
+    ensure_layout(
+        into.workspace, authored=into.authored_files, catalogue_roots=into.catalogue_roots
+    )
 
     if not source.is_dir():
         msg = f"nothing to seed from: {source} is not a directory"

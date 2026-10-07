@@ -35,7 +35,7 @@ NOT_A_KIND_DIRECTORY = {
 }
 
 
-def test_the_layout_names_every_kind_a_catalogue_reads():
+def test_the_layout_names_every_kind_a_catalogue_reads(tmp_path):
     """It named three of the five, so a workspace had two answers to which directories
     it has: the layout's on a fresh start, and resolving a catalogue's on the first
     read -- which creates all five.
@@ -44,15 +44,54 @@ def test_the_layout_names_every_kind_a_catalogue_reads():
     the tuple did. What that cost was not a failure but a habit: tests made the
     missing two by hand, and the same call spread to the three that already existed,
     69 times across 28 files.
+
+    Driven rather than read off `LAYOUT_DIRS`, which names no kind: the kinds come from
+    `catalogue_roots`, and a check on the tuple alone passes while the layout makes
+    none of them.
     """
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from kingfisher.infrastructure.workspace import ensure_layout
     from kingfisher.layout import LAYOUT_DIRS
 
-    assert set(DEFINITION_KINDS) <= set(LAYOUT_DIRS), (
+    made = {p.name for p in ensure_layout(tmp_path / "ws").iterdir() if p.is_dir()}
+
+    assert set(DEFINITION_KINDS) <= made, (
         "a kind a catalogue reads is a directory a fresh workspace should already have"
     )
-    assert set(LAYOUT_DIRS) == set(DEFINITION_KINDS) | set(NOT_A_KIND_DIRECTORY), (
+    assert made == set(DEFINITION_KINDS) | set(NOT_A_KIND_DIRECTORY), (
         "the layout makes a directory that is neither a kind nor written down here"
+    )
+    assert set(LAYOUT_DIRS) == set(NOT_A_KIND_DIRECTORY), (
+        "LAYOUT_DIRS is made in the workspace whatever is configured, so a kind in it "
+        "gets a folder there even when its setting moved it"
+    )
+
+
+def test_the_layout_and_the_first_read_make_the_same_folders(cfg, tmp_path):
+    """With a kind moved, the layout made its folder in the workspace and the first
+    read made it where the setting pointed, so a deployment had both and read one.
+    """
+    from dataclasses import replace
+
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS, resolve_definitions
+    from kingfisher.infrastructure.workspace import ensure_layout
+
+    deployment = tmp_path / "deployment"
+    moved = replace(
+        cfg,
+        workspace=deployment / "ws",
+        **{f"{kind}_root": deployment / "catalogue" / kind for kind in DEFINITION_KINDS},
+    )
+
+    ensure_layout(moved.workspace, catalogue_roots=moved.catalogue_roots)
+    laid_out = sorted(p for p in deployment.rglob("*") if p.is_dir())
+    resolve_definitions(moved)
+
+    assert sorted(p for p in deployment.rglob("*") if p.is_dir()) == laid_out, (
+        "the first read made a folder the layout did not"
+    )
+    assert not set(DEFINITION_KINDS) & {p.name for p in moved.workspace.iterdir()}, (
+        "the layout made a moved kind's folder in the workspace"
     )
 
 

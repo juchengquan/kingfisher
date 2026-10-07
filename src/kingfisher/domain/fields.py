@@ -483,7 +483,7 @@ class Reader:
         if (found := text(written)) not in SOURCES:
             msg = (
                 f"{self.source}: {key} entry {text(entry.get('name'))!r} has source "
-                f"{written!r}; it takes {SHARED!r}, the workspace's own {key}/, or "
+                f"{written!r}; it takes {SHARED!r}, the catalogue's own {key}/, or "
                 f"{BUNDLED!r}, this delegate's own folder subagents/<name>/{key}/"
             )
             raise self.error(msg)

@@ -11,7 +11,9 @@ pip install kingfisher
 from kingfisher import definitions_source, ensure_layout, paths_from_env, seed
 
 paths = paths_from_env()
-ensure_layout(paths.workspace, authored=paths.authored_files)
+ensure_layout(
+    paths.workspace, authored=paths.authored_files, catalogue_roots=paths.catalogue_roots
+)
 
 done = seed(paths, definitions_source(paths))
 for name in done.written:
@@ -26,7 +28,10 @@ whether or not you call `ensure_layout` — a deployment told to write
 `models.yaml` and given no example of one is a dead end, and the library closes
 it from the inside. `authored` is where that example goes: `models.yaml` and
 `source_ids.yaml` both relocate, and an example a directory away from the file it
-describes is the same dead end wearing a different coat.
+describes is the same dead end wearing a different coat. `catalogue_roots` is
+where each kind of definition is read from, and its folder is made there: a kind
+moved with `KINGFISHER_SKILLS_DIR` or a sibling gets none in the workspace, where
+a definition would sit unread.
 
 What the explicit call still buys is the path `seed` never reaches.
 `definitions_source` refuses when a deployment has named no assets, and it
