@@ -2306,6 +2306,23 @@ turn went; and rather than raised, because the turn finished and its answer is
 worth keeping. A turn stopped at a bound keeps its session on purpose and leaves
 the field empty -- `stop_reason` says why. *(2026-09-15.)*
 
+**`/memory` lasts as long as its session, and the prompt says so.** The memory
+section told the agent to record what "would change how a future session works",
+and no future session can read it: `/memory` is routed to `memory/` inside the
+session, scaffolded when the session is laid out and deleted with it. An agent
+following the prompt wrote notes for a reader who never arrives. It now says
+*later turns of this conversation*, the lifetime `system.md` already gives
+`/derived`.
+
+Memory shared between sessions is a separate design, and it has not been made.
+`docs/design/2026-09-10-a-mount-kingfisher-can-name.md` leaves `/memory` off a
+shared mount because a per-caller route on storage every session shares "needs a
+tenancy argument that has not been made", and nothing since has made it. Until
+that design exists, "a future session" does not go back into the prompt. The
+guidelines deepagents appends beside it still say "future conversations":
+`create_deep_agent` builds `MemoryMiddleware` without passing its `system_prompt`,
+so that text is the library's and is not changed here. *(2026-10-07.)*
+
 ## Wiring a store
 
 *Much of this was reversed on 2026-09-30: `SessionStore` and `SessionRoot` are gone,

@@ -43,8 +43,8 @@ tools: [web_search, http_fetch]
 # agent's job is not a procedure.
 #
 # Off rather than "no opinion". What this agent looks up belongs in the answer
-# it was asked for; carrying a previous caller's lookups into the next session
-# is how a stale figure outlives the question that produced it.
+# it was asked for; carrying one turn's lookups into a later one is how a stale
+# figure outlives the question that produced it.
 #
 # `false` is the only value that does anything here: `true` and an absent line
 # both mean "on if the deployment wired it", so a file arguing for off and
