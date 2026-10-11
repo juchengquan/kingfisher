@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import os
 import platform
+import stat
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from kingfisher import Config, ConfigError, Inventory, inventory, kinds_at
 from kingfisher.domain.session import sessions_root
@@ -24,6 +25,8 @@ from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.sandbox.bubblewrap import bubblewrap_available
 from kingfisher.infrastructure.sandbox.confinement import (
+    LINUX_FENCES,
+    SANDBOX_EXEC,
     Confinement,
     harness_unfenced,
     shell_confinement,
@@ -106,6 +109,9 @@ def _models(cfg: Config) -> Iterator[Check]:
     # By endpoint rather than by model, because `doctor` silences the loader's warning
     # and this is what says it instead: an endpoint no model uses has no entry in
     # `unreachable`, and a report built from that alone would call it keyed.
+    keyed = "; ".join(
+        f"{name}: {_key_source(endpoint)}" for name, endpoint in sorted(models.endpoints.items())
+    )
     if models.dropped:
         named = ", ".join(
             f"{name} ({key} is not set)" for name, key in sorted(models.dropped.items())
@@ -119,11 +125,110 @@ def _models(cfg: Config) -> Iterator[Check]:
         yield Check(
             "credentials",
             "warn",
-            f"no key for endpoint(s) {named}; {riding}",
-            "set the variable each one names, or ignore this if no definition wants them",
+            f"no key for endpoint(s) {named}; {riding}; keyed: {keyed}",
+            "set what each one names -- a variable, the keys file setting, or its entry -- "
+            "or ignore this if no definition wants them",
         )
     else:
-        yield Check("credentials", "ok", "every endpoint this file names has a key")
+        yield Check("credentials", "ok", keyed)
+
+
+def _key_source(endpoint: Any) -> str:
+    """Where one endpoint's key came from, in the words `models.yaml` used for it."""
+    if endpoint.key_entry:
+        return f'keys file, entry "{endpoint.key_entry}"'
+    return endpoint.key_env or "set in code"
+
+
+def _keys_file(cfg: Config) -> Iterator[Check]:
+    """Whether the agent's shell can read the keys file, by the fence that is running.
+
+    A report and never a refusal: kingfisher keeps nothing from the shell for the
+    keys, so where the file sits decides it, and this says what that is.
+    """
+    path = cfg.models.keys_file
+    if path is None:
+        return
+    if cfg.session_backends_factory:
+        yield Check(
+            "keys file",
+            "warn",
+            f"KINGFISHER_SESSION_BACKENDS_FACTORY names {cfg.session_backends_factory}, and "
+            f"nothing here can see whether its shell can read {path}",
+            "a shell on another machine cannot; one on this machine reads what its own "
+            "fence allows",
+        )
+        return
+    mechanism = shell_confinement(cfg).mechanism
+    reason = confinement.shell_reads(
+        path,
+        mechanism=mechanism,
+        home=Path.home(),
+        readable=confinement.shell_readable(cfg, mechanism),
+    )
+    if reason is None:
+        yield Check("keys file", "ok", f"{path}, which the sandbox keeps from the agent's shell")
+        return
+    if mechanism == SANDBOX_EXEC:
+        remedy = "keep it under your home folder and out of the workspace, as in "
+        remedy += "~/.config/kingfisher/keys.yaml"
+    elif mechanism in LINUX_FENCES:
+        remedy = "keep it out of what the fence grants: the system folders, the interpreter's "
+        remedy += "and the skills"
+    else:
+        remedy = "turn the sandbox on, or keep the keys where this shell cannot reach"
+    yield Check(
+        "keys file", "warn", f"{path}: {reason}, so the agent's shell can read the keys in it",
+        remedy,
+    )
+
+
+def _keys_file_mode(cfg: Config) -> Iterator[Check]:
+    """Whether other users on this machine can read the keys file -- not the agent."""
+    path = cfg.models.keys_file
+    if path is None or not path.is_file():
+        return
+    mode = stat.S_IMODE(path.stat().st_mode)
+    if mode & 0o077:
+        yield Check(
+            "keys file mode",
+            "warn",
+            f"{path} is mode {mode:o}, so other users on this machine can read it",
+            f"chmod 600 {path}",
+        )
+
+
+def _starting_environment(cfg: Config, from_dotenv: frozenset[str] | None) -> Iterator[Check]:
+    """Keys that were in the environment before kingfisher started, where the shell reads it.
+
+    On macOS a sandboxed shell reads any same-user process's environment as it started,
+    and with no fence nothing stops it; what `.env` added afterwards is not in there.
+    `None` is a caller that cannot say what `.env` added, which is told nothing rather
+    than told something that may be wrong -- and so are session backends whose shell
+    this cannot see.
+    """
+    if from_dotenv is None or cfg.session_backends_factory:
+        return
+    mechanism = shell_confinement(cfg).mechanism
+    if mechanism == SANDBOX_EXEC:
+        where = "on this Mac"
+    elif mechanism in LINUX_FENCES:
+        return
+    else:
+        where = "with no sandbox"
+    exported = sorted(
+        {e.key_env for e in cfg.models.endpoints.values() if e.key_env} - from_dotenv
+    )
+    if exported:
+        verb = "was" if len(exported) == 1 else "were"
+        yield Check(
+            "starting environment",
+            "warn",
+            f"{', '.join(exported)} {verb} set before kingfisher started, and {where} the "
+            f"agent's shell can read a process's starting environment",
+            "put the key in the keys file KINGFISHER_MODEL_KEYS_FILE names, or in .env, "
+            "rather than exporting it",
+        )
 
 
 def _packs(cfg: Config) -> Iterator[Check]:
@@ -729,14 +834,22 @@ def _retired(environ: Mapping[str, str] | None = None) -> Iterator[Check]:
     )
 
 
-def examine(cfg: Config, found: Inventory | None = None) -> tuple[Check, ...]:
-    """Every check, in the order somebody diagnosing would want them."""
+def examine(
+    cfg: Config, found: Inventory | None = None, *, from_dotenv: frozenset[str] | None = None
+) -> tuple[Check, ...]:
+    """Every check, in the order somebody diagnosing would want them.
+
+    `from_dotenv` is the names `.env` added, which only the command line knows.
+    """
     checks: list[Check] = []
     try:
         # First, because it is the one check that explains another being wrong:
         # a setting that stopped being read looks exactly like one nobody set.
         checks += _retired()
         checks += _models(cfg)
+        checks += _keys_file(cfg)
+        checks += _keys_file_mode(cfg)
+        checks += _starting_environment(cfg, from_dotenv)
         checks += _packs(cfg)
         checks += _at_rest(cfg)
         if found is None:

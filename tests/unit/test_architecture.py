@@ -2451,6 +2451,9 @@ LIGHT_EXPORTS = frozenset({
     # must not load the agent runtime -- which is why it lives beside
     # `shell_confinement` rather than beside the backend it is about.
     "harness_unfenced",
+    # The mechanisms `doctor` tells apart when it says whether the shell can read the
+    # keys file or a process's starting environment. Constants, so nothing to load.
+    "LINUX_FENCES", "SANDBOX_EXEC",
     # Light only while `host_paths` names no runtime class. `HostPathGuard` is the
     # langchain half of that mechanism and lives with the rest of the middleware;
     # defined beside the error it catches, it made raising the error cost 250ms and

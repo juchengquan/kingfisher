@@ -1604,6 +1604,47 @@ model call: no probe, and it points at the caller's own task as the end-to-end
 test. *(2026-08-18, `what-the-catalogue-dropped.md`; 2026-08-17,
 `a-command-worth-shipping.md`.)*
 
+**The command line's model keys may sit in a keys file it is told about.** An endpoint
+in `models.yaml` says `key: <entry>` instead of `key_env: <VAR>`, naming an entry in
+the file `KINGFISHER_MODEL_KEYS_FILE` names, so the key is in neither the shared
+catalogue nor the environment. The obvious way to move keys into YAML -- `api_key:`
+inline in `models.yaml` -- would have put them in the workspace, which the macOS fence
+lets the agent's shell read, more exposed than a `.env` under the home folder; so the
+keys have a file of their own and `models.yaml` stays the half that is shared. `key_env`
+stays beside it for a runtime that hands secrets over as variables, and an endpoint
+names exactly one. `key_file:` per endpoint, the shape Docker and Kubernetes hand
+secrets in, was left as a later addition rather than the answer.
+
+**No default, only the setting names the file, and only the keys move.** Everything
+but the workspace defaults inside it or is off: a home-folder default would have been
+the first place kingfisher picked outside the workspace by itself, and a workspace
+default puts keys where the shell reads them. `models.yaml` never names the file,
+because a path there is one machine's path in the file machines share. The setting
+resolves as the other path settings do. No setting, or no such entry, drops the
+endpoint as a missing variable does; a named file that is missing, unreadable, not a
+mapping, or holding a key YAML reads as a number refuses to start, as the models file
+does. Moving every other `KINGFISHER_*` setting into YAML is a separate argument, not
+made here.
+
+**`doctor` says where each key came from and who else can read it, and refuses
+nothing.** `credentials` names each endpoint's source. `keys file` says whether the
+running fence lets the shell read the file, by each fence's shape: on macOS anything
+outside the home folder is readable, so a check about the workspace alone would have
+called `/tmp` safe. `keys file mode` names a file other users can read.
+`starting environment` names a key that was in the environment before kingfisher
+started, on macOS or with no fence, where the shell reads a process's starting
+environment -- which the command line can tell only because it records the names
+`.env` added. That exposure was first put in the guide rather than in code; a report
+is not a guard, and it is the one a deployer cannot otherwise see. Session backends
+`doctor` cannot see into get the answer `session files` gives them.
+
+**Reversed: no keys example.** None was settled at first, because renaming one in place
+puts real keys in the workspace. With `keys file` reporting exactly that, the mistake
+is said rather than silent, so `seed` places `keys.yaml.example` beside
+`models.yaml.example`, holding no live entry and opening with the instruction to copy
+it out. What every rule here leans on is measured in `guides/configuration.md`, under
+*What each fence hides*. *(2026-10-11, `where-the-command-line-keeps-its-keys.md`.)*
+
 ## What a tool returns
 
 **A workspace tool's return type is langchain's rule, and kingfisher adds none.**

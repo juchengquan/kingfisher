@@ -432,6 +432,47 @@ def readable_roots(workspace: Path, extra: tuple[str, ...] = (),
     return tuple(dict.fromkeys(p.resolve() for p in roots if str(p)))
 
 
+def shell_readable(cfg: Config, mechanism: str) -> tuple[Path, ...]:
+    """What `mechanism` lets the shell read, from the lists each fence is built from.
+
+    The session directory is left out: what asks this is about a file of the
+    deployment's, which no session's directory holds.
+    """
+    skills = (cfg.skills_dir, *cfg.skills_mounts.values())
+    if mechanism == SANDBOX_EXEC:
+        return readable_roots(cfg.workspace, cfg.shell_path_extra, skills)
+    if mechanism in LINUX_FENCES:
+        # Each fence's own list, not one shared: bubblewrap binds no `/proc` or `/dev`,
+        # and one list serving both is how a mechanism gains a path it meant to deny.
+        from kingfisher.infrastructure.sandbox import bubblewrap, fence  # noqa: PLC0415
+
+        system = fence.SYSTEM_PATHS if mechanism == LANDLOCK else bubblewrap.SYSTEM_PATHS
+        granted = [*map(Path, system), *toolchain_roots(cfg.shell_path_extra), *map(Path, skills)]
+        return tuple(dict.fromkeys(p.resolve() for p in granted if str(p)))
+    return ()
+
+
+def shell_reads(
+    path: Path, *, mechanism: str, home: Path, readable: tuple[Path, ...]
+) -> str | None:
+    """Why the agent's shell can read `path` under `mechanism`, or `None` where it cannot.
+
+    By each fence's shape rather than by asking one. `sandbox-exec` allows everything,
+    denies `home` and gives `readable` back, so a file outside the home folder is
+    readable with the sandbox on; the Linux fences grant `readable` and nothing else.
+    Any other mechanism is no fence.
+    """
+    target = Path(path).resolve()
+    under = next((root for root in readable if target.is_relative_to(root)), None)
+    if mechanism == SANDBOX_EXEC:
+        if not target.is_relative_to(Path(home).resolve()):
+            return "it is outside the home folder, which is all the macOS sandbox hides"
+        return f"it is under {under}, which the macOS sandbox gives back" if under else None
+    if mechanism in LINUX_FENCES:
+        return f"it is under {under}, which the {mechanism} fence grants" if under else None
+    return "nothing kingfisher runs confines the agent's shell here"
+
+
 def writable_roots(workspace: Path) -> tuple[Path, ...]:
     """Everywhere the shell is allowed to write.
 

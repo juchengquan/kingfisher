@@ -364,7 +364,10 @@ def test_the_json_form_carries_the_same_checks(cfg, at_the_command_line, capsys)
 
     document = json.loads(capsys.readouterr().out)
     checks = document["checks"]
-    assert {entry["name"] for entry in checks} == {check.name for check in examine(cfg)}
+    # The command line hands `examine` what `.env` added -- nothing, in a test -- and a
+    # check reads it, so the comparison hands over the same.
+    expected = {check.name for check in examine(cfg, from_dotenv=frozenset())}
+    assert {entry["name"] for entry in checks} == expected
     for entry in checks:
         assert set(entry) == {"name", "verdict", "detail", "remedy"}
 
@@ -1223,3 +1226,186 @@ def test_a_check_that_could_not_run_says_so_rather_than_passing(cfg, where):
         assert verdicts[name].verdict == expected, (name, verdicts[name].detail)
         if expected == "warn":
             assert verdicts[name].detail.startswith("not checked"), name
+
+
+# -- where each key came from, and who else can read it ----------------------
+
+
+def _keyed_three_ways(cfg):
+    """One endpoint keyed from the keys file, one from a variable, one built in code."""
+    from dataclasses import replace
+
+    fake, elsewhere = cfg.models.endpoints["fake"], cfg.models.endpoints["elsewhere"]
+    return replace(
+        cfg,
+        models=replace(
+            cfg.models,
+            endpoints={
+                "fake": replace(fake, key_env="", key_entry="minimax"),
+                "elsewhere": replace(elsewhere, key_env="OPENAI_API_KEY"),
+                "coded": replace(elsewhere, key_env=""),
+            },
+        ),
+    )
+
+
+def test_credentials_say_where_each_key_came_from(cfg):
+    """With two places a key can come from, "every endpoint has a key" no longer says
+    which one it is using.
+    """
+    (check,) = [c for c in examine(_keyed_three_ways(cfg)) if c.name == "credentials"]
+
+    assert check.verdict == "ok"
+    assert 'fake: keys file, entry "minimax"' in check.detail
+    assert "elsewhere: OPENAI_API_KEY" in check.detail
+    assert "coded: set in code" in check.detail
+
+
+def test_a_missing_key_still_says_where_the_others_came_from(cfg, tmp_path):
+    from kingfisher.config import MissingCredentialsWarning
+
+    with pytest.warns(MissingCredentialsWarning):
+        half = _half_keyed(cfg, tmp_path)
+    (check,) = [c for c in examine(half) if c.name == "credentials"]
+
+    assert check.verdict == "warn"
+    assert "elsewhere (ELSEWHERE_KEY is not set)" in check.detail
+    assert "gateway: GATEWAY_KEY" in check.detail
+    assert "keys file" in check.remedy, "the remedy only knew about variables"
+
+
+def _with_keys_file(cfg, path, **change):
+    from dataclasses import replace
+
+    return replace(cfg, models=replace(cfg.models, keys_file=path), **change)
+
+
+def _fenced_by(monkeypatch, mechanism):
+    """The mechanism doctor sees, whatever this host would choose."""
+    from kingfisher.infrastructure.sandbox.confinement import Confinement
+
+    seen = Confinement(wrap=lambda command: command, mechanism=mechanism)
+    monkeypatch.setattr(health, "shell_confinement", lambda cfg, **kw: seen)
+
+
+def _row(checks, name):
+    found = [c for c in checks if c.name == name]
+    return found[0] if found else None
+
+
+def test_a_keys_file_the_shell_can_read_is_warned_about(cfg, tmp_path, monkeypatch):
+    """Inside the workspace on a Mac is the mistake a renamed example makes; outside the
+    home folder is the one a check about the workspace alone would call safe.
+    """
+    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _fenced_by(monkeypatch, SANDBOX_EXEC)
+    inside, outside = cfg.workspace / "keys.yaml", tmp_path.parent / "elsewhere" / "keys.yaml"
+
+    for path, says in ((inside, str(cfg.workspace)), (outside, "outside the home folder")):
+        check = _row(examine(_with_keys_file(cfg, path)), "keys file")
+        assert check is not None and check.verdict == "warn", path
+        assert says in check.detail
+        assert "home folder" in check.remedy
+
+
+def test_a_keys_file_the_sandbox_hides_is_said_to_be_hidden(cfg, tmp_path, monkeypatch):
+    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _fenced_by(monkeypatch, SANDBOX_EXEC)
+    hidden = tmp_path / ".config" / "kingfisher" / "keys.yaml"
+
+    check = _row(examine(_with_keys_file(cfg, hidden)), "keys file")
+
+    assert check is not None and check.verdict == "ok"
+    assert _row(examine(cfg), "keys file") is None, "no keys file named, nothing to say"
+
+
+def test_with_no_fence_a_keys_file_is_readable_wherever_it_is(cfg, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _fenced_by(monkeypatch, "")
+    hidden = tmp_path / ".config" / "kingfisher" / "keys.yaml"
+
+    check = _row(examine(_with_keys_file(cfg, hidden, shell_sandbox="off")), "keys file")
+
+    assert check is not None and check.verdict == "warn"
+
+
+def test_session_backends_doctor_cannot_see_into_are_said_so(cfg, tmp_path, monkeypatch):
+    """The same answer `session files` gives them: their shell may run on another machine,
+    and nothing here can tell.
+    """
+    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _fenced_by(monkeypatch, SANDBOX_EXEC)
+    hidden = tmp_path / ".config" / "kingfisher" / "keys.yaml"
+    named = _with_keys_file(cfg, hidden, session_backends_factory="deployment:Remote")
+
+    check = _row(examine(named), "keys file")
+
+    assert check is not None and check.verdict == "warn"
+    assert "KINGFISHER_SESSION_BACKENDS_FACTORY" in check.detail
+
+
+def test_a_keys_file_other_users_can_read_is_warned_about(cfg, tmp_path):
+    """Other people on the machine, not the agent -- the expectation ssh holds its keys to."""
+    path = tmp_path / "keys.yaml"
+    path.write_text("minimax: sk-x\n", encoding="utf-8")
+
+    # Group-readable as well as world-readable: a group is other users too.
+    for mode in (0o644, 0o640):
+        path.chmod(mode)
+        check = _row(examine(_with_keys_file(cfg, path)), "keys file mode")
+        assert check is not None and check.verdict == "warn", f"{mode:o} passed"
+        assert f"chmod 600 {path}" in check.remedy
+    path.chmod(0o600)
+    assert _row(examine(_with_keys_file(cfg, path)), "keys file mode") is None
+
+
+def test_a_key_in_the_starting_environment_is_warned_about_where_it_is_read(cfg, monkeypatch):
+    """On a Mac, or with no fence, the shell reads a process's environment as it started
+    -- so an exported key is readable, and one `.env` added afterwards is not.
+    """
+    from kingfisher.infrastructure.sandbox.confinement import BUBBLEWRAP, SANDBOX_EXEC
+
+    keyed = _keyed_three_ways(cfg)
+
+    _fenced_by(monkeypatch, SANDBOX_EXEC)
+    exported = _row(examine(keyed, from_dotenv=frozenset()), "starting environment")
+    loaded = frozenset({"OPENAI_API_KEY"})
+    from_file = _row(examine(keyed, from_dotenv=loaded), "starting environment")
+    unknown = _row(examine(keyed), "starting environment")
+    _fenced_by(monkeypatch, BUBBLEWRAP)
+    hidden = _row(examine(keyed, from_dotenv=frozenset()), "starting environment")
+
+    assert exported is not None and exported.verdict == "warn"
+    assert "OPENAI_API_KEY" in exported.detail
+    assert "keys file" in exported.remedy
+    assert from_file is None, "a key .env added is not in the starting environment"
+    assert unknown is None, "a caller that cannot say what .env added is told nothing"
+    assert hidden is None, "bubblewrap shows the shell no other process"
+
+
+def test_the_command_line_says_which_keys_env_added(cfg, tmp_path, monkeypatch, capsys):
+    """Driven through `main`, with a real `.env`: the half of the rule no examine-level
+    test reaches is the command line recording what it loaded.
+    """
+    path = tmp_path / "half.yaml"
+    path.write_text(TWO_ENDPOINTS, encoding="utf-8")
+    (tmp_path / ".env").write_text("GATEWAY_KEY=sk-from-dotenv\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("GATEWAY_KEY", raising=False)
+    monkeypatch.setenv("ELSEWHERE_KEY", "sk-exported")
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(path))
+    monkeypatch.setenv("KINGFISHER_SHELL_SANDBOX", "off")
+
+    main(["doctor"])
+
+    said = [line for line in capsys.readouterr().out.splitlines() if "starting environment" in line]
+    assert said, "nothing was said about the starting environment"
+    assert "ELSEWHERE_KEY" in said[0]
+    assert "GATEWAY_KEY" not in said[0], "a key .env loaded was called exported"

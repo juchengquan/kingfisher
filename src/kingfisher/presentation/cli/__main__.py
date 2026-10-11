@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 import warnings
@@ -911,7 +912,7 @@ def _reap_one(kf: Kingfisher, session_id: str) -> int:
     return 0
 
 
-def _doctor(*, as_document: bool = False) -> int:
+def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = None) -> int:
     """Say what would stop a run, and what would merely surprise."""
     try:
         # Silenced rather than shown: the `credentials` check says the same thing, and
@@ -939,7 +940,7 @@ def _doctor(*, as_document: bool = False) -> int:
     # unsayable, since a catalogue resolved from `cfg` agrees with `cfg` by
     # construction.
     found = inventory(cfg)
-    checks = examine(cfg, found)
+    checks = examine(cfg, found, from_dotenv=from_dotenv)
     origins = found.origins
     if as_document:
         # An object where this was a bare list of checks. The two forms of this
@@ -994,7 +995,7 @@ HANDLERS = {
     "run": _run,
     "decide": _decide,
     "seed": lambda args: _seed(args.source, everything=args.everything),
-    "doctor": lambda args: _doctor(as_document=args.json),
+    "doctor": lambda args: _doctor(as_document=args.json, from_dotenv=args.from_dotenv),
     "list": lambda args: _list(as_document=args.json, held=args.held),
     "sessions": lambda args: _sessions(as_document=args.json),
     "artifact": _artifact,
@@ -1002,13 +1003,26 @@ HANDLERS = {
 }
 
 
+def _load_dotenv() -> frozenset[str]:
+    """Load `.env`, and say which names it added.
+
+    The rest were in the environment when kingfisher started, which is what a shell
+    on macOS can read of this process -- so `doctor` needs to know which is which, and
+    only this point can tell.
+    """
+    before = set(os.environ)
+    load_dotenv(ENV_FILE, override=False)
+    return frozenset(set(os.environ) - before)
+
+
 def main(argv: list[str] | None = None) -> int:
     # Before anything reads the environment, and it must not become a reason to
     # depend on being in a checkout: absent is the ordinary case for an
     # installed kingfisher, and `load_dotenv` returns False rather than raising.
-    load_dotenv(ENV_FILE, override=False)
+    from_dotenv = _load_dotenv()
 
     parser = build_parser()
+    parser.set_defaults(from_dotenv=from_dotenv)
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
 
     if args.command is None:

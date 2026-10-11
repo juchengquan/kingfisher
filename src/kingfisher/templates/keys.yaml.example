@@ -1,0 +1,21 @@
+# What the keys file looks like -- the file KINGFISHER_MODEL_KEYS_FILE names.
+#
+# Copy it out of this workspace before writing a key in it. On macOS the agent's
+# shell can read the workspace, so a key left here is one it can read; under your
+# home folder and outside the workspace, the sandbox hides it:
+#
+#   mkdir -p ~/.config/kingfisher
+#   cp keys.yaml.example ~/.config/kingfisher/keys.yaml
+#   chmod 600 ~/.config/kingfisher/keys.yaml
+#
+# and in .env:
+#
+#   KINGFISHER_MODEL_KEYS_FILE=~/.config/kingfisher/keys.yaml
+#
+# One line per entry. The name on the left is what an endpoint's `key:` says in
+# models.yaml; the value is the key, as text -- quote one YAML would read as a
+# number. `kingfisher doctor` says where each endpoint's key came from, and warns
+# when this file sits where the agent's shell or another user can read it.
+
+# minimax: sk-...
+# openai: sk-...
