@@ -17,7 +17,7 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
-## The noun is `subagent`, after #685
+## The noun is `subagent`, after #686
 
 `delegate` as a noun is gone from kingfisher, in favour of deepagents' `subagent`.
 Four things a caller or a script can read changed with it, and no old spelling is kept:
