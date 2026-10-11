@@ -53,8 +53,9 @@ RETIRED: dict[str, str] = {
     "KINGFISHER_MAX_TOKENS": "models.yaml, beside the model it bounds",
     "KINGFISHER_MODEL_SUBAGENT": "`model:` in the subagent's own .yaml",
     "KINGFISHER_PROVIDER_SUBAGENT": "the endpoint that model names",
-    "KINGFISHER_STATE_DIR": "nothing -- run logs, claims and pinned agents are "
-                            "inside the session they belong to",
+    "KINGFISHER_STATE_DIR": "nothing -- claims and pinned agents are inside the "
+                            "session they belong to, and run events go to the "
+                            "`kingfisher.run` logger",
     "KINGFISHER_SCRATCH_DIR": "nothing -- TMPDIR is a directory inside the session",
     "KINGFISHER_SESSION_KEY": "nothing -- what a session keeps is no longer signed, and "
                               "the `session files` check says what keeps the shell out",

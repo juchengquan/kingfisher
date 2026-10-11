@@ -1262,7 +1262,7 @@ It takes source id *names*, never a `Capabilities`. A name is resolved against t
 definitions this deployment wrote, so the only thing anyone can hand in is an
 input — there is no spelling of "give me everything" except `UNSCOPED`.
 
-### The four spellings, and one rule
+### The spellings, and one rule
 
 `source_ids:` on a definition is the **default audience** for everything it holds,
 and the **ceiling** on what any entry may say. That one rule covers every form
