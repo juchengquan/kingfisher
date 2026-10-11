@@ -377,7 +377,7 @@ def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
     """Every place the agent should look for skills, labelled."""
     if RESERVED_SKILL_FOLDER in folders:
         # Refused rather than skipped: `subagents/` under the skills root would
-        # shadow *every* bundle at once, so the skills of every delegate that has
+        # shadow *every* bundle at once, so the skills of every subagent that has
         # any would silently stop being found. A folder that vanishes is the
         # failure this package keeps naming, and the fix is one rename.
         msg = (
@@ -634,7 +634,7 @@ def backend_at(
         raise ConfigError(msg)
 
     routes: dict[str, Any] = {path: backing[path]() for path in routed_paths()}
-    # One per bundle and per mount, so a delegate's own skills and a mounted party's
+    # One per bundle and per mount, so a subagent's own skills and a mounted party's
     # are readable by the file tools that read every other skill. Generated rather
     # than declared: the names are not known until a catalogue is read, which is
     # what `family=True` marks.

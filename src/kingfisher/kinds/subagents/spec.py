@@ -1,7 +1,7 @@
 """What a subagent is, and the vocabulary a definition says it in.
 
 **Omitting `tools` inherits the parent's; omitting `skills` grants none.** Tools are
-what a delegate needs to *act*, so inheriting is the useful default; skills are what it
+what a subagent needs to *act*, so inheriting is the useful default; skills are what it
 needs to *know*, and the body below is already its procedure. Handing the index over
 also costs ~600 tokens for three skills, of which ~450 is deepagents' preamble and is
 paid for the first as much as the third. Re-measured 2026-09-03.
@@ -35,7 +35,7 @@ class SubagentError(ValueError):
 
 @dataclass(frozen=True)
 class RunOn:
-    """Where a request wants one delegate to run, instead of what its file says.
+    """Where a request wants one subagent to run, instead of what its file says.
 
     One field, and it used to be two. There was a `provider` beside the model, with a
     rule that an override had to be wholesale -- never the file's endpoint joined to
@@ -53,14 +53,14 @@ class SubagentSpec(Definition):
     """One subagent, as the workspace defines it.
 
     What it shares with an agent is on `Definition`; what is here is what only a
-    delegate has -- the graph it may bring instead of a prompt, and the tools and
+    subagent has -- the graph it may bring instead of a prompt, and the tools and
     skills of its own that come with it.
     """
 
     #: The `tools:` and `skills:` entries written `source: bundled`, by half: what this
-    #: delegate takes from its own folder, `subagents/<name>/tools/` and `skills/`.
+    #: subagent takes from its own folder, `subagents/<name>/tools/` and `skills/`.
     #: Kept out of `tools` and `skills` because no grant narrows them -- activating
-    #: the delegate is what grants its parts.
+    #: the subagent is what grants its parts.
     #:
     #: The folder and this have to match exactly, and the catalogue refuses to load
     #: when they do not. A file in the folder that is not listed would otherwise be
@@ -78,11 +78,11 @@ class SubagentSpec(Definition):
     #: could not: the objects do not survive being written down, which is the whole
     #: reason a bundle is a folder there.
     #:
-    #: `__post_init__` refuses a spec holding both -- a delegate whose tools came from
+    #: `__post_init__` refuses a spec holding both -- a subagent whose tools came from
     #: two places would have no rule saying which wins, and `miscounted` would check
     #: the list against the wrong half.
     carried: Mapping[str, Any] = field(default_factory=dict, metadata={"derived": True})
-    #: What assembles this delegate, when a workspace declared it in Python rather than
+    #: What assembles this subagent, when a workspace declared it in Python rather than
     #: YAML. Called with a model and the tools it was granted, and it returns a graph
     #: deepagents runs as given.
     build: Any = field(default=None, metadata={"derived": True})
@@ -91,12 +91,12 @@ class SubagentSpec(Definition):
         """Exactly one of `system_prompt` and `build`, and never two kinds of bundle."""
         if bool(self.system_prompt) == (self.build is not None):
             written = "both a system_prompt and a build" if self.system_prompt else "neither"
-            msg = f"subagent {self.name!r} has {written}; a delegate is one or the other"
+            msg = f"subagent {self.name!r} has {written}; a subagent is one or the other"
             raise ValueError(msg)
         if any(self.bundled.values()) and self.carried:
             msg = (
                 f"subagent {self.name!r} both lists entries from its folder and carries "
-                "its own; a delegate owns one or the other, since a list is checked "
+                "its own; a subagent owns one or the other, since a list is checked "
                 "against a folder and carried tools are the folder"
             )
             raise ValueError(msg)
@@ -104,7 +104,7 @@ class SubagentSpec(Definition):
 
 #: Every field this format defines. A key outside it is refused rather
 #: than ignored, because ignoring one is indistinguishable from honouring it: a
-#: definition writing `tolls:` got a delegate holding *every* tool its parent had, since
+#: definition writing `tolls:` got a subagent holding *every* tool its parent had, since
 #: a missing `tools` means inherit.
 KNOWN: frozenset[str] = frozenset(
     {
@@ -125,9 +125,9 @@ KNOWN: frozenset[str] = frozenset(
 #: Why `bundle:` is refused in a document and a compiled declaration. Worded as the
 #: spelling to use instead, because whoever writes the key meant a folder's contents.
 NO_BUNDLE_KEY = (
-    "a delegate's own tools and skills are listed where the rest are, written "
+    "a subagent's own tools and skills are listed where the rest are, written "
     "{name: mask_secrets, source: bundled} in tools: or skills:. Only what is "
-    "listed there reaches the delegate, so add '*' to tools: as well if it should "
+    "listed there reaches the subagent, so add '*' to tools: as well if it should "
     "keep every catalogue tool it had"
 )
 
@@ -139,17 +139,17 @@ REFUSED: Mapping[str, str] = MappingProxyType(
     {
         "permissions": (
             "deepagents' permissions *replace* the parent's rather than narrowing "
-            "them, so writing this to tighten a delegate would drop the rules it "
+            "them, so writing this to tighten a subagent would drop the rules it "
             "already inherits -- including the one making /inputs read-only"
         ),
         "interrupt_on": (
-            "a delegate inherits its parent's gates rather than declaring its own -- "
-            "the caller answering a pause is the agent's caller, and a delegate that "
+            "a subagent inherits its parent's gates rather than declaring its own -- "
+            "the caller answering a pause is the agent's caller, and a subagent that "
             "could widen or narrow what stops for them would be deciding that on "
             "their behalf"
         ),
         # Corrected 2026-09-06, and the correction is the point of the entry. This read
-        # "a delegate returns prose to its caller, which is the caller's to shape --
+        # "a subagent returns prose to its caller, which is the caller's to shape --
         # there is nothing here to hand a schema to", and deepagents disproves both
         # halves: `_compile_spec` takes a `response_format`, and
         # `middleware/subagents.py` serialises what comes back -- `model_dump_json`, or
@@ -157,7 +157,7 @@ REFUSED: Mapping[str, str] = MappingProxyType(
         # There is somewhere to hand it, and it is handed there.
         "response_format": (
             "deepagents does support one here, and nothing structured survives it "
-            "-- a delegate's response is serialised into the tool result, so its "
+            "-- a subagent's response is serialised into the tool result, so its "
             "parent reads text either way and there is nothing for kingfisher to "
             "carry"
         ),
@@ -170,7 +170,7 @@ REFUSED: Mapping[str, str] = MappingProxyType(
 #: even a preference. A compiled subagent is a plain `dict` at runtime, so there
 #: is no type to search for, and searching for "a mapping with a `build` key"
 #: would find imported names too: `from .base import RESEARCHER`, written to
-#: compose one delegate into another, would offer `RESEARCHER` as a delegate
+#: compose one subagent into another, would offer `RESEARCHER` as a subagent
 #: nobody meant to expose.
 EXPORT = "SUBAGENTS"
 #:
@@ -181,7 +181,7 @@ EXPORT = "SUBAGENTS"
 #: spelling it a second time.
 
 #: Every key a *compiled* Python declaration may write -- one carrying `build`.
-#: Deliberately not `KNOWN`: the two formats describe the same delegate and do not
+#: Deliberately not `KNOWN`: the two formats describe the same subagent and do not
 #: describe it with the same words, and a shared set would have to be the union,
 #: which permits each format the other's keys.
 DECLARED: frozenset[str] = frozenset(
@@ -204,7 +204,7 @@ NOT_COMPILED: Mapping[str, str] = MappingProxyType(
     {
         "builtin_tools": (
             "deepagents' own tools are built inside the parent's assembly and do "
-            "not exist as objects when a delegate is put together, so there is "
+            "not exist as objects when a subagent is put together, so there is "
             "nothing to hand a graph. A compiled subagent brings its own"
         ),
         "system_prompt": (
@@ -212,9 +212,9 @@ NOT_COMPILED: Mapping[str, str] = MappingProxyType(
             "uses is inside it. Write the prompt where the graph is built"
         ),
         "skills": (
-            "deepagents mounts skills for a delegate it builds; it runs a "
+            "deepagents mounts skills for a subagent it builds; it runs a "
             "compiled graph as given and never adds a skills middleware to it. "
-            "Read what the delegate needs inside the graph instead"
+            "Read what the subagent needs inside the graph instead"
         ),
         "middlewares": (
             "middleware is wrapped around a graph deepagents builds. A compiled "
@@ -222,7 +222,7 @@ NOT_COMPILED: Mapping[str, str] = MappingProxyType(
             "that does nothing"
         ),
         "subagents": (
-            "delegation reaches a delegate through the `task` tool its own "
+            "delegation reaches a subagent through the `task` tool its own "
             "middleware supplies, and a compiled graph is given no middleware. "
             "Build the nesting into the graph if it needs it"
         ),
@@ -231,7 +231,7 @@ NOT_COMPILED: Mapping[str, str] = MappingProxyType(
 )
 
 
-#: The halves a delegate's own folder holds, which is the same two names
+#: The halves a subagent's own folder holds, which is the same two names
 #: `catalogue.ASSET_DIRECTORIES` keeps the walk out of.
 #: `test_the_bundle_key_covers_every_directory_a_bundle_holds` is what stops the two
 #: drifting -- a third asset kind added to the walk and not here would be a folder a
@@ -271,9 +271,9 @@ NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
             "objects in 'tools', and the absolute directory of its skills in 'skills'"
         ),
         "subagents": (
-            "a helper has to be a catalogue entry, and an imported delegate is "
+            "a helper has to be a catalogue entry, and an imported subagent is "
             "atomic -- what it owns reaches it and nothing else reaches that. Ship "
-            "the helper as a delegate of its own for an agent to grant beside this "
+            "the helper as a subagent of its own for an agent to grant beside this "
             "one, or write 'build' and compose the graph yourself"
         ),
         "middlewares": (
@@ -283,12 +283,12 @@ NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
         "model": (
             "it names a model profile only this deployment defines, and naming one "
             "decides where the prompt goes and whose credentials pay. A request pins "
-            "any delegate's model by name with 'run_on', which is where the choice "
+            "any subagent's model by name with 'run_on', which is where the choice "
             "belongs"
         ),
         "source_ids": (
             "it names ids from the deployment's source_ids.yaml. The agent that "
-            "grants this delegate carries the audience deciding who reaches it"
+            "grants this subagent carries the audience deciding who reaches it"
         ),
         "permissions": REFUSED["permissions"],
         "interrupt_on": REFUSED["interrupt_on"],
@@ -300,7 +300,7 @@ NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
             "so an entry sharing one replaces what was there -- and the "
             "FilesystemMiddleware its own docs suggest here would replace the one "
             "carrying this deployment's backend and every rule on it, /inputs "
-            "read-only included. Middleware reaches a delegate only by the "
+            "read-only included. Middleware reaches a subagent only by the "
             "deployment registering it; write 'build' and wrap the graph yourself "
             "if this one needs some"
         ),
@@ -358,7 +358,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         raise SubagentError(msg)
 
     # `build` is not among them: whether it is there is what chose this branch, and a
-    # `system_prompt` is refused above -- a compiled delegate's instruction is inside
+    # `system_prompt` is refused above -- a compiled subagent's instruction is inside
     # the graph it brings.
     _require(entry, "name", "description", source=source)
 
@@ -366,7 +366,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     if not callable(build):
         msg = (
             f"{source}: 'build' is {type(build).__name__}, which cannot be called. "
-            f"It is given a model and the tools this delegate was granted, and "
+            f"It is given a model and the tools this subagent was granted, and "
             f"returns the graph to run"
         )
         raise SubagentError(msg)
@@ -378,20 +378,20 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         entry.get("tools"), absent=ALL, key="tools", same=bare_name
     )
     # Only `tools` here: `skills` and `subagents` are refused for a compiled
-    # delegate by `NOT_COMPILED`, so there is nothing else to carry an audience.
+    # subagent by `NOT_COMPILED`, so there is nothing else to carry an audience.
     audiences = {"tools": tool_audiences} if tool_audiences else {}
     source_ids = read.source_ids(entry.get("source_ids"))
     return SubagentSpec(
         name=fields.text(entry["name"]),
         description=fields.text(entry["description"]),
-        # Said rather than defaulted: a compiled delegate's instruction is inside the
+        # Said rather than defaulted: a compiled subagent's instruction is inside the
         # graph it brings, and `__post_init__` reads this as exactly that.
         system_prompt="",
         build=build,
         # Not `ALL`, which is what a document that stays quiet means. A
         # compiled graph is handed the workspace tools it was granted and
         # nothing else, so claiming every built-in would be a ceiling nothing
-        # can fill -- and `--run` would report a delegate withholding tools it
+        # can fill -- and `--run` would report a subagent withholding tools it
         # was never able to have.
         builtin_tools=None,
         tools=written_tools,
@@ -432,7 +432,7 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
         # The field defaults to `ALL`, which means *inherit whatever the request
         # granted* -- so a definition saying nothing about workspace tools, which
         # every portable one does since it has no `tools:` key to say it with, would
-        # be handed the deployment's entire catalogue. An imported delegate holds
+        # be handed the deployment's entire catalogue. An imported subagent holds
         # what it carried and nothing else.
         tools=None,
         carried=_carried(entry, read),
@@ -484,12 +484,12 @@ def _skills_directories(value: object, reader: fields.Reader) -> tuple[Path, ...
     One path, or a list of them: the list is deepagents' own `SubAgent["skills"]`,
     so a spec written to that TypedDict loads as it is. Each is a directory on this
     host, never a backend path -- a definition written elsewhere cannot know this
-    deployment's routes, and kingfisher mounts each one and tells the delegate
+    deployment's routes, and kingfisher mounts each one and tells the subagent
     where.
     """
     values = list(value) if isinstance(value, (list, tuple)) else [value]
     if not values:
-        msg = f"{reader.source}: skills is empty; leave it out for a delegate with none"
+        msg = f"{reader.source}: skills is empty; leave it out for a subagent with none"
         raise SubagentError(msg)
     found = tuple(_skills_directory(one, reader) for one in values)
     # Either way round, a skill would be listed twice: once from each directory.
@@ -584,25 +584,25 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         absent=None,
         key="skills",
         refuse_all=(
-            "it means whatever the request granted, and a delegate is given an "
+            "it means whatever the request granted, and a subagent is given an "
             "index only where its skills are named -- so against the ordinary "
             "request, which grants every skill, the star reads as all of them "
             "and arrives as none. Name the procedures this one uses"
         ),
     )
-    written_delegates, delegate_audiences = reader.audienced(
+    written_subagents, subagent_audiences = reader.audienced(
         document.get("subagents"),
         absent=None,
         key="subagents",
         refuse_all=(
             "it would mean every definition in the catalogue, which includes this "
-            "one, so it is always a loop. Name the delegates this one consults"
+            "one, so it is always a loop. Name the subagents this one consults"
         ),
     )
     audiences = {
         name: entries
         for name, entries in zip(
-            AUDIENCED, (tool_audiences, delegate_audiences, skill_audiences), strict=True
+            AUDIENCED, (tool_audiences, subagent_audiences, skill_audiences), strict=True
         )
         if entries
     }
@@ -625,7 +625,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         skills=written_skills,
         middlewares=written_middleware,
         middleware_settings=middleware_settings,
-        subagents=written_delegates,
+        subagents=written_subagents,
         bundled={"tools": own_tools, "skills": own_skills},
         wanted=wanted,
         metadata=reader.mapping(document.get("metadata"), key="metadata"),

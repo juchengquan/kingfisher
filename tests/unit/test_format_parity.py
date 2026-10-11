@@ -127,7 +127,7 @@ def test_a_required_field_present_but_blank_is_refused(reader, field_name):
 
     Driven over all four because of the compiled declaration: it checked presence alone,
     so `{"name": "", "description": "", "build": f}` was accepted where the portable
-    reader in the same file refused exactly that. deepagents was handed a delegate with
+    reader in the same file refused exactly that. deepagents was handed a subagent with
     no name to dispatch on and no description for the parent model to choose on, and
     `kingfisher list` exited zero over a line reading `(surveyor.py)  [compiled] — `.
     """
@@ -168,7 +168,7 @@ def test_neither_kind_can_be_built_without_saying_what_it_instructs_with(kind):
     tests pass anyway. `parse` refuses a *document* that omits it and always did; this
     is the other door, and nothing was watching it.
 
-    A delegate is held to the same thing for a different reason: a compiled one says
+    A subagent is held to the same thing for a different reason: a compiled one says
     `system_prompt=""` out loud, so `__post_init__` can tell "brought a graph" from
     "said nothing", which it cannot do if the field defaults.
     """
@@ -281,9 +281,9 @@ def test_a_shared_field_reads_the_same_in_either_file():
     # them that disagree rather than stopping at the first.
     parted = {}
     for label, text in sorted(DOCUMENTS.items()):
-        agent, delegate = _outcome("agent", text), _outcome("subagent", text)
-        if agent != delegate:
-            parted[label] = (agent, delegate)
+        agent, subagent = _outcome("agent", text), _outcome("subagent", text)
+        if agent != subagent:
+            parted[label] = (agent, subagent)
 
     assert not parted, f"the two readers disagree on {parted}"
 
@@ -305,7 +305,7 @@ def test_the_documents_read_every_field_both_formats_define():
     assert len(read) < len(DOCUMENTS), "no document is refused, so no refusal is compared"
 
 
-#: Where the two formats part on purpose: a delegate refuses `*` for these, and
+#: Where the two formats part on purpose: a subagent refuses `*` for these, and
 #: each reason is written beside the field in `kinds.subagents.reading`.
 PART_ON_THE_STAR = frozenset({"skills", "subagents"})
 
@@ -348,14 +348,14 @@ def test_bundled_is_the_only_source_the_formats_part_on():
         for key in SHARED_KEYS - REQUIRED
         for source in SOURCES
     }
-    parted = {pair for pair, (agent, delegate) in outcomes.items() if agent != delegate}
+    parted = {pair for pair, (agent, subagent) in outcomes.items() if agent != subagent}
 
     assert parted == PART_ON_THE_SOURCE
     # Which way, too: two refusals worded differently also part, so a subagent that
     # stopped taking `bundled` would pass the line above on the wording alone.
     for pair in PART_ON_THE_SOURCE:
-        agent, delegate = outcomes[pair]
-        assert (agent[0], delegate[0]) == ("refused", "read"), pair
+        agent, subagent = outcomes[pair]
+        assert (agent[0], subagent[0]) == ("refused", "read"), pair
 
 
 # -- what both readers do before either format looks -------------------------

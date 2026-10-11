@@ -7,7 +7,7 @@ stated and measured. `catalogue` walks the disk and `harness` reaches the runtim
 neither is free, and the domain may not import either.
 """
 
-#: The name deepagents gives the tool that dispatches a delegate.
+#: The name deepagents gives the tool that dispatches a subagent.
 #:
 #: **No kind reads it.** Both readers are `infrastructure.harness.kinds.tools` and
 #: `infrastructure.harness.interpreter`, so by subject it belongs beside them, and the

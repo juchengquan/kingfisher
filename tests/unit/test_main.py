@@ -89,7 +89,7 @@ def test_prose_is_closed_off_when_the_run_ends_on_it():
     assert result is not None
 
 
-def test_a_delegates_prose_is_marked_where_it_starts_and_ends():
+def test_a_subagents_prose_is_marked_where_it_starts_and_ends():
     """Two answers on one stream, with nothing between them, read as one."""
     text, _ = _render(
         [
@@ -102,7 +102,7 @@ def test_a_delegates_prose_is_marked_where_it_starts_and_ends():
     assert text == "Checking that. \n[reviewer]\nI recomputed it.\n[main]\nAgreed.\n"
 
 
-def test_a_run_with_no_delegates_is_rendered_exactly_as_before():
+def test_a_run_with_no_subagents_is_rendered_exactly_as_before():
     """The regression that would be easy to miss: every run gaining a `[main]` line it
     never had.
     """

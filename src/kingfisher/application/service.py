@@ -4,7 +4,7 @@ Construction is not per-request, and the trade is measured rather than guessed: 
 median and 9.2ms p95 to build an unrestricted agent, of which 7.2ms is
 `create_deep_agent` compiling the graph. Against a turn of 1.5-1.9s that is under 1%.
 
-  subagent      +5-6ms   each compiles its own graph; the range is the delegate
+  subagent      +5-6ms   each compiles its own graph; the range is the subagent
   custom tool   +0.47ms  linear to at least 50, measured in August
   middlewares   +0.03ms
   skill          0.0ms   sixteen measure the same as none
@@ -36,8 +36,8 @@ from kingfisher.application import config as config_module
 from kingfisher.application.disposal import Disposal
 from kingfisher.application.origins import Origins
 from kingfisher.application.reporting import (
-    delegate_only,
     opening_events,
+    subagent_only,
     withheld_by_kind,
 )
 from kingfisher.application.sessions import Sessions
@@ -77,7 +77,7 @@ from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.activation import (
     defined_subagents,
-    indistinct_delegates,
+    indistinct_subagents,
 )
 from kingfisher.infrastructure.harness.agent import (
     Assembled,
@@ -160,7 +160,7 @@ class _Turn:
     ok: bool = False
     stop_reason: str = END_TURN
     kept: tuple[str, ...] = ()
-    delegates: runtime.Delegates = field(default_factory=runtime.Delegates)
+    subagent_names: runtime.SubagentNames = field(default_factory=runtime.SubagentNames)
     #: What the lifecycle produced and the loop still owes its caller: a context
     #: manager cannot yield into the generator around it.
     pending: list[RunEvent] = field(default_factory=list)
@@ -197,7 +197,7 @@ def refused_credentials(exc: BaseException, cfg: Config) -> ConfigError | None:
     lines from the reader's eye is not the one that was sent.
 
     The endpoint is found by matching the failed request's URL rather than by asking
-    for the default: a delegate may run somewhere its parent does not, and naming the
+    for the default: a subagent may run somewhere its parent does not, and naming the
     default endpoint for a 401 raised by another one would be confidently wrong.
     """
     if getattr(exc, "status_code", None) != UNAUTHORIZED:
@@ -929,8 +929,8 @@ class Kingfisher(Sessions, Disposal):
                 agent=agent if held is not None else None,
                 held=held,
             )
-            shared = delegate_only(allowed, cfg, catalogue=self.catalogue)
-            indistinct = indistinct_delegates(
+            shared = subagent_only(allowed, cfg, catalogue=self.catalogue)
+            indistinct = indistinct_subagents(
                 cfg, allowed, catalogue=self.catalogue, run_on=request.run_on
             )
             # A caller-supplied id wins; otherwise one is made. No directory is
@@ -995,7 +995,7 @@ class Kingfisher(Sessions, Disposal):
             placement=placement,
             withheld=withheld,
             indistinct=indistinct,
-            delegate_only=shared,
+            subagent_only=shared,
         )
 
     def _restored(self, session: Session, state: bytes) -> Any:
@@ -1228,7 +1228,7 @@ class Kingfisher(Sessions, Disposal):
 
     def _read(self, turn: _Turn, namespace: Any, mode: Any, chunk: Any) -> tuple[RunEvent, ...]:
         """One stream chunk, read as events. The answer accumulates on `turn`."""
-        turn.answer, events = consume(namespace, mode, chunk, turn.answer, turn.delegates)
+        turn.answer, events = consume(namespace, mode, chunk, turn.answer, turn.subagent_names)
         return events
 
     def _payload(self, turn: _Turn) -> Any:
@@ -1246,7 +1246,7 @@ class Kingfisher(Sessions, Disposal):
         """The keywords both graph streams are driven with.
 
         Shared so that one of them cannot quietly lose `subgraphs`, which would
-        leave a delegate's tokens out of that path and nothing else changed.
+        leave a subagent's tokens out of that path and nothing else changed.
         """
         driving: dict[str, Any] = {
             "config": turn.prepared.config,

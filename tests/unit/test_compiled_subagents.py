@@ -12,7 +12,7 @@ from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.spec import EXPORT, NOT_COMPILED, SubagentError, declared
 from tests.conftest import FakeToolCallingModel, declared_subagents
 
-COMPILED = '''"""A delegate the workspace assembled."""
+COMPILED = '''"""A subagent the workspace assembled."""
 
 SUBAGENTS = [
     {{
@@ -240,7 +240,7 @@ def test_a_spec_cannot_carry_both_a_prompt_and_a_builder():
 # -- building ---------------------------------------------------------------
 
 
-def test_a_compiled_delegate_reaches_deepagents_as_a_runnable(cfg, session_dir):
+def test_a_compiled_subagent_reaches_deepagents_as_a_runnable(cfg, session_dir):
     """The shape deepagents wants: three keys, and the graph it will run."""
     _write(cfg.workspace / "subagents", "researcher.py", COMPILED.format(name="researcher"))
 
@@ -251,13 +251,13 @@ def test_a_compiled_delegate_reaches_deepagents_as_a_runnable(cfg, session_dir):
         capabilities=Capabilities(subagents=("researcher",)),
     )
 
-    (delegate,) = declared_subagents(built)
-    assert set(delegate) == {"name", "description", "runnable"}
-    assert delegate["name"] == "researcher"
+    (subagent,) = declared_subagents(built)
+    assert set(subagent) == {"name", "description", "runnable"}
+    assert subagent["name"] == "researcher"
     # None of the prompted path's fields, because none of them reach a graph
     # deepagents did not build.
-    assert "system_prompt" not in delegate
-    assert "middleware" not in delegate
+    assert "system_prompt" not in subagent
+    assert "middleware" not in subagent
 
 
 def test_the_compiled_shape_is_deepagents_own(cfg, session_dir):
@@ -275,8 +275,8 @@ def test_the_compiled_shape_is_deepagents_own(cfg, session_dir):
         capabilities=Capabilities(subagents=("researcher",)),
     )
 
-    (delegate,) = declared_subagents(built)
-    assert set(delegate) == set(CompiledSubAgent.__required_keys__)
+    (subagent,) = declared_subagents(built)
+    assert set(subagent) == set(CompiledSubAgent.__required_keys__)
 
 
 def test_a_build_that_returns_nothing_is_refused(cfg, session_dir):
@@ -369,7 +369,7 @@ def test_something_that_merely_looks_like_a_graph_is_refused(cfg):
 def test_the_check_is_the_interface_not_a_particular_graph_class(cfg):
     """Against `Runnable`, which is what `CompiledSubAgent` declares -- not against
     `CompiledStateGraph`, which is an implementation class upstream may rename and
-    which would take every compiled delegate down to enforce a spelling.
+    which would take every compiled subagent down to enforce a spelling.
     """
     from langchain_core.runnables import RunnableLambda
 
@@ -381,9 +381,9 @@ def test_the_check_is_the_interface_not_a_particular_graph_class(cfg):
         name="researcher", description="d", system_prompt="", build=lambda model, tools: not_a_graph
     )
 
-    delegate = compiled(spec, cfg)
+    subagent = compiled(spec, cfg)
 
-    assert delegate["runnable"] is not_a_graph
+    assert subagent["runnable"] is not_a_graph
 
 
 PROBE = """from langchain_core.tools import tool
@@ -443,7 +443,7 @@ def _tools_seen(cfg, session_dir, capabilities):
     return [one.name for one in _tools_given(cfg, session_dir, capabilities)]
 
 
-def test_a_compiled_delegate_is_granted_the_workspace_tools_it_named(cfg, session_dir):
+def test_a_compiled_subagent_is_granted_the_workspace_tools_it_named(cfg, session_dir):
     """The one narrowing kingfisher can still apply: it hands the graph the workspace
     tools this request granted, chosen by name.
     """
@@ -454,7 +454,7 @@ def test_a_compiled_delegate_is_granted_the_workspace_tools_it_named(cfg, sessio
     assert seen == ["probe"]
 
 
-def test_a_compiled_delegates_tool_is_wired_to_this_session(cfg, session_dir):
+def test_a_compiled_subagents_tool_is_wired_to_this_session(cfg, session_dir):
     """The wiring is the claim: `session_dir` has to reach `compiled` for the tools to
     be wrapped against anything, and no test of the wrapper alone would notice it
     stopping at `as_subagent`.
@@ -490,14 +490,14 @@ def test_a_request_that_withheld_a_tool_withholds_it_from_the_graph(cfg, session
     assert seen == []
 
 
-def test_a_compiled_delegate_is_handed_the_tool_it_named_either_way(cfg):
-    """`build` is given the tools this delegate was granted, and the grant is resolved
+def test_a_compiled_subagent_is_handed_the_tool_it_named_either_way(cfg):
+    """`build` is given the tools this subagent was granted, and the grant is resolved
     by the same set membership everything else uses -- so a definition writing the
     documented long form for a tool no other file defines was handed an empty list,
     and a graph that needed it got nothing with no error at all.
 
     The quietest of the sites this bug touched: the parent refused out loud, while this
-    one just built a delegate that could not work.
+    one just built a subagent that could not work.
     """
     from langchain_core.runnables import RunnableLambda
     from langchain_core.tools import tool

@@ -13,6 +13,7 @@ from langgraph.types import Command, StreamMode
 from kingfisher.domain.request import Decision, DecisionError
 from kingfisher.domain.result import DECISIONS, PendingDecision, RunEvent
 from kingfisher.domain.transcript import Message, Role, ToolCall
+from kingfisher.kinds.subagents import TASK_TOOL
 
 #: What langgraph raises out of `stream` when a turn uses up `recursion_limit`.
 OutOfSteps = GraphRecursionError
@@ -181,22 +182,22 @@ def messages_in(update: Any) -> list[Any]:
     return list(messages) if isinstance(messages, (list, tuple)) else [messages]
 
 
-class Delegates:
-    """Which delegate produced a chunk, learned from the stream as it arrives.
+class SubagentNames:
+    """Which subagent produced a chunk, learned from the stream as it arrives.
 
     Only `messages` chunks carry a name, in `lc_agent_name`. `updates` carry no
     metadata at all -- which would leave `model_call` and `tool_result` unnamed if
-    the two were read independently. They are not: a delegate's first model call is
+    the two were read independently. They are not: a subagent's first model call is
     *streamed* before the node update that reports it, so the name is always known by
     the time an event needs it. Measured, not assumed; a test drives a real two-level
-    run and asserts every delegate event is named.
+    run and asserts every subagent event is named.
     """
 
     def __init__(self) -> None:
         self._names: dict[tuple[str, ...], str] = {}
 
     def name(self, namespace: Any, metadata: Any = None) -> str | None:
-        """The delegate a chunk belongs to, or `None` for the main agent."""
+        """The subagent a chunk belongs to, or `None` for the main agent."""
         key = tuple(namespace or ())
         if not key:
             return None
@@ -224,15 +225,19 @@ def _token_event(chunk: Any) -> RunEvent | None:
 
 
 def events_in(
-    namespace: Any, mode: str, chunk: Any, delegates: Delegates | None = None
+    namespace: Any, mode: str, chunk: Any, subagent_names: SubagentNames | None = None
 ) -> Iterator[RunEvent]:
     """Translate one stream chunk into domain events."""
-    named = delegates.name(namespace) if delegates is not None else None
+    named = subagent_names.name(namespace) if subagent_names is not None else None
     if mode == "messages":
-        if delegates is not None and isinstance(chunk, tuple) and len(chunk) == TOKEN_CHUNK_PARTS:
+        if (
+            subagent_names is not None
+            and isinstance(chunk, tuple)
+            and len(chunk) == TOKEN_CHUNK_PARTS
+        ):
             # A `messages` chunk is the only one carrying `lc_agent_name`, so
             # this is where the map learns; ask again once it has.
-            named = delegates.name(namespace, chunk[1])
+            named = subagent_names.name(namespace, chunk[1])
         if (event := _token_event(chunk)) is not None:
             yield replace(event, agent=named)
         return
@@ -247,13 +252,13 @@ def events_in(
 def answer_in(namespace: Any, mode: str, chunk: Any) -> str | None:
     """The assistant's last message from a `values` chunk, if it has one.
 
-    And `None` for any chunk from a delegate, which is not a refinement -- it is the
-    whole reason this takes a namespace. Streaming into delegates makes their
+    And `None` for any chunk from a subagent, which is not a refinement -- it is the
+    whole reason this takes a namespace. Streaming into subagents makes their
     `values` chunks arrive here too, and "the last one wins" then means the last
     *anyone* emitted. A turn that ends normally is unharmed, because the caller's
     agent always speaks last. A turn cut short by `turn_timeout_s` is not: it stops
-    between chunks, and if it stopped just after a delegate finished, the run
-    reported the delegate's answer as its own. Measured on a real two-level run
+    between chunks, and if it stopped just after a subagent finished, the run
+    reported the subagent's answer as its own. Measured on a real two-level run
     before this line existed.
     """
     if namespace:
@@ -266,20 +271,19 @@ def answer_in(namespace: Any, mode: str, chunk: Any) -> str | None:
     return getattr(messages[-1], "text", None) or ""
 
 
-#: The graph node a delegate's pause arrives on: it stopped inside the tool call that
+#: The graph node a subagent's pause arrives on: it stopped inside the tool call that
 #: runs it, so the task belongs to the tool node rather than to any gate.
 TOOLS_NODE = "tools"
 
-#: The tool a parent calls to start a delegate, and the argument naming which one.
-DELEGATE_TOOL = "task"
-DELEGATE_ARG = "subagent_type"
+#: The argument of `TASK_TOOL` naming which subagent it starts.
+SUBAGENT_TYPE_ARG = "subagent_type"
 
 #: Separates the interrupt a gated call belongs to from its place within it.
 #:
 #: The pair is the address because neither half is one alone. langgraph gives an
 #: `Interrupt` a stable id and nothing smaller -- one interrupt covers every gated
 #: call in a message -- and the tool call's own id is not in the pause at all: the
-#: payload carries names and arguments, and for a delegate's pause the tool calls
+#: payload carries names and arguments, and for a subagent's pause the tool calls
 #: belong to a nested state this snapshot cannot reach.
 CALL_SEPARATOR = "#"
 
@@ -288,7 +292,7 @@ def pending_in(snapshot: Any) -> tuple[PendingDecision, ...]:
     """Every gated call a paused turn is waiting on; nothing for a turn that ran on."""
     found: list[PendingDecision] = []
     for task in getattr(snapshot, "tasks", ()) or ():
-        delegate = _delegate_behind(task, snapshot)
+        subagent = _subagent_behind(task, snapshot)
         for pause in getattr(task, "interrupts", ()) or ():
             value = pause.value
             if not isinstance(value, dict):
@@ -303,7 +307,7 @@ def pending_in(snapshot: Any) -> tuple[PendingDecision, ...]:
                         call_id=f"{pause.id}{CALL_SEPARATOR}{index}",
                         tool=str(request.get("name") or ""),
                         args=dict(request.get("args") or {}),
-                        agent=delegate,
+                        agent=subagent,
                         # Narrowed to what kingfisher accepts rather than passed on
                         # as the middleware declared it: a bare `True` gate says all
                         # four, `edit` included, and offering a caller a decision the
@@ -314,20 +318,20 @@ def pending_in(snapshot: Any) -> tuple[PendingDecision, ...]:
     return tuple(found)
 
 
-def _delegate_behind(task: Any, snapshot: Any) -> str | None:
-    """Which delegate proposed this, where the pause can say so without guessing.
+def _subagent_behind(task: Any, snapshot: Any) -> str | None:
+    """Which subagent proposed this, where the pause can say so without guessing.
 
-    A delegate's pause arrives on the tool node and its nested state is unreachable
+    A subagent's pause arrives on the tool node and its nested state is unreachable
     from here, so the name is not in the pause. It is in the parent's own last
     message -- the `subagent_type` of the `task` call that started it -- and that is
-    unambiguous only while one delegate is in flight. With two, this is `None` rather
+    unambiguous only while one subagent is in flight. With two, this is `None` rather
     than a guess: the tool and arguments are right either way, and naming the wrong
-    delegate beside a call somebody is about to approve is worse than naming none.
+    subagent beside a call somebody is about to approve is worse than naming none.
     """
     # Which task the pause came from, before reading any name off the parent. One
-    # message may both gate a call of the agent's own and start a delegate, and the
+    # message may both gate a call of the agent's own and start a subagent, and the
     # search below would then find that `task` call and hand the agent's own call
-    # its delegate's name. Exactly one delegate is in flight there, so the refusal
+    # its subagent's name. Exactly one subagent is in flight there, so the refusal
     # to guess further down does not catch it.
     if getattr(task, "name", "") != TOOLS_NODE:
         return None
@@ -336,9 +340,9 @@ def _delegate_behind(task: Any, snapshot: Any) -> str | None:
         if not calls:
             continue
         started = [
-            str(call["args"][DELEGATE_ARG])
+            str(call["args"][SUBAGENT_TYPE_ARG])
             for call in calls
-            if call.get("name") == DELEGATE_TOOL and DELEGATE_ARG in (call.get("args") or {})
+            if call.get("name") == TASK_TOOL and SUBAGENT_TYPE_ARG in (call.get("args") or {})
         ]
         return started[0] if len(started) == 1 else None
     return None

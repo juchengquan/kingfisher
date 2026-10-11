@@ -106,12 +106,12 @@ skills:
   # produced a figure is for whoever may open this agent at all.
   - code-review
 subagents:
-  # A delegate, restricted the same way. `auditor` is reachable by three source
+  # A subagent, restricted the same way. `auditor` is reachable by three source
   # ids in its own file; this line says which of them may reach it *through
   # this agent*, which is the sense in which an audience is a property of the
   # use rather than of the thing used.
   #
-  # `kingfisher list` prints a roll-up by delegate for exactly that reason: the
+  # `kingfisher list` prints a roll-up by subagent for exactly that reason: the
   # same auditor may be opened wider somewhere else, and a call site quietly
   # wider than its neighbours is what the roll-up exists to show.
   - name: auditor

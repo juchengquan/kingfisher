@@ -222,7 +222,7 @@ def test_a_model_missing_its_endpoint_is_refused(tmp_path):
 
 def test_a_profile_keyed_by_another_name_is_refused():
     """`ModelProfile.model` is the id sent on the wire and the key is what everything
-    looks up by, so a pair that disagree means a delegate asking for one model and a
+    looks up by, so a pair that disagree means a subagent asking for one model and a
     client built for another -- silently, since both names are real.
     """
     with pytest.raises(ConfigError, match="the two cannot differ"):

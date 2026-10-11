@@ -2,7 +2,7 @@
 
 The package lists its skills the way that TypedDict does -- `skills: list[str]` --
 but as directories on the host, since it cannot know the routes of whatever
-deployment imports it. Kingfisher mounts each one and tells the delegate where.
+deployment imports it. Kingfisher mounts each one and tells the subagent where.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkil
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE
-from tests.conftest import FakeToolCallingModel, delegate
+from tests.conftest import FakeToolCallingModel, subagent_of
 
 #: The installed package, as a library author would write it: a `SubAgent`, typed
 #: as one, its skills in two directories found from its own `__file__`.
@@ -103,7 +103,7 @@ def test_the_fixture_is_a_subagent_as_deepagents_types_it(deployed):
 
 
 def test_every_listed_directory_is_read(cfg, deployed):
-    """Both directories' skills belong to the delegate, under its one label."""
+    """Both directories' skills belong to the subagent, under its one label."""
     definitions = Definitions.from_config(cfg).warm()
 
     assert set(definitions.bundled_skills["clerk"].names) == {"lookup", "redact"}
@@ -119,8 +119,8 @@ def test_each_directory_gets_a_route_of_its_own(cfg, deployed, session_dir):
     assert f"{BUNDLED_SKILLS_ROUTE}{where}/" not in routes
 
 
-def test_the_delegate_is_shown_the_skills_from_both(cfg, deployed, session_dir):
-    """Listed through the delegate's own index and the backend it shares, so a route
+def test_the_subagent_is_shown_the_skills_from_both(cfg, deployed, session_dir):
+    """Listed through the subagent's own index and the backend it shares, so a route
     or a source that went missing shows as a skill that never loads.
     """
     built = build_agent(
@@ -130,7 +130,7 @@ def test_the_delegate_is_shown_the_skills_from_both(cfg, deployed, session_dir):
         capabilities=Capabilities(subagents=("clerk",), tools=()),
     )
     (index,) = [
-        m for m in delegate(built, "clerk")["middleware"] if isinstance(m, NarrowedSkills)
+        m for m in subagent_of(built, "clerk")["middleware"] if isinstance(m, NarrowedSkills)
     ]
 
     shown = index._format_skills_list(index.before_agent({}, None, {})["skills_metadata"])

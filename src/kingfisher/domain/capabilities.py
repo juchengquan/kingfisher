@@ -87,7 +87,7 @@ class Capabilities:
     tools: Selection = ALL
     skills: Selection = ALL
     #: `"*"` means *everything this agent declares*, and an agent declares the
-    #: delegates it calls, so the set is small and deliberate rather than whatever
+    #: subagents it calls, so the set is small and deliberate rather than whatever
     #: the workspace holds. That matters because wiring a subagent compiles a whole
     #: graph -- 5-6ms each, re-measured 2026-09-03.
     subagents: Selection = ALL
@@ -98,7 +98,7 @@ class Capabilities:
     #: the run's prompts and files. Checked against where a named model *resolves to*,
     #: since definitions name models rather than endpoints.
     endpoints: Selection = ALL
-    #: Models a request may put a delegate on, overriding what its file says.
+    #: Models a request may put a subagent on, overriding what its file says.
     models: Selection = None
     #: Not a list of names, and the only field that is not. It says so here rather
     #: than being left out of two loops, which is what `SWITCH` is for.
@@ -208,7 +208,7 @@ def all_but(excluded: tuple[str, ...], *, offered: Iterable[str]) -> tuple[str, 
 
 
 def refuse_ungranted_models(wanted: Iterable[str], *, granted: Selection, subject: str) -> None:
-    """Refuse a model a request may not put a delegate on."""
+    """Refuse a model a request may not put a subagent on."""
     if granted == ALL:
         return
     permitted = set(granted or ())
@@ -389,7 +389,7 @@ def refuse_written_wants(
 UNRESTRICTED = Capabilities()
 
 
-#: Two lists into one, for a delegate that may narrow both. Here rather than in
+#: Two lists into one, for a subagent that may narrow both. Here rather than in
 #: `kinds.tools.spec` because it takes two `Selection`s and answers a third, never
 #: touching a registry -- which is the line that module draws.
 
@@ -401,7 +401,7 @@ def ceiling(
     granted_tools: Selection,
     subject: str,
 ) -> Selection:
-    """Every tool a delegate may call, from the two lists it may narrow."""
+    """Every tool a subagent may call, from the two lists it may narrow."""
     from_builtin = narrowed(asked_builtin, by=granted_builtin)
     from_workspace = narrowed(asked_tools, by=granted_tools)
     if from_builtin == ALL and from_workspace == ALL:

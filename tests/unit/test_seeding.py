@@ -377,7 +377,7 @@ def test_a_star_is_not_a_name_and_is_seeded(cfg, tmp_path):
 
 
 def test_the_rule_holds_below_the_top_level(cfg, tmp_path):
-    """A delegate in `subagents/analysis/` names middleware exactly as easily as one
+    """A subagent in `subagents/analysis/` names middleware exactly as easily as one
     beside it.
     """
     source = tmp_path / "presets"

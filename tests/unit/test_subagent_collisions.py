@@ -129,7 +129,7 @@ def test_an_unknown_name_is_still_unknown(cfg, session_dir):
 
 
 def test_two_different_names_are_not_a_clash(cfg, session_dir):
-    """The rule is about the name a roster keys on, not about how many delegates a
+    """The rule is about the name a roster keys on, not about how many subagents a
     request activates.
     """
     _two_vendors(cfg)
@@ -143,8 +143,8 @@ def test_two_different_names_are_not_a_clash(cfg, session_dir):
 # -- what the model is handed ---------------------------------------------
 
 
-def test_the_activated_delegate_keeps_its_plain_name(cfg, session_dir):
-    """A reference is how a *request* says which; the model reaches a delegate by
+def test_the_activated_subagent_keeps_its_plain_name(cfg, session_dir):
+    """A reference is how a *request* says which; the model reaches a subagent by
     `subagent_type`, and that stays `surveyor`.
     """
     _two_vendors(cfg)
@@ -155,7 +155,7 @@ def test_the_activated_delegate_keeps_its_plain_name(cfg, session_dir):
 
     assert "surveyor" in named, named
     assert "team/surveyor.yaml::surveyor" not in named, (
-        "a reference reached the model, which reaches a delegate by this name"
+        "a reference reached the model, which reaches a subagent by this name"
     )
 
 

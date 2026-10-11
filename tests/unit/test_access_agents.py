@@ -408,10 +408,10 @@ def test_a_line_narrowing_past_declared_source_ids_is_reported_not_refused(cfg):
 
 def test_a_subagent_is_checked_too(cfg):
     an_agent(cfg, "assistant")
-    delegates = cfg.catalogue_roots["subagents"]
-    delegates.mkdir(parents=True, exist_ok=True)
-    (delegates / "auditor.yaml").write_text(
-        "name: auditor\ndescription: A delegate.\nsource_ids: [analists]\n"
+    subagents = cfg.catalogue_roots["subagents"]
+    subagents.mkdir(parents=True, exist_ok=True)
+    (subagents / "auditor.yaml").write_text(
+        "name: auditor\ndescription: A subagent.\nsource_ids: [analists]\n"
         "system_prompt: |\n  Do it.\n",
         encoding="utf-8",
     )
@@ -438,13 +438,13 @@ def test_nothing_is_checked_where_there_is_no_vocabulary(cfg):
     assert Kingfisher(cfg, backends=default_backends).agent_named("analyst") is not None
 
 
-def test_a_delegate_cannot_reach_a_looser_middleware_than_its_agent_granted():
+def test_a_subagent_cannot_reach_a_looser_middleware_than_its_agent_granted():
     """Middleware is not additive in effect, which is why an agent narrows it.
 
     `call-cap-generous` is a *looser* ceiling than `call-cap-strict`. If
     `declares` left `middleware` at `ALL` -- as it does for `endpoints` and
     `models`, on the argument that an agent narrowing those would be a definition
-    authorising itself -- a delegate could name whichever registered cap it
+    authorising itself -- a subagent could name whichever registered cap it
     liked and leave the bound its parent runs under.
 
     So the narrowing is the feature, and this is what says so. The cost shows up
@@ -461,6 +461,6 @@ def test_a_delegate_cannot_reach_a_looser_middleware_than_its_agent_granted():
     )
 
     assert spec.declares().middlewares == ("call-cap-strict",), (
-        "an agent's middleware is the ceiling its delegates are clamped by; at "
-        "`ALL` a delegate could pick any registered entry, including a looser cap"
+        "an agent's middleware is the ceiling its subagents are clamped by; at "
+        "`ALL` a subagent could pick any registered entry, including a looser cap"
     )

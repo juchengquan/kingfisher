@@ -236,8 +236,8 @@ system_prompt: |
 """
 
 
-def _delegate_with_a_failing_tool(cfg, session_dir):
-    """The same graph, one level down: a delegate holding the failing tool."""
+def _subagent_with_a_failing_tool(cfg, session_dir):
+    """The same graph, one level down: a subagent holding the failing tool."""
     from kingfisher.domain.capabilities import Capabilities
     from kingfisher.infrastructure.harness.agent import build_agent
     from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
@@ -257,24 +257,24 @@ def _delegate_with_a_failing_tool(cfg, session_dir):
     return _subagent_graphs(graph)["helper"]
 
 
-def test_a_failing_workspace_tool_does_not_stop_a_delegate_either(cfg, session_dir):
+def test_a_failing_workspace_tool_does_not_stop_a_subagent_either(cfg, session_dir):
     """The gap the parent's guard left, and the reason it matters more now."""
-    out = _delegate_with_a_failing_tool(cfg, session_dir).invoke(
+    out = _subagent_with_a_failing_tool(cfg, session_dir).invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 8}
     )
 
     failures = [
         m for m in out["messages"] if isinstance(m, ToolMessage) and m.status == "error"
     ]
-    assert failures, "the tool's exception never reached the delegate's model"
+    assert failures, "the tool's exception never reached the subagent's model"
     assert "FileNotFoundError" in failures[0].content
 
 
-def test_the_delegate_carries_on_to_an_answer(cfg, session_dir):
-    """Surviving is not enough: the delegate has to finish, or its caller gets nothing
+def test_the_subagent_carries_on_to_an_answer(cfg, session_dir):
+    """Surviving is not enough: the subagent has to finish, or its caller gets nothing
     back and the run is dead a level higher instead.
     """
-    out = _delegate_with_a_failing_tool(cfg, session_dir).invoke(
+    out = _subagent_with_a_failing_tool(cfg, session_dir).invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 8}
     )
 
@@ -296,12 +296,12 @@ system_prompt: |
 """
 
 
-def test_a_helper_below_a_delegate_is_guarded_too(cfg, session_dir):
+def test_a_helper_below_a_subagent_is_guarded_too(cfg, session_dir):
     """Worth its own test rather than assumed from the one above.
 
-    A helper is built by a different call than a delegate the request activated, so
+    A helper is built by a different call than a subagent the request activated, so
     reaching for the top-level instance instead is an easy mistake that passes -- a
-    standalone delegate has neither the helper nor the bug.
+    standalone subagent has neither the helper nor the bug.
     """
     from kingfisher.domain.capabilities import Capabilities
     from kingfisher.infrastructure.harness.agent import build_agent

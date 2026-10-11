@@ -10,10 +10,10 @@ from kingfisher.kinds.tools.spec import split_reference
 
 
 def refuse_two_of_a_name(activated: Sequence[str], *, subject: str) -> None:
-    """Refuse a roster that would hold two delegates answering to one name.
+    """Refuse a roster that would hold two subagents answering to one name.
 
-    An agent picks a delegate out of a dictionary keyed by name, so two of a name is
-    not a conflict it reports -- it is one delegate that quietly never exists.
+    An agent picks a subagent out of a dictionary keyed by name, so two of a name is
+    not a conflict it reports -- it is one subagent that quietly never exists.
     Measured: handing deepagents two subagents called `profiler` compiles one, with
     no error and nothing to say which survived.
     """
@@ -25,7 +25,7 @@ def refuse_two_of_a_name(activated: Sequence[str], *, subject: str) -> None:
         name, wrote = clashing[0]
         msg = (
             f"{subject} activates {len(wrote)} subagents called {name!r}, and an "
-            f"agent reaches a delegate by name -- one would never run. "
+            f"agent reaches a subagent by name -- one would never run. "
             f"Activate the one you meant: {', '.join(sorted(wrote))}"
         )
         raise CapabilityError(msg)
@@ -150,7 +150,7 @@ def miscounted(
         # from it, and only this one knows what the file thought it had.
         return (
             f"lists entries as source: bundled and owns no folder to take them from "
-            f"-- a delegate's own folder is subagents/{spec.name}/, holding this "
+            f"-- a subagent's own folder is subagents/{spec.name}/, holding this "
             f"definition"
         )
     held = {"tools": tools, "skills": skills}
@@ -175,7 +175,7 @@ def refuse_miscounted(
     if found is not None:
         msg = (
             f"subagent {spec.name!r}: {found}. Only what is listed reaches the "
-            f"delegate, so the list and the folder have to match"
+            f"subagent, so the list and the folder have to match"
         )
         raise SubagentError(msg)
 
@@ -183,7 +183,7 @@ def refuse_miscounted(
 def resolved_model(
     wanted: str | None, *, override: RunOn | None = None
 ) -> str | None:
-    """What a delegate would run, in order, once the request has had its say."""
+    """What a subagent would run, in order, once the request has had its say."""
     if override is not None:
         return override.model
     return wanted

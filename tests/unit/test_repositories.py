@@ -82,7 +82,7 @@ def test_nothing_reads_a_repository_member_with_a_default():
     """A member read with `getattr` and a default answers nothing for a repository that
     lacks it -- which is how an agent repository without `documents` ran without pinning
     the session to its agent, and a subagent repository without `bundles` dropped a
-    delegate's carried tools. A member worth reading goes on the port.
+    subagent's carried tools. A member worth reading goes on the port.
     """
     import ast
 

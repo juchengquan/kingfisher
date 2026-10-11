@@ -94,10 +94,10 @@ def test_a_grant_cannot_reach_past_what_is_offered():
     assert WORKSPACE.permitted((), ("http_fetch", "not_here")) == ("http_fetch",)
 
 
-# -- what a delegate may call ----------------------------------------------
+# -- what a subagent may call ----------------------------------------------
 
 
-def test_a_delegate_is_narrowed_by_the_grant_not_by_the_workspace():
+def test_a_subagent_is_narrowed_by_the_grant_not_by_the_workspace():
     """The mistake this nearly shipped as an `Offering` method."""
     allowed = ceiling(
         ALL,
@@ -111,8 +111,8 @@ def test_a_delegate_is_narrowed_by_the_grant_not_by_the_workspace():
     assert "execute" not in (allowed or ())
 
 
-def test_a_delegate_nobody_narrowed_gets_no_allowlist():
-    """`ALL` here where `permitted` answers `None`: a delegate's selection is narrowed
+def test_a_subagent_nobody_narrowed_gets_no_allowlist():
+    """`ALL` here where `permitted` answers `None`: a subagent's selection is narrowed
     again downstream, a request's goes to a middleware.
     """
     assert ceiling(ALL, ALL, granted_builtin=ALL, granted_tools=ALL, subject="x") == ALL

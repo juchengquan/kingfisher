@@ -28,7 +28,7 @@ builtin_tools: [read_file, ls, glob, grep, execute]
 # gate that never fires, and believing a call is gated while it runs is worse
 # than being told at startup.
 #
-# Delegates inherit this list and cannot write their own. A delegate that could
+# Subagents inherit this list and cannot write their own. A subagent that could
 # widen or narrow what stops for your caller would be deciding that on their
 # behalf, so the field is refused in a subagent file.
 interrupt_on: [execute]

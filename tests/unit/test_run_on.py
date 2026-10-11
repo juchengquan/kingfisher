@@ -1,4 +1,4 @@
-"""A request putting a named delegate on a different model."""
+"""A request putting a named subagent on a different model."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def _built(
     run_on=None,
     subagents=("second-opinion",),
 ):
-    """The specs kingfisher handed deepagents, by delegate name."""
+    """The specs kingfisher handed deepagents, by subagent name."""
     assembled = build_agent(
         cfg,
         backend=backend_at(cfg, session_dir),
@@ -65,7 +65,7 @@ def _built(
 
 
 def _model_of(specs, name: str) -> str:
-    """The model instance kingfisher built for one delegate, by its own name."""
+    """The model instance kingfisher built for one subagent, by its own name."""
     built = specs[name]["model"]
     return getattr(built, "model", None) or built.model_name
 
@@ -197,11 +197,11 @@ def test_an_endpoint_the_request_may_not_reach_is_still_refused(cfg, session_dir
 # -- and it has to name something real ------------------------------------
 
 
-def test_naming_a_delegate_the_request_did_not_activate_is_refused(cfg, session_dir):
+def test_naming_a_subagent_the_request_did_not_activate_is_refused(cfg, session_dir):
     """A quietly ignored override is the failure this exists to prevent: the caller
     asked for the cheap model and would have been billed for the other.
 
-    The activated delegate pins nothing on purpose: with a pinned one the build fails
+    The activated subagent pins nothing on purpose: with a pinned one the build fails
     for its own reasons and this passes without the guard ever running, which is what
     it did before.
     """

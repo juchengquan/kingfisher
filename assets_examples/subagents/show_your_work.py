@@ -1,7 +1,7 @@
-"""A delegate that answers, then reports exactly which tools it actually ran.
+"""A subagent that answers, then reports exactly which tools it actually ran.
 
 **A compiled subagent, and the shape is the point.** Everything else in this
-folder is a YAML document that kingfisher assembles into a delegate. This is a
+folder is a YAML document that kingfisher assembles into a subagent. This is a
 Python module that assembles one itself and exports it as `SUBAGENTS`, and it
 ships because it does the one thing a document cannot.
 
@@ -22,11 +22,11 @@ being given up.
 
 **No `tools:` line, which is the other half of the example.** A compiled
 definition omitting it means `absent=ALL` -- whatever the request granted. This
-delegate reports on what it was handed rather than on a fixed pair, so it is
+subagent reports on what it was handed rather than on a fixed pair, so it is
 useful against any tool set.
 
 **The record joins the answer rather than following it.** deepagents returns a
-delegate's result by walking back to the last `AIMessage` with non-empty text,
+subagent's result by walking back to the last `AIMessage` with non-empty text,
 so a record appended as its own message would not accompany the answer, it would
 *replace* it -- the caller would get the footer and lose the reply. One message
 carrying both is the only shape that survives that, and it is worth knowing
@@ -35,7 +35,7 @@ before anyone rearranges these nodes.
 **The imports are deferred, and that is not style.** This module is imported
 whenever the subagent catalogue is read -- `kingfisher list` included -- and
 `from langchain.agents import create_agent` costs about 370 ms. At module scope
-that is paid on every listing, for a delegate the request may never activate.
+that is paid on every listing, for a subagent the request may never activate.
 """
 
 from __future__ import annotations
@@ -48,9 +48,9 @@ from typing import Any
 #: put it in the caller's context on every turn.
 ARGUMENT_WIDTH = 120
 
-#: What the record says when the delegate answered without calling anything.
+#: What the record says when the subagent answered without calling anything.
 #: Said rather than omitted, because "no tools were run" is the single most
-#: useful line this delegate ever prints -- an answer produced without touching
+#: useful line this subagent ever prints -- an answer produced without touching
 #: the files it is about is exactly what an auditor is looking for, and an empty
 #: footer reads as though the question was never asked.
 NOTHING_RAN = "ran nothing: this answer used no tools."
@@ -101,7 +101,7 @@ def _build(model: Any, tools: list[Any]) -> Any:
 
     `tools` is what the request actually granted, already narrowed -- kingfisher
     resolves the declaration against the offering and hands over objects. A
-    compiled delegate is given no allowlist middleware, so this list is the whole
+    compiled subagent is given no allowlist middleware, so this list is the whole
     of what it can call.
 
     Each object arrives wrapped, and that wrapping is every guard this graph gets:
@@ -117,7 +117,7 @@ def _build(model: Any, tools: list[Any]) -> Any:
         """Replace the answer with the answer *and* what it took to produce it."""
         messages = list(state["messages"])
         # Walked back the same way deepagents walks back to decide what a
-        # delegate returned -- last `AIMessage` with non-empty text -- so the
+        # subagent returned -- last `AIMessage` with non-empty text -- so the
         # message this node replaces is exactly the one that would have been
         # sent on. `.text` is a property; calling it is deprecated upstream.
         answered = ""

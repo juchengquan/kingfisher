@@ -4,7 +4,7 @@ description: |-
 # No workspace tools: `[]` is none, and omitting the line would mean all.
 builtin_tools: [read_file, ls, glob, grep, execute]
 tools: []
-# Omitting this would leave the delegate with no skills at all, which is
+# Omitting this would leave the subagent with no skills at all, which is
 # not what omitting `tools` means. Its body is its procedure; this adds the
 # one shared procedure it genuinely re-uses.
 skills:
@@ -19,12 +19,12 @@ skills:
   # `postmortem` of their own.
   #
   # **Keep both entries.** They are the two ways a grant resolves -- a bare name
-  # against a unique one, a qualifier against a folder -- and this delegate is
+  # against a unique one, a qualifier against a folder -- and this subagent is
   # where the suite checks that each arrives. Collapsing them to one spelling
   # reads as tidying and retires the only place the other is exercised.
   - tabular-qa
   - incident::postmortem
-# A delegate may consult another. Checking a figure is this one's job; whether
+# A subagent may consult another. Checking a figure is this one's job; whether
 # the column it came from is really numeric is a question of a different kind,
 # and `profiler`'s.
 #
@@ -59,7 +59,7 @@ system_prompt: |
 
   If a figure rests on a column you are not sure of — text that looks numeric,
   blanks that may or may not count — ask `profiler` about the file before you
-  recompute. If `profiler` is not among your delegates, read the header and a
+  recompute. If `profiler` is not among your subagents, read the header and a
   few rows yourself, and say that you did.
 
   If you cannot tell — the file is ambiguous, the claim is underspecified — say

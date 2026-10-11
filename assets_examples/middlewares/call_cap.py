@@ -46,7 +46,7 @@ and in `agents/researcher.yaml`, or any `subagents/*.yaml`:
     middlewares: [call-cap-strict]
 
 Both halves of that are written out: `assets_examples/agents/researcher.yaml` and
-`assets_examples/subagents/sweeper.yaml` are an agent and its delegate, naming the
+`assets_examples/subagents/sweeper.yaml` are an agent and its subagent, naming the
 registry entries above under two different ceilings.
 `assets_examples/agents/assistant.yaml` names every example as well.
 

@@ -18,7 +18,7 @@ description: Works in the workspace and looks things up outside it.
 # quietly dropped.
 #
 # `task` is in the list and earns its place with no `subagents:` below, because
-# deepagents adds a general-purpose delegate of its own unless told not to. The
+# deepagents adds a general-purpose subagent of its own unless told not to. The
 # delegation is to a copy of this agent's own surface rather than to a named
 # specialist.
 builtin_tools:

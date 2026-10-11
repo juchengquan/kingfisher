@@ -116,17 +116,17 @@ OTHER_ENDPOINT = Endpoint(
 )
 
 #: Two models on one endpoint, which is the shape the catalogue exists to allow
-#: and the shape a delegate test needs: `cheap-model` carries params that differ
-#: from the default's, so a test asserting a delegate got *its own* ceiling
+#: and the shape a subagent test needs: `cheap-model` carries params that differ
+#: from the default's, so a test asserting a subagent got *its own* ceiling
 #: cannot pass by accident on the deployment's.
 FAKE_MODELS = {
     "fake-model": ModelProfile(model="fake-model", endpoint="fake"),
     "cheap-model": ModelProfile(
         model="cheap-model", endpoint="fake", max_tokens=321, timeout_s=45
     ),
-    #: On the *other* endpoint, and that is its whole job. A delegate written
+    #: On the *other* endpoint, and that is its whole job. A subagent written
     #: `distinct: true` refuses a model sharing a host with the default, so a
-    #: one-endpoint fixture cannot show a delegate genuinely running elsewhere
+    #: one-endpoint fixture cannot show a subagent genuinely running elsewhere
     #: -- every model it could name resolves to the same machine.
     "elsewhere-model": ModelProfile(model="elsewhere-model", endpoint="elsewhere"),
 }
@@ -335,20 +335,20 @@ def a_subagent(text: str, name: str) -> SubagentSpec:
 
 
 def declared_subagents(built: Assembled) -> list:
-    """The delegate specs a build activated, without the built-in one.
+    """The subagent specs a build activated, without the built-in one.
 
     The specs stay plain dicts: `Assembled` records what `create_deep_agent` was
-    handed, and what it is handed for a delegate is deepagents' own `SubAgent`
+    handed, and what it is handed for a subagent is deepagents' own `SubAgent`
     mapping. Only the outer record gained a type.
     """
     return [s for s in built.subagents or () if s.get("name") != "general-purpose"]
 
 
-def delegate(built: Assembled, name: str) -> dict:
-    """One delegate a build activated, as deepagents received it.
+def subagent_of(built: Assembled, name: str) -> dict:
+    """One subagent a build activated, as deepagents received it.
 
     The outer read is the record and the inner one stays a subscript, because what
-    `create_deep_agent` is handed for a delegate is deepagents' own `SubAgent`
+    `create_deep_agent` is handed for a subagent is deepagents' own `SubAgent`
     mapping -- only the outer record gained a type.
     """
     (found,) = [s for s in built.subagents or () if s["name"] == name]
@@ -356,12 +356,12 @@ def delegate(built: Assembled, name: str) -> dict:
 
 
 def middleware_of(built: Assembled, name: str) -> list:
-    """One delegate's middleware, in the order it was attached.
+    """One subagent's middleware, in the order it was attached.
 
     Here rather than in each file: two of the three copies were identical down to
     the docstring, and the third was this one's first line under another name.
     """
-    return delegate(built, name).get("middleware", [])
+    return subagent_of(built, name).get("middleware", [])
 
 
 def repository_root(start: Path | None = None) -> Path:
@@ -439,7 +439,7 @@ def workspace_with_presets(cfg, shipped):
     """A workspace holding the shipped definitions, as `kingfisher seed` leaves one."""
     import shutil
 
-    # `tools` too, because a delegate that names one is refused before its
+    # `tools` too, because a subagent that names one is refused before its
     # skills are looked at -- so leaving them out would make a skills test pass
     # by never reaching the check.
     #

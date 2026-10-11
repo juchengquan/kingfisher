@@ -119,8 +119,8 @@ class NarrowedSkills(SkillsMiddleware):
         )
 
 
-class DeclaredDelegatesOnly(AgentMiddleware):
-    """Refuse `task` to a delegate this request did not declare."""
+class DeclaredSubagentsOnly(AgentMiddleware):
+    """Refuse `task` to a subagent this request did not declare."""
 
     def __init__(self, declared: tuple[str, ...]) -> None:
         self._declared = set(declared)
@@ -136,14 +136,14 @@ class DeclaredDelegatesOnly(AgentMiddleware):
         offered = ", ".join(sorted(self._declared)) or "none"
         # A missing argument is a different mistake from a refused name, and
         # saying the wrong one costs the whole turn. Observed live: a model
-        # sent `subagentType`, read back "None is not a delegate this request
+        # sent `subagentType`, read back "None is not a subagent this request
         # may use. Available: ..., reviewer, ...", reported the tool as broken
         # "despite listing reviewer as available", and answered around it
         # rather than retrying. The name it could not find was its own typo.
         detail = (
             "no subagent_type was given -- the argument is `subagent_type`"
             if wanted is None
-            else f"{wanted!r} is not a delegate this request may use"
+            else f"{wanted!r} is not a subagent this request may use"
         )
         return ToolMessage(
             content=f"Error: {detail}. Available: {offered}.",

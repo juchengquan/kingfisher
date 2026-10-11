@@ -3,13 +3,13 @@
 This repository's worked set: every kind the formats define, each file
 demonstrating a distinct feature of one. It is committed, and it is held to
 working. The tests parse every file here, load every tool, build an agent from
-what `assistant` declares, and render the skills index each delegate is actually
+what `assistant` declares, and render the skills index each subagent is actually
 handed, so a feature that stops being demonstrated fails the suite rather than
 quietly rotting.
 
 Rendering the index is the part worth naming. Granting a skill and being offered
 one are different facts, a definition shows only the first, and nothing you can
-read in this directory distinguishes a delegate that holds a procedure from one
+read in this directory distinguishes a subagent that holds a procedure from one
 handed an empty index.
 
 What none of it covers is a model. Nothing here is called against an endpoint,

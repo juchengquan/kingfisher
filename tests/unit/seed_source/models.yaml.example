@@ -128,12 +128,12 @@ models:
 # definition names and you have not bound **refuses the build** rather than
 # falling back to the default -- handing `second-opinion` the very model it
 # exists not to be is the answer nobody asked for, and nothing in the output
-# would look wrong. It fires only when a request activates that delegate.
+# would look wrong. It fires only when a request activates that subagent.
 aliases:
   cheap: MiniMax-M2.5
   alternate: gpt-5
 
-# --- pointing a delegate at one of these ------------------------------------
+# --- pointing a subagent at one of these ------------------------------------
 #
 # A subagent names a model from this table, or an alias from the one above:
 #

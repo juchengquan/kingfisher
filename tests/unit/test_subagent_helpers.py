@@ -1,4 +1,4 @@
-"""A delegate that consults another delegate."""
+"""A subagent that consults another subagent."""
 
 from __future__ import annotations
 
@@ -70,15 +70,15 @@ def _build(cfg, session_dir, *, subagents=("reviewer", "second-opinion")):
     ).graph
 
 
-def _delegate(graph, name: str):
-    """One of the agent's own delegates, compiled."""
+def _subagent(graph, name: str):
+    """One of the agent's own subagents, compiled."""
     from tests.unit.test_delegation_ceiling import _subagent_graphs
 
     return _subagent_graphs(graph)[name]
 
 
-def _helper(graph, delegate: str, name: str):
-    """A delegate's *helper*, which is a different instance from the delegate of the
+def _helper(graph, subagent: str, name: str):
+    """A subagent's *helper*, which is a different instance from the subagent of the
     same name the agent holds directly.
 
     Worth its own accessor because reaching for the top-level one instead is an easy
@@ -88,11 +88,11 @@ def _helper(graph, delegate: str, name: str):
     """
     from tests.unit.test_delegation_ceiling import _subagent_graphs
 
-    return _subagent_graphs(_delegate(graph, delegate))[name]
+    return _subagent_graphs(_subagent(graph, subagent))[name]
 
 
-def _delegates_of(graph) -> set[str]:
-    """The delegates this compiled agent can reach, by name."""
+def _subagents_of(graph) -> set[str]:
+    """The subagents this compiled agent can reach, by name."""
     from tests.unit.test_delegation_ceiling import _subagent_graphs
 
     return set(_subagent_graphs(graph))
@@ -107,7 +107,7 @@ def _tools_of(graph) -> set[str]:
 # -- the format ------------------------------------------------------------
 
 
-def test_a_definition_may_name_delegates():
+def test_a_definition_may_name_subagents():
     """It was refused, with a reason that turned out to be wrong about what the format
     could express.
     """
@@ -117,7 +117,7 @@ def test_a_definition_may_name_delegates():
 
 
 def test_naming_none_is_the_default():
-    """Like `skills` and unlike `tools`: a delegate that needed the whole catalogue
+    """Like `skills` and unlike `tools`: a subagent that needed the whole catalogue
     would not have been worth defining.
     """
     spec = a_subagent(HELPER, "second-opinion.yaml")
@@ -135,7 +135,7 @@ def test_a_helper_may_have_helpers_of_its_own(cfg, session_dir):
     graph = _build(cfg, session_dir, subagents=("reviewer", "second-opinion", "checker"))
     helper = _helper(graph, "reviewer", "second-opinion")
 
-    assert "checker" in _delegates_of(helper)
+    assert "checker" in _subagents_of(helper)
 
 
 def test_a_cycle_is_refused_when_the_catalogue_loads(cfg, session_dir):
@@ -183,7 +183,7 @@ def test_a_helper_is_built_without_a_task_tool(cfg, session_dir):
     """The depth bound is a call that is not made, so this is what proves it: the helper
     holds no `task`, so it could not delegate even if it tried.
 
-    Asked of the helper *inside* `reviewer`, not the standalone delegate of the same
+    Asked of the helper *inside* `reviewer`, not the standalone subagent of the same
     name -- that one has no helpers either, so it would pass whatever this change did.
     """
     _define(cfg, REVIEWER, HELPER)
@@ -194,7 +194,7 @@ def test_a_helper_is_built_without_a_task_tool(cfg, session_dir):
 
 
 def test_a_helper_is_not_handed_the_parents_task_tool(cfg, session_dir):
-    """The harvested `task` is bound to the *parent's* delegate list."""
+    """The harvested `task` is bound to the *parent's* subagent list."""
     _define(cfg, REVIEWER, HELPER)
 
     graph = _build(cfg, session_dir)
@@ -203,27 +203,27 @@ def test_a_helper_is_not_handed_the_parents_task_tool(cfg, session_dir):
     assert "read_file" in _tools_of(_helper(graph, "reviewer", "second-opinion"))
 
 
-# -- the delegate can actually delegate ------------------------------------
+# -- the subagent can actually subagent ------------------------------------
 
 
-def test_a_delegate_that_names_a_helper_gets_a_task_tool(cfg, session_dir):
+def test_a_subagent_that_names_a_helper_gets_a_task_tool(cfg, session_dir):
     """What the whole change is for."""
     _define(cfg, REVIEWER, HELPER)
 
     graph = _build(cfg, session_dir)
 
-    assert "task" in _tools_of(_delegate(graph, "reviewer"))
+    assert "task" in _tools_of(_subagent(graph, "reviewer"))
 
 
-def test_a_delegate_that_names_none_gets_no_task_tool(cfg, session_dir):
-    """Unchanged for every delegate that does not ask, which is all of them until
+def test_a_subagent_that_names_none_gets_no_task_tool(cfg, session_dir):
+    """Unchanged for every subagent that does not ask, which is all of them until
     someone writes the line.
     """
     _define(cfg, HELPER)
 
     graph = _build(cfg, session_dir, subagents=("second-opinion",))
 
-    assert "task" not in _tools_of(_delegate(graph, "second-opinion"))
+    assert "task" not in _tools_of(_subagent(graph, "second-opinion"))
 
 
 # -- the caller decides ----------------------------------------------------
@@ -235,7 +235,7 @@ def test_a_helper_the_caller_did_not_name_is_dropped(cfg, session_dir):
 
     graph = _build(cfg, session_dir, subagents=("reviewer",))
 
-    assert "task" not in _tools_of(_delegate(graph, "reviewer"))
+    assert "task" not in _tools_of(_subagent(graph, "reviewer"))
 
 
 def test_a_helper_nothing_defines_is_refused(cfg, session_dir):
@@ -249,20 +249,20 @@ def test_a_helper_nothing_defines_is_refused(cfg, session_dir):
 
 
 def test_granting_everything_reaches_the_helper_too(cfg, session_dir):
-    """`ALL` is every delegate the workspace defines, so a caller who narrowed nothing
+    """`ALL` is every subagent the workspace defines, so a caller who narrowed nothing
     has named the helper as much as anything else.
     """
     _define(cfg, REVIEWER, HELPER)
 
     graph = _build(cfg, session_dir, subagents=ALL)
 
-    assert "task" in _tools_of(_delegate(graph, "reviewer"))
+    assert "task" in _tools_of(_subagent(graph, "reviewer"))
 
 
 # -- and it actually runs --------------------------------------------------
 
 
-def test_a_delegate_consults_its_helper_end_to_end(cfg, session_dir):
+def test_a_subagent_consults_its_helper_end_to_end(cfg, session_dir):
     """Building is not running, and the two have come apart before."""
     _define(cfg, REVIEWER, HELPER)
 
@@ -294,9 +294,9 @@ def test_a_delegate_consults_its_helper_end_to_end(cfg, session_dir):
     )
     transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
 
-    assert "REVIEWER-SUMMARISED" in transcript  # the delegate reported back
+    assert "REVIEWER-SUMMARISED" in transcript  # the subagent reported back
     assert "PARENT-DONE" in transcript
-    # The helper's own words stayed inside the delegate, which is the property
+    # The helper's own words stayed inside the subagent, which is the property
     # that makes a helper worth having rather than just another tool call.
     assert "SECOND-OPINION-ANSWERED" not in transcript
 
@@ -304,8 +304,8 @@ def test_a_delegate_consults_its_helper_end_to_end(cfg, session_dir):
 # -- what nesting must not have loosened ------------------------------------
 
 
-def test_a_nested_agent_gets_no_unrestricted_delegate(cfg, session_dir):
-    """`DeclaredDelegatesOnly` is applied to the main agent and nowhere else.
+def test_a_nested_agent_gets_no_unrestricted_subagent(cfg, session_dir):
+    """`DeclaredSubagentsOnly` is applied to the main agent and nowhere else.
 
     Measured rather than reasoned: `create_deep_agent` adds it, and
     `SubAgentMiddleware` does not. So the backstop stays where it is -- and this is
@@ -314,10 +314,10 @@ def test_a_nested_agent_gets_no_unrestricted_delegate(cfg, session_dir):
     _define(cfg, REVIEWER, NESTING_HELPER, CHECKER)
 
     graph = _build(cfg, session_dir, subagents=("reviewer", "second-opinion", "checker"))
-    nested = _delegate(graph, "reviewer")
+    nested = _subagent(graph, "reviewer")
 
-    assert "task" in _tools_of(nested), "a delegate with helpers needs task to reach them"
-    assert "general-purpose" not in _delegates_of(nested)
+    assert "task" in _tools_of(nested), "a subagent with helpers needs task to reach them"
+    assert "general-purpose" not in _subagents_of(nested)
 
 
 def test_a_definition_is_compiled_once_for_each_position(cfg, session_dir, monkeypatch):
@@ -353,13 +353,13 @@ def test_a_definition_is_compiled_once_for_each_position(cfg, session_dir, monke
 
 
 def _spec(name, subagents=None):
-    body = f"name: {name}\ndescription: A delegate.\nsystem_prompt: |\n  x\n"
+    body = f"name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
     if subagents is not None:
         body += f"subagents: {subagents}\n"
     return a_subagent(body, f"{name}.yaml")
 
 
-def test_a_definition_may_not_ask_for_every_delegate():
+def test_a_definition_may_not_ask_for_every_subagent():
     """The refusal that makes the rest of this moot: `subagents` must be named."""
     with pytest.raises(SubagentError, match=r"subagents may not be"):
         _spec("greedy", '["*"]')
@@ -381,7 +381,7 @@ def test_tools_still_takes_a_star():
     `skills` was measured rather than assumed -- see the two tests below.
     """
     spec = a_subagent(
-        "name: broad\ndescription: A delegate.\nsystem_prompt: |\n  x\n"
+        "name: broad\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
         'tools: ["*"]\n',
         "broad.yaml",
     )
@@ -390,17 +390,17 @@ def test_tools_still_takes_a_star():
     assert spec.skills is None  # unwritten, which is what grants none
 
 
-def test_a_delegate_may_not_ask_for_every_skill():
+def test_a_subagent_may_not_ask_for_every_skill():
     """`skills: ["*"]` read as "all of them" and arrived as none.
 
-    It resolves to whatever the request granted, and a delegate is handed an
+    It resolves to whatever the request granted, and a subagent is handed an
     index only where its skills are *named* -- so under the ordinary request,
-    which grants every skill, the delegate got no index at all. It worked only
+    which grants every skill, the subagent got no index at all. It worked only
     when the caller happened to narrow skills, which is a meaning no author of
     the file can see.
     """
     body = (
-        "name: broad\ndescription: A delegate.\nsystem_prompt: |\n  x\n"
+        "name: broad\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
         'skills: ["*"]\n'
     )
 
@@ -414,7 +414,7 @@ def test_the_skills_refusal_says_what_to_write_instead():
     is the same one the `subagents` refusal above exists to catch.
     """
     body = (
-        "name: broad\ndescription: A delegate.\nsystem_prompt: |\n  x\n"
+        "name: broad\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
         'skills: ["*"]\n'
     )
 
@@ -477,7 +477,7 @@ def test_a_diamond_is_not_a_cycle():
 
 
 def _helper_specs(spec) -> dict:
-    """The helper specs kingfisher hung off one delegate, by name."""
+    """The helper specs kingfisher hung off one subagent, by name."""
     for middleware in spec.get("middleware", []):
         for attribute in ("subagents", "_subagents"):
             if found := getattr(middleware, attribute, None):
@@ -485,9 +485,9 @@ def _helper_specs(spec) -> dict:
     return {}
 
 
-def test_a_helper_runs_the_model_of_the_delegate_that_summoned_it(cfg, session_dir):
+def test_a_helper_runs_the_model_of_the_subagent_that_summoned_it(cfg, session_dir):
     """A definition naming no model runs whatever reached it, and one level down that is
-    the delegate above -- not the main agent.
+    the subagent above -- not the main agent.
     """
     _define(cfg, CHEAP_REVIEWER, HELPER)
     main = FakeToolCallingModel(responses=[AIMessage(content="ok")])
@@ -506,7 +506,7 @@ def test_a_helper_runs_the_model_of_the_delegate_that_summoned_it(cfg, session_d
     assert helper["model"].model == "cheap-model"
 
 
-def test_one_helper_under_two_parents_is_two_delegates(cfg, session_dir):
+def test_one_helper_under_two_parents_is_two_subagents(cfg, session_dir):
     """A helper naming no model runs whatever reached it, so the same name under two
     differently-pinned parents is two different agents.
     """
@@ -527,7 +527,7 @@ def test_one_helper_under_two_parents_is_two_delegates(cfg, session_dir):
     assert under_elsewhere["model"].model == "elsewhere-model"
 
 
-def test_a_helper_under_an_unpinned_delegate_still_runs_the_agents_model(
+def test_a_helper_under_an_unpinned_subagent_still_runs_the_agents_model(
     cfg, session_dir
 ):
     """The other half, and the one that must not have changed."""

@@ -1,4 +1,4 @@
-# The agent half of the middleware pairing: this agent and its delegate
+# The agent half of the middleware pairing: this agent and its subagent
 # `sweeper` run under two ceilings over one behaviour.
 #
 # `kingfisher seed` will not copy it, and that is what the `middlewares:` line
@@ -56,8 +56,8 @@ description: Answers questions from a workspace's files under a ceiling on how m
 #
 # `call-cap-generous` is listed and *not the ceiling this agent runs under*,
 # which needs saying because it reads as a mistake. An agent's `middlewares:` is
-# also the grant its delegates are clamped by -- `AgentSpec.declares` returns
-# this list as the request's -- so a name absent here is one no delegate may
+# also the grant its subagents are clamped by -- `AgentSpec.declares` returns
+# this list as the request's -- so a name absent here is one no subagent may
 # reach. `sweeper` names `call-cap-generous`, so this file has to grant it.
 #
 # The cost is visible and worth stating: this agent is wrapped in both caps and
@@ -87,10 +87,10 @@ tools: []
 # runs under `call-cap-generous` while this agent runs under `call-cap-strict`,
 # and that is not an inconsistency: **a subagent inherits none of its parent's
 # middleware.** Each definition names its own, each gets its own instance, and a
-# cap here bounds this agent's tool calls and not one call its delegate makes.
+# cap here bounds this agent's tool calls and not one call its subagent makes.
 #
 # Which is the argument for the pairing. A ceiling on the agent that thinks and
-# a looser one on the delegate that reads is the shape most deployments want,
+# a looser one on the subagent that reads is the shape most deployments want,
 # and it is only expressible because the two are counted apart.
 subagents: [sweeper]
 # No `model:`, so this runs your `default:`.

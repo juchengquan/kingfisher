@@ -30,8 +30,8 @@ from kingfisher.layout import MEMORY
 from tests.conftest import (
     FakeToolCallingModel,
     declared_subagents,
-    delegate,
     dispatched,
+    subagent_of,
     subagents_dir,
 )
 
@@ -345,7 +345,7 @@ def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, session_dir):
 
     (subagent,) = declared_subagents(built)
     assert "tools" not in subagent  # names here would raise inside ToolNode
-    # By type rather than by position. A delegate carries guards it did not ask
+    # By type rather than by position. A subagent carries guards it did not ask
     # for -- the host-path correction, and the workspace tools' own failures --
     # and this test is about the allowlist its definition produced.
     (allowlist,) = [m for m in subagent["middleware"] if isinstance(m, ToolAllowlist)]
@@ -381,8 +381,8 @@ def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch,
     )
 
 
-def test_the_environment_cannot_reroute_a_delegate(cfg, monkeypatch, session_dir):
-    """The definition is the only author of where a delegate runs."""
+def test_the_environment_cannot_reroute_a_subagent(cfg, monkeypatch, session_dir):
+    """The definition is the only author of where a subagent runs."""
     _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.yaml")
     monkeypatch.setenv("KINGFISHER_MODEL_SUBAGENT", "operator-choice")
     monkeypatch.setenv("KINGFISHER_PROVIDER_SUBAGENT", "openai")
@@ -521,7 +521,7 @@ def test_the_catalogue_can_live_outside_the_workspace(cfg, session_dir, tmp_path
 
 def test_subagents_relocate_independently_of_skills(cfg, tmp_path):
     """A deployment may share one catalogue of procedures while keeping its own
-    delegates, or the reverse -- so they are two roots, not one.
+    subagents, or the reverse -- so they are two roots, not one.
     """
     catalogue = tmp_path / "catalogue" / "subagents"
     catalogue.mkdir(parents=True)
@@ -549,7 +549,7 @@ def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir):
         capabilities=Capabilities(subagents=("reviewer",)),
     )
 
-    assert delegate(built, "reviewer")["model"].model == "cheap-model"
+    assert subagent_of(built, "reviewer")["model"].model == "cheap-model"
 
 
 # -- none, versus could not tell -------------------------------------------

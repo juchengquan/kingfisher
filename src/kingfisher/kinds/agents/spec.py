@@ -3,7 +3,7 @@
 **Omission means the same thing it means in a subagent file:** leave a *tool* field out
 and you get everything available, leave `skills` or `subagents` out and you get none.
 The skills index alone costs ~600 tokens for three, ~450 of it deepagents' preamble,
-while every delegate compiles a graph at ~6ms. Re-measured 2026-09-03.
+while every subagent compiles a graph at ~6ms. Re-measured 2026-09-03.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ REFUSED: Mapping[str, str] = MappingProxyType(
 class AgentSpec(Definition):
     """One agent, once its definition has been read.
 
-    What it shares with a delegate is on `Definition`; `memory` is the whole of what
+    What it shares with a subagent is on `Definition`; `memory` is the whole of what
     only an agent has.
     """
 
@@ -95,25 +95,25 @@ class AgentSpec(Definition):
     #: worse than none because it reads as protection. An author who finds this too
     #: coarse wants an agent that was never granted `execute`.
     #:
-    #: Not on `Definition` and so not on a delegate: a delegate inherits its
+    #: Not on `Definition` and so not on a subagent: a subagent inherits its
     #: parent's, which is `REFUSED` in that format with the reason.
     interrupt_on: tuple[str, ...] = ()
 
     def declares(self, held: frozenset[str] | None = None) -> Capabilities:
         """What this agent holds, said as the narrowing a request is clamped by.
 
-        The five a delegate answers identically come from `Definition`; these three
+        The five a subagent answers identically come from `Definition`; these three
         are an agent's alone. `models` opens to everything because an agent decides
-        which model its delegates may run, and `memory` is a field only it has.
+        which model its subagents may run, and `memory` is a field only it has.
 
         **`middlewares` is deliberately not among them**, and the contrast is the
         reason this is worth reading: middleware is not additive in effect --
         `call-cap-generous` is a *looser* ceiling than `call-cap-strict`, so a
-        delegate free to name any registered entry could pick the roomiest one a
+        subagent free to name any registered entry could pick the roomiest one a
         deployment happens to offer and leave the bound its parent runs under. So it
         stays narrowed in the base, which is what makes an agent decide which its
-        delegates may choose from, and why an agent lists one it does not use itself
-        when a delegate needs it.
+        subagents may choose from, and why an agent lists one it does not use itself
+        when a subagent needs it.
         """
         return replace(
             super().declares(held), endpoints=ALL, models=ALL, memory=self.memory
@@ -159,7 +159,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     written_skills, skill_audiences, _ = read.sourced(
         document.get("skills"), absent=None, key="skills", refuse_bundled=_NO_FOLDER
     )
-    written_delegates, delegate_audiences = read.audienced(
+    written_subagents, subagent_audiences = read.audienced(
         # No `refuse_all` here. A *subagent* naming every subagent names itself,
         # which is always a loop; an agent is not one of them.
         document.get("subagents"),
@@ -169,7 +169,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     audiences = {
         name: entries
         for name, entries in zip(
-            AUDIENCED, (tool_audiences, delegate_audiences, skill_audiences), strict=True
+            AUDIENCED, (tool_audiences, subagent_audiences, skill_audiences), strict=True
         )
         if entries
     }
@@ -192,7 +192,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),
         skills=written_skills,
-        subagents=written_delegates,
+        subagents=written_subagents,
         source_ids=source_ids,
         audiences=audiences,
         middlewares=written_middleware,

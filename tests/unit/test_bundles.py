@@ -24,7 +24,7 @@ from kingfisher.kinds.tools.spec import Offering, tool_name
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
 from kingfisher.presentation.cli.health import examine, worst
 from kingfisher.presentation.cli.listing import failed, render
-from tests.conftest import FakeToolCallingModel, a_subagent, delegate
+from tests.conftest import FakeToolCallingModel, a_subagent, subagent_of
 
 DEFINITION = "name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
 
@@ -86,7 +86,7 @@ def test_a_bundle_folder_is_keyed_the_way_a_grant_names_it(tmp_path):
     assert len(repository.bundles) == 2
 
 
-#: A compiled delegate, small enough to declare inline and real enough to build.
+#: A compiled subagent, small enough to declare inline and real enough to build.
 COMPILED = """
 def build(model, tools):
     from langchain.agents import create_agent
@@ -342,7 +342,7 @@ def test_a_private_tool_written_as_a_package_is_skipped_too(tmp_path):
     assert set(LocalSubagentRepository(tmp_path).specs) == {"surveyor"}
 
 
-# -- what the delegate actually ends up holding -----------------------------
+# -- what the subagent actually ends up holding -----------------------------
 
 
 def owner(*, shared=None, tools=("probe",), skills=()):
@@ -372,7 +372,7 @@ def workspace_with_bundle(cfg, definition=PRIVATE_OWNER, private="probe"):
     (bundle / "surveyor.yaml").write_text(definition, encoding="utf-8")
     (bundle / "tools").mkdir(exist_ok=True)
     # A different answer from the catalogue's, so a test can say which of two
-    # files defining one name actually reached the delegate.
+    # files defining one name actually reached the subagent.
     (bundle / "tools" / f"{private}.py").write_text(
         TOOL.format(name=private, answer="from the bundle"), encoding="utf-8"
     )
@@ -384,17 +384,17 @@ def workspace_with_bundle(cfg, definition=PRIVATE_OWNER, private="probe"):
 
 
 def built_subagent(cfg, session_dir):
-    """The one delegate this workspace defines, as deepagents received it."""
+    """The one subagent this workspace defines, as deepagents received it."""
     built = build_agent(
         cfg,
         backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("surveyor",), tools=("shared",)),
     )
-    return delegate(built, "surveyor")
+    return subagent_of(built, "surveyor")
 
 
-def test_a_delegate_holds_the_tool_from_its_own_folder(cfg, session_dir):
+def test_a_subagent_holds_the_tool_from_its_own_folder(cfg, session_dir):
     """The request granted `shared` and never heard of `probe`."""
     workspace_with_bundle(cfg)
 
@@ -414,13 +414,13 @@ def test_a_private_tool_survives_a_request_that_granted_no_tools(cfg, session_di
         capabilities=Capabilities(subagents=("surveyor",), tools=()),
     )
 
-    subagent = delegate(built, "surveyor")
+    subagent = subagent_of(built, "surveyor")
     assert {tool_name(t) for t in subagent["tools"]} == {"probe"}
 
 
-def test_only_what_the_definition_lists_reaches_the_delegate(cfg, session_dir):
+def test_only_what_the_definition_lists_reaches_the_subagent(cfg, session_dir):
     """A build that never ran `warm` is handed the folder as it is, so a file the
-    definition does not list would reach the delegate if the build trusted the
+    definition does not list would reach the subagent if the build trusted the
     folder -- `warm` refusing the pair does not help a caller that skipped it.
     """
     workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
@@ -432,7 +432,7 @@ def test_only_what_the_definition_lists_reaches_the_delegate(cfg, session_dir):
     assert {tool_name(t) for t in subagent["tools"]} == {"probe"}
 
 
-def test_a_private_tool_is_in_the_delegates_allowlist(cfg, session_dir):
+def test_a_private_tool_is_in_the_subagents_allowlist(cfg, session_dir):
     """The failure this would otherwise have been is silent rather than absent."""
     workspace_with_bundle(cfg)
 
@@ -451,7 +451,7 @@ def test_a_bundled_tool_answers_for_its_name_when_the_catalogue_is_inherited(
     cfg, session_dir
 ):
     """`*` takes the catalogue's `shared` and the list takes the folder's, and a
-    delegate dispatches by name -- so one has to go, and the one the definition named
+    subagent dispatches by name -- so one has to go, and the one the definition named
     `source: bundled` is the one that stays.
     """
     workspace_with_bundle(cfg, definition=INHERITS_AND_OWNS_SHARED, private="shared")
@@ -465,7 +465,7 @@ def test_a_bundled_tool_answers_for_its_name_when_the_catalogue_is_inherited(
 
 
 def test_one_name_listed_as_both_shared_and_bundled_is_refused(cfg):
-    """Two entries for one name leave which one the delegate calls unsaid."""
+    """Two entries for one name leave which one the subagent calls unsaid."""
     workspace_with_bundle(
         cfg, definition=owner(shared=("shared",), tools=("shared",)), private="shared"
     )
@@ -476,9 +476,9 @@ def test_one_name_listed_as_both_shared_and_bundled_is_refused(cfg):
     assert "names 'shared' twice" in str(raised.value)
 
 
-#: A delegate with nothing in it but the three required fields, for the rules below that
+#: A subagent with nothing in it but the three required fields, for the rules below that
 #: drive the reader on one `tools:` or `skills:` block.
-DELEGATE = "name: surveyor\ndescription: d\nsystem_prompt: |\n  Go.\n"
+SUBAGENT = "name: surveyor\ndescription: d\nsystem_prompt: |\n  Go.\n"
 
 #: The same pair as the rule above, with the shared half written as the reference
 #: `formats.md` says means the same tool. Every spelling of one dispatch name has to meet
@@ -494,11 +494,11 @@ SPELLINGS = (
 def test_one_dispatch_name_is_refused_however_the_entries_spell_it(label, shared_as, cfg):
     """The refusal compared written entries verbatim, so `shared.py::shared` beside a
     bundled `shared` was two strings and went through -- and the bundle silently won,
-    handing the delegate its own tool where the author had named the catalogue's file.
+    handing the subagent its own tool where the author had named the catalogue's file.
 
     Measured before this existed: accepted, with `tools=('shared.py::shared',)` and
     `bundled={'tools': ('shared',)}`, and the only signal was a `doctor` warning that a
-    delegate's own tool answered instead of the catalogue's.
+    subagent's own tool answered instead of the catalogue's.
     """
     workspace_with_bundle(
         cfg, definition=owner(shared=(shared_as,), tools=("shared",)), private="shared"
@@ -522,14 +522,14 @@ def test_two_tools_of_a_name_from_two_files_cannot_both_be_held():
     definition naming both owns the problem and can edit the line.
     """
     with pytest.raises(SubagentError, match="twice"):
-        a_subagent(DELEGATE + "tools:\n  - a.py::fetch\n  - b.py::fetch\n", "surveyor.yaml")
+        a_subagent(SUBAGENT + "tools:\n  - a.py::fetch\n  - b.py::fetch\n", "surveyor.yaml")
 
 
 def test_two_different_tools_are_not_a_collision():
     """The control: comparing by dispatch name must not refuse a definition naming two
     tools that happen to live in different files.
     """
-    spec = a_subagent(DELEGATE + "tools:\n  - a.py::fetch\n  - b.py::grep\n", "surveyor.yaml")
+    spec = a_subagent(SUBAGENT + "tools:\n  - a.py::fetch\n  - b.py::grep\n", "surveyor.yaml")
 
     assert spec.tools == ("a.py::fetch", "b.py::grep")
 
@@ -541,13 +541,13 @@ def test_two_sources_may_still_both_ship_one_skill_name():
     name is ambiguous can actually be seen.
     """
     spec = a_subagent(
-        DELEGATE + "skills:\n  - research::lookup\n  - legal::lookup\n", "surveyor.yaml"
+        SUBAGENT + "skills:\n  - research::lookup\n  - legal::lookup\n", "surveyor.yaml"
     )
 
     assert spec.skills == ("research::lookup", "legal::lookup")
 
 
-def test_the_main_agent_never_holds_another_delegates_private_tool(cfg, session_dir):
+def test_the_main_agent_never_holds_another_subagents_private_tool(cfg, session_dir):
     """The point of the whole feature."""
     workspace_with_bundle(cfg)
 
@@ -579,10 +579,10 @@ def with_private_skill(cfg, name="sampling"):
     )
 
 
-def test_a_delegate_is_told_about_the_skill_in_its_own_folder(cfg, session_dir):
+def test_a_subagent_is_told_about_the_skill_in_its_own_folder(cfg, session_dir):
     """Rendered rather than read off `_allowed`, and that is the whole guard: the
     grant was recorded under the label the bundle was *read* under and the index
-    is keyed by the label it is *mounted* under, so this delegate was handed
+    is keyed by the label it is *mounted* under, so this subagent was handed
     "No skills available yet" while `_allowed` looked right.
     """
     workspace_with_bundle(cfg, definition=OWN_TOOL_AND_SKILL)
@@ -754,7 +754,7 @@ def test_an_orphaned_bundle_does_not_make_the_listing_non_zero(cfg):
 
 
 def test_doctor_warns_about_an_orphaned_bundle_and_does_not_fail_on_it(cfg):
-    """Its own check name rather than `delegate tools`: the folder may hold only
+    """Its own check name rather than `subagent tools`: the folder may hold only
     `skills/`, and a row naming the wrong half sends a reader looking for a tool
     that was never there.
     """
@@ -763,14 +763,14 @@ def test_doctor_warns_about_an_orphaned_bundle_and_does_not_fail_on_it(cfg):
     checks = examine(cfg)
     named = {check.name: check for check in checks}
 
-    assert named["delegate bundles"].verdict == "warn"
-    assert "analysis/" in named["delegate bundles"].detail
+    assert named["subagent bundles"].verdict == "warn"
+    assert "analysis/" in named["subagent bundles"].detail
     assert worst(checks) != "fail", "a folder naming no definition is legal"
 
 
-def test_doctor_names_the_delegate_whose_private_tools_will_not_load(cfg):
+def test_doctor_names_the_subagent_whose_private_tools_will_not_load(cfg):
     """Its own check rather than folded into `tools`, for the reason the field is
-    its own: a reader has to be told which delegate to go and open.
+    its own: a reader has to be told which subagent to go and open.
     """
     workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
     bundle = cfg.workspace / "subagents" / "surveyor" / "tools"
@@ -778,18 +778,18 @@ def test_doctor_names_the_delegate_whose_private_tools_will_not_load(cfg):
 
     checks = {check.name: check for check in examine(cfg)}
 
-    assert checks["delegate tools"].verdict == "fail"
+    assert checks["subagent tools"].verdict == "fail"
     assert checks["tools"].verdict == "ok", "the catalogue's own tools still loaded"
 
 
-def test_a_broken_tool_catalogue_is_not_reported_as_a_delegate_failure(cfg):
+def test_a_broken_tool_catalogue_is_not_reported_as_a_subagent_failure(cfg):
     """One unparseable module in `tools/` was named twice -- once as `tools` and once as
-    `delegate tools` -- on a workspace with no delegates at all. The second row sends a
+    `subagent tools` -- on a workspace with no subagents at all. The second row sends a
     reader to the wrong directory, which is the fault `doctor` exists to avoid.
 
     The catalogue read sat inside the `try` whose exception becomes `bundles_error`,
     because `shadowed` compares a bundle's names against it. The other direction, and
-    the control, is `test_doctor_names_the_delegate_whose_private_tools_will_not_load`:
+    the control, is `test_doctor_names_the_subagent_whose_private_tools_will_not_load`:
     a bundle that really will not load still fails on its own row.
     """
     tools = cfg.catalogue_roots["tools"]
@@ -801,7 +801,7 @@ def test_a_broken_tool_catalogue_is_not_reported_as_a_delegate_failure(cfg):
 
     assert found.bundles_error is None, "a tools failure is not a bundle's"
     assert checks["tools"].verdict == "fail"
-    assert "not checked" in checks["delegate tools"].detail
+    assert "not checked" in checks["subagent tools"].detail
 
 
 def test_shadowing_says_it_was_not_checked_rather_than_that_there_is_none(cfg):
@@ -820,7 +820,7 @@ def test_shadowing_says_it_was_not_checked_rather_than_that_there_is_none(cfg):
 
 
 def test_shadowing_is_checked_when_the_catalogue_loads(cfg):
-    """The control `test_a_broken_tool_catalogue_is_not_reported_as_a_delegate_failure`
+    """The control `test_a_broken_tool_catalogue_is_not_reported_as_a_subagent_failure`
     and `test_shadowing_says_it_was_not_checked_rather_than_that_there_is_none` need: a
     flag that was always `False` would pass both of them.
     """
@@ -833,7 +833,7 @@ def test_shadowing_is_checked_when_the_catalogue_loads(cfg):
 
 
 def test_doctor_warns_about_shadowing_and_does_not_fail_on_it(cfg):
-    """Nothing is broken: the delegate answers with its own and the catalogue's
+    """Nothing is broken: the subagent answers with its own and the catalogue's
     never reaches it. That is a decision somebody made, and it is only acceptable
     while it is visible -- so `doctor` says it and still exits zero.
     """
@@ -842,8 +842,8 @@ def test_doctor_warns_about_shadowing_and_does_not_fail_on_it(cfg):
     checks = examine(cfg)
     named = {check.name: check for check in checks}
 
-    assert named["delegate tools"].verdict == "warn"
-    assert "surveyor" in named["delegate tools"].detail
+    assert named["subagent tools"].verdict == "warn"
+    assert "surveyor" in named["subagent tools"].detail
     assert worst(checks) != "fail", "shadowing stops nothing, so it must not gate"
 
 
@@ -958,7 +958,7 @@ def test_a_definition_that_lists_from_a_folder_it_no_longer_owns_is_refused(cfg)
 
     `orphaned_assets` sees the folder left behind and cannot see what the file thought
     it had; this is the only place the two halves of that rename meet, and without it
-    a renamed bundle is a delegate that quietly holds nothing.
+    a renamed bundle is a subagent that quietly holds nothing.
     """
     listing(cfg, tools=("probe",))
     renamed(cfg)
@@ -983,7 +983,7 @@ def test_a_rename_is_reported_from_both_sides(cfg):
 
     assert found.orphaned_assets == ("surveyor",)
     assert "owns no folder" in found.miscounted_bundles["surveys"]
-    assert named["delegate bundles"].verdict == "warn"
+    assert named["subagent bundles"].verdict == "warn"
     assert named["bundled entries"].verdict == "fail"
 
 
@@ -1024,13 +1024,13 @@ def test_a_source_that_is_neither_is_refused():
 
 
 def test_a_bundled_entry_has_no_audience_of_its_own():
-    """A bundled entry arrives with the delegate whatever the caller holds, so an
+    """A bundled entry arrives with the subagent whatever the caller holds, so an
     audience on it would read as a restriction that nothing applies.
     """
     with pytest.raises(SubagentError) as raised:
         read_surveyor("tools: [{name: probe, source: bundled, source_ids: [A]}]")
 
-    assert "reaches whoever reaches this delegate" in str(raised.value)
+    assert "reaches whoever reaches this subagent" in str(raised.value)
 
 
 def test_a_bundled_entry_names_no_file():
@@ -1084,7 +1084,7 @@ def test_an_agent_may_say_an_entry_is_shared():
 def test_the_bundle_key_covers_every_directory_a_bundle_holds():
     """Two lists that must agree, in both directions.
 
-    `BUNDLE_KEYS` is what a delegate may take from its folder and `ASSET_DIRECTORIES`
+    `BUNDLE_KEYS` is what a subagent may take from its folder and `ASSET_DIRECTORIES`
     is what the walk keeps out of the definition scan. A third asset kind added to one
     and not the other is either a folder nobody can list from or a key naming a folder
     that is read as a subagent, and neither has a symptom before it happens.
@@ -1095,7 +1095,7 @@ def test_the_bundle_key_covers_every_directory_a_bundle_holds():
     assert set(BUNDLE_KEYS) == set(ASSET_DIRECTORIES)
 
 
-def test_a_listing_names_the_delegate_whose_list_has_gone_stale(cfg):
+def test_a_listing_names_the_subagent_whose_list_has_gone_stale(cfg):
     """A refusal reachable only through the constructor is one `list` cannot see, which
     is how `orphaned_assets` came to be computed for a year and printed never.
     """
@@ -1108,7 +1108,7 @@ def test_a_listing_names_the_delegate_whose_list_has_gone_stale(cfg):
     assert failed(found), "the catalogue refuses this, so a zero exit would be a lie"
 
 
-def test_doctor_names_the_delegate_whose_list_has_gone_stale(cfg):
+def test_doctor_names_the_subagent_whose_list_has_gone_stale(cfg):
     """The exit code is held by `test_doctor_fails_on_every_refusal_a_file_can_reach`;
     what this adds is that the row says which definition to open.
     """
@@ -1131,11 +1131,11 @@ def test_a_clean_catalogue_says_so_rather_than_saying_nothing(cfg):
     assert named["bundled entries"].verdict == "ok"
 
 
-# -- a compiled delegate's own folder ---------------------------------------
+# -- a compiled subagent's own folder ---------------------------------------
 
 
 #: `COMPILED`, listing what it takes from its folder. A dict rather than YAML,
-#: because a compiled delegate is only ever declared in Python.
+#: because a compiled subagent is only ever declared in Python.
 COMPILED_LISTING = """
 def build(model, tools):
     from langchain.agents import create_agent
@@ -1175,20 +1175,20 @@ def compiled_bundle(cfg, *, skill=False, tools=INHERITS_AND_OWNS_PROBE):
 
 
 def dispatched_by(subagent) -> tuple[str, ...]:
-    """What the graph a compiled delegate built will actually answer to.
+    """What the graph a compiled subagent built will actually answer to.
 
     Read off the built graph rather than off what `build` was handed, which is the
-    whole point: a tool passed to `build` and dropped on the floor is a delegate
+    whole point: a tool passed to `build` and dropped on the floor is a subagent
     that does not have it, and the two look identical from this side of the call.
     """
     node = getattr(subagent["runnable"], "nodes", {}).get("tools")
     return tuple(sorted(getattr(getattr(node, "bound", None), "tools_by_name", None) or {}))
 
 
-def test_a_compiled_delegate_is_handed_the_tools_in_its_own_folder(cfg, session_dir):
+def test_a_compiled_subagent_is_handed_the_tools_in_its_own_folder(cfg, session_dir):
     """`compiled` took every parameter `as_subagent` resolves except this one, so a
-    compiled delegate's bundle reached the listing and never the graph: `probe
-    [private tool]` printed under a delegate that dispatched nothing.
+    compiled subagent's bundle reached the listing and never the graph: `probe
+    [private tool]` printed under a subagent that dispatched nothing.
     """
     compiled_bundle(cfg)
     built = build_agent(
@@ -1198,10 +1198,10 @@ def test_a_compiled_delegate_is_handed_the_tools_in_its_own_folder(cfg, session_
         capabilities=Capabilities(subagents=("surveyor",)),
     )
 
-    assert "probe" in dispatched_by(delegate(built, "surveyor"))
+    assert "probe" in dispatched_by(subagent_of(built, "surveyor"))
 
 
-def test_a_compiled_delegates_bundle_wins_a_name_the_catalogue_also_defines(cfg, tmp_path):
+def test_a_compiled_subagents_bundle_wins_a_name_the_catalogue_also_defines(cfg, tmp_path):
     """The assembled path's rule, which has to hold here too: `build` is handed one
     list and whatever it builds dispatches by name, so two tools of a name is one tool
     and nothing saying which.
@@ -1248,7 +1248,7 @@ def test_a_compiled_delegates_bundle_wins_a_name_the_catalogue_also_defines(cfg,
     )
 
     # `tool_name` rather than an attribute, and invoked rather than called: a compiled
-    # delegate's tools arrive wrapped, so a plain function reaches `build` as the tool
+    # subagent's tools arrive wrapped, so a plain function reaches `build` as the tool
     # `create_agent` would have made of it rather than as the function itself.
     names = [tool_name(one) for one in handed]
     assert names.count("probe") == 1, "two tools of a name reached `build`"
@@ -1257,7 +1257,7 @@ def test_a_compiled_delegates_bundle_wins_a_name_the_catalogue_also_defines(cfg,
     assert "other" in names, "the catalogue's own still arrive"
 
 
-def test_a_compiled_delegates_bundled_skill_is_reported_as_reaching_nothing(cfg):
+def test_a_compiled_subagents_bundled_skill_is_reported_as_reaching_nothing(cfg):
     """A skills index arrives through middleware and a compiled graph is given none,
     so this half of a bundle cannot work -- and the listing says so on the line, beside
     the refusal below, so a reader learns why rather than only that.
@@ -1270,7 +1270,7 @@ def test_a_compiled_delegates_bundled_skill_is_reported_as_reaching_nothing(cfg)
     assert "told about no skills" in "\n".join(render(found))
 
 
-def test_an_assembled_delegates_bundled_skill_is_not_reported_as_stranded(cfg):
+def test_an_assembled_subagents_bundled_skill_is_not_reported_as_stranded(cfg):
     """The control. The note is about graphs, not about bundles -- pointed at every
     bundled skill it would fire on the shipped `redactor`, whose skill arrives.
     """
@@ -1283,7 +1283,7 @@ def test_an_assembled_delegates_bundled_skill_is_not_reported_as_stranded(cfg):
     assert "told about no skills" not in "\n".join(render(found))
 
 
-def test_a_compiled_delegate_with_a_skill_in_its_folder_is_refused(cfg):
+def test_a_compiled_subagent_with_a_skill_in_its_folder_is_refused(cfg):
     """It cannot list the skill -- `skills` is refused for a graph deepagents never
     indexes -- so the skill is unlisted, and an unlisted file is refused.
     """
@@ -1295,7 +1295,7 @@ def test_a_compiled_delegate_with_a_skill_in_its_folder_is_refused(cfg):
     assert "sampling" in str(raised.value)
 
 
-def test_doctor_fails_on_a_compiled_delegate_with_a_skill_in_its_folder(cfg):
+def test_doctor_fails_on_a_compiled_subagent_with_a_skill_in_its_folder(cfg):
     """Failed rather than warned, because startup refuses it now."""
     compiled_bundle(cfg, skill=True)
 
@@ -1305,8 +1305,8 @@ def test_doctor_fails_on_a_compiled_delegate_with_a_skill_in_its_folder(cfg):
     assert "sampling" in named["bundled entries"].detail
 
 
-def test_a_compiled_delegate_lists_from_its_own_folder(cfg):
-    """The same entries a document writes, in a dict: a compiled delegate owns a folder
+def test_a_compiled_subagent_lists_from_its_own_folder(cfg):
+    """The same entries a document writes, in a dict: a compiled subagent owns a folder
     like any other, and its tools reach `build`.
     """
     compiled_bundle(cfg)
@@ -1319,7 +1319,7 @@ def test_a_compiled_delegate_lists_from_its_own_folder(cfg):
     }
 
 
-def test_a_compiled_delegate_is_held_to_what_it_lists(cfg):
+def test_a_compiled_subagent_is_held_to_what_it_lists(cfg):
     """Held rather than merely permitted: a list that is never checked is decoration."""
     compiled_bundle(cfg, tools='[{"name": "gone", "source": "bundled"}]')
 
@@ -1403,7 +1403,7 @@ def test_the_shipped_bundle_takes_nothing_from_the_catalogue(
     """`redactor.yaml` lists only its own tool, so it holds no shared one.
 
     Without a `tools:` line it held every catalogue tool, `sql_query` and `http_fetch`
-    among them, on the delegate whose job is being careful with what it returns.
+    among them, on the subagent whose job is being careful with what it returns.
     """
     built = build_agent(
         workspace_with_presets,
@@ -1413,6 +1413,6 @@ def test_the_shipped_bundle_takes_nothing_from_the_catalogue(
     )
 
     (allowlist,) = [
-        m for m in delegate(built, "redactor")["middleware"] if isinstance(m, ToolAllowlist)
+        m for m in subagent_of(built, "redactor")["middleware"] if isinstance(m, ToolAllowlist)
     ]
     assert set(allowlist._allowed) == {"ls", "glob", "grep", "mask_secrets"}

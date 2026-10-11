@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class Progress:
     """Print run events as they arrive, and keep the terminal readable.
 
-    **A delegate's prose is progress, not answer.** `token` events carry the delegate
+    **A subagent's prose is progress, not answer.** `token` events carry the subagent
     that produced them, or `None` for the agent the caller asked. Sent to one stream
     they read as one voice, which the speaker tag exists to prevent; sent to two, the
     distinction does the same job better -- an extractor's working notes are not part
@@ -51,16 +51,16 @@ class Progress:
     def _token(self, event: RunEvent) -> None:
         """One fragment of prose, to whichever stream it belongs on."""
         if self._split and event.agent is not None:
-            # A delegate, and the streams are apart: this is progress. Tagged
+            # A subagent, and the streams are apart: this is progress. Tagged
             # on a change of speaker, as it always was, because the fragments
-            # of two delegates would otherwise run together.
+            # of two subagents would otherwise run together.
             self._say_who(event.agent)
             self._progress.write(event.text)
             self._progress.flush()
             self._owed = True
             return
         if not self._split:
-            # Prose from a delegate arrives on the same stream as the caller's
+            # Prose from a subagent arrives on the same stream as the caller's
             # own, as the same type, with nothing between them -- so without a
             # marker the two answers read as one. It cannot go on the fragment
             # itself: chunks split mid-word, and there is no line to tag. So it

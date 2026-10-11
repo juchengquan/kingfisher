@@ -19,7 +19,7 @@ works because the client is the same object for every agent, every request and
 every turn.
 
 A model is not. Which one an agent runs is decided per build -- the agent file
-may pin one, a delegate may pin another, and the request may override either --
+may pin one, a subagent may pin another, and the request may override either --
 so a class closing over a model closes over the deployment's *default* and runs
 that whatever the agent in front of it was pinned to. An agent on the cheap
 model would be compacted by the expensive one, silently, and the only symptom is
@@ -37,7 +37,7 @@ The third class attribute, beside `defaults` and `yaml_settable`:
 
 Each name is filled in where the agent is assembled, which is the only place
 that knows the answer. `model` is the model *this graph* runs -- the agent's
-own, or a delegate's own, or whatever it inherited from the one that summoned
+own, or a subagent's own, or whatever it inherited from the one that summoned
 it. `backend` is the filesystem the agent sees, rooted at this session. A build
 also offers `definition`, the agent or subagent spec an instance was built for,
 which this class has no use for.
@@ -53,7 +53,7 @@ summarizer passes it to `init_chat_model`, which infers a provider from the name
 and reads credentials from the environment -- around the
 catalogue, around the endpoint's `base_url`, around every param the profile
 carries. That is the same trap `infrastructure.harness.kinds.subagents` documents for a
-delegate's model. Handing it a built instance is the fix, not a convenience.
+subagent's model. Handing it a built instance is the fix, not a convenience.
 
 ## Wiring it
 
@@ -92,7 +92,7 @@ class Compact(SummarizationMiddleware):
 
     ## deepagents', not langchain's
 
-    deepagents puts a summarizer on every agent and every delegate, and it records
+    deepagents puts a summarizer on every agent and every subagent, and it records
     what it summarized as an index into the conversation rather than rewriting the
     conversation. langchain's rewrites it. Beside deepagents' own, a rewriting
     summarizer leaves that index pointing at the wrong messages or past the end,

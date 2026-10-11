@@ -50,10 +50,10 @@ for a fourth. Passing an empty tuple means *none*. Naming something that does
 not exist raises `CapabilityError` at build time rather than running with
 quietly less than you asked for.
 
-### Putting one delegate on a different model
+### Putting one subagent on a different model
 
-A definition says where its delegate runs. A request can override that for a
-delegate it names — useful when the file is not yours to edit, or when the
+A definition says where its subagent runs. A request can override that for a
+subagent it names — useful when the file is not yours to edit, or when the
 model it pins is not one your credentials reach:
 
 ```python
@@ -82,7 +82,7 @@ where a request's prompts may go.
 ## Agents — `/agents/<name>.yaml`, at any depth
 
 The agent is what a request runs, and everything else on this page is something
-an agent selects from: the tools it holds, the skills it may read, the delegates
+an agent selects from: the tools it holds, the skills it may read, the subagents
 it may consult, the model it runs on.
 
 ```yaml
@@ -124,7 +124,7 @@ subagent's *is* the whole prompt. An agent's is the last of three parts:
     prompts/system.md    what the harness is — /inputs is read-only, /skills is
                          loadable, where memory lives. Ships with kingfisher
     PROMPT.md            what this workspace is about. Yours, optional, and it
-                         reaches your delegates too
+                         reaches your subagents too
     system_prompt        what this agent is. Yours, and required
 
 There is no way to replace the first. An agent without it is not leaner — it is
@@ -146,7 +146,7 @@ true of every agent in the workspace.
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table below. Unset means all of them; `[]` means none |
 | `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none |
 | `skills` | optional | Which procedures it is told about. Unset grants **none**; write `["*"]` for every skill the workspace offers |
-| `subagents` | optional | Delegates it may consult. Unset grants **none**; `["*"]` is every subagent the workspace offers |
+| `subagents` | optional | Subagents it may consult. Unset grants **none**; `["*"]` is every subagent the workspace offers |
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
 | `model` | optional | One entry in your `models.yaml`. Unset runs the `default:` there. A list is refused |
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
@@ -157,13 +157,13 @@ true of every agent in the workspace.
 One rule covers all four, and a subagent file follows it too: **leave a tool
 field out and you get everything available to you; leave `skills` or `subagents`
 out and you get none.** Tools are what an agent needs to *act* and it can do
-nothing without them; skills and delegates are what it needs to *know* and
+nothing without them; skills and subagents are what it needs to *know* and
 *ask*, and most agents need neither.
 
-### An agent grants the helpers its delegates may consult
+### An agent grants the helpers its subagents may consult
 
-An agent activates the delegates it names and no others. A delegate may name
-helpers of its own — [below](#a-delegate-that-consults-another) — and one of
+An agent activates the subagents it names and no others. A subagent may name
+helpers of its own — [below](#a-subagent-that-consults-another) — and one of
 those reaches a run only where the agent names it as well: `reviewer` consulting
 `profiler` needs both on the agent's `subagents:` line, and an agent naming only
 `reviewer` gets a reviewer that cannot delegate.
@@ -175,7 +175,7 @@ each agent activates, which is that list rather than the chain below it.
 
 **The agent itself has to work.** A model your catalogue does not define
 refuses. **Anything below it that cannot run is left out and reported** — which
-is what lets a freshly seeded workspace run at all when one delegate names a
+is what lets a freshly seeded workspace run at all when one subagent names a
 model you have not set up.
 
 ### Approval gates
@@ -229,9 +229,9 @@ A gate on a tool *this* caller was not granted is neither of those, and is
 allowed: the grant already narrows per request, so there is simply nothing for
 the gate to fire on.
 
-Delegates inherit their parent's gates and cannot declare their own — the field
+Subagents inherit their parent's gates and cannot declare their own — the field
 is refused in a subagent file. The caller answering a pause is the agent's
-caller, and a delegate that could widen or narrow what stops for them would be
+caller, and a subagent that could widen or narrow what stops for them would be
 deciding that on their behalf.
 
 ### Two fields are refused
@@ -338,14 +338,14 @@ The reference is the same `file::name` a subagent's `tools:` uses.
 
 **A request's grant says what the run may draw on, not what the agent carries.**
 The agent takes everything granted except names more than one file defines, and
-each such pair goes to whichever delegate names one:
+each such pair goes to whichever subagent names one:
 
 ```yaml
 # subagents/agent_a.yaml
 tools: [vendor_a/fetch.py::fetch]
 ```
 
-Both delegates then have a `fetch`, and each calls its own vendor's. The model
+Both subagents then have a `fetch`, and each calls its own vendor's. The model
 sees a flat `fetch` in every agent and never sees a reference — a tool name goes
 to the provider as an identifier, so the qualifier resolves before any schema is
 built.
@@ -353,11 +353,11 @@ built.
 The agent holding the grant is told what it could not take:
 
 ```
-[delegate_only] 1 tool name(s) more than one file defines, so this agent holds
+[subagent_only] 1 tool name(s) more than one file defines, so this agent holds
 none of them -- a subagent that names one gets it: fetch
 ```
 
-**A delegate still cannot exceed what the request was granted.** That ceiling is
+**A subagent still cannot exceed what the request was granted.** That ceiling is
 unchanged: a request that withheld `execute` cannot have it handed back by a
 definition that asks.
 
@@ -369,7 +369,7 @@ controls both — this is for when nobody does.
 
 ## Subagents — `/subagents/<name>.yaml`, at any depth
 
-A YAML document. Everything the delegate is, in one file.
+A YAML document. Everything the subagent is, in one file.
 
 Folders work here too: `subagents/analysis/profiler.yaml` is activated as
 `profiler`, because `name:` is the identity and the path is not. There are no
@@ -428,7 +428,7 @@ needed.
 `builtin_tools` is the set that comes with deepagents — the table further down
 lists them. `tools` is whatever *your* workspace defines in `tools/`.
 
-They are separate because they are granted separately: on one list, a delegate
+They are separate because they are granted separately: on one list, a subagent
 could not ask for a workspace tool without giving up every built-in.
 
 ```yaml
@@ -453,29 +453,29 @@ a *request* spells it that way, and one spelling in one place beats two
 spellings everywhere. Mixing is refused too: `["*", read_file]` cannot mean
 both things at once.
 
-Sending a delegate somewhere cheaper — or somewhere else entirely — is one
+Sending a subagent somewhere cheaper — or somewhere else entirely — is one
 more line:
 
 ```yaml
 model: gpt-5            # an entry in your models.yaml
 ```
 
-Omit it and the delegate runs whatever *summoned* it — the main agent, or the
-delegate that called this one. That is the usual case, and `reviewer` is the
+Omit it and the subagent runs whatever *summoned* it — the main agent, or the
+subagent that called this one. That is the usual case, and `reviewer` is the
 shipped example of it: re-checking a figure is work for the same model that
 produced it, whichever one that turned out to be.
 
-A delegate that names a model and ends up on the caller's anyway is reported in
+A subagent that names a model and ends up on the caller's anyway is reported in
 the run — `indistinct` names it, and the two crude cases it can see are the same
 model as the deployment's default and a different id on the same host. Reported,
-never refused: kingfisher cannot know that a delegate *needs* to differ, and
+never refused: kingfisher cannot know that a subagent *needs* to differ, and
 `reviewer` deliberately runs on the same model and is right to.
 
 An endpoint is a property of the model — `models.yaml` says which one serves
 `gpt-5` — so there is no second line to keep in step.
 
 This is the only place it is said. There is no environment variable for it: one
-could only say "every delegate", which is the wrong size for the decision.
+could only say "every subagent", which is the wrong size for the decision.
 
 **The name has to be one your catalogue defines.** The table in `models.yaml` is
 closed, and a definition naming a model outside it is refused when the agent is
@@ -485,7 +485,7 @@ built, rather than reaching an endpoint that has never heard of it:
 subagent 'second-opinion': no model 'gpt-5'; this deployment can run ('MiniMax-M3',)
 ```
 
-It fails only for the delegate you *activated* — a subagent is wired only when a
+It fails only for the subagent you *activated* — a subagent is wired only when a
 request names it, so seeding one you cannot run costs nothing until you ask for
 it. And `run_on` can rescue it without editing the file, which is why this is
 not checked across the whole catalogue up front: the refusal would fire before
@@ -503,19 +503,19 @@ on the spot, so every entry after the first would be unreachable.
 | --- | --- | --- |
 | `name` | required | What a request activates it by. Authoritative — the filename is not |
 | `description` | required | Single line. This is what the parent agent sees when deciding whether to delegate, so write it as a trigger, not a title |
-| `system_prompt` | required | The delegate's whole instruction, written after `\|` |
+| `system_prompt` | required | The subagent's whole instruction, written after `\|` |
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table above. Unset means all of them; `[]` means none |
-| `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none. An entry written `{name: x, source: bundled}` comes from this delegate's own folder instead — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
+| `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none. An entry written `{name: x, source: bundled}` comes from this subagent's own folder instead — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it. `source: bundled` works here too |
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
-| `subagents` | optional | Delegates this one may consult mid-job. Unset grants **none**. One level — see below |
-| `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the delegate runs whatever summoned it |
+| `subagents` | optional | Subagents this one may consult mid-job. Unset grants **none**. One level — see below |
+| `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the subagent runs whatever summoned it |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
-| `source_ids` | optional | Who may reach this delegate, wherever it is used. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
+| `source_ids` | optional | Who may reach this subagent, wherever it is used. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
 
-### A delegate that consults another
+### A subagent that consults another
 
-A delegate can hit a question of a different kind mid-job — `reviewer` doubting
+A subagent can hit a question of a different kind mid-job — `reviewer` doubting
 one figure, when checking figures is not what it is for. It can ask for help:
 
 One more line in `reviewer.yaml`:
@@ -524,7 +524,7 @@ One more line in `reviewer.yaml`:
 subagents: [second-opinion]
 ```
 
-And the delegate it names, which is an ordinary definition — the only thing
+And the subagent it names, which is an ordinary definition — the only thing
 that makes it a helper is being named above:
 
 ```yaml
@@ -560,9 +560,9 @@ file.
 
 **Any depth, no loops.** A helper may name helpers of its own, and so may
 those. What a catalogue may not do is come back to where it started — and that
-is checked over the whole catalogue, not only the delegates one agent reaches,
+is checked over the whole catalogue, not only the subagents one agent reaches,
 because a set of files is either coherent or it is not. `kingfisher list` reports
-it, and building any agent with delegates refuses it:
+it, and building any agent with subagents refuses it:
 
 ```
 subagents reach themselves: reviewer -> second-opinion -> reviewer. Delegation
@@ -573,7 +573,7 @@ stop naming the next
 The message names the whole loop rather than one edge of it, because one edge
 does not say which link to cut and whoever reads it may own none of the files.
 
-A definition may appear in several places — two delegates may both consult the
+A definition may appear in several places — two subagents may both consult the
 same `checker` — and reaching one twice is not a loop.
 
 **What it costs.** Every level is a real conversation with a real model. A
@@ -610,7 +610,7 @@ The two spaces holding the block in place are not part of your text; anything
 indented past them is.
 
 `>` is refused, because it joins consecutive lines. These two numbered steps
-would reach the delegate as one run-on line, in a file that loads without
+would reach the subagent as one run-on line, in a file that loads without
 complaint and looks correct on screen:
 
 ```yaml
@@ -661,7 +661,7 @@ and reads nothing.
 
 **Nothing in a run reads it.** It is for whatever loads the catalogue — a
 deployment script choosing which definitions to install, an ownership report, a
-check that every delegate names a team:
+check that every subagent names a team:
 
 ```python
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
@@ -685,7 +685,7 @@ tools:
 ```
 
 **A field not in the table above is an error, not a field that gets ignored.**
-Ignoring one is indistinguishable from honouring it: `tolls:` hands a delegate
+Ignoring one is indistinguishable from honouring it: `tolls:` hands a subagent
 *every* tool its parent had, because unset `tools` means inherit. A near miss is
 named — *did you mean 'tools'?* — and the fields deepagents knows but this format
 declines each say why, since "unknown field" reads as an omission worth working
@@ -699,7 +699,7 @@ format, so an unrecognised key there is left alone.
 ### Two subagents with the same name
 
 Kept, both of them, and qualified — the opposite of the agent rule above and for
-the reason given there: a delegate *is* selected from a set, so a caller who
+the reason given there: a subagent *is* selected from a set, so a caller who
 means one can say which.
 
 ```
@@ -747,14 +747,14 @@ SUBAGENTS = [
 ]
 ```
 
-`build` is called with the model this delegate resolved to and the tool objects
+`build` is called with the model this subagent resolved to and the tool objects
 the request actually granted, and must return something runnable. `kingfisher
 seed` ships `show_your_work.py` as a worked example: it answers, then appends a
 record of the tool calls that actually happened — computed from the transcript,
 not asked of the model.
 
 **Whatever your last node emits is what the caller gets, and only that.**
-deepagents returns a delegate's result by walking back to the last `AIMessage`
+deepagents returns a subagent's result by walking back to the last `AIMessage`
 with non-empty text. So a node that appends a footer as its own message does not
 add to the answer — it *replaces* it, and the reply is lost. Emit one message
 carrying both.
@@ -762,7 +762,7 @@ carrying both.
 **Reach for this when a definition cannot say what you mean.** The example above
 guarantees an ordering: no edge from the start to the model bypasses the survey
 node. A prompt can *ask* for that and a model may skip it, most often on the
-input where skipping costs most. "The same delegate, in Python" is not a reason —
+input where skipping costs most. "The same subagent, in Python" is not a reason —
 a document is reviewable by people who do not read Python, and it gets the fields
 this format has to refuse below.
 
@@ -771,22 +771,22 @@ this format has to refuse below.
 | field | why not |
 |---|---|
 | `system_prompt` | the graph brings its own; write the prompt where the graph is built |
-| `builtin_tools` | deepagents' own tools do not exist as objects when a delegate is assembled |
-| `skills` | deepagents mounts skills for a delegate *it* builds, never for a compiled one |
+| `builtin_tools` | deepagents' own tools do not exist as objects when a subagent is assembled |
+| `skills` | deepagents mounts skills for a subagent *it* builds, never for a compiled one |
 | `middlewares` | middleware wraps a graph deepagents builds; this one is already built |
 | `subagents` | delegation arrives through middleware, which a compiled graph is not given |
 
 `name`, `description`, `build`, `tools`, `model`, `metadata` and `source_ids` are
 what remain.
 
-**A compiled delegate can own a bundle, and gets half of one.** Put
+**A compiled subagent can own a bundle, and gets half of one.** Put
 `surveyor.py` in `subagents/surveyor/`, list its tools in `"tools"` with
 `"source": "bundled"`, and they reach the graph like any other bundle's —
 `build` is handed one list, its own tools first. A `skills/` folder beside it is
 refused: it cannot be listed, for the reason the table above gives — an index
 arrives through middleware and a compiled graph is given none — and an unlisted
-file in a delegate's folder stops the catalogue loading. Keep a compiled
-delegate's procedure inside the graph.
+file in a subagent's folder stops the catalogue loading. Keep a compiled
+subagent's procedure inside the graph.
 
 A *package* named after the definition — `subagents/surveyor/__init__.py` — is
 not a bundle. That folder is the package, and what is under it is importable as
@@ -809,10 +809,10 @@ model wrote.
 **Defer the heavy imports into `build`.** Every `.py` file under `subagents/` is
 imported whenever the catalogue is read — `kingfisher list` included — and
 `from langchain.agents import create_agent` costs about 370 ms. At module scope
-that is paid on every listing, for a delegate the request may never activate.
+that is paid on every listing, for a subagent the request may never activate.
 
 **A module with no `SUBAGENTS` is an error**, not a skipped file, for the reason
-a tool module without `TOOLS` is: quietly offering fewer delegates than the
+a tool module without `TOOLS` is: quietly offering fewer subagents than the
 workspace defines is worse than saying so.
 
 ---
@@ -820,7 +820,7 @@ workspace defines is worse than saying so.
 ### A subagent that travels — a `SUBAGENTS` entry with no `build`
 
 The third shape. A module's `SUBAGENTS` entry that writes no `build` is a
-*declaration*: kingfisher assembles the delegate from what it says, exactly as it
+*declaration*: kingfisher assembles the subagent from what it says, exactly as it
 does from a document. What makes it worth having is what it cannot say.
 
 ```python
@@ -855,13 +855,13 @@ SUBAGENTS = [
 different here: they hold what the definition brought, never names, because a name
 is a lookup in *your* catalogue and a string or `{name: ...}` entry in `tools` is
 refused. Every other field this format defines names something only one
-deployment knows — `subagents` names *your* delegates, `middlewares` selects code *you*
+deployment knows — `subagents` names *your* subagents, `middlewares` selects code *you*
 registered, `model` a profile in *your* `models.yaml`, `source_ids` ids in *your*
 `source_ids.yaml`. A definition written somewhere else cannot mean anything by
 them, so each is refused with that reason rather than a generic "unknown key".
 
-Nothing is lost by the last two. A request pins any delegate's model by name with
-`run_on`, and the agent granting the delegate carries the audience that decides
+Nothing is lost by the last two. A request pins any subagent's model by name with
+`run_on`, and the agent granting the subagent carries the audience that decides
 who reaches it — so both stay with the deployment, in files it owns.
 
 **This is what makes a subagent importable from an installed package.** Export
@@ -887,7 +887,7 @@ format for it anyway.
 #### What it carries is its own
 
 `tools` and `skills` here hold the things rather than naming them — a folder's
-contents, for a definition that has no folder. They reach that delegate and nothing
+contents, for a definition that has no folder. They reach that subagent and nothing
 else: its tools are in no catalogue, so no agent can be granted them and no request
 can narrow them away. That is what an imported subagent being **atomic** means. You
 use it, or you do not; there is no third option where you take it apart.
@@ -898,7 +898,7 @@ directory **on this host**, not a path inside the agent's backend: deepagents'
 examples write `/skills/...`, which names a route in one deployment, and a
 package cannot know another's routes. Kingfisher mounts each directory under
 `/skills/subagents/` — one directory at the bundle's own route, several numbered
-beneath it in the order listed — and tells the delegate where. Two directories
+beneath it in the order listed — and tells the subagent where. Two directories
 holding a skill of one name, or one directory inside another, are refused.
 
 Each must be **absolute** — a relative path would resolve against whatever
@@ -916,7 +916,7 @@ withholds it. A package cannot grant itself a shell.
 #### Written to deepagents' `SubAgent`
 
 A package written for deepagents, by somebody who has never heard of kingfisher,
-types its delegate as deepagents' `SubAgent` TypedDict. Most of one loads as it is:
+types its subagent as deepagents' `SubAgent` TypedDict. Most of one loads as it is:
 
 | `SubAgent` key | Here |
 |---|---|
@@ -926,14 +926,14 @@ types its delegate as deepagents' `SubAgent` TypedDict. Most of one loads as it 
 | `model` | refused: it names a profile only this deployment defines; a request pins one with `run_on` |
 | `middleware` | refused: deepagents merges it by name, so the `FilesystemMiddleware` its docs suggest would replace the one carrying this deployment's rules |
 | `permissions` | refused: deepagents' rules replace the parent's rather than narrowing them |
-| `interrupt_on` | refused: a delegate inherits its caller's gates |
-| `response_format` | refused: the parent reads a delegate's result as text either way |
+| `interrupt_on` | refused: a subagent inherits its caller's gates |
+| `response_format` | refused: the parent reads a subagent's result as text either way |
 
 A refused key stops the spec loading, with the reason in the message.
 
 The type also cannot say two things this format can. With no `builtin_tools`, the
-delegate gets every built-in the request granted — still narrowed by the request,
-but a delegate that should only read has only its prompt asking it to. With no
+subagent gets every built-in the request granted — still narrowed by the request,
+but a subagent that should only read has only its prompt asking it to. With no
 `metadata`, it cannot record where it came from. Needing either is the point to
 add the key and stop annotating the dict as a `SubAgent`.
 
@@ -946,7 +946,7 @@ so that `ty` refuses any key the TypedDict does not define.
 There are two ways to get what a helper would have given you, and they cost
 different things.
 
-**Ship the helper as a delegate of its own**, in the same `SUBAGENTS` list, and let
+**Ship the helper as a subagent of its own**, in the same `SUBAGENTS` list, and let
 an agent grant the two side by side. Each keeps the harness it would have had —
 skills, the tool narrowing, the path translation. What it costs is the package's
 encapsulation: the deployment has to know to grant both, and the order they work in
@@ -960,7 +960,7 @@ index and wrapped in none of kingfisher's middleware, and it reads what it needs
 itself.
 
 Folding the step into the prompt is **not** a third option, whatever it looks like.
-The reason to delegate is that the delegate burns its own context and hands back an
+The reason to delegate is that the subagent burns its own context and hands back an
 answer; a prompt cannot buy you a fresh context, which is the one thing you were
 after.
 
@@ -989,7 +989,7 @@ grouping — `subagents/analysis/profiler.yaml` is unchanged by any of this.
 **Why you would.** An agent that omits `tools:` gets *every* tool the catalogue
 holds, so anything in `tools/` is something the top-level agent can call. A
 bundle is the only place a capability can sit that it cannot. It is how a
-delegate comes to be trusted with something its caller is not.
+subagent comes to be trusted with something its caller is not.
 
 **List what it takes from the folder, and only that arrives.** Each entry says
 where it comes from:
@@ -1009,7 +1009,7 @@ system_prompt: |
 ```
 
 `source` takes `shared`, the catalogue's own `tools/` or `skills/`, and
-`bundled`, this delegate's folder. A plain name means `shared`, so every other
+`bundled`, this subagent's folder. A plain name means `shared`, so every other
 line you have written keeps its meaning. `redactor` lists nothing shared, so it
 gets no catalogue tool; to keep every catalogue tool as well, write
 `tools: ["*", {name: mask_secrets, source: bundled}]`.
@@ -1021,34 +1021,34 @@ and so does a listed name the folder does not hold:
 ```
 subagent 'redactor': redactor/tools/ holds later, which tools: does not list --
 add each as {name: <it>, source: bundled}, or move it out of the folder. Only what
-is listed reaches the delegate, so the list and the folder have to match
+is listed reaches the subagent, so the list and the folder have to match
 ```
 
 That is what makes the folder safe to change. Dropping a file into it cannot
-hand the delegate a capability with no line in any file altered, and renaming
+hand the subagent a capability with no line in any file altered, and renaming
 `redactor` cannot take every one away without a word: the definition still lists
 entries from a folder it no longer owns, and that is refused too. `kingfisher
-list` prints the mismatch under the delegate and `doctor` fails on
+list` prints the mismatch under the subagent and `doctor` fails on
 `bundled entries`, so both say it before startup does.
 
-**The delegate holds them whatever the request granted.** Activating `redactor`
+**The subagent holds them whatever the request granted.** Activating `redactor`
 is what grants its parts — a caller never names them, which is the point, since
 naming them would mean knowing they exist. `--without-subagents redactor`
-declines the whole delegate; there is no finer lever, deliberately. For the same
+declines the whole subagent; there is no finer lever, deliberately. For the same
 reason a bundled entry takes no `source_ids`: it reaches whoever reaches the
-delegate.
+subagent.
 
 **Only a subagent has a folder.** `source: bundled` in an agent file is refused,
 and so is the path form `file::name` on a bundled entry — the folder already says
 where it is. `source: shared` is accepted in either file.
 
-**A compiled delegate gets the tools half only.** Its `tools/` reach the graph;
+**A compiled subagent gets the tools half only.** Its `tools/` reach the graph;
 a `skills/` folder beside it is refused. [A subagent that builds
 itself](#a-subagent-that-builds-itself--subagentsmodulepy) has the detail.
 
 **A bundled tool answers for its name.** A definition inheriting the catalogue
 with `"*"` and listing its own `fetch` gets its own, whatever the catalogue grows
-later. Listing `fetch` both as shared and as bundled is refused, since a delegate
+later. Listing `fetch` both as shared and as bundled is refused, since a subagent
 dispatches by name. `kingfisher list` prints the inherited case as
 `fetch  [private tool, shadowing the catalogue's]`, because shadowing is only
 acceptable while it is visible.
@@ -1064,10 +1064,10 @@ walked away is refused from its own side if it listed anything — so
 `kingfisher list` prints
 
 ```
-  ! redactor/ holds tools/ or skills/ that reach no delegate — nothing in it is named redactor
+  ! redactor/ holds tools/ or skills/ that reach no subagent — nothing in it is named redactor
 ```
 
-and `doctor` warns on `delegate bundles`, neither of them failing.
+and `doctor` warns on `subagent bundles`, neither of them failing.
 
 **`tools` and `skills` are reserved directory names** anywhere under
 `subagents/`, so a skill's own `config.yaml` is never read as a subagent
@@ -1089,10 +1089,10 @@ under `/skills/`, and anything holding `read_file` can open a bundle's skills
 there — no read of one is ever denied. The shared catalogue differs only under a
 request that names the skills it grants, which denies reads of the rest; a
 request granting every skill leaves all of it open. What a bundle buys for a
-skill is that no other delegate is *told* about it. A private tool is
+skill is that no other subagent is *told* about it. A private tool is
 stronger: an ungranted tool is never bound into an agent, so it cannot be
 called at all. Do not put in a bundled skill anything you would mind another
-delegate reading.
+subagent reading.
 
 *A bundled skill's scripts are not runnable.* A skill's scripts are executed by
 the shell against `$KINGFISHER_SKILLS`, and the sandbox grants the shell the
@@ -1189,7 +1189,7 @@ it, not loading it is the mechanism working.
 
 ## Access — `source_ids:` in the definitions, `source_ids.yaml` for the vocabulary
 
-Which source ids may reach which agents, delegates, tools and skills. Optional:
+Which source ids may reach which agents, subagents, tools and skills. Optional:
 with no `source_ids.yaml`, kingfisher controls nothing by source id.
 
 A source id is a name in this deployment's vocabulary and nothing else — not a
@@ -1419,12 +1419,12 @@ access:
 
 ### One grant, everywhere
 
-The caller's source ids bound the agent, its delegates, and their delegates alike. A
-delegate's own `source_ids:` is its intrinsic ceiling — "this one is sensitive
+The caller's source ids bound the agent, its subagents, and their subagents alike. A
+subagent's own `source_ids:` is its intrinsic ceiling — "this one is sensitive
 wherever it is used" — and a parent's `subagents:` entry narrows it further for
 that parent's context. The two intersect; neither widens the other.
 
-So a delegate whose tools are partly out of reach **runs with the rest and
+So a subagent whose tools are partly out of reach **runs with the rest and
 reports what was withheld**:
 
 ```yaml
@@ -1439,7 +1439,7 @@ tools:
 ```
 
 A caller in `C` gets a `reviewer` holding `http_fetch` and not `sql_query`.
-Write delegate prompts to cope — *"if you can check the figure against the
+Write subagent prompts to cope — *"if you can check the figure against the
 database, do; if not, say so"* — because the caller decides, not the file.
 
 **An ungranted tool never reaches the graph.** It is not attached and then
@@ -1449,7 +1449,7 @@ subagent is never compiled, so its graph is never paid for either.
 
 ### Compiled subagents
 
-A Python-declared delegate may carry `source_ids` and per-tool audiences:
+A Python-declared subagent may carry `source_ids` and per-tool audiences:
 
 ```python
 SUBAGENTS = [
@@ -1463,13 +1463,13 @@ SUBAGENTS = [
 ]
 ```
 
-`source_ids` is a real boundary: whether a compiled delegate is built at all is
+`source_ids` is a real boundary: whether a compiled subagent is built at all is
 kingfisher's decision, so there is nothing there for a graph to ignore.
 
 The per-tool audience narrows what is **handed to** `build`, with the caveat the
 plain `tools` list already carries: deepagents applies no allowlist to a graph it
 did not build, so a `build` that ignored what it was given could call anything it
-holds. `skills` and `subagents` are refused for a compiled delegate regardless —
+holds. `skills` and `subagents` are refused for a compiled subagent regardless —
 see `NOT_COMPILED`.
 
 ### What a caller can see

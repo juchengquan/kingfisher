@@ -303,13 +303,13 @@ def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir)
     assert out["messages"][-1].content == "retried and finished"  # the run survived
 
 
-def test_a_delegate_gets_the_correction_too(cfg, session_dir):
+def test_a_subagent_gets_the_correction_too(cfg, session_dir):
     """The same guard, one level down, where the same backend raises.
 
-    A delegate is built with the parent's backend and inherits none of the parent's
+    A subagent is built with the parent's backend and inherits none of the parent's
     middleware, so `reject_host_path` fired for it exactly as it fires for the parent
     and the correction had nothing to turn it into. Measured before the fix:
-    `HostPathError` out of the delegate's graph, killing the run.
+    `HostPathError` out of the subagent's graph, killing the run.
     """
     from langchain_core.messages import AIMessage
 
@@ -346,7 +346,7 @@ def test_a_delegate_gets_the_correction_too(cfg, session_dir):
     )
 
     transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
-    assert "is a host path" in transcript  # the correction reached the delegate
+    assert "is a host path" in transcript  # the correction reached the subagent
     assert f"{SCRATCH_ROUTE}<name>" in transcript  # including what to use instead
     assert out["messages"][-1].content == "retried and finished"  # the run survived
 

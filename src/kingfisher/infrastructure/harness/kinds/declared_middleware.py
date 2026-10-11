@@ -57,7 +57,7 @@ def offered_middleware(
 ) -> dict[str, Any]:
     """Both sources of middleware, as the one mapping a definition selects from.
 
-    Merged once, so an agent and its delegates select from the same thing. A name
+    Merged once, so an agent and its subagents select from the same thing. A name
     in both is refused rather than resolved: both belong to the same deployment,
     so renaming is available -- unlike a tool clash between two vendors, which is
     why that one is qualified instead.
@@ -82,7 +82,7 @@ def declared_middleware(
     kind: str,
     provisions: Mapping[str, Any] | None = None,
 ) -> list[Any]:
-    """Build the middleware a definition asked for, agent or delegate.
+    """Build the middleware a definition asked for, agent or subagent.
 
     `provisions` is what this build holds for a class that declared `wants` -- see
     `_wanted`. Defaulted to nothing rather than required, so a caller with no graph

@@ -1,6 +1,6 @@
 name: auditor
 description: Re-checks figures against their sources. Use before reporting numbers computed once.
-# Reachable by all three, and narrower inside. This delegate is the worked
+# Reachable by all three, and narrower inside. This subagent is the worked
 # example of the case the whole feature exists for: **one definition, different
 # tools per caller.**
 #
@@ -15,7 +15,7 @@ builtin_tools: [read_file, glob, grep]
 tools:
   - name: sql_query
     # The compounding case, in three lines. Reached on `audit_log` alone, this
-    # delegate holds `line_count` and not `sql_query`; reached on `sales_db` it
+    # subagent holds `line_count` and not `sql_query`; reached on `sales_db` it
     # holds both. Nothing is refused, nothing errors -- it simply runs with
     # less, and the run reports `tool sql_query` as withheld.
     source_ids: [sales_db]
@@ -46,5 +46,5 @@ system_prompt: |
   report was checked.
 
   Never guess at a figure you could not recompute. An unchecked number said
-  plainly is useful; an invented one is the failure this delegate exists to
+  plainly is useful; an invented one is the failure this subagent exists to
   catch.

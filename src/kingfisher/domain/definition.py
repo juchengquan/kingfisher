@@ -1,4 +1,4 @@
-"""What an agent and a delegate both are, declared once.
+"""What an agent and a subagent both are, declared once.
 
 Every field the two declare identically, and the two readers that fill them are held
 to each other by `test_format_parity`. They were written out twice until the history
@@ -15,7 +15,7 @@ here and the commit that made it fourteen.
 **Where the kinds genuinely part, the comment says so rather than going quiet.** That
 is the whole of what this file buys over two copies: a difference stated in one place
 cannot drift, and `skills`, `subagents`, `wanted` and `source_ids` each mean something
-slightly different to an agent than to a delegate. Each says which is which below.
+slightly different to an agent than to a subagent. Each says which is which below.
 
 `system_prompt` is the field that took the most getting here, and is worth reading
 for the shape of the argument: the two kinds defaulted it differently, and it joined
@@ -39,7 +39,7 @@ from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 
 @dataclass(frozen=True, kw_only=True)
 class Definition:
-    """The fields an agent and a delegate declare identically."""
+    """The fields an agent and a subagent declare identically."""
 
     name: str
     description: str
@@ -48,15 +48,15 @@ class Definition:
     #:
     #: An agent has no second shape: `parse` refuses a definition that omits it, and a
     #: default would leave a second way in for something the format does not allow --
-    #: a spec built in code saying what no file may say. A delegate does have one: a
-    #: compiled delegate carries its instruction inside the graph, so the string is
+    #: a spec built in code saying what no file may say. A subagent does have one: a
+    #: compiled subagent carries its instruction inside the graph, so the string is
     #: empty and `SubagentSpec.__post_init__` refuses a spec that has neither or both.
     #:
-    #: It defaulted to empty for a delegate until the pair was looked at together, and
+    #: It defaulted to empty for a subagent until the pair was looked at together, and
     #: required here is the stricter reading of both: the one caller that builds a
-    #: compiled delegate now writes `system_prompt=""`, which says *this one has no
+    #: compiled subagent now writes `system_prompt=""`, which says *this one has no
     #: prompt* rather than leaving it to a default nobody reads. What counts as
-    #: acceptable stays with each kind -- an agent's may not be blank, a delegate's
+    #: acceptable stays with each kind -- an agent's may not be blank, a subagent's
     #: must be blank exactly when it brought a graph.
     system_prompt: str
     #: The two tool axes, granted apart because they are offered apart: the
@@ -79,17 +79,17 @@ class Definition:
     #: `tools` means, and the difference is deliberate: tools are what it needs to
     #: act, skills are what it needs to know.
     #:
-    #: A delegate has a second reason, and it is why the two kinds read this key
+    #: A subagent has a second reason, and it is why the two kinds read this key
     #: differently: its body already is its procedure, and inheriting its caller's
     #: index would put it in a context whose narrowness is the reason to delegate at
-    #: all. So a delegate refuses `["*"]` here and an agent takes it.
+    #: all. So a subagent refuses `["*"]` here and an agent takes it.
     skills: Selection = None
     #: Definitions this one may consult, by name, from the same catalogue. Absent
     #: means none, like `skills`.
     #:
-    #: **An agent may write `["*"]` and a delegate may not**, which is the other place
-    #: the two formats part. For a delegate that set includes itself, so it is always
-    #: a loop -- and a delegate that needed the whole catalogue would not have been
+    #: **An agent may write `["*"]` and a subagent may not**, which is the other place
+    #: the two formats part. For a subagent that set includes itself, so it is always
+    #: a loop -- and a subagent that needed the whole catalogue would not have been
     #: worth defining.
     subagents: Selection = None
     #: Middleware this definition runs with, by name, from a registry the deployment
@@ -108,7 +108,7 @@ class Definition:
     #: from the model -- which is why it is granted rather than free.
     #:
     #: `None` means it named none, and **the two kinds fall back differently**: an
-    #: agent runs the deployment's `default:`, a delegate runs whatever summoned it.
+    #: agent runs the deployment's `default:`, a subagent runs whatever summoned it.
     #: This is the field whose two comments had already drifted apart, which is the
     #: argument for the pair being stated together.
     wanted: str | None = field(default=None, metadata={"derived": True})
@@ -117,7 +117,7 @@ class Definition:
     #: the point of it is to be the one place a definition can say something the
     #: format has no opinion about.
     metadata: Mapping[str, object] = field(default_factory=dict)
-    #: Who may reach this definition: open a session on an agent, or reach a delegate
+    #: Who may reach this definition: open a session on an agent, or reach a subagent
     #: wherever it is used.
     source_ids: Audience = ALL
     #: Field name -> entry name -> who reaches that entry, for the fields in
@@ -131,7 +131,7 @@ class Definition:
 
         The five axes both kinds answer the same way. An agent widens two more and
         carries `memory`, which is its override's business rather than this one's --
-        and a delegate leaving all three unset is the behaviour
+        and a subagent leaving all three unset is the behaviour
         `test_the_two_kinds_declare_the_unaudienced_axes_differently` was written to
         pin, because one body serving both kinds is exactly how it would be lost.
         """

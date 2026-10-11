@@ -135,17 +135,17 @@ def test_an_agent_with_no_gates_needs_no_checkpointer(cfg, session_dir):
     assert "__interrupt__" not in out
 
 
-def test_the_gates_reach_deepagents_as_the_argument_a_delegate_inherits(
+def test_the_gates_reach_deepagents_as_the_argument_a_subagent_inherits(
     cfg, session_dir
 ):
-    """A delegate cannot declare `interrupt_on` -- the field is `REFUSED` in the
+    """A subagent cannot declare `interrupt_on` -- the field is `REFUSED` in the
     subagent format -- so what it stops on has to arrive from its parent, or a
     workspace could gate the shell and lose the gate the moment work was delegated.
 
     What this checks is the half kingfisher owns: the top-level argument is set, and
-    nothing per-delegate is, so deepagents' own inheritance is the only route there
-    is. It does not drive a delegate to a pause -- doing that through `build_agent`
-    means scripting a model the delegate resolves for itself -- so a change in how
+    nothing per-subagent is, so deepagents' own inheritance is the only route there
+    is. It does not drive a subagent to a pause -- doing that through `build_agent`
+    means scripting a model the subagent resolves for itself -- so a change in how
     deepagents propagates the argument would pass here.
     """
     directory = cfg.workspace / "subagents"

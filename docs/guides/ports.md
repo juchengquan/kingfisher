@@ -401,7 +401,7 @@ answers as its sync one does.
 
 **A session has to serve under `/skills/` what kingfisher read.** Grants and the
 read-deny rules come from kingfisher's own reading of the catalogue, each mount and
-each delegate's skills, and the agent reads skills through your backend. Serve one
+each subagent's skills, and the agent reads skills through your backend. Serve one
 from anywhere else and it is either granted and missing, or readable however a request
 narrowed, and nothing at runtime says which. `a_session_serves_the_skills_kingfisher_read`
 lists each through one session and compares names and paths.

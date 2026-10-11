@@ -62,8 +62,8 @@ class PendingDecision:
     call_id: str
     tool: str
     args: Mapping[str, Any] = field(default_factory=dict)
-    #: Which delegate proposed it, or `None` for the agent the caller asked. The
-    #: caller answers either way -- a delegate has no one else to ask.
+    #: Which subagent proposed it, or `None` for the agent the caller asked. The
+    #: caller answers either way -- a subagent has no one else to ask.
     agent: str | None = None
     #: What this call will accept, as the middleware declared it. Reported rather
     #: than assumed: a caller that guessed from `DECISIONS` would offer a choice
@@ -150,11 +150,11 @@ KINDS: tuple[str, ...] = (
     # Warnings, emitted before the model is reached and only when they apply. Each
     # says something that would otherwise be discovered too late: a path that could
     # not be hardened, a grant that means less than the workspace holds, a grant
-    # this agent cannot hold itself, a delegate that meant to run elsewhere and did
+    # this agent cannot hold itself, a subagent that meant to run elsewhere and did
     # not, and a caller's input that was overwritten.
     "protect_failed",
     "withheld",
-    "delegate_only",
+    "subagent_only",
     "indistinct",
     "inputs_placed",
     # The run itself.
@@ -189,10 +189,10 @@ class RunEvent:
     #: that separates the two. Nothing emits `reasoning` yet — the field exists so
     #: that when one does, it is not a new event kind.
     channel: str = "answer"
-    #: Which delegate produced this, or `None` for the agent the caller asked.
+    #: Which subagent produced this, or `None` for the agent the caller asked.
     #:
-    #: The stream reports the graph it was started on, and a delegate is a separate
-    #: graph run inside a tool call -- so the caller's prose and a delegate's
+    #: The stream reports the graph it was started on, and a subagent is a separate
+    #: graph run inside a tool call -- so the caller's prose and a subagent's
     #: arrive on the same channel and the *type* cannot tell them apart. Both are
     #: `AIMessageChunk`. This is what tells them apart.
     agent: str | None = None
@@ -206,7 +206,7 @@ class RunEvent:
             raise ValueError(msg)
 
     def _tag(self, kind: str) -> str:
-        """The bracketed tag, naming the delegate when one produced this."""
+        """The bracketed tag, naming the subagent when one produced this."""
         return f"{kind}:{self.agent}" if self.agent else kind
 
     def _line(self, limit: int = 800) -> str:
@@ -221,7 +221,7 @@ class RunEvent:
             # A fragment, not a line. A tag would assert a boundary that is not
             # there -- chunks split mid-word -- and `_line` would flatten the
             # markdown the model is in the middle of writing. Which is also why a
-            # delegate's tokens are not tagged: there is nowhere in the middle of a
+            # subagent's tokens are not tagged: there is nowhere in the middle of a
             # word to put the tag.
             return self.text
         if self.kind == "model_call":

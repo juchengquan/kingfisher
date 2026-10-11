@@ -51,7 +51,7 @@ def test_a_model_entrys_extra_cannot_overrule_its_own_params(cfg):
 
 
 def test_the_model_comes_from_the_profile_it_is_handed(cfg):
-    """How a delegate runs elsewhere, now that there is no `Config` parameter:
+    """How a subagent runs elsewhere, now that there is no `Config` parameter:
     `delegation.as_subagent` looks the profile up and hands it over.
     """
     profile, endpoint = cfg.models.resolve("cheap-model")

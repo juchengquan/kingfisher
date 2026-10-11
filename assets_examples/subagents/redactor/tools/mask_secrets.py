@@ -2,8 +2,8 @@
 
 **This tool ships inside a bundle, and that is the example.** It sits in
 `subagents/redactor/tools/` rather than in the catalogue's `tools/`, and
-`redactor` lists it as `source: bundled`, so it reaches that delegate and
-nothing else -- not the agent that summoned it, not another delegate, not a
+`redactor` lists it as `source: bundled`, so it reaches that subagent and
+nothing else -- not the agent that summoned it, not another subagent, not a
 request that names it.
 
 The reason is the shape of the tool rather than a policy someone chose. It

@@ -1,4 +1,4 @@
-"""A delegate that meant to run elsewhere, and did not."""
+"""A subagent that meant to run elsewhere, and did not."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from kingfisher.application.service import opening_events
 from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.domain.capabilities import ALL, Capabilities
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.harness.activation import indistinct_delegates
+from kingfisher.infrastructure.harness.activation import indistinct_subagents
 from kingfisher.infrastructure.harness.models import ADAPTERS
 from kingfisher.infrastructure.steps import drive
 from kingfisher.kinds.subagents.rules import resolved_model
@@ -77,7 +77,7 @@ def _elsewhere(cfg, url: str):
 
 def _found(cfg, names, **kwargs):
     return dict(
-        indistinct_delegates(cfg, Capabilities(subagents=names), **kwargs)
+        indistinct_subagents(cfg, Capabilities(subagents=names), **kwargs)
     )
 
 
@@ -101,10 +101,10 @@ def test_a_second_endpoint_pointing_at_the_same_host_is_reported(cfg, session_di
     assert "same host" in found["second-opinion"]
 
 
-def test_granting_every_delegate_reports_what_naming_them_reports(cfg, session_dir):
+def test_granting_every_subagent_reports_what_naming_them_reports(cfg, session_dir):
     """A request granting `*` has to be expanded against the catalogue first.
 
-    Unexpanded it is iterated as a string, so every delegate looked up is one
+    Unexpanded it is iterated as a string, so every subagent looked up is one
     character, none of them is defined, and the widest request there is comes
     back with nothing to report.
     """
@@ -156,27 +156,27 @@ def test_a_different_model_on_the_same_gateway_is_reported(cfg, session_dir):
     assert "same host" in _found(cfg, ("cheap",))["cheap"]
 
 
-def test_a_delegate_that_asked_for_nothing_is_never_reported(cfg, session_dir):
+def test_a_subagent_that_asked_for_nothing_is_never_reported(cfg, session_dir):
     """`reviewer` runs on the deployment's own model on purpose."""
     _define(cfg, ASKED_FOR_NOTHING)
 
     assert _found(cfg, ("reviewer",)) == {}
 
 
-def test_a_request_that_activated_no_delegates_is_asked_nothing(cfg, session_dir):
+def test_a_request_that_activated_no_subagents_is_asked_nothing(cfg, session_dir):
     """Written `subagents=None` rather than left at the default, which stopped meaning
     "none" once an agent could declare a roster of its own.
     """
     _define(cfg, ASKED)
 
-    assert indistinct_delegates(cfg, Capabilities(subagents=None)) == ()
+    assert indistinct_subagents(cfg, Capabilities(subagents=None)) == ()
 
 
 # -- an override counts as asking too --------------------------------------
 
 
 def test_an_override_onto_the_deployments_own_model_is_reported(cfg, session_dir):
-    """A caller may put a delegate on the main model deliberately."""
+    """A caller may put a subagent on the main model deliberately."""
     _define(cfg, ASKED_FOR_A_MODEL.format(model="cheap-model"))
 
     found = _found(
@@ -246,7 +246,7 @@ def test_a_run_with_nothing_to_say_says_nothing(cfg, session_dir):
     ]
 
 
-def test_the_message_names_the_delegate(cfg, session_dir):
+def test_the_message_names_the_subagent(cfg, session_dir):
     """`[indistinct] second-opinion runs 'gpt-5' on endpoint 'openai', which points at
     the same host as the default (…)` -- readable without the field.
     """
@@ -286,7 +286,7 @@ def _spec_from(text):
 
 
 def test_naming_the_same_model_is_reported_and_never_refused(cfg, session_dir):
-    """Kingfisher cannot know that a delegate needs to differ, so this is only ever a
+    """Kingfisher cannot know that a subagent needs to differ, so this is only ever a
     report: `reviewer` names the deployment's own model on purpose.
     """
     _define(cfg, ASKED_FOR_A_MODEL.format(model=cfg.models.default))

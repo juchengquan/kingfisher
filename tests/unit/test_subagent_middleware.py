@@ -55,7 +55,7 @@ def test_a_definition_gets_the_middleware_it_names(cfg, session_dir):
 
     built = build(cfg, registry={"audit": Audited}, subagents=("reviewer",))
 
-    # The deployment's own, which is what this file is about. A delegate also
+    # The deployment's own, which is what this file is about. A subagent also
     # carries guards nothing in its definition mentions -- the host-path
     # correction, and the workspace tools' own failures -- and asserting the
     # whole list would make this fail every time one is added.
@@ -116,7 +116,7 @@ def test_a_granted_name_goes_through(cfg, session_dir):
         middlewares=("audit",),
     )
 
-    # The deployment's own, which is what this file is about. A delegate also
+    # The deployment's own, which is what this file is about. A subagent also
     # carries guards nothing in its definition mentions -- the host-path
     # correction, and the workspace tools' own failures -- and asserting the
     # whole list would make this fail every time one is added.
@@ -187,7 +187,7 @@ TOOLS = [always_fails]
 '''
 
 
-def test_what_a_delegate_carries_is_pinned_here_and_only_here(cfg, session_dir):
+def test_what_a_subagent_carries_is_pinned_here_and_only_here(cfg, session_dir):
     """The exact stack, in order, for a definition that triggers every branch."""
     from tests.conftest import tools_dir
     from tests.unit.test_subagent_skills import offer_skills
@@ -199,8 +199,8 @@ def test_what_a_delegate_carries_is_pinned_here_and_only_here(cfg, session_dir):
     define(cfg, HELPER, name="helper")
 
     # Skills on, because this stack is the one with every branch in it and a
-    # delegate's index is the deployment's to switch off -- see
-    # `test_a_delegate_gets_no_skills_when_the_deployment_switched_them_off`.
+    # subagent's index is the deployment's to switch off -- see
+    # `test_a_subagent_gets_no_skills_when_the_deployment_switched_them_off`.
     built = build(
         replace(cfg, skills_enabled=True),
         registry={"audit": Audited},

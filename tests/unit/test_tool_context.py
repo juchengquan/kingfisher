@@ -460,9 +460,9 @@ def _calls(name: str, **args: Any) -> AIMessage:
 
 
 def _run(cfg, session_dir, *responses: AIMessage, **keywords: Any) -> list[tuple[bool, Any]]:
-    """Every tool result of one run, each with whether a delegate produced it.
+    """Every tool result of one run, each with whether a subagent produced it.
 
-    Driven with the build's own context and streamed into delegates, which is what the
+    Driven with the build's own context and streamed into subagents, which is what the
     service does -- so a result here is one a turn would have produced.
     """
     built = build_agent(
@@ -500,14 +500,14 @@ def test_a_workspace_tool_reads_a_session_file_through_the_backend(cfg, session_
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        ((delegated, result),) = _run(
+        ((in_subagent, result),) = _run(
             cfg,
             session_dir,
             _calls("first_line", file_path="/inputs/notes.txt"),
             AIMessage(content="done"),
         )
 
-    assert not delegated
+    assert not in_subagent
     assert (result.status, result.content) == ("success", "alpha")
     assert not _pydantic_complaints(caught), "the documented annotation is not a clean one"
 
@@ -598,9 +598,9 @@ system_prompt: |
 """
 
 
-def test_a_delegates_tool_is_handed_the_backend_too(cfg, session_dir):
-    """deepagents starts a delegate with no context of its own, and whether the
-    parent's arrives is langgraph's to decide. Pinned, because a delegate holding the
+def test_a_subagents_tool_is_handed_the_backend_too(cfg, session_dir):
+    """deepagents starts a subagent with no context of its own, and whether the
+    parent's arrives is langgraph's to decide. Pinned, because a subagent holding the
     same tool and handed `None` fails on the first line of it.
     """
     _a_tool(cfg)
@@ -611,8 +611,8 @@ def test_a_delegates_tool_is_handed_the_backend_too(cfg, session_dir):
     results = _run(
         cfg,
         session_dir,
-        # One model, shared: the delegate names none and runs its parent's, so the
-        # second answer is the delegate's first.
+        # One model, shared: the subagent names none and runs its parent's, so the
+        # second answer is the subagent's first.
         _calls("task", description="read it", subagent_type="helper"),
         _calls("first_line", file_path="/inputs/notes.txt"),
         AIMessage(content="read"),
@@ -620,12 +620,12 @@ def test_a_delegates_tool_is_handed_the_backend_too(cfg, session_dir):
         capabilities=Capabilities(subagents=("helper",)),
     )
 
-    mine = [(delegated, m.content) for delegated, m in results if m.name == "first_line"]
+    mine = [(in_subagent, m.content) for in_subagent, m in results if m.name == "first_line"]
     assert mine == [(True, "alpha")]
 
 
-def test_the_wrapper_a_compiled_delegates_tools_wear_passes_the_runtime_on(cfg, session_dir):
-    """A compiled delegate gets no middleware, so its tools are wrapped instead -- and
+def test_the_wrapper_a_compiled_subagents_tools_wear_passes_the_runtime_on(cfg, session_dir):
+    """A compiled subagent gets no middleware, so its tools are wrapped instead -- and
     `runtime` is the one argument a model never sends, which a wrapper forwarding
     only what it was called with would drop.
     """

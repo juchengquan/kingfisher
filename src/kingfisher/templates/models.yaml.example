@@ -116,7 +116,7 @@ models:
     extra:
       reasoning_effort: high
 
-# --- pointing a delegate at one of these ------------------------------------
+# --- pointing a subagent at one of these ------------------------------------
 #
 # A subagent or an agent names a model from this table:
 #

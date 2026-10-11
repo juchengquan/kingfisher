@@ -177,7 +177,7 @@ kind.** Inline means every agent file carries a copy of a versioned schema, and
 a v1.0 that lands is a migration across a workspace -- two lists of one fact,
 which `test_architecture.py` already spends an import to avoid elsewhere. It
 also breaks the property the format is built around: an agent file selects by
-name what the workspace already offers -- its tools, skills, delegates and
+name what the workspace already offers -- its tools, skills, subagents and
 middleware -- and defines none of them. A two-hundred-line schema pasted into
 YAML is defining.
 
@@ -338,13 +338,13 @@ first time someone wants the name in a feature list, and the answer is that
 kingfisher can carry an A2UI document and cannot make it renderable -- the
 catalogue is the client's.
 
-**Extending `response_format` to delegates.** The `REFUSED` table in
+**Extending `response_format` to subagents.** The `REFUSED` table in
 `subagents/reading.py` refused it with a reason that was checkably false:
-deepagents does hand a delegate's structured response somewhere, serialising it
+deepagents does hand a subagent's structured response somewhere, serialising it
 into the tool result with `json.dumps`. The refusal stays; the reason was
-corrected in slice 1. The true reason is better than the false one: a delegate's
+corrected in slice 1. The true reason is better than the false one: a subagent's
 structured response reaches its parent as *text*, so a schema buys shape
-discipline inside the delegate and nothing structured survives the handoff.
+discipline inside the subagent and nothing structured survives the handoff.
 Extending it would double the surface -- a second registry lookup, a second
 refusal, a second set of format docs -- for a feature with no consumer.
 
@@ -370,7 +370,7 @@ smaller document, and there is no client to prove otherwise.
 
 Independent slices, a pull request each off `main`, no stacking.
 
-**1. Correct the delegate refusal.** *Landed 2026-09-06 as #372, the day this
+**1. Correct the subagent refusal.** *Landed 2026-09-06 as #372, the day this
 document did.* `subagents/reading.py` stated a reason upstream contradicts, and
 it went first because it depended on none of the rest and was worth having
 whether or not any of it is ever built. A refusal message stating a false reason

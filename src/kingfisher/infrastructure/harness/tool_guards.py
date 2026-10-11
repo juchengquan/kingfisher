@@ -22,7 +22,7 @@ from kingfisher.infrastructure.harness.session_paths import SessionPaths, refusa
 def tool_guards(names: frozenset[str], paths: SessionPaths | None) -> list[AgentMiddleware]:
     """What every graph holding workspace tools gets wrapped in, built once.
 
-    Three graphs hold them -- the agent, a delegate, and the `general-purpose` delegate
+    Three graphs hold them -- the agent, a subagent, and the `general-purpose` subagent
     deepagents supplies, which is handed the agent's tools and so holds the same objects.
     Composed here because each of the three was composed where it was built, and the one
     built last got none of this: a tool call through `general-purpose` reached the tool
@@ -37,7 +37,7 @@ def tool_guards(names: frozenset[str], paths: SessionPaths | None) -> list[Agent
     """
     guards: list[AgentMiddleware] = [HostPathGuard()]
     if names:
-        # Beside each other and in this order, which the delegate's stack is pinned to:
+        # Beside each other and in this order, which the subagent's stack is pinned to:
         # both are about a workspace tool call, and the translation rewrites the
         # arguments before anything below it decides anything about them.
         guards.append(WorkspaceToolErrors(names))
@@ -47,10 +47,10 @@ def tool_guards(names: frozenset[str], paths: SessionPaths | None) -> list[Agent
 
 
 class GuardedTool(BaseTool):
-    """One workspace tool, carrying the guards a compiled delegate cannot be given.
+    """One workspace tool, carrying the guards a compiled subagent cannot be given.
 
     There is a fourth graph holding workspace tools, and `tool_guards` cannot reach
-    it: a delegate the workspace compiled itself. deepagents runs that graph as
+    it: a subagent the workspace compiled itself. deepagents runs that graph as
     given, so no middleware of kingfisher's is in front of its tools. Measured:
     `show-your-work` called `log_levels('/inputs/api.log')` and the tool raised
     `FileNotFoundError` on a path nothing had translated, ending the run. What
@@ -124,10 +124,10 @@ class GuardedTool(BaseTool):
 
 
 def guarded_tools(tools: Sequence[Any], paths: SessionPaths | None) -> list[Any]:
-    """The workspace tools a compiled delegate is handed, each one wrapped.
+    """The workspace tools a compiled subagent is handed, each one wrapped.
 
     The names are not needed here the way `tool_guards` needs them: everything in
-    this list is a workspace tool already, chosen by the grant this delegate was
+    this list is a workspace tool already, chosen by the grant this subagent was
     resolved against.
     """
     return [_guarded(one, paths) for one in tools]

@@ -30,7 +30,7 @@ from kingfisher.kinds.subagents.spec import (
     declared,
 )
 from kingfisher.kinds.tools.spec import tool_name
-from tests.conftest import FakeToolCallingModel, delegate
+from tests.conftest import FakeToolCallingModel, subagent_of
 from tests.unit.test_bundles import TOOL
 
 SKILL = "---\nname: sampling\ndescription: How to sample a file.\n---\n\n# Sampling\n"
@@ -91,7 +91,7 @@ def built(cfg, session_dir, capabilities=None):
         capabilities=capabilities
         or Capabilities(subagents=("surveyor",), tools=("shared",)),
     )
-    return delegate(assembled, "surveyor")
+    return subagent_of(assembled, "surveyor")
 
 
 # -- what it may and may not say --------------------------------------------
@@ -146,7 +146,7 @@ def test_the_shape_decides_the_rules_rather_than_where_the_entry_came_from():
 def test_a_portable_declaration_is_granted_no_workspace_tool(cfg, session_dir):
     """`SubagentSpec.tools` defaults to `ALL`, which means *inherit whatever the
     request granted* -- and a portable entry has no `tools:` key to say otherwise
-    with. Left at the default, an imported delegate would be handed the deployment's
+    with. Left at the default, an imported subagent would be handed the deployment's
     whole catalogue: the request below grants `shared`, and `shared` must not arrive.
     """
     write_portable(cfg)
@@ -170,11 +170,11 @@ def test_the_spec_says_none_rather_than_staying_quiet(cfg):
 # -- atomic ------------------------------------------------------------------
 
 
-def test_a_carried_tool_reaches_its_delegate_whatever_the_request_granted(
+def test_a_carried_tool_reaches_its_subagent_whatever_the_request_granted(
     cfg, session_dir
 ):
     """What a definition carried is held, not granted: a request naming no tool at
-    all still leaves the delegate the one it brought.
+    all still leaves the subagent the one it brought.
     """
     write_portable(cfg)
 
@@ -188,7 +188,7 @@ def test_a_carried_tool_reaches_its_delegate_whatever_the_request_granted(
 def test_a_carried_tool_is_offered_to_nobody_else(cfg):
     """Atomic from the other side. A carried tool in the shared catalogue would be
     grantable by any agent, which is the half of "you use the subagent, not its
-    parts" that a delegate-side check cannot see.
+    parts" that a subagent-side check cannot see.
     """
     write_portable(cfg)
 
@@ -198,7 +198,7 @@ def test_a_carried_tool_is_offered_to_nobody_else(cfg):
     assert "probe" in catalogue.bundled_tools["surveyor"].names
 
 
-def test_builtin_tools_stay_narrowed_for_a_portable_delegate(cfg, session_dir):
+def test_builtin_tools_stay_narrowed_for_a_portable_subagent(cfg, session_dir):
     """The exception to atomic, and the one that matters. Built-ins are the host's
     rather than the definition's, so `pip install` must not be a way to put back a
     shell the deployment turned off -- the declaration asks for `execute` and the
@@ -221,8 +221,8 @@ def test_builtin_tools_stay_narrowed_for_a_portable_delegate(cfg, session_dir):
 # -- the skills half ---------------------------------------------------------
 
 
-def test_a_carried_skill_reaches_the_delegate_that_brought_it(cfg, session_dir):
-    """A delegate inherits none of its parent's middleware, so a skill it is not
+def test_a_carried_skill_reaches_the_subagent_that_brought_it(cfg, session_dir):
+    """A subagent inherits none of its parent's middleware, so a skill it is not
     given is one it has no idea exists -- and a carried bundle's skills are named by
     a path the definition resolved rather than found by walking the catalogue.
     """
@@ -299,7 +299,7 @@ def test_a_carried_bundle_makes_no_claim_to_check(cfg):
 
 
 def test_a_spec_cannot_both_describe_a_folder_and_carry_one():
-    """Two sources for what a delegate holds, with no rule saying which wins -- and
+    """Two sources for what a subagent holds, with no rule saying which wins -- and
     `miscounted` would be checking the list against the wrong half.
     """
     with pytest.raises(ValueError, match="one or the other"):
@@ -347,7 +347,7 @@ def test_a_carried_skills_folder_is_not_reported_as_abandoned(cfg):
     for, which is exactly what a carried bundle's folder looks like from the walk: the
     definition reaches it by absolute path rather than by sitting in it.
 
-    The folder is named `assets` and the delegate `surveyor` **on purpose**. Name the
+    The folder is named `assets` and the subagent `surveyor` **on purpose**. Name the
     two alike and the folder is covered by the label a carried bundle already
     publishes, so this passes whether or not anything reads the path -- which is how
     the shipped example passed against a check that was doing nothing.
@@ -404,7 +404,7 @@ def test_doctor_names_what_arrived_with_a_definition(workspace_with_presets):
     said = [
         check
         for check in examine(workspace_with_presets)
-        if check.name == "delegate tools" and "carried" in check.detail
+        if check.name == "subagent tools" and "carried" in check.detail
     ]
 
     assert [check.verdict for check in said] == ["ok"]
@@ -413,7 +413,7 @@ def test_doctor_names_what_arrived_with_a_definition(workspace_with_presets):
 
 def test_carrying_is_read_off_the_backing_rather_than_the_file_extension(cfg):
     """A `.py` under `subagents/` may own a folder like any document, so a listing
-    that decided this by how a definition was written would call a compiled delegate
+    that decided this by how a definition was written would call a compiled subagent
     with an ordinary bundle 'carried' and mislead about where its tools are.
     """
     from kingfisher.application.inventory import inventory
@@ -456,7 +456,7 @@ def test_the_helper_refusal_points_at_a_key_that_exists():
 # -- one tool axis everything, the other nothing ------------------------------
 
 #: Each leaves one axis at `ALL` and the other empty, which is every portable
-#: delegate's default: it may use the host's built-ins and holds no workspace tool.
+#: subagent's default: it may use the host's built-ins and holds no workspace tool.
 ONE_AXIS_OPEN = {
     "portable, default": (
         "surveyor.py",
@@ -474,10 +474,10 @@ ONE_AXIS_OPEN = {
 
 
 @pytest.mark.parametrize("filename, text", ONE_AXIS_OPEN.values(), ids=ONE_AXIS_OPEN)
-def test_a_delegate_with_one_axis_open_builds_in_a_workspace_with_no_tools(
+def test_a_subagent_with_one_axis_open_builds_in_a_workspace_with_no_tools(
     cfg, session_dir, filename, text
 ):
-    """A request naming only the delegate raised `ValueError: one tool axis resolved
+    """A request naming only the subagent raised `ValueError: one tool axis resolved
     to '*'`: with no workspace tools and nothing narrowed, the names were never read
     off the probe, and "every built-in plus none" has no spelling as an allowlist.
     """

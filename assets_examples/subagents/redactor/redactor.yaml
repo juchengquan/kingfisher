@@ -4,15 +4,15 @@ description: Quotes from files that may contain credentials, with secrets masked
 #
 # `subagents/redactor/` holds a definition whose `name` is `redactor`, so the
 # folder belongs to it: what is in `redactor/tools/` and `redactor/skills/` can
-# reach this delegate and nothing else. A folder that names no definition is
+# reach this subagent and nothing else. A folder that names no definition is
 # just organisation, which is what `analysis/profiler.yaml` next door is.
 #
 # A bundle folder holds exactly one definition. `redactor/helper.yaml` would be
 # refused, because "is `helper` inside the bundle or beside it" has no honest
 # answer and the two answers differ in what `helper` may call.
 builtin_tools: [ls, glob, grep]
-# `read_file` is deliberately absent. This delegate exists so that a file's raw
-# text never enters the transcript, and a delegate holding both tools would have
+# `read_file` is deliberately absent. This subagent exists so that a file's raw
+# text never enters the transcript, and a subagent holding both tools would have
 # the careful path and the careless one side by side.
 #
 # `source: bundled` is what takes a tool from this folder rather than from the
@@ -20,9 +20,9 @@ builtin_tools: [ls, glob, grep]
 # match: a file added to `redactor/tools/` and not listed here stops the
 # catalogue loading, and so does renaming `redactor` out from under the folder.
 #
-# Nothing shared is listed, so this delegate gets no catalogue tool. Left out
+# Nothing shared is listed, so this subagent gets no catalogue tool. Left out
 # entirely, the line would be every catalogue tool -- `sql_query` returning rows
-# unmasked among them -- on the one delegate whose job is being careful with
+# unmasked among them -- on the one subagent whose job is being careful with
 # what it returns.
 tools:
   - name: mask_secrets
@@ -31,7 +31,7 @@ skills:
   - name: redaction
     source: bundled
 # Keys of your own, which nothing in a run reads. A script checking that every
-# delegate names an owner does, and a delegate handling credentials is the one
+# subagent names an owner does, and a subagent handling credentials is the one
 # that check exists for.
 metadata:
   owner: security-team

@@ -27,11 +27,11 @@ class Request:
     turn_id: str | None = None
     inputs: tuple[Path, ...] = ()
     capabilities: Capabilities = field(default_factory=Capabilities)
-    #: Delegate name -> where this request wants it to run. Empty by default.
+    #: Subagent name -> where this request wants it to run. Empty by default.
     #:
     #: Separate from `capabilities.models`, which is the deployment's answer to
     #: "which models may this caller name at all". This is the caller's answer to
-    #: "which delegate goes on which", and there is nothing to narrow -- an
+    #: "which subagent goes on which", and there is nothing to narrow -- an
     #: assignment is not a permission.
     run_on: Mapping[str, RunOn] = field(default_factory=dict)
 

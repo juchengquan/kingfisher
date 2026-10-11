@@ -3,12 +3,12 @@ description: Reads a large or numerous set of files and returns only the facts a
 # Both tool lists, because they are granted apart. `builtin_tools` is
 # deepagents' own set; `tools` is whatever this workspace defines, and an
 # empty list is how you say none of them. Omitting it would mean *all* of
-# them, which would make a delegate that exists to read files able to
+# them, which would make a subagent that exists to read files able to
 # fetch URLs and query databases.
 builtin_tools: [read_file, ls, glob, grep]
 tools: []
 # **This runs your deployment's default model, and probably should not.**
-# Reading is the cheap half of delegation, so this is exactly the delegate that
+# Reading is the cheap half of delegation, so this is exactly the subagent that
 # wants a cheap one -- and a file shipped inside a wheel cannot name it. A
 # vendor's model id is portable nowhere: on a deployment without that entry it
 # is refused, and before the catalogue was closed it was worse, reaching

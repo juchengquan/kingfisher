@@ -81,11 +81,11 @@ class Inventory:
     agents: Mapping[str, str] = _NOTHING
     #: Agent name -> the file it came from.
     agent_sources: Mapping[str, str] = _NOTHING
-    #: Delegate names each agent reaches, its own and theirs, resolved through
+    #: Subagent names each agent reaches, its own and theirs, resolved through
     #: the chain. Printed because nobody maintains it: an agent file names the
-    #: delegates it calls, and what *those* call comes along -- so this is the
+    #: subagents it calls, and what *those* call comes along -- so this is the
     #: only place the whole tree is visible without opening every file.
-    agent_delegates: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    agent_subagents: Mapping[str, tuple[str, ...]] = _NO_NAMES
     agents_error: str | None = None
 
     #: The agent's own tools, granted with `--builtin-tools`. Empty when the
@@ -159,15 +159,15 @@ class Inventory:
     #: other way to find that out.
     bundled_tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
     bundled_skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
-    #: Skills in a bundle whose owner is a compiled delegate, by subagent. A skills
+    #: Skills in a bundle whose owner is a compiled subagent, by subagent. A skills
     #: index arrives through middleware and deepagents gives a compiled graph none,
-    #: so such a delegate cannot list them and the folder is refused as unlisted.
+    #: so such a subagent cannot list them and the folder is refused as unlisted.
     #: Carried so the listing can say *why* beside that refusal: the unlisted-file
     #: message alone sends a reader to add a `source: bundled` line that a compiled
     #: declaration refuses.
     stranded_skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
     #: Catalogue tools a bundle answers for instead, by subagent. Printed
-    #: because shadowing is only acceptable while it is visible: the delegate
+    #: because shadowing is only acceptable while it is visible: the subagent
     #: gets its own and the shared one never reaches it, and nothing else in
     #: this output would say so.
     shadowed: Mapping[str, tuple[str, ...]] = _NO_NAMES
@@ -175,7 +175,7 @@ class Inventory:
     #: gives: the comparison needs the workspace catalogue, and a catalogue that did
     #: not load is not the answer "nothing shadows".
     shadowed_checked: bool = True
-    #: Delegates whose bundle arrived with the definition rather than sitting in a
+    #: Subagents whose bundle arrived with the definition rather than sitting in a
     #: folder under the catalogue. What that changes for a reader is where the code
     #: is: a folder's tools are files in this workspace, and a carried bundle's were
     #: installed -- so the names below print the same and one set is reviewable here
@@ -183,12 +183,12 @@ class Inventory:
     carried_bundles: tuple[str, ...] = ()
     #: A bundle this deployment cannot read: tools that will not import, or a
     #: folder that is one subagent's and holds two definitions. Its own field
-    #: rather than `tools_error`, so a listing says which delegate to go and open.
+    #: rather than `tools_error`, so a listing says which subagent to go and open.
     bundles_error: str | None = None
     #: Folders under `subagents/` holding `tools/` or `skills/` that no definition
     #: is named for. Legal, and nine times in ten a bundle whose definition was
     #: renamed -- which is why it is carried rather than left to the repository that
-    #: computes it: a delegate that lost its bundle has no other symptom, at any
+    #: computes it: a subagent that lost its bundle has no other symptom, at any
     #: point in a run, than holding nothing.
     orphaned_assets: tuple[str, ...] = ()
 
@@ -265,11 +265,11 @@ class Inventory:
 
 
 def activated(named: Selection, defined: Mapping[str, SubagentSpec]) -> tuple[str, ...]:
-    """The delegates an agent activates: the ones it names, with `"*"` expanded.
+    """The subagents an agent activates: the ones it names, with `"*"` expanded.
 
-    Its delegates' own `subagents:` are deliberately not walked. A helper reaches a
+    Its subagents' own `subagents:` are deliberately not walked. A helper reaches a
     run only where the agent names it too -- `subagent_helpers` narrows one by what
-    the agent declared -- so walking the chain here printed a delegate the build
+    the agent declared -- so walking the chain here printed a subagent the build
     would drop, which is worse than printing nothing: a listing is read to find out
     what an agent ends up with.
     """
@@ -313,7 +313,7 @@ def _bundled(
         # Its own `try`, and the whole reason this one is narrow: reading the
         # *workspace* catalogue here put a `tools/` failure into `bundles_error`, so
         # one unparseable module was reported twice -- once as `tools` and once as
-        # `delegate tools`, on a workspace with no delegates at all. The second row
+        # `subagent tools`, on a workspace with no subagents at all. The second row
         # sends a reader to the wrong directory.
         try:
             catalogue = {one.name for one in resolved.tools.found}
@@ -330,7 +330,7 @@ def _bundled(
                     if (found := tuple(sorted(catalogue.intersection(names))))
                 }
             )
-        # Inside the `try` too: a delegate carrying two skills of one name is
+        # Inside the `try` too: a subagent carrying two skills of one name is
         # refused as its directories are read, which is here.
         skills = MappingProxyType(
             {
@@ -642,7 +642,7 @@ def inventory(
     agents: Mapping[str, str] = _NOTHING
     defined_agents: Mapping[str, object] = _NOTHING
     agent_sources: Mapping[str, str] = _NOTHING
-    agent_delegates: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    agent_subagents: Mapping[str, tuple[str, ...]] = _NO_NAMES
     agents_error: str | None = None
     try:
         # The same shape as the subagent read below it, and in one `try` for the
@@ -650,7 +650,7 @@ def inventory(
         defined_agents = resolved.agents.specs
         agents = {name: spec.description for name, spec in defined_agents.items()}
         agent_sources = MappingProxyType(dict(resolved.agents.sources))
-        agent_delegates = MappingProxyType(
+        agent_subagents = MappingProxyType(
             {
                 name: activated(spec.subagents, resolved.subagents.specs)
                 for name, spec in defined_agents.items()
@@ -658,7 +658,7 @@ def inventory(
         )
     except (AgentError, SubagentError) as exc:
         # `SubagentError` too: resolving the chain reads the subagent catalogue,
-        # so a broken delegate makes the *agents* half unanswerable. Reported
+        # so a broken subagent makes the *agents* half unanswerable. Reported
         # here rather than raised, like its neighbours -- a listing is where
         # somebody goes because something is broken.
         agents_error = str(exc)
@@ -672,7 +672,7 @@ def inventory(
     # not theirs to read. Decided here rather than at each renderer: the text form
     # already skipped the access sections for a scoped view and the JSON form did
     # not, so one caller holding a source id was handed the name, the file and the
-    # delegate chain of every definition out of their reach -- measured through the
+    # subagent chain of every definition out of their reach -- measured through the
     # real command -- along with the vocabulary and every definition's audience.
     #
     # One computed answer, which the companion maps are filtered against rather than
@@ -707,8 +707,8 @@ def inventory(
         # the same walk as the names, so an unscoped listing keeps all of them
         # without a branch of its own. Key these off a different walk and the
         # unscoped view starts silently dropping chains.
-        agent_delegates=MappingProxyType(
-            {name: chain for name, chain in agent_delegates.items() if name in for_caller}
+        agent_subagents=MappingProxyType(
+            {name: chain for name, chain in agent_subagents.items() if name in for_caller}
         ),
         # `or`, not replace: a kind that already failed to load has the more
         # fundamental problem, and saying the second one instead would send a

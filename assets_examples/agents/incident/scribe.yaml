@@ -24,7 +24,7 @@ builtin_tools: ["*"]
 # `tools/logs/access/status_codes.py`. A folder without `__init__.py` reaches no
 # name, so moving either file changes nothing here.
 #
-# The list is also exactly what `show-your-work` is handed: a compiled delegate
+# The list is also exactly what `show-your-work` is handed: a compiled subagent
 # that writes no `tools:` takes what its caller was granted. Three tools that
 # read a log are enough to recompute a figure, and none of them reaches the
 # network.
@@ -35,7 +35,7 @@ tools: [log_levels, status_codes, line_count]
 skills:
   - incident::postmortem
   - incident::timeline
-# The two delegates no other shipped agent names, and a delegate no agent names
+# The two subagents no other shipped agent names, and a subagent no agent names
 # is one nothing can call. `redactor` brings the tool and skill in its own
 # folder whatever this file grants; `show-your-work` is a compiled graph.
 subagents: [redactor, show-your-work]
@@ -49,7 +49,7 @@ system_prompt: |
 
   Quote a log line only through `redactor`. Logs carry tokens, addresses and
   customer emails, and a writeup is read by people who should see none of them.
-  If `redactor` is not among your delegates, cite the file and line number and
+  If `redactor` is not among your subagents, cite the file and line number and
   leave the text out.
 
   Put every figure you report -- time to detect, error counts, how many

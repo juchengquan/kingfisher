@@ -79,10 +79,10 @@ def tool_ceiling(spec, *, builtin, workspace):
     )
 
 
-def test_a_delegate_may_not_use_what_its_caller_was_denied(cfg, session_dir):
+def test_a_subagent_may_not_use_what_its_caller_was_denied(cfg, session_dir):
     """The escape, driven rather than inspected.
 
-    Driven rather than inspected: what the delegate's `ToolNode` registers is identical
+    Driven rather than inspected: what the subagent's `ToolNode` registers is identical
     either way, which is how this went unnoticed.
     """
     responses = [
@@ -101,18 +101,18 @@ def test_a_delegate_may_not_use_what_its_caller_was_denied(cfg, session_dir):
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
     ).graph
 
-    delegate = _subagent_graphs(graph).get("helper")
-    assert delegate is not None, "the declared subagent was not compiled"
+    subagent = _subagent_graphs(graph).get("helper")
+    assert subagent is not None, "the declared subagent was not compiled"
 
-    out = delegate.invoke(
+    out = subagent.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
         config={"recursion_limit": 6},
     )
     transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
 
-    assert "escaped" not in transcript, "the delegate ran a command its caller could not"
-    # Named for the delegate, not for the request, even though the request is
-    # what withheld it here. A delegate's allowlist is two layers intersected
+    assert "escaped" not in transcript, "the subagent ran a command its caller could not"
+    # Named for the subagent, not for the request, even though the request is
+    # what withheld it here. A subagent's allowlist is two layers intersected
     # and the refusal cannot tell them apart, so it says whose surface the tool
     # is missing from rather than guessing at which layer removed it. Blaming
     # the request is right in this test and was wrong in the one that prompted
@@ -130,9 +130,9 @@ system_prompt: |
 """
 
 
-def test_a_delegate_that_withheld_a_tool_itself_is_the_one_named(cfg, session_dir):
+def test_a_subagent_that_withheld_a_tool_itself_is_the_one_named(cfg, session_dir):
     """The other direction, and the one that reads wrong: the request granted everything
-    and the delegate's own definition is what is missing the tool.
+    and the subagent's own definition is what is missing the tool.
     """
     responses = [
         AIMessage(
@@ -150,22 +150,22 @@ def test_a_delegate_that_withheld_a_tool_itself_is_the_one_named(cfg, session_di
         capabilities=Capabilities(subagents=("reader",)),
     ).graph
 
-    delegate = _subagent_graphs(graph).get("reader")
-    assert delegate is not None, "the declared subagent was not compiled"
+    subagent = _subagent_graphs(graph).get("reader")
+    assert subagent is not None, "the declared subagent was not compiled"
 
-    out = delegate.invoke(
+    out = subagent.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
         config={"recursion_limit": 6},
     )
     transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
 
-    assert "escaped" not in transcript, "the delegate ran what its definition withheld"
+    assert "escaped" not in transcript, "the subagent ran what its definition withheld"
     assert "not available for the 'reader' subagent" in transcript
     assert "this request" not in transcript, "the request granted execute -- it is not the wall"
 
 
-def test_the_builtin_delegate_arrives_with_the_ceiling_on(cfg, session_dir):
-    """deepagents supplies a `general-purpose` delegate with "the same capabilities as
+def test_the_builtin_subagent_arrives_with_the_ceiling_on(cfg, session_dir):
+    """deepagents supplies a `general-purpose` subagent with "the same capabilities as
     the main agent" and none of our middleware, present whenever `task` is --
     including for a request that declared none.
     """
@@ -185,10 +185,10 @@ def test_the_builtin_delegate_arrives_with_the_ceiling_on(cfg, session_dir):
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
     ).graph
 
-    delegate = _subagent_graphs(graph).get("general-purpose")
-    assert delegate is not None, "the built-in delegate should still be reachable"
+    subagent = _subagent_graphs(graph).get("general-purpose")
+    assert subagent is not None, "the built-in subagent should still be reachable"
 
-    out = delegate.invoke(
+    out = subagent.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
         config={"recursion_limit": 8},
     )
@@ -197,8 +197,8 @@ def test_the_builtin_delegate_arrives_with_the_ceiling_on(cfg, session_dir):
     assert "not available for this request" in transcript
 
 
-def test_the_builtin_survives_when_no_delegates_are_named(cfg, session_dir):
-    """`subagents=None` means "no opinion about delegates", and a narrowed request that
+def test_the_builtin_survives_when_no_subagents_are_named(cfg, session_dir):
+    """`subagents=None` means "no opinion about subagents", and a narrowed request that
     never named one still gets the built-in -- limited, not gone.
     """
     wired = _with_helper(cfg)
@@ -209,10 +209,10 @@ def test_the_builtin_survives_when_no_delegates_are_named(cfg, session_dir):
         capabilities=Capabilities(builtin_tools=("read_file", "task")),
     ).graph
 
-    delegate = _subagent_graphs(graph).get("general-purpose")
-    assert delegate is not None
+    subagent = _subagent_graphs(graph).get("general-purpose")
+    assert subagent is not None
 
-    out = delegate.invoke(
+    out = subagent.invoke(
         {
             "messages": [{"role": "user", "content": "go"}],
         },
@@ -221,7 +221,7 @@ def test_the_builtin_survives_when_no_delegates_are_named(cfg, session_dir):
     assert out["messages"][-1].content == "ok"
 
 
-def test_an_unnamed_delegate_is_still_refused(cfg, session_dir):
+def test_an_unnamed_subagent_is_still_refused(cfg, session_dir):
     """The backstop."""
     responses = [
         AIMessage(
@@ -250,7 +250,7 @@ def test_an_unnamed_delegate_is_still_refused(cfg, session_dir):
         config={"recursion_limit": 12},
     )
     transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
-    assert "is not a delegate this request may use" in transcript
+    assert "is not a subagent this request may use" in transcript
     assert "general-purpose" in transcript  # and it names what may be reached
 
 
@@ -282,7 +282,7 @@ def test_an_unrestricted_request_delegates_as_before(cfg, session_dir):
         config={"recursion_limit": 12},
     )
     transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
-    assert "is not a delegate this request may use" not in transcript
+    assert "is not a subagent this request may use" not in transcript
 
 
 # -- one rule, applied at two levels --------------------------------------
@@ -297,7 +297,7 @@ def test_an_unrestricted_request_delegates_as_before(cfg, session_dir):
 #
 # Two things it cannot catch, both verified rather than assumed:
 #
-# A copy that changes only the *order* passes at the delegate level, because
+# A copy that changes only the *order* passes at the subagent level, because
 # the ceiling reaches nothing but `ToolAllowlist`, which keeps a set. The old
 # swapped-argument copy fails nothing here, and there is nothing for it to fail
 # -- same names, same set, same behaviour.
@@ -341,7 +341,7 @@ def test_a_request_is_narrowed_by_it():
     assert not wrong, "\n".join(wrong)
 
 
-def test_a_delegate_is_narrowed_by_it(cfg):
+def test_a_subagent_is_narrowed_by_it(cfg):
     """The level that carried the copy.
 
     One `cfg` for every case, which nothing here writes to: a spec is built from a
@@ -369,10 +369,10 @@ def test_a_delegate_is_narrowed_by_it(cfg):
 # -- the two axes are resolved apart --------------------------------------
 
 
-def test_naming_a_workspace_tool_costs_a_delegate_no_builtin():
+def test_naming_a_workspace_tool_costs_a_subagent_no_builtin():
     """The whole reason the definition's list was split.
 
-    One flat list meant a delegate could not ask for `http_fetch` without giving up
+    One flat list meant a subagent could not ask for `http_fetch` without giving up
     `read_file`, and nothing in the file showed it happening. #77 fixed exactly this
     for a *request*; this is the same fix one level in.
     """
@@ -386,7 +386,7 @@ def test_naming_a_workspace_tool_costs_a_delegate_no_builtin():
     assert set(ceiling) == {"read_file", "ls", "http_fetch"}
 
 
-def test_naming_a_builtin_costs_a_delegate_no_workspace_tool():
+def test_naming_a_builtin_costs_a_subagent_no_workspace_tool():
     """And the mirror, which is the direction the presets go."""
     spec = replace(
         a_subagent(HELPER, "helper.md"), builtin_tools=("read_file",), tools=ALL
@@ -398,7 +398,7 @@ def test_naming_a_builtin_costs_a_delegate_no_workspace_tool():
     assert set(ceiling) == {"read_file", "http_fetch"}
 
 
-def test_an_empty_list_is_how_a_delegate_says_none_of_them():
+def test_an_empty_list_is_how_a_subagent_says_none_of_them():
     """`tools: []` is none; omitting the line is all."""
     spec = replace(a_subagent(HELPER, "helper.md"), builtin_tools=("read_file",), tools=())
 
@@ -444,7 +444,7 @@ def as_identities(selection):
     return tuple(f"catalogue::{name}" for name in selection)
 
 
-def test_a_delegates_skills_are_narrowed_by_it():
+def test_a_subagents_skills_are_narrowed_by_it():
     """The fourth place, and the one the whole-function hash could not see."""
     assert DECLARED, "no declared cases -- this walks nothing and passes"
     wrong = []
@@ -492,7 +492,7 @@ def _built_with(cfg, session_dir, capabilities) -> dict:
     return seen
 
 
-def test_the_builtin_delegate_gets_exactly_the_main_agents_tools(cfg, session_dir):
+def test_the_builtin_subagent_gets_exactly_the_main_agents_tools(cfg, session_dir):
     """deepagents ships it described to the model as having "access to all tools as the
     main agent", and that description is handed straight through.
     """
@@ -500,20 +500,20 @@ def test_the_builtin_delegate_gets_exactly_the_main_agents_tools(cfg, session_di
 
     (parent,) = [m for m in seen["middleware"] if isinstance(m, ToolAllowlist)]
     (builtin,) = [s for s in seen["subagents"] if s["name"] == "general-purpose"]
-    (delegate,) = [m for m in builtin["middleware"] if isinstance(m, ToolAllowlist)]
+    (subagent,) = [m for m in builtin["middleware"] if isinstance(m, ToolAllowlist)]
 
-    assert parent._allowed == delegate._allowed == {"read_file", "task"}
+    assert parent._allowed == subagent._allowed == {"read_file", "task"}
 
 
-def test_the_builtin_delegate_is_supplied_exactly_once(cfg, session_dir):
+def test_the_builtin_subagent_is_supplied_exactly_once(cfg, session_dir):
     """Supplying the spec is the only hook there is.
 
-    deepagents builds this delegate itself and takes no middleware for it --
+    deepagents builds this subagent itself and takes no middleware for it --
     `GeneralPurposeSubagentProfile` offers `enabled`, `description` and
     `system_prompt`, and nothing else. An explicit spec by the same name is the
     documented override, and it is what carries the ceiling: measured, removing it
     lets a request granted only `read_file` and `task` run `execute` through the
-    delegate.
+    subagent.
     """
     seen = _built_with(cfg, session_dir, Capabilities(builtin_tools=("read_file", "task")))
 
@@ -522,7 +522,7 @@ def test_the_builtin_delegate_is_supplied_exactly_once(cfg, session_dir):
 
 
 def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session_dir):
-    """Nothing was narrowed, so the delegate having everything the main agent has is
+    """Nothing was narrowed, so the subagent having everything the main agent has is
     what deepagents would have done anyway.
     """
     seen = _built_with(cfg, session_dir, Capabilities())
@@ -533,7 +533,7 @@ def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session
     kinds = [type(m).__name__ for m in supplied[0]["middleware"]]
     assert "ToolAllowlist" not in kinds, "nothing was narrowed, so nothing to narrow it by"
     # It still carries the guards every graph holding workspace tools carries. This
-    # asserted an empty list, which was the defect: deepagents hands this delegate the
+    # asserted an empty list, which was the defect: deepagents hands this subagent the
     # agent's own tools, and it held them with nothing wrapped around them.
     assert kinds == ["HostPathGuard"], kinds
 
@@ -574,7 +574,7 @@ def _build(cfg, session_dir, definition):
 
 
 def test_a_misspelled_tool_is_refused_not_dropped(cfg, session_dir):
-    """`tools: [reed_file]` built a delegate with *no* tools, silently."""
+    """`tools: [reed_file]` built a subagent with *no* tools, silently."""
     with pytest.raises(CapabilityError, match="unknown builtin_tool"):
         _build(cfg, session_dir, TYPO)
 
@@ -590,12 +590,12 @@ def test_the_message_names_the_tool_and_what_is_offered(cfg, session_dir):
 
 def test_the_wildcard_means_everything(cfg, session_dir):
     """`["*"]` used to mean the opposite of what it says: `*` matched no tool, so the
-    obvious spelling of "all of them" produced a delegate with none.
+    obvious spelling of "all of them" produced a subagent with none.
     """
     graph = _build(cfg, session_dir, STAR)
 
-    delegate = _subagent_graphs(graph).get("helper")
-    assert delegate is not None
+    subagent = _subagent_graphs(graph).get("helper")
+    assert subagent is not None
 
     spec = a_subagent(STAR, "helper.yaml")
     assert spec.builtin_tools == ALL
@@ -629,8 +629,8 @@ def test_a_tool_the_request_withheld_is_still_dropped(cfg, session_dir):
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
     ).graph
 
-    delegate = _subagent_graphs(graph).get("helper")
-    assert delegate is not None  # built, not refused
+    subagent = _subagent_graphs(graph).get("helper")
+    assert subagent is not None  # built, not refused
 
 
 def test_a_definition_naming_no_tools_is_unaffected(cfg, session_dir):
@@ -669,12 +669,12 @@ def test_the_wrong_list_message_agrees_in_number(cfg, session_dir):
 
 def test_a_missing_subagent_type_says_so_rather_than_naming_none():
     """A missing argument is a different mistake from a refused name."""
-    from kingfisher.infrastructure.harness.middlewares.narrowing import DeclaredDelegatesOnly
+    from kingfisher.infrastructure.harness.middlewares.narrowing import DeclaredSubagentsOnly
 
     class _Call:
         tool_call = {"name": "task", "args": {"subagentType": "reviewer"}, "id": "c1"}
 
-    refusal = DeclaredDelegatesOnly(("reviewer",))._refuse(_Call())
+    refusal = DeclaredSubagentsOnly(("reviewer",))._refuse(_Call())
 
     assert refusal is not None
     assert "no subagent_type was given" in refusal.content
@@ -682,20 +682,20 @@ def test_a_missing_subagent_type_says_so_rather_than_naming_none():
     assert "None" not in refusal.content  # never the value it did not send
 
 
-def test_a_delegate_that_does_not_exist_still_names_it():
+def test_a_subagent_that_does_not_exist_still_names_it():
     """The other half, unchanged: a real name that is not on the list."""
-    from kingfisher.infrastructure.harness.middlewares.narrowing import DeclaredDelegatesOnly
+    from kingfisher.infrastructure.harness.middlewares.narrowing import DeclaredSubagentsOnly
 
     class _Call:
         tool_call = {"name": "task", "args": {"subagent_type": "nobody"}, "id": "c1"}
 
-    refusal = DeclaredDelegatesOnly(("reviewer",))._refuse(_Call())
+    refusal = DeclaredSubagentsOnly(("reviewer",))._refuse(_Call())
 
     assert refusal is not None
-    assert "'nobody' is not a delegate" in refusal.content
+    assert "'nobody' is not a subagent" in refusal.content
 
 
-# -- the delegate nobody declared ------------------------------------------
+# -- the subagent nobody declared ------------------------------------------
 
 
 class _Audit(AgentMiddleware):
@@ -705,14 +705,14 @@ class _Audit(AgentMiddleware):
 
 
 def _declared(built, name: str) -> list:
-    """One named delegate's middleware, as it was handed to deepagents.
+    """One named subagent's middleware, as it was handed to deepagents.
 
     The record's `subagents` is a list of deepagents' own `SubAgent` mappings, so
     the outer read is an attribute and the inner ones stay subscripts. Only what
     `create_deep_agent` was *called with* gained a type.
     """
     supplied = [s for s in built.subagents or () if s.get("name") == name]
-    assert supplied, f"no {name!r} delegate was supplied"
+    assert supplied, f"no {name!r} subagent was supplied"
     return list(supplied[0].get("middleware") or [])
 
 
@@ -765,7 +765,7 @@ def _with_a_tool(cfg):
 def test_every_graph_holding_the_workspace_tools_carries_the_same_guards(
     cfg, session_dir
 ):
-    """deepagents fills a delegate spec that names no tools from the parent, so the
+    """deepagents fills a subagent spec that names no tools from the parent, so the
     built-in one holds the agent's own tool objects. It was handed the ceiling and the
     deployment's middleware and nothing else -- no path translation, so a call through
     it reached the tool with the paths the model wrote, and no error guard, so a failing
@@ -787,18 +787,18 @@ def test_every_graph_holding_the_workspace_tools_carries_the_same_guards(
         assert [k for k in kinds if k in guards] == guards, f"{where} carries {kinds}"
 
 
-def test_the_builtin_delegate_carries_the_deployments_middleware(cfg, session_dir):
-    """An audit hook that can be stepped around by naming one delegate is not an audit
+def test_the_builtin_subagent_carries_the_deployments_middleware(cfg, session_dir):
+    """An audit hook that can be stepped around by naming one subagent is not an audit
     hook.
     """
     built = _audited_build(cfg, session_dir, builtin_tools=("read_file", "task"))
 
     kinds = [type(m).__name__ for m in _gp(built).get("middleware", ())]
-    assert "_Audit" in kinds, f"the built-in delegate runs unaudited: {kinds}"
+    assert "_Audit" in kinds, f"the built-in subagent runs unaudited: {kinds}"
     assert "ToolAllowlist" in kinds, "the ceiling it already had must survive"
 
 
-def test_the_builtin_delegate_is_supplied_when_nothing_was_narrowed(cfg, session_dir):
+def test_the_builtin_subagent_is_supplied_when_nothing_was_narrowed(cfg, session_dir):
     """The replacement used to happen only for a request that narrowed something,
     because it was written to carry a ceiling.
     """
@@ -810,16 +810,16 @@ def test_the_builtin_delegate_is_supplied_when_nothing_was_narrowed(cfg, session
 
 
 def test_the_backstop_is_on_an_unrestricted_request_too(cfg, session_dir):
-    """`DeclaredDelegatesOnly` exists so a delegate deepagents adds in a future version
+    """`DeclaredSubagentsOnly` exists so a subagent deepagents adds in a future version
     does not arrive unnoticed.
     """
     built = _audited_build(cfg, session_dir)
 
-    assert "DeclaredDelegatesOnly" in {type(m).__name__ for m in built.middleware}
+    assert "DeclaredSubagentsOnly" in {type(m).__name__ for m in built.middleware}
 
 
-def test_the_builtin_delegate_gets_its_own_instances(cfg, session_dir):
-    """Built per graph, like every declared delegate's -- `as_subagent` calls the
+def test_the_builtin_subagent_gets_its_own_instances(cfg, session_dir):
+    """Built per graph, like every declared subagent's -- `as_subagent` calls the
     factory again for each one rather than sharing.
     """
     built = _audited_build(cfg, session_dir)

@@ -6,7 +6,7 @@ holds what a session serves under `/skills/` to what kingfisher read. Per-sessio
 skills themselves are not built, and wait for a deployment that needs them.
 **Date:** 2026-10-11.
 **Occasion:** adding a worked subagent typed as deepagents' `SubAgent` led to the
-question of how a delegate's skills reach the composite backend, and from there to the
+question of how a subagent's skills reach the composite backend, and from there to the
 two readers of the skills catalogue. Kingfisher reads the catalogue itself, at
 startup, and builds grants and the read-deny rules from that reading; the agent reads
 skills through its session's backend. They agree on the default backends and nothing
@@ -35,7 +35,7 @@ Settled before this document, and not reopened by it.
 One deployment serves several companies. Every company shares the deployment's skills
 catalogue, and one of them, say Acme, also needs a few skills of its own that the
 others must not see. Today the only places a skill can come from are deployment-wide:
-the catalogue, a mount named by `KINGFISHER_SKILLS_MOUNTS`, and a delegate's own
+the catalogue, a mount named by `KINGFISHER_SKILLS_MOUNTS`, and a subagent's own
 skills. None of them can differ between sessions.
 
 ## The design
@@ -44,8 +44,8 @@ skills. None of them can differ between sessions.
 checked there, and every agent definition's `skills:` line is checked against it.
 A session's skills are added to it, never put in its place.
 
-**Skills only.** Agents, delegates and tools stay one set per deployment. A tool or a
-delegate declared in Python is code imported into the process, and code that differs
+**Skills only.** Agents, subagents and tools stay one set per deployment. A tool or a
+subagent declared in Python is code imported into the process, and code that differs
 per company is a trust question of its own.
 
 **A session's extra skills live in that session's own storage**, at
@@ -83,8 +83,8 @@ Plain `list` and `doctor` have no session, so they show the shared skills and on
 saying a session may add more.
 
 **Who can use them.** An agent whose definition writes `skills: ["*"]`, or a request
-naming them. Agent and delegate definitions cannot name one, because a name a
-definition writes is checked at startup and a per-session name cannot be. Delegates
+naming them. Agent and subagent definitions cannot name one, because a name a
+definition writes is checked at startup and a per-session name cannot be. Subagents
 name their skills explicitly and are refused the star, so they never get extras.
 
 **A pre-built graph skips the step.** `Kingfisher(cfg, graph=..., backends=...)`
@@ -103,8 +103,8 @@ where it covers pre-built graphs.
   `assets_examples/skills`, the median of twenty reads through `kinds.skills.registry`.
   The per-turn step costs one listing even for a session with no extras, which on a
   backend kept elsewhere is a round trip.
-- **The parent's skills list does not reach a delegate.** `skills_metadata` is private
-  state, stripped before a delegate runs, so a delegate lists its own sources. Driven
+- **The parent's skills list does not reach a subagent.** `skills_metadata` is private
+  state, stripped before a subagent runs, so a subagent lists its own sources. Driven
   through `task` with the parent's skills both open and narrowed.
 
 ## Considered and not taken
@@ -135,7 +135,7 @@ where it covers pre-built graphs.
 
 - **The shell and skills.** A skill names its scripts under `$KINGFISHER_SKILLS`, a
   directory on this host. An extra's scripts are not under it, so they can be read and
-  not run, which is already true of a delegate's own skills. A backend whose shell runs
+  not run, which is already true of a subagent's own skills. A backend whose shell runs
   elsewhere has the same gap for every skill, and that is a question about how files
   reach a remote shell rather than about this list.
 

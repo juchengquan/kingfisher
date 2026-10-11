@@ -168,7 +168,7 @@ def _named(spec_middleware, **kwargs) -> AgentSpec:
 def test_an_agents_own_middleware_is_wrapped_around_the_agent(cfg, session_dir):
     """`middlewares:` in an agent file did nothing to the agent.
 
-    Measured before it was fixed, one build, same registry, same name: the delegate's
+    Measured before it was fixed, one build, same registry, same name: the subagent's
     graph had an `Audit.before_agent` node and the agent's did not. An audit hook
     that covers the cheap half of a run and not the expensive half is worse than
     none, because it looks like coverage.
@@ -187,7 +187,7 @@ def test_an_agents_own_middleware_is_wrapped_around_the_agent(cfg, session_dir):
 def test_the_agents_middleware_runs_after_the_narrowing_kingfisher_applied(
     cfg, session_dir
 ):
-    """Last, for the reason `as_subagent` already gives for a delegate's: a deployment's
+    """Last, for the reason `as_subagent` already gives for a subagent's: a deployment's
     middleware should see the tool and skill narrowing rather than running ahead of
     it.
     """
@@ -427,10 +427,10 @@ def test_a_registered_class_is_built_again_for_every_graph(cfg, session_dir):
     )
 
 
-#: A delegate pinned to a model that is not the deployment's default, which is the
+#: A subagent pinned to a model that is not the deployment's default, which is the
 #: only shape that can tell the two apart: `cheap-model` carries `max_tokens=321`
 #: where the default carries 4096, so a middleware handed the wrong one says so.
-_DELEGATE = """name: reviewer
+_SUBAGENT = """name: reviewer
 description: Checks an analysis for arithmetic errors.
 model: cheap-model
 middlewares: [wants]
@@ -452,14 +452,14 @@ class _WantsEverything(AgentMiddleware):
         super().__init__()
 
 
-#: The same delegate, naming no model, so it runs whatever summoned it. Its
+#: The same subagent, naming no model, so it runs whatever summoned it. Its
 #: middleware has to be told that model rather than nothing, which is the half
 #: `_with_helpers` spells out and the half nothing held.
-_INHERITING_DELEGATE = _DELEGATE.replace("model: cheap-model\n", "")
+_INHERITING_SUBAGENT = _SUBAGENT.replace("model: cheap-model\n", "")
 
 
-def _with_a_delegate(cfg, session_dir, injected, definition: str = _DELEGATE):
-    """One build in which an agent and its delegate both name the same middleware."""
+def _with_a_subagent(cfg, session_dir, injected, definition: str = _SUBAGENT):
+    """One build in which an agent and its subagent both name the same middleware."""
     (cfg.workspace / "subagents").mkdir(exist_ok=True)
     (cfg.workspace / "subagents" / "reviewer.yaml").write_text(definition, encoding="utf-8")
 
@@ -471,44 +471,44 @@ def _with_a_delegate(cfg, session_dir, injected, definition: str = _DELEGATE):
         middleware_registry={"wants": _WantsEverything},
     )
 
-    # `delegate["middleware"]` stays a subscript: the record types what
-    # `create_deep_agent` was handed, and what it is handed for a delegate is
+    # `subagent["middleware"]` stays a subscript: the record types what
+    # `create_deep_agent` was handed, and what it is handed for a subagent is
     # deepagents' own `SubAgent` mapping. Only the outer record gained a type.
-    delegate = next(s for s in declared_subagents(built) if s["name"] == "reviewer")
+    subagent = next(s for s in declared_subagents(built) if s["name"] == "reviewer")
     return (
         next(m for m in built.middleware if type(m) is _WantsEverything),
-        next(m for m in delegate["middleware"] if type(m) is _WantsEverything),
+        next(m for m in subagent["middleware"] if type(m) is _WantsEverything),
     )
 
 
-def test_a_delegate_that_inherits_tells_its_middleware_what_it_will_run(cfg, session_dir):
-    """The other half of the rule above, and the one nothing held: a delegate naming
+def test_a_subagent_that_inherits_tells_its_middleware_what_it_will_run(cfg, session_dir):
+    """The other half of the rule above, and the one nothing held: a subagent naming
     no model runs whatever summoned it, and its middleware is owed that model rather
     than `None`.
 
-    `as_subagent` leaves `model` off such a delegate's spec and deepagents hands it
-    the caller's, so nothing about the delegate itself says what it runs -- which is
+    `as_subagent` leaves `model` off such a subagent's spec and deepagents hands it
+    the caller's, so nothing about the subagent itself says what it runs -- which is
     why the value handed to the middleware has to be filled in here. Dropping that
     fallback left every suite green.
     """
     injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
 
-    mine, theirs = _with_a_delegate(cfg, session_dir, injected, _INHERITING_DELEGATE)
+    mine, theirs = _with_a_subagent(cfg, session_dir, injected, _INHERITING_SUBAGENT)
 
-    assert theirs.model is injected, "the delegate's middleware was told nothing it runs"
+    assert theirs.model is injected, "the subagent's middleware was told nothing it runs"
     assert mine.model is injected, "and the agent's own is unchanged by that"
 
 
-def test_a_delegate_that_inherits_is_given_no_model_of_its_own(cfg, session_dir):
+def test_a_subagent_that_inherits_is_given_no_model_of_its_own(cfg, session_dir):
     """Why the rule above has to fill the value in: the spec carries no model at all,
-    so deepagents is what gives the delegate its caller's. A `model` here would pin
-    the delegate to whatever this build resolved, and "runs whatever summoned it"
+    so deepagents is what gives the subagent its caller's. A `model` here would pin
+    the subagent to whatever this build resolved, and "runs whatever summoned it"
     would stop being true one level down.
     """
     injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
     (cfg.workspace / "subagents").mkdir(exist_ok=True)
     (cfg.workspace / "subagents" / "reviewer.yaml").write_text(
-        _INHERITING_DELEGATE, encoding="utf-8"
+        _INHERITING_SUBAGENT, encoding="utf-8"
     )
 
     built = build_agent(
@@ -519,15 +519,15 @@ def test_a_delegate_that_inherits_is_given_no_model_of_its_own(cfg, session_dir)
         middleware_registry={"wants": _WantsEverything},
     )
 
-    delegate = next(s for s in declared_subagents(built) if s["name"] == "reviewer")
-    assert "model" not in delegate
+    subagent = next(s for s in declared_subagents(built) if s["name"] == "reviewer")
+    assert "model" not in subagent
     # Not vacuous: one that names a model does carry it.
-    assert "model" in _a_pinned_delegate(cfg, session_dir, injected)
+    assert "model" in _a_pinned_subagent(cfg, session_dir, injected)
 
 
-def _a_pinned_delegate(cfg, session_dir, injected) -> dict:
-    """The same delegate, pinned, as the control for the rule above."""
-    (cfg.workspace / "subagents" / "reviewer.yaml").write_text(_DELEGATE, encoding="utf-8")
+def _a_pinned_subagent(cfg, session_dir, injected) -> dict:
+    """The same subagent, pinned, as the control for the rule above."""
+    (cfg.workspace / "subagents" / "reviewer.yaml").write_text(_SUBAGENT, encoding="utf-8")
     built = build_agent(
         cfg,
         agent=_named(("wants",), subagents=("reviewer",)),
@@ -538,19 +538,19 @@ def _a_pinned_delegate(cfg, session_dir, injected) -> dict:
     return next(s for s in declared_subagents(built) if s["name"] == "reviewer")
 
 
-def test_a_delegate_is_handed_its_own_model_rather_than_the_agents(cfg, session_dir):
-    """The bug this would have shipped with: a delegate's middleware running the
+def test_a_subagent_is_handed_its_own_model_rather_than_the_agents(cfg, session_dir):
+    """The bug this would have shipped with: a subagent's middleware running the
     agent's model.
 
-    The delegate's model is not built until `as_subagent`'s last line, so the only
+    The subagent's model is not built until `as_subagent`'s last line, so the only
     thing in scope where its middleware is made is the *agent's* -- and handing that
-    over is wrong in the one direction that costs money, since a delegate pinned to
+    over is wrong in the one direction that costs money, since a subagent pinned to
     a cheap model would be compacted by the expensive one. The same mistake was made
     once already for a helper's inherited model and is recorded beside `_with_helpers`.
     """
     injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
 
-    mine, theirs = _with_a_delegate(cfg, session_dir, injected)
+    mine, theirs = _with_a_subagent(cfg, session_dir, injected)
 
     assert mine.model is injected, "the agent's own middleware runs the agent's model"
     assert theirs.model is not injected
@@ -558,7 +558,7 @@ def test_a_delegate_is_handed_its_own_model_rather_than_the_agents(cfg, session_
 
 
 def test_both_kinds_are_handed_the_same_things_to_want(cfg, session_dir):
-    """A key provisioned where the agent is assembled and not where a delegate is.
+    """A key provisioned where the agent is assembled and not where a subagent is.
 
     Both sites go through one builder, so they cannot differ by accident today; this
     is what would catch a second mapping written inline at one of them. What it would
@@ -568,7 +568,7 @@ def test_both_kinds_are_handed_the_same_things_to_want(cfg, session_dir):
     """
     injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
 
-    mine, theirs = _with_a_delegate(cfg, session_dir, injected)
+    mine, theirs = _with_a_subagent(cfg, session_dir, injected)
 
     # Every want filled on both sides, or one of these would have raised rather
     # than arrived: an unprovided want is refused when the agent is built.
@@ -592,7 +592,7 @@ class _WantsOnlyAModel(AgentMiddleware):
 def test_a_middleware_naming_a_model_this_request_withheld_is_refused(cfg, session_dir):
     """The ceiling a definition cannot write its way around.
 
-    A middleware's `model:` is a name in a definition file like a delegate's, so it
+    A middleware's `model:` is a name in a definition file like a subagent's, so it
     goes through the same endpoint check -- `refuse_ungranted_endpoint`, once, in
     `model_named`. Without it a definition could route every compaction of every run
     to an endpoint the caller explicitly refused, and nothing would say so.
