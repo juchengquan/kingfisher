@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+from kingfisher import DefaultBackends, Kingfisher, Origin
 from kingfisher.kinds.skills.catalogue import reachable
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import start, verbs
@@ -600,6 +602,63 @@ def test_both_forms_of_the_listing_name_where_they_read(cfg, monkeypatch, capsys
     assert str(cfg.workspace / "sessions") in block
     assert document["root"] == str(cfg.workspace / "sessions")
     assert [held["id"] for held in document["sessions"]] == ["s1"]
+
+
+def test_no_surface_names_the_workspace_directory_when_backends_keep_sessions(
+    cfg, monkeypatch, capsys
+):
+    """The setting exists so that `sessions` and `reap` do not list and delete a local
+    `sessions/` while a deployment's own backends keep them somewhere else -- and the
+    path printed beside those listings said `<workspace>/sessions` whatever the backends
+    were. "no sessions in ..." pointed at an empty directory the backends never touch.
+
+    Driven over the three surfaces together, because the listing was already right and
+    only the line beside it was wrong: a rule reading one of them would have passed.
+    `test_both_forms_of_the_listing_name_where_they_read` is the control and runs on the
+    default backend, where the derived path is the correct answer.
+    """
+    import json
+
+    # A factory that really builds, because the command builds it. Named rather than
+    # faked for that reason: `configured_backends` imports the dotted path, so a
+    # plausible-looking string would fail before any of this is reached.
+    configured = replace(
+        cfg, session_backends_factory="tests.unit.test_named_backend:make_backends"
+    )
+    _looking_at(monkeypatch, configured)
+    derived = str(configured.workspace / "sessions")
+
+    main(["sessions"])
+    listing = capsys.readouterr().out
+    main(["sessions", "--json"])
+    document = json.loads(capsys.readouterr().out)
+    main(["list"])
+    catalogue = capsys.readouterr().out
+
+    assert derived not in listing, "the human listing named a directory nothing reads"
+    assert document["root"] is None, "and a script was handed it as a fact"
+    assert "sessions    : <supplied>" in catalogue
+
+
+def test_the_library_and_the_commands_agree_on_where_sessions_are(cfg, monkeypatch):
+    """`Kingfisher.origins` asked the backends it was built with and the commands derived
+    a path from the workspace, so the same deployment got two answers depending on which
+    door it came through. The setting is what a surface holding only a `Config` can ask.
+    """
+    from kingfisher.application.inventory import inventory
+
+    configured = replace(cfg, session_backends_factory="acme.backends:build")
+    _looking_at(monkeypatch, configured)
+
+    class Theirs(DefaultBackends):
+        """A deployment's own, which is what makes `origins` answer `<supplied>`: told
+        apart by identity, since a subclass may return its backend with anything changed.
+        """
+
+    through_the_library = Kingfisher(configured, backends=Theirs()).origins.sessions
+    through_a_command = inventory(configured).origins.sessions
+
+    assert through_the_library == through_a_command == Origin("supplied", None)
 
 
 def test_a_bare_number_is_refused_rather_than_read_as_seconds(cfg, monkeypatch, capsys):

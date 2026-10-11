@@ -3698,6 +3698,35 @@ configuration alone is right for the simple deployment and quietly wrong for the
 one that moved something. `Origins.of` does not call `resolve_definitions`, which
 creates derived roots: a report must not bring into being what it reports on.
 
+
+**`sessions` was the one entry a surface could not answer, and answered wrongly.**
+`Origins` is asked for where sessions are by handing over the backends a `Kingfisher`
+was built with, tested by identity against `DefaultBackends` -- a subclass may return
+its backend with anything changed. `inventory` has no such object: it holds a `Config`.
+It passed nothing, which `_sessions` read as "the default backend", so every surface
+printing the origins block reported the derived `<workspace>/sessions` whatever a
+deployment had configured.
+
+Measured on 2026-10-11 against a deployment naming its own backends: `kingfisher doctor`
+and `kingfisher list` both printed `sessions : ./sessions` while the library answered
+`<supplied>` for the same deployment -- and `doctor` printed it three rows above its own
+`sessions survive` check, which reads the setting and knew better. `_sessions` reads
+that setting where no object is handed in, so the two ways of asking agree.
+
+**The `sessions` command had the same split, with the listing right and the line beside
+it wrong.** `kf.sessions()` asks the backends; the path printed next to it was
+`sessions_root(kf.workspace)`. So the one deployment the setting exists for was told to
+look in a directory its backends never touch, and the empty case said "no sessions in"
+that directory. The absolute path is kept where kingfisher knows it -- somebody reads
+that line in order to go there -- and a sentence naming the backends stands where it
+does not, rather than a path that would be a guess. `"root"` is `null` in the JSON form
+for the same reason.
+
+Three surfaces are driven together in one rule, because the listing was already correct
+and only its neighbour was wrong: a rule reading one of them would have passed. The
+control is `test_both_forms_of_the_listing_name_where_they_read`, which runs on the
+default backend -- where the derived path *is* the right answer, and where this bug was
+invisible. *(2026-10-11, from an architecture review.)*
 **Each entry carries a kind, not a formatted string.** `default` is the derived
 location, decided by comparing against it rather than by asking whether an
 override was set -- so a deployment naming the default path explicitly is

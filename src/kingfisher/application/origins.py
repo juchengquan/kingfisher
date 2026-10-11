@@ -178,8 +178,19 @@ def _source_ids(cfg: Config) -> Origin:
 
 
 def _sessions(cfg: Config, backends: object | None) -> Origin:
-    """Where sessions are: the workspace's own directory, or a backend's. `None` is the
-    default backend, which keeps them in the workspace."""
-    if backends is None:
-        return Origin("default", cfg.workspace / "sessions")
-    return Origin("supplied")
+    """Where sessions are: the workspace's own directory, or a deployment's own backends.
+
+    Two ways of asking, because the callers have different things to ask with.
+    `Kingfisher` hands over the object it was built with, tested by identity against
+    `DefaultBackends` -- a subclass may return its backend with anything changed. A
+    surface holding only a `Config` has no object, so it reads the setting that would
+    have built one.
+
+    `inventory` had nothing to pass and got the derived default, so `kingfisher doctor`
+    printed `sessions : ./sessions` three rows above its own `sessions survive` check,
+    which reads this same setting and knew better. Both now answer `<supplied>`, which
+    is what the library answers for the same deployment.
+    """
+    if backends is not None or cfg.session_backends_factory is not None:
+        return Origin("supplied")
+    return Origin("default", cfg.workspace / "sessions")
