@@ -28,6 +28,7 @@ from kingfisher.kinds.skills.catalogue import reachable
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.kinds.tools.spec import Offering
+from kingfisher.layout import SCRATCH
 from tests.conftest import FakeToolCallingModel, middleware_of, repository_root, subagent_of
 from tests.unit.test_subagent_helpers import _subagent, _tools_of
 
@@ -1703,7 +1704,10 @@ class _Reader(BaseChatModel):
             (m.text for m in messages if m.additional_kwargs.get("lc_source") == "summarization"),
             "",
         )
-        if self.follow_history and (named := re.search(r"/conversation_history/\S+?\.md", summary)):
+        # Under whatever root the summary gives, so the read follows it and the test
+        # says separately where that is.
+        named = re.search(r"\S*/conversation_history/\S+?\.md", summary)
+        if self.follow_history and named:
             call = {"name": "read_file", "args": {"file_path": named.group()}, "id": "history"}
             return _reply(AIMessage(content="", tool_calls=[call]))
         if self.calls:
@@ -1775,13 +1779,17 @@ def test_compaction_fires_at_sixty_messages_however_small(shipped, cfg, session_
 
     And the summary names where what it replaced went, which `assistant`'s prompt
     tells the agent to read -- read back here through the agent's own `read_file`,
-    so under the permissions the agent runs with rather than the backend's.
+    so under the permissions the agent runs with rather than the backend's. It went
+    to `conversation_history/` at the session root, outside every folder the layout
+    names, until the backend gave deepagents the scratchpad.
     """
     model = _Reader(reads=40, follow_history=True)
     warned = _read_under_compact(shipped, cfg, session_dir, model)
 
     assert model.summarised, "sixty small messages were never summarized"
     assert "Summarized at" in model.history, f"the history did not read back: {model.history!r}"
+    assert list((session_dir / SCRATCH / "conversation_history").glob("*.md"))
+    assert not (session_dir / "conversation_history").exists(), "kept at the session root"
     # The notice kingfisher gives when a middleware takes one of deepagents' own
     # places. Here it is the design: without it, this runs beside deepagents'
     # summarizer instead of in its place.

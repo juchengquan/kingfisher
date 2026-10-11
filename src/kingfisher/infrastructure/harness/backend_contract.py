@@ -31,6 +31,7 @@ from kingfisher.layout import (
     HARNESS_ROUTE,
     INPUTS_ROUTE,
     OUTPUTS_ROUTE,
+    SCRATCH_ROUTE,
     SKILLS_ROUTE,
     denied_read_scopes,
     denied_scopes,
@@ -140,6 +141,28 @@ def filesystem_consistency(make: Callable[[], Any]) -> None:
             raise AssertionError(msg)
 
 
+def offloads_in_the_scratchpad(make: Callable[[], Any]) -> None:
+    """deepagents' own files land where `system.md` tells the agent they are.
+
+    A tool result too long for a message, and the history the summarizer keeps, go
+    under the backend's `artifacts_root`, which defaults to `/`. `WorkspaceScopedBackend`
+    sets it, so a subclass passes; a `CompositeBackend` assembled without it puts both
+    folders at the session root, where the agent is never sent to search. Read the way
+    deepagents reads it, `isinstance` included, because a backend that is no
+    `CompositeBackend` is `/` whatever attribute it carries.
+    """
+    backend = make()
+    root = backend.artifacts_root if isinstance(backend, CompositeBackend) else "/"
+    if root.rstrip("/") != SCRATCH_ROUTE.rstrip("/"):
+        msg = (
+            f"{type(backend).__name__} has deepagents write the tool results it evicts "
+            f"and the history it summarizes under {root!r}, and the agent is told they "
+            f"are under {SCRATCH_ROUTE}. Pass artifacts_root={SCRATCH_ROUTE!r} to the "
+            "CompositeBackend, as the one backend_at builds does"
+        )
+        raise AssertionError(msg)
+
+
 def shell_denied(make: Callable[[], Any]) -> None:
     """The agent's shell may not write under `/.harness` or `/inputs`.
 
@@ -207,12 +230,13 @@ def host_path_refusal(make: Callable[[], Any]) -> None:
 
 #: Every check a backend a deployment's `open` returned must pass, in the order a
 #: deployment wants to read them: the silent failure first, then the one that stops
-#: the graph building, then the promise the prompt makes, then what the shell must
+#: the graph building, then the promises the prompt makes, then what the shell must
 #: not write, then the refusal.
 BACKEND_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (
     execution_support,
     route_coverage,
     filesystem_consistency,
+    offloads_in_the_scratchpad,
     shell_denied,
     host_path_refusal,
 )
@@ -225,6 +249,11 @@ def refuse_unusable_backend(backend: Any) -> None:
     turn's worth of work, so running them costs nothing and the default pays the
     same nothing every other build does. The rest write files and run shell
     commands -- a deployment's to pay in its own tests, never a turn's.
+
+    `offloads_in_the_scratchpad` only looks too, and stays out on purpose. What it
+    catches is a folder in the wrong place, and the stub deepagents hands the model
+    still names the right path; refusing every turn of a working deployment over
+    that costs more than the folder does.
 
     Running any of them at all is what stands in for a property this seam used to
     have for free. A deployment handed the backend kingfisher built kept the route

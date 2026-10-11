@@ -188,11 +188,24 @@ for the next reader who reaches for one.*
   class and the subclass's own class name otherwise, so replacing it is something
   a subclass opts into. `compaction.py` does. *(2026-10-01.)*
 - **What it summarizes away is kept, and the summary says where.** One file per
-  session, `/conversation_history/<session_id>.md`, a timestamped section appended
-  each time; through kingfisher's backend it lands in the session directory and the
-  agent reads it back with `read_file`.
-  `test_compaction_fires_at_sixty_messages_however_small` reads it back that way.
-  *(2026-10-01.)*
+  session, `conversation_history/<session_id>.md` under the root the next entry
+  describes, a timestamped section appended each time; through kingfisher's backend
+  that is `/scratchpad/conversation_history/`, and the agent reads it back with
+  `read_file`. `test_compaction_fires_at_sixty_messages_however_small` reads it back
+  that way. *(2026-10-01; the root 2026-10-11.)*
+- **It writes two kinds of file on its own, under one root it reads with
+  `isinstance`.** A tool result over 20,000 tokens, counted at four characters each,
+  is saved to `large_tool_results/<call id>` and the model is handed a head-and-tail
+  stub naming the path. Every tool but the file tools is evicted, so `execute` and
+  each workspace tool are; when a call overflows the context, the summarizer
+  offloads the large tool results it keeps there too. A user message over 50,000 tokens goes to
+  `conversation_history/<uuid>.md`, beside the summarizer's history and its
+  `media/`. Both folders hang off `CompositeBackend.artifacts_root`, `/` by default,
+  which `FilesystemMiddleware` and `SummarizationMiddleware` read only when the
+  backend is a `CompositeBackend`: anything else is `/` whatever it carries. The
+  `grep` tool's description says offloaded results are under `/large_tool_results/`
+  "by default", and does not change with the root. `tests/unit/test_offloads.py`
+  drives both evictions. *(2026-10-11, deepagents 0.7.6.)*
 - **Its trigger counts the system prompt and tools; its `keep` does not.** With a
   window small enough that those approach three quarters of it, a profile-based
   trigger fires before every call: the stock prompt (about 2.4k tokens) at a 3.2k

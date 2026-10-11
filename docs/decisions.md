@@ -2695,6 +2695,51 @@ calls `check_sessions` itself, just before `ensure_layout`, which no longer take
 mode: a flag could not carry it, and the id would have needed a third value for
 seeding, which asks nothing and now simply does not call it. *(2026-10-07.)*
 
+**deepagents' own files are kept in the scratchpad.** deepagents writes two kinds of
+file without being asked. A tool result over about 80,000 characters is saved to
+`large_tool_results/<call id>` and the model is handed a stub naming the path; the
+summarizer's fallback when a call overflows the context writes there too. The
+summarizer keeps what it replaced in `conversation_history/session_<id>.md`, with its
+images under `media/`, and a user message too long to send goes to
+`conversation_history/<uuid>.md`. Both folders hang off `CompositeBackend.artifacts_root`,
+which defaults to `/` and which kingfisher never set. So they sat at the session root
+beside `inputs/`, `outputs/`, `memory/`, `scratchpad/` and `.harness/`: in no folder
+the layout names, never returned to a caller, and not in a prompt that tells the agent
+it writes only to `/outputs` and `/scratchpad`.
+
+`WorkspaceScopedBackend` passes `artifacts_root=SCRATCH_ROUTE`, so they are
+`/scratchpad/large_tool_results/` and `/scratchpad/conversation_history/`. That is what
+they are: the agent's working material, returned to nobody and swept with the session.
+`/outputs` was the other folder with a name, and would have handed every evicted result
+to the caller as an artifact. `system.md` names both in its scratchpad line. A stub
+names its own path, so the line matters when the agent searches rather than follows one
+-- and deepagents' own `grep` description says offloaded results are under
+`/large_tool_results/` "by default", which is no longer where they are.
+`test_the_prompt_names_the_folders_deepagents_writes_on_its_own` reads the root off the
+backend, so a rename cannot leave the line behind.
+
+*One setting, and one condition on it.* deepagents reads `artifacts_root` only off a
+`CompositeBackend`: `FilesystemMiddleware` and `SummarizationMiddleware` both ask
+`isinstance` and fall back to `/`. `WorkspaceScopedBackend` is one, and it is what
+`create_deep_agent` is handed, so every middleware built from it reads the setting -- the
+agent's, each declared subagent's, `general-purpose`'s and the `compact` example's. A
+deployment's own backend has it by subclassing that class or returning what `backend_at`
+built; a `CompositeBackend` assembled from nothing is back at `/`. `BACKEND_CONTRACT`
+gained `offloads_in_the_scratchpad`, which reads the root the way deepagents does. It is
+not one of the two run on every build: it finds a folder in the wrong place, whose stub
+still names the right path, and refusing a working deployment over that costs more
+than the folder.
+
+*The shell can now write them.* The Landlock fence grants a session's folders one at a
+time and never the session itself, so the shell could not write the old root-level
+folders and can write these. The agent may edit or delete an evicted result or the
+summary history with its own shell. They are its working material and nothing kingfisher
+reads back trusts them, so that is accepted rather than fenced.
+
+*No migration.* A session made before this keeps any root-level `large_tool_results/`
+and `conversation_history/` until it is reaped. A stub from before names the old path,
+and the file is still there to read. *(2026-10-11.)*
+
 ## Wiring a store
 
 *Much of this was reversed on 2026-09-30: `SessionStore` and `SessionRoot` are gone,

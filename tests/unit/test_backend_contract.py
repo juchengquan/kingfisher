@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 from typing import Any
 
 import pytest
+from deepagents.backends import CompositeBackend
 from deepagents.backends.protocol import ReadResult
 
 from kingfisher.infrastructure.harness.backend import (
@@ -17,8 +19,10 @@ from kingfisher.infrastructure.harness.backend_contract import (
     execution_support,
     filesystem_consistency,
     host_path_refusal,
+    offloads_in_the_scratchpad,
     route_coverage,
 )
+from kingfisher.layout import SCRATCH_ROUTE
 
 
 def test_kingfishers_own_backend_keeps_the_contract(cfg, session_dir):
@@ -97,6 +101,47 @@ def test_a_shell_that_cannot_see_what_the_tools_wrote_is_caught(cfg, session_dir
 
     with pytest.raises(AssertionError, match="one filesystem"):
         filesystem_consistency(lambda: blind)
+
+
+def test_a_composite_of_a_deployment_s_own_puts_deepagents_files_at_the_root(cfg, session_dir):
+    """A `CompositeBackend` assembled from kingfisher's own parts still defaults to `/`,
+    so the tool results deepagents evicts land where the prompt never sends the agent.
+    """
+    real = backend_at(cfg, session_dir)
+    own = CompositeBackend(default=real.default, routes=dict(real.routes))
+
+    with pytest.raises(AssertionError, match=re.escape(f"artifacts_root={SCRATCH_ROUTE!r}")):
+        offloads_in_the_scratchpad(lambda: own)
+
+
+def test_the_root_is_read_only_off_a_composite_as_deepagents_reads_it(cfg, session_dir):
+    """deepagents asks `isinstance` before it reads the attribute, so a backend carrying
+    the right one by delegation is still `/` to it.
+    """
+    carried = NotRecognised(backend_at(cfg, session_dir))
+    assert carried.artifacts_root == SCRATCH_ROUTE
+
+    with pytest.raises(AssertionError, match="under '/'"):
+        offloads_in_the_scratchpad(lambda: carried)
+
+
+def test_a_subclass_of_the_scoped_backend_keeps_the_scratchpad(cfg, session_dir):
+    """`ports.md` tells a deployment that subclassing `WorkspaceScopedBackend` carries
+    the setting; set by `backend_at` instead of by the class, it would not.
+    """
+
+    class Mine(WorkspaceScopedBackend):
+        pass
+
+    real = backend_at(cfg, session_dir)
+    mine = Mine(
+        default=real.default,
+        routes=dict(real.routes),
+        session_dir=session_dir,
+        workspace=cfg.workspace,
+    )
+
+    offloads_in_the_scratchpad(lambda: mine)
 
 
 def test_a_host_path_refused_with_the_wrong_type_is_caught(cfg, session_dir):
