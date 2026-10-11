@@ -815,6 +815,45 @@ def _session_files(cfg: Config) -> Iterator[Check]:
         )
 
 
+def _sessions_apart(cfg: Config) -> Iterator[Check]:
+    """Whether one session's agent can read and change another session's files.
+
+    `shell` says what the host is exposed to; this says the consequence for the people
+    one workspace serves. A report, never a refusal: kingfisher is mostly run as a
+    package, and on many servers no fence can start. Quiet where it cannot happen -- one
+    session per workspace, or a Linux fence handing each turn its own session -- and for
+    session backends this command cannot see into, whose contract asks it of them.
+    """
+    if cfg.session_id is not None or cfg.session_backends_factory:
+        return
+    confined = shell_confinement(cfg)
+    if confined.mechanism in LINUX_FENCES:
+        return
+    if confined.mechanism == SANDBOX_EXEC:
+        why = "the macOS sandbox hides the home folder, not one session from another"
+        remedy = "give each person a workspace of their own: KINGFISHER_SESSION_ID makes one"
+    elif confined.elsewhere:
+        why = (
+            "KINGFISHER_SHELL_SANDBOX is 'external', which keeps the host from the shell, "
+            "not one session from another"
+        )
+        remedy = "give each person a workspace of their own: KINGFISHER_SESSION_ID makes one"
+    else:
+        why = "nothing kingfisher runs confines the shell here"
+        remedy = (
+            "turn the sandbox on, or give each person a workspace of their own: "
+            "KINGFISHER_SESSION_ID makes one"
+        )
+    remedy += " hold a single session"
+    yield Check(
+        "sessions apart",
+        "warn",
+        f"this workspace holds many sessions and {why}, so one session's agent can read "
+        f"and change another session's files",
+        remedy,
+    )
+
+
 def _retired(environ: Mapping[str, str] | None = None) -> Iterator[Check]:
     """Settings this deployment still carries that nothing reads any more.
 
@@ -879,6 +918,7 @@ def examine(
         checks += _definitions(cfg, found)
         checks += _shell(cfg)
         checks += _session_files(cfg)
+        checks += _sessions_apart(cfg)
     except ConfigError as exc:  # pragma: no cover -- belt and braces
         checks.append(Check("configuration", "fail", str(exc)))
     return tuple(checks)

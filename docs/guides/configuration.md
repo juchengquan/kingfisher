@@ -145,11 +145,19 @@ code:
 | The shell reading… | macOS `sandbox-exec` | bubblewrap | Landlock | No fence |
 |---|---|---|---|---|
 | The operator's home | hidden | hidden | hidden | readable |
-| The workspace, `models.yaml` included | readable; writes refused | hidden | hidden | readable |
+| The workspace, `models.yaml` included | readable; writes refused to `models.yaml` and the definitions | hidden | hidden | readable |
+| Other sessions' folders | readable and writable | hidden | hidden | readable and writable |
 | Anywhere else -- `/tmp`, `/Users/Shared`, `/opt` | readable | hidden | hidden | readable |
 | `/etc`, `/usr` | readable | readable | readable | readable |
 | A process's environment as it started | readable | hidden | not settled | readable |
 | The network | open | closed | open | open |
+
+**On macOS the sandbox does not keep sessions apart.** It hides the operator's home,
+not one session from another, so each session's agent can read and change the others'
+files -- measured on 2026-10-11 with the workspace both inside the home folder and
+outside it. Keep people apart on one Mac by giving each a workspace of their own;
+`KINGFISHER_SESSION_ID` makes one hold a single session. `doctor` says it as `sessions
+apart`, and so does the warning a run prints when nothing confines the shell.
 
 "No fence" is `off`, `external` with nothing outside actually confining the shell,
 and a Linux host where neither fence could start, which warns and runs.

@@ -615,7 +615,15 @@ def backend_at(
         # deployment its host is exposed when nothing runs on it. This line rather
         # than the caller's, so the default filter says it once per process instead
         # of once per place that builds a backend.
-        warnings.warn(confined.warning, stacklevel=1)
+        said = confined.warning
+        if cfg.session_id is None:
+            # What it means for the people one workspace serves, said where a program
+            # running kingfisher sees it: most never run `doctor`.
+            said += (
+                " This workspace holds many sessions, so each session's agent can also "
+                "read and change the other sessions' files."
+            )
+        warnings.warn(said, stacklevel=1)
     shell = ConfinedLocalShellBackend(
         confined,
         runner=chosen,
