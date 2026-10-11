@@ -6,13 +6,19 @@ import asyncio
 import json
 import os
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from deepagents.backends import FilesystemBackend
 
 from kingfisher import SESSION_BACKENDS_CONTRACT, DefaultBackends, Kingfisher, default_backends
-from kingfisher.infrastructure.harness.backend import backend_at
-from kingfisher.layout import CLAIM
+from kingfisher.infrastructure.harness.backend import (
+    WorkspaceScopedBackend,
+    backend_at,
+    bundled_skills_route,
+)
+from kingfisher.layout import CLAIM, SKILLS_ROUTE
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import StubCheckpointer
 from tests.unit.test_run import StubAgent
@@ -293,3 +299,107 @@ def test_the_kit_catches_a_host_path_into_another_session(cfg):
 def test_a_backend_that_keeps_nothing_here_passes_the_host_path_check(cfg):
     """`None` is an honest answer: the tool is refused and reads through the backend."""
     _check("a_host_path_stays_in_its_session")(lambda: (cfg, NothingHere()))
+
+
+# -- the skills a session serves ----------------------------------------------
+
+SKILL = "---\nname: {name}\ndescription: The {name} procedure.\n---\n\n# {name}\n\nDo it.\n"
+
+
+def _skill(folder: Path, name: str) -> None:
+    (folder / name).mkdir(parents=True)
+    (folder / name / "SKILL.md").write_text(SKILL.format(name=name), encoding="utf-8")
+
+
+@pytest.fixture
+def skilled(cfg, tmp_path):
+    """A skill in every place one is mounted from: the catalogue's top level, a folder
+    of it, a mount, and a delegate carrying its own.
+    """
+    _skill(cfg.skills_dir, "review")
+    _skill(cfg.skills_dir / "incident", "timeline")
+    _skill(tmp_path / "vendor", "lookup")
+    carried = tmp_path / "package" / "skills"
+    _skill(carried, "masking")
+    subagents = cfg.catalogue_roots["subagents"]
+    subagents.mkdir(parents=True, exist_ok=True)
+    entry = {
+        "name": "carrier",
+        "description": "Carries a skill of its own.",
+        "system_prompt": "Go.",
+        "skills": [str(carried)],
+    }
+    (subagents / "carrier.py").write_text(f"SUBAGENTS = [{entry!r}]\n", encoding="utf-8")
+    return replace(cfg, skills_mounts={"vendor": tmp_path / "vendor"})
+
+
+def _rerouted(edit):
+    """Kingfisher's own backends, with their routes edited after each is built."""
+
+    class Rerouted(DefaultBackends):
+        def open(self, cfg, session_id, /, *, catalogue=None):
+            built = super().open(cfg, session_id, catalogue=catalogue)
+            return WorkspaceScopedBackend(
+                default=built.default,
+                routes=edit(dict(built.routes)),
+                session_dir=built._session_dir,
+                workspace=built.workspace,
+            )
+
+    return Rerouted()
+
+
+def _catalogue_over(*skills: str):
+    """`/skills/` routed to a folder holding these, each at the top level."""
+
+    def edit(routes, elsewhere):
+        for name in skills:
+            _skill(elsewhere, name)
+        return {**routes, SKILLS_ROUTE: FilesystemBackend(root_dir=str(elsewhere))}
+
+    return edit
+
+
+def _without(route: str):
+    def edit(routes, _elsewhere):
+        return {path: backend for path, backend in routes.items() if path != route}
+
+    return edit
+
+
+def test_the_default_serves_every_skill_it_reads(skilled):
+    """The control: each case below fails on the route it changes, not on a fixture
+    the default could not pass either.
+    """
+    _check("a_session_serves_the_skills_kingfisher_read")(lambda: (skilled, default_backends))
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        _catalogue_over("impostor"),
+        # Every name still served, and `timeline` out of its folder: the deny rule for
+        # it names `/skills/incident/timeline/**`, where nothing is.
+        _catalogue_over("review", "timeline"),
+        _catalogue_over("review"),
+        _without(f"{SKILLS_ROUTE}vendor/"),
+        _without(bundled_skills_route("carrier")),
+    ],
+    ids=[
+        "other-skills",
+        "same-names-other-paths",
+        "a-folder-missing",
+        "mount-unrouted",
+        "bundle-unrouted",
+    ],
+)
+def test_the_kit_catches_skills_served_from_somewhere_kingfisher_did_not_read(
+    skilled, tmp_path, edit
+):
+    """A backend serving `/skills/` other than kingfisher read leaves grants naming
+    skills the agent cannot find, and deny rules naming paths nothing is at.
+    """
+    backends = _rerouted(lambda routes: edit(routes, tmp_path / "elsewhere"))
+
+    with pytest.raises(AssertionError, match="serves /skills/ differently"):
+        _check("a_session_serves_the_skills_kingfisher_read")(lambda: (skilled, backends))

@@ -72,6 +72,10 @@ slices land.
   `kingfisher` command's API keys from `.env` into YAML without putting them where
   the agent's shell reads more easily, and what each fence hides, measured. Nothing
   built.
+- [Per-session skills](design/2026-10-11-per-session-skills.md) — letting a session
+  bring skills of its own while the skills kingfisher read and the skills the agent
+  sees stay one list. The check it rests on has landed; the feature waits for a
+  deployment that needs it.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,

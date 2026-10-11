@@ -352,6 +352,27 @@ def bundled_skill_mounts(where: str, directories: tuple[Path, ...]) -> tuple[tup
     )
 
 
+def skill_mounts(catalogue: Definitions) -> tuple[tuple[str, Path], ...]:
+    """`(route, directory)` for every skills directory mounted beneath the catalogue.
+
+    Each bundle's, then each mount a deployment named. All under `/skills/`, because
+    both things that keep the catalogue read-only -- the deny rule and the sandbox
+    profile -- are scoped to that prefix. `backend_at` mounts this list and
+    `SESSION_BACKENDS_CONTRACT` checks a deployment's backends against it: a kind of
+    skills directory mounted anywhere but here would escape the check.
+    """
+    return (
+        *(
+            pair
+            for bundle in _bundles_with_skills(catalogue)
+            for pair in bundled_skill_mounts(bundle.where, bundle.skills)
+        ),
+        # The segment the registry lists a mount under, so the deny rule for a skill
+        # in it lands here.
+        *((f"{SKILLS_ROUTE}{label}/", mount) for label, mount in catalogue.skills.mounts.items()),
+    )
+
+
 def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
     """Every place the agent should look for skills, labelled."""
     if RESERVED_SKILL_FOLDER in folders:
@@ -613,21 +634,13 @@ def backend_at(
         raise ConfigError(msg)
 
     routes: dict[str, Any] = {path: backing[path]() for path in routed_paths()}
-    # One per bundle, so a delegate's own skills are readable by the file tools
-    # that read every other skill -- and read-only for the same two reasons,
-    # since both enforcement points are scoped to `/skills/` and this sits
-    # underneath it. Generated rather than declared: the names are not known
-    # until a catalogue is read, which is what `family=True` marks.
+    # One per bundle and per mount, so a delegate's own skills and a mounted party's
+    # are readable by the file tools that read every other skill. Generated rather
+    # than declared: the names are not known until a catalogue is read, which is
+    # what `family=True` marks.
     routes.update({
         route: FilesystemBackend(root_dir=str(directory))
-        for bundle in _bundles_with_skills(catalogue or Definitions.from_config(cfg))
-        for route, directory in bundled_skill_mounts(bundle.where, bundle.skills)
-    })
-    # One per mount, under `/skills/` for the bundles' reason. The registry lists a
-    # mount under this same segment, so the deny rule for a skill in it lands here.
-    routes.update({
-        f"{SKILLS_ROUTE}{label}/": FilesystemBackend(root_dir=str(mount))
-        for label, mount in skills.mounts.items()
+        for route, directory in skill_mounts(catalogue or Definitions.from_config(cfg))
     })
 
     return WorkspaceScopedBackend(

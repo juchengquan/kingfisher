@@ -3084,6 +3084,27 @@ The mode rule loses nothing by it: `placement` held the checks and the report, a
 the copy into `/data` is the backend's own, inside `writable_data`.
 *(2026-10-05.)*
 
+**What a session serves under `/skills/` is checked against what kingfisher read.**
+Kingfisher reads the skills catalogue itself, at startup, and builds grants and the
+read-deny rules from that reading; the agent reads skills through its session's
+backend. Session backends of a deployment's own may serve `/skills/` from anywhere,
+and nothing compared the two: a granted skill could be missing from the agent's
+index, and one kingfisher never read had no deny rule, so it stayed readable whatever
+a request narrowed. `a_session_serves_the_skills_kingfisher_read` in
+`SESSION_BACKENDS_CONTRACT` lists the catalogue, each mount and each bundle through
+one opened session, with the lister deepagents loads skills with, and compares names
+and paths with the same folders read directly.
+
+**By what is served, not by what backs a route.** Inspecting the routes would refuse
+a backend serving the same folders another way, and pass one routing `/skills/` to
+the right kind of backend over the wrong folder. **In the kit rather than on every
+open**, where the two automatic checks run: those cost an `isinstance` and a scan,
+and this lists every source, for a wiring mistake that does not change between
+turns. It needs no async twin, because `aopen_reaches_the_session_open_does` already
+holds `aopen` to the session `open` reaches. **Bundles and mounts come from one list,
+`skill_mounts`**, which `backend_at` mounts and the check reads: a skills directory
+mounted anywhere else would be served and never checked. *(2026-10-11.)*
+
 ## A tool's path is the backend's path
 
 **A workspace tool's `path` is resolved by the session's backend, under the turn's

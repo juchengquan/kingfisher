@@ -17,6 +17,22 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## A session's skills checked against what kingfisher read, after #680
+
+`SESSION_BACKENDS_CONTRACT` has one more check,
+`a_session_serves_the_skills_kingfisher_read` (#681). Kingfisher builds grants and the
+read-deny rules from the skills it reads itself. The check opens a session through
+your backends and compares what it serves under `/skills/` -- the catalogue, each
+mount and each delegate's own skills -- with the folders kingfisher read.
+
+- **Built on `backend_at` and keeping its routes**, there is nothing to do: kingfisher's
+  own routes pass.
+- **Routing `/skills/` yourself**, serve the folders kingfisher reads: the catalogue at
+  `/skills/`, each mount at `/skills/<label>/`, and each delegate's skills under
+  `/skills/subagents/`. A skill served from anywhere else is either granted and
+  missing, or readable however a request narrowed.
+- Nothing changes at runtime. The check runs where you run the kit.
+
 ## A lone session's id recorded, after #674
 
 A workspace holding one session records the id it was laid out for, in
