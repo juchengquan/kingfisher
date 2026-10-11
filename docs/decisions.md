@@ -1947,9 +1947,10 @@ built that way from the start and says why in its docstring: the lesson was writ
 for one fence and not applied to the other.
 
 **Why this mattered more than a thin test file.** `FENCES_HARNESS` -- named by no test
--- is what `harness_unfenced` reads, which is what tells `key_needed` that a bubblewrap
-deployment needs no session key. The binds nothing checked were the thing switching
-signing off. Of the three mechanisms in that constant, sandbox-exec had four to five
+-- is what `harness_unfenced` reads, which is what lets `doctor`'s `session files` check
+say a bubblewrap deployment keeps the shell out of `.harness`. Nothing signs what is kept
+there, so the binds nothing checked were all that `ok` stood on. Of the three
+mechanisms in that constant, sandbox-exec had four to five
 tests biting per mutation and Landlock had both a policy rule and a CI escape test;
 bubblewrap had the flag words. Its five escape tests run on no job -- no `bwrap` on the
 macOS runner, and the Linux image refuses the unprivileged user namespace the probe
