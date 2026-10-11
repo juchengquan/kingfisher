@@ -113,12 +113,17 @@ def test_a_mounted_skill_is_addressed_under_its_label(mounted):
 
 
 def test_a_broken_skill_in_a_mount_is_reported_under_its_label(mounted):
-    """An unloadable directory in a mount is named where a reader would look for it."""
+    """An unloadable directory in a mount is named where a reader would look for it.
+
+    The whole tuple, not `"vendor/broken" in` it. Written the second way, this passed
+    against a mount that reported *every* skill as unloadable -- the label applied twice
+    makes nothing match what loaded, so everything reads as missing. Measured.
+    """
     broken = mounted.skills_mounts["vendor"] / "broken"
     broken.mkdir()
     (broken / "SKILL.md").write_text("no header here\n", encoding="utf-8")
 
-    assert "vendor/broken" in Definitions.from_config(mounted).registry.unloadable
+    assert Definitions.from_config(mounted).registry.unloadable == ("vendor/broken",)
 
 
 def test_a_mount_is_flat(mounted):
