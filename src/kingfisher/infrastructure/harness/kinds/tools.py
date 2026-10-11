@@ -133,7 +133,7 @@ class _ToolSurface:
 
 
 def _private_tools(catalogue: Definitions, name: str) -> tuple[Found, ...]:
-    """The tools a delegate brings itself, or none."""
+    """The tools a subagent brings itself, or none."""
     repository = catalogue.bundled_tools.get(name)
     if repository is None:
         return ()
@@ -141,7 +141,7 @@ def _private_tools(catalogue: Definitions, name: str) -> tuple[Found, ...]:
     if spec is None or spec.carried:
         return tuple(repository.found)
     # Filtered here as well as refused at load, so a build that skipped `warm` still
-    # hands a delegate only what its definition lists from the folder.
+    # hands a subagent only what its definition lists from the folder.
     listed = set(spec.bundled.get("tools", ()))
     return tuple(one for one in repository.found if one.name in listed)
 
@@ -174,7 +174,7 @@ def _resolve_tools(
     `names_needed` is the fourth job: a *definition* naming tools has to be checked
     against what exists, and what exists includes the built-in set. A caller asks for
     it only when some activated definition actually names one. Measured on a build
-    with one delegate: 1 compile and 12.6ms when it names no tools, 2 and 20.3ms when
+    with one subagent: 1 compile and 12.6ms when it names no tools, 2 and 20.3ms when
     it does -- so the probe is the ~7.7ms, and the runs that never needed it still
     skip it.
     """

@@ -1,4 +1,4 @@
-"""A delegate that orders version strings, and says which ones are not versions.
+"""A subagent that orders version strings, and says which ones are not versions.
 
 **Written to deepagents' own `SubAgent`, and typed as one.** `timestamps` is the
 same portable shape in kingfisher's words; this is the shape a package written for
@@ -16,9 +16,9 @@ writing one file of its own:
     SUBAGENTS = [versions_subagent]
 
 **The type has no word for two things `timestamps` says.** Without `builtin_tools`
-this delegate gets every built-in the request granted -- narrowed still, so a
+this subagent gets every built-in the request granted -- narrowed still, so a
 request that withheld `execute` withholds it here, but one that granted
-`write_file` hands it over, and a delegate that should only read has only its
+`write_file` hands it over, and a subagent that should only read has only its
 prompt asking it to. Without `metadata` it cannot record where it came from.
 Needing either is the point to stop writing to the TypedDict: add the key, drop the
 annotation, and you have `timestamps`.
@@ -40,7 +40,7 @@ from deepagents import SubAgent
 HERE = Path(__file__).parent
 
 #: SemVer 2.0.0's grammar as semver.org publishes it, plus a leading `v`: that is
-#: how tags spell versions, and a delegate asked to order tags that refused every
+#: how tags spell versions, and a subagent asked to order tags that refused every
 #: one of them would be no use. ASCII, because `\d` alone also matches digits from
 #: other scripts, which the specification does not allow and `int` would read.
 SEMVER = re.compile(

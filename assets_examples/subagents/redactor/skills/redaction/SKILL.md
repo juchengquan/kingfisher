@@ -5,9 +5,9 @@ description: How to quote from a file that may contain credentials. Use before p
 
 # Quoting from a file that may hold secrets
 
-This skill ships inside `redactor`'s own folder, so the `redactor` delegate is
+This skill ships inside `redactor`'s own folder, so the `redactor` subagent is
 told about it and nothing else is. A skill in the shared `skills/` directory is
-one any request may activate; this one arrives with the delegate or not at all.
+one any request may activate; this one arrives with the subagent or not at all.
 
 ## The procedure
 

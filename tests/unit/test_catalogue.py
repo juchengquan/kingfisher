@@ -304,7 +304,7 @@ def test_a_workspace_with_no_tools_never_assembles_the_probe(cfg, monkeypatch):
     Kingfisher(cfg, backends=default_backends)
 
 
-def test_a_delegate_is_activated_from_the_supplied_catalogue(tmp_path, cfg, session_dir):
+def test_a_subagent_is_activated_from_the_supplied_catalogue(tmp_path, cfg, session_dir):
     """The subagent half, through `build_agent` rather than beside it."""
     roots = _staged(tmp_path / "staged", subagent=SUBAGENT)
 
@@ -317,7 +317,7 @@ def test_a_delegate_is_activated_from_the_supplied_catalogue(tmp_path, cfg, sess
     )
 
     names = [spec["name"] for spec in built.subagents or ()]
-    assert "reviewer" in names, "the staged catalogue's delegate was not wired"
+    assert "reviewer" in names, "the staged catalogue's subagent was not wired"
 
 
 def test_the_agent_it_builds_offers_the_staged_definitions(tmp_path, cfg, session_dir):

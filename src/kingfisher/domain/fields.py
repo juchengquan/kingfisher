@@ -25,7 +25,7 @@ SIMILARITY = 0.7
 
 
 #: Where one `tools:` or `skills:` entry comes from. `shared` is the workspace's own
-#: catalogue and is what a plain name means; `bundled` is the delegate's own folder,
+#: catalogue and is what a plain name means; `bundled` is the subagent's own folder,
 #: `subagents/<name>/tools/` or `skills/`, which is the one place a capability can sit
 #: that an agent leaving out `tools:` does not receive.
 SHARED = "shared"
@@ -445,7 +445,7 @@ class Reader:
     ) -> tuple[Selection, Mapping[str, Audience], tuple[str, ...]]:
         """What `audienced` answers for the shared entries, and the bundled ones apart.
 
-        Apart because nothing narrows a bundled entry: it arrives with the delegate
+        Apart because nothing narrows a bundled entry: it arrives with the subagent
         whatever the request granted, so folding it into the selection would let a
         grant that omits it read as having removed it.
         """
@@ -459,7 +459,7 @@ class Reader:
 
         extra = ("source_ids", "source")
         # Through `_entries` with both kinds together, so a name written once shared
-        # and once bundled is the "names it twice" refusal: a delegate dispatches by
+        # and once bundled is the "names it twice" refusal: a subagent dispatches by
         # name, and two entries for one would leave which one it calls unsaid.
         written, carried = self._entries(value, key=key, extra=extra, same=same)
         bundled = tuple(
@@ -473,14 +473,14 @@ class Reader:
             if "source_ids" in carried[name]:
                 msg = (
                     f"{where} is source: {BUNDLED} and says who reaches it, and a "
-                    f"bundled entry reaches whoever reaches this delegate. Put the "
-                    f"source_ids on the delegate itself"
+                    f"bundled entry reaches whoever reaches this subagent. Put the "
+                    f"source_ids on the subagent itself"
                 )
                 raise self.error(msg)
             if SEPARATOR in name:
                 msg = (
                     f"{where} is source: {BUNDLED} and says which file it is in, and "
-                    f"a bundled entry is always in this delegate's own folder. Write "
+                    f"a bundled entry is always in this subagent's own folder. Write "
                     f"the name alone"
                 )
                 raise self.error(msg)
@@ -506,7 +506,7 @@ class Reader:
             msg = (
                 f"{self.source}: {key} entry {text(entry.get('name'))!r} has source "
                 f"{written!r}; it takes {SHARED!r}, the catalogue's own {key}/, or "
-                f"{BUNDLED!r}, this delegate's own folder subagents/<name>/{key}/"
+                f"{BUNDLED!r}, this subagent's own folder subagents/<name>/{key}/"
             )
             raise self.error(msg)
         return found

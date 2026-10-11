@@ -2465,11 +2465,11 @@ LIGHT_EXPORTS = frozenset({
 
 #: The rest, which genuinely need deepagents to do their job.
 HEAVY_EXPORTS = frozenset({
-    # Heavy to reach as well as to call: it lives beside `indistinct_delegates`
+    # Heavy to reach as well as to call: it lives beside `indistinct_subagents`
     # in the harness, which imports deepagents at module scope. 868ms and 3,137
     # modules, measured -- which is why `doctor` imports it inside the check
     # rather than at the top of `health`, where every other verb would pay it.
-    "unrunnable_delegates",
+    "unrunnable_subagents",
     "Kingfisher", "run", "stream",
     # The default's class and its per-directory builder, and the command line's way to
     # the backends a setting names: all three are the backend module, which is

@@ -339,7 +339,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
     seeding.seed(cfg, shipped)
-    # An agent of this test's own. `assistant` declares delegates of its own, and
+    # An agent of this test's own. `assistant` declares subagents of its own, and
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
@@ -369,7 +369,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
     seeding.seed(cfg, shipped)
-    # An agent of this test's own. `assistant` declares delegates of its own, and
+    # An agent of this test's own. `assistant` declares subagents of its own, and
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
@@ -424,7 +424,7 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
     seeding.seed(cfg, shipped)
-    # An agent of this test's own. `assistant` declares delegates of its own, and
+    # An agent of this test's own. `assistant` declares subagents of its own, and
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
@@ -617,7 +617,7 @@ def test_a_rejected_key_from_the_keys_file_names_its_entry_and_the_file(cfg, tmp
 
 
 def test_the_endpoint_named_is_the_one_that_refused(cfg):
-    """Not the default. A delegate may run somewhere its parent does not, so resolving
+    """Not the default. A subagent may run somewhere its parent does not, so resolving
     the default model for the name would be confidently wrong on the one 401 that
     needed a different answer.
     """

@@ -160,7 +160,7 @@ def test_a_rule_added_after_the_guards_were_built_still_applies(tmp_path):
         paths.real("/memory/AGENTS.md")
 
 
-def test_a_delegate_is_handed_the_parents_paths_on_any_backend(cfg, tmp_path):
+def test_a_subagent_is_handed_the_parents_paths_on_any_backend(cfg, tmp_path):
     """It guessed its session from `backend.workspace`, which a deployment's backend
     need not have -- and then its tools lost translation and the host-path refusal
     with nothing said. `ElsewhereFiles` has no such attribute.

@@ -1,7 +1,7 @@
 """Turning a `SubagentSpec` into the `SubAgent` deepagents expects.
 
 Nothing here calls anything in `agent.py`, and that rather than size is what keeps the
-two apart: `agent.py` assembles a graph, this answers what one delegate runs with, and
+two apart: `agent.py` assembles a graph, this answers what one subagent runs with, and
 a call back the other way makes them one job again.
 """
 
@@ -53,7 +53,7 @@ def _identities(registry: SkillRegistry, selection: Selection) -> Selection:
 def subagent_skills(
     spec: SubagentSpec, offered: SkillRegistry, activated: Selection
 ) -> Selection:
-    """Which skills a delegate is told about, or `None` for none."""
+    """Which skills a subagent is told about, or `None` for none."""
     if spec.skills is not None and spec.skills != ALL:
         # `None` is none and `ALL` is whatever the request itself has -- neither
         # names anything, so neither can name something the workspace lacks.
@@ -68,11 +68,11 @@ def subagent_skills(
             listing=f"{offered.names}",
         )
     # Both sides in the registry's vocabulary before they meet. `narrowed`
-    # intersects strings, and one skill has two legal spellings -- so a delegate
+    # intersects strings, and one skill has two legal spellings -- so a subagent
     # granted `incident::postmortem` under a ceiling of `postmortem` kept
     # neither. The identity is also what `NarrowedSkills` filters its index by,
-    # so a name left as written reached the delegate as an empty index: every
-    # `skills:` a delegate declared was inert, silently, whichever way it was
+    # so a name left as written reached the subagent as an empty index: every
+    # `skills:` a subagent declared was inert, silently, whichever way it was
     # spelled.
     return narrowed(_identities(offered, spec.skills), by=_identities(offered, activated))
 
@@ -80,7 +80,7 @@ def subagent_skills(
 def subagent_helpers(
     spec: SubagentSpec, defined: Mapping[str, Any], activated: Selection
 ) -> tuple[str, ...]:
-    """Which delegates this one may consult, of the ones it names."""
+    """Which subagents this one may consult, of the ones it names."""
     if spec.subagents is None:
         return ()
     named = tuple(defined) if spec.subagents == ALL else spec.subagents
@@ -101,7 +101,7 @@ def _subject(spec: SubagentSpec | AgentSpec) -> str:
     return f"{kind} {spec.name!r}"
 
 
-def model_object(  # five things decide which model a delegate
+def model_object(  # five things decide which model a subagent
     # runs, and each is a separate rule: what the file names, what the deployment
     # binds, which endpoints this request may reach, what the request overrode,
     # and what it inherits when it names nothing. Folding any pair together would
@@ -115,7 +115,7 @@ def model_object(  # five things decide which model a delegate
     run_on: RunOn | None = None,
     inherited: Any = None,
 ) -> Any | None:
-    """The model instance this delegate runs, or `None` to leave it inheriting."""
+    """The model instance this subagent runs, or `None` to leave it inheriting."""
     model_id = resolved_model(spec.wanted, override=run_on)
     if model_id is None:
         return inherited
@@ -128,20 +128,20 @@ def indistinct(
     *,
     model: str | None,
 ) -> str | None:
-    """Why this delegate is not running anywhere different, or `None`."""
+    """Why this subagent is not running anywhere different, or `None`."""
     if not spec.wanted:
         return None  # it never asked to be anywhere in particular
 
-    # Whoever summoned this one, which is the main agent for a delegate a
-    # request activated and the delegate above it for a helper. It used to be
+    # Whoever summoned this one, which is the main agent for a subagent a
+    # request activated and the subagent above it for a helper. It used to be
     # the deployment's default in both cases, and that reading survived only
-    # while nothing above a delegate could name a model of its own: an agent
+    # while nothing above a subagent could name a model of its own: an agent
     # pinned to `gpt-5` summoning a helper bound to `gpt-5` compared it against
     # a MiniMax default, found a difference, and let the two run side by side.
     # Which is the answer this whole function exists to catch.
     against = cfg.models.default
-    # "whatever", not "the delegate". A summoner used to be one, because only a
-    # delegate could name a model above another; an agent can now, so naming the
+    # "whatever", not "the subagent". A summoner used to be one, because only a
+    # subagent could name a model above another; an agent can now, so naming the
     # kind here would be wrong exactly when the agent is the one that pinned it.
     # `None` still means the main agent on the deployment's own model, which is
     # the one case this can name precisely.
@@ -166,20 +166,20 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     endpoints: Selection = ALL,
     tools: Selection = ALL,
     catalogue: Sequence[Found] = (),
-    #: This delegate's own tools, from the folder named after it, held whatever the
+    #: This subagent's own tools, from the folder named after it, held whatever the
     #: request granted -- the same argument the assembled path makes, and it does not
-    #: weaken for a graph the workspace wrote. A compiled delegate reached this
+    #: weaken for a graph the workspace wrote. A compiled subagent reached this
     #: function without them for as long as both features have existed: `list`
     #: printed `[private tool]` under it and the graph dispatched nothing.
     private: Sequence[Found] = (),
-    #: What this delegate's tools resolve their paths against. Needed here and
-    #: nowhere else in this file: an assembled delegate gets translation from the
+    #: What this subagent's tools resolve their paths against. Needed here and
+    #: nowhere else in this file: an assembled subagent gets translation from the
     #: middleware built below, and this one has no middleware to get it from.
     paths: SessionPaths | None = None,
     run_on: RunOn | None = None,
     default_model: Any = None,
 ) -> dict[str, Any]:
-    """A delegate the workspace built itself, wrapped the way deepagents takes one."""
+    """A subagent the workspace built itself, wrapped the way deepagents takes one."""
     model = model_object(
         spec, cfg, endpoints=endpoints, run_on=run_on, inherited=default_model
     )
@@ -193,20 +193,20 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     # `narrowed` rather than `ceiling`, and the difference is the point.
     # `ceiling` merges the two tool axes into one allowlist, and says plainly
     # that both must be resolved against what is offered or neither. A compiled
-    # delegate has one axis: deepagents' built-ins do not exist as objects here,
+    # subagent has one axis: deepagents' built-ins do not exist as objects here,
     # so `builtin_tools` is refused in the declaration and there is no second
     # axis to merge. What is left is the workspace's own, narrowed by what this
     # request granted -- which is the same rule, with nothing to fold.
     # `spelt` for the same reason the parent needs it: this definition may have
     # written `where::what` for a tool no other file defines, and `narrowed`
-    # would drop it silently rather than hand the delegate nothing loudly.
+    # would drop it silently rather than hand the subagent nothing loudly.
     written = Offering.of(catalogue).spelt(spec.tools)
     shared = select(narrowed(written, by=tools), catalogue)
     # Bundle first and the catalogue's namesake dropped, which is the assembled
     # path's rule read here rather than copied: `build` is handed one list and
     # dispatches by name, so two tools answering to one name is one tool and no
     # way to say which. The order is stated before the lookup for the reason it is
-    # there -- a delegate that has had its own `fetch` for months should not change
+    # there -- a subagent that has had its own `fetch` for months should not change
     # behaviour because somebody else shipped one.
     owned = {one.name for one in private}
     granted = [one.tool for one in (*private, *(o for o in shared if o.name not in owned))]
@@ -230,7 +230,7 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
         made = "None" if runnable is None else type(runnable).__name__
         msg = (
             f"subagent {spec.name!r}: 'build' returned {made}, which is not a graph -- "
-            f"nothing to run it with. It is given a model and the tools this delegate "
+            f"nothing to run it with. It is given a model and the tools this subagent "
             f"was granted, and returns the graph to run. A class is callable, so "
             f"`\'build\': YourClass` gets constructed rather than called for a graph; "
             f"name a function that builds one"
@@ -241,7 +241,7 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
 
 def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # narrow, each resolved by its own rule above. Bundling them would hide
-    # which of those rules applied to a given delegate.
+    # which of those rules applied to a given subagent.
     spec: SubagentSpec,
     cfg: Config,
     *,
@@ -254,29 +254,29 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # declares a `SubAgent` TypedDict, which nothing here can satisfy
     # structurally without restating their schema.
     helpers: list[Any] | None = None,
-    # What `create_deep_agent` supplies to a delegate it builds, and
+    # What `create_deep_agent` supplies to a subagent it builds, and
     # `SubAgentMiddleware` does not: `create_sub_agent` refuses a spec that
-    # names neither. Passed when this delegate is itself a helper, and omitted
+    # names neither. Passed when this subagent is itself a helper, and omitted
     # otherwise so the top-level path keeps deepagents' own defaults.
     default_model: Any = None,
     tool_objects: list[Any] | None = None,
     catalogue: Sequence[Found] = (),
-    #: This delegate's own tools, from the folder named after it. Held whatever
+    #: This subagent's own tools, from the folder named after it. Held whatever
     #: the request granted, which is the whole of what a bundle is for: the
-    #: request activated the delegate, and a delegate is made of parts. Everything
+    #: request activated the subagent, and a subagent is made of parts. Everything
     #: else on this signature narrows against what the caller allowed; this one
     #: deliberately does not, and `catalogue` is the half that still does.
     private: Sequence[Found] = (),
-    #: This delegate's own skills: the `source::name` keys deepagents will list
+    #: This subagent's own skills: the `source::name` keys deepagents will list
     #: them under, and the sources they are mounted at. Held whatever the
     #: request granted, for the reason `private` is.
     private_skills: tuple[tuple[str, ...], tuple[tuple[str, str], ...]] | None = None,
     skill_sources: list[Any] | None = None,
-    #: What a tool's paths mean in this turn: the parent's, because a delegate runs
-    #: in the parent's session on the parent's backend. A compiled delegate's tools
+    #: What a tool's paths mean in this turn: the parent's, because a subagent runs
+    #: in the parent's session on the parent's backend. A compiled subagent's tools
     #: carry it; an assembled one's middleware below does.
     paths: SessionPaths | None = None,
-    #: Where this request wants this delegate to run, replacing its file's
+    #: Where this request wants this subagent to run, replacing its file's
     #: answer. `None` is the ordinary case: the file decides.
     run_on: RunOn | None = None,
     extra_middleware: list[Any] | None = None,
@@ -308,10 +308,10 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     }
     middleware: list[Any] = []
     # The definition's own restriction, narrowed by the request's -- by the
-    # domain's rule, not a copy of it. A delegate may never be offered more than
+    # domain's rule, not a copy of it. A subagent may never be offered more than
     # whoever reached it: the parent's `ToolAllowlist` sits on the parent's
     # middleware, and a subagent inherits none of it, so a request that withheld
-    # `execute` handed it straight to any delegate. The ceiling has to be
+    # `execute` handed it straight to any subagent. The ceiling has to be
     # applied here to exist at all; deciding what it *is* does not belong here.
     allowed = ceiling(
         spec.builtin_tools,
@@ -322,38 +322,38 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     )
     # Its own workspace tools, chosen as objects rather than inherited as a
     # name. Two files may each define a `fetch`, and the parent cannot register
-    # both -- it dispatches by name -- so a delegate that wants one has to be
+    # both -- it dispatches by name -- so a subagent that wants one has to be
     # handed that one. Measured: `SubAgent.tools` *adds* to the built-ins rather
-    # than replacing them, so this costs a delegate none of its file tools.
+    # than replacing them, so this costs a subagent none of its file tools.
     mine = select(allowed, catalogue)
-    # Bundle first: a catalogue tool answering a name this delegate defines
+    # Bundle first: a catalogue tool answering a name this subagent defines
     # itself is dropped, so exactly one candidate answers to each name and
     # `duplicated` still holds. Nothing is silently replaced -- the order is
     # stated here, before the lookup, rather than discovered after it -- and the
     # reason it is this way round is that the alternative couples a bundle to
-    # every name the shared catalogue may grow later. A delegate that has had
+    # every name the shared catalogue may grow later. A subagent that has had
     # its own `fetch` for months should not break because someone else shipped
     # one.
     if private:
         owned = {one.name for one in private}
         mine = tuple(one for one in mine if one.name not in owned)
     # The same three every graph holding workspace tools gets, built by `tool_guards`
-    # so that the agent, this delegate and the `general-purpose` one cannot differ --
+    # so that the agent, this subagent and the `general-purpose` one cannot differ --
     # which they did, and the one that differed held the agent's own tools.
     #
-    # Translation matters more here than for the parent. A delegate is built with its
+    # Translation matters more here than for the parent. A subagent is built with its
     # own prompt and none of `system.md`, so it never learns that host paths exist and
     # cannot be told one except by its caller. #245 left that open in as many words:
-    # "a design question about what a delegate is told". This is the answer -- it is
+    # "a design question about what a subagent is told". This is the answer -- it is
     # told the same paths as everyone else, because there is no other kind. Handed
     # down rather than read off the backend: a backend of a deployment's own need not
-    # carry the attribute this once guessed from, and without it a delegate's tools
+    # carry the attribute this once guessed from, and without it a subagent's tools
     # lost translation and the host-path refusal with nothing said.
     middleware.extend(
         tool_guards(frozenset(entry.name for entry in (*catalogue, *private)), paths)
     )
     if allowed != ALL:
-        # `None` is a delegate permitted nothing, which is an empty allowlist rather
+        # `None` is a subagent permitted nothing, which is an empty allowlist rather
         # than an absent one -- the same split the parent makes.
         middleware.append(
             ToolAllowlist(
@@ -367,8 +367,8 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # source *paths*; this selects by name, which is what a definition writes.
     # A bundle's skills are held whichever way the definition wrote `skills:`,
     # so they are folded in before the branch rather than inside it. That
-    # matters because `skills` defaults to *none* -- a delegate saying nothing
-    # gets no skills index at all -- and a delegate that ships a skill of its
+    # matters because `skills` defaults to *none* -- a subagent saying nothing
+    # gets no skills index at all -- and a subagent that ships a skill of its
     # own and is told about none of it is the silent emptiness this package
     # keeps refusing.
     own_names, own_sources = private_skills or ((), ())
@@ -377,15 +377,15 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         skills = tuple(dict.fromkeys((*granted, *own_names)))
         skill_sources = [*(skill_sources or []), *own_sources]
     if skills is not None and skills != ALL and backend is not None:
-        # The same sources the parent got, so a delegate reads a folder's skills
+        # The same sources the parent got, so a subagent reads a folder's skills
         # under the label its parent granted them by. Passed in rather than
-        # rebuilt: two walks of the catalogue could disagree, and a delegate
+        # rebuilt: two walks of the catalogue could disagree, and a subagent
         # silently offered a different skill than the one named is the failure
         # this whole area exists to stop.
         middleware.append(
             NarrowedSkills(allowed=skills, backend=backend, sources=skill_sources or [])
         )
-    # What lets this delegate delegate. deepagents gives a subagent no `task` tool of
+    # What lets this subagent delegate. deepagents gives a subagent no `task` tool of
     # its own -- `create_sub_agent` calls `create_agent` with the spec's tools and
     # nothing else -- so the only way in is the one field a spec has that carries code,
     # and `SubAgentMiddleware` is exactly what supplies `task` to the main agent.

@@ -68,9 +68,9 @@ def test_a_catalogue_that_will_not_load_is_a_failure(cfg):
     assert checks["tools"].verdict == "ok"
 
 
-def test_a_broken_delegate_does_not_take_the_agents_half_down(cfg):
+def test_a_broken_subagent_does_not_take_the_agents_half_down(cfg):
     """Resolving what each agent delegates to reads the subagent catalogue, so a
-    broken delegate makes the agents half unanswerable -- and it is carried there
+    broken subagent makes the agents half unanswerable -- and it is carried there
     rather than raised, like every other kind's error in this record.
 
     Left to escape it would reach `doctor` and `list` as a traceback over a
@@ -87,9 +87,9 @@ def test_a_broken_delegate_does_not_take_the_agents_half_down(cfg):
 
     found = inventory(cfg)
 
-    assert found.agents_error is not None, "a broken delegate was raised rather than carried"
+    assert found.agents_error is not None, "a broken subagent was raised rather than carried"
     assert "broken.yaml" in found.agents_error
-    # And the listing still answers for everything the delegate did not break.
+    # And the listing still answers for everything the subagent did not break.
     assert found.subagents_error is not None
 
 
@@ -645,7 +645,7 @@ def test_definitions_that_all_run_say_so_once(cfg, tmp_path):
 
 
 def test_a_broken_catalogue_does_not_take_the_definitions_check_with_it(cfg):
-    """`unrunnable_delegates` reads the same files, so a definition that will not load
+    """`unrunnable_subagents` reads the same files, so a definition that will not load
     raises out of it.
     """
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
@@ -668,7 +668,7 @@ def test_the_catalogue_line_says_what_it_did_not_check(cfg):
 
 
 def test_reaching_the_cli_stays_free_of_provider_sdks():
-    """`unrunnable_delegates` costs 868ms and 3,137 modules to import, so at the top of
+    """`unrunnable_subagents` costs 868ms and 3,137 modules to import, so at the top of
     `health` every verb would pay it -- `kingfisher help` would spend a second to
     print text.
     """
@@ -1181,13 +1181,13 @@ def test_a_supplied_local_runner_is_named_beside_the_mechanism():
 
 
 def _broken(cfg, where: str) -> None:
-    """A working bundled delegate, with one file broken in the place `where` names."""
+    """A working bundled subagent, with one file broken in the place `where` names."""
     from tests.unit.test_bundles import BROKEN, OWN_TOOL_ONLY, workspace_with_bundle
 
     workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
     subagents = cfg.workspace / "subagents"
     target, text = {
-        "the delegate's own tool": (subagents / "surveyor" / "tools" / "probe.py", BROKEN),
+        "the subagent's own tool": (subagents / "surveyor" / "tools" / "probe.py", BROKEN),
         "a catalogue tool": (cfg.workspace / "tools" / "shared.py", BROKEN),
         "a subagent file": (subagents / "bad.yaml", "name: [\n"),
     }[where]
@@ -1199,7 +1199,7 @@ def _broken(cfg, where: str) -> None:
 #: and the folder check still runs -- so `doctor` cannot infer "not checked" from the
 #: other rows' errors, and each of these says what it actually did.
 STOPPED_BY = {
-    "the delegate's own tool": {"bundled entries": "warn", "tool references": "ok"},
+    "the subagent's own tool": {"bundled entries": "warn", "tool references": "ok"},
     "a catalogue tool": {"bundled entries": "ok", "tool references": "warn"},
     "a subagent file": {"bundled entries": "warn", "tool references": "warn"},
 }
@@ -1208,8 +1208,8 @@ STOPPED_BY = {
 @pytest.mark.parametrize("where", sorted(STOPPED_BY))
 def test_a_check_that_could_not_run_says_so_rather_than_passing(cfg, where):
     """Both read a catalogue, and both answered "ok" when it would not load: an empty
-    result reads the same as a clean one. With a delegate's tool broken, `doctor` said
-    `bundled entries: ok -- every delegate lists exactly its own folder` for a folder
+    result reads the same as a clean one. With a subagent's tool broken, `doctor` said
+    `bundled entries: ok -- every subagent lists exactly its own folder` for a folder
     it never read.
 
     The `ok` cells are the control -- a check that said "not checked" whenever

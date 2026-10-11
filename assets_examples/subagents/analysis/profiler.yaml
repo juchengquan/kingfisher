@@ -11,7 +11,7 @@ description: Surveys a dataset before anyone analyses it — column types, missi
 # which can walk as deep as it likes.
 builtin_tools: [read_file, ls, glob]
 # The package preset, which is the point of pairing these two examples: a
-# delegate whose whole job is reading a file cheaply should use the tool that
+# subagent whose whole job is reading a file cheaply should use the tool that
 # reads it cheaply, not `read_file` on a million rows.
 #
 # Written `where::what`, which is optional and says where each tool lives. The

@@ -36,12 +36,12 @@ def _agents(found: Inventory) -> Iterator[str]:
     for name, described in found.agents.items():
         source = found.agent_sources.get(name)
         yield f"  {name}{_from(source, f'{name}.yaml')} — {described}"
-        # The delegates this agent activates, which is what it names and no more:
+        # The subagents this agent activates, which is what it names and no more:
         # a helper one of them consults reaches a run only where this file names
         # it too. Printed rather than left to be worked out, because `["*"]` is a
         # name for whatever the catalogue holds today.
-        if delegates := found.agent_delegates.get(name):
-            yield f"      delegates: {', '.join(delegates)}"
+        if subagents := found.agent_subagents.get(name):
+            yield f"      subagents: {', '.join(subagents)}"
     if not found.agents:
         yield f"  (none)  — a request must name one; try {SEED_HINT}"
     yield ""
@@ -116,9 +116,9 @@ def _middlewares(found: Inventory) -> Iterator[str]:
 
 
 def _bundles(found: Inventory) -> Iterator[str]:
-    """Why a delegate's own folder could not be read.
+    """Why a subagent's own folder could not be read.
 
-    Not a kind, so nothing that walks them reaches it -- a bundle is one delegate's
+    Not a kind, so nothing that walks them reaches it -- a bundle is one subagent's
     folder rather than a catalogue. Its tools are still Python that has to import, which
     is why `failed` counts it, and it was counted without being printed.
     """
@@ -291,17 +291,17 @@ def _subagents(found: Inventory) -> Iterator[str]:
             for own in held.get(name, ()):
                 # Said on the line itself rather than in a note below, because the
                 # line above it is the one it contradicts: without this, a compiled
-                # delegate's private skill prints exactly like one that arrives.
+                # subagent's private skill prints exactly like one that arrives.
                 reaches = "  (a compiled graph is told about no skills)" if own in stranded else ""
                 yield f"      {own}  [private {kind[:-1]}{carried}]{reaches}"
         if (miscounted := found.miscounted_bundles.get(name)) is not None:
-            # Under the delegate rather than in a section of its own: the lines above
+            # Under the subagent rather than in a section of its own: the lines above
             # say what its folder holds, and this says the definition's list disagrees
             # with them. A reader comparing the two is the point.
             yield f"      ! {miscounted}"
         for hidden in found.shadowed.get(name, ()):
             # Said out loud because shadowing is only acceptable while it is
-            # visible. The delegate answers `fetch` with its own; the
+            # visible. The subagent answers `fetch` with its own; the
             # catalogue's never reaches it, and no other line here would say so.
             yield f"      {hidden}  [private tool, shadowing the catalogue's]"
     if found.compiled_subagents:
@@ -309,17 +309,17 @@ def _subagents(found: Inventory) -> Iterator[str]:
         # graph as given and never applies our allowlist to it, so a tool grant
         # is a suggestion there rather than a limit -- and nothing else in this
         # output would say so.
-        yield "  (a compiled delegate brings its own graph: --tools and"
+        yield "  (a compiled subagent brings its own graph: --tools and"
         yield "   --builtin-tools do not restrict what it can call)"
     if not found.subagents:
         yield f"  (none)  — try {SEED_HINT}"
     for folder in found.orphaned_assets:
-        # The delegate this folder was written for has no line of its own to be
+        # The subagent this folder was written for has no line of its own to be
         # missing from: it still lists, still runs, and holds none of what is in
         # here. Nothing else a reader can see says so.
         owner = PurePath(folder).name
         yield (
-            f"  ! {folder}/ holds tools/ or skills/ that reach no delegate "
+            f"  ! {folder}/ holds tools/ or skills/ that reach no subagent "
             f"— nothing in it is named {owner}"
         )
         yield "    (rename the folder, or the `name:` inside it, so the two match)"
@@ -338,7 +338,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "origins": origins_document(found.origins),
         "agents": dict(found.agents),
         "agent_sources": dict(found.agent_sources),
-        "agent_delegates": {name: list(v) for name, v in found.agent_delegates.items()},
+        "agent_subagents": {name: list(v) for name, v in found.agent_subagents.items()},
         "agents_error": found.agents_error,
         "builtin_tools": list(found.builtin_tools),
         "tools": list(found.tools),
@@ -420,6 +420,6 @@ def failed(found: Inventory) -> bool:
         return True
     # Not a kind, and the one error here that a walk of them does not reach. A
     # bundle's tools are tools -- Python that has to import -- and a deployment that
-    # starts and fails on the first request activating that delegate is the shape
+    # starts and fails on the first request activating that subagent is the shape
     # this predicate exists to stop.
     return found.bundles_error is not None

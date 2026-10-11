@@ -141,7 +141,7 @@ def require_literal_prompt(text: str, source: Path, error: type[ValueError]) -> 
             msg = (
                 f"{source.name}: system_prompt is written as {written}, which reflows it. "
                 f"Use a literal block -- `system_prompt: {LITERAL}` -- so the prompt "
-                "reaches the delegate with the line breaks you wrote"
+                "reaches the subagent with the line breaks you wrote"
             )
             raise error(msg)
         return

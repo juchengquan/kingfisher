@@ -81,8 +81,8 @@ def _interpreter(cfg: Config, permitted: tuple[str, ...] | None) -> Any:
         ptc=ptc,
         # Dispatch from code follows the same grant as dispatch from a tool
         # call. Left at its default this would let a request that withheld
-        # `task` delegate anyway, from inside the sandbox -- a hole of exactly
-        # the shape the delegate ceiling exists to close.
+        # `task` subagent anyway, from inside the sandbox -- a hole of exactly
+        # the shape the subagent ceiling exists to close.
         subagents=permitted is None or TASK_TOOL in permitted,
         mode="thread",
         # Below any real snapshot, so every one is dropped. See the docstring:

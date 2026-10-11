@@ -135,7 +135,7 @@ def narrowed_for(spec: object, held: frozenset[str] | None) -> dict[str, Selecti
     Driven by `AUDIENCED` rather than by three lines each, because the two
     definitions that hold audiences wrote those lines out twice over and the
     list of fields is already declared once, here. What this deliberately does
-    *not* return is a `Capabilities`: an agent widens `models` where a delegate
+    *not* return is a `Capabilities`: an agent widens `models` where a subagent
     leaves it unset, so the axes no audience touches stay with the definition
     that has an opinion about them.
     """

@@ -42,7 +42,7 @@ class SessionPaths:
 
     Apart from both of its users because two places have to answer identically and
     only one of them has a call to rewrite: `WorkspaceToolPaths`, and `GuardedTool`,
-    which travels on the tools themselves because a compiled delegate has no
+    which travels on the tools themselves because a compiled subagent has no
     middleware to attach. A second `real` written for the second place is the copy
     that drifts, and the escape it stops resolving would not be visible in either
     file.

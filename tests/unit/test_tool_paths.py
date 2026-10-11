@@ -53,7 +53,7 @@ def handed(bridge, request) -> Any:
 
 def test_the_name_the_agent_was_taught_now_works(bridge, session):
     """Measured in a real run before this existed: the model passed `/inputs/config.ini`,
-    the tool raised `FileNotFoundError`, and the delegate reported it could not read
+    the tool raised `FileNotFoundError`, and the subagent reported it could not read
     a file that `ls` could see.
     """
     assert handed(bridge, a_call(path="/inputs/config.ini")) == {
@@ -398,7 +398,7 @@ def test_a_link_that_stays_inside_still_works(session, bridge):
     assert args["path"] == str((session / "inputs" / "real.csv").resolve())
 
 
-# -- the tools a compiled delegate is handed ---------------------------------
+# -- the tools a compiled subagent is handed ---------------------------------
 #
 # A compiled graph is given no middleware of kingfisher's, so everything above
 # reaches it only by travelling on the tools themselves. These drive the wrapped
@@ -414,7 +414,7 @@ def answered(wrapped, **args):
     return wrapped.invoke({"type": "tool_call", "id": "c1", "name": wrapped.name, "args": args})
 
 
-def test_a_compiled_delegates_tool_is_handed_a_real_path(paths, session):
+def test_a_compiled_subagents_tool_is_handed_a_real_path(paths, session):
     """The crash this exists for: the shipped `scribe` handed `show-your-work`
     path-taking tools, and `log_levels('/inputs/api.log')` raised `FileNotFoundError`
     because a compiled graph has no middleware to translate the path.
@@ -434,7 +434,7 @@ def test_a_compiled_delegates_tool_is_handed_a_real_path(paths, session):
 def test_a_tool_that_raises_answers_instead_of_ending_the_run(paths, session):
     """Measured inside a compiled graph: every exception reaches the caller and ends
     the run -- `ToolException` and `ValueError` as much as `FileNotFoundError`. A
-    delegate that cannot report a bad path can only die on one.
+    subagent that cannot report a bad path can only die on one.
     """
     from langchain_core.tools import tool
 

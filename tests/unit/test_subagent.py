@@ -182,7 +182,7 @@ def test_a_deliberately_unexposed_field_says_why():
 
 
 def test_permissions_explains_the_direction_it_gets_wrong():
-    """The one worth a test of its own: it is written to *tighten* a delegate and
+    """The one worth a test of its own: it is written to *tighten* a subagent and
     silently did nothing, so the definition read stricter than the agent it produced.
     """
     with pytest.raises(SubagentError) as raised:
@@ -329,7 +329,7 @@ def test_every_literal_block_is_accepted():
 
 
 def test_a_folded_prompt_is_refused():
-    """`>` joins consecutive lines, so two numbered steps reach the delegate as one
+    """`>` joins consecutive lines, so two numbered steps reach the subagent as one
     run-on line -- valid YAML, correct-looking file, odd-behaving agent.
     """
     for style in [">", ">-", ">2"]:
@@ -352,7 +352,7 @@ def test_a_quoted_prompt_is_refused():
 
 def test_folding_is_what_the_refusal_is_about():
     """The negative control, so the rule is justified rather than asserted: this is what
-    a folded prompt would have handed the delegate.
+    a folded prompt would have handed the subagent.
     """
     import yaml as _yaml
 
@@ -376,7 +376,7 @@ def test_the_description_may_still_be_folded():
     assert spec.description == "Checks an analysis for arithmetic errors, one claim at a time."
 
 
-# -- where a delegate runs ------------------------------------------------
+# -- where a subagent runs ------------------------------------------------
 #
 # The rule used to sit in `infrastructure.harness.kinds.subagents` and take a whole
 # `Config` to read two values out of. It takes the two values now, so it is reachable
@@ -508,7 +508,7 @@ def test_a_model_names_where_it_runs_by_naming_what_it_runs():
 # `model:` and `alias:` each take a scalar or a list. The list is not a file
 # hedging: a candidate is only ever passed over for a reason the deployment
 # caused -- an alias nobody bound, or a model that turns out to be the one this
-# delegate exists not to be -- so a second entry says which other deployments
+# subagent exists not to be -- so a second entry says which other deployments
 # this definition can still be useful in.
 
 

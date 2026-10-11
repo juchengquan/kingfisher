@@ -94,7 +94,7 @@ constructs `Kingfisher`.
 
 **And it is the wrong answer for anything this build decides.** A client is the
 same object for every agent and every turn, which is why closing over one works.
-The model an agent runs is not — the agent file may pin one, a delegate may pin
+The model an agent runs is not — the agent file may pin one, a subagent may pin
 another, a request may override either — so a class closing over a model closes
 over the deployment's *default* and runs that whatever the agent in front of it
 was pinned to. The next section is for those.
@@ -116,7 +116,7 @@ class Compact(SummarizationMiddleware):  # deepagents', not langchain's
 
 `wants` is the third class attribute, beside `defaults` and `yaml_settable`, and
 each name in it is filled in where the agent is assembled. `model` is what *this*
-graph runs — the agent's own, a delegate's own, or whatever a delegate inherited
+graph runs — the agent's own, a subagent's own, or whatever a subagent inherited
 from the one that summoned it. `backend` is the filesystem the agent sees, rooted
 at this session. `definition` is the `AgentSpec` or `SubagentSpec` this instance
 belongs to.
@@ -300,17 +300,17 @@ narrowing kingfisher applies, so it observes the tool set the request and the
 definition actually left in reach rather than what the definition asked for.
 
 **One graph, not one turn.** The factory runs again for each graph built: the
-agent's, each declared delegate's, and the general-purpose delegate's. A counter
+agent's, each declared subagent's, and the general-purpose subagent's. A counter
 counts that graph. `CallCap` is a per-turn cap only because the agent happens to
 be built once per turn, and a limiter that has to bound a whole turn needs
 somewhere to live that a graph does not have.
 
-**Every graph, delegates included.** The general-purpose delegate deepagents
+**Every graph, subagents included.** The general-purpose subagent deepagents
 supplies is replaced by one carrying this deployment's middleware, so delegating
 is not a way around an audit hook — otherwise the way to run unaudited would be
 to ask for nothing in particular.
 
-A delegate inherits none of its parent's middleware — each definition's is built
+A subagent inherits none of its parent's middleware — each definition's is built
 from its own `middlewares:` field.
 
 **So register the class, not an instance of it.** `middlewares={"audit": Audit}`,

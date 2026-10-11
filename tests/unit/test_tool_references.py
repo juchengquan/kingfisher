@@ -28,7 +28,7 @@ TOOLS = [{name}]
 """
 
 SUBAGENT = """name: {name}
-description: A delegate called {name}.
+description: A subagent called {name}.
 tools: [{tools}]
 system_prompt: |
   {body}
@@ -323,7 +323,7 @@ def test_an_agents_long_form_grant_reaches_the_tools_it_carries():
     assert [tool_name(one) for one in surface.carried] == ["probe"]
 
 
-def test_a_delegates_long_form_grant_reaches_the_tools_it_holds(cfg):
+def test_a_subagents_long_form_grant_reaches_the_tools_it_holds(cfg):
     """The same question one level down, where a definition rather than a request does
     the naming.
     """
@@ -336,8 +336,8 @@ def test_a_delegates_long_form_grant_reaches_the_tools_it_holds(cfg):
     assert [tool_name(one) for one in built["tools"]] == ["probe"]
 
 
-def test_a_delegates_long_form_grant_survives_the_ceiling(cfg):
-    """The ceiling merges the two axes into the allowlist the delegate runs under, and
+def test_a_subagents_long_form_grant_survives_the_ceiling(cfg):
+    """The ceiling merges the two axes into the allowlist the subagent runs under, and
     took the written form as a name.
     """
     spec = _spec(tools="probe.py::probe")
@@ -347,10 +347,10 @@ def test_a_delegates_long_form_grant_survives_the_ceiling(cfg):
     )
 
     allowlists = [one for one in built.get("middleware", ()) if isinstance(one, ToolAllowlist)]
-    assert allowlists, "a delegate naming one tool is restricted to it"
+    assert allowlists, "a subagent naming one tool is restricted to it"
 
     # Through the middleware rather than into its set: what matters is that the
-    # tool survives the filter the delegate actually runs under.
+    # tool survives the filter the subagent actually runs under.
     kept = allowlists[0].wrap_model_call(_Request([probe]), lambda request: request)
 
     assert [tool_name(one) for one in kept.tools] == ["probe"]

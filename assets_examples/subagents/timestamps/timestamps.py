@@ -1,4 +1,4 @@
-"""A delegate that normalises the dates it finds, and says which ones it could not.
+"""A subagent that normalises the dates it finds, and says which ones it could not.
 
 **A portable subagent, and the shape is the point.** Everything else under
 `subagents/` is either a YAML document this deployment wrote or a Python module
@@ -6,7 +6,7 @@ assembling a graph itself. This is the third shape: a declaration in Python, wit
 no `build`, carrying its own tool and its own skill.
 
 It exists because of what it *cannot* say. A portable definition may not name a
-tool, a skill, a delegate, a middleware, a model or a source id -- every one of
+tool, a skill, a subagent, a middleware, a model or a source id -- every one of
 those is a lookup in some particular deployment's catalogue, and a definition
 that travels has never seen the deployment it will be installed into. So its
 `tools` holds the tool objects rather than names, and its `skills` the directory
@@ -22,11 +22,11 @@ export `SUBAGENTS` from it, and a deployment reaches it by writing one file:
 
 Nothing else changes. Kingfisher discovers no packages and names none -- the
 deployment's own file is the whole of the opt-in, which is why an installed
-package cannot quietly add a delegate to anybody's catalogue.
+package cannot quietly add a subagent to anybody's catalogue.
 
 **What it carries is its own and reaches nothing else.** `iso_timestamp` below is
 not in this workspace's `tools/`, so no agent can be granted it and no request can
-narrow it away; it reaches this delegate and stops. The same goes for the
+narrow it away; it reaches this subagent and stops. The same goes for the
 `iso-8601` skill beside this file. That is what an imported subagent being
 *atomic* means: you use it, or you do not, and there is no third option where you
 take it apart.
@@ -35,7 +35,7 @@ take it apart.
 tools rather than this definition's, so a request that withheld `execute` still
 withholds it here. A package cannot grant itself a shell.
 
-If a delegate needs this deployment's `sql_query`, it is not portable and should
+If a subagent needs this deployment's `sql_query`, it is not portable and should
 be a YAML document in `subagents/` -- that format exists for exactly that, and is
 reviewable by people who do not read Python.
 """
@@ -56,7 +56,7 @@ HERE = Path(__file__).parent
 
 #: `03/04/2026` is 3 April in most of the world and 4 March in the United States,
 #: and nothing in the string says which. Reported rather than guessed: a date
-#: silently read the wrong way round is the failure this delegate exists to stop,
+#: silently read the wrong way round is the failure this subagent exists to stop,
 #: and a confident wrong answer is worse than a flagged one.
 AMBIGUOUS = re.compile(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$")
 
@@ -90,7 +90,7 @@ SUBAGENTS = [
             "that are genuinely ambiguous rather than guessing. Use before comparing "
             "or sorting dates that came from more than one source."
         ),
-        # Reading and searching, and nothing that writes: this delegate reports on
+        # Reading and searching, and nothing that writes: this subagent reports on
         # what it found and changes nothing.
         "builtin_tools": ["read_file", "ls", "glob", "grep"],
         # The tools themselves, not their names. A name would be a lookup in the
@@ -101,7 +101,7 @@ SUBAGENTS = [
         # an installed package keeps its files.
         "skills": HERE / "skills",
         # Keys of your own, which nothing in a run reads. A package shipping
-        # delegates is the case this is most useful for: the deployment installing
+        # subagents is the case this is most useful for: the deployment installing
         # it did not write the definition and has no other way to record where it
         # came from.
         "metadata": {"ships_with": "kingfisher examples", "portable": True},

@@ -17,18 +17,33 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## The noun is `subagent`, after #685
+
+`delegate` as a noun is gone from kingfisher, in favour of deepagents' `subagent`.
+Four things a caller or a script can read changed with it, and no old spelling is kept:
+
+- The warning kind `delegate_only` is `subagent_only`.
+- `kingfisher list --json` keys an agent's subagents as `agent_subagents`, not
+  `agent_delegates`.
+- The `doctor` rows `delegate tools` and `delegate bundles` are `subagent tools` and
+  `subagent bundles`.
+- `kingfisher list` prints `subagents:` under each agent where it printed `delegates:`.
+
+Messages that said `delegate` say `subagent`. Nothing a deployment writes or sets
+changes.
+
 ## A session's skills checked against what kingfisher read, after #680
 
 `SESSION_BACKENDS_CONTRACT` has one more check,
 `a_session_serves_the_skills_kingfisher_read` (#681). Kingfisher builds grants and the
 read-deny rules from the skills it reads itself. The check opens a session through
 your backends and compares what it serves under `/skills/` -- the catalogue, each
-mount and each delegate's own skills -- with the folders kingfisher read.
+mount and each subagent's own skills -- with the folders kingfisher read.
 
 - **Built on `backend_at` and keeping its routes**, there is nothing to do: kingfisher's
   own routes pass.
 - **Routing `/skills/` yourself**, serve the folders kingfisher reads: the catalogue at
-  `/skills/`, each mount at `/skills/<label>/`, and each delegate's skills under
+  `/skills/`, each mount at `/skills/<label>/`, and each subagent's skills under
   `/skills/subagents/`. A skill served from anywhere else is either granted and
   missing, or readable however a request narrowed.
 - Nothing changes at runtime. The check runs where you run the kit.
@@ -335,7 +350,7 @@ method that opens a session is named rather than being the object's `__call__`.
   Re-seed them (`kingfisher seed`) if you move to a backend that keeps sessions
   elsewhere. Seeding overwrites a copy you edited, so carry any edits across first.
   If you call them directly, pass `file_path=` and a `ToolRuntime`.
-- **A compiled delegate with a blank `name` or `description` is now refused** (#601).
+- **A compiled subagent with a blank `name` or `description` is now refused** (#601).
   The other three readers already refused one.
 
 ## Subagent bundles

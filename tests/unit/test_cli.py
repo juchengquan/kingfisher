@@ -421,7 +421,7 @@ def test_a_verb_other_than_run_says_a_warning_plainly_too(cfg, tmp_path, monkeyp
     assert "UserWarning" not in err
 
 
-def test_a_delegates_prose_is_progress_rather_than_answer(cfg, monkeypatch, capsys):
+def test_a_subagents_prose_is_progress_rather_than_answer(cfg, monkeypatch, capsys):
     """A reviewer's working notes are not what you asked for."""
     from kingfisher import RunEvent
 

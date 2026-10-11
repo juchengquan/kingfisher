@@ -1,4 +1,4 @@
-"""A delegate's work, on the caller's stream."""
+"""A subagent's work, on the caller's stream."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from tests.unit.test_run import StubAgent
 
 
 class StreamingFake(GenericFakeChatModel):
-    """A fake that really streams, so a delegate produces token events."""
+    """A fake that really streams, so a subagent produces token events."""
 
     def bind_tools(self, tools, **kwargs):
         return self
@@ -43,9 +43,9 @@ def _two_level(cfg, session_dir):
         subagents=[
             {
                 "name": "reviewer",
-                "description": "A delegate.",
+                "description": "A subagent.",
                 "system_prompt": "You check things.",
-                "model": StreamingFake(messages=iter([AIMessage(content="DELEGATE PROSE")])),
+                "model": StreamingFake(messages=iter([AIMessage(content="SUBAGENT PROSE")])),
                 "tools": [],
             }
         ],
@@ -68,18 +68,18 @@ def _events(cfg, session_dir, name="s"):
 # -- it arrives at all ----------------------------------------------------
 
 
-def test_a_delegates_prose_reaches_the_caller(cfg, session_dir):
+def test_a_subagents_prose_reaches_the_caller(cfg, session_dir):
     """The whole point."""
     events = _events(cfg, session_dir)
 
     prose = "".join(e.text for e in events if e.kind == "token")
 
-    assert "DELEGATE PROSE" in prose
+    assert "SUBAGENT PROSE" in prose
 
 
-def test_the_delegates_own_steps_arrive_too(cfg, session_dir):
+def test_the_subagents_own_steps_arrive_too(cfg, session_dir):
     """Not just its prose -- the model calls it made, which is where the cost of a
-    delegate becomes visible rather than merely logged.
+    subagent becomes visible rather than merely logged.
     """
     events = _events(cfg, session_dir)
 
@@ -89,13 +89,13 @@ def test_the_delegates_own_steps_arrive_too(cfg, session_dir):
 # -- and is distinguishable -----------------------------------------------
 
 
-def test_every_delegate_event_says_which_delegate(cfg, session_dir):
-    """The claim `Delegates` rests on, driven rather than asserted in prose."""
+def test_every_subagent_event_says_which_subagent(cfg, session_dir):
+    """The claim `SubagentNames` rests on, driven rather than asserted in prose."""
     events = _events(cfg, session_dir)
 
-    delegated = [e for e in events if e.agent is not None]
-    assert delegated, "no event was attributed to a delegate at all"
-    assert {e.agent for e in delegated} == {"reviewer"}
+    from_subagents = [e for e in events if e.agent is not None]
+    assert from_subagents, "no event was attributed to a subagent at all"
+    assert {e.agent for e in from_subagents} == {"reviewer"}
 
 
 def test_the_callers_own_events_are_not_attributed_to_anyone(cfg, session_dir):
@@ -105,7 +105,7 @@ def test_the_callers_own_events_are_not_attributed_to_anyone(cfg, session_dir):
     assert [e for e in events if e.kind == "model_call" and e.agent is None]
 
 
-def test_a_delegates_line_is_tagged_with_its_name(cfg, session_dir):
+def test_a_subagents_line_is_tagged_with_its_name(cfg, session_dir):
     """`[model:reviewer]` rather than `[model]`, so a transcript reads without the
     reader having to track which lines came from where.
     """
@@ -116,9 +116,9 @@ def test_a_delegates_line_is_tagged_with_its_name(cfg, session_dir):
     assert str(first).startswith("[model:reviewer]")
 
 
-def test_a_run_without_delegates_renders_exactly_as_before(cfg):
+def test_a_run_without_subagents_renders_exactly_as_before(cfg):
     """The tag is appended, never a new column, so nothing that parsed these lines has
-    to learn about delegates it never sees.
+    to learn about subagents it never sees.
     """
     start(cfg, "plain")
     events = list(
@@ -138,23 +138,23 @@ def test_a_run_without_delegates_renders_exactly_as_before(cfg):
 # -- the answer belongs to the caller's agent -----------------------------
 
 
-def test_a_delegates_values_chunk_is_not_the_runs_answer():
+def test_a_subagents_values_chunk_is_not_the_runs_answer():
     """The bug `subgraphs=True` would otherwise have introduced."""
-    theirs = {"messages": [AIMessage(content="DELEGATE PROSE")]}
+    theirs = {"messages": [AIMessage(content="SUBAGENT PROSE")]}
 
     assert runtime.answer_in(("tools:abc",), "values", theirs) is None
-    assert runtime.answer_in((), "values", theirs) == "DELEGATE PROSE"
+    assert runtime.answer_in((), "values", theirs) == "SUBAGENT PROSE"
 
 
-class _DelegateSpeaksFirst:
-    """A delegate finishes, and the turn is cut short before anything else."""
+class _SubagentSpeaksFirst:
+    """A subagent finishes, and the turn is cut short before anything else."""
 
     def stream(self, state, config, stream_mode=None, subgraphs=False):
-        yield (("tools:abc",), "values", {"messages": [AIMessage(content="belongs-to-delegate")]})
+        yield (("tools:abc",), "values", {"messages": [AIMessage(content="belongs-to-subagent")]})
         yield ((), "values", {"messages": [AIMessage(content="belongs-to-caller")]})
 
 
-def test_a_turn_cut_short_after_a_delegate_reports_no_delegate_answer(cfg):
+def test_a_turn_cut_short_after_a_subagent_reports_no_subagent_answer(cfg):
     """The same thing end to end, through the path that actually stops early."""
     from dataclasses import replace
 
@@ -164,7 +164,7 @@ def test_a_turn_cut_short_after_a_delegate_reports_no_delegate_answer(cfg):
         stream(
             Request("go", session_id="cut"),
             cfg=replace(cfg, turn_timeout_s=0),
-            graph=_DelegateSpeaksFirst(),
+            graph=_SubagentSpeaksFirst(),
             backends=default_backends,
             checkpointer=StubCheckpointer(),
         )
@@ -173,7 +173,7 @@ def test_a_turn_cut_short_after_a_delegate_reports_no_delegate_answer(cfg):
     (finished,) = [e for e in events if e.kind == "finished"]
     assert finished.result is not None
     assert finished.result.stop_reason == "max_duration"
-    assert "delegate" not in finished.result.answer.lower()
+    assert "subagent" not in finished.result.answer.lower()
 
 
 def test_the_map_never_names_the_main_agent():
@@ -181,8 +181,8 @@ def test_the_map_never_names_the_main_agent():
     happens to carry.
     """
     for namespace in [(), ("tools:abc",)]:
-        delegates = runtime.Delegates()
+        subagent_names = runtime.SubagentNames()
 
-        named = delegates.name(namespace, {"lc_agent_name": "reviewer"})
+        named = subagent_names.name(namespace, {"lc_agent_name": "reviewer"})
 
         assert named == (None if namespace == () else "reviewer")

@@ -52,7 +52,7 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
 
     **`middlewares` is deliberately not among them**, and the reason is about this
     report rather than about that axis. What goes here is what a caller could have
-    asked for differently -- a tool, a skill, a delegate they may grant next time. A
+    asked for differently -- a tool, a skill, a subagent they may grant next time. A
     caller cannot register a middleware: the names come from whatever constructed
     `Kingfisher`, so telling them one was withheld names something they have no way
     to act on.
@@ -124,7 +124,7 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
         granted = getattr(allowed, field)
         # Silent when the request left an axis alone. `subagents` defaults to
         # none, so reporting every axis at its default would put a line about
-        # undeclared delegates on every run -- which is the noise this event
+        # undeclared subagents on every run -- which is the noise this event
         # exists to avoid being.
         if granted == getattr(default, field):
             continue
@@ -133,8 +133,8 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
     return tuple(found)
 
 
-def delegate_only(allowed: Capabilities, cfg: Config, *, catalogue: Any) -> tuple[str, ...]:
-    """Names this run was granted that only a delegate can actually ask for."""
+def subagent_only(allowed: Capabilities, cfg: Config, *, catalogue: Any) -> tuple[str, ...]:
+    """Names this run was granted that only a subagent can actually ask for."""
     found = (catalogue or Definitions.from_config(cfg)).tools.found
     return Offering.of(found).ambiguous(allowed.tools, found)
 
@@ -147,7 +147,7 @@ def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning
     placement: Any,
     withheld: tuple[tuple[str, tuple[str, ...]], ...] = (),
     indistinct: tuple[tuple[str, str], ...] = (),
-    delegate_only: tuple[str, ...] = (),
+    subagent_only: tuple[str, ...] = (),
 ) -> tuple[RunEvent, ...]:
     """What the caller is told before the model is reached.
 
@@ -170,20 +170,20 @@ def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning
             )
         )
     # Granted, and still not in the agent's own hands. Two files may each define a
-    # `fetch`, and an agent dispatches by name -- so the pair goes to whichever delegate
+    # `fetch`, and an agent dispatches by name -- so the pair goes to whichever subagent
     # names one, and the agent holding the grant gets neither.
-    if delegate_only:
+    if subagent_only:
         events.append(
             RunEvent(
-                kind="delegate_only",
+                kind="subagent_only",
                 text=(
-                    f"{len(delegate_only)} tool name(s) more than one file defines, "
+                    f"{len(subagent_only)} tool name(s) more than one file defines, "
                     f"so this agent holds none of them -- a subagent that names one "
-                    f"gets it: {', '.join(delegate_only)}"
+                    f"gets it: {', '.join(subagent_only)}"
                 ),
             )
         )
-    # A delegate that meant to run elsewhere and did not. Said here because
+    # A subagent that meant to run elsewhere and did not. Said here because
     # nothing later will: it builds, it answers, and an answer from the model
     # it was supposed to be checking looks exactly like a good one.
     for name, why in indistinct:

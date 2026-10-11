@@ -41,13 +41,13 @@ def _populate(cfg) -> None:
 
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "probe-agent.yaml").write_text(
-        "name: probe-agent\ndescription: A delegate the inventory can find.\n"
+        "name: probe-agent\ndescription: A subagent the inventory can find.\n"
         "system_prompt: |\n  Answer briefly.\n",
         encoding="utf-8",
     )
 
 
-def test_an_agent_taking_every_delegate_lists_every_delegate(cfg):
+def test_an_agent_taking_every_subagent_lists_every_subagent(cfg):
     """`subagents: ['*']` has to be expanded before the closure is walked.
 
     Left as the star, it is walked as a string: every name it yields is one
@@ -66,17 +66,17 @@ def test_an_agent_taking_every_delegate_lists_every_delegate(cfg):
 
     found = inventory(cfg)
 
-    assert found.agent_delegates["everything"] == ("alpha", "beta")
-    assert found.agent_delegates["one"] == ("alpha",)
+    assert found.agent_subagents["everything"] == ("alpha", "beta")
+    assert found.agent_subagents["one"] == ("alpha",)
 
 
-def test_an_agent_lists_the_delegates_it_activates_and_not_their_helpers(cfg):
+def test_an_agent_lists_the_subagents_it_activates_and_not_their_helpers(cfg):
     """The listing answers "what does this agent end up with", and it walked the chain
-    below each delegate to answer it -- printing a helper the build then dropped.
+    below each subagent to answer it -- printing a helper the build then dropped.
 
     A helper reaches a run only where the agent names it too: `subagent_helpers`
-    narrows a delegate's helpers by what the agent declared. So an agent naming only
-    the parent got a delegate with no `task` tool, while the listing said otherwise.
+    narrows a subagent's helpers by what the agent declared. So an agent naming only
+    the parent got a subagent with no `task` tool, while the listing said otherwise.
     """
     from tests.conftest import an_agent
 
@@ -95,8 +95,8 @@ def test_an_agent_lists_the_delegates_it_activates_and_not_their_helpers(cfg):
 
     found = inventory(cfg)
 
-    assert found.agent_delegates["one"] == ("reviewer",)
-    assert found.agent_delegates["both"] == ("reviewer", "second-opinion")
+    assert found.agent_subagents["one"] == ("reviewer",)
+    assert found.agent_subagents["both"] == ("reviewer", "second-opinion")
 
 
 def test_the_names_a_subtraction_uses_are_the_names_the_listing_shows(cfg):

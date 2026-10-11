@@ -47,7 +47,7 @@ def _two_vendors(cfg, *, name="fetch"):
         )
 
 
-def _delegate(cfg, vendor, *, grant):
+def _subagent(cfg, vendor, *, grant):
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / f"agent_{vendor}.yaml").write_text(
         SPEC.format(name=f"agent_{vendor}", vendor=vendor, grant=grant), encoding="utf-8"
@@ -81,11 +81,11 @@ def test_two_folders_may_each_define_one_name(cfg):
 # -- the whole point ------------------------------------------------------
 
 
-def test_each_delegate_holds_the_tool_it_named(cfg, session_dir):
+def test_each_subagent_holds_the_tool_it_named(cfg, session_dir):
     """Two helpers, two vendors, one name."""
     _two_vendors(cfg)
     for vendor in ("vendor_a", "vendor_b"):
-        _delegate(cfg, vendor, grant=f"{vendor}/fetch.py::fetch")
+        _subagent(cfg, vendor, grant=f"{vendor}/fetch.py::fetch")
 
     graph = build_agent(
         cfg,
@@ -97,10 +97,10 @@ def test_each_delegate_holds_the_tool_it_named(cfg, session_dir):
             subagents=("agent_vendor_a", "agent_vendor_b"),
         ),
     ).graph
-    delegates = _subagent_graphs(graph)
+    subagents = _subagent_graphs(graph)
 
-    assert _fetch_from(delegates["agent_vendor_a"]) == "from vendor_a"
-    assert _fetch_from(delegates["agent_vendor_b"]) == "from vendor_b"
+    assert _fetch_from(subagents["agent_vendor_a"]) == "from vendor_a"
+    assert _fetch_from(subagents["agent_vendor_b"]) == "from vendor_b"
 
 
 def test_the_agent_holding_the_grant_holds_neither(cfg, session_dir):
@@ -126,11 +126,11 @@ def test_what_the_agent_cannot_hold_is_said_out_loud(cfg):
     """Quietly holding less than was asked for is the failure this codebase refuses
     everywhere.
     """
-    from kingfisher.application.reporting import delegate_only
+    from kingfisher.application.reporting import subagent_only
 
     _two_vendors(cfg)
 
-    assert delegate_only(
+    assert subagent_only(
         Capabilities(tools=("vendor_a/fetch.py::fetch", "vendor_b/fetch.py::fetch")),
         cfg,
         catalogue=None,
@@ -142,7 +142,7 @@ def test_a_grant_of_everything_still_works(cfg, session_dir):
     unusable by default.
     """
     _two_vendors(cfg)
-    _delegate(cfg, "vendor_a", grant="vendor_a/fetch.py::fetch")
+    _subagent(cfg, "vendor_a", grant="vendor_a/fetch.py::fetch")
 
     graph = build_agent(
         cfg,
@@ -155,16 +155,16 @@ def test_a_grant_of_everything_still_works(cfg, session_dir):
     assert _fetch_from(_subagent_graphs(graph)["agent_vendor_a"]) == "from vendor_a"
 
 
-def test_a_delegate_can_actually_call_the_one_it_named(cfg, session_dir):
-    """The registry says a delegate *holds* it; only a call says it can use it.
+def test_a_subagent_can_actually_call_the_one_it_named(cfg, session_dir):
+    """The registry says a subagent *holds* it; only a call says it can use it.
 
     Written because a mutation proved the gap: leaving the allowlist keyed on the
     reference rather than the bare name filters every workspace tool out of the model
-    request, and every other test here still passed. The delegate would have held its
+    request, and every other test here still passed. The subagent would have held its
     `fetch` and never been offered it.
     """
     _two_vendors(cfg)
-    _delegate(cfg, "vendor_b", grant="vendor_b/fetch.py::fetch")
+    _subagent(cfg, "vendor_b", grant="vendor_b/fetch.py::fetch")
 
     graph = build_agent(
         cfg,
@@ -191,7 +191,7 @@ def test_a_delegate_can_actually_call_the_one_it_named(cfg, session_dir):
     )
     transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
 
-    assert "from vendor_b" in transcript, "the delegate could not call the tool it named"
+    assert "from vendor_b" in transcript, "the subagent could not call the tool it named"
     assert "from vendor_a" not in transcript, "it reached the other vendor's tool"
 
 
@@ -228,11 +228,11 @@ def test_the_refusal_names_both_files(cfg, session_dir):
 
 def test_a_definition_naming_it_bare_is_refused_too(cfg, session_dir):
     """A definition is checked the same way a request is, and at construction -- a
-    delegate that would have dispatched to the wrong vendor should never reach a
+    subagent that would have dispatched to the wrong vendor should never reach a
     turn.
     """
     _two_vendors(cfg)
-    _delegate(cfg, "vendor_a", grant="fetch")
+    _subagent(cfg, "vendor_a", grant="fetch")
 
     with pytest.raises(CapabilityError, match="more than one source offers"):
         build_agent(
@@ -268,15 +268,15 @@ def test_a_unique_name_is_still_granted_flat(cfg, session_dir):
     assert _fetch_from(graph) == "from solo"
 
 
-def test_a_delegate_still_cannot_reach_past_the_request(cfg, session_dir):
+def test_a_subagent_still_cannot_reach_past_the_request(cfg, session_dir):
     """The ceiling this change had to leave alone.
 
-    Driven, not inspected: the delegate inherits the parent's registry and is stopped by
+    Driven, not inspected: the subagent inherits the parent's registry and is stopped by
     its allowlist, so what its `ToolNode` registers is identical either way and only
     calling it proves anything.
     """
     _two_vendors(cfg)
-    _delegate(cfg, "vendor_b", grant="vendor_b/fetch.py::fetch")
+    _subagent(cfg, "vendor_b", grant="vendor_b/fetch.py::fetch")
 
     graph = build_agent(
         cfg,
@@ -303,8 +303,8 @@ def test_a_delegate_still_cannot_reach_past_the_request(cfg, session_dir):
     )
     transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
 
-    assert "from vendor_a" not in transcript, "the delegate ran a tool its caller never had"
-    assert "from vendor_b" not in transcript, "the delegate reached past the request"
+    assert "from vendor_a" not in transcript, "the subagent ran a tool its caller never had"
+    assert "from vendor_b" not in transcript, "the subagent reached past the request"
 
 
 def test_one_file_defining_a_name_twice_is_still_refused(cfg):

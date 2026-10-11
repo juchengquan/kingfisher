@@ -28,8 +28,8 @@ from kingfisher.kinds.skills.catalogue import reachable
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.kinds.tools.spec import Offering
-from tests.conftest import FakeToolCallingModel, delegate, middleware_of, repository_root
-from tests.unit.test_subagent_helpers import _delegate, _tools_of
+from tests.conftest import FakeToolCallingModel, middleware_of, repository_root, subagent_of
+from tests.unit.test_subagent_helpers import _subagent, _tools_of
 
 
 def test_every_preset_subagent_parses(shipped):
@@ -55,7 +55,7 @@ def test_every_preset_subagent_parses(shipped):
             assert len(spec.system_prompt) > 200  # a real prompt, not a stub
         else:
             # The invariant `SubagentSpec` enforces: exactly one of the two, so
-            # a compiled delegate having no prompt is the format working rather
+            # a compiled subagent having no prompt is the format working rather
             # than a preset half-written.
             assert not spec.system_prompt
 
@@ -289,7 +289,7 @@ def test_the_log_tools_answer_from_a_log(shipped, tmp_path):
 def test_no_preset_names_a_model(shipped):
     """A file inside the wheel cannot portably name a vendor's model id.
 
-    `extractor` and `profiler` said `MiniMax-M2.5` once, and a delegate that has
+    `extractor` and `profiler` said `MiniMax-M2.5` once, and a subagent that has
     since gone said `gpt-5`. The catalogue is closed now, so any of those would
     refuse to start for a deployment whose `models.yaml` lacks the entry -- and
     before it was closed they were worse, reaching whatever endpoint was configured
@@ -306,10 +306,10 @@ def test_metadata_is_shown_on_both_kinds_that_take_it(shipped):
     writes is a field a reader has to take on trust.
     """
     agents = LocalAgentRepository(shipped / "agents").specs.values()
-    delegates = LocalSubagentRepository(shipped / "subagents").specs.values()
+    subagents = LocalSubagentRepository(shipped / "subagents").specs.values()
 
     assert any(spec.metadata for spec in agents), "no shipped agent writes metadata"
-    assert any(spec.metadata for spec in delegates), "no shipped subagent writes metadata"
+    assert any(spec.metadata for spec in subagents), "no shipped subagent writes metadata"
 
 
 def test_the_shipped_catalogue_has_no_delegation_cycle(shipped):
@@ -421,7 +421,7 @@ def test_every_preset_names_skills_this_distribution_actually_offers(
     cfg = replace(workspace_with_presets, skills_enabled=True)
     # What `agents/assistant.yaml` declares. Written out rather than read from
     # the file, because `build_agent` takes capabilities and this test is about
-    # what the delegates resolve to, not about how an agent becomes a request.
+    # what the subagents resolve to, not about how an agent becomes a request.
     granted = Capabilities(subagents=("extractor", "reviewer", "profiler"))
 
     build_agent(cfg, backend=backend_at(cfg, session_dir), model=fake_model, capabilities=granted)
@@ -432,7 +432,7 @@ def test_the_preset_that_grants_a_skill_is_told_about_it(
 ):
     """Resolving is not being offered, and only one of the two was ever checked.
 
-    Every `skills:` a shipped delegate declared was recorded under the words the
+    Every `skills:` a shipped subagent declared was recorded under the words the
     file wrote while the index was keyed by `source::name`, so `reviewer` read
     "No skills available yet" and its prompt's *follow the shared procedure* had
     nothing behind it.
@@ -453,11 +453,11 @@ def test_the_preset_that_grants_a_skill_is_told_about_it(
     assert "tabular-qa" in rendered
 
 
-def test_the_shipped_delegate_consults_its_helper_under_the_agent_that_ships_it(
+def test_the_shipped_subagent_consults_its_helper_under_the_agent_that_ships_it(
     workspace_with_presets, session_dir, fake_model, shipped
 ):
     """`reviewer` names `profiler`, and `assistant` grants both, so the agent a reader
-    runs first has a delegate with a helper.
+    runs first has a subagent with a helper.
 
     Read off `assistant.yaml` rather than written out: what could regress is the file
     that ships the pairing dropping half of it.
@@ -471,10 +471,10 @@ def test_the_shipped_delegate_consults_its_helper_under_the_agent_that_ships_it(
         capabilities=Capabilities(subagents=declared),
     ).graph
 
-    assert "task" in _tools_of(_delegate(graph, "reviewer")), "reviewer lost its helper"
+    assert "task" in _tools_of(_subagent(graph, "reviewer")), "reviewer lost its helper"
 
 
-def test_a_caller_naming_the_delegate_alone_gets_it_without_its_helper(
+def test_a_caller_naming_the_subagent_alone_gets_it_without_its_helper(
     workspace_with_presets, session_dir, fake_model
 ):
     """Dropped rather than refused, which is why `reviewer.yaml`'s prompt copes either
@@ -488,7 +488,7 @@ def test_a_caller_naming_the_delegate_alone_gets_it_without_its_helper(
         capabilities=Capabilities(subagents=("reviewer",)),
     ).graph
 
-    assert "task" not in _tools_of(_delegate(graph, "reviewer"))
+    assert "task" not in _tools_of(_subagent(graph, "reviewer"))
 
 
 # -- the compiled preset ----------------------------------------------------
@@ -548,7 +548,7 @@ def test_the_record_names_the_tool_and_its_arguments(shipped):
 
 
 def test_the_answer_survives_the_record(shipped):
-    """deepagents returns a delegate's result by walking back to the last `AIMessage`
+    """deepagents returns a subagent's result by walking back to the last `AIMessage`
     with non-empty text.
     """
     graph = compiled(shipped, [line_count], calling("line_count", {"path": "x"}))
@@ -575,7 +575,7 @@ def test_a_failed_call_is_recorded_as_failed(shipped):
 
 
 def test_an_answer_that_used_nothing_says_so(shipped):
-    """The most useful line this delegate ever prints."""
+    """The most useful line this subagent ever prints."""
     graph = compiled(shipped, [line_count], [AIMessage(content="I already knew that.")])
 
     answer = graph.invoke({"messages": [HumanMessage(content="how long is it?")]})
@@ -641,7 +641,7 @@ def test_the_typed_preset_writes_only_what_deepagents_types(shipped):
 def test_the_typed_preset_is_handed_its_tool_and_shown_its_skill(
     workspace_with_presets, session_dir, fake_model
 ):
-    """Read through the index the delegate is actually given, because `skills` as
+    """Read through the index the subagent is actually given, because `skills` as
     deepagents writes it -- a list of strings -- can load, build, and mount nothing.
     """
     wired = replace(workspace_with_presets, skills_enabled=True)
@@ -652,13 +652,13 @@ def test_the_typed_preset_is_handed_its_tool_and_shown_its_skill(
         capabilities=Capabilities(subagents=("versions",)),
     )
     (index,) = [
-        m for m in delegate(built, "versions")["middleware"] if isinstance(m, NarrowedSkills)
+        m for m in subagent_of(built, "versions")["middleware"] if isinstance(m, NarrowedSkills)
     ]
 
     shown = index._format_skills_list(index.before_agent({}, None, {})["skills_metadata"])
 
     assert "semver" in shown
-    assert "order_versions" in _tools_of(_delegate(built.graph, "versions"))
+    assert "order_versions" in _tools_of(_subagent(built.graph, "versions"))
 
 
 def test_the_typed_presets_tool_orders_by_precedence_rather_than_as_text(shipped):
@@ -1197,7 +1197,7 @@ def test_the_middleware_example_refuses_a_cap_that_refuses_everything(shipped):
 
 
 def _example_definitions(shipped):
-    """The agent-and-delegate pair that name middleware, from the kinds they belong to."""
+    """The agent-and-subagent pair that name middleware, from the kinds they belong to."""
     return (
         LocalAgentRepository(shipped / "agents").specs["researcher"],
         LocalSubagentRepository(shipped / "subagents").specs["sweeper"],
@@ -1206,11 +1206,11 @@ def _example_definitions(shipped):
 
 def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
     """Unseeded is not unchecked."""
-    agent, delegate = _example_definitions(shipped)
+    agent, subagent = _example_definitions(shipped)
 
     assert agent.name == "researcher"
     # `call-cap-generous` is granted here so `sweeper` may name it, since an
-    # agent's `middlewares:` is the ceiling its delegates are clamped by. The
+    # agent's `middlewares:` is the ceiling its subagents are clamped by. The
     # agent runs under both caps and the stricter one decides.
     assert agent.middlewares == (
         "call-cap-strict",
@@ -1218,9 +1218,9 @@ def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
         "tool-note",
         "compact",
     )
-    assert delegate.name == "sweeper"
-    assert delegate.middlewares == ("call-cap-generous", "tool-note")
-    assert agent.subagents == ("sweeper",), "the agent half has to name the delegate half"
+    assert subagent.name == "sweeper"
+    assert subagent.middlewares == ("call-cap-generous", "tool-note")
+    assert agent.subagents == ("sweeper",), "the agent half has to name the subagent half"
 
     # Both spellings in one list, which is what these two files are now for.
     # The cap is bare because `CallCap` opens nothing; the note is written long
@@ -1228,19 +1228,19 @@ def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
     assert dict(agent.middleware_settings) == {
         "tool-note": {"text": "Cite the path and line for anything you assert."}
     }
-    assert dict(delegate.middleware_settings) == {
+    assert dict(subagent.middleware_settings) == {
         "tool-note": {"text": "Return the path and line, not the file."}
     }
     assert (
-        agent.middleware_settings["tool-note"] != delegate.middleware_settings["tool-note"]
+        agent.middleware_settings["tool-note"] != subagent.middleware_settings["tool-note"]
     ), "one registry entry configured two ways is the thing this pair demonstrates"
 
 
 def test_the_middleware_examples_are_why_they_are_not_seeded(shipped):
     """The reason they sit here rather than under `agents/` and `subagents/`."""
-    agent, delegate = _example_definitions(shipped)
+    agent, subagent = _example_definitions(shipped)
 
-    for spec, kind in ((agent, "agent"), (delegate, "subagent")):
+    for spec, kind in ((agent, "agent"), (subagent, "subagent")):
         with pytest.raises(CapabilityError, match="names unregistered middleware"):
             declared_middleware(spec, {}, ALL, kind=kind)
 
@@ -1248,17 +1248,17 @@ def test_the_middleware_examples_are_why_they_are_not_seeded(shipped):
 def test_the_middleware_examples_build_against_the_registry_they_document(shipped):
     """The wiring block in `call_cap.py` is copy-pasteable, checked by pasting it."""
     registry = _documented_registry(shipped)
-    agent, delegate = _example_definitions(shipped)
+    agent, subagent = _example_definitions(shipped)
 
     built = declared_middleware(
         agent, registry, ALL, kind="agent", provisions=_shipped_provisions(agent)
     )
-    delegated = declared_middleware(
-        delegate, registry, ALL, kind="subagent", provisions=_shipped_provisions(delegate)
+    subagent_middleware = declared_middleware(
+        subagent, registry, ALL, kind="subagent", provisions=_shipped_provisions(subagent)
     )
 
     # `CallCapGenerous` is in the agent's list because `sweeper` names it and an
-    # agent grants what its delegates may reach. It is built for the agent too,
+    # agent grants what its subagents may reach. It is built for the agent too,
     # which the file says out loud -- the stricter cap beside it still decides.
     assert [type(m).__name__ for m in built] == [
         "CallCap",
@@ -1266,23 +1266,23 @@ def test_the_middleware_examples_build_against_the_registry_they_document(shippe
         "ToolNote",
         "Compact",
     ]
-    assert [type(m).__name__ for m in delegated] == ["CallCapGenerous", "ToolNote"]
-    assert built[0] is not delegated[0], "one instance for both would share a budget"
-    assert built[1] is not delegated[0], (
+    assert [type(m).__name__ for m in subagent_middleware] == ["CallCapGenerous", "ToolNote"]
+    assert built[0] is not subagent_middleware[0], "one instance for both would share a budget"
+    assert built[1] is not subagent_middleware[0], (
         "the same class named by both is still built twice, or the budget the "
-        "agent spends would come out of the delegate's"
+        "agent spends would come out of the subagent's"
     )
     # The ceilings the two classes document, read off the objects rather than
     # off `defaults`: the point of registering a class is that the build path
     # applies its defaults, so asserting the attribute would assert nothing.
     assert built[0]._limit == 20
-    assert delegated[0]._limit == 100
+    assert subagent_middleware[0]._limit == 100
 
 
 def test_the_note_example_is_one_class_configured_two_ways(shipped):
     """The half of the axis `call_cap.py` cannot show, driven end to end."""
     registry = _documented_registry(shipped)
-    agent, delegate = _example_definitions(shipped)
+    agent, subagent = _example_definitions(shipped)
 
     # Selected by type rather than by position, which is what this read before.
     # A third entry on the agent moved `[1]` from the note to a cap and the
@@ -1296,18 +1296,18 @@ def test_the_note_example_is_one_class_configured_two_ways(shipped):
             agent, registry, ALL, kind="agent", provisions=_shipped_provisions(agent)
         )
     )
-    delegated = _note(
+    subagent_middleware = _note(
         declared_middleware(
-            delegate, registry, ALL, kind="subagent", provisions=_shipped_provisions(delegate)
+            subagent, registry, ALL, kind="subagent", provisions=_shipped_provisions(subagent)
         )
     )
 
     assert note._text == "Cite the path and line for anything you assert."
-    assert delegated._text == "Return the path and line, not the file."
-    assert note._text != delegated._text
+    assert subagent_middleware._text == "Return the path and line, not the file."
+    assert note._text != subagent_middleware._text
     # The key neither file wrote, which both take from the deployment. The
     # merge is per key rather than all-or-nothing, and this is where that shows.
-    assert note._max_length == delegated._max_length == 200
+    assert note._max_length == subagent_middleware._max_length == 200
 
 
 def test_the_note_example_refuses_the_key_it_did_not_open(shipped):
@@ -1419,7 +1419,7 @@ def test_every_source_id_the_presets_name_is_declared(shipped):
 
 def test_the_source_id_presets_narrow_for_a_narrower_caller(shipped):
     """The compounding case, asserted against the files rather than described: one
-    delegate, and an auditor holds fewer tools than an analyst.
+    subagent, and an auditor holds fewer tools than an analyst.
     """
     specs = LocalSubagentRepository(shipped / "subagents").specs
     source_ids = _vocabulary(shipped)
@@ -1636,8 +1636,8 @@ def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir
 
     It was real: `researcher` granted `call-cap-strict` and `tool-note`, and
     `sweeper` named `call-cap-generous`, which its parent therefore refused. An
-    agent's `middlewares:` is the ceiling its delegates are clamped by, so a
-    delegate can only name what the agent granted.
+    agent's `middlewares:` is the ceiling its subagents are clamped by, so a
+    subagent can only name what the agent granted.
 
     Built from the workspace with no `middleware_registry=` at all, which is the
     thing that could not be done before `middlewares/` was a kind: the whole
@@ -1788,11 +1788,11 @@ def test_compaction_fires_at_sixty_messages_however_small(shipped, cfg, session_
     assert any("replaces its SummarizationMiddleware in place" in w for w in warned), warned
 
 
-# -- an agent in a folder, and the delegates it reaches -----------------------
+# -- an agent in a folder, and the subagents it reaches -----------------------
 
 
-def _scribe_delegates(cfg, session_dir, shipped) -> dict:
-    """`scribe`, built from the shipped catalogue alone, as the delegates it handed on."""
+def _scribe_subagents(cfg, session_dir, shipped) -> dict:
+    """`scribe`, built from the shipped catalogue alone, as the subagents it handed on."""
     from kingfisher.infrastructure.catalogue import Definitions
 
     wired = replace(cfg, skills_enabled=True)
@@ -1834,37 +1834,37 @@ def test_a_shipped_agent_says_every_builtin_with_the_star(shipped):
     assert LocalAgentRepository(shipped / "agents").specs["scribe"].builtin_tools == ALL
 
 
-def test_every_shipped_delegate_is_named_by_some_agent(shipped):
-    """A delegate no agent names is a definition nothing can call.
+def test_every_shipped_subagent_is_named_by_some_agent(shipped):
+    """A subagent no agent names is a definition nothing can call.
 
     `redactor` and `show-your-work` were both, and every test of either built it
     directly, so nothing noticed that no shipped agent could reach them.
     """
-    delegates = LocalSubagentRepository(shipped / "subagents").specs
+    subagents = LocalSubagentRepository(shipped / "subagents").specs
     named: set[str] = set()
     for agent in LocalAgentRepository(shipped / "agents").specs.values():
         # Each agent's own list, not the chain below it. The build activates what an
         # agent names; whether a helper arrives unnamed is a separate question, and
         # this rule should not lean on the answer.
-        named |= set(delegates) if agent.subagents == ALL else set(agent.subagents or ())
+        named |= set(subagents) if agent.subagents == ALL else set(agent.subagents or ())
 
-    assert delegates, "an empty catalogue would pass the assertion below"
-    assert set(delegates) <= named, f"no shipped agent names {sorted(set(delegates) - named)}"
+    assert subagents, "an empty catalogue would pass the assertion below"
+    assert set(subagents) <= named, f"no shipped agent names {sorted(set(subagents) - named)}"
 
 
-def test_the_nested_agent_hands_the_compiled_delegate_its_own_grant(
+def test_the_nested_agent_hands_the_compiled_subagent_its_own_grant(
     cfg, session_dir, shipped
 ):
     """`show-your-work` writes no `tools:`, so it is handed exactly what `scribe` was
     granted -- three tools that read a log, and nothing that reaches the network.
 
-    Driven through a build, because what a compiled delegate is handed is decided when
+    Driven through a build, because what a compiled subagent is handed is decided when
     the agent is assembled, and shows in no definition.
     """
-    delegates = _scribe_delegates(cfg, session_dir, shipped)
+    subagents = _scribe_subagents(cfg, session_dir, shipped)
 
-    assert {"redactor", "show-your-work"} <= set(delegates)
-    answering = delegates["show-your-work"]["runnable"].nodes["answer"].bound
+    assert {"redactor", "show-your-work"} <= set(subagents)
+    answering = subagents["show-your-work"]["runnable"].nodes["answer"].bound
     handed = set(answering.nodes["tools"].bound.tools_by_name)
     assert handed == {"log_levels", "status_codes", "line_count"}
 

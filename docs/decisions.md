@@ -92,7 +92,7 @@ failed hardest.
 
 **A reference is a selector, and a checked label too.** `vendor_a/fetch.py::fetch`
 resolves to one tool, and where a name is unique the path is still checked: a
-subagent naming a tool at a path it has moved from stops startup and a delegate's
+subagent naming a tool at a path it has moved from stops startup and a subagent's
 build, while an agent naming one is reported by `doctor` and `kingfisher list` and
 runs without the tool. The model never sees a reference -- it is given a flat
 `fetch` -- because tool names go to the provider as identifiers and `::` is not
@@ -103,7 +103,7 @@ something to put in one. A bare name two folders offer is refused, naming both.
 **One definition naming one dispatch name twice is refused, however it spells it.** The
 "names it twice" check compared written entries verbatim, so `shared.py::shared` beside
 a bundled `shared` was two strings and went through -- and the bundle silently won,
-handing the delegate its own tool where the author had named the catalogue's file. Only
+handing the subagent its own tool where the author had named the catalogue's file. Only
 a `doctor` warning said so. Measured on 2026-10-11, with the plainly-written pair beside
 it as the control: that one is refused.
 
@@ -261,7 +261,7 @@ live object, which a file cannot.
 
 **Both sources are merged once, and a name in both is refused.** `build_agent`
 resolves the registry before either branch reads it, so an agent and its
-delegates select from one mapping; merging twice would be a second chance to
+subagents select from one mapping; merging twice would be a second chance to
 disagree. A clash is refused rather than resolved because both sources belong to
 the same deployment and renaming is available -- unlike a tool clash between two
 vendors, which is why that one is qualified instead.
@@ -281,8 +281,8 @@ agent runtime for names that never reach it. The trade `models.py` already makes
 by naming its chat classes as strings.
 
 **The shipped pairing had never been built, and did not work.** `researcher`
-granted `call-cap-strict` and `tool-note` while its delegate `sweeper` named
-`call-cap-generous` -- and an agent's `middlewares:` is the ceiling its delegates
+granted `call-cap-strict` and `tool-note` while its subagent `sweeper` named
+`call-cap-generous` -- and an agent's `middlewares:` is the ceiling its subagents
 are clamped by, so the parent refused it. Invisible for as long as the example
 existed: with nothing registered anywhere it failed earlier for want of a
 registry, and every test that touched the pair either replaced the spec or
@@ -366,7 +366,7 @@ worth correcting here, because the next person will know it is. A registered
 class has always been able to close over one -- `guides/middleware.md` documents
 the pattern, and a deployment can build a model in its own program and capture it.
 What could not be reached was narrower and sharper: *this build's* answer, which
-is decided per agent and per delegate and cannot be closed over at startup, and
+is decided per agent and per subagent and cannot be closed over at startup, and
 the model from a `middlewares/` file, which is imported once when `Kingfisher`
 reads its catalogue -- before any agent has been built, so there is no model yet to
 capture.
@@ -390,11 +390,11 @@ nothing said. A want with no such resolver -- `backend`, `definition` -- has no
 name a file could carry, so a value written for one is refused rather than
 interpreted, on the class rather than on the write.
 
-**A delegate is handed its own model, not its agent's.** The proposal said both
-call sites had the built model in scope; only one did. A delegate's is not built
+**A subagent is handed its own model, not its agent's.** The proposal said both
+call sites had the built model in scope; only one did. A subagent's is not built
 until `as_subagent`'s last line, so what is in scope where its middleware is made
 is the *agent's* -- and handing that over is wrong in the direction that costs
-money, since a delegate pinned to the cheap model would be compacted by the
+money, since a subagent pinned to the cheap model would be compacted by the
 expensive one. `_with_helpers` already knew the answer and now passes it down.
 The same mistake had been made once before for a helper's inherited model.
 
@@ -439,7 +439,7 @@ is refused on a deployment that registered nothing, and a star resolves to nothi
 there. *Middleware is a definition kind* is what made that false, and nobody read
 the two together -- a file in the workspace's `middlewares/` counts as registered,
 and `seed` copies the examples in. So a seeded workspace wrapped the agent a reader
-runs first in every one of them, on the agent and on its general-purpose delegate,
+runs first in every one of them, on the agent and on its general-purpose subagent,
 with neither its file nor its prompt saying so. Measured by building it. The test
 for the star checked it against an empty registry, which is the one registry a
 seeded workspace never has.
@@ -459,13 +459,13 @@ two sources of one registry mean different things to one field.
 it.** `ports.md` listed four of them as ports to replace when a catalogue is not a
 directory, and nothing outside this repository could: neither `Definitions` nor the
 interfaces are exported. The repositories with no directory were test fakes, a
-delegate's carried tools, and the empty middleware default. So the interfaces declared the basics, the local repositories carried the
+subagent's carried tools, and the empty middleware default. So the interfaces declared the basics, the local repositories carried the
 rest, and thirteen reads went through `getattr` with a default -- one of them under
 a comment saying a repository that is not the local one answers nothing rather than
 raising. Two of those answers were behaviour, and running an in-memory repository
 through them showed it: without `documents` a session was never pinned to its agent,
 so a later turn asking the same session for another agent was served instead of
-refused; without `bundles` a delegate's carried tools were dropped.
+refused; without `bundles` a subagent's carried tools were dropped.
 
 Settled the way `CatalogueSource` was, above: one implementation is not a seam. The
 rows left `ports.md`, every member a consumer reads is on its interface -- `root`
@@ -552,10 +552,10 @@ first turn on one agent and every later turn on another. One value carrying both
 read once, keeps what was parsed, and is what a test hands `read` too, so neither
 reader bends to the other. *(2026-09-24.)*
 
-**A delegate lists what it takes from its own folder, and only that arrives.** Each
+**A subagent lists what it takes from its own folder, and only that arrives.** Each
 `tools:` and `skills:` entry may say `source: shared` (the catalogue, which is what a
 plain name means) or `source: bundled` (the subagent's own folder). The folder used
-to grant by itself: every file in `subagents/<name>/tools/` reached the delegate
+to grant by itself: every file in `subagents/<name>/tools/` reached the subagent
 with no line naming it, and an optional `bundle:` key could describe the folder and
 be checked against it while granting nothing.
 
@@ -572,23 +572,23 @@ definition can put on or take off, and two subagents claiming one tool would nee
 rule of their own. With the location reading, a tool is private because of where
 its file sits.
 
-**An unlisted file in a delegate's folder is refused, not ignored.** Every
+**An unlisted file in a subagent's folder is refused, not ignored.** Every
 deployment upgrading has exactly these files, granted by being there, and ignoring
 them would lose each one silently -- the failure the change exists to remove. It is
 the old `bundle:` check, now always on: `rules.miscounted` compares the list and the
 folder in both directions, `warm` refuses, and `doctor` fails on `bundled entries`.
 The build filters to the list as well, so a caller that skipped `warm` is still
-handed only what is listed. A compiled delegate cannot list skills, so a `skills/`
+handed only what is listed. A compiled subagent cannot list skills, so a `skills/`
 folder beside one is refused by the same rule rather than warned about.
 
 **Subagents only.** `source: bundled` in an agent file is refused: an agent has no
-folder, and the folder exists so a delegate can hold something its caller cannot.
+folder, and the folder exists so a subagent can hold something its caller cannot.
 A bundled entry also takes no `source_ids` -- it reaches whoever reaches the
-delegate -- and no `file::name` path, since the folder is where it is.
+subagent -- and no `file::name` path, since the folder is where it is.
 
-**What was kept.** The shadowing rule stays: a delegate inheriting the catalogue
+**What was kept.** The shadowing rule stays: a subagent inheriting the catalogue
 with `"*"` and listing its own `fetch` gets its own, and `list` still marks it,
-because the catalogue's `fetch` is still dropped for that delegate. A folder named
+because the catalogue's `fetch` is still dropped for that subagent. A folder named
 after no definition stays a warning; the renamed definition that left it is refused
 from its own side when it listed anything. A portable `SUBAGENTS` entry carries
 objects instead, in its plain `tools` and `skills`, since it has no folder for
@@ -608,8 +608,8 @@ fields inherit everything available; `skills`, `subagents` and `middlewares` omi
 to none. Tools are what an agent needs to *act*; the others are what it needs to
 know and to ask. *(2026-08-18, `agents-as-definitions.md`.)*
 
-**A delegate names its skills; `["*"]` is refused there and taken on an agent.**
-The star resolves to whatever the request granted, and a delegate is handed a
+**A subagent names its skills; `["*"]` is refused there and taken on an agent.**
+The star resolves to whatever the request granted, and a subagent is handed a
 skills index only where its skills are *named* -- so under the ordinary request,
 which grants every skill, `skills: ["*"]` read as all of them and arrived as
 none. It worked only when the caller happened to narrow skills, which is a
@@ -618,25 +618,25 @@ Refused at the read, beside the `subagents` star and for the same reason: the
 habit comes from a request, where the star is the ordinary way to say
 everything. The two tool axes still take it, where it means what it says.
 
-**An agent grants the helpers its delegates consult, and the docs said otherwise
-for months.** *Helpers arrive with the delegate that wants them* promised that an
+**An agent grants the helpers its subagents consult, and the docs said otherwise
+for months.** *Helpers arrive with the subagent that wants them* promised that an
 agent naming `reviewer` got whatever `reviewer` named; `kingfisher list` printed
 that chain, computed by `inventory.reached`. The build never did it:
 `AgentSpec.declares` returns the agent's own `subagents:`, and `subagent_helpers`
-narrows a delegate's helpers by it, so an agent naming only the parent built a
-delegate with no `task` tool at all. Measured both ways before changing anything --
+narrows a subagent's helpers by it, so an agent naming only the parent built a
+subagent with no `task` tool at all. Measured both ways before changing anything --
 naming both works, naming one drops the helper silently.
 
 The code kept its rule and the prose moved to it, because the alternative widens
 one axis alone: `middlewares:` already makes an agent's line the ceiling its
-delegates are clamped by -- *the shipped pairing had never been built* is the entry
+subagents are clamped by -- *the shipped pairing had never been built* is the entry
 where that cost `researcher` a name it does not use itself -- and a `subagents:`
 that granted what it did not name would be the only field where naming one thing
 grants another. It would also compile a graph per turn for a helper nobody asked
 for.
 
 So the listing prints what an agent *activates*, `reached` is `activated` and no
-longer walks the chain, and the guide says a delegate's helper needs naming on the
+longer walks the chain, and the guide says a subagent's helper needs naming on the
 agent too. What did not change: a *request* naming `reviewer` alone still gets a
 reviewer without its helper, dropped rather than refused, which is the half the
 guide always had right. *(2026-09-17.)*
@@ -650,7 +650,7 @@ is 6,872 compilations and seven seconds. *(2026-08-18, `subagents-all-the-way-do
 "At load" meant when a build read the catalogue, which was the only time it was
 read. The catalogue has been read at startup since, and a cycle is still not
 refused there: `kingfisher list` reports one, and the first build of an agent with
-delegates refuses it. *(2026-09-17.)*
+subagents refuses it. *(2026-09-17.)*
 
 **A subagent may be a compiled graph rather than a spec**, told apart by
 extension. `SUBAGENTS` is declared and never inferred; name and description are
@@ -665,17 +665,17 @@ a package may hold a fixture or a prompt beside its `__init__.py`, so the one re
 confusion is named rather than every unfamiliar suffix refused. *(2026-09-17.)*
 
 **One stack for every graph that holds the workspace tools.** Three graphs hold
-them -- the agent, a delegate, and the `general-purpose` delegate deepagents supplies
+them -- the agent, a subagent, and the `general-purpose` subagent deepagents supplies
 -- and each composed its own middleware where it was built. The one built last got
-none of it: deepagents fills a delegate spec that names no tools from the parent, so
+none of it: deepagents fills a subagent spec that names no tools from the parent, so
 `general-purpose` held the agent's own tool objects with no host-path guard, no error
 guard and no path translation. A tool call through it reached the tool with the paths
 the model wrote, which is exactly the leak translation exists to close, and a failing
 tool raised instead of answering. `tool_guards` builds the three now and all three
 sites call it, so a fourth cannot be written half-right.
 
-**A compiled delegate's tools are wrapped, because it is the fourth graph.**
-`tool_guards` reaches a graph through its middleware, and a compiled delegate has
+**A compiled subagent's tools are wrapped, because it is the fourth graph.**
+`tool_guards` reaches a graph through its middleware, and a compiled subagent has
 none -- deepagents runs it as given. The shipped `scribe` is what showed it: three
 path-taking tools handed to `show-your-work`, and the first call died on
 `log_levels('/data/api.log')` with `FileNotFoundError`, the run over. `GuardedTool`
@@ -694,31 +694,31 @@ did not build nothing catches one -- measured for `ToolException`, `ValueError` 
 before it leaves the tool. That also keeps `ToolMessage.status` true, which
 `show_your_work` reads to report a call as failed. *(2026-09-18.)*
 
-**The skills switch is the deployment's, for delegates too.** `cfg.skills_enabled`
-says what is wired and a request says what it wants of that. The delegate branch asked
-only the request, so a workspace with skills switched off still handed a delegate an
+**The skills switch is the deployment's, for subagents too.** `cfg.skills_enabled`
+says what is wired and a request says what it wants of that. The subagent branch asked
+only the request, so a workspace with skills switched off still handed a subagent an
 index of the catalogue while the agent got none and `doctor` reported that none would
-be offered. Read once now, beside the request's own ceiling. A delegate's *own* bundle
-stays outside the switch: it is the delegate's folder rather than the catalogue the
+be offered. Read once now, beside the request's own ceiling. A subagent's *own* bundle
+stays outside the switch: it is the subagent's folder rather than the catalogue the
 switch is about, and the backend mounts its route either way, so withholding the index
 would leave those files reachable and unnamed. *(2026-09-18, from an architecture
 review; both were found by reading the three stacks side by side.)*
 
 **A definition names at most one model**, and a subagent naming none runs its
 caller's. A list there is refused rather than read. `indistinct` reports a
-delegate that named a model and did not end up anywhere different.
+subagent that named a model and did not end up anywhere different.
 *(2026-08-18, `compiled-subagents.md`, `agents-as-definitions.md`.)*
 
-**What a delegate inherits is now held rather than commented.** Two lines beside
-`_with_helpers` explain that a delegate naming no model gets no `model` on its spec
+**What a subagent inherits is now held rather than commented.** Two lines beside
+`_with_helpers` explain that a subagent naming no model gets no `model` on its spec
 -- deepagents hands it the caller's -- and that its middleware must therefore be
 told the model it will actually run. Both carried the reasoning for a bug measured
-once: a helper under a delegate pinned to the cheap model quietly ran the expensive
+once: a helper under a subagent pinned to the cheap model quietly ran the expensive
 one. Only the helper half was held. Dropping the other, so a middleware on an
-inheriting delegate is handed `None`, left all 2,084 tests green.
+inheriting subagent is handed `None`, left all 2,084 tests green.
 
 **The duplication that occasioned this was left alone, and that is the decision.** A
-delegate's model is resolved twice per build -- once for what its middleware is
+subagent's model is resolved twice per build -- once for what its middleware is
 told, once for its spec -- and the two are equal answers in separate objects. The
 review card called for collapsing them. Measured first: a model costs **0.010ms** to
 build, against an admit at 15-46ms, so there is no saving to claim; the two sites
@@ -736,7 +736,7 @@ nothing. *(2026-09-23, from an architecture review.)*
 list tried in order, and `alias` was the only thing that could use one, so the two
 went together. `distinct: true` turned `indistinct`'s report into a refusal, and
 `second-opinion` was its only user in the shipped catalogue, so both went; the field
-can come back if that delegate does. This entry kept describing both until
+can come back if that subagent does. This entry kept describing both until
 2026-09-17.
 
 **A turn resolves its agent once.** Admission asked `_agent_for` twice, and down
@@ -810,7 +810,7 @@ from that any local file could claim.
 did not. The compiled branch checked that `name` and `description` were *present*; the
 portable branch beside it checked presence and emptiness, and so did both document
 readers. So `{"name": "", "description": "", "build": f}` was accepted by the one
-reader of four that had half the check. Measured: the delegate reached deepagents --
+reader of four that had half the check. Measured: the subagent reached deepagents --
 which dispatches on the name and hands the description to the parent model to choose on
 -- and `kingfisher list` exited **zero** over a line reading `(surveyor.py)  [compiled]
 — `, against this record's own rule that a listing exiting zero means nothing in the
@@ -837,7 +837,7 @@ already written and filed nowhere: `a_portable_subagent_naming_a_model` had been
 unreferenced since it was added. *(2026-09-27, from an architecture review.)*
 
 **What it carries is its own, and `builtin_tools` is the exception.** Carried
-tools reach that delegate and nothing else -- they enter no catalogue, so nothing
+tools reach that subagent and nothing else -- they enter no catalogue, so nothing
 can grant or narrow them, which is what atomic means. Built-ins are the host's
 rather than the definition's, so they stay narrowed by the request: otherwise
 `pip install` would be a way to put back a shell a deployment had turned off.
@@ -845,7 +845,7 @@ rather than the definition's, so they stay narrowed by the request: otherwise
 **`Holdings` gained a second backing rather than the spec gaining contents.**
 `SubagentSpec.bundled` holds names -- what a definition lists from its folder,
 checked against it -- and `carried` beside it holds what a definition brought
-instead, refused together by `__post_init__` since a delegate owns one or the
+instead, refused together by `__post_init__` since a subagent owns one or the
 other. Putting imported tool
 objects on the spec for folder bundles too would have made *parsing* a definition
 import its bundle's Python, where now the import happens when a bundle's tools are
@@ -859,7 +859,7 @@ know a deployment's routes, so here each is a directory that must exist on this
 host, and `/skills/...` is refused naming the likely mistake. One directory keeps the
 bundle's route; several are numbered beneath it in the order listed, all under the
 bundle's one label, so a skill's identity does not depend on which directory holds
-it. Two holding one name are refused rather than merged, since the delegate could
+it. Two holding one name are refused rather than merged, since the subagent could
 hold only one of them. *(2026-09-25.)*
 
 **deepagents' other `SubAgent` keys are refused with a reason, not as unknown.** A
@@ -869,7 +869,7 @@ it" reads as *not yet* rather than *no*. The first three take a document's reaso
 `middleware` is refused rather than carried the way tools are: deepagents merges it
 by name, so the `FilesystemMiddleware` its own docs suggest would replace the one
 holding the deployment's backend and permission rules, and middleware otherwise
-reaches a delegate only by the deployment registering it. The drift test reads the
+reaches a subagent only by the deployment registering it. The drift test reads the
 keys off the TypedDict, so one a deepagents upgrade adds has to be decided here.
 *(2026-09-25.)*
 
@@ -882,7 +882,7 @@ The case for it is one thing, because the other two reasons to delegate are alre
 unavailable to a portable definition: it cannot give a helper a different tool
 surface, since its carried bundle is one set with nothing to split it between, and
 it cannot give one a different model, since `model` is refused as unportable. What
-is left is context isolation -- a delegate burning its own context and handing back
+is left is context isolation -- a subagent burning its own context and handing back
 an answer -- and `build` already answers that. A compiled entry composes whatever
 graph it likes and closes over its own tools.
 
@@ -896,7 +896,7 @@ So the refusal stays and the key stays reserved, and what changed instead was th
 advice. It used to say *fold the step into this one's prompt*, which is wrong in the
 one case somebody would be reading it: a prompt cannot buy a fresh context, which is
 the whole reason to want a helper. It now names the two real answers -- ship the
-helper as a delegate of its own, or write `build` -- and `formats.md` says what each
+helper as a subagent of its own, or write `build` -- and `formats.md` says what each
 costs. `test_the_helper_refusal_points_at_a_key_that_exists` holds the advice to the
 format, so a renamed `build` cannot leave it pointing at nothing.
 
@@ -967,6 +967,23 @@ never the spelling: `_agent` beside `_agents` rendering one and many is exactly 
 a reader expects. What made this one a trap is that the two names had different
 subjects, and no rule keyed on the letters can tell that apart. *(2026-09-24, from
 an architecture review.)*
+
+**`subagent` is the noun, and `delegate` is only ever the verb.** Kingfisher's formal
+names already followed deepagents -- the `subagents/` folder, the `subagents:` key,
+`SUBAGENTS`, `SubagentSpec` -- while its prose, its messages and many of its helpers
+used `delegate` for the same thing, about as often. Readers met two words for one
+thing and asked whether they differed, and the noun reads as the verb at a glance: one
+comment had to say "what lets this subagent delegate" to be read at all. So the noun is
+`subagent` everywhere, and `delegate` stays only as the verb ("an agent delegates the
+reading") or the act (`test_delegation_ceiling`). `test_subagent_vocabulary` refuses
+the noun in a name, a file name or prose. `spikes/` is left as the record it is.
+
+**The public spellings changed with it, with no alias kept.** The `delegate_only`
+warning is `subagent_only`, `kingfisher list --json` says `agent_subagents`, the
+`doctor` rows are `subagent tools` and `subagent bundles`, and the listing prints
+`subagents:`. Keeping the old spellings beside the new would have kept the second word
+in exactly the places a script reads; the upgrading notes list all four.
+*(2026-10-11.)*
 
 **Seeding keeps its own tolerant reader, and the spellings it covers are held.**
 `source_ids_named` and `middleware_named` read one field out of a document that may
@@ -1246,7 +1263,7 @@ one renderer. `Inventory` filtered `agents` and `subagents` by what the caller r
 and carried the rest whole, and the text form covered for it by skipping the access
 sections for a scoped view. `as_json` had no such clause. Measured through the real
 command, a caller holding one source id was handed, for every definition out of their
-reach: its name, the file it came from, and its delegate chain -- plus the vocabulary,
+reach: its name, the file it came from, and its subagent chain -- plus the vocabulary,
 every definition's audience, and the report of what restricts nobody.
 
 The record's own field said otherwise -- *"the names above have already been filtered
@@ -1280,7 +1297,7 @@ agent they cannot open offers, and the file each tool lives in.
 
 What a listing can ask is whether **any definition this caller reaches offers it to
 them**, which is what `_offers` does -- over the reachable agents and the reachable
-delegates alike, because a caller who reaches a delegate reaches what it holds. Three
+subagents alike, because a caller who reaches a subagent reaches what it holds. Three
 things about that walk are load-bearing and each was a silent mutation until a rule was
 written for it:
 
@@ -1382,7 +1399,7 @@ second reader is how this happened. *(2026-09-15.)*
 the entry above, found the same way: `Stated` was built from a spec in two places
 with the same pair of `getattr` calls, and the rule that narrows a definition's
 audienced fields to one caller was written out six times -- three fields, in each
-of the two `declares` bodies, with the delegate listing its own fields a second
+of the two `declares` bodies, with the subagent listing its own fields a second
 time for the no-caller case. `AUDIENCED` already named those three fields and
 already drove five other loops, so the enumeration was the duplicated part rather
 than the rule. `domain.access.stated` and `narrowed_for` are the one of each now,
@@ -1391,7 +1408,7 @@ share.
 
 `narrowed_for` returns the three selections and never a `Capabilities`, which is
 the part worth keeping deliberate: an agent widens `models` to everything where a
-delegate leaves it unset, and `memory` is an agent's to state. Those axes carry no
+subagent leaves it unset, and `memory` is an agent's to state. Those axes carry no
 audience, so they stay with the definition that has an opinion about them -- a
 shared body returning the whole record would have flattened a difference no test
 was watching. One is now. *(2026-09-16.)*
@@ -1646,10 +1663,10 @@ through `read_file` and killed a sixteen-call run through `csv_profile`. Which o
 the two happened depended on the tool the model reached for, which a deployment
 cannot predict.
 
-Built beyond what the design asked for. It specified the agent; delegates and
+Built beyond what the design asked for. It specified the agent; subagents and
 helpers below them get the guard too, because an agent declares its own roster
 and `subagents` defaults to everything in it, so the common case became several
-delegates holding the workspace's tools with the guard only on the parent.
+subagents holding the workspace's tools with the guard only on the parent.
 *(2026-08-18 as `a-tool-failure-is-not-a-crash.md`; shipped, and the file removed
 2026-08-31.)*
 
@@ -3166,9 +3183,9 @@ mount, or `/data` here and the shell elsewhere. Which backend it is says nothing
 one path, so the question is asked of the path, at the call. A startup rule was the
 alternative, and it would have refused a deployment over a tool it never calls.
 
-**A delegate is handed the parent's paths.** It guessed its session from
+**A subagent is handed the parent's paths.** It guessed its session from
 `backend.workspace`, which a deployment's backend need not have, and without it a
-delegate's tools lost translation and the host-path refusal silently.
+subagent's tools lost translation and the host-path refusal silently.
 
 **A path under a write-denied scope is handed over.** Under `/data` that is safe on the
 default backend, the directory being read-only on disk. Under `/skills` it is not: the
@@ -3315,7 +3332,7 @@ is about that flag. See "The names a caller writes follow the folder" under
 the quiet. A `--quiet` flag was rejected: it asks the caller for correct
 behaviour and does nothing for whoever forgets it.
 
-That split settled something the design had not reached. **A delegate's prose is
+That split settled something the design had not reached. **A subagent's prose is
 progress, not answer.** On one stream the speaker tag is what keeps two voices
 apart; on two, the streams do it better, and an extractor's working notes are
 not what anybody redirected stdout for. `Progress` moved out of the unshipped
@@ -3455,7 +3472,7 @@ so the attributes stay ones a checker follows, and
 
 Two things stay outside it and say so. `skills` has no single error, because a skill
 fails one at a time and `doctor` gives them a check of their own; `bundles_error` is
-not a kind at all, a bundle being one delegate's folder rather than a catalogue.
+not a kind at all, a bundle being one subagent's folder rather than a catalogue.
 Each `*_error` the record carries is now driven one at a time through `failed`,
 which is how one goes missing: a kind gains an error, every other check keeps
 passing, and the deployment that breaks on it is the one nobody told.
@@ -3514,20 +3531,20 @@ would say that each block might fail in any way, which is the thing they were
 narrowed to stop saying.
 
 Five of the six were held. **The sixth was not**: the agents walk could be narrowed
-to `AgentError` alone with all 2,104 tests green, and a broken delegate would then
+to `AgentError` alone with all 2,104 tests green, and a broken subagent would then
 reach `doctor` and `list` as a traceback over a workspace whose agents are fine --
 which is the incident three of the comments in that file record.
-`test_a_broken_delegate_does_not_take_the_agents_half_down` holds it now.
+`test_a_broken_subagent_does_not_take_the_agents_half_down` holds it now.
 
 
 **It gained one on 2026-10-11, and the count in this heading went with it.** The block
 that reads the *workspace* tool catalogue is its own now. It had sat inside the one whose
 exception becomes `bundles_error`, because `shadowed` compares a bundle's tool names
 against the catalogue's -- so one unparseable module in `tools/` was reported twice,
-`FAIL tools` and `FAIL delegate tools`, on a workspace with no delegates at all. The
+`FAIL tools` and `FAIL subagent tools`, on a workspace with no subagents at all. The
 second row sends a reader to the wrong directory, which is the fault `doctor` exists to
-avoid. `bundles_error` is for a delegate's own folder, and the record already said so:
-*"a bundle is one delegate's folder rather than a catalogue."*
+avoid. `bundles_error` is for a subagent's own folder, and the record already said so:
+*"a bundle is one subagent's folder rather than a catalogue."*
 
 `shadowed` answers `None` where that read failed, and `Inventory` carries
 `shadowed_checked` beside it -- the third field to need that after `moved_tools` and
@@ -4125,7 +4142,7 @@ every session. That entry is also what granted the shell write access to it, so
 the fence now grants `data`, `derived`, `memory`, `runs`, `.home` and `.tmp` and
 nothing more -- the list under *Landlock cannot take back what it has granted*,
 above, names one place fewer. The `session_dir` that threaded through
-`available_skills`, `defined_subagents`, `indistinct_delegates` and
+`available_skills`, `defined_subagents`, `indistinct_subagents` and
 `withheld_by_kind` went with it: what a request may activate is what the
 catalogue holds, and a turn reads no definitions of its own. *(2026-09-16.)*
 
@@ -4210,7 +4227,7 @@ neither consumer and one of them is heavy, so replacing would have quietly
 dropped them out of a guard they were already inside.
 
 **Sixteen names came off, in three slices.** `Confinement` (light) and
-`unrunnable_delegates` (heavy) landed with the rules, so each new guard had a
+`unrunnable_subagents` (heavy) landed with the rules, so each new guard had a
 live case in both branches -- a rule with no cases passes whatever it says, which
 this suite has shipped twice. Then `doctor`'s six -- `bubblewrap_available`,
 `landlock_abi`, `shell_confinement`, `memory_backing`, `destination_hint`,
@@ -4663,7 +4680,7 @@ commits since August, so no commit opens fewer files for this. It is the case
 group.
 
 **`activation` stayed beside `agent.py`.** It decides what one request turns on,
-across skills and delegates at once, and reads the backend to do it: not one kind's
+across skills and subagents at once, and reads the backend to do it: not one kind's
 half, and `agent.py` is what it changes with. Nor is every kind in the folder.
 Skills reach the runtime from `kinds.skills.registry`, because deepagents reads a
 `SKILL.md` itself, and an agent is the graph `agent.py` builds -- which the folder's
@@ -5265,7 +5282,7 @@ plus three literals written inline in `narrowing.py`. Both classes subclass
 `ValueError` and the tests guarding them catch the base, so a rule keyed on the
 exception name exempts nothing. Wording is behaviour there, twice measured: told
 only the virtual spelling, an agent passed it to `execute` 4 times in 10, and a
-model that read "None is not a delegate this request may use" reported the tool as
+model that read "None is not a subagent this request may use" reported the tool as
 broken and answered around it. *(Measured 2026-09-21.)*
 
 **One fixture for pointing a command at a workspace.** The command reads the
@@ -5293,12 +5310,12 @@ some *other* workspace -- a fresh one, a relocated catalogue -- still says so
 itself, because that is a different arrangement rather than this one written out.
 *(2026-09-23, from an architecture review.)*
 
-**One way to reach a delegate a build made.** "The delegate called X, and its
+**One way to reach a subagent a build made.** "The subagent called X, and its
 middleware" was written six times: twice byte-identical down to the docstring, once
 as its first half under another name and imported across files, three times inline
 -- the sixth found only because a rebase put it in front of somebody, since it went
 through `declared_subagents` rather than the field and no search for the field
-reached it. `delegate` and `middleware_of` are in `conftest` beside `declared_subagents`
+reached it. `subagent_of` and `middleware_of` are in `conftest` beside `declared_subagents`
 now, which was already the same read one step back.
 
 **The middleware itself was left unanswerable, which is the other half of the
@@ -5420,10 +5437,10 @@ red until it does. *(2026-09-16.)*
 above, and a different question: not one reader but one record. The two share 14
 fields, and the differences are guarantees the types enforce rather than
 declarations kept twice. An agent's `system_prompt` is required with no default, so no
-code builds an agent without one; a delegate has a prompt or a `build`, exactly one.
-`memory` is an agent's, and `bundle`, `carried` and `build` a delegate's. `declares`
+code builds an agent without one; a subagent has a prompt or a `build`, exactly one.
+`memory` is an agent's, and `bundle`, `carried` and `build` a subagent's. `declares`
 parts where no audience reaches: an agent opens `models` and `endpoints` and carries
-`memory`, a delegate leaves all three unset, and
+`memory`, a subagent leaves all three unset, and
 `test_the_two_kinds_declare_the_unaudienced_axes_differently` exists because one
 shared body would erase that with nothing going red. One class would turn each of
 those into a check on a kind field, and an agent with a `build` would become
@@ -5434,17 +5451,17 @@ Nothing downstream was asking for it either. `build_agent` reads two things off 
 signatures, and access reads both by attribute name on purpose. The middle option --
 a base class in `domain/` for the shared fields -- would write the declarations once
 and put one name in place of the union. It was judged a wash: reading `AgentSpec`
-would mean two files, comments that give a delegate's reasons would go neutral, and
+would mean two files, comments that give a subagent's reasons would go neutral, and
 it catches no drift `test_format_parity.py` does not already catch.
 
 What would change the answer is a product change rather than tidying: one definition
-file usable both as an agent and as a delegate. *(2026-09-17.)*
+file usable both as an agent and as a subagent. *(2026-09-17.)*
 
 *Asked again the next day and measured rather than argued, because the entry above
 asserts what the two share without counting it. Of the 14 shared fields: **all 14
 declare the same type**, 13 of 14 the same default -- `system_prompt` is the one, and
 it is the guarantee the entry names -- and **12 of 14 are read by byte-identical
-calls**. The two that are not are `skills` and `subagents`, where a delegate passes
+calls**. The two that are not are `skills` and `subagents`, where a subagent passes
 `refuse_all` and an agent does not, which is the star the one-reader entry above
 already named as where the formats part.*
 
@@ -5460,7 +5477,7 @@ will find `kw_only` and think they have found the unlock.*
 could move to a base unchanged -- `name`, `description` and `tools` are bare in both
 and `audiences` is identical. The other 10 are the same field explained for its own
 kind. `source_ids` is "who may open a session on this agent" against "who may reach
-this delegate, wherever it is used"; `wanted` is the deployment's default against
+this subagent, wherever it is used"; `wanted` is the deployment's default against
 whatever summoned it. A base would put 12 declarations in one file and 10 of their
 reasons in another, which is the fault* Write the reason where the mistake is *names.
 The measurement also found one of those comments stale -- the agent's `wanted` still
@@ -5482,7 +5499,7 @@ fails. Nothing builds either spec positionally, so nothing had to change to allo
 **And a shared comment turned out to be the point rather than the cost.** The objection
 was that ten of the fourteen comments are kind-specific and would go neutral. They do
 not: where the kinds part, the one comment now says which is which -- an agent may write
-`["*"]` for `subagents` and a delegate may not, because for a delegate that set includes
+`["*"]` for `subagents` and a subagent may not, because for a subagent that set includes
 itself and is always a loop. A reader meets that difference in one place for the first
 time. Two comments each knowing half is how the agent's `wanted` sat stale for months
 with nothing red, and a merged comment cannot drift because there is one of it.
@@ -5501,7 +5518,7 @@ spec's fields the union of both kinds', so the equality fails for each and the c
 only weaken to a subset -- which stops catching the thing it exists for. The argument
 about a spec built in code saying what no file may say does not go away with
 `system_prompt` either; it moves to `memory`, `build`, `bundle` and `carried`, where a
-delegate could carry a `memory` nothing reads.
+subagent could carry a `memory` nothing reads.
 
 A base keeps all of that; one class turns each into a check on a kind field. The readers
 are untouched -- that is *Not taken: one reader* above, and nothing here reopens it.
@@ -5514,9 +5531,9 @@ defaults differ?" was asked rather than worked around. *(2026-09-18.)*
 *Fourteen, not thirteen: `system_prompt` unified by losing its default rather than by
 sharing one. The two arrived at their defaults from opposite directions -- an agent has
 no second shape, so `parse` refuses a definition without a prompt and a default would
-be the second way in that field exists to refuse; a delegate does, because a compiled
+be the second way in that field exists to refuse; a subagent does, because a compiled
 one carries its instruction inside the graph. Required on both is the stricter reading
-of each: the one caller that builds a compiled delegate now writes `system_prompt=""`,
+of each: the one caller that builds a compiled subagent now writes `system_prompt=""`,
 which says* this one has no prompt *instead of leaving it to a default nobody reads, and
 `__post_init__` can still tell "brought a graph" from "said nothing". What counts as
 acceptable stays per kind.*

@@ -22,21 +22,21 @@ class StubAgent:
         *,
         updates: list | None = None,
         tokens: list | None = None,
-        delegate: tuple | None = None,
+        subagent: tuple | None = None,
     ) -> None:
         self.answer = answer
         self.updates = updates or []
         self.tokens = tokens or []
-        self.delegate = delegate or ()
+        self.subagent = subagent or ()
         self.state: dict | None = None
         self.config: dict | None = None
 
     def stream(self, state, config, stream_mode=None, subgraphs=False):
         self.state, self.config = state, config
         for chunk in self.tokens:
-            yield (self.delegate, "messages", chunk)
+            yield (self.subagent, "messages", chunk)
         for update in self.updates:
-            yield (self.delegate, "updates", update)
+            yield (self.subagent, "updates", update)
         yield ((), "values", {"messages": [AIMessage(content=self.answer)]})
 
     async def astream(self, state, config, stream_mode=None, subgraphs=False):
@@ -332,10 +332,10 @@ class RecordingAgent(StubAgent):
         yield from super().stream(state, config, stream_mode)
 
 
-def test_the_loop_asks_for_what_a_delegate_does(cfg):
-    """A delegate runs in a subgraph, and a stream that does not ask for subgraph
+def test_the_loop_asks_for_what_a_subagent_does(cfg):
+    """A subagent runs in a subgraph, and a stream that does not ask for subgraph
     events never sees one. The symptom is not an error: the turn answers, and
-    everything the delegate did is missing from the run.
+    everything the subagent did is missing from the run.
     """
     agent = RecordingAgent("ok")
     list(Kingfisher(

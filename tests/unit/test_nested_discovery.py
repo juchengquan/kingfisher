@@ -22,7 +22,7 @@ TOOLS = [{name}]
 """
 
 SUBAGENT = """name: {name}
-description: A delegate called {name}.
+description: A subagent called {name}.
 system_prompt: |
   You do the thing.
 """

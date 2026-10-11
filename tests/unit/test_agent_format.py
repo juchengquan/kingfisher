@@ -97,7 +97,7 @@ def test_leaving_the_tool_fields_out_grants_all_of_them():
     assert spec.tools == ALL
 
 
-def test_leaving_skills_and_delegates_out_grants_none():
+def test_leaving_skills_and_subagents_out_grants_none():
     """The other half of that sentence."""
     spec = _read(MINIMAL, "plain.yaml")
 
@@ -121,9 +121,9 @@ def test_an_agent_may_name_every_subagent_and_a_subagent_may_not():
     """
     assert _read(MINIMAL.rstrip() + '\nsubagents: ["*"]\n', "plain.yaml").subagents == ALL
 
-    delegate = 'name: d\ndescription: A delegate.\nsubagents: ["*"]\nsystem_prompt: |\n  Go.\n'
+    subagent = 'name: d\ndescription: A subagent.\nsubagents: ["*"]\nsystem_prompt: |\n  Go.\n'
     with pytest.raises(SubagentError, match="always a loop"):
-        a_subagent(delegate, "d.yaml")
+        a_subagent(subagent, "d.yaml")
 
 
 def test_each_declined_field_says_why_it_is_declined():
@@ -523,22 +523,22 @@ def test_a_workspace_that_has_agents_is_not_lectured(cfg):
 
 
 def test_the_two_kinds_declare_the_unaudienced_axes_differently():
-    """An agent widens `models` to everything and states its own `memory`; a delegate
+    """An agent widens `models` to everything and states its own `memory`; a subagent
     leaves both unset. Pinned because nothing else asserts it: `declares` narrows three
     fields against an audience, and the axes it does *not* narrow were carried along by
     two hand-written bodies -- so one body serving both kinds would flatten this with
     the whole suite still green.
     """
     agent = _read(MINIMAL.rstrip() + "\nmemory: false\n", "plain.yaml")
-    delegate = a_subagent(
+    subagent = a_subagent(
         "name: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n", "reviewer.yaml"
     )
 
     for held in (None, frozenset({"A"})):
-        said, theirs = agent.declares(held), delegate.declares(held)
+        said, theirs = agent.declares(held), subagent.declares(held)
 
-        assert said.models == ALL, "an agent may put a delegate on any model it names"
+        assert said.models == ALL, "an agent may put a subagent on any model it names"
         assert said.memory is False, "the file said so, and only the agent has the field"
-        assert theirs.models is None, "a delegate names its own model or inherits one"
-        assert theirs.memory is None, "memory is the agent's to decline, not a delegate's"
+        assert theirs.models is None, "a subagent names its own model or inherits one"
+        assert theirs.memory is None, "memory is the agent's to decline, not a subagent's"
         assert said.endpoints == ALL and theirs.endpoints == ALL, "no audience reaches these"

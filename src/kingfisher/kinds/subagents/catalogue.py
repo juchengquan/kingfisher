@@ -225,7 +225,7 @@ class LocalSubagentRepository:
         # catalogue. A definition that carries names its skills by absolute path
         # rather than by sitting next to them, so the folder is reached by nothing
         # this walk can see -- and an example arranged the way a package is would be
-        # reported as abandoned while the delegate reading it works.
+        # reported as abandoned while the subagent reading it works.
         for bundle in self.bundles.values():
             if bundle.root is not None:
                 continue

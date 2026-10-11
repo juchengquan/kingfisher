@@ -167,8 +167,8 @@ for the next reader who reaches for one.*
   and not the other.** `_apply_excluded_middleware` refuses to strip them;
   `_apply_custom_middleware` will replace them without a word. *(2026-08-31.)*
 - **A subagent inherits none of its parent's middleware.** Each definition's is
-  built separately, so a cap on an agent bounds nothing its delegate does.
-  `infrastructure/harness/kinds/subagents.py` says so where a delegate is built. *(2026-08-30.)*
+  built separately, so a cap on an agent bounds nothing its subagent does.
+  `infrastructure/harness/kinds/subagents.py` says so where a subagent is built. *(2026-08-30.)*
 - **A sync run does not skip an async-only hook; it raises.** Under `stream`, a
   middleware implementing only `awrap_tool_call` or `awrap_model_call` raises the
   base class's `NotImplementedError` the first time the hook is reached, and one
@@ -256,7 +256,7 @@ cost an experiment to establish.
   carries no `name`, so `_event_for` records a `tool_result` naming no tool.
   Documented rather than refused, and `decisions.md` says why. *(2026-09-04.)*
 
-Four more, measured while wrapping the tools a compiled delegate is handed, on
+Four more, measured while wrapping the tools a compiled subagent is handed, on
 langchain-core 1.5.5, langgraph 1.2.11 and deepagents 0.7.6. They are about what
 survives *re-wrapping* a tool, which nothing above needed to ask.
 
@@ -299,9 +299,9 @@ did not work. All of it langchain-core 1.5.5, langgraph 1.2.11, deepagents 0.7.6
   resumed with `Command(resume=...)` and no `context=` ran the approved tool with
   `runtime.context` as `None`; resumed with one, the tool saw the new one. Nothing
   is restored and nothing is refused, so a resume has to be handed it again.
-- **A delegate inherits its parent's context, and deepagents is not what passes
-  it.** The `task` tool invokes a delegate with a config and nothing else, and the
-  delegate's tools saw the parent's context anyway -- for a declared delegate, for
+- **A subagent inherits its parent's context, and deepagents is not what passes
+  it.** The `task` tool invokes a subagent with a config and nothing else, and the
+  subagent's tools saw the parent's context anyway -- for a declared subagent, for
   `general-purpose`, and for a compiled graph handed in as `runnable`.
 - **`context_schema` is not what delivers a context.** A graph compiled with no
   schema handed its tools the context it was driven with all the same. What is
@@ -399,17 +399,17 @@ figure recorded had been taken against an empty one.*
 
 - **A whole agent rebuild costs what the catalogue holds.** 8ms in an empty
   workspace; **54ms** in one seeded with the shipped `assets_examples/`, where
-  the default agent compiles every delegate it is offered. Between them, 25ms
-  for a seeded workspace whose agent names no delegates.
+  the default agent compiles every subagent it is offered. Between them, 25ms
+  for a seeded workspace whose agent names no subagents.
 
   The conclusion it was recorded for still stands -- against a turn of 1.5-1.9s
   even the worst of those is under 4%, so "loaded once" was never the argument
   for the catalogue. What does not stand is quoting 8ms as *the* number: it is
   the emptiest case there is. *(8ms 2026-08-16; the rest 2026-09-03.)*
-- **Each named delegate compiles its own graph, about 6ms, every turn**, whether
+- **Each named subagent compiles its own graph, about 6ms, every turn**, whether
   or not the task uses it. Drop a name you never use rather than keeping the list
   tidy. *(4.3ms 2026-08-18, 6.2ms 2026-09-03 -- measured as the difference between
-  an agent naming three delegates and the same agent naming none.)*
+  an agent naming three subagents and the same agent naming none.)*
 - **A skills index costs about 600 tokens for three skills, and most of it is
   fixed.** deepagents' own scaffolding -- the "Skills System" preamble it wraps
   the listing in -- is ~450 tokens before a single skill is named; the three
@@ -427,7 +427,7 @@ because they are the evidence for a decision, not because they can be checked
 again -- the thing they measured is gone.
 
 - **6,872 compilations and seven seconds** for 15 definitions each naming three,
-  when delegates were compiled per *path* rather than per definition.
+  when subagents were compiled per *path* rather than per definition.
   *(2026-08-18.)*
 - **132 orphaned threads** in one real workspace, when a conversation lived in a
   database keyed beside the session directory rather than inside it.

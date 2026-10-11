@@ -1,4 +1,4 @@
-"""What a delegate is told it knows."""
+"""What a subagent is told it knows."""
 
 from __future__ import annotations
 
@@ -40,12 +40,12 @@ def build(cfg, session_dir, **caps):
 # -- the deployment's switch ----------------------------------------------
 
 
-def test_a_delegate_gets_no_skills_when_the_deployment_switched_them_off(
+def test_a_subagent_gets_no_skills_when_the_deployment_switched_them_off(
     cfg, session_dir
 ):
     """`cfg` says what is wired and the request says what it wants of that, and this
     branch asked only the request. With `KINGFISHER_SKILLS_ENABLED` off the agent got no
-    index and no deny rules while a delegate naming one still got an index over the
+    index and no deny rules while a subagent naming one still got an index over the
     catalogue -- and `doctor` reported that none would be offered.
     """
     offer_skills(cfg, "tabular-qa")
@@ -61,10 +61,10 @@ def test_a_delegate_gets_no_skills_when_the_deployment_switched_them_off(
 
     assert not [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
     kinds = [type(m).__name__ for m in middleware_of(built, "reviewer")]
-    assert "NarrowedSkills" not in kinds, f"the delegate was told about skills: {kinds}"
+    assert "NarrowedSkills" not in kinds, f"the subagent was told about skills: {kinds}"
 
 
-def test_a_delegate_still_gets_them_when_the_deployment_wired_them(cfg, session_dir):
+def test_a_subagent_still_gets_them_when_the_deployment_wired_them(cfg, session_dir):
     """The control, so the test above is the switch rather than the wiring."""
     offer_skills(cfg, "tabular-qa")
     define(cfg, "name: reviewer\ndescription: d\nskills: [tabular-qa]\n"
@@ -79,7 +79,7 @@ def test_a_delegate_still_gets_them_when_the_deployment_wired_them(cfg, session_
 # -- the field ------------------------------------------------------------
 
 
-def test_a_definition_can_name_the_skills_its_delegate_gets(cfg, session_dir):
+def test_a_definition_can_name_the_skills_its_subagent_gets(cfg, session_dir):
     offer_skills(cfg, "tabular-qa", "code-review")
     define(cfg, "name: reviewer\ndescription: d\nskills: [tabular-qa]\n"
         "system_prompt: |\n  You review.\n")
@@ -90,11 +90,11 @@ def test_a_definition_can_name_the_skills_its_delegate_gets(cfg, session_dir):
     assert set(scoped._allowed) == {"catalogue::tabular-qa"}
 
 
-def test_a_delegate_may_name_a_skill_by_its_full_identity(cfg, session_dir):
+def test_a_subagent_may_name_a_skill_by_its_full_identity(cfg, session_dir):
     """`incident::postmortem` was refused as an unknown skill, and it is the skill's
     own identity -- the one spelling that keeps meaning this skill after somebody
     else ships a `postmortem`. The shipped `reviewer` writes it, so seeding the
-    examples and running anything that declared that delegate died at build.
+    examples and running anything that declared that subagent died at build.
     """
     (cfg.skills_dir / "incident" / "postmortem").mkdir(parents=True)
     (cfg.skills_dir / "incident" / "postmortem" / "SKILL.md").write_text(
@@ -109,12 +109,12 @@ def test_a_delegate_may_name_a_skill_by_its_full_identity(cfg, session_dir):
     assert set(scoped._allowed) == {"incident::postmortem"}
 
 
-def test_a_delegate_is_actually_told_about_the_skill_it_named(cfg, session_dir):
+def test_a_subagent_is_actually_told_about_the_skill_it_named(cfg, session_dir):
     """The grant reaching the index, rather than the grant being recorded.
 
     `_allowed` held what the definition wrote and the index is keyed by
     `source::name`, so every one of these sets was disjoint from the thing it
-    filtered: a delegate naming a skill was told "No skills available yet". That
+    filtered: a subagent naming a skill was told "No skills available yet". That
     is invisible to any assertion about `_allowed` alone, which is why this one
     renders the list.
     """
@@ -131,7 +131,7 @@ def test_a_delegate_is_actually_told_about_the_skill_it_named(cfg, session_dir):
 
 
 def test_omitting_skills_grants_none(cfg, session_dir):
-    """Not what omitting `tools` means, and the asymmetry is the point: a delegate's
+    """Not what omitting `tools` means, and the asymmetry is the point: a subagent's
     body is already its procedure.
     """
     offer_skills(cfg, "tabular-qa")
@@ -166,7 +166,7 @@ def test_both_can_be_named_together(cfg, session_dir):
     middleware = middleware_of(built, "reviewer")
 
     # The two this definition asked for, in order, ignoring the guards every
-    # delegate carries whether or not its file mentions them.
+    # subagent carries whether or not its file mentions them.
     asked_for = [
         type(m).__name__
         for m in middleware
@@ -189,7 +189,7 @@ def test_a_definition_naming_an_unknown_skill_fails_loudly(cfg, session_dir):
         build(cfg, session_dir, subagents=("reviewer",))
 
 
-def test_a_delegate_cannot_reach_past_the_request(cfg, session_dir):
+def test_a_subagent_cannot_reach_past_the_request(cfg, session_dir):
     """Not a mistake -- a caller narrower than the definition -- so the skill is dropped
     rather than raised, exactly as intersect drops it for the parent.
     """
@@ -205,7 +205,7 @@ def test_a_delegate_cannot_reach_past_the_request(cfg, session_dir):
 
     (scoped,) = [m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkills)]
     assert set(scoped._allowed) == {"catalogue::tabular-qa"}, (
-        "the delegate kept a skill its caller lacked"
+        "the subagent kept a skill its caller lacked"
     )
 
 

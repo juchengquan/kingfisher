@@ -1,4 +1,4 @@
-"""Which model a delegate runs, and therefore where its prompt goes."""
+"""Which model a subagent runs, and therefore where its prompt goes."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.models import ADAPTERS
-from tests.conftest import FakeToolCallingModel, delegate
+from tests.conftest import FakeToolCallingModel, subagent_of
 
 #: A second endpoint, on a different wire format, so a test can tell "went
 #: elsewhere" from "went to the default" by which attribute the value landed on.
@@ -65,7 +65,7 @@ def build(cfg, session_dir, *, run_on=None, **caps):
         capabilities=Capabilities(subagents=("reviewer",), **caps),
         run_on=run_on,
     )
-    return delegate(built, "reviewer")
+    return subagent_of(built, "reviewer")
 
 
 def elsewhere(cfg):
@@ -129,10 +129,10 @@ def test_naming_a_model_the_catalogue_does_not_define_is_refused(tmp_path):
         cfg.models.resolve("gpt-5")
 
 
-# -- the delegate actually goes there --------------------------------------
+# -- the subagent actually goes there --------------------------------------
 
 
-def test_a_delegate_runs_the_model_it_names(cfg, session_dir):
+def test_a_subagent_runs_the_model_it_names(cfg, session_dir):
     define(cfg, "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
 
     spec = build(elsewhere(cfg), session_dir)
@@ -143,7 +143,7 @@ def test_a_delegate_runs_the_model_it_names(cfg, session_dir):
 
 def test_omitting_the_model_builds_none_of_its_own(cfg, session_dir):
     """"Runs what the deployment runs" is expressed by building nothing here, not by
-    building the default again: a top-level delegate inherits the model its parent
+    building the default again: a top-level subagent inherits the model its parent
     was constructed with, and a second instance would only be a chance for the two to
     differ.
     """
@@ -163,13 +163,13 @@ def test_naming_a_model_on_the_default_endpoint_stays_there(cfg, session_dir):
     assert spec["model"].anthropic_api_url == cfg.models.resolve()[1].base_url
 
 
-def test_a_delegates_own_params_reach_its_client(cfg, session_dir):
+def test_a_subagents_own_params_reach_its_client(cfg, session_dir):
     """**The guard this change exists for.**
 
     `cheap-model` carries a ceiling and a timeout that differ from the default's, so
     this cannot pass by accident on the deployment's numbers.
 
-    `as_subagent` built a delegate by copying the `Config` with four fields swapped, so
+    `as_subagent` built a subagent by copying the `Config` with four fields swapped, so
     a fifth that nobody added to that copy was silently the deployment's value -- and a
     per-model `max_tokens` would have been exactly that fifth field.
     """
@@ -182,7 +182,7 @@ def test_a_delegates_own_params_reach_its_client(cfg, session_dir):
     assert cfg.models.models["fake-model"].max_tokens != 321  # the default it must not have taken
 
 
-def test_a_delegates_params_survive_going_elsewhere(cfg, session_dir):
+def test_a_subagents_params_survive_going_elsewhere(cfg, session_dir):
     """The same guard across a wire format, where the attribute names differ."""
     define(cfg, "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
 
@@ -192,8 +192,8 @@ def test_a_delegates_params_survive_going_elsewhere(cfg, session_dir):
     assert spec["model"].request_timeout == 90
 
 
-def test_a_delegate_naming_an_unrunnable_model_is_refused_by_name(cfg, session_dir):
-    """Refused when the delegate is *activated*, not across the catalogue up front --
+def test_a_subagent_naming_an_unrunnable_model_is_refused_by_name(cfg, session_dir):
+    """Refused when the subagent is *activated*, not across the catalogue up front --
     `run_on` exists so a caller can rescue a shipped definition whose model their
     credentials cannot reach, and a catalogue-wide refusal would fire before the
     override could apply.
@@ -204,7 +204,7 @@ def test_a_delegate_naming_an_unrunnable_model_is_refused_by_name(cfg, session_d
         build(cfg, session_dir)
 
 
-def test_a_delegate_nobody_activated_cannot_break_the_build(cfg, session_dir):
+def test_a_subagent_nobody_activated_cannot_break_the_build(cfg, session_dir):
     """Seeding a preset you cannot run costs nothing until you ask for it."""
     define(cfg, "name: unreachable\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  Go.\n")
@@ -259,10 +259,10 @@ def test_grants_clamp_endpoints_like_everything_else():
 # -- the definition is the only author -------------------------------------
 
 
-def test_the_environment_cannot_move_a_delegate_to_another_endpoint(
+def test_the_environment_cannot_move_a_subagent_to_another_endpoint(
     cfg, session_dir, monkeypatch
 ):
-    """`KINGFISHER_PROVIDER_SUBAGENT` used to reroute every delegate at once, and
+    """`KINGFISHER_PROVIDER_SUBAGENT` used to reroute every subagent at once, and
     nothing reads it now.
     """
     define(cfg, "name: reviewer\ndescription: d\nmodel: cheap-model\nsystem_prompt: |\n  Go.\n")

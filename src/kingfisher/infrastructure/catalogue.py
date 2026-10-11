@@ -60,7 +60,7 @@ class Definitions:
         # Asked of the bundle rather than built here. What backs one is the bundle's
         # own business now that there are two backings -- a folder to walk, or the
         # objects a definition carried -- and a second reading of that here would be
-        # the place the two could disagree about what a delegate holds.
+        # the place the two could disagree about what a subagent holds.
         return {
             name: repository
             for name, bundle in bundles.items()
@@ -91,7 +91,7 @@ class Definitions:
         _ = self.middlewares.classes
         _ = self.registry
         # A bundle's tools are imported here for the reason every other kind is,
-        # and the reason survives the fact that only one delegate can call them:
+        # and the reason survives the fact that only one subagent can call them:
         # a private tool is still Python that has to import, and a deployment
         # that starts, reports itself fine, and fails on the first request that
         # happens to activate `surveyor` is the shape of the bug `list` exiting
@@ -108,7 +108,7 @@ class Definitions:
         # A definition saying where its tools live is checked here for the same
         # reason the reading happens here: it is a claim about this catalogue,
         # both halves are now in hand, and a stale path found on the first turn
-        # that activates one delegate is a deployment that started while broken.
+        # that activates one subagent is a deployment that started while broken.
         offers = Offering.of(self.tools.found)
         for spec in self.subagents.specs.values():
             offers.refuse_moved(spec.tool_sources, subject=f"subagent {spec.name!r}")
@@ -266,7 +266,7 @@ def _one_registry(name: str, directories: tuple[Path, ...]) -> SkillRegistry:
     if len(read) == 1:
         return read[0]
     # Refused rather than merged: every directory is mounted under the bundle's one
-    # label, so two holding a name would give the delegate one skill by that name
+    # label, so two holding a name would give the subagent one skill by that name
     # and hide the other -- whichever deepagents happened to list last.
     seen: dict[str, Path] = {}
     for directory, registry in zip(directories, read, strict=True):
@@ -274,7 +274,7 @@ def _one_registry(name: str, directories: tuple[Path, ...]) -> SkillRegistry:
             if taken in seen:
                 msg = (
                     f"subagent {name!r} carries a skill called {taken!r} in both "
-                    f"{seen[taken]} and {directory}; a delegate can hold one skill by "
+                    f"{seen[taken]} and {directory}; a subagent can hold one skill by "
                     f"a name, so rename one of them"
                 )
                 raise SubagentError(msg)

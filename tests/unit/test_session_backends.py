@@ -314,7 +314,7 @@ def _skill(folder: Path, name: str) -> None:
 @pytest.fixture
 def skilled(cfg, tmp_path):
     """A skill in every place one is mounted from: the catalogue's top level, a folder
-    of it, a mount, and a delegate carrying its own.
+    of it, a mount, and a subagent carrying its own.
     """
     _skill(cfg.skills_dir, "review")
     _skill(cfg.skills_dir / "incident", "timeline")

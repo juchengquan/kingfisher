@@ -211,7 +211,7 @@ def test_json_is_asked_for_rather_than_assumed(cfg, at_the_command_line, capsys)
     assert not capsys.readouterr().out.lstrip().startswith("{")
 
 
-# -- a delegate the workspace built itself ----------------------------------
+# -- a subagent the workspace built itself ----------------------------------
 
 
 COMPILED_MODULE = """from langchain_core.runnables import RunnableLambda
@@ -245,7 +245,7 @@ def _subagent_catalogue(cfg):
     (directory / "reviewer.yaml").write_text(PROMPTED_DEFINITION, encoding="utf-8")
 
 
-def test_the_listing_marks_a_compiled_delegate(cfg):
+def test_the_listing_marks_a_compiled_subagent(cfg):
     """Marked because the rest of the listing means something different for it, and
     nothing else in the output would say so.
     """
@@ -261,7 +261,7 @@ def test_the_listing_marks_a_compiled_delegate(cfg):
     assert "[compiled]" not in named["reviewer"][0]
 
 
-def test_the_listing_says_what_a_compiled_delegate_costs(cfg):
+def test_the_listing_says_what_a_compiled_subagent_costs(cfg):
     """The assumption a reader would otherwise make."""
     from kingfisher.application.inventory import inventory
     from kingfisher.presentation.cli.listing import render
@@ -273,7 +273,7 @@ def test_the_listing_says_what_a_compiled_delegate_costs(cfg):
     assert "do not restrict what it can call" in printed
 
 
-def test_a_workspace_with_no_compiled_delegate_says_nothing_about_them(cfg):
+def test_a_workspace_with_no_compiled_subagent_says_nothing_about_them(cfg):
     """The note is about a minority, so it stays absent for everyone else -- a caveat
     printed to every reader is one none of them reads.
     """
@@ -289,7 +289,7 @@ def test_a_workspace_with_no_compiled_delegate_says_nothing_about_them(cfg):
     assert "compiled" not in printed
 
 
-def test_a_compiled_delegate_is_not_annotated_with_the_file_you_can_already_see(cfg):
+def test_a_compiled_subagent_is_not_annotated_with_the_file_you_can_already_see(cfg):
     """`_from` stays silent when the name already tells you the file."""
     from kingfisher.application.inventory import inventory
     from kingfisher.presentation.cli.listing import render
@@ -466,7 +466,7 @@ def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(
     """
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "helper.yaml").write_text(
-        "name: helper\ndescription: A delegate.\nsystem_prompt: |\n  x\n", encoding="utf-8"
+        "name: helper\ndescription: A subagent.\nsystem_prompt: |\n  x\n", encoding="utf-8"
     )
     tools = cfg.catalogue_roots["tools"]
     tools.mkdir(parents=True, exist_ok=True)
@@ -578,7 +578,7 @@ def test_a_scoped_listing_carries_nothing_out_of_reach(form, cfg, at_the_command
 
     Measured through the real command before this existed: the text form hid the
     unreachable agent and `--json` carried its name, the file it came from, its
-    delegate chain, every definition's audience and the vocabulary itself -- so an
+    subagent chain, every definition's audience and the vocabulary itself -- so an
     operator checking a policy got a different answer depending on the flag, and the
     flag that answered wrongly is the one a script reads.
 
@@ -711,11 +711,11 @@ def test_an_agent_naming_no_tools_offers_the_whole_catalogue(
     assert "secret_export" in printed, "the unset field offers this one too"
 
 
-#: A delegate this caller reaches, offering a tool no agent mentions. A delegate carries
+#: A subagent this caller reaches, offering a tool no agent mentions. A subagent carries
 #: its own `source_ids:`, so it is reachable on its own terms -- and a caller who reaches
 #: it reaches what it holds, through whichever agent delegates to it.
-REACHABLE_DELEGATE = """name: helper
-description: A delegate.
+REACHABLE_SUBAGENT = """name: helper
+description: A subagent.
 source_ids: [A, B]
 tools:
   - name: secret_export
@@ -726,23 +726,23 @@ system_prompt: |
 
 
 @pytest.mark.parametrize("form", ["text", "json"])
-def test_a_delegate_in_reach_offers_its_tools_to_that_caller(
+def test_a_subagent_in_reach_offers_its_tools_to_that_caller(
     form, cfg, at_the_command_line, capsys
 ):
-    """A tool only a delegate holds is shown to a caller who reaches the delegate.
+    """A tool only a subagent holds is shown to a caller who reaches the subagent.
 
-    Dropping the delegates from the walk leaves the whole suite green otherwise: every
+    Dropping the subagents from the walk leaves the whole suite green otherwise: every
     other tool here is named by an agent as well, so nothing measures the half of the
     catalogue a caller reaches only by delegation.
     """
     _workspace(cfg, NARROW)
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
-    (subagents_dir(cfg) / "helper.yaml").write_text(REACHABLE_DELEGATE, encoding="utf-8")
+    (subagents_dir(cfg) / "helper.yaml").write_text(REACHABLE_SUBAGENT, encoding="utf-8")
 
     assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
 
     printed = capsys.readouterr().out
-    assert "secret_export" in printed, "the delegate they reach holds it"
+    assert "secret_export" in printed, "the subagent they reach holds it"
     assert "line_count" not in printed, "and `narrow` still narrows this one away"
 
 
@@ -1137,7 +1137,7 @@ def test_the_listing_is_clean_when_every_source_id_is_declared(cfg, at_the_comma
 #: this table nor the per-kind view is one `failed` can miss, which is how
 #: `middlewares_error` came to be computed and read by nothing for a release.
 ERRORS_OUTSIDE_THE_KINDS = {
-    "bundles_error": "a bundle is one delegate's own folder, not a catalogue",
+    "bundles_error": "a bundle is one subagent's own folder, not a catalogue",
 }
 
 
@@ -1249,7 +1249,7 @@ def test_every_trouble_besides_an_error_is_said_in_the_human_listing(field_name)
     from tests.conftest import an_inventory
 
     value, said = TROUBLES_BESIDE_THE_ERRORS[field_name]
-    # A delegate for it to hang under: `miscounted_bundles` prints beneath its owner,
+    # A subagent for it to hang under: `miscounted_bundles` prints beneath its owner,
     # so a record with no subagents cannot show it however the renderer is written.
     broken = an_inventory(
         subagents=MappingProxyType({"redactor": "Redacts."}), **{field_name: value}

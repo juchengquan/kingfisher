@@ -117,9 +117,9 @@ NOT_BUNDLED = {
     # Still not bundled, and the reason had to be rewritten rather than kept: it
     # said "registered in the process, not staged as files", which stopped being
     # true when `middlewares/` became a kind. What holds now is narrower and is
-    # about audience -- a bundle is a delegate's own tools and skills, and
-    # middleware is granted by the deployment rather than carried by a delegate.
-    "middlewares": "granted by the deployment, so a delegate cannot bring its own",
+    # about audience -- a bundle is a subagent's own tools and skills, and
+    # middleware is granted by the deployment rather than carried by a subagent.
+    "middlewares": "granted by the deployment, so a subagent cannot bring its own",
     "endpoints": "settings, not assets",
     "models": "settings, not assets",
     "memory": "a switch, not names",

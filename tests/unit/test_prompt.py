@@ -185,7 +185,7 @@ def test_the_skills_exception_is_still_an_exception(cfg, session_dir):
     assert "hello" in result.output
 
 
-# -- what a delegate's prompt carries -------------------------------------
+# -- what a subagent's prompt carries -------------------------------------
 #
 # `PROMPT.md` is where a workspace writes what it wants said about its own
 # work. It reached the main agent and nothing the main agent delegated to, so a
@@ -193,33 +193,33 @@ def test_the_skills_exception_is_still_an_exception(cfg, session_dir):
 # stated that as a decision; the asymmetry was just there.
 
 
-DELEGATE = """name: reviewer
+SUBAGENT = """name: reviewer
 description: Checks an analysis.
 system_prompt: |
   You review analyses for arithmetic errors.
 """
 
 
-def _delegate(cfg):
-    spec = a_subagent(DELEGATE, "reviewer.yaml")
+def _subagent_prompt(cfg):
+    spec = a_subagent(SUBAGENT, "reviewer.yaml")
     return as_subagent(spec, cfg)["system_prompt"]
 
 
-def test_a_delegate_is_given_the_workspaces_own_instructions(cfg):
+def test_a_subagent_is_given_the_workspaces_own_instructions(cfg):
     (cfg.workspace / USER_PROMPT_FILE).write_text("Always cite the file.", encoding="utf-8")
 
-    assert "Always cite the file." in _delegate(cfg)
+    assert "Always cite the file." in _subagent_prompt(cfg)
 
 
 def test_a_workspace_that_wrote_none_changes_nothing(cfg):
     """The definition's own text, byte for byte -- no separator, no blank tail."""
-    assert _delegate(cfg) == "You review analyses for arithmetic errors."
+    assert _subagent_prompt(cfg) == "You review analyses for arithmetic errors."
 
 
-def test_a_delegate_is_not_given_the_harnesss_own_prompt(cfg):
+def test_a_subagent_is_not_given_the_harnesss_own_prompt(cfg):
     """The part that must *not* be inherited."""
     (cfg.workspace / USER_PROMPT_FILE).write_text("Always cite the file.", encoding="utf-8")
-    prompt = _delegate(cfg)
+    prompt = _subagent_prompt(cfg)
 
     assert len(prompt) < 200
     assert "/inputs" not in prompt
@@ -230,7 +230,7 @@ def test_both_levels_separate_the_addition_the_same_way(cfg):
     (cfg.workspace / USER_PROMPT_FILE).write_text("Always cite the file.", encoding="utf-8")
 
     main = system_prompt(replace(cfg, skills_enabled=True))
-    delegate = _delegate(cfg)
+    subagent = _subagent_prompt(cfg)
 
     assert "\n\n---\n\nAlways cite the file." in main
-    assert "\n\n---\n\nAlways cite the file." in delegate
+    assert "\n\n---\n\nAlways cite the file." in subagent

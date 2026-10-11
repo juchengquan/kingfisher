@@ -364,7 +364,7 @@ other name — `file_path`, `source` — reaches the tool as the model wrote it.
 runs, and declares a context of `None` — so pydantic warns on every call that it
 was handed something else.
 
-Two edges. A delegate's tools are handed the same backend as the agent that
+Two edges. A subagent's tools are handed the same backend as the agent that
 started it. And `runtime.context` is `None` when the deployment passed `graph=` to
 `Kingfisher`: a graph kingfisher did not build is driven the way its builder
 left it, so a tool written this way needs a graph kingfisher assembled.

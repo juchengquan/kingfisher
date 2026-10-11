@@ -1,4 +1,4 @@
-"""What a request turns on: the skills and the delegates it activates."""
+"""What a request turns on: the skills and the subagents it activates."""
 
 from __future__ import annotations
 
@@ -46,10 +46,10 @@ def defined_subagents(
     return dict((catalogue or Definitions.from_config(cfg)).subagents.specs)
 
 
-def unrunnable_delegates(
+def unrunnable_subagents(
     cfg: Config, *, catalogue: Definitions | None = None
 ) -> tuple[tuple[str, str], ...]:
-    """`(name, why)` for each defined delegate this deployment cannot run."""
+    """`(name, why)` for each defined subagent this deployment cannot run."""
     found: list[tuple[str, str]] = []
     for name, spec in sorted(defined_subagents(cfg, catalogue=catalogue).items()):
         try:
@@ -61,14 +61,14 @@ def unrunnable_delegates(
     return tuple(found)
 
 
-def indistinct_delegates(
+def indistinct_subagents(
     cfg: Config,
     capabilities: Capabilities,
     *,
     catalogue: Definitions | None = None,
     run_on: Mapping[str, RunOn] | None = None,
 ) -> tuple[tuple[str, str], ...]:
-    """`(name, why)` for each activated delegate that asked to run elsewhere and did
+    """`(name, why)` for each activated subagent that asked to run elsewhere and did
     not.
     """
     if capabilities.subagents is None:
@@ -124,7 +124,7 @@ def _skill_denials(activated: tuple[str, ...], registry: Any) -> list[Filesystem
 def _private_skills(
     catalogue: Definitions, name: str
 ) -> tuple[tuple[str, ...], tuple[tuple[str, str], ...]] | None:
-    """The skills a delegate brings itself, and where they are mounted."""
+    """The skills a subagent brings itself, and where they are mounted."""
     registry = catalogue.bundled_skills.get(name)
     if registry is None or not registry.offered:
         return None
@@ -143,7 +143,7 @@ def _private_skills(
     # Re-labelled from the source it was *read* under to the one it is *mounted*
     # under. `skill_registry.read` calls a root source `catalogue`, and a bundle
     # is mounted under the folder's own name -- so the two halves of this return
-    # value named one skill two ways, and the delegate was told about none of it.
+    # value named one skill two ways, and the subagent was told about none of it.
     return (
         tuple(
             skill_registry.qualified(where, skill_registry.split_qualified(key)[1])
@@ -162,7 +162,7 @@ def _activated_subagents(
     *,
     catalogue: Definitions | None = None,
 ) -> tuple[Mapping[str, Any], tuple[str, ...]]:
-    """Which delegates this request wired, and every definition available."""
+    """Which subagents this request wired, and every definition available."""
     if capabilities.subagents is None:
         return {}, ()
     defined = defined_subagents(cfg, catalogue=catalogue)
@@ -173,8 +173,8 @@ def _activated_subagents(
     # runnable model. Helper depth is structural -- a catalogue asking for two
     # levels is incoherent however it is used, and no request can rescue it. An
     # unrunnable model is not: `run_on` exists precisely so a caller can put a
-    # shipped delegate on a model their credentials reach, and a catalogue-wide
-    # refusal would fire before the override could apply. So it stays per-delegate,
+    # shipped subagent on a model their credentials reach, and a catalogue-wide
+    # refusal would fire before the override could apply. So it stays per-subagent,
     # at `as_subagent`, where the override has already been resolved.
     # `ALL` is every subagent the workspace defines, resolved here because here
     # is where "what it defines" is known.

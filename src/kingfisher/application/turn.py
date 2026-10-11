@@ -71,13 +71,13 @@ class Prepared:
     #: not grant -- tools, skills, subagents. Crosses rather than stopping: a
     #: withheld name is a fact about the run, not a refusal.
     withheld: tuple[tuple[str, tuple[str, ...]], ...] = ()
-    #: `(name, why)` for each delegate that asked to run elsewhere and did not.
+    #: `(name, why)` for each subagent that asked to run elsewhere and did not.
     #: A fact about the run, like `withheld` -- nothing is wrong enough to stop
     #: for, and nothing else would ever say it.
     indistinct: tuple[tuple[str, str], ...] = ()
     #: Tool names more than one file defines, which the agent holding the
     #: grant therefore cannot hold. Reported rather than dropped in silence.
-    delegate_only: tuple[str, ...] = ()
+    subagent_only: tuple[str, ...] = ()
 
 
 def turn_message(task: str, placed: tuple[str, ...]) -> str:
@@ -108,12 +108,12 @@ def consume(
     mode: str,
     chunk: Any,
     answer: str,
-    delegates: runtime.Delegates,
+    subagent_names: runtime.SubagentNames,
 ) -> tuple[str, tuple[RunEvent, ...]]:
     """One stream chunk into (answer so far, events to emit)."""
     if (text := runtime.answer_in(namespace, mode, chunk)) is not None:
         answer = text
-    return answer, tuple(runtime.events_in(namespace, mode, chunk, delegates))
+    return answer, tuple(runtime.events_in(namespace, mode, chunk, subagent_names))
 
 
 def decision_needed(waiting: tuple[PendingDecision, ...]) -> RunEvent:
