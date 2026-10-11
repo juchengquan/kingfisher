@@ -505,3 +505,22 @@ def test_a_hard_failure_is_passed_through_rather_than_emptied(cfg, session_dir):
         truncated: bool = False
 
     assert _once(Failed(), key=lambda one: one).matches is None
+
+
+def test_an_unconfined_shell_says_what_it_means_for_the_other_sessions(cfg, session_dir):
+    """Most programs running kingfisher never run `doctor`; this warning is what they see.
+    It named what the host was exposed to and not that each session could reach the rest.
+    """
+    from dataclasses import replace
+
+    from kingfisher.infrastructure.harness.backend import backend_at
+
+    many, one = replace(cfg, shell_sandbox="off"), replace(cfg, shell_sandbox="off", session_id="s")
+
+    with pytest.warns(UserWarning, match="read and change the other sessions' files"):
+        backend_at(many, session_dir)
+    with pytest.warns(UserWarning) as said:
+        backend_at(one, session_dir)
+    assert not [w for w in said if "other sessions" in str(w.message)], (
+        "a workspace holding one session was told about sessions it does not have"
+    )

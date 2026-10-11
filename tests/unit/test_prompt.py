@@ -250,3 +250,13 @@ def test_both_levels_separate_the_addition_the_same_way(cfg):
 
     assert "\n\n---\n\nAlways cite the file." in main
     assert "\n\n---\n\nAlways cite the file." in subagent
+
+
+def test_the_prompt_does_not_promise_other_sessions_are_out_of_reach():
+    """It told the agent another session's files were not reachable from any path it
+    could write. The macOS shell can read and change them, and so can any unfenced one.
+    """
+    for skills in (False, True):
+        for memory in (False, True):
+            text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
+            assert "another session's files" not in text

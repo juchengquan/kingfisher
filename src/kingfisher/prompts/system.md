@@ -20,9 +20,6 @@ same thing in every session and on every machine:
   summarized away under `/scratchpad/conversation_history/`: search there when you
   need one back and nothing names its path.
 
-The session is yours alone; another session's files are not reachable from any path
-you can write.
-
 ## Two filesystems, one set of files
 
 The file tools (`ls`, `read_file`, `write_file`, `edit_file`, `delete`, `glob`, `grep`)

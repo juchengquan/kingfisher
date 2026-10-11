@@ -322,7 +322,9 @@ def test_the_exit_code_separates_will_not_run_from_worth_knowing(cfg, monkeypatc
     monkeypatch.setattr("tests.integration.driver.config_from_env", lambda: cfg, raising=False)
     cfg = replace(cfg, assets=shipped)
 
-    ok = examine(cfg)
+    # One session per workspace, so nothing is left to warn about on any host: on macOS
+    # the sandbox does not keep many sessions apart, and `sessions apart` says so.
+    ok = examine(replace(cfg, session_id="only"))
     warned = examine(replace(cfg, shell_sandbox="off"))
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
@@ -1409,3 +1411,66 @@ def test_the_command_line_says_which_keys_env_added(cfg, tmp_path, monkeypatch, 
     assert said, "nothing was said about the starting environment"
     assert "ELSEWHERE_KEY" in said[0]
     assert "GATEWAY_KEY" not in said[0], "a key .env loaded was called exported"
+
+
+# -- one session reaching another -------------------------------------------------
+
+
+def _confined_as(monkeypatch, **seen):
+    """The confinement doctor sees, whatever this host would choose."""
+    from kingfisher.infrastructure.sandbox.confinement import Confinement
+
+    confined = Confinement(wrap=lambda command: command, **seen)
+    monkeypatch.setattr(health, "shell_confinement", lambda cfg, **kw: confined)
+
+
+@pytest.mark.parametrize(
+    ("seen", "says", "remedy"),
+    [
+        ({"warning": "unconfined"}, "nothing kingfisher runs confines", "sandbox on"),
+        ({"mechanism": "sandbox-exec"}, "macOS sandbox", "KINGFISHER_SESSION_ID"),
+        ({"elsewhere": True}, "'external'", "KINGFISHER_SESSION_ID"),
+    ],
+    ids=["no-fence", "macos", "external"],
+)
+def test_sessions_that_can_reach_each_other_are_said_to(cfg, monkeypatch, seen, says, remedy):
+    """`shell` says what the host is exposed to. What it never said is the consequence for
+    people sharing one workspace: one session's agent can read and change another's.
+    """
+    _confined_as(monkeypatch, **seen)
+
+    check = _row(examine(cfg), "sessions apart")
+
+    assert check is not None and check.verdict == "warn"
+    assert "read and change another session's files" in check.detail
+    assert says in check.detail
+    assert remedy in check.remedy
+
+
+@pytest.mark.parametrize("mechanism", ["Landlock", "bubblewrap"])
+def test_a_linux_fence_keeps_sessions_apart_and_is_not_warned_about(cfg, monkeypatch, mechanism):
+    """Each turn is handed its own session and nothing else, so there is nothing to say."""
+    _confined_as(monkeypatch, mechanism=mechanism)
+
+    assert _row(examine(cfg), "sessions apart") is None
+
+
+def test_one_session_per_workspace_is_never_warned_about(cfg, monkeypatch):
+    """With one session there is nobody else's files to reach, whatever confines the shell."""
+    from dataclasses import replace
+
+    _confined_as(monkeypatch, warning="unconfined")
+
+    assert _row(examine(replace(cfg, session_id="only")), "sessions apart") is None
+
+
+def test_session_backends_doctor_cannot_see_into_are_left_to_their_contract(cfg, monkeypatch):
+    """Whether they keep sessions apart is theirs to show, and `SESSION_BACKENDS_CONTRACT`
+    asks them; a third "cannot see" line on every check of such a deployment is noise.
+    """
+    from dataclasses import replace
+
+    _confined_as(monkeypatch, warning="unconfined")
+    named = replace(cfg, session_backends_factory="deployment:Remote")
+
+    assert _row(examine(named), "sessions apart") is None

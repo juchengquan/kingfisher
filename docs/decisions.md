@@ -2111,6 +2111,29 @@ design and an unchanged command is correct on Linux and a failure on macOS.
 to share one `getattr`, against the decision that it stays light enough to run in
 somebody else's CI. *(2026-09-25, from an architecture review.)*
 
+**Sessions reaching each other is reported, not refused.** On macOS the sandbox denies
+the operator's home and gives the whole workspace back, for writes as well as reads, so
+one session's shell can read and change every other session's files: measured on
+2026-10-11, a second session's shell read the first's `outputs/` and wrote a file into
+it, with the workspace inside the home folder and outside it. Nothing needed the whole
+workspace; it follows from the profile's shape, and narrowing it means a profile per
+session, which the one text per workspace was built to avoid -- two turns racing to
+write one file, and a truncated profile failing open. Where no fence starts, which is
+most servers on a kernel before 6.12 without a working bubblewrap, and Docker
+Desktop's, and under `external`, nothing keeps sessions apart either.
+
+Refusing a turn there was weighed and not taken. Kingfisher is mostly run as a
+package, and a stop most ordinary servers would hit is friction for nearly every
+deployment, to protect the one case -- several people sharing a workspace -- that a
+warning can name. So `doctor`'s `sessions apart` says it in those words. It is quiet
+with one session per workspace (`KINGFISHER_SESSION_ID`), under a Linux fence, and for
+session backends `doctor` cannot see into, whose contract asks it of them. The warning
+a program sees when nothing confines the shell says it too, where the workspace holds
+many sessions. The macOS profile is left as it is; separating people on one Mac is a
+workspace each. The shipped `compose.yaml` stays `external`, for development testing
+and one person per container, and its comment says so. The system prompt no longer
+tells the agent another session's files are unreachable. *(2026-10-11.)*
+
 ## Sessions: what persists and where
 
 These began as decisions in *Nothing at rest on this machine* and were built
