@@ -127,6 +127,20 @@ def test_the_seed_directory_is_never_derived(cfg, tmp_path):
     assert Origins.of(replace(cfg, assets=tmp_path)).seed == Origin("relocated", tmp_path)
 
 
+def test_sessions_are_supplied_where_the_setting_names_backends_to_build(cfg):
+    """The half a surface holding only a `Config` can answer, and the half that was
+    missing. `inventory` has no backends object to hand over, so it reported the derived
+    default -- and `kingfisher doctor` printed `sessions : ./sessions` three rows above
+    its own `sessions survive` row, which reads this same setting and knew better.
+    """
+    configured = replace(cfg, session_backends_factory="acme.backends:build")
+
+    assert Origins.of(configured).sessions == Origin("supplied", None)
+    # The control: with nothing naming backends, the derived default is the right
+    # answer and must not become `<supplied>` for every deployment.
+    assert Origins.of(cfg).sessions == Origin("default", cfg.workspace / "sessions")
+
+
 def test_sessions_are_the_workspace_s_own_unless_a_backend_says_otherwise(cfg):
     """`None` is the default backend, which keeps sessions under the workspace; anything
     else keeps them wherever it keeps them, which no path here can name.

@@ -783,7 +783,17 @@ def _sessions(*, as_document: bool = False) -> int:
 
     cfg = config_from_env()
     kf = Kingfisher(cfg, backends=configured_backends(cfg))
-    root = sessions_root(kf.workspace)
+    # Asked of `origins` rather than derived from the workspace. The listing below
+    # already comes from the backends, and this line sat beside it saying
+    # `<workspace>/sessions` whatever they were -- so the one deployment the setting
+    # exists for was told to look in a directory its backends never touch, and
+    # "no sessions in ..." pointed at an empty one.
+    #
+    # The absolute path where kingfisher knows it, because somebody reads this to go
+    # there; a sentence where it does not, rather than a path it would be guessing.
+    kept = kf.origins.sessions
+    root: Path | None = sessions_root(kf.workspace) if kept.kind == "default" else None
+    where = str(root) if root is not None else "the session backends this deployment configured"
     now = time.time()
     # A walk per session, at ~0.8ms each. The same trade `sessions()` already
     # makes for the listing: cheap where it is read, and a workspace large
@@ -797,7 +807,7 @@ def _sessions(*, as_document: bool = False) -> int:
                     # Named here as well as in the block below, because the two
                     # forms have to say the same thing -- the rule `doctor` puts
                     # its origins in both for.
-                    "root": str(root),
+                    "root": None if root is None else str(root),
                     "sessions": [
                         {
                             "id": info.id,
@@ -814,10 +824,10 @@ def _sessions(*, as_document: bool = False) -> int:
         return 0
 
     if not held:
-        print(f"no sessions in {root}")
+        print(f"no sessions in {where}")
         return 0
 
-    print(f"{_count(len(held))}, {_size(sum(size for _, size in held))}, in {root}")
+    print(f"{_count(len(held))}, {_size(sum(size for _, size in held))}, in {where}")
     print()
     width = max(len(info.id) for info, _ in held)
     for info, size in held:
