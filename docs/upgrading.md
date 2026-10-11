@@ -17,7 +17,7 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
-## A session's skills checked against what kingfisher read, after #678
+## A session's skills checked against what kingfisher read, after #680
 
 `SESSION_BACKENDS_CONTRACT` has one more check,
 `a_session_serves_the_skills_kingfisher_read` (#681). Kingfisher builds grants and the
