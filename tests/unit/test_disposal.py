@@ -344,6 +344,35 @@ def test_retention_and_claim_agree_on_when_a_claim_went_stale(cfg):
     assert held in outside.removed
 
 
+def test_a_turns_claim_is_taken_with_the_grace_period_not_the_deadline(cfg, monkeypatch):
+    """What `_admit` actually passes, which is the half
+    `test_a_claim_survives_the_deadline_that_stops_its_turn` cannot reach: that rule
+    supplies `claim_stale_after` by hand at every call, so it holds the constant's own
+    property and says nothing about the wiring.
+
+    Measured: reinstating the bug at that call site -- `stale_after=cfg.turn_timeout_s`
+    -- left all 2,546 tests green, while the same mutation at `Disposal` reddens
+    `test_retention_and_claim_agree_on_when_a_claim_went_stale`. One of the two readers
+    of this constant was held and the other was not.
+    """
+    from kingfisher.infrastructure.harness.backend import SessionClaims
+
+    taken: list[float] = []
+    claiming = SessionClaims.claim
+
+    def watched(self, name, *, stale_after, now=None):
+        taken.append(stale_after)
+        return claiming(self, name, stale_after=stale_after, now=now)
+
+    monkeypatch.setattr(SessionClaims, "claim", watched)
+    service(cfg).run(Request("go"))
+
+    # Not vacuous, and this is the assertion that makes it so: the two numbers were the
+    # same once, and a rule comparing against either would have passed then.
+    assert cfg.claim_stale_after > cfg.turn_timeout_s
+    assert taken == [cfg.claim_stale_after]
+
+
 def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
     """The window a turn stops *in*, which the claim used to be taken during."""
     import time
