@@ -99,6 +99,37 @@ runs without the tool. The model never sees a reference -- it is given a flat
 something to put in one. A bare name two folders offer is refused, naming both.
 *(2026-08-17, `qualified-tool-references.md`, `two-tools-called-fetch.md`.)*
 
+
+**One definition naming one dispatch name twice is refused, however it spells it.** The
+"names it twice" check compared written entries verbatim, so `shared.py::shared` beside
+a bundled `shared` was two strings and went through -- and the bundle silently won,
+handing the delegate its own tool where the author had named the catalogue's file. Only
+a `doctor` warning said so. Measured on 2026-10-11, with the plainly-written pair beside
+it as the control: that one is refused.
+
+Three pairs slipped through, not one. `a.py::fetch` with `b.py::fetch` is the same
+collision from the other side -- two *different* tools, one flat name -- and `fetch`
+with `a.py::fetch` is the pair the entry above calls two spellings of one tool. All
+three are refused now, and the message names both spellings, because "names 'fetch'
+twice" sends a reader looking for a second `fetch` they did not write.
+
+**Refused at the reader, which is not where the catalogue's clash goes.** *Two
+definitions of one name coexist* sends a clash between two catalogue files to
+construction, because it is "unfixable by anyone who does not own both files". A
+definition naming both owns the problem and can edit the line, so the refusal belongs
+where the line is -- and the reader already refused the plain spelling, so this widens
+an existing decision rather than taking a new one.
+
+**The comparison is per-field, and the fields genuinely differ.** A tool's reference is
+`where::what` and *the model never sees it* -- it is handed a flat `what` -- so two
+entries resolving to one `what` cannot both dispatch. A skill's identity *is*
+`source::name`: two parties who never met may both ship a `lookup`, and deduping those
+by bare name would refuse the arrangement sources exist for. So `tools` compares by bare
+name and `skills` compares as written, with the bare-against-qualified skill case left
+to the registry, where whether a bare name is ambiguous can actually be seen. A mutation
+applying the tools rule to skills reddens that control, which is what holds the
+distinction rather than the comment above it. *(2026-10-11, from an architecture
+review.)*
 **A skill's identity is `source::name`**, a folder under the skills root is a
 source, and deny rules are built from the path rather than the name.
 *(2026-08-17, `skills-from-several-parties.md`.)*
