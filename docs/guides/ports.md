@@ -394,9 +394,17 @@ better place to read a failure than a turn is. And run
 `SESSION_BACKENDS_CONTRACT`, above, against the object that makes them: that two
 sessions are kept apart, that a session is there on the next turn, that the claim
 is exclusive, that what is listed and deleted is what exists, that where you say
-a file is on this host it is that session's file, and that every async twin —
+a file is on this host it is that session's file, that a session serves under
+`/skills/` the skills kingfisher read, and that every async twin —
 `aopen`, `asessions`, `adelete`, `aclaim`, `arelease`, `asize` and `amark_used` —
 answers as its sync one does.
+
+**A session has to serve under `/skills/` what kingfisher read.** Grants and the
+read-deny rules come from kingfisher's own reading of the catalogue, each mount and
+each delegate's skills, and the agent reads skills through your backend. Serve one
+from anywhere else and it is either granted and missing, or readable however a request
+narrowed, and nothing at runtime says which. `a_session_serves_the_skills_kingfisher_read`
+lists each through one session and compares names and paths.
 
 **The shell and the file tools have to be two views of one filesystem**, and this
 is the one left that reports nothing on its own. A virtual path becomes a shell

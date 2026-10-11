@@ -18,16 +18,20 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from deepagents.backends import CompositeBackend
+from deepagents.backends import CompositeBackend, FilesystemBackend
 from deepagents.backends.protocol import SandboxBackendProtocol
 
 from kingfisher.config import ConfigError
+from kingfisher.infrastructure.catalogue import Definitions
+from kingfisher.infrastructure.harness.backend import skill_mounts
 from kingfisher.infrastructure.harness.host_paths import HostPathError
 from kingfisher.infrastructure.harness.permitted_backend import host_path
+from kingfisher.kinds.skills import registry as skill_registry
 from kingfisher.layout import (
     HARNESS_ROUTE,
     INPUTS_ROUTE,
     OUTPUTS_ROUTE,
+    SKILLS_ROUTE,
     denied_read_scopes,
     denied_scopes,
 )
@@ -351,6 +355,52 @@ def a_host_path_stays_in_its_session(make: Callable[[], Any]) -> None:
         raise AssertionError(msg)
 
 
+def a_session_serves_the_skills_kingfisher_read(make: Callable[[], Any]) -> None:
+    """Under `/skills/`, a session's backend serves the skills kingfisher read itself.
+
+    Grants and the read-deny rules are built from what kingfisher read; the agent reads
+    through the backend. One serving `/skills/` from anywhere else splits the two with
+    nothing said: a granted skill the agent cannot find, and a skill kingfisher never
+    read, which no deny rule names, so it stays readable whatever a request narrowed.
+
+    Listed through deepagents' own lister at each route a skills index is given, and
+    compared by name and path, rather than by asking what backs each route: a backend
+    serving the same folders another way passes, and the right kind of backend over
+    the wrong folder does not.
+    """
+    cfg, backends = make()
+    catalogue = Definitions.from_config(cfg).warm()
+    one = CONTRACT_SESSIONS[0]
+    session = backends.open(cfg, one, catalogue=catalogue)
+    root = catalogue.skills.root
+    places = [
+        # Source by source, because deepagents lists a source one level deep: a
+        # skill in a catalogue folder is found only by listing that folder.
+        *((SKILLS_ROUTE, root, path) for _, path in skill_registry.sources(root)),
+        *((route, directory, skill_registry.ROOT) for route, directory in skill_mounts(catalogue)),
+    ]
+    read: set[tuple[str, str]] = set()
+    served: set[tuple[str, str]] = set()
+    for route, directory, path in places:
+        read |= {
+            (skill["name"], f"{route}{skill['path'].lstrip('/')}")
+            for skill in skill_registry.listed(FilesystemBackend(root_dir=str(directory)), path)
+        }
+        served |= {
+            (skill["name"], skill["path"])
+            for skill in skill_registry.listed(session, f"{route}{path.lstrip('/')}")
+        }
+    if read != served:
+        msg = (
+            f"{one!r} serves /skills/ differently from the folders kingfisher read -- "
+            f"read and not served: {sorted(read - served)}; served and never read: "
+            f"{sorted(served - read)}. Grants and read-deny rules come from what "
+            "kingfisher read, so the first are granted and missing and the second "
+            "are readable whatever a request narrowed"
+        )
+        raise AssertionError(msg)
+
+
 def _on_a_loop_of_its_own(awaited: Callable[[], Any]) -> Any:
     """`awaited()` run to the end on a new event loop, in a thread of its own.
 
@@ -514,6 +564,7 @@ SESSION_BACKENDS_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (
     a_session_asked_for_is_listed,
     a_deleted_session_is_gone,
     a_host_path_stays_in_its_session,
+    a_session_serves_the_skills_kingfisher_read,
     aopen_reaches_the_session_open_does,
     asessions_lists_what_sessions_does,
     adelete_removes_the_session,
