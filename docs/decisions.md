@@ -2509,6 +2509,24 @@ passed is recorded. The rule also asserts that the two numbers *differ*, because
 were the same number once and a rule comparing against either would have passed then --
 which is the shape this review kept finding, in a rule written to prevent it.
 *(2026-10-11, from an architecture review.)*
+
+**A sweep that removes nothing says which reason spared each session.** `expired` folds
+a busy session into `kept`, and `reap` had only that count and the age -- so it blamed
+the age for a session `kingfisher sessions` prints as hours idle. Two commands
+contradicting each other on one workspace, and the advice that followed could not work:
+no age sweeps a session a turn is running in, so `--older-than sweeps on a shorter age`
+sent a reader to try something that was never going to help. `--older-than 0`, which the
+flag's own help glosses as "every session no turn is running in", read as `none ... has
+been idle longer than <1m`.
+
+`SweepPlan` and `SweepResult` carry the busy count now, which is the difference between
+the two `expired` calls `Disposal` already makes -- the first to find which sessions are
+old enough to ask the claim question of, the second to take the running ones out. Three
+sentences rather than one, because three things can be true: every survivor is busy, some
+are and the rest are too young, or the age is genuinely what decided. The last is the
+control, and it is what the pre-existing rule about *which* age is named was holding.
+*(2026-10-11, from an architecture review.)*
+
 **No migration and no fallback reader; the marker carries a layout version.**
 The failure a fallback would paper over is silence rather than breakage: a pin
 the new code cannot find means a session re-pins and may change agent

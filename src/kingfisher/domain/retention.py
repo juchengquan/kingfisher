@@ -10,6 +10,9 @@ from dataclasses import dataclass
 class SweepResult:
     removed: tuple[str, ...]
     kept: int
+    #: How many of `kept` a running turn spared, carried for the reason
+    #: `SweepPlan.busy` gives.
+    busy: int = 0
     #: Sessions that could not be fully removed, with why. Surfaced rather than
     #: swallowed: a checkpointer that cannot delete at all should be visible.
     failures: tuple[str, ...] = ()
@@ -25,6 +28,11 @@ class SweepPlan:
 
     doomed: tuple[str, ...]
     kept: int
+    #: How many of `kept` a running turn spared, rather than their age. Carried
+    #: because `kept` cannot tell the two apart, and a sweep that removes nothing
+    #: reports what decided: blaming the age for a busy session contradicts
+    #: `kingfisher sessions`, which prints that session's idle time beside it.
+    busy: int = 0
 
 
 def expired(
@@ -41,7 +49,10 @@ def expired(
         for name, modified in entries
         if name not in running and now - modified > older_than_seconds
     )
-    return SweepPlan(doomed=doomed, kept=len(entries) - len(doomed))
+    spared = tuple(name for name, _ in entries if name in running)
+    return SweepPlan(
+        doomed=doomed, kept=len(entries) - len(doomed), busy=len(spared)
+    )
 
 
 def orphaned(names: Sequence[str], sessions: Sequence[str]) -> tuple[str, ...]:
@@ -72,5 +83,6 @@ def apply(
     return SweepResult(
         removed=tuple(removed),
         kept=sweep_plan.kept,
+        busy=sweep_plan.busy,
         failures=tuple(failures),
     )

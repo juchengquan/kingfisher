@@ -723,6 +723,65 @@ def test_an_age_you_asked_for_is_not_blamed_on_the_setting(cfg, monkeypatch, cap
     assert "KINGFISHER_SESSION_TTL_S" not in printed
 
 
+def _busy_since(cfg, session_id: str, *, hours: float) -> str:
+    """A session a turn is holding, last touched `hours` ago."""
+    import os
+    import time
+
+    from tests.unit.test_tenancy import _claim
+
+    start(cfg, session_id)
+    _claim(cfg, session_id).write_text("held", encoding="utf-8")
+    old = time.time() - hours * 3600
+    os.utime(cfg.workspace / "sessions" / session_id, (old, old))
+    return session_id
+
+
+def test_reap_names_the_turn_rather_than_the_age_that_did_not_decide(cfg, monkeypatch, capsys):
+    """`expired` folds a busy session into `kept`, so a sweep that removed nothing
+    blamed the age -- for a session `kingfisher sessions` prints as hours idle. Two
+    commands contradicting each other on one workspace, and advice that cannot work: no
+    age sweeps a session a turn is running in.
+    """
+    _looking_at(monkeypatch, cfg)
+    _busy_since(cfg, "held", hours=2)
+
+    assert main(["reap", "--older-than", "30m"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "a turn is running in it" in printed
+    assert "idle longer than" not in printed, "the age did not decide this"
+
+
+def test_reap_names_both_reasons_where_both_applied(cfg, monkeypatch, capsys):
+    """One held by a turn and one simply too young. Naming only the age would be wrong
+    about the first, and naming only the turn wrong about the second.
+    """
+    _looking_at(monkeypatch, cfg)
+    _busy_since(cfg, "held", hours=2)
+    start(cfg, "fresh")
+
+    assert main(["reap", "--older-than", "30m"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "1 session is busy" in printed
+    assert "none of the other 1 session here has been idle longer than 30m" in printed
+
+
+def test_reap_still_blames_the_age_when_the_age_is_what_decided(cfg, monkeypatch, capsys):
+    """The control: a sweep over sessions no turn is holding must go on naming the age,
+    which is the only thing that spared them.
+    """
+    _looking_at(monkeypatch, cfg)
+    start(cfg, "fresh")
+
+    assert main(["reap", "--older-than", "30m"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "idle longer than 30m" in printed
+    assert "busy" not in printed
+
+
 def test_reaping_one_by_name_takes_it_whatever_its_age(cfg, monkeypatch, capsys):
     """The id you are holding is the session you want gone, and the TTL has nothing to
     say about it.

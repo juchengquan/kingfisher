@@ -61,6 +61,10 @@ class Disposal:
         """
         age = self.cfg.session_ttl_s if older_than_seconds is None else older_than_seconds
         entries = self._backends.sessions(self.cfg)
+        # Twice on purpose: the first answers which sessions are old enough to ask the
+        # claim question of, and the second is the plan a running turn has been taken
+        # out of. `plan.busy` is the difference, which is what `reap` needs to say why
+        # it removed nothing.
         idle = retention.expired(entries, age, now)
         plan = retention.expired(entries, age, now, busy=self._busy(idle.doomed, now=now))
         result = retention.apply(plan, lambda session_id: drive(self._discard_steps(session_id)))
