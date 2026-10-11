@@ -2,8 +2,9 @@
 
 **Status:** proposed. **Slice 1 landed on 2026-10-01:** the measurements are in
 `guides/configuration.md`, under *What each fence hides*, which is the copy to keep
-current; the table below is the one this argument was made from. The loader is not
-built.
+current; the table below is the one this argument was made from. **The open
+questions were settled on 2026-10-11**, under *Settled*; the loader, the examples and
+the `doctor` check are not built.
 **Date:** 2026-10-01.
 **Occasion:** removing the session key raised what else the agent's shell can read,
 and the model API keys came first. Two agents measured it on macOS and read the
@@ -101,8 +102,8 @@ minimax: sk-...
 ```
 
 `models.yaml` stays a file anyone may read, and the keys sit somewhere chosen for
-being secret. With a default under the home folder, such as
-`~/.config/kingfisher/keys.yaml`, the macOS fence hides it. Neither Linux fence grants
+being secret. Named under the home folder -- the examples suggest
+`~/.config/kingfisher/keys.yaml` -- the macOS fence hides it. Neither Linux fence grants
 the home, and a remote backend never sees the file. It costs a second file, and a
 setting to find it.
 
@@ -137,26 +138,75 @@ Each endpoint names exactly one of `key` or `key_env`. Both, or neither, is refu
 as the YAML is read, as an unknown key is now. That is a rule about the file's shape,
 not a guard on the key, so it is not the enforcement ruled out above.
 
-## Open, and deliberately not decided yet
+## Settled
 
-- **The keys file's default path, and its setting's name.** `~/.config/kingfisher/keys.yaml`
-  and `KINGFISHER_KEYS_FILE` are placeholders.
-- **What `doctor` says about it.** It could name, per endpoint, where its key came
-  from, and say when the keys file sits somewhere the running fence lets the shell
-  read. That would be a report, consistent with no enforcement, but it is a new check
-  and its wording is a choice.
-- **Whether `.env` keeps non-secret settings.** The owner's remark was about API keys.
-  Moving every `KINGFISHER_*` setting into YAML would be a larger change, with its own
-  argument.
-- **A key in the starting environment** (note 1 above) stays readable on macOS whatever
-  this decides. That is a property of the operating system rather than of kingfisher,
-  and it belongs in the guide, not in code.
+Put to the owner on 2026-10-11, one question at a time, each with the same endpoint
+written every way.
+
+**Where the keys file is.**
+
+- **No default: the keys file is read only once a setting names it.** Everything but
+  the workspace "defaults inside it or is off", so that a deployment's files are
+  never somewhere its own configuration does not mention. A home-folder default would
+  have been the first place kingfisher picked outside the workspace on its own, and a
+  workspace default would put keys where the macOS fence lets the shell read them. The
+  examples suggest `~/.config/kingfisher/keys.yaml`, written out, so the path is chosen
+  and visible.
+- **The setting is `KINGFISHER_MODEL_KEYS_FILE`.** `KINGFISHER_KEYS_FILE` read as a
+  successor to the session key that had just been retired; this one says what it holds.
+- **Only the setting names the file; `models.yaml` never does.** A path in it would be
+  one machine's path in the file that is shared between machines, which is the reason
+  for a second file.
+- **Paths resolve like the other path settings:** `~` expanded, a relative path from
+  the directory kingfisher was started in, where `.env` is read. Relative to the
+  workspace would have pointed relative paths into what the macOS fence lets the shell
+  read.
+
+**What happens when it is not right.**
+
+- **An endpoint names `key:` and no keys file is named:** that endpoint is dropped
+  with `MissingCredentialsWarning`, naming the setting, and the others load -- as a
+  missing `key_env` does. A machine without one provider set up still runs the rest.
+- **The file is named and has no such entry:** dropped the same way, naming the file
+  and the entry.
+- **The named file is missing, unreadable, or not YAML:** kingfisher refuses to start
+  and names the path, as `KINGFISHER_MODELS_FILE` does. A wrong path somebody wrote is
+  a mistake to say at once, where a missing provider is a machine's ordinary state.
+
+**What `seed` gives you.** No keys example file. `models.yaml.example` shows `key:`, and
+`.env.example` shows the setting with a two-line sample of the file beside it. A
+`keys.yaml.example` in the workspace would make renaming it in place the obvious next
+step, which puts real keys where the shell reads them.
+
+**What `doctor` reports.** A report each, nothing refused, and only in `doctor`, not at
+every start -- the line `session files` already holds.
+
+- **Where each endpoint's key came from,** in the `credentials` row:
+  `minimax: keys file, entry "minimax"; openai: OPENAI_API_KEY`.
+- **The keys file sitting where the agent's shell can read it,** worked out from the
+  fence actually running, by the rules in *What each fence hides*: on macOS, outside
+  the home folder or inside the workspace; on Linux, under a root the fence grants;
+  with no fence, always. Warning about the workspace and staying quiet about `/tmp`
+  would have read as `/tmp` being safe.
+- **A key that was in the environment before kingfisher started,** on macOS and with
+  no fence, because the shell can read a process's starting environment there; it
+  suggests the keys file. For `doctor` to tell, the command line records which names
+  its `.env` loading added. This reverses what this document first said, that note 1
+  belonged in the guide rather than in code: a report is not a guard, and it is the
+  one exposure a deployer cannot otherwise see.
+- **Other users able to read the keys file** -- a mode wider than `600` -- with the
+  `chmod 600` that would fix it.
+
+**Only the keys move.** Every other `KINGFISHER_*` setting stays where it is. Moving them
+all into YAML is a separate proposal, if it is still wanted: where such a file lives
+when it names the workspace itself, which wins when it and the environment disagree,
+and whether `.env` goes.
 
 ## What this does not do
 
 It adds no sandbox rule, refuses no key file for where it sits, and does not change
-what a deployment wiring kingfisher in code does. Both cases in #628 stay where they
-are.
+what a deployment wiring kingfisher in code does. It moves no setting but the keys.
+Both cases in #628 stay where they are.
 
 ## Plan, if this moves
 
@@ -165,11 +215,13 @@ Each slice independent and green, a pull request off `main`, test first.
 1. **The measurements, into `docs/guides/configuration.md`.** The table above, as what
    each fence hides, with the advice to keep keys under the home folder on macOS. It
    depends on nothing here and is worth landing even if the rest never does.
-2. **The loader.** `models.yaml` accepts `key:` naming an entry in the keys file. The
-   keys file is found through the setting. "Exactly one of `key` or `key_env`" is
-   refused as the file is read. An endpoint whose entry is missing is dropped, with the
-   same `MissingCredentialsWarning` that a missing `key_env` gets, naming the keys file
-   and the entry.
-3. **`seed` and the examples.** `models.yaml.example` shows `key:`, a commented
-   `keys.yaml.example` says where it goes, and `.env.example` stops listing key lines.
-4. **`doctor`**, if the open question above settles on a check.
+2. **The loader.** `models.yaml` accepts `key:` naming an entry in the file
+   `KINGFISHER_MODEL_KEYS_FILE` names, resolved as the other path settings are.
+   "Exactly one of `key` or `key_env`" is refused as the file is read. No setting, or
+   no entry, drops the endpoint with `MissingCredentialsWarning`, naming what was
+   missing. A named file that is missing, unreadable or not YAML refuses to start.
+3. **`seed` and the examples.** `models.yaml.example` shows `key:`; `.env.example`
+   shows `KINGFISHER_MODEL_KEYS_FILE=~/.config/kingfisher/keys.yaml` with a sample of
+   the file, and stops listing key lines. No keys example file is written.
+4. **`doctor`.** The four reports under *Settled*. The command line starts recording
+   which names `.env` added, which the starting-environment report needs.

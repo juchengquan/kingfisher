@@ -70,8 +70,9 @@ slices land.
 - [Where the command line keeps its
   keys](design/2026-10-01-where-the-command-line-keeps-its-keys.md) — moving the
   `kingfisher` command's API keys from `.env` into YAML without putting them where
-  the agent's shell reads more easily, and what each fence hides, measured. Nothing
-  built.
+  the agent's shell reads more easily, and what each fence hides, measured. The
+  measurements are in the configuration guide and every question is settled; the
+  loader, the examples and the `doctor` check are not built.
 - [Per-session skills](design/2026-10-11-per-session-skills.md) — letting a session
   bring skills of its own while the skills kingfisher read and the skills the agent
   sees stay one list. The check it rests on has landed; the feature waits for a
