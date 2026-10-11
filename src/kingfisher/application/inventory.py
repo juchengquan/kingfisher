@@ -171,6 +171,10 @@ class Inventory:
     #: gets its own and the shared one never reaches it, and nothing else in
     #: this output would say so.
     shadowed: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    #: Whether `shadowed` was asked at all, for the reason `moved_tools_checked`
+    #: gives: the comparison needs the workspace catalogue, and a catalogue that did
+    #: not load is not the answer "nothing shadows".
+    shadowed_checked: bool = True
     #: Delegates whose bundle arrived with the definition rather than sitting in a
     #: folder under the catalogue. What that changes for a reader is where the code
     #: is: a folder's tools are files in this workspace, and a carried bundle's were
@@ -279,7 +283,7 @@ def _bundled(
 ) -> tuple[
     Mapping[str, tuple[str, ...]],
     Mapping[str, tuple[str, ...]],
-    Mapping[str, tuple[str, ...]],
+    Mapping[str, tuple[str, ...]] | None,
     str | None,
     tuple[str, ...],
     tuple[str, ...],
@@ -292,7 +296,7 @@ def _bundled(
     """
     tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
     skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
-    shadowed: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    shadowed: Mapping[str, tuple[str, ...]] | None = _NO_NAMES
     error: str | None = None
     orphans: tuple[str, ...] = ()
     carried: tuple[str, ...] = ()
@@ -306,14 +310,26 @@ def _bundled(
                 for name, repository in resolved.bundled_tools.items()
             }
         )
-        catalogue = {one.name for one in resolved.tools.found}
-        shadowed = MappingProxyType(
-            {
-                name: found
-                for name, names in tools.items()
-                if (found := tuple(sorted(catalogue.intersection(names))))
-            }
-        )
+        # Its own `try`, and the whole reason this one is narrow: reading the
+        # *workspace* catalogue here put a `tools/` failure into `bundles_error`, so
+        # one unparseable module was reported twice -- once as `tools` and once as
+        # `delegate tools`, on a workspace with no delegates at all. The second row
+        # sends a reader to the wrong directory.
+        try:
+            catalogue = {one.name for one in resolved.tools.found}
+        except (ToolError, CapabilityError):
+            # Not an error of this function's: `tools_error` already names the file.
+            # `None` rather than empty, because "nothing shadows" is a different
+            # answer from "the catalogue it would be compared against did not load".
+            shadowed = None
+        else:
+            shadowed = MappingProxyType(
+                {
+                    name: found
+                    for name, names in tools.items()
+                    if (found := tuple(sorted(catalogue.intersection(names))))
+                }
+            )
         # Inside the `try` too: a delegate carrying two skills of one name is
         # refused as its directories are read, which is here.
         skills = MappingProxyType(
@@ -730,7 +746,8 @@ def inventory(
                 if bundled_skills.get(name)
             }
         ),
-        shadowed=shadowed,
+        shadowed=shadowed if shadowed is not None else _NO_NAMES,
+        shadowed_checked=shadowed is not None,
         carried_bundles=carried,
         bundles_error=bundles_error,
         orphaned_assets=orphaned_assets,

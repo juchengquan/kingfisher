@@ -3504,8 +3504,8 @@ like code they can. `Inventory.middlewares` carries that distinction rather than
 raw `__module__`, so `--json` gets the honest answer too. *(2026-09-27, from an
 architecture review.)*
 
-**The inventory's seven `try` blocks keep their six catch-sets.** The review read
-them as one rule written six ways. They are not: each set is exactly the kinds its
+**The inventory's `try` blocks each keep their own catch-set.** The review read
+them as one rule written several ways. They are not: each set is exactly the kinds its
 block reads, and every type beyond the obvious one carries the incident that put it
 there -- `CapabilityError` in `_tools` because assembling the tool probe refuses a
 workspace tool shadowing a built-in, `SubagentError` in the agents walk because
@@ -3519,6 +3519,28 @@ reach `doctor` and `list` as a traceback over a workspace whose agents are fine 
 which is the incident three of the comments in that file record.
 `test_a_broken_delegate_does_not_take_the_agents_half_down` holds it now.
 
+
+**It gained one on 2026-10-11, and the count in this heading went with it.** The block
+that reads the *workspace* tool catalogue is its own now. It had sat inside the one whose
+exception becomes `bundles_error`, because `shadowed` compares a bundle's tool names
+against the catalogue's -- so one unparseable module in `tools/` was reported twice,
+`FAIL tools` and `FAIL delegate tools`, on a workspace with no delegates at all. The
+second row sends a reader to the wrong directory, which is the fault `doctor` exists to
+avoid. `bundles_error` is for a delegate's own folder, and the record already said so:
+*"a bundle is one delegate's folder rather than a catalogue."*
+
+`shadowed` answers `None` where that read failed, and `Inventory` carries
+`shadowed_checked` beside it -- the third field to need that after `moved_tools` and
+`miscounted_bundles`, for the same reason each gives: an empty mapping cannot tell
+"nothing shadows" from "the catalogue it would be compared against did not load", and
+`doctor` must not report the second as the first. It says `shadowing not checked` now and
+points at the row that does say why.
+
+The heading above used to count the blocks. It is one more than it said as of this
+change, and the claim never needed the number -- which is the lesson `CLAUDE.md` already
+records about a measured count in prose nobody re-measures. The property is that each
+block's catch-set is exactly the kinds it reads, and that is checkable by reading one
+block. *(2026-10-11, from an architecture review.)*
 **Removed on the way: `SkillError`.** Defined, exported as one of "the errors a
 caller must tell apart", listed among the command's refusals -- and raised nowhere
 since #483 took `kinds/skills/reading.py::name_from` out with the upload path on
