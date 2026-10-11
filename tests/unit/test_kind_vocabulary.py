@@ -161,7 +161,7 @@ NOT_SUBTRACTABLE = {
 
 
 def test_what_the_catalogue_loads_is_accounted_for():
-    """Four directories."""
+    """One directory per field of `Definitions`."""
     covered = {f.name for f in fields(Definitions)}
 
     assert covered | set(NOT_ON_DISK) == set(AXES) | set(NOT_AN_AXIS)

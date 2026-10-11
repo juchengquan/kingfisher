@@ -410,8 +410,8 @@ def test_the_home_directory_exists_before_a_command_runs(cfg, session_dir):
 
 # -- one file, listed once ------------------------------------------------
 #
-# Two of the routes point *inside* the default backend's own root: `/inputs` and
-# `/memory` are real directories under the session.
+# Two of the readable routes point *inside* the default backend's own root:
+# `/inputs` and `/memory` are real directories under the session.
 # `CompositeBackend` merges every backend's answer, so each of those files was
 # found twice -- once by the route and once by the default walking past it.
 # `/skills` never showed it, because it points at the catalogue, somewhere else
@@ -423,7 +423,7 @@ def _rows(result):
     return result.matches
 
 
-#: Every route that lives under the session root, and so was doubled.
+#: Every readable route that lives under the session root, and so was doubled.
 INSIDE_THE_ROOT = {
     "/inputs": ("inputs",),
     "/memory": ("memory",),

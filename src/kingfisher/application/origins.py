@@ -94,7 +94,7 @@ class Origins:
     def line(self) -> str:
         """Every entry, on one line, with the workspace factored out.
 
-        Spelled out in full this is about 450 characters, nine of eleven values
+        Spelled out in full this is about 450 characters, most of its values
         sharing one prefix -- and the entries worth noticing, the ones that are
         somewhere else, are buried in the repetition. Relative brings it to about 240
         *and* leaves the relocated ones as the only absolute paths, so the eye finds
@@ -141,7 +141,7 @@ def _derived(actual: Path, default: Path) -> Kind:
 
 
 def _file(actual: Path | None, default: Path) -> Origin:
-    """A path with a derived fallback: the two catalogues' files, and the roots."""
+    """A path with a derived fallback: `models.yaml`."""
     if actual is None:
         # Only reachable for a `Models` assembled in code, which carries no
         # source. The file was never read, so there is no path to report.

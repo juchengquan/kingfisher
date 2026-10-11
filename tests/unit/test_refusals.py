@@ -127,9 +127,9 @@ def a_subagent_missing_a_field(cfg):
 
 
 #: A portable declaration -- no `build`, so kingfisher assembles it -- with one key
-#: spliced in. One template rather than six literals: every defect below differs by
-#: exactly that key, and six copies would let five of them drift out of the format
-#: while still refusing something.
+#: spliced in. One template rather than a literal per defect: every defect below
+#: differs by exactly that key, and separate copies would let all but one drift out
+#: of the format while still refusing something.
 PORTABLE = (
     "SUBAGENTS = [{{'name': 'p', 'description': 'd', "
     "'system_prompt': 'Go.'{extra}}}]\n"
@@ -305,14 +305,14 @@ REFUSALS: dict[str, Refusal] = {
         2, defect=a_portable_subagent_carrying_a_class),
     "kinds/tools/spec.py::Offering.refuse_moved": Refusal(
         1, defect=a_subagent_naming_a_tool_that_moved),
+    "kinds/subagents/rules.py::refuse_miscounted": Refusal(
+        1, defect=a_subagent_miscounting_its_own_folder),
     # The four a file on disk cannot reach. Each was measured the same way the others
     # were -- by writing the defect and watching a catalogue accept it -- rather than
     # reasoned about, because "nothing can reach this" is the claim in this table
     # most likely to be wrong and least likely to be noticed.
     "kinds/skills/registry.py::SkillRegistry.resolve": Refusal(
         3, unreachable="a grant naming a skill two sources both offer, which is a request"),
-    "kinds/subagents/rules.py::refuse_miscounted": Refusal(
-        1, defect=a_subagent_miscounting_its_own_folder),
     "kinds/subagents/rules.py::refuse_cycles": Refusal(
         1, unreachable="asked in `_activated_subagents`, over the set a request "
                        "activates rather than over a file on disk"),
