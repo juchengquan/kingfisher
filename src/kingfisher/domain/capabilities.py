@@ -26,8 +26,13 @@ ALL: Literal["*"] = "*"
 SEPARATOR = "::"
 
 
-def _bare(written: str) -> str:
-    """A written name with any source stripped off, for a caller comparing names."""
+def bare_name(written: str) -> str:
+    """A written name with any source stripped off, for a caller comparing names.
+
+    Public because two modules compare by it: this one, matching a grant against the
+    spellings a catalogue offers, and `fields`, refusing one definition that names one
+    dispatch name twice.
+    """
     return written.rpartition(SEPARATOR)[2].strip()
 
 
@@ -185,7 +190,7 @@ def all_but(excluded: tuple[str, ...], *, offered: Iterable[str]) -> tuple[str, 
     # listing printed underneath. The two mistakes send them to different
     # places: one is a typo, the other is a name that stopped being enough.
     for name in sorted(missing):
-        if spellings := tuple(sorted(n for n in known if _bare(n) == name)):
+        if spellings := tuple(sorted(n for n in known if bare_name(n) == name)):
             msg = (
                 f"cannot exclude {name!r}: more than one source offers it, so "
                 f"subtracting it alone would leave one behind -- "
@@ -233,7 +238,7 @@ def refuse_unoffered(
         # only answer that cannot be silently wrong, and it has to say what to
         # write instead or it is a refusal someone has to go and research.
         for name in unknown:
-            if spellings := tuple(sorted(n for n in known if _bare(n) == name)):
+            if spellings := tuple(sorted(n for n in known if bare_name(n) == name)):
                 msg = (
                     f"{subject} names {kind} {name!r}, which more than one source "
                     f"offers -- naming it alone would silently pick one: "

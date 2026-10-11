@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from difflib import get_close_matches
 from types import MappingProxyType
@@ -202,16 +202,35 @@ class Reader:
         return self.selection(written, absent=absent, key=key), MappingProxyType(settings)
 
     def _entries(
-        self, value: Sequence[object], *, key: str, extra: tuple[str, ...]
+        self,
+        value: Sequence[object],
+        *,
+        key: str,
+        extra: tuple[str, ...],
+        same: Callable[[str], str] | None = None,
     ) -> tuple[list[str], dict[str, Mapping[str, object]]]:
-        """The names a list field wrote, and what each entry carried beside one."""
+        """The names a list field wrote, and what each entry carried beside one.
+
+        `same` is how two spellings of one entry are told apart, and the fields differ.
+        A tool's reference is `where::what` and the model is handed a flat `what`, so
+        `a.py::fetch` and `fetch` are one dispatch name and cannot both apply. A skill's
+        identity *is* `source::name` -- two parties who never met may both ship a
+        `lookup` -- so those compare as written, and the bare-against-qualified case is
+        resolved against the catalogue where the ambiguity can actually be seen.
+        """
         written: list[str] = []
         carried: dict[str, Mapping[str, object]] = {}
+        dispatches = same or (lambda name: name)
         for position, entry in enumerate(value, start=1):
             name = self._entry_name(entry, position=position, key=key, extra=extra)
-            if name in written:
+            dispatched = dispatches(name)
+            clash = next((n for n in written if dispatches(n) == dispatched), None)
+            if clash is not None:
+                # Both spellings where they differ, because "names 'fetch' twice" sends
+                # a reader looking for a second `fetch` they did not write.
+                said = f"{name!r}" if clash == name else f"{clash!r} and {name!r}"
                 msg = (
-                    f"{self.source}: {key} names {name!r} twice. One name is one "
+                    f"{self.source}: {key} names {said} twice. One name is one "
                     f"thing to build, so a second entry for it is either two "
                     f"answers that cannot both apply or a line that says nothing"
                 )
@@ -412,7 +431,9 @@ class Reader:
         # unrestricted name.
         return chosen, {n: a for n, a in stated.items() if a is not None}
 
-    def sourced(
+    def sourced(  # noqa: PLR0913 -- five of these are five different questions about
+        # one field, and the sixth is how two spellings of one entry are told apart.
+        # Folding them into an object would hide which of them a caller is answering.
         self,
         value: object,
         *,
@@ -420,6 +441,7 @@ class Reader:
         key: str,
         refuse_all: str | None = None,
         refuse_bundled: str | None = None,
+        same: Callable[[str], str] | None = None,
     ) -> tuple[Selection, Mapping[str, Audience], tuple[str, ...]]:
         """What `audienced` answers for the shared entries, and the bundled ones apart.
 
@@ -439,7 +461,7 @@ class Reader:
         # Through `_entries` with both kinds together, so a name written once shared
         # and once bundled is the "names it twice" refusal: a delegate dispatches by
         # name, and two entries for one would leave which one it calls unsaid.
-        written, carried = self._entries(value, key=key, extra=extra)
+        written, carried = self._entries(value, key=key, extra=extra, same=same)
         bundled = tuple(
             name for name, entry in carried.items() if self._source(entry, key=key) == BUNDLED
         )

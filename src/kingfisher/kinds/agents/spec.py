@@ -15,7 +15,7 @@ from types import MappingProxyType
 
 from kingfisher.domain import fields
 from kingfisher.domain.access import AUDIENCED
-from kingfisher.domain.capabilities import ALL, Capabilities
+from kingfisher.domain.capabilities import ALL, Capabilities, bare_name
 from kingfisher.domain.definition import Definition
 
 # A `tools:` entry may be written `where::what`, so reading this format means
@@ -154,7 +154,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     # `source: shared` is taken so an entry reads the same in either file; `bundled`
     # is refused, because only a subagent has a folder of its own to take it from.
     written_tools, tool_audiences, _ = read.sourced(
-        document.get("tools"), absent=ALL, key="tools", refuse_bundled=_NO_FOLDER
+        document.get("tools"), absent=ALL, key="tools", same=bare_name, refuse_bundled=_NO_FOLDER
     )
     written_skills, skill_audiences, _ = read.sourced(
         document.get("skills"), absent=None, key="skills", refuse_bundled=_NO_FOLDER

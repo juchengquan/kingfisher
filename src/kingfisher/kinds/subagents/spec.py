@@ -22,7 +22,7 @@ from typing import Any
 
 from kingfisher.domain import fields
 from kingfisher.domain.access import AUDIENCED
-from kingfisher.domain.capabilities import ALL
+from kingfisher.domain.capabilities import ALL, bare_name
 from kingfisher.domain.definition import Definition
 from kingfisher.kinds.tools.spec import claimed_sources
 
@@ -375,7 +375,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     read = fields.Reader(source=where.name, error=SubagentError)
     wanted = fields.wanted_model(entry, read)
     written_tools, tool_audiences, own_tools = read.sourced(
-        entry.get("tools"), absent=ALL, key="tools"
+        entry.get("tools"), absent=ALL, key="tools", same=bare_name
     )
     # Only `tools` here: `skills` and `subagents` are refused for a compiled
     # delegate by `NOT_COMPILED`, so there is nothing else to carry an audience.
@@ -572,7 +572,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     # the dictionary the agent dispatches through all key on the plain name.
     # Where it claims to live travels beside it, for whoever checks the claim.
     written_tools, tool_audiences, own_tools = reader.sourced(
-        document.get("tools"), absent=ALL, key="tools"
+        document.get("tools"), absent=ALL, key="tools", same=bare_name
     )
     # Same two-in-one read as the agent format, and the same field: a
     # definition writing settings has to mean the same thing in either file.

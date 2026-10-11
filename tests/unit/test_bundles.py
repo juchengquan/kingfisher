@@ -476,6 +476,77 @@ def test_one_name_listed_as_both_shared_and_bundled_is_refused(cfg):
     assert "names 'shared' twice" in str(raised.value)
 
 
+#: A delegate with nothing in it but the three required fields, for the rules below that
+#: drive the reader on one `tools:` or `skills:` block.
+DELEGATE = "name: surveyor\ndescription: d\nsystem_prompt: |\n  Go.\n"
+
+#: The same pair as the rule above, with the shared half written as the reference
+#: `formats.md` says means the same tool. Every spelling of one dispatch name has to meet
+#: that refusal: the model is handed a flat `shared`, so two entries for it cannot both
+#: apply.
+SPELLINGS = (
+    ("a path and a bundled name", "shared.py::shared"),
+    ("a bare name and a bundled name", "shared"),
+)
+
+
+@pytest.mark.parametrize(("label", "shared_as"), SPELLINGS, ids=[s[0] for s in SPELLINGS])
+def test_one_dispatch_name_is_refused_however_the_entries_spell_it(label, shared_as, cfg):
+    """The refusal compared written entries verbatim, so `shared.py::shared` beside a
+    bundled `shared` was two strings and went through -- and the bundle silently won,
+    handing the delegate its own tool where the author had named the catalogue's file.
+
+    Measured before this existed: accepted, with `tools=('shared.py::shared',)` and
+    `bundled={'tools': ('shared',)}`, and the only signal was a `doctor` warning that a
+    delegate's own tool answered instead of the catalogue's.
+    """
+    workspace_with_bundle(
+        cfg, definition=owner(shared=(shared_as,), tools=("shared",)), private="shared"
+    )
+
+    with pytest.raises(SubagentError) as raised:
+        _ = Definitions.from_config(cfg).subagents.specs
+
+    assert "twice" in str(raised.value)
+    # Both spellings, because "names 'shared' twice" sends a reader looking for a second
+    # `shared` they did not write.
+    assert shared_as in str(raised.value)
+
+
+def test_two_tools_of_a_name_from_two_files_cannot_both_be_held():
+    """One definition naming `a.py::fetch` and `b.py::fetch` is the same collision from
+    the other side: two *different* tools, one flat name for the model to call.
+
+    Refused here rather than left to construction, which is where the record sends a
+    clash between two *catalogue* files -- unfixable by anyone who does not own both. A
+    definition naming both owns the problem and can edit the line.
+    """
+    with pytest.raises(SubagentError, match="twice"):
+        a_subagent(DELEGATE + "tools:\n  - a.py::fetch\n  - b.py::fetch\n", "surveyor.yaml")
+
+
+def test_two_different_tools_are_not_a_collision():
+    """The control: comparing by dispatch name must not refuse a definition naming two
+    tools that happen to live in different files.
+    """
+    spec = a_subagent(DELEGATE + "tools:\n  - a.py::fetch\n  - b.py::grep\n", "surveyor.yaml")
+
+    assert spec.tools == ("a.py::fetch", "b.py::grep")
+
+
+def test_two_sources_may_still_both_ship_one_skill_name():
+    """The other control, and the reason the comparison is per-field. A skill's identity
+    *is* `source::name`, so two parties who never met may both ship a `lookup` -- and the
+    bare-against-qualified case is resolved against the catalogue, where whether the bare
+    name is ambiguous can actually be seen.
+    """
+    spec = a_subagent(
+        DELEGATE + "skills:\n  - research::lookup\n  - legal::lookup\n", "surveyor.yaml"
+    )
+
+    assert spec.skills == ("research::lookup", "legal::lookup")
+
+
 def test_the_main_agent_never_holds_another_delegates_private_tool(cfg, session_dir):
     """The point of the whole feature."""
     workspace_with_bundle(cfg)
