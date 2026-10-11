@@ -373,7 +373,12 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
-    service = Kingfisher(cfg, backends=default_backends)
+    # Skills switched on, because this rule is about the skills axis among the four and
+    # `Config.skills_enabled` defaults to off. With it off the agent is told about no
+    # skills at all, so a report naming one "not granted" says the others were -- which
+    # is the answer the switch exists to suppress, and what this asserted.
+    wired = replace(cfg, skills_enabled=True)
+    service = Kingfisher(wired, backends=default_backends)
     start(cfg, "s")
     asked = Request(
         "go",
@@ -402,7 +407,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     # skill shipped.
     from kingfisher.infrastructure.harness.activation import available_skills
 
-    seeded_skills = set(available_skills(cfg))
+    seeded_skills = set(available_skills(wired))
     seeded_subagents = set(LocalSubagentRepository(subagents_dir(cfg)).specs)
     # Not vacuous: the granted name has to be one the catalogue offers, or
     # "everything except it" would be the whole catalogue by accident.
@@ -415,6 +420,56 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     assert "http_fetch" in by_kind["tool"]  # a workspace tool, reported apart
     assert by_kind["skill"] == tuple(sorted(seeded_skills - {"code-review"}))
     assert by_kind["subagent"] == tuple(sorted(seeded_subagents - {"reviewer"}))
+
+
+def test_nothing_is_withheld_from_the_skills_axis_when_the_switch_is_off(cfg, shipped):
+    """With `KINGFISHER_SKILLS_ENABLED` off the agent is told about no skills at all, so
+    a report naming one "not granted" says the others were.
+
+    Measured before this: the same line, `1 skill(s) not granted: ...`, with the switch
+    on and off alike -- while `doctor` on that config says "KINGFISHER_SKILLS_ENABLED is
+    off so none will be offered". Two surfaces contradicting each other about one
+    deployment. The third reader of this switch to ask only the request; the subagent
+    branch and `doctor` were the first two, and the entry recording those says why.
+    """
+    from kingfisher.infrastructure.workspace import seeding
+
+    seeding.seed(cfg, shipped)
+    an_agent(cfg)
+    off = replace(cfg, skills_enabled=False)
+    asked = Request(
+        "go",
+        agent="only",
+        capabilities=Capabilities(skills=("code-review",)),
+    )
+
+    prepared = drive(Kingfisher(off, backends=default_backends)._prepare_steps(asked))
+    withheld = dict(prepared.withheld)
+
+    assert "skill" not in withheld, "a skill cannot be withheld where none is offered"
+
+
+def test_the_skills_axis_is_still_reported_when_the_switch_is_on(cfg, shipped):
+    """The control: suppressing the row where nothing is offered must not suppress it
+    where something is.
+    """
+    from kingfisher.infrastructure.harness.activation import available_skills
+    from kingfisher.infrastructure.workspace import seeding
+
+    seeding.seed(cfg, shipped)
+    an_agent(cfg)
+    on = replace(cfg, skills_enabled=True)
+    asked = Request(
+        "go",
+        agent="only",
+        capabilities=Capabilities(skills=("code-review",)),
+    )
+
+    prepared = drive(Kingfisher(on, backends=default_backends)._prepare_steps(asked))
+    withheld = dict(prepared.withheld)
+
+    assert withheld["skill"] == tuple(sorted(set(available_skills(on)) - {"code-review"}))
+    assert withheld["skill"], "and the catalogue really does offer more than the one granted"
 
 
 def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
