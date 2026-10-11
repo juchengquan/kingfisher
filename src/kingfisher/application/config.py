@@ -190,6 +190,7 @@ class Environment:
                 models_file,
                 self.values,
                 model_catalogue.adapters(self.optional_text("KINGFISHER_ADAPTERS_FACTORY")),
+                keys_file=self.optional_path("KINGFISHER_MODEL_KEYS_FILE"),
             ),
             access=access_policy.load(access_file),
             # The path as well as what was found there. `load` answers `None`

@@ -209,6 +209,11 @@ def refused_credentials(exc: BaseException, cfg: Config) -> ConfigError | None:
         if url.startswith(endpoint.base_url)
     ]
     where = f"endpoint {named[0][0]!r}" if named else "the model endpoint"
+    if named and (entry := named[0][1].key_entry):
+        return ConfigError(
+            f"{where} rejected the key from entry {entry!r} in {cfg.models.keys_file} "
+            f"(401); that entry is the one to check"
+        )
     supplied = f" from {named[0][1].key_env}" if named and named[0][1].key_env else ""
     return ConfigError(
         f"{where} rejected the key{supplied} (401). A value exported in the shell "

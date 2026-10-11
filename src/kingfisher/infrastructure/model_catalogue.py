@@ -33,7 +33,12 @@ KNOWN_TOP: frozenset[str] = frozenset({"endpoints", "models", "default"})
 #: secret, and because two gateways speaking one wire format cannot both be
 #: described by a single conventional variable name -- which is the whole reason
 #: this table exists apart from the adapter table.
-KNOWN_ENDPOINT: frozenset[str] = frozenset({"api", "base_url", "key_env"})
+KNOWN_ENDPOINT: frozenset[str] = frozenset({"api", "base_url", "key", "key_env"})
+
+#: What names the file an endpoint's `key:` is an entry in. No default: everything but
+#: the workspace defaults inside it or is off, and a keys file inside the workspace is
+#: one the macOS fence lets the agent's shell read.
+KEYS_SETTING = "KINGFISHER_MODEL_KEYS_FILE"
 
 #: What a model entry may say, beside `extra`. Every one is optional except
 #: `endpoint`; see `ModelProfile` for why omitted means "not passed at all"
@@ -111,11 +116,50 @@ def _mapping(value: Any, where: str) -> Mapping[str, Any]:
     return value
 
 
-def _endpoints(
+def _keys(path: Path | None) -> Mapping[str, str] | None:
+    """The keys file's entries, or `None` where no keys file is named.
+
+    Refused rather than read around when it is named and wrong. A path somebody wrote
+    is a mistake to say at once, where an endpoint missing its key is one machine's
+    ordinary state -- the line `KINGFISHER_MODELS_FILE` already draws.
+    """
+    if path is None:
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        msg = f"{KEYS_SETTING} names {path}, which does not exist"
+        raise ConfigError(msg) from exc
+    except OSError as exc:
+        msg = f"{KEYS_SETTING} names {path}, which cannot be read: {exc}"
+        raise ConfigError(msg) from exc
+    try:
+        parsed = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        msg = f"{path}: not valid YAML: {exc}"
+        raise ConfigError(msg) from exc
+    if parsed is None:
+        return {}
+    if not isinstance(parsed, Mapping):
+        msg = f"{path}: not a mapping of entry names to keys"
+        raise ConfigError(msg)
+    # A key YAML reads as a number would be sent as one, or quietly stringified into
+    # something that was never the key.
+    if wrong := sorted(str(name) for name, key in parsed.items() if not isinstance(key, str)):
+        named = ", ".join(repr(name) for name in wrong)
+        msg = f"{path}: entry {named} is not text; quote a key YAML would read as a number"
+        raise ConfigError(msg)
+    return {str(name): key for name, key in parsed.items()}
+
+
+def _endpoints(  # noqa: PLR0913 -- one argument per source a key can come from
     document: Mapping[str, Any],
     environ: Mapping[str, str],
     source: Path,
     buildable: Mapping[str, Adapter],
+    *,
+    keys: Mapping[str, str] | None,
+    keys_file: Path | None,
 ) -> tuple[dict[str, Endpoint], dict[str, str]]:
     """Every endpoint whose key is actually present, and the names dropped."""
     resolved: dict[str, Endpoint] = {}
@@ -123,10 +167,24 @@ def _endpoints(
     for name, raw in _mapping(document.get("endpoints"), f"{source}: endpoints").items():
         entry = _mapping(raw, f"{source}: endpoint {name!r}")
         _refuse_unknown(entry, KNOWN_ENDPOINT, f"{source}: endpoint {name!r}")
-        for required in ("api", "base_url", "key_env"):
+        for required in ("api", "base_url"):
             if not str(entry.get(required) or "").strip():
                 msg = f"{source}: endpoint {name!r} is missing required key {required!r}"
                 raise ConfigError(msg)
+        named_entry = str(entry.get("key") or "").strip()
+        named_variable = str(entry.get("key_env") or "").strip()
+        if named_entry and named_variable:
+            msg = (
+                f"{source}: endpoint {name!r} names both 'key' and 'key_env'; its key "
+                f"comes from one or the other"
+            )
+            raise ConfigError(msg)
+        if not (named_entry or named_variable):
+            msg = (
+                f"{source}: endpoint {name!r} names neither 'key' nor 'key_env', so "
+                f"nothing says where its key is"
+            )
+            raise ConfigError(msg)
         api = str(entry["api"]).strip()
         if api not in buildable:
             # Refused here rather than in `build_model`, which is where it used to
@@ -140,7 +198,14 @@ def _endpoints(
                 f"cannot build; known: {tuple(sorted(buildable))}"
             )
             raise ConfigError(msg)
-        key = (environ.get(str(entry["key_env"])) or "").strip()
+        if named_variable:
+            key = (environ.get(named_variable) or "").strip()
+            missing = named_variable
+        elif keys is None:
+            key, missing = "", KEYS_SETTING
+        else:
+            key = (keys.get(named_entry) or "").strip()
+            missing = f"entry {named_entry!r} in {keys_file}"
         if not key:
             # Named, not hinted at. "endpoint 'minimax' has no credentials"
             # sends someone to the YAML, where everything looks correct.
@@ -148,13 +213,14 @@ def _endpoints(
             # Keyed by endpoint rather than pre-formatted, because two callers
             # need it now and they word it differently: the warning below lists
             # them, and `resolve` names one inside a sentence about a model.
-            dropped[name] = str(entry["key_env"])
+            dropped[name] = missing
             continue
         resolved[name] = Endpoint(
             api=api,
             base_url=str(entry["base_url"]),
             api_key=key,
-            key_env=str(entry["key_env"]),
+            key_env=named_variable,
+            key_entry=named_entry,
             adapter=buildable[api],
         )
     return resolved, dropped
@@ -219,9 +285,18 @@ def _models(
 
 
 def load(
-    path: Path, environ: Mapping[str, str], buildable: Mapping[str, Adapter] = ADAPTERS
+    path: Path,
+    environ: Mapping[str, str],
+    buildable: Mapping[str, Adapter] = ADAPTERS,
+    *,
+    keys_file: Path | None = None,
 ) -> Models:
-    """Read `path` into what this deployment can run, where, and under which names."""
+    """Read `path` into what this deployment can run, where, and under which names.
+
+    `keys_file` is what `KEYS_SETTING` named, read before the catalogue so a keys file
+    named wrong refuses even where no endpoint has yet asked it for anything.
+    """
+    keys = _keys(keys_file)
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -258,7 +333,9 @@ def load(
     document = _mapping(parsed, str(path))
     _refuse_unknown(document, KNOWN_TOP, str(path))
 
-    endpoints, dropped = _endpoints(document, environ, path, buildable)
+    endpoints, dropped = _endpoints(
+        document, environ, path, buildable, keys=keys, keys_file=keys_file
+    )
     if dropped:
         # Warned even when nothing names them. A shared catalogue listing an
         # endpoint this machine cannot reach is the normal case, but silence
@@ -296,4 +373,5 @@ def load(
         unreachable=unreachable,
         dropped=dropped,
         source=path,
+        keys_file=keys_file,
     )

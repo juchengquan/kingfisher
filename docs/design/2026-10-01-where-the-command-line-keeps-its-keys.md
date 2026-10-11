@@ -3,8 +3,9 @@
 **Status:** proposed. **Slice 1 landed on 2026-10-01:** the measurements are in
 `guides/configuration.md`, under *What each fence hides*, which is the copy to keep
 current; the table below is the one this argument was made from. **The open
-questions were settled on 2026-10-11**, under *Settled*; the loader, the examples and
-the `doctor` check are not built.
+questions were settled on 2026-10-11**, under *Settled*. **Slices 2 and 3 landed
+together the same day:** a keys file `KINGFISHER_MODEL_KEYS_FILE` names, and the
+examples that suggest one. The `doctor` check is not built.
 **Date:** 2026-10-01.
 **Occasion:** removing the session key raised what else the agent's shell can read,
 and the model API keys came first. Two agents measured it on macOS and read the

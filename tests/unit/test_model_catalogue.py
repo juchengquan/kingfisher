@@ -7,6 +7,8 @@ vanishes, a param that looks set and is not.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from kingfisher import default_backends
@@ -104,7 +106,8 @@ def test_a_key_this_format_does_not_define_is_refused(tmp_path):
     for body, expected in [
             (GOOD.replace("default:", "defualt:"), "defualt"),
             (GOOD.replace("    max_tokens: 2048", "    max_token: 2048"), "max_token"),
-            (GOOD.replace("    key_env: GATEWAY_API_KEY", "    key: GATEWAY_API_KEY"), "key"),
+            # The key written inline, which is the spelling a keys file exists to avoid.
+            (GOOD.replace("    key_env: GATEWAY_API_KEY", "    api_key: sk-inline"), "'api_key'"),
         ]:
         with pytest.raises(ConfigError, match=expected):
             loaded(tmp_path, body)
@@ -374,3 +377,115 @@ def test_an_endpoint_remembers_which_variable_its_key_came_from(tmp_path):
     assert models.endpoints["gateway"].key_env == "GATEWAY_API_KEY"
     # And the key itself is still the value, not the name of the variable.
     assert models.endpoints["gateway"].api_key == "sk-gateway"
+
+
+# -- a keys file -----------------------------------------------------------
+
+#: Two endpoints, one keyed from the keys file and one from a variable, with the
+#: default on the second -- so dropping the first leaves a deployment that still loads.
+TWO_WAYS = """
+endpoints:
+  gateway:
+    api: anthropic
+    base_url: https://example.invalid/anthropic
+    key: gateway
+  other:
+    api: openai_responses
+    base_url: https://example.invalid/v1
+    key_env: OTHER_API_KEY
+
+default: other-model
+
+models:
+  main-model:
+    endpoint: gateway
+  other-model:
+    endpoint: other
+"""
+
+OTHER = {"OTHER_API_KEY": "sk-other"}
+
+
+def keys_at(tmp_path, body: str = "gateway: sk-from-file\n"):
+    path = tmp_path / "keys.yaml"
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
+def test_an_endpoint_takes_its_key_from_the_keys_file(tmp_path):
+    """A key in neither `models.yaml` nor the environment, which is the file's point."""
+    models = load(written(tmp_path, TWO_WAYS), OTHER, keys_file=keys_at(tmp_path))
+
+    gateway = models.endpoints["gateway"]
+    assert (gateway.api_key, gateway.key_entry, gateway.key_env) == ("sk-from-file", "gateway", "")
+    assert models.endpoints["other"].key_env == "OTHER_API_KEY", "a variable still works beside it"
+    assert models.keys_file == tmp_path / "keys.yaml"
+
+
+@pytest.mark.parametrize(
+    ("change", "says"),
+    [
+        (("    key: gateway\n", "    key: gateway\n    key_env: GATEWAY_API_KEY\n"), "both"),
+        (("    key: gateway\n", ""), "neither"),
+    ],
+    ids=["both", "neither"],
+)
+def test_an_endpoint_says_exactly_one_place_its_key_comes_from(tmp_path, change, says):
+    """Both would leave which one won to the loader's order; neither leaves nothing to find."""
+    with pytest.raises(ConfigError, match=f"endpoint 'gateway' names {says}"):
+        load(written(tmp_path, TWO_WAYS.replace(*change)), OTHER, keys_file=keys_at(tmp_path))
+
+
+def test_no_keys_file_named_drops_the_endpoint_and_says_which_setting(tmp_path):
+    """A machine that never set the keys file up still runs what does not need it, as one
+    missing a variable does -- and is told the setting, not just that a key is absent.
+    """
+    with pytest.warns(MissingCredentialsWarning, match="KINGFISHER_MODEL_KEYS_FILE is not set"):
+        models = load(written(tmp_path, TWO_WAYS), OTHER)
+
+    assert set(models.endpoints) == {"other"}
+    assert models.dropped == {"gateway": "KINGFISHER_MODEL_KEYS_FILE"}
+    assert "KINGFISHER_MODEL_KEYS_FILE is not set" in models.unreachable["main-model"]
+
+
+def test_an_entry_the_keys_file_lacks_drops_the_endpoint_naming_both(tmp_path):
+    named = keys_at(tmp_path, "unrelated: sk-x\n")
+
+    with pytest.warns(MissingCredentialsWarning, match="entry 'gateway' in"):
+        models = load(written(tmp_path, TWO_WAYS), OTHER, keys_file=named)
+
+    assert set(models.endpoints) == {"other"}
+    assert models.dropped == {"gateway": f"entry 'gateway' in {named}"}
+
+
+@pytest.mark.parametrize(
+    ("body", "says"),
+    [
+        (None, "does not exist"),
+        ("gateway: [unclosed\n", "not valid YAML"),
+        ("- gateway\n- sk-from-file\n", "not a mapping"),
+        ("gateway: 42\n", "entry 'gateway' is not text"),
+    ],
+    ids=["missing", "not-yaml", "not-a-mapping", "not-text"],
+)
+def test_a_keys_file_that_is_named_and_wrong_refuses_to_start(tmp_path, body, says):
+    """A path somebody wrote is a mistake to say at once, where an endpoint without its
+    key is one machine's ordinary state -- the line `KINGFISHER_MODELS_FILE` already draws.
+    """
+    named = tmp_path / "keys.yaml" if body is None else keys_at(tmp_path, body)
+
+    with pytest.raises(ConfigError, match=says) as refused:
+        load(written(tmp_path, TWO_WAYS), OTHER, keys_file=named)
+    assert str(named) in str(refused.value)
+
+
+def test_a_keys_file_it_cannot_read_refuses_to_start(tmp_path):
+    named = keys_at(tmp_path)
+    named.chmod(0)
+    try:
+        if os.access(named, os.R_OK):
+            pytest.skip("this user reads a file whatever its mode")
+        with pytest.raises(ConfigError, match="cannot be read"):
+            load(written(tmp_path, TWO_WAYS), OTHER, keys_file=named)
+    finally:
+        named.chmod(0o600)

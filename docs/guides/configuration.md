@@ -22,6 +22,7 @@ mentions.
 | `KINGFISHER_WORKSPACE` | The workspace. Everything below defaults inside it. | **required** |
 | `KINGFISHER_ASSETS` | Where `kingfisher seed` copies definitions from. Without it seeding lays the workspace out, writes `models.yaml.example`, and then refuses — in that order, so a deployment with nothing to seed still gets somewhere to start. | none |
 | `KINGFISHER_MODELS_FILE` | The model catalogue: which models exist, where each runs, which key it uses. | `<workspace>/models.yaml` |
+| `KINGFISHER_MODEL_KEYS_FILE` | The file an endpoint's `key:` names an entry in, one `name: key` line each. Read only once this names it; named and missing, unreadable or not such a list, it refuses startup. Keep it out of the workspace, and on macOS under the home folder — see *What each fence hides*. | none |
 | `KINGFISHER_ADAPTERS_FACTORY` | `module:name` naming something callable with no arguments that returns wire formats of your own, for an endpoint's `api` to name. See [below](#a-wire-format-kingfisher-does-not-ship). | none — `anthropic` and `openai_responses` only |
 | `KINGFISHER_SOURCE_IDS_FILE` | The source-id vocabulary. No file means access control is off entirely. | `<workspace>/source_ids.yaml` |
 | `KINGFISHER_AGENTS_DIR` | Relocate the agents catalogue. | inside the workspace |
@@ -163,8 +164,9 @@ command lines are readable. The kernel is expected to refuse another process's
 `environ`, but no test here holds it to that.
 
 **Kingfisher does not keep the model keys from the shell; where they sit decides it.**
-On macOS, keep `.env` in a directory under the home folder, start kingfisher from
-there, and do not export keys before it starts. A key set in code with
+On macOS, keep the keys file `KINGFISHER_MODEL_KEYS_FILE` names under the home folder
+and out of the workspace, keep `.env` under it too and start kingfisher from there,
+and do not export keys before it starts. A key set in code with
 `Endpoint(api_key=...)` reaches no file and no starting environment. A remote backend
 runs its shell on another machine, and this one's keys are not there to read.
 
