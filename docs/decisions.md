@@ -103,6 +103,25 @@ something to put in one. A bare name two folders offer is refused, naming both.
 source, and deny rules are built from the path rather than the name.
 *(2026-08-17, `skills-from-several-parties.md`.)*
 
+
+**`unloadable` compares a skill by its own path, and compared it by its name.** The
+came-back check read `f"/{found.name}/" in path` against every path kept under one root
+-- and the sources *under* a root share that list, so a `lookup` that loaded from
+`research/` vouched for a broken `legal/lookup`. Two sources shipping one name is the
+case sources exist for, and it was the case that hid a failure completely: no
+`unloadable` line, `doctor` green, and a grant of `legal::lookup` refused with "no skill
+'lookup' in 'legal'" with nothing anywhere saying why. Measured on 2026-10-11, with the
+distinct-name layout as the control -- there the same broken skill is reported.
+
+The two sides of the comparison are spelled differently on purpose: `Listed.path`
+already carries the mount's label and `relative_to` does not, so prefixing both names a
+mounted skill twice over. That mistake makes *nothing* match what loaded, so every
+skill in the mount reads as unloadable -- and
+`test_a_broken_skill_in_a_mount_is_reported_under_its_label` passed against it, because
+it asserted `"vendor/broken" in` the tuple rather than the tuple. It asserts the whole
+tuple now, which is the same correction the bubblewrap binds took on 2026-10-05 and for
+the same reason: a membership test cannot see what else arrived.
+*(2026-10-11, from an architecture review.)*
 **The skill registry is populated by deepagents' own lister**, which is a private
 function with a test pinning it. Two readers of the catalogue used to disagree, so
 a caller could activate a skill the agent was never told about. A directory the
