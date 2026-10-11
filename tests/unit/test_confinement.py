@@ -1069,3 +1069,37 @@ def test_concurrent_writers_do_not_share_one_scratch_file(tmp_path):
     assert sorted(p.name for p in beside.iterdir()) == ["shell.sb"], (
         "a temporary profile was left beside the real one"
     )
+
+
+# -- what the shell reads, by each fence's shape -----------------------------
+
+
+def test_what_the_shell_reads_follows_each_fences_shape(tmp_path):
+    """macOS allows everything, denies the home and gives some of it back; the Linux
+    fences grant a list and nothing else. A rule asking only "is it in the workspace"
+    would call `/tmp` safe on a Mac, where it is not.
+    """
+    from kingfisher.infrastructure.sandbox.confinement import (
+        BUBBLEWRAP,
+        LANDLOCK,
+        SANDBOX_EXEC,
+        shell_reads,
+    )
+
+    home, system = tmp_path / "home", tmp_path / "usr"
+    workspace = home / "ws"
+    hidden = home / ".config" / "keys.yaml"
+    inside = workspace / "keys.yaml"
+    outside = tmp_path / "opt" / "keys.yaml"
+
+    def reads(path, mechanism, readable):
+        return shell_reads(path, mechanism=mechanism, home=home, readable=readable)
+
+    assert reads(hidden, SANDBOX_EXEC, (workspace,)) is None
+    assert str(workspace) in (reads(inside, SANDBOX_EXEC, (workspace,)) or "")
+    assert "outside the home folder" in (reads(outside, SANDBOX_EXEC, (workspace,)) or "")
+    for fence in (BUBBLEWRAP, LANDLOCK):
+        assert reads(outside, fence, (system,)) is None, f"{fence} granted what it never listed"
+        assert reads(inside, fence, (system,)) is None
+        assert str(system) in (reads(system / "keys.yaml", fence, (system,)) or "")
+    assert "nothing" in (reads(hidden, "", ()) or ""), "with no fence, everything is read"

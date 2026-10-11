@@ -86,6 +86,23 @@ def test_the_layout_carries_the_catalogue_example(tmp_path):
     assert "models" in (ws / EXAMPLE).read_text(encoding="utf-8")
 
 
+def test_the_layout_carries_a_keys_example_holding_no_keys(tmp_path):
+    """Placed beside the catalogue's, so it is found where people look. It holds no live
+    entry, so renaming it in place puts nothing readable in the workspace until a key is
+    typed into it -- and its first lines say to copy it out first.
+    """
+    import yaml
+
+    from kingfisher.infrastructure.workspace.layout import KEYS_EXAMPLE
+
+    ws = ensure_layout(tmp_path / "ws")
+    text = (ws / KEYS_EXAMPLE).read_text(encoding="utf-8")
+
+    assert yaml.safe_load(text) is None, "the example carries a live entry"
+    assert "KINGFISHER_MODEL_KEYS_FILE" in text
+    assert "out of this workspace" in text
+
+
 def test_the_catalogue_example_is_refreshed_but_not_rewritten(tmp_path):
     """Neither of the two obvious rules."""
     ws = ensure_layout(tmp_path / "ws")

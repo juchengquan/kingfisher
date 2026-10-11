@@ -34,9 +34,14 @@ TEMPLATES = "kingfisher.templates"
 EXAMPLE = "models.yaml.example"
 
 
-#: The same furniture for the other file a deployment may be told to write. The one
-#: example this package places, and the reason it is the only one.
-EXAMPLES = (EXAMPLE,)
+#: What the keys file `KINGFISHER_MODEL_KEYS_FILE` names looks like. Placed in the
+#: workspace, where people look, holding no live entry and saying to copy it out first:
+#: the workspace is what the macOS fence lets the shell read, and `doctor` warns when
+#: the keys file is left there.
+KEYS_EXAMPLE = "keys.yaml.example"
+
+#: The examples this package places.
+EXAMPLES = (EXAMPLE, KEYS_EXAMPLE)
 
 
 def is_new_workspace(workspace: Path) -> bool:
