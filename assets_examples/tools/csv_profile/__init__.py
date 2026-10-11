@@ -1,6 +1,6 @@
 """A tool that outgrew one file, which is the reason to write a folder.
 
-The other two presets are single files, because that is all they needed.
+The other presets are single files, because that is all they needed.
 Profiling a CSV needs a shared notion of what a column *is* -- how a type is
 guessed, what counts as missing -- and that notion is used by both tools here
 and by neither of them alone. Written flat, it would have been a `_helpers.py`

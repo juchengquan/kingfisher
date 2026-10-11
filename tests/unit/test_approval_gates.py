@@ -45,7 +45,7 @@ def _gated(*, calls: list[dict[str, Any]], after: str = "done", saver: Any = Non
 def _gated_on_disk(cfg, session_dir, *, calls: list[dict[str, Any]], after: str = "done") -> Any:
     """The same, on kingfisher's own backend so an approved write lands in the session.
 
-    Worth the extra wiring in the three tests that use it. Without a real backend the
+    Worth the extra wiring in the tests that use it. Without a real backend the
     file tools write into deepagents' in-state filesystem, where an approved call and
     a rejected one leave the session directory looking identical -- so the assertion
     that tells them apart would be asserting on nothing.

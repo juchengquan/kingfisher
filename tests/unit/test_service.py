@@ -339,7 +339,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
     seeding.seed(cfg, shipped)
-    # An agent of this test's own. `assistant` declares three delegates, and
+    # An agent of this test's own. `assistant` declares delegates of its own, and
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
@@ -369,7 +369,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
     seeding.seed(cfg, shipped)
-    # An agent of this test's own. `assistant` declares three delegates, and
+    # An agent of this test's own. `assistant` declares delegates of its own, and
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
@@ -424,7 +424,7 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
     seeding.seed(cfg, shipped)
-    # An agent of this test's own. `assistant` declares three delegates, and
+    # An agent of this test's own. `assistant` declares delegates of its own, and
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)

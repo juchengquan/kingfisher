@@ -172,7 +172,7 @@ def test_the_query_answers_nothing_when_nothing_moved():
 
 
 def test_a_moved_tool_fails_at_construction_not_on_the_first_turn(cfg, shipped):
-    """`warm()` reads all three so a broken definition fails at startup."""
+    """`warm()` reads every kind so a broken definition fails at startup."""
     seeding.seed(cfg, shipped)
     (tools_dir(cfg) / "csv_profile").rename(tools_dir(cfg) / "analysis")
 

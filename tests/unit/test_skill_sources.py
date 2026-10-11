@@ -151,6 +151,37 @@ def test_a_broken_skill_inside_a_folder_is_still_reported(cfg):
     assert registry.unloadable == ("research/broken",)
 
 
+def test_a_broken_skill_is_reported_though_another_source_shares_its_name(cfg):
+    """The case this whole file is about, and the one that hid a failure completely.
+
+    `unloadable` asked whether any path kept *in this root* contained `/<name>/`, and
+    every source under one root shares that list -- so `research/lookup` loading said
+    that a broken `legal/lookup` had come back. Measured before this existed: no
+    `unloadable` line, `doctor` green, and a grant of `legal::lookup` refused with "no
+    skill 'lookup' in 'legal'" and nothing anywhere saying why.
+    """
+    _skill(cfg.skills_dir, "research/lookup", "lookup", "The research way.")
+    (cfg.skills_dir / "legal" / "lookup").mkdir(parents=True)
+    (cfg.skills_dir / "legal" / "lookup" / "SKILL.md").write_text(
+        "---\nname: lookup\n---\nNo description.\n", encoding="utf-8"
+    )
+
+    registry = _read(cfg)
+
+    assert registry.unloadable == ("legal/lookup",)
+    assert registry.names == ("lookup",), "and the one that did load is still offered"
+
+
+def test_two_sources_that_both_load_are_reported_as_missing_nothing(cfg):
+    """The control the rule above needs: comparing by path rather than by name must not
+    start naming a skill that is plainly there.
+    """
+    registry = _two_parties(cfg)
+
+    assert registry.unloadable == ()
+    assert registry.names == ("legal::lookup", "research::lookup")
+
+
 # -- the two loaders, which do not delegate --------------------------------
 
 

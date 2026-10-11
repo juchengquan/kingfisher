@@ -1,13 +1,14 @@
 # Writing definitions
 
-The four formats a workspace can hold — an agent, a skill, a subagent, a tool —
+The formats a workspace can hold — an agent, a skill, a subagent, a tool —
 with every field, what it means, and worked examples you can paste. This page is
 the reference for the formats themselves, and it starts with the agent because
 that is what a request names; everything else here is something an agent selects
 from.
 
-A tool is the one of the four that is code rather than a document, so writing
-one has a page of its own: [`tools.md`](tools.md). This page says what a
+A tool is code rather than a document, so writing one has a page of its own:
+[`tools.md`](tools.md), as middleware, the other kind written in Python, has
+[`middleware.md`](middleware.md). This page says what a
 definition may say *about* a tool — which it grants, and which file's when two
 files offer one name.
 
@@ -16,8 +17,8 @@ definitions, and it does all three against files it did not write. It ships no
 skills of its own for the same reason its base prompt carries no domain
 instructions: a general agent should read the same whatever the project is.
 
-Seed from a directory holding `agents/`, `tools/`, `skills/` and `subagents/` —
-any of them, none required:
+Seed from a directory holding `agents/`, `middlewares/`, `tools/`, `skills/` and
+`subagents/` — any of them, none required:
 
     kingfisher seed --from ./my-definitions   # or $KINGFISHER_ASSETS
     kingfisher list                           # what the workspace offers now
@@ -775,8 +776,8 @@ this format has to refuse below.
 | `middlewares` | middleware wraps a graph deepagents builds; this one is already built |
 | `subagents` | delegation arrives through middleware, which a compiled graph is not given |
 
-`name`, `description`, `build`, `tools`, `model` and `metadata` are what
-remain.
+`name`, `description`, `build`, `tools`, `model`, `metadata` and `source_ids` are
+what remain.
 
 **A compiled delegate can own a bundle, and gets half of one.** Put
 `surveyor.py` in `subagents/surveyor/`, list its tools in `"tools"` with

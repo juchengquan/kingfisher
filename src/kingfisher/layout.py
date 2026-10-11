@@ -68,8 +68,8 @@ SESSION_DIRS: tuple[str, ...] = (INPUTS, OUTPUTS, MEMORY, SCRATCH)
 SKILLS = "skills"
 
 #: What the harness keeps about a session, inside the session and out of the
-#: agent's reach: the agent it opened with, its conversation and the lock a turn
-#: holds. Every one of these used to live under `state_dir`,
+#: agent's reach, named below. The agent it opened with, its conversation and the
+#: lock a turn holds used to live under `state_dir`,
 #: where nothing deleted it when the session went and nothing counted it against
 #: the session that caused it -- one file per session that ever existed, kept
 #: forever. Inside, `reap` and `session_bytes` cover them the way they already

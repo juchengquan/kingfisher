@@ -223,7 +223,7 @@ already sets.
 The setting is read wherever the catalogue is, so `kingfisher doctor` and
 `kingfisher run` see your rows as well as your own program does.
 
-## Two things that catch people
+## A thing that catches people
 
 **`KINGFISHER_SKILLS` means one thing now, and it is not a flag.** The agent's
 shell gets it holding the *path* to the skills catalogue, which is how a skill's
@@ -231,9 +231,6 @@ scripts reach their neighbours; nothing reads it as a yes/no any more. That is
 what closed the trap `_ENABLED` was introduced for — a deployment writing the
 path was setting a flag to a value no parser recognises, and skills went **off**
 with no error. The two can no longer arrive at one reader.
-
-**A deployment configured by reading `.env.example` will miss the service
-settings**, including the port. The file covers the library and stops there.
 
 ## Checking it
 

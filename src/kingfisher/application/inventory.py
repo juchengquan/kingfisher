@@ -68,15 +68,15 @@ class Catalogued:
 class Inventory:
     """What this workspace offers right now, per kind, with where each came from."""
 
-    #: Where every part of this deployment was read from, including the four catalogue
-    #: directories. One record rather than the three loose strings that were here --
+    #: Where every part of this deployment was read from, including every catalogue
+    #: directory. One record rather than the three loose strings that were here --
     #: `skills_source`, `subagents_source`, `agents_source` -- which named three of the
     #: four kinds and left `tools` out, because a fourth field is a thing somebody has
     #: to remember to add and nobody did.
     origins: Origins
 
     #: Agent name -> its description. First in the record because it is first in
-    #: the listing: an agent is what a request names, and the three kinds below
+    #: the listing: an agent is what a request names, and the kinds below
     #: are what it selects from.
     agents: Mapping[str, str] = _NOTHING
     #: Agent name -> the file it came from.

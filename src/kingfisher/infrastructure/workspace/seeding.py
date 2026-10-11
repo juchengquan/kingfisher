@@ -312,7 +312,7 @@ def _overwritten(source: Path, target: Path, label: str) -> list[str]:
 
 
 def kinds_at(source: Path) -> tuple[str, ...]:
-    """Which of the four kinds a directory actually provides."""
+    """Which kinds a directory actually provides."""
     return tuple(kind for kind in DEFINITION_KINDS if (source / kind).is_dir())
 
 
@@ -330,7 +330,7 @@ def definitions_source(paths: Source, override: str | Path | None = None) -> Pat
 
     msg = (
         "no definitions to seed from: set KINGFISHER_ASSETS to a directory "
-        "holding agents/, skills/, subagents/ or tools/, or pass --from DIR"
+        "holding agents/, middlewares/, skills/, subagents/ or tools/, or pass --from DIR"
     )
     if SUGGESTION.is_dir():
         msg += f" -- ./{SUGGESTION} is one"

@@ -1000,10 +1000,10 @@ def test_the_domain_may_name_a_spec_but_not_a_catalogue():
 #: Measured, not declared -- every entry is a package some module imports today.
 THIRD_PARTY: dict[str, frozenset[str]] = {
     # The agent runtime. This *was* the swap boundary in one directory, and is
-    # now the larger half of it: `skills/` reaches the runtime too, and the
-    # entry below says so. What the boundary buys is unchanged in kind and
+    # now the larger half of it: `kinds/skills` and `kinds/middlewares` reach the
+    # runtime too, and their entries below say so. What the boundary buys is unchanged in kind and
     # weaker in degree -- an upgrade is still a list of files rather than a
-    # search, and the list now spans two directories instead of one.
+    # search, and the list now spans more than one directory.
     "infrastructure/harness": frozenset({
         "deepagents",
         "langchain",
@@ -2369,12 +2369,6 @@ LIGHT_EXPORTS = frozenset({
     "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError",
     "SessionBusyError", "SubagentError", "UnknownSessionError",
     "UnsafeReferenceError",
-    # The `SessionStore` contract, for a deployment checking its own adapter.
-    # Light, and it has to stay light: a deployment runs this from its own test
-    # suite, and a kit that pulled three provider SDKs in to check four methods
-    # over bytes would be a cost paid on every CI run for nothing. `testing`
-    # imports the standard library and no test framework either -- see its
-    # docstring for why that one is deliberate.
     # The runner's kit and the result type a runner builds. Light by the same
     # route: `testing` reaches the standard library, and `CommandResult` is a
     # frozen dataclass in `domain.ports`.
@@ -2487,7 +2481,7 @@ HEAVY_EXPORTS = frozenset({
     # Its companion kit checks what a deployment's backends build, which are backends
     # deepagents has to accept.
     "SESSION_BACKENDS_CONTRACT",
-    # The one kit that is heavy, and unavoidably: the other four describe ports a
+    # Heavy, and unavoidably: `COMMAND_RUNNER_CONTRACT` describes a port a
     # deployment satisfies without knowing deepagents exists, and this one checks
     # an object deepagents has to accept.
     "BACKEND_CONTRACT",
@@ -2528,7 +2522,7 @@ def test_every_watched_name_is_classified_light_or_heavy():
 def test_a_name_the_command_took_private_is_still_watched():
     """The half of the re-keying that a passing tree cannot show.
 
-    `set(_EXPORTS)` and `set(_watched())` agree on every name but the two the command
+    `set(_EXPORTS)` and `set(_watched())` agree on every name but the ones the command
     took at their own address, so the rule above passes under either key and reverting
     to the old one removes the coverage silently.
     """
@@ -2916,8 +2910,8 @@ def test_the_catalogue_holds_one_module_per_kind():
 
 
 #: What sits in `kinds/` and is not a kind. `importing` loads a workspace's own
-#: Python without putting it on the import path, and four kind catalogues are its
-#: only readers; `documents` reads the YAML the agent and subagent formats are
+#: Python without putting it on the import path, and the kind catalogues that load
+#: Python read it; `documents` reads the YAML the agent and subagent formats are
 #: written in; `__init__` is the folder's docstring and holds no import on purpose.
 #: A fourth name here is where the kinds start sharing an implementation, which they
 #: duplicate in order to avoid -- so it is an edit somebody argues for, not a file
@@ -3085,8 +3079,8 @@ def test_every_record_this_package_hands_out_is_frozen():
 
 # -- who caused it ---------------------------------------------------------
 #
-# A consumer that cannot name an error can only catch `ValueError`. Ten of the
-# eleven error types here are one, and so is `Request`'s empty-task check, and
+# A consumer that cannot name an error can only catch `ValueError`. All but one
+# of the error types here are one, and so is `Request`'s empty-task check, and
 # so is whatever a dependency raises -- so that net turns a bug into a refusal
 # and a refusal into a 500. Naming them is what makes the difference reportable.
 
@@ -3399,7 +3393,7 @@ def test_no_surface_decides_for_itself_what_a_finished_turn_is():
     and `kingfisher run --delete-session` -- and they share no code path, because one
     drains `stream` and the other is the drain. Two copies of `stop_reason ==
     "end_turn"` pass every behaviour test in this tree and still come apart over a
-    fourth reason added later, with nothing going red: both would still be asserting
+    reason added later, with nothing going red: both would still be asserting
     about `end_turn` and `max_steps`, which still work. So the comparison lives in
     `RunResult.completed`, and the only place a new one can be written is the place
     that already has it.
@@ -3774,8 +3768,8 @@ def test_no_constant_is_published_for_tests_alone():
     # A collector pointed at the wrong root finds nothing and reports success --
     # the failure this file has shipped twice, once in `_modules_in` and once in
     # the consumer collector. Named layers rather than a count, so this says
-    # which half of the package stopped being walked. All four define constants;
-    # `domain` and `infrastructure` hold sixty-seven of the seventy-three.
+    # which half of the package stopped being walked. All four define constants,
+    # most of them in `domain` and `infrastructure`.
     layers = {"domain", "application", "infrastructure", "presentation"}
     walked = {path.relative_to(SRC).parts[0] for path in found.values()}
 

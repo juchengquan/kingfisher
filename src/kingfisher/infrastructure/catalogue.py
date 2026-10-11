@@ -80,7 +80,7 @@ class Definitions:
         }
 
     def warm(self) -> Definitions:
-        """Read all three now, so a broken definition fails here."""
+        """Read every kind now, so a broken definition fails here."""
         _ = self.agents.specs, self.subagents.specs, self.tools.found
         # The fifth kind, which this read for none of the time it has existed.
         # `middlewares/*.py` is Python that has to import, exactly like `tools/*.py`,
@@ -144,7 +144,7 @@ class Definitions:
     def from_roots(
         cls, roots: Mapping[str, Path], *, skills_mounts: Mapping[str, Path] = NO_MOUNTS
     ) -> Definitions:
-        """Four directories on this host, as four local repositories."""
+        """This host's directories, as local repositories."""
         return cls(
             agents=LocalAgentRepository(
                 Path(roots.get("agents", Path(roots["skills"]).parent / AGENT_DIRECTORY))

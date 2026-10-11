@@ -22,7 +22,7 @@ from kingfisher.domain.capabilities import (
 
 
 def test_the_two_ends_are_all_and_none():
-    """`ALL` and `None` are opposite ends, and every field now starts at the same one."""
+    """`ALL` and `None` are opposite ends, and every grant but `models` starts at `ALL`."""
     assert Capabilities().tools == ALL
     assert Capabilities().subagents == ALL
     assert Capabilities().is_unrestricted
@@ -270,7 +270,7 @@ def test_a_grant_written_today_goes_stale_when_a_tool_arrives():
 
 # -- writing a grant by subtraction ---------------------------------------
 #
-# A whitelist cannot say "not the shell", only the other eleven names. This
+# A whitelist cannot say "not the shell", only every other name. This
 # resolves the subtraction against what is offered *now*, so what gets stored
 # and enforced is still a whitelist -- a stored subtraction would be a deny-list
 # and would let tomorrow's new tool through by default.

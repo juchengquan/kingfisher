@@ -770,8 +770,8 @@ def _shipped_provisions(definition):
 
 
 #: One `"name": Class,` line out of a wiring block. Deliberately loose about
-#: whitespace, because the two blocks align their values differently and a
-#: pattern that cared would be checking the layout rather than the pairs.
+#: whitespace: a pattern that cared would be checking the layout rather than the
+#: pairs.
 WIRING = re.compile(r'"([a-z0-9-]+)":\s+(\w+),')
 
 
@@ -800,17 +800,18 @@ def _wiring_per_example(shipped) -> dict[str, dict[str, str]]:
 
 
 def _documented_wiring(shipped) -> dict[str, str]:
-    """Every `name -> class` the two blocks register between them."""
+    """Every `name -> class` the wiring blocks register between them."""
     merged: dict[str, str] = {}
     for pairs in _wiring_per_example(shipped).values():
         merged.update(pairs)
     return merged
 
 
-def test_the_two_wiring_blocks_do_not_contradict_each_other(shipped):
-    """`tool_note.py` prints the cap's entries too, so they can disagree.
+def test_the_wiring_blocks_do_not_contradict_each_other(shipped):
+    """`tool_note.py` and `compaction.py` print earlier blocks' entries too, so they can
+    disagree.
 
-    One block is what a deployment pastes; both being right matters more than either.
+    One block is what a deployment pastes; every block being right matters more than any one.
     This is also what makes the class-name check below bite: merged naively, a rename
     in one block is papered over by the correct copy in the other, which is exactly
     how the first version of these tests passed a mutation it was written to catch.
@@ -1440,7 +1441,7 @@ def test_the_source_id_presets_narrow_for_a_narrower_caller(shipped):
 
 
 def test_an_entry_that_states_nothing_inherits(shipped):
-    """`analyst.yaml` restricts one tool and leaves two bare -- which is the rule most
+    """`analyst.yaml` restricts some tools and leaves others bare -- which is the rule most
     likely to be got wrong, so it is asserted rather than only commented.
     """
     specs = LocalAgentRepository(shipped / "agents").specs
@@ -1626,8 +1627,8 @@ def test_the_operator_stops_before_running_a_command(cfg, session_dir, shipped):
 def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir, shipped):
     """The curriculum, run rather than read.
 
-    `researcher` and `sweeper` are the shipped pair that name middleware, and
-    they exist to show two ceilings over one behaviour.
+    `researcher` and `sweeper` are the shipped pair that show two ceilings over one
+    behaviour.
     Nothing had ever built them together. With no registry wired anywhere they
     failed for want of one, and every test that touched them either replaced the
     spec or supplied a registry of its own -- so the mismatch underneath was

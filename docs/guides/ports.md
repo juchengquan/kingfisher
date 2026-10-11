@@ -82,7 +82,7 @@ session is on this host; session backends of your own run their commands however
 their `open` builds the backend.
 
 Verified with `COMMAND_RUNNER_CONTRACT` — five checks, which run commands.
-Three things to know:
+Things to know:
 
 - **`local` decides whether the fence is applied.** The command arrives already
   confined when `local` is True, which is the default and what you get by not
@@ -415,8 +415,8 @@ its inputs and run nothing over them, with a confused model as the only symptom.
 **The shell may not write under `/.harness` or `/inputs`.** `shell_denied` writes a
 file there through the backend, then has the shell try to overwrite it and to create
 another beside it. `default_backends` passes on the strength of its sandbox; with the
-sandbox off it fails on `/.harness`, which is exactly the deployment that needs a
-session key.
+sandbox off it fails on `/.harness`, which is exactly the deployment it is there
+to catch.
 
 The last is ordinary: if you refuse host paths, refuse them with `HostPathError`
 (`from kingfisher import HostPathError`),

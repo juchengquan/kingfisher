@@ -220,7 +220,7 @@ def test_nothing_is_written_before_that_refusal(cfg, tmp_path):
 
 
 def test_a_source_holding_only_one_kind_seeds_only_that(cfg, tmp_path):
-    """A directory is not required to hold all three."""
+    """A directory is not required to hold every kind."""
     mine = _definitions(tmp_path / "mine", "skills/alone/SKILL.md")
 
     written = seeding.seed(cfg, mine).written

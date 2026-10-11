@@ -261,11 +261,23 @@ def read(repository: SkillRepository) -> SkillRegistry:
         # why in a warning it logs; what matters here is only which ones, so a reader
         # can go and look at the file rather than wonder why a skill they wrote is not
         # on offer.
-        kept = {one.path for one in here}
+        # Compared by each skill's own directory, not by its name. This read
+        # `f"/{found.name}/" in path` against every path kept here -- and the sources
+        # under one root share this list, so a `lookup` that loaded from `team/` said a
+        # broken `legal/lookup` had come back. Two sources shipping one name is the case
+        # sources exist for, and it was the case that hid a failure entirely: no
+        # `unloadable` line, `doctor` green, and a grant of `legal::lookup` refused with
+        # "no skill 'lookup' in 'legal'" and nothing anywhere saying why.
+        #
+        # The two sides are spelled differently on purpose. `Listed.path` already
+        # carries the mount prefix, and `relative_to` does not, so prefixing both would
+        # name a mounted skill twice over.
+        kept = {str(PurePosixPath(one.path).parent).lstrip("/") for one in here}
         missing.extend(
-            str(PurePosixPath(prefix.lstrip("/")) / found.relative_to(directory))
+            where
             for found in reachable(directory, deepest)
-            if not any(f"/{found.name}/" in path for path in kept)
+            if (where := str(PurePosixPath(prefix.lstrip("/")) / found.relative_to(directory)))
+            not in kept
         )
     # A skill whose header names something its directory does not. deepagents files it
     # under the header and logs a warning nobody reads, so `--list` shows a name that is

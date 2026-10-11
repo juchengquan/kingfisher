@@ -38,7 +38,7 @@ DEFINITION = "name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
 
 @pytest.fixture
 def catalogue(tmp_path):
-    """One of each kind, in three directories."""
+    """A skill, a subagent and a tool, in three directories."""
     (tmp_path / "skills" / "greeting").mkdir(parents=True)
     (tmp_path / "skills" / "greeting" / "SKILL.md").write_text(
         "---\nname: greeting\ndescription: Says hello.\n---\n\nHello.\n", encoding="utf-8"
@@ -211,7 +211,7 @@ def test_an_agent_repository_pins_the_text_it_parsed_not_the_file_as_it_is_now(
 
 
 def test_a_skill_repository_walks_once_for_the_question_it_answers(catalogue, monkeypatch):
-    """Cheapest of the three -- a walk, not a parse -- and cached for the same reason:
+    """Cheapest of the repositories -- a walk, not a parse -- and cached for the same reason:
     a catalogue's repository answers every turn of a deployment's life from one read.
     """
     walks = []

@@ -141,7 +141,7 @@ def test_seeding_from_an_empty_directory_says_so(cfg, monkeypatch, capsys, tmp_p
 
 
 def test_an_unknown_verb_is_refused(capsys):
-    """argparse's own refusal, which names the two that exist."""
+    """argparse's own refusal, which names the ones that exist."""
     with pytest.raises(SystemExit) as exit_code:
         main(["teleport"])
 
