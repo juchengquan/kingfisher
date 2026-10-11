@@ -61,6 +61,22 @@ def test_the_prompt_s_path_table_spells_the_directories_the_session_has():
         assert f"| `/{name}/<name>` | `{name}/<name>` |" in text, name
 
 
+def test_the_prompt_names_the_folders_deepagents_writes_on_its_own(cfg, session_dir):
+    """A prompt naming folders the backend no longer has deepagents write sends the
+    agent's search somewhere empty, as deepagents' own `grep` description already does.
+
+    The root is read off what `backend_at` builds rather than spelled here, so moving
+    the setting or renaming the scratchpad fails this until the prompt follows.
+    """
+    from kingfisher.infrastructure.harness.backend import backend_at
+
+    root = backend_at(cfg, session_dir).artifacts_root.rstrip("/")
+    text = render_system_prompt()
+
+    for folder in ("large_tool_results", "conversation_history"):
+        assert f"`{root}/{folder}/`" in text, folder
+
+
 def test_nothing_the_agent_is_told_sends_it_to_a_run_directory():
     """The run directory went when a turn stopped being a place, and the prompt and the
     smoke task went on sending files there for days: a place the agent cannot find is

@@ -17,6 +17,29 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## deepagents' own files kept in the scratchpad, after #689
+
+The files deepagents writes on its own have moved under `/scratchpad/` (#690). A tool
+result too long for a message is now saved to `/scratchpad/large_tool_results/`, and the
+summarizer's history, with any user message too long to send, to
+`/scratchpad/conversation_history/`. Both used to sit at the session root, as
+`/large_tool_results/` and `/conversation_history/`. The system prompt names the new
+folders.
+
+- **Built on `backend_at`**, or on `DefaultBackends` returning what it opened, there is
+  nothing to do.
+- **A `CompositeBackend` of your own** still has deepagents write both folders at `/`
+  until you pass `artifacts_root="/scratchpad/"`. `BACKEND_CONTRACT` has a sixth check,
+  `offloads_in_the_scratchpad`, that says so. Nothing refuses it at runtime.
+- **A prompt, skill or middleware of yours that names `/conversation_history/` or
+  `/large_tool_results/`** should say `/scratchpad/conversation_history/` or
+  `/scratchpad/large_tool_results/`. A stub still names its own path, so following one
+  is unaffected.
+- **Older sessions** keep any of these folders at their root until they are reaped.
+  There is no migration.
+- **Under Landlock** the agent's shell can now edit or delete these files, as it can
+  anything else in `/scratchpad/`.
+
 ## The noun is `subagent`, after #686
 
 `delegate` as a noun is gone from kingfisher, in favour of deepagents' `subagent`.

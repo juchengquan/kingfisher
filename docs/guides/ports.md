@@ -238,6 +238,10 @@ class MyBackends(DefaultBackends):
 kingfisher = Kingfisher(cfg, backends=MyBackends())
 ```
 
+Where `MyScoped` is a `CompositeBackend` of your own, hand it
+`artifacts_root=mine.artifacts_root` beside the routes, or deepagents writes its
+own files at the session root — see *deepagents' own files* below.
+
 `backend_at(cfg, directory)` is the same thing for a directory of your choosing.
 A plain function is refused with a `TypeError` that says to do this: it can build a
 backend, and cannot say which sessions there are.
@@ -254,7 +258,7 @@ all five, because the type check asks for every method. The backend `open` retur
 `adownload_files` and the rest, which deepagents' `BackendProtocol` already has.
 
 Starting from nothing instead is allowed and is yours to get right — which is a
-thing to do deliberately, not to discover. Two of the five contract checks below
+thing to do deliberately, not to discover. Two of the six contract checks below
 run on every backend kingfisher resolves and will tell you about the two failures
 that otherwise report nothing.
 
@@ -362,7 +366,7 @@ For the command line, name it with `KINGFISHER_SESSION_BACKENDS_FACTORY`; withou
 
 ### Checking what you returned
 
-**Two of the five run on their own**, against every backend kingfisher resolves,
+**Two of the six run on their own**, against every backend kingfisher resolves,
 and raise `ConfigError` rather than letting a turn find out. Both of them only
 look — an `isinstance` and a scan of your routes, no I/O — so they cost nothing
 and there is nothing to switch on:
@@ -378,8 +382,10 @@ implements the file operations in terms of `execute`, or register with the ABC.
 or the graph will not build: deepagents refuses `permissions=` outright on a
 backend that executes unless every rule is scoped to a route.
 
-**The other three stay yours**, because they write files and run shell commands, and
-a library should not do either at a build:
+**The other four stay yours.** Three write files and run shell commands, and a
+library should not do either at a build. The fourth only looks, and finds a folder
+in the wrong place rather than an agent that cannot work, which is not worth
+refusing a turn over:
 
 ```python
 from kingfisher import BACKEND_CONTRACT
@@ -389,7 +395,7 @@ def test_my_backend_keeps_the_contract(check, cfg):
     check(lambda: MyBackends().open(cfg, "a-session"))
 ```
 
-Run all five. The automatic pair costs nothing twice, and your own suite is a
+Run all six. The automatic pair costs nothing twice, and your own suite is a
 better place to read a failure than a turn is. And run
 `SESSION_BACKENDS_CONTRACT`, above, against the object that makes them: that two
 sessions are kept apart, that a session is there on the next turn, that the claim
@@ -411,6 +417,17 @@ is the one left that reports nothing on its own. A virtual path becomes a shell
 path by dropping its leading slash; the prompt says so in a table the model reads
 every turn. Route a path somewhere the shell cannot follow and the agent can read
 its inputs and run nothing over them, with a confused model as the only symptom.
+
+**deepagents' own files have to land under `/scratchpad/`.** A tool result too
+long for a message is saved to a file and the model handed a stub naming it, and
+the summarizer saves the conversation it replaces. Both go under the composite's
+`artifacts_root`, as `large_tool_results/` and `conversation_history/`, and the
+prompt tells the agent that is `/scratchpad/`. The backend `backend_at` builds has
+it set, and so does a subclass of its class that calls its `__init__`. A
+`CompositeBackend` of your own defaults to `/` and puts both folders at the session
+root: pass `artifacts_root="/scratchpad/"`. deepagents reads it only off a
+`CompositeBackend`, so on anything else it is `/` whatever you set.
+`offloads_in_the_scratchpad` reads it the same way.
 
 **The shell may not write under `/.harness` or `/inputs`.** `shell_denied` writes a
 file there through the backend, then has the shell try to overwrite it and to create

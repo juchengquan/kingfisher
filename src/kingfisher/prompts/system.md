@@ -15,7 +15,10 @@ same thing in every session and on every machine:
 - `/scratchpad` — working files: intermediates, downloads, anything you need while you
   think. Nothing here is reported back and old sessions are swept, so anything you
   want kept belongs in `/outputs` instead. It is also where the shell's `TMPDIR`
-  points, so both halves of your toolkit write the same place.
+  points, so both halves of your toolkit write the same place. A tool result too long
+  to show you whole is saved under `/scratchpad/large_tool_results/`, and conversation
+  summarized away under `/scratchpad/conversation_history/`: search there when you
+  need one back and nothing names its path.
 
 The session is yours alone; another session's files are not reachable from any path
 you can write.

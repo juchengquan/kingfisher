@@ -49,6 +49,7 @@ from kingfisher.layout import (
     MEMORY_ROUTE,
     RESERVED_SKILL_FOLDER,
     SCRATCH,
+    SCRATCH_ROUTE,
     SESSION_DIRS,
     SKILLS_ROUTE,
     SKILLS_VIEW,
@@ -281,7 +282,15 @@ class WorkspaceScopedBackend(SessionClaims, CompositeBackend):
         session_dir: Path,
         workspace: Path,
     ) -> None:
-        super().__init__(default=default, routes=routes)
+        # Where deepagents writes on its own -- a tool result too long to send, the
+        # history its summarizer keeps. They are the agent's working material: returned
+        # to nobody, swept with the session, and where `system.md` tells it to look.
+        # `/outputs` would hand each one to the caller as an artifact, and the default,
+        # `/`, puts both folders at the session root, in none the layout names. Under
+        # Landlock the shell can rewrite them here, and may: nothing kingfisher reads
+        # back trusts them. deepagents reads this only off a `CompositeBackend`, so it
+        # is set here, and a subclass calling this `__init__` keeps it.
+        super().__init__(default=default, routes=routes, artifacts_root=SCRATCH_ROUTE)
         #: The deployment's workspace, which is what a host path is refused against.
         #: Separate from the session below, and they were one value: see
         #: `reject_host_path`, where the session is what the suggestion needs.
