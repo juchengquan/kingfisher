@@ -79,6 +79,17 @@ class Definitions:
             if bundle.skills
         }
 
+    @cached_property
+    def bundled_misplaced(self) -> Mapping[str, tuple[str, ...]]:
+        """Each subagent's skills sitting too deep in its own folder to load, for a
+        listing and for the refusal of a definition that lists one.
+        """
+        return {
+            name: found
+            for name, bundle in self.subagents.bundles.items()
+            if bundle.skills and (found := _misplaced_in(bundle.skills))
+        }
+
     def warm(self) -> Definitions:
         """Read every kind now, so a broken definition fails here."""
         _ = self.agents.specs, self.subagents.specs, self.tools.found
@@ -117,7 +128,13 @@ class Definitions:
         # and neither alone can tell whether the list still matches the folder.
         for name, spec in self.subagents.specs.items():
             where, tools, skills = self.bundled(name)
-            refuse_miscounted(spec, where=where, tools=tools, skills=skills)
+            refuse_miscounted(
+                spec,
+                where=where,
+                tools=tools,
+                skills=skills,
+                buried=self.bundled_misplaced.get(name, ()),
+            )
         return self
 
     def bundled(self, name: str) -> tuple[str | None, tuple[str, ...], tuple[str, ...]]:
@@ -260,9 +277,23 @@ def refuse_unmountable(root: Path, mounts: Mapping[str, Path]) -> None:
                 raise ConfigError(msg)
 
 
+def _misplaced_in(directories: tuple[Path, ...]) -> tuple[str, ...]:
+    """One subagent's misplaced skills, relative to the folder each sits in.
+
+    Numbered as the folders' routes are when there are several, so `2/group/lookup`
+    names the second -- a package's folders are all called `skills`.
+    """
+    one = len(directories) == 1
+    return tuple(
+        deep if one else f"{n}/{deep}"
+        for n, directory in enumerate(directories, start=1)
+        for deep in LocalSkillRepository(directory, flat=True).misplaced
+    )
+
+
 def _one_registry(name: str, directories: tuple[Path, ...]) -> SkillRegistry:
     """One bundle's skills, read from each of its directories and held as one."""
-    read = [skill_registry.read(LocalSkillRepository(one)) for one in directories]
+    read = [skill_registry.read(LocalSkillRepository(one, flat=True)) for one in directories]
     if len(read) == 1:
         return read[0]
     # Refused rather than merged: every directory is mounted under the bundle's one

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from kingfisher.presentation.cli.__main__ import main
@@ -593,6 +595,34 @@ def test_a_scoped_listing_carries_nothing_out_of_reach(form, cfg, at_the_command
     printed = capsys.readouterr().out
     assert "hidden" not in printed, f"the {form} form named an agent this caller cannot open"
     assert "narrow" in printed, "and it should still show the one they can"
+
+
+def test_a_buried_skill_is_kept_to_callers_who_reach_its_subagent(
+    cfg, at_the_command_line, capsys
+):
+    """Keyed by subagent name, so unfiltered it names a subagent this caller cannot
+    open -- the leak the per-subagent maps here have had before. The operator's view
+    is the control.
+    """
+    _workspace(cfg, NARROW)
+    folder = cfg.catalogue_roots["subagents"] / "keeper"
+    skill = folder / "skills" / "group" / "buried"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(
+        "---\nname: buried\ndescription: Something to do.\n---\nDo it.\n", encoding="utf-8"
+    )
+    (folder / "keeper.yaml").write_text(
+        "name: keeper\ndescription: A subagent.\nsource_ids: [A]\nsystem_prompt: |\n  Go.\n",
+        encoding="utf-8",
+    )
+
+    assert main(["list", "--as", "B", "--json"]) == 0
+    scoped = json.loads(capsys.readouterr().out)
+    assert main(["list", "--json"]) == 0
+    whole = json.loads(capsys.readouterr().out)
+
+    assert scoped["bundled_misplaced"] == {}
+    assert whole["bundled_misplaced"] == {"keeper": ["group/buried"]}
 
 
 @pytest.mark.parametrize("form", ["text", "json"])

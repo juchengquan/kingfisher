@@ -148,6 +148,17 @@ def test_a_single_path_keeps_the_bundles_own_route(cfg, installed, session_dir):
     assert f"{BUNDLED_SKILLS_ROUTE}{where}/" in backend_at(cfg, session_dir).routes
 
 
+def test_a_buried_skill_is_named_by_the_folder_it_is_in(cfg, installed):
+    """Numbered as the folders' routes are: a package's folders are all called
+    `skills`, so a path alone would not say which one to open.
+    """
+    package = installed()
+    _skill(package / "extra" / "skills" / "group", "deep", "Goes deeper than it should.")
+    _deploy(cfg)
+
+    assert Definitions.from_config(cfg).bundled_misplaced == {"clerk": ("2/group/deep",)}
+
+
 def test_a_backend_path_is_refused_saying_what_it_is(cfg, installed):
     """deepagents' own examples write `/skills/...`, a path inside the backend. A
     package cannot know this deployment's routes, so kingfisher refuses it by name

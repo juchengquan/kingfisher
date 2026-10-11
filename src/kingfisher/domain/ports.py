@@ -73,6 +73,17 @@ class SkillRepository(Protocol):
         """
         ...
 
+    @property
+    def flat(self) -> bool:
+        """Whether the directory is one source, with every skill directly in it.
+
+        A subagent's own folder is: its skills index is given that folder as one source,
+        as a mount is. The catalogue is not -- a folder under its root is a source of
+        its own, which buys one level of grouping. Asked by both readers here, so the
+        skills a subagent is granted and the skills it is shown are found the same way.
+        """
+        ...
+
 
 @runtime_checkable
 class AgentRepository(AssetRepository, Protocol):

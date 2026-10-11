@@ -299,6 +299,14 @@ def _subagents(found: Inventory) -> Iterator[str]:
             # say what its folder holds, and this says the definition's list disagrees
             # with them. A reader comparing the two is the point.
             yield f"      ! {miscounted}"
+        for deep in found.bundled_misplaced.get(name, ()):
+            # Beside the skills that do arrive, because the reason is the difference:
+            # the catalogue allows one folder of grouping, and a subagent's own folder
+            # is one source, as a mount is.
+            yield (
+                f"      ! {deep}/ sits too deep to load — a subagent's skills sit "
+                f"directly in its folder"
+            )
         for hidden in found.shadowed.get(name, ()):
             # Said out loud because shadowing is only acceptable while it is
             # visible. The subagent answers `fetch` with its own; the
@@ -359,6 +367,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "moved_tools_checked": found.moved_tools_checked,
         "bundled_tools": {k: list(v) for k, v in found.bundled_tools.items()},
         "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
+        "bundled_misplaced": {k: list(v) for k, v in found.bundled_misplaced.items()},
         "carried_bundles": list(found.carried_bundles),
         "stranded_skills": {k: list(v) for k, v in found.stranded_skills.items()},
         "shadowed": {k: list(v) for k, v in found.shadowed.items()},

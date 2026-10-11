@@ -166,6 +166,11 @@ class Inventory:
     #: message alone sends a reader to add a `source: bundled` line that a compiled
     #: declaration refuses.
     stranded_skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    #: Skills too deep in a subagent's own folder to load, by subagent, relative to
+    #: the folder. A subagent is given its folder as one source, so a folder of
+    #: grouping inside it reaches nothing -- and a skill simply absent from what a
+    #: subagent holds is the one thing a reader cannot see.
+    bundled_misplaced: Mapping[str, tuple[str, ...]] = _NO_NAMES
     #: Catalogue tools a bundle answers for instead, by subagent. Printed
     #: because shadowing is only acceptable while it is visible: the subagent
     #: gets its own and the shared one never reaches it, and nothing else in
@@ -395,7 +400,13 @@ def _miscounted_bundles(resolved: Definitions) -> Mapping[str, str] | None:
     try:
         for name, spec in resolved.subagents.specs.items():
             where, tools, skills = resolved.bundled(name)
-            complaint = miscounted(spec, where=where, tools=tools, skills=skills)
+            complaint = miscounted(
+                spec,
+                where=where,
+                tools=tools,
+                skills=skills,
+                buried=resolved.bundled_misplaced.get(name, ()),
+            )
             if complaint is not None:
                 found[name] = complaint
     except (ToolError, SubagentError):
@@ -638,6 +649,9 @@ def inventory(
         if subagents_error is None
         else (_NO_NAMES, _NO_NAMES, _NO_NAMES, None, (), ())
     )
+    bundled_misplaced: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    if subagents_error is None and bundles_error is None:
+        bundled_misplaced = resolved.bundled_misplaced
 
     agents: Mapping[str, str] = _NOTHING
     defined_agents: Mapping[str, object] = _NOTHING
@@ -744,6 +758,13 @@ def inventory(
                 name: bundled_skills[name]
                 for name in compiled_subagents
                 if bundled_skills.get(name)
+            }
+        ),
+        bundled_misplaced=MappingProxyType(
+            {
+                name: deep
+                for name, deep in bundled_misplaced.items()
+                if name in for_caller_subagents
             }
         ),
         shadowed=shadowed if shadowed is not None else _NO_NAMES,
