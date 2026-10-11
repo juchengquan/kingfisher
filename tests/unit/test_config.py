@@ -91,6 +91,22 @@ def test_the_thread_pool_size_is_read_from_its_setting(env):
     assert config_from_env({**env, "KINGFISHER_THREAD_POOL_SIZE": "8"}).thread_pool_size == 8
 
 
+def test_the_keys_file_resolves_like_the_other_path_settings(env, tmp_path, monkeypatch):
+    """`~` expanded and a relative path taken from where kingfisher started, where `.env`
+    is read -- not from the workspace, which the macOS fence lets the shell read.
+    """
+    (tmp_path / "keys.yaml").write_text("unused: sk-x\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    relative = config_from_env({**env, "KINGFISHER_MODEL_KEYS_FILE": "keys.yaml"})
+    home = config_from_env({**env, "KINGFISHER_MODEL_KEYS_FILE": "~/keys.yaml"})
+
+    assert relative.models.keys_file == (tmp_path / "keys.yaml").resolve()
+    assert home.models.keys_file == (tmp_path / "keys.yaml").resolve()
+    assert config_from_env(env).models.keys_file is None, "named by nothing, read from nowhere"
+
+
 def test_endpoints_and_models_come_from_the_file(env):
     cfg = config_from_env(env)
 

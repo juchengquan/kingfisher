@@ -75,6 +75,11 @@ class Endpoint:
     #: variable sends someone to the file where everything already looks right.
     #: Defaulted, so an endpoint built in a test need not carry one.
     key_env: str = ""
+    #: The keys file entry the key was read from, for an endpoint whose `models.yaml`
+    #: says `key:` -- then `key_env` is empty. Kept for the 401's reason above: the
+    #: entry is the thing to check, and a message about variables would send the
+    #: reader to the environment, which held nothing.
+    key_entry: str = ""
     #: The row `api` named, resolved as the catalogue loaded. Carried rather than
     #: looked up again by name when a model is built, because a deployment's own
     #: rows exist only in the table that load was handed.
@@ -233,9 +238,12 @@ class Models:
     #: model name, valued as the clause `resolve` drops into its refusal.
     unreachable: Mapping[str, str] = field(default_factory=dict)
     #: Endpoints this file defines that were dropped for want of a key, valued by
-    #: the variable each one names -- including one no model uses, which nothing in
-    #: `unreachable` would mention.
+    #: what was not set: the variable an endpoint names, the keys file setting, or the
+    #: keys file's entry -- each written to read after "whose" and before "is not
+    #: set". Includes an endpoint no model uses, which `unreachable` would not mention.
     dropped: Mapping[str, str] = field(default_factory=dict)
+    #: The keys file `key:` entries were read from, or `None` where none was named.
+    keys_file: Path | None = None
     #: Where all of it was read from. Informational, so a refusal can name the
     #: file that should have defined what it could not find.
     source: Path | None = None

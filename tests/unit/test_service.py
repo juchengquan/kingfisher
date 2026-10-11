@@ -598,6 +598,24 @@ def test_a_rejected_key_names_the_variable_it_came_from(cfg):
     assert ".env" in str(refused)
 
 
+def test_a_rejected_key_from_the_keys_file_names_its_entry_and_the_file(cfg, tmp_path):
+    """The `.env` sentence is wrong for a key no variable held: the entry is what to check."""
+    keys = tmp_path / "keys.yaml"
+    models = replace(
+        cfg.models,
+        endpoints={"fake": replace(FAKE_ENDPOINT, key_env="", key_entry="fake")},
+        keys_file=keys,
+    )
+    refused = refused_credentials(
+        _RejectedKeyError(f"{FAKE_ENDPOINT.base_url}/v1/messages"), replace(cfg, models=models)
+    )
+
+    assert refused is not None
+    assert "entry 'fake'" in str(refused)
+    assert str(keys) in str(refused)
+    assert ".env" not in str(refused)
+
+
 def test_the_endpoint_named_is_the_one_that_refused(cfg):
     """Not the default. A delegate may run somewhere its parent does not, so resolving
     the default model for the name would be confidently wrong on the one 401 that

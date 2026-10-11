@@ -43,14 +43,17 @@
 # the old KINGFISHER_API_STYLE's hard limit: one endpoint per wire format,
 # forever. Several entries may share an `api`, which is the point.
 #
-# `key_env` names the variable holding the key. An endpoint whose variable is
-# unset is dropped with a warning and its models go with it, so one file works
-# across a fleet whose machines hold different subsets of the keys.
+# `key` names the endpoint's entry in the keys file KINGFISHER_MODEL_KEYS_FILE
+# names, so the key is in neither this file nor the environment. `key_env` names
+# a variable holding it instead, for a runtime that hands secrets over that way.
+# An endpoint says one of the two. One whose key is missing is dropped with a
+# warning and its models go with it, so one file works across a fleet whose
+# machines hold different subsets of the keys.
 endpoints:
   minimax:
     api: anthropic
     base_url: https://api.minimaxi.com/anthropic
-    key_env: MINIMAX_API_KEY
+    key: minimax
 
   # A second endpoint on the *same* wire format -- impossible before this file
   # existed. Uncomment if you run one.
@@ -62,7 +65,7 @@ endpoints:
   openai:
     api: openai_responses
     base_url: https://api.openai.com/v1
-    key_env: OPENAI_API_KEY
+    key: openai
 
 # --- default: what runs when nothing says otherwise -------------------------
 #
