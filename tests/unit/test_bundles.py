@@ -782,6 +782,56 @@ def test_doctor_names_the_delegate_whose_private_tools_will_not_load(cfg):
     assert checks["tools"].verdict == "ok", "the catalogue's own tools still loaded"
 
 
+def test_a_broken_tool_catalogue_is_not_reported_as_a_delegate_failure(cfg):
+    """One unparseable module in `tools/` was named twice -- once as `tools` and once as
+    `delegate tools` -- on a workspace with no delegates at all. The second row sends a
+    reader to the wrong directory, which is the fault `doctor` exists to avoid.
+
+    The catalogue read sat inside the `try` whose exception becomes `bundles_error`,
+    because `shadowed` compares a bundle's names against it. The other direction, and
+    the control, is `test_doctor_names_the_delegate_whose_private_tools_will_not_load`:
+    a bundle that really will not load still fails on its own row.
+    """
+    tools = cfg.catalogue_roots["tools"]
+    tools.mkdir(parents=True, exist_ok=True)
+    (tools / "broken.py").write_text(BROKEN, encoding="utf-8")
+
+    found = inventory(cfg)
+    checks = {check.name: check for check in examine(cfg)}
+
+    assert found.bundles_error is None, "a tools failure is not a bundle's"
+    assert checks["tools"].verdict == "fail"
+    assert "not checked" in checks["delegate tools"].detail
+
+
+def test_shadowing_says_it_was_not_checked_rather_than_that_there_is_none(cfg):
+    """Empty and unknown are different answers and a mapping cannot tell them apart --
+    the reason `moved_tools_checked` exists, applied to the one comparison that needs
+    the workspace catalogue.
+    """
+    tools = cfg.catalogue_roots["tools"]
+    tools.mkdir(parents=True, exist_ok=True)
+    (tools / "broken.py").write_text(BROKEN, encoding="utf-8")
+
+    found = inventory(cfg)
+
+    assert not found.shadowed_checked
+    assert found.shadowed == {}, "and it answers empty, so no reader is handed a guess"
+
+
+def test_shadowing_is_checked_when_the_catalogue_loads(cfg):
+    """The control `test_a_broken_tool_catalogue_is_not_reported_as_a_delegate_failure`
+    and `test_shadowing_says_it_was_not_checked_rather_than_that_there_is_none` need: a
+    flag that was always `False` would pass both of them.
+    """
+    workspace_with_bundle(cfg, definition=INHERITS_AND_OWNS_SHARED, private="shared")
+
+    found = inventory(cfg)
+
+    assert found.shadowed_checked
+    assert found.shadowed == {"surveyor": ("shared",)}
+
+
 def test_doctor_warns_about_shadowing_and_does_not_fail_on_it(cfg):
     """Nothing is broken: the delegate answers with its own and the catalogue's
     never reaches it. That is a decision somebody made, and it is only acceptable

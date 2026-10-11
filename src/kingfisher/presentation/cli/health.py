@@ -417,7 +417,17 @@ def _delegate_tools(found: Inventory) -> Iterator[Check]:
     # answers with its own and the catalogue's never reaches it. That is a
     # decision somebody made, and it is only acceptable while it is visible --
     # which is the same reason `kingfisher list` prints it.
-    if found.shadowed:
+    if not found.shadowed_checked:
+        # Said rather than passed over: without this row a broken `tools/` reads as
+        # "no delegate shadows the catalogue", which is a different claim from "the
+        # catalogue this would be compared against did not load".
+        yield Check(
+            "delegate tools",
+            "warn",
+            "shadowing not checked -- the workspace tool catalogue did not load; its "
+            "own row says why",
+        )
+    elif found.shadowed:
         answering = ", ".join(
             f"{name} ({', '.join(names)})" for name, names in sorted(found.shadowed.items())
         )

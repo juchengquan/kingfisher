@@ -362,6 +362,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "carried_bundles": list(found.carried_bundles),
         "stranded_skills": {k: list(v) for k, v in found.stranded_skills.items()},
         "shadowed": {k: list(v) for k, v in found.shadowed.items()},
+        "shadowed_checked": found.shadowed_checked,
         "bundles_error": found.bundles_error,
         "orphaned_assets": list(found.orphaned_assets),
         "miscounted_bundles": dict(found.miscounted_bundles),
