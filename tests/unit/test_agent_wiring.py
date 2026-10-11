@@ -77,10 +77,9 @@ def test_planning_and_permissions_are_wired(cfg, session_dir):
     middleware_names = {type(m).__name__ for m in built.middleware}
     assert "TodoListMiddleware" in middleware_names
 
-    # Two routes are read-only for every request, whatever it was granted:
-    # `/inputs` is the caller's input, and `/skills` is instructions the agent
-    # follows. Named rather than counted, so adding a third rule does not fail
-    # this and a *removed* one still does.
+    # These routes are read-only for every request, whatever it was granted:
+    # `/inputs` is the caller's input, `/skills` is instructions the agent
+    # follows, and `/.harness` is the harness's own. Named rather than counted.
     # `delete` maps to the `write` operation, so one rule covers write/edit/delete.
     read_only = {
         rule.paths[0] for rule in built.permissions

@@ -14,14 +14,14 @@ from tests.unit.test_backend_seam import Elsewhere
 
 
 def test_a_plain_workspace_reports_every_catalogue_as_derived(cfg):
-    """Four catalogues, and `tools` among them.
+    """Every catalogue, and `tools` among them.
 
     Named individually rather than looped, because the bug was one kind being silently
     absent from the answer.
     """
     found = Origins.of(cfg)
 
-    for kind in ("agents", "skills", "subagents", "tools"):
+    for kind in ("agents", "middlewares", "skills", "subagents", "tools"):
         entry = getattr(found, kind)
         assert entry.kind == "default", kind
         assert entry.path == cfg.workspace / kind, kind

@@ -40,7 +40,7 @@ from kingfisher import (
 # The names here the door does not carry. The command ships in the same
 # distribution as the library, so it may take one at the module defining it --
 # see *The front door* in `docs/decisions.md` -- and each of these is something
-# no caller outside the wheel has asked for: the four kinds a catalogue holds,
+# no caller outside the wheel has asked for: the kinds a catalogue holds,
 # used to say what a directory has none of; where a workspace keeps its
 # sessions; and the warning `doctor` says as a check instead. `configured_backends`
 # is taken the same way, inside the commands that build a service, because only a
@@ -287,7 +287,7 @@ def build_parser() -> argparse.ArgumentParser:
         # worth the trade: the second half is a limit, and a limit buried in a
         # justified block is one nobody reaches.
         description=(
-            "The configuration, the credentials it names, the three catalogues,\n"
+            "The configuration, the credentials it names, every catalogue,\n"
             "whether every definition can actually run, and what is confining the\n"
             "shell. Exits non-zero only on something that will stop a run.\n"
             "\n"

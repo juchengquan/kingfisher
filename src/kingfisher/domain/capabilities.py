@@ -50,7 +50,7 @@ SWITCH = "switch"
 
 
 class CapabilityError(ValueError):
-    """A request named a tool, skill, subagent or middleware it may not have."""
+    """A request named something it may not have."""
 
 
 def _normalise(value: object) -> Selection:

@@ -76,7 +76,7 @@ def _staged(root, *, skill=None, subagent=None, tool=None):
 
 
 def _roots(catalogue):
-    """The three directories behind a locally-backed catalogue."""
+    """The staged kinds' directories behind a locally-backed catalogue."""
     return {kind: getattr(catalogue, kind).root for kind in ("skills", "subagents", "tools")}
 
 

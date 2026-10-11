@@ -168,7 +168,7 @@ for the next reader who reaches for one.*
   `_apply_custom_middleware` will replace them without a word. *(2026-08-31.)*
 - **A subagent inherits none of its parent's middleware.** Each definition's is
   built separately, so a cap on an agent bounds nothing its delegate does.
-  `delegation.py` says this in four places. *(2026-08-30.)*
+  `infrastructure/harness/kinds/subagents.py` says so where a delegate is built. *(2026-08-30.)*
 - **A sync run does not skip an async-only hook; it raises.** Under `stream`, a
   middleware implementing only `awrap_tool_call` or `awrap_model_call` raises the
   base class's `NotImplementedError` the first time the hook is reached, and one

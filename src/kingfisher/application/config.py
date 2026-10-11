@@ -206,7 +206,7 @@ class Environment:
             shell_path_extra=path_extra,
             shell_sandbox=self.values.get("KINGFISHER_SHELL_SANDBOX", "auto"),
             # From `paths`, not read again here: it is the one reader of these
-            # three, so a fresh workspace is seeded into the same directories a
+            # roots, so a fresh workspace is seeded into the same directories a
             # configured one is served from.
             skills_root=paths.skills_root,
             subagents_root=paths.subagents_root,

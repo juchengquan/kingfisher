@@ -1,8 +1,8 @@
 """Thin driver for a kingfisher run. Not shipped, and not a unit test.
 
 Under `tests/integration/` because that is what it is: the one thing here that
-reaches a real model and spends real money, where the 1,600 tests beside it are
-offline and finish in eleven seconds. It is not collected -- pytest takes
+reaches a real model and spends real money, where every test beside it is offline
+and quick. It is not collected -- pytest takes
 `test_*.py`, and this is deliberately not that, because a module whose job is to call
 a model must never be run by a bare `pytest`.
 """
@@ -216,8 +216,8 @@ def _grants(cfg: Config, args: argparse.Namespace) -> dict[str, tuple[str, ...] 
         leave_out = excluded[kind]
         named = getattr(args, kind)
         # A kind nobody mentioned is *absent* from the result, not `None` in it.
-        # The two are opposite: `Capabilities` starts `tools`, `skills` and
-        # `builtin_tools` at `ALL`, and `None` on those fields means *none*. So
+        # The two are opposite: `Capabilities` starts every grant here at
+        # `ALL`, and `None` on those fields means *none*. So
         # passing `None` for a flag that was never typed asked for an agent with
         # no tools and no skills -- which is what `main.py "task"` had been
         # quietly requesting, against a docstring promising the opposite.
@@ -329,9 +329,7 @@ def main(argv: list[str]) -> int:
     if not capabilities.is_unrestricted:
         for kind in GRANTS:
             selected = getattr(capabilities, kind)
-            # `ALL` is not a narrowing and has no list to print. Only reachable
-            # for `builtin_tools`, which defaults to it -- the other three
-            # default to `None` or a tuple.
+            # `ALL` is not a narrowing and has no list to print.
             if selected is not None and selected != ALL:
                 print(f"{kind.replace('_', ' '):<14}: {', '.join(selected) or '(none)'}")
         if capabilities.memory is not None:

@@ -63,14 +63,15 @@ satisfy. That is what lets it run on a fresh workspace, before there is a
 `models.yaml` inside it to read.
 
 The formats — agents, skills, subagents, and the catalogue they live in — are
-documented in [`docs/guides/formats.md`](docs/guides/formats.md). A tool is the
-one that is code rather than a document, so writing one has its own page:
-[`docs/guides/tools.md`](docs/guides/tools.md). The rest of
+documented in [`docs/guides/formats.md`](docs/guides/formats.md). Tools and
+middleware are code rather than documents, so each has its own page:
+[`docs/guides/tools.md`](docs/guides/tools.md) and
+[`docs/guides/middleware.md`](docs/guides/middleware.md). The rest of
 [`docs/`](docs/README.md) says why the code is shaped the way it is and what
 deepagents actually does underneath it.
 
-`kingfisher list` shows what a workspace offers a request — tools, skills,
-subagents — and where each one came from. `kingfisher seed` writes a starting
+`kingfisher list` shows what a workspace offers a request, kind by kind, and
+where each one came from. `kingfisher seed` writes a starting
 workspace. `kingfisher sessions` shows what that workspace is holding — one line
 per session, how long it has been idle and what it costs — and `kingfisher reap`
 deletes the ones it is finished with. `kingfisher artifact --session ID

@@ -302,7 +302,7 @@ def test_the_record_is_the_only_shape_callers_need(cfg):
     assert isinstance(found, Inventory)
     for name in (
         # One field where there were four -- the workspace and three of the four
-        # catalogue paths -- and it answers for all eleven places rather than
+        # catalogue paths -- and it answers for every place rather than
         # those three.
         "origins", "builtin_tools", "tools",
         "tool_sources", "tools_error", "skills", "skills_unloadable",

@@ -1,6 +1,6 @@
 """Every check a backend a deployment supplied must pass.
 
-Here rather than beside the other four kits in `kingfisher.testing`, because the
+Here rather than beside the runner's kit in `kingfisher.testing`, because the
 sharpest check needs deepagents and that module is permitted nothing foreign --
 `test_architecture` gives the package root an empty set, and widening it to reach
 one function would have permitted the agent runtime in `config` and `layout` too.
@@ -215,11 +215,11 @@ BACKEND_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (
 
 
 def refuse_unusable_backend(backend: Any) -> None:
-    """Two of the four, run on every backend the harness resolves.
+    """Two of the contract's checks, run on every backend the harness resolves.
 
     These two only *look*: an isinstance and a scan of the routes, no I/O and no
     turn's worth of work, so running them costs nothing and the default pays the
-    same nothing every other build does. The other two write files and run shell
+    same nothing every other build does. The rest write files and run shell
     commands -- a deployment's to pay in its own tests, never a turn's.
 
     Running any of them at all is what stands in for a property this seam used to
