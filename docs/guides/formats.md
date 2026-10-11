@@ -1099,6 +1099,13 @@ the shell against `$KINGFISHER_SKILLS`, and the sandbox grants the shell the
 skills catalogue only. A bundle sits under `subagents/`, so its skills can be
 read and listed but not run. Keep executable skills in the shared catalogue.
 
+*A subagent's skills sit directly in its folder.* `skills/<name>/SKILL.md`, as in a
+mount, and not the one folder of grouping the shared catalogue allows: the subagent
+is given its folder as one source, and a source is read one level down. A skill in a
+subfolder is not loaded or granted, and `kingfisher list` and `doctor` say where it
+is. A definition listing one as `source: bundled` is refused, saying it sits in a
+subfolder.
+
 ---
 
 ## Skills — `/skills/<name>/SKILL.md`, or one folder deep

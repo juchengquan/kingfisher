@@ -564,6 +564,21 @@ def _subagent_tools(found: Inventory) -> Iterator[Check]:
             "rename the folder, or the `name:` inside it, so the two match",
         )
 
+    # A warning, as the catalogue's own misplaced skills are: everything starts and the
+    # subagent works without the skill. Said because nothing else would -- the skill is
+    # simply not among the ones the subagent is shown.
+    if found.bundled_misplaced:
+        deep = "; ".join(
+            f"{name}: {', '.join(f'{one}/' for one in ones)}"
+            for name, ones in sorted(found.bundled_misplaced.items())
+        )
+        yield Check(
+            "subagent skills",
+            "warn",
+            f"too deep in a subagent's own folder to load: {deep}",
+            "move each to sit directly in the subagent's skills folder",
+        )
+
     detail = f"{len(found.skills)} loadable"
     if not found.skills_enabled:
         detail += ", and KINGFISHER_SKILLS_ENABLED is off so none will be offered"

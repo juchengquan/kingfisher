@@ -862,6 +862,20 @@ bundle's one label, so a skill's identity does not depend on which directory hol
 it. Two holding one name are refused rather than merged, since the subagent could
 hold only one of them. *(2026-09-25.)*
 
+**A subagent's own skills folder is read flat, as a mount is.** Its skills index is
+given the folder as one source, which deepagents lists one level down, while the
+startup reading treated it as the catalogue -- a root whose folders are sources too.
+So a skill in a subfolder was granted to a carried subagent and never on its menu,
+and nothing said so. Both readers now ask the repository whether it is `flat`, so
+they find the same skills. A skill too deep to load is reported, as the catalogue's
+are, by `kingfisher list` under its subagent and by a `doctor` warning, numbered by
+folder when a subagent carries several; a definition listing one is refused, as a
+caller naming a skill the agent will not load is, with a message saying it is in a
+subfolder rather than that the folder lacks it. Allowing one level of grouping was
+the alternative: it meant giving the index a source per subfolder, and a rule for two
+subfolders holding one name, for subagents that hold a handful of skills.
+*(2026-10-11.)*
+
 **deepagents' other `SubAgent` keys are refused with a reason, not as unknown.** A
 spec typed to that TypedDict is the likeliest thing to write `permissions`,
 `interrupt_on`, `response_format` or `middleware`, and "this format does not define

@@ -595,6 +595,90 @@ def test_a_subagent_is_told_about_the_skill_in_its_own_folder(cfg, session_dir):
     assert "sampling" in narrowed._format_skills_list(narrowed._qualified())
 
 
+def with_buried_skill(cfg, name="deep"):
+    """A skill one folder down inside `surveyor`'s own `skills/`, where the catalogue
+    would allow it and a subagent's folder does not.
+    """
+    folder = cfg.workspace / "subagents" / "surveyor" / "skills" / "group" / name
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "SKILL.md").write_text(
+        SKILL.format(name=name, description="Goes deeper than it should."), encoding="utf-8"
+    )
+
+
+def test_a_skill_in_a_subfolder_of_a_subagents_folder_is_neither_granted_nor_shown(
+    cfg, session_dir, tmp_path
+):
+    """The subagent's index lists its folder as one source, so a skill one level down
+    was granted to it and never on its menu. The skill beside it is the control.
+
+    Carried rather than kept in a folder named after it, and that is what makes this
+    bite: a folder's subagent lists what it takes, and that list already keeps an
+    unlisted skill out, so only a carried subagent was ever granted the deeper one.
+    """
+    carried = tmp_path / "package" / "skills"
+    for name, where in (("top", carried), ("deep", carried / "group")):
+        (where / name).mkdir(parents=True)
+        (where / name / "SKILL.md").write_text(
+            SKILL.format(name=name, description=f"The {name} procedure."), encoding="utf-8"
+        )
+    subagents = cfg.workspace / "subagents"
+    subagents.mkdir(parents=True, exist_ok=True)
+    entry = {
+        "name": "carrier",
+        "description": "Carries its own skills.",
+        "system_prompt": "Go.",
+        "skills": [str(carried)],
+    }
+    (subagents / "carrier.py").write_text(f"SUBAGENTS = [{entry!r}]\n", encoding="utf-8")
+
+    built = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("carrier",), tools=()),
+    )
+
+    (index,) = [
+        m for m in subagent_of(built, "carrier")["middleware"] if isinstance(m, NarrowedSkills)
+    ]
+    shown = index._format_skills_list(index.before_agent({}, None, {})["skills_metadata"])
+    assert "**top**" in shown and "carrier::top" in index._allowed
+    assert "**deep**" not in shown
+    assert "carrier::deep" not in index._allowed
+
+
+def test_the_listing_and_doctor_say_where_a_buried_skill_is(cfg):
+    """Otherwise the skill is simply absent from what the subagent holds, which is the
+    one thing a reader cannot see.
+    """
+    workspace_with_bundle(cfg, definition=OWN_TOOL_AND_SKILL)
+    with_private_skill(cfg)
+    with_buried_skill(cfg)
+
+    found = inventory(cfg)
+    printed = list(render(found))
+    said = [c for c in examine(cfg) if c.name == "subagent skills"]
+
+    assert found.bundled_misplaced == {"surveyor": ("group/deep",)}
+    assert any("! group/deep/ sits too deep to load" in line for line in printed)
+    assert [c.verdict for c in said] == ["warn"]
+    assert "surveyor: group/deep/" in said[0].detail
+
+
+def test_a_definition_listing_a_buried_skill_is_told_where_it_is(cfg):
+    """Refused, as a caller naming a skill the agent will not load is -- and told the
+    file is in a subfolder, not that the folder lacks it, which would send a reader
+    looking for a file that is plainly there.
+    """
+    workspace_with_bundle(cfg, definition=owner(skills=("deep",)))
+    with_buried_skill(cfg)
+
+    said = r"sits in a subfolder of surveyor/skills/ \(group/deep\)"
+    with pytest.raises(SubagentError, match=said):
+        Definitions.from_config(cfg).warm()
+
+
 def test_a_skill_the_definition_does_not_list_is_not_indexed(cfg, session_dir):
     """The skills half of listing being what grants, for a build that skipped `warm`."""
     workspace_with_bundle(cfg, definition=OWN_TOOL_AND_SKILL)

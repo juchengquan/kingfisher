@@ -17,6 +17,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## A subagent's skills read flat, after #690
+
+A subagent's own skills sit directly in its folder: `skills/<name>/SKILL.md`. A
+skill in a subfolder of that folder was never shown to the subagent, and is no longer
+granted to it either.
+
+- `kingfisher list` prints `! <path>/ sits too deep to load` under the subagent, and
+  `doctor` warns on a `subagent skills` row. `list --json` carries them as
+  `bundled_misplaced`.
+- **A definition listing such a skill as `source: bundled` is refused at startup**,
+  with a message saying it sits in a subfolder. Move the skill up to sit directly in
+  the folder.
+
 ## deepagents' own files kept in the scratchpad, after #689
 
 The files deepagents writes on its own have moved under `/scratchpad/` (#690). A tool

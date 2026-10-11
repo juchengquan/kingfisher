@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from pathlib import PurePosixPath
 
 from kingfisher.domain.capabilities import ALL, CapabilityError
 from kingfisher.kinds.subagents.spec import BUNDLE_KEYS, RunOn, SubagentError, SubagentSpec
@@ -98,7 +99,14 @@ def refuse_cycles(specs: Mapping[str, SubagentSpec]) -> None:
                     stack.append((helper, False))
 
 
-def _differs(listed: Sequence[str], held: Sequence[str], *, half: str, where: str) -> str | None:
+def _differs(
+    listed: Sequence[str],
+    held: Sequence[str],
+    *,
+    half: str,
+    where: str,
+    buried: Sequence[str] = (),
+) -> str | None:
     """How one half of what a definition lists as bundled and its folder disagree.
 
     Both directions, because they are different mistakes with the same cure. A name
@@ -109,9 +117,21 @@ def _differs(listed: Sequence[str], held: Sequence[str], *, half: str, where: st
     """
     missing = sorted(set(listed) - set(held))
     arrived = sorted(set(held) - set(listed))
-    if not missing and not arrived:
+    # A listed skill in a subfolder is not missing, and saying it is sends the reader
+    # looking for a file that is plainly there.
+    deep = {PurePosixPath(one).name: one for one in buried}
+    sunk = [name for name in missing if name in deep]
+    missing = [name for name in missing if name not in deep]
+    if not missing and not arrived and not sunk:
         return None
     said = []
+    if sunk:
+        said.append(
+            f"{half}: lists {', '.join(sunk)} as source: bundled, which sits in a "
+            f"subfolder of {where}/{half}/ ({', '.join(deep[name] for name in sunk)}) -- "
+            f"a subagent is given its folder as one source, so move each to sit "
+            f"directly in it"
+        )
     if missing:
         said.append(
             f"{half}: lists {', '.join(missing)} as source: bundled, which "
@@ -132,6 +152,7 @@ def miscounted(
     where: str | None,
     tools: Sequence[str] = (),
     skills: Sequence[str] = (),
+    buried: Sequence[str] = (),
 ) -> str | None:
     """How a definition's bundled entries differ from the folder they come from.
 
@@ -157,7 +178,15 @@ def miscounted(
     differences = [
         found
         for half in BUNDLE_KEYS
-        if (found := _differs(listed.get(half, ()), held[half], half=half, where=where))
+        if (
+            found := _differs(
+                listed.get(half, ()),
+                held[half],
+                half=half,
+                where=where,
+                buried=buried if half == "skills" else (),
+            )
+        )
         is not None
     ]
     return "; ".join(differences) or None
@@ -169,9 +198,10 @@ def refuse_miscounted(
     where: str | None,
     tools: Sequence[str] = (),
     skills: Sequence[str] = (),
+    buried: Sequence[str] = (),
 ) -> None:
     """Refuse a definition whose bundled entries and its own folder disagree."""
-    found = miscounted(spec, where=where, tools=tools, skills=skills)
+    found = miscounted(spec, where=where, tools=tools, skills=skills, buried=buried)
     if found is not None:
         msg = (
             f"subagent {spec.name!r}: {found}. Only what is listed reaches the "

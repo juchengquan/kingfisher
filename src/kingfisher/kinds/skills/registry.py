@@ -221,11 +221,14 @@ def read(repository: SkillRepository) -> SkillRegistry:
     from deepagents.backends import FilesystemBackend  # noqa: PLC0415
 
     root = repository.root
-    found_sources = sources(root)
+    # A subagent's own folder is read as its skills index will be given it: one
+    # source. Read as the catalogue is, a skill in a subfolder would be granted to a
+    # subagent that is never shown it.
+    found_sources = ((CATALOGUE, ROOT),) if repository.flat else sources(root)
     # `(directory, prefix, sources, deepest)`: the root, then each mount as a single
     # source at its own root.
     places = [
-        (root, "", found_sources, DEEPEST),
+        (root, "", found_sources, MOUNT_DEEPEST if repository.flat else DEEPEST),
         *(
             (mount, f"/{label}", ((label, ROOT),), MOUNT_DEEPEST)
             for label, mount in repository.mounts.items()

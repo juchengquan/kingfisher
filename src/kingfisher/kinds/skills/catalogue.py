@@ -58,13 +58,15 @@ class LocalSkillRepository:
     root: Path
     #: Each further directory, by the label it is mounted under.
     mounts: Mapping[str, Path] = field(default_factory=lambda: MappingProxyType({}))
+    #: The root is one source, as a mount is. See `SkillRepository.flat`.
+    flat: bool = False
 
     @cached_property
     def misplaced(self) -> tuple[str, ...]:
         """Skills sitting below the deepest place anything will look for them."""
         return tuple(
             sorted([
-                *_below(Path(self.root), DEEPEST),
+                *_below(Path(self.root), MOUNT_DEEPEST if self.flat else DEEPEST),
                 *(
                     f"{label}/{one}"
                     for label, mount in self.mounts.items()
