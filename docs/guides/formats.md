@@ -1443,8 +1443,9 @@ subagent's own `source_ids:` is its intrinsic ceiling — "this one is sensitive
 wherever it is used" — and a parent's `subagents:` entry narrows it further for
 that parent's context. The two intersect; neither widens the other.
 
-So a subagent whose tools are partly out of reach **runs with the rest and
-reports what was withheld**:
+So a subagent whose tools are partly out of reach **runs with the rest**, and
+nothing tells the caller what it lacks — [out of reach reads as not
+offered](#what-a-caller-can-see):
 
 ```yaml
 # subagents/reviewer.yaml
