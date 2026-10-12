@@ -652,6 +652,13 @@ read. The catalogue has been read at startup since, and a cycle is still not
 refused there: `kingfisher list` reports one, and the first build of an agent with
 subagents refuses it. *(2026-09-17.)*
 
+A name the walk cannot place is no edge: a helper nobody defines, or a bare name
+two files share with nothing saying which. Resolving the shared one to every file
+it could mean was considered and not taken -- it refuses the whole catalogue over
+a loop that exists only if the choice goes one way. What makes skipping it safe is
+that the build refuses the same name against the same keys before following it.
+*(2026-10-12.)*
+
 **A subagent may be a compiled graph rather than a spec**, told apart by
 extension. `SUBAGENTS` is declared and never inferred; name and description are
 static text and only the graph comes from a function; the function receives the

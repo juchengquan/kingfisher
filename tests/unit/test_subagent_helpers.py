@@ -160,6 +160,29 @@ def test_the_refusal_names_the_whole_loop(cfg, session_dir):
     assert "reviewer -> second-opinion -> reviewer" in str(raised.value)
 
 
+def test_a_loop_through_a_name_two_files_share_is_refused_before_it_is_built(
+    cfg, session_dir
+):
+    """A build that settled a shared name on one file would recurse through a loop the
+    walk never saw, since the walk follows only names that are keys.
+
+    Both halves of the loop are activated so that such a build goes round it, which is
+    the failure named. With `reviewer` alone, narrowing drops the settled edge and the
+    build merely succeeds.
+    """
+    root = subagents_dir(cfg)
+    for where, body in {
+        "reviewer.yaml": REVIEWER,
+        "a/second-opinion.yaml": CYCLIC_HELPER,
+        "b/second-opinion.yaml": HELPER,
+    }.items():
+        (root / where).parent.mkdir(parents=True, exist_ok=True)
+        (root / where).write_text(body, encoding="utf-8")
+
+    with pytest.raises(CapabilityError, match="more than one source offers"):
+        _build(cfg, session_dir, subagents=("reviewer", "a/second-opinion.yaml::second-opinion"))
+
+
 def test_a_definition_reached_twice_is_not_a_cycle():
     """The distinction the check exists to draw."""
     specs = {
