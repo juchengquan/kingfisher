@@ -71,6 +71,10 @@ slices land.
   bring skills of its own while the skills kingfisher read and the skills the agent
   sees stay one list. The check it rests on has landed; the feature waits for a
   deployment that needs it.
+- [A ledger of tool results](design/2026-10-12-a-ledger-of-tool-results.md) — a
+  record of every tool result a turn produced, each saved under an id the agent can
+  find again after a long conversation is summarised, and listed for the caller.
+  Nothing built.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
