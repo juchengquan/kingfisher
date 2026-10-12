@@ -704,6 +704,23 @@ switch is about, and the backend mounts its route either way, so withholding the
 would leave those files reachable and unnamed. *(2026-09-18, from an architecture
 review; both were found by reading the three stacks side by side.)*
 
+
+**A third reader was still asking only the request: the withheld run report.** With the
+switch off the agent is told about no skills at all, and the report still said `1
+skill(s) not granted: beta` -- which says `alpha` *was* granted. Measured on 2026-10-11
+through a whole turn: the same line with the switch on and off alike, while `doctor` on
+that config says `KINGFISHER_SKILLS_ENABLED is off so none will be offered`. Two
+surfaces contradicting each other about one deployment. The offered set is `()` where
+nothing is wired, so there is nothing to have been withheld.
+
+**The rule that should have caught it asserted the defect.**
+`test_every_kind_a_request_can_narrow_is_reported` drives all four axes and asserts the
+skills row reports -- on the `cfg` fixture, where `Config.skills_enabled` defaults to
+*off*. So it required the answer the switch exists to suppress. It switches skills on
+now, which is what a rule about the skills axis needs, and the new rule takes the other
+half. That makes five rules this review has found whose fixture put their own subject
+out of reach, and the first that was asserting the wrong answer rather than merely
+missing the right one. *(2026-10-11, from an architecture review.)*
 **A definition names at most one model**, and a subagent naming none runs its
 caller's. A list there is refused rather than read. `indistinct` reports a
 subagent that named a model and did not end up anywhere different.

@@ -111,7 +111,17 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
             n for n in registered_tools(graph) or () if n not in set(workspace)
         )),
         ("tool", "tools", "tools", lambda: workspace),
-        ("skill", "skills", "skills", lambda: available_skills(cfg, catalogue=catalogue)),
+        # `cfg` as well as the request, which is where the two axes meet everywhere
+        # else: with the switch off the agent is told about no skills at all, and a
+        # report of one "not granted" says the others were. The third reader of this
+        # switch to have asked only the request -- the subagent branch and `doctor`
+        # were the first two, and the entry recording those says why.
+        (
+            "skill",
+            "skills",
+            "skills",
+            lambda: available_skills(cfg, catalogue=catalogue) if cfg.skills_enabled else (),
+        ),
         (
             "subagent",
             "subagents",
