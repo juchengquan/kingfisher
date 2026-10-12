@@ -1,0 +1,235 @@
+"""Every tool result a graph kingfisher built hands the model, recorded as it arrives."""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+from collections.abc import Awaitable, Callable, Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+from langchain.agents.middleware import AgentMiddleware
+from langchain_core.messages import ToolMessage
+from langgraph.types import Command
+
+from kingfisher.domain.access import Audience, jointly, listed, stated, unlisted
+from kingfisher.domain.result import MAIN, WORKING, LedgerEntry, Listed
+from kingfisher.kinds.subagents import TASK_TOOL
+from kingfisher.kinds.tools.spec import split_reference
+from kingfisher.layout import RESULTS_ROUTE
+
+if TYPE_CHECKING:
+    from kingfisher.infrastructure.harness.ledger import Ledger
+
+_log = logging.getLogger(__name__)
+
+#: The parent's `task` call a subagent is running inside, or `None` in the agent the
+#: caller asked. Set by the agent's recorder around that call and read by every
+#: recorder inside the subagent's graph, including on the threads langgraph runs
+#: calls made together on -- measured, and recorded in `findings.md`.
+RUN: ContextVar[str | None] = ContextVar("kingfisher_ledger_run", default=None)
+
+#: deepagents' file tools. What they read or write is a file already, and a row for
+#: each would bury the rest. `execute` is not among them.
+UNRECORDED = frozenset({"ls", "glob", "grep", "read_file", "write_file", "edit_file", "delete"})
+
+#: How much of one argument, and of a result's first line, a row keeps.
+ARG_LIMIT = 60
+LINE_LIMIT = 100
+
+
+@dataclass(frozen=True)
+class Audiences:
+    """Who one definition offers each of its tools to."""
+
+    default: Audience
+    #: By the name a call dispatches on, which is how a tool reaches a recorder.
+    tools: Mapping[str, Audience]
+
+    @classmethod
+    def of(cls, definition: object | None) -> Audiences:
+        """The definition's own audience, and each `tools:` entry's where it wrote one."""
+        said = stated(definition)
+        return cls(
+            default=said.source_ids,
+            tools={split_reference(name)[1]: who for name, who in said.of("tools").items()},
+        )
+
+    def offered(self, tool: str) -> Audience:
+        return self.tools.get(tool, self.default)
+
+
+@contextmanager
+def _running(call: Mapping[str, Any]) -> Iterator[None]:
+    """Name the run a top-level `task` call starts, for as long as it runs.
+
+    Only where none is named yet: everything inside a subagent, a nested helper's
+    calls included, belongs to the run of the call that started it.
+    """
+    if call.get("name") != TASK_TOOL or RUN.get() is not None:
+        yield
+        return
+    token = RUN.set(call.get("id") or "")
+    try:
+        yield
+    finally:
+        RUN.reset(token)
+
+
+class Recorder(AgentMiddleware):
+    """Record each successful tool result, and keep it as a file in the session.
+
+    First in what `tool_guards` returns, and each of the three things that position
+    gives is needed. It is inside deepagents' eviction, so it sees a long result
+    whole. It is ahead of `WorkspaceToolPaths`, so it records the arguments the model
+    wrote rather than the host paths they become. And it is ahead of a deployment's
+    middleware, so it records what that middleware left, which is what the model reads.
+    """
+
+    def __init__(self, ledger: Ledger, backend: Any, audiences: Audiences | None) -> None:
+        super().__init__()
+        self._ledger = ledger
+        #: The turn's backend under the turn's rules, as a tool's own save goes through.
+        self._backend = backend
+        #: `None` where no `source_ids.yaml` is in force.
+        self._audiences = audiences
+
+    def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
+        with _running(request.tool_call):
+            result = handler(request)
+        if (made := self._recorded(request.tool_call, result)) is not None:
+            entry, content = made
+            try:
+                answers = self._backend.upload_files([(entry.path, content)])
+            except Exception as exc:  # noqa: BLE001 -- a save must never fail the call
+                answers = exc
+            self._unkept(entry, answers)
+        return result
+
+    async def awrap_tool_call(
+        self, request: Any, handler: Callable[[Any], Awaitable[Any]]
+    ) -> Any:
+        with _running(request.tool_call):
+            result = await handler(request)
+        if (made := self._recorded(request.tool_call, result)) is not None:
+            entry, content = made
+            try:
+                answers = await self._backend.aupload_files([(entry.path, content)])
+            except Exception as exc:  # noqa: BLE001 -- a save must never fail the call
+                answers = exc
+            self._unkept(entry, answers)
+        return result
+
+    def _recorded(
+        self, call: Mapping[str, Any], result: Any
+    ) -> tuple[LedgerEntry, bytes] | None:
+        """The entry for one call and the bytes its file holds, or `None` to record nothing."""
+        tool = str(call.get("name") or "")
+        if tool in UNRECORDED:
+            return None
+        answer = _answer_in(result, call.get("id"))
+        # A failed call has nothing worth finding again, and the conversation shows it.
+        if answer is None or answer.status == "error":
+            return None
+        text = str(answer.text)
+        content = text.encode("utf-8")
+        call_id = str(call.get("id") or "")
+        run = RUN.get()
+        args = _arguments(call.get("args") or {})
+        access = self._access(tool, run or call_id)
+        entry = self._ledger.add(
+            lambda number: LedgerEntry(
+                id=number,
+                turn=self._ledger.turn,
+                call=call_id,
+                run=run,
+                role=MAIN if run is None else WORKING,
+                tool=tool,
+                args=args,
+                access=access,
+                size=len(content),
+                path=f"{RESULTS_ROUTE}{number}-{_segment(tool)}{_suffix(text)}",
+                summary=_summary(tool, args, text),
+            )
+        )
+        return entry, content
+
+    def _access(self, tool: str, inside: str) -> Listed | None:
+        """The audience this result was produced under, as a row holds it.
+
+        `inside` is the run a `task` answer's subagent ran as. That answer can repeat
+        anything the run read, so it is reached by whoever reaches all of it.
+        """
+        if self._audiences is None:
+            return None
+        offered = self._audiences.offered(tool)
+        if tool != TASK_TOOL:
+            return listed(offered)
+        read = (unlisted(one) for one in self._ledger.access_in(inside))
+        return listed(jointly((offered, *read)))
+
+    def _unkept(self, entry: LedgerEntry, answers: Any) -> None:
+        """Take the path off an entry if the backend would not keep its file.
+
+        Reported on the row and in the log, and never raised: the tool has run and
+        the model is about to read its result, and a failed call here would be one the
+        model may make again, running the tool twice.
+        """
+        if isinstance(answers, Exception):
+            why = f"{type(answers).__name__}: {answers}"
+        elif answers and answers[0].error:
+            why = str(answers[0].error)
+        else:
+            return
+        _log.warning(
+            "the result of %s %s was not kept at %s: %s", entry.tool, entry.id, entry.path, why
+        )
+        self._ledger.unkept(entry)
+
+
+def _answer_in(result: Any, call_id: Any) -> ToolMessage | None:
+    """The message that answers this call, inside the `Command` `task` returns too."""
+    if isinstance(result, ToolMessage):
+        return result
+    if not isinstance(result, Command) or not isinstance(result.update, Mapping):
+        return None
+    found = [one for one in result.update.get("messages") or () if isinstance(one, ToolMessage)]
+    return next((one for one in found if one.tool_call_id == call_id), None)
+
+
+def _cut(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _arguments(args: Mapping[str, Any]) -> str:
+    """Each argument as `name=value`. `repr` keeps a value on one line and a string
+    in its quotes, so `path='/inputs/a b.csv'` reads as one argument.
+    """
+    return " ".join(f"{name}={_cut(repr(value), ARG_LIMIT)}" for name, value in args.items())
+
+
+def _summary(tool: str, args: str, text: str) -> str:
+    """The tool, its arguments and the first line of what it returned."""
+    first = next((line.strip() for line in text.splitlines() if line.strip()), "")
+    called = f"{tool} {args}" if args else tool
+    return f"{called} -- {_cut(first, LINE_LIMIT)}" if first else called
+
+
+#: A tool's name may come from an MCP server or a module author, and the file name
+#: has to be one path segment however it was spelled.
+_UNSAFE = re.compile(r"[^A-Za-z0-9_-]+")
+
+
+def _segment(tool: str) -> str:
+    return _UNSAFE.sub("_", tool).strip("_")[:64] or "tool"
+
+
+def _suffix(text: str) -> str:
+    try:
+        json.loads(text)
+    except ValueError:
+        return ".txt"
+    return ".json"

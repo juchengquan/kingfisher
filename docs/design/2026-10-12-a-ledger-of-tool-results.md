@@ -1,6 +1,10 @@
 # A ledger of tool results
 
-**Status:** proposed. Nothing built.
+**Status:** slice 1 of 3 has landed: results are recorded, kept as files, written to
+the ledger and listed on `RunResult.ledger`. The stamp, the delta and the index are
+still to come. Slice 1 settled two things this left open: a result file the backend
+refuses leaves its row with `path` null rather than failing the call, and a `task`
+answer's access is the `task` grant's own audience held together with its run's.
 **Date:** 2026-10-12.
 **Occasion:** the owner's notes on artifacts named three pieces of work. The first, *a
 tool that creates a file saves it and returns where it went*, shipped, and its entry in

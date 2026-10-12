@@ -48,6 +48,9 @@ class Prepared:
     #: What was said in this session before now. The graph's saver holds one
     #: turn and nothing after it, so this is where a conversation comes from.
     history: tuple[Message, ...] = ()
+    #: What this turn's tools returned, gathered as the graph runs and kept when it
+    #: ends, or `None` for a graph the caller built, which nothing here can hook.
+    ledger: Any = None
     #: Answers to a turn that stopped for them, in langgraph's own shape, or `None`
     #: for a turn that is asking something new. The two are alternatives rather than
     #: additions: a resume continues a graph mid-superstep and has no message to add.

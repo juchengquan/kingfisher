@@ -64,6 +64,10 @@ SCRATCH = "scratchpad"
 
 SESSION_DIRS: tuple[str, ...] = (INPUTS, OUTPUTS, MEMORY, SCRATCH)
 
+#: Where a recorded tool result is kept, under the scratchpad: the agent reads one
+#: back with `read_file` and searches them with `grep`, and they go with the session.
+RESULTS = "results"
+
 #: Where skills live.
 SKILLS = "skills"
 
@@ -85,6 +89,10 @@ HARNESS = ".harness"
 #: their own under `state_dir` before this.
 PINNED_AGENT = "agent.yaml"
 TRANSCRIPT_FILE = "transcript.jsonl"
+#: What the session's tools returned, one row a result and a closing line a turn.
+#: Here rather than beside the results it lists: a row names its file, and the agent
+#: must not be able to rewrite what a later turn reads back as true.
+LEDGER_FILE = "ledger.jsonl"
 CLAIM = "claim"
 #: Written only by a turn that stopped at an approval gate, and deleted the moment
 #: one is answered or superseded. Its presence *is* the mark that a session is
@@ -133,6 +141,7 @@ BUNDLED_SKILLS_ROUTE = _route(SKILLS, RESERVED_SKILL_FOLDER)
 #: the same name with a slash.
 OUTPUTS_ROUTE = _route(OUTPUTS)
 SCRATCH_ROUTE = _route(SCRATCH)
+RESULTS_ROUTE = _route(SCRATCH, RESULTS)
 
 #: A route the agent may not read or write, which is the only reason it is one:
 #: `FilesystemMiddleware` refuses `permissions=` outright unless every rule path

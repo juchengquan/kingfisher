@@ -1,5 +1,5 @@
 """What kingfisher keeps about a session: the agent it opened with, its conversation,
-and a turn paused for an answer.
+the ledger of what its tools returned, and a turn paused for an answer.
 
 Read and written through `HarnessFiles`, so through the session's backend. This
 module owns the formats; the backend owns where they live.
@@ -8,17 +8,20 @@ module owns the formats; the backend owns where they live.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from kingfisher.domain.result import PendingDecision
+from kingfisher.domain.result import LedgerEntry, Listed, PendingDecision
 from kingfisher.domain.transcript import Message, as_json, from_json
 from kingfisher.infrastructure.steps import Steps, changing, reading
 from kingfisher.kinds.documents import DefinitionText
 from kingfisher.layout import (
     HARNESS,
     HARNESS_ROUTE,
+    LEDGER_FILE,
     PAUSED_MARK,
     PAUSED_STATE,
     PINNED_AGENT,
@@ -122,6 +125,85 @@ def read_transcript(harness: Any) -> Steps[tuple[Message, ...]]:
 def write_transcript(harness: Any, messages: tuple[Message, ...]) -> Steps[None]:
     """Replace this session's transcript with what it now holds."""
     yield from harness.store(TRANSCRIPT_FILE, as_json(messages).encode("utf-8"))
+
+
+def entry_id(number: int) -> str:
+    """The id a ledger entry is given: `A-` and at least four digits."""
+    return f"A-{number:04d}"
+
+
+_ENTRY_ID = re.compile(r"A-(\d+)")
+
+
+@dataclass(frozen=True)
+class KeptLedger:
+    """The ledger as a turn found it, and what the turn needs to know of it."""
+
+    #: Its rows and closing lines as written, which the turn writes back ahead of its own.
+    lines: tuple[str, ...] = ()
+    #: The highest number an entry has had, so the next is one past it.
+    last: int = 0
+    #: Every file a row names, which the sweep keeps.
+    paths: frozenset[str] = frozenset()
+    #: The parent's `task` call id -> the access of each working entry under it. A
+    #: subagent paused at a gate finishes in the next turn, and its answer is
+    #: recorded there, after the entries its run made before the pause.
+    runs: Mapping[str, tuple[Listed, ...]] = field(default_factory=dict)
+
+
+def read_ledger(harness: Any) -> Steps[KeptLedger]:
+    """This session's ledger, or an empty one where no turn has written it."""
+    held = yield from harness.fetch(LEDGER_FILE)
+    return KeptLedger() if held is None else _kept(held.decode("utf-8"))
+
+
+def _kept(text: str) -> KeptLedger:
+    lines: list[str] = []
+    last = 0
+    paths: set[str] = set()
+    runs: dict[str, list[Listed]] = {}
+    for line in text.splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            # Dropped rather than refused. A backend has no rename, so a turn that died
+            # writing the ledger can leave half a line, and refusing it would refuse every
+            # turn after. Its rows were never shown in a transcript, which is written
+            # after this file, so the numbers they held are free to be given again.
+            continue
+        if not isinstance(row, dict):
+            continue
+        lines.append(line)
+        if isinstance(row.get("id"), str) and (number := _ENTRY_ID.fullmatch(row["id"])):
+            last = max(last, int(number.group(1)))
+        if isinstance(row.get("path"), str):
+            paths.add(row["path"])
+        if isinstance(row.get("run"), str) and isinstance(row.get("access"), list):
+            runs.setdefault(row["run"], []).append(
+                tuple(one if isinstance(one, str) else tuple(one) for one in row["access"])
+            )
+    return KeptLedger(
+        lines=tuple(lines),
+        last=last,
+        paths=frozenset(paths),
+        runs={run: tuple(found) for run, found in runs.items()},
+    )
+
+
+def write_ledger(
+    harness: Any, earlier: KeptLedger, entries: Sequence[LedgerEntry], *, turn: str
+) -> Steps[None]:
+    """Replace the ledger with what it held, this turn's rows, and this turn's closing line.
+
+    The closing line is written however many rows the turn recorded: turn ids are not
+    a sequence, so the file's order is the only record of the turns' order.
+    """
+    rows = [
+        *earlier.lines,
+        *(json.dumps(asdict(entry), ensure_ascii=False) for entry in entries),
+        json.dumps({"turn": turn}),
+    ]
+    yield from harness.store(LEDGER_FILE, ("\n".join(rows) + "\n").encode("utf-8"))
 
 
 #: Which agent the paused graph was built from. Kept for *checking* a resume, never

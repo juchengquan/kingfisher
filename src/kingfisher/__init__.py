@@ -101,6 +101,8 @@ _EXPORTS = {
     "Decision": "kingfisher.domain.request",
     "DecisionError": "kingfisher.domain.request",
     "PendingDecision": "kingfisher.domain.result",
+    # One row of `RunResult.ledger`, which a caller keeping them names.
+    "LedgerEntry": "kingfisher.domain.result",
     "RunOn": "kingfisher.kinds.subagents.spec",
     "RunEvent": "kingfisher.domain.result",
     "RunResult": "kingfisher.domain.result",
@@ -145,6 +147,7 @@ __all__ = [
     "Inventory",
     "Kingfisher",
     "Landing",
+    "LedgerEntry",
     "Origin",
     "Origins",
     "PendingDecision",
@@ -205,6 +208,7 @@ if TYPE_CHECKING:
     from kingfisher.domain.request import Request as Request
     from kingfisher.domain.request import Resume as Resume
     from kingfisher.domain.result import ArtifactError as ArtifactError
+    from kingfisher.domain.result import LedgerEntry as LedgerEntry
     from kingfisher.domain.result import PendingDecision as PendingDecision
     from kingfisher.domain.result import RunEvent as RunEvent
     from kingfisher.domain.result import RunResult as RunResult
