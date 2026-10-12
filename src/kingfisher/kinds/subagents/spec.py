@@ -261,9 +261,10 @@ PORTABLE: frozenset[str] = frozenset(
 
 #: Keys a portable declaration may not write, each with the reason, named one at a time
 #: for the reason `NOT_COMPILED` is. Two families: this format's own, each naming
-#: something only the deployment knows, and deepagents' `SubAgent` keys this format
-#: does not take -- which a spec typed to that TypedDict writes, and which would
-#: otherwise be refused as merely unknown.
+#: something only the deployment knows, and deepagents' `SubAgent` and
+#: `CompiledSubAgent` keys this format does not take -- which a spec typed to one
+#: of those TypedDicts writes, and which would otherwise be refused as merely
+#: unknown, beside a list of keys that does not include `build`.
 NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
     {
         "bundle": (
@@ -303,6 +304,12 @@ NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
             "read-only included. Middleware reaches a subagent only by the "
             "deployment registering it; write 'build' and wrap the graph yourself "
             "if this one needs some"
+        ),
+        "runnable": (
+            "it holds a graph built before this deployment saw it, its model and "
+            "tools already fixed, so nothing a request grants or withholds could "
+            "reach it. Write 'build' instead: it is given a model and the tools "
+            "this subagent was granted, and returns the graph to run"
         ),
     }
 )

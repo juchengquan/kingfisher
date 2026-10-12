@@ -932,7 +932,10 @@ types its subagent as deepagents' `SubAgent` TypedDict. Most of one loads as it 
 | `interrupt_on` | refused: a subagent inherits its caller's gates |
 | `response_format` | refused: the parent reads a subagent's result as text either way |
 
-A refused key stops the spec loading, with the reason in the message.
+A refused key stops the spec loading, with the reason in the message. So does
+`runnable`, deepagents' `CompiledSubAgent`: a graph built before this deployment
+saw it is out of reach of what a request grants. Write `build` instead — see
+*Compiled subagents* below.
 
 The type also cannot say two things this format can. With no `builtin_tools`, the
 subagent gets every built-in the request granted — still narrowed by the request,
