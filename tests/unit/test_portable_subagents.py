@@ -11,8 +11,9 @@ from __future__ import annotations
 from typing import get_type_hints
 
 import pytest
-from deepagents import SubAgent
+from deepagents import CompiledSubAgent, SubAgent
 from langchain_core.messages import AIMessage
+from langchain_core.runnables import RunnableLambda
 
 from kingfisher import backend_at
 from kingfisher.domain.capabilities import Capabilities
@@ -108,6 +109,21 @@ def test_every_refused_key_says_why_it_cannot_travel(key):
         declared(entry, "acme.py")
 
     assert NOT_PORTABLE[key] in str(raised.value)
+
+
+def test_a_compiled_subagent_as_deepagents_types_it_is_sent_to_build():
+    """`runnable` was refused as a key "this format does not define", beside a list
+    of what a declaration without `build` takes -- which sent the author of a
+    ready-made graph away from the one key that runs it.
+    """
+    entry: CompiledSubAgent = {
+        "name": "s",
+        "description": "d",
+        "runnable": RunnableLambda(lambda state: state),
+    }
+
+    with pytest.raises(SubagentError, match="Write 'build' instead"):
+        declared(entry, "acme.py")
 
 
 def test_an_unknown_key_lists_what_a_portable_entry_takes():
@@ -324,9 +340,10 @@ def test_every_field_the_documents_define_is_portable_or_refused_with_a_reason()
     """
     # `bundle` is outside `KNOWN` because a document refuses it too, and refused here
     # with a reason of its own: it is where a portable entry used to carry its tools.
-    # deepagents' `SubAgent` keys are read off the TypedDict rather than listed, so a
-    # key an upgrade adds fails this instead of reaching a reader as merely unknown.
-    assert PORTABLE | set(NOT_PORTABLE) == KNOWN | {"bundle"} | set(get_type_hints(SubAgent))
+    # deepagents' keys are read off its two TypedDicts rather than listed, so a key
+    # an upgrade adds fails this instead of reaching a reader as merely unknown.
+    theirs = set(get_type_hints(SubAgent)) | set(get_type_hints(CompiledSubAgent))
+    assert PORTABLE | set(NOT_PORTABLE) == KNOWN | {"bundle"} | theirs
 
 
 def test_every_portable_key_reaches_a_field_the_spec_has():

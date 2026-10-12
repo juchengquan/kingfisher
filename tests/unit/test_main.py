@@ -49,13 +49,34 @@ def test_structural_events_render_one_per_line():
     ]
 
 
-def test_the_finished_event_is_returned_not_printed():
-    """It carries the result; it has nothing to say that was not already said."""
+def test_the_finished_event_is_returned_and_a_streamed_answer_not_repeated():
+    """The answer arrived a word at a time; printing the result's too would read as
+    the model answering twice.
+    """
     expected = _a_result()
-    text, result = _render([RunEvent(kind="finished", text="42", result=expected)])
+    text, result = _render(
+        [RunEvent(kind="token", text="42"), RunEvent(kind="finished", text="42", result=expected)]
+    )
 
     assert result is expected
-    assert text == ""
+    assert text.count("42") == 1
+
+
+def test_a_subagents_prose_does_not_stand_in_for_the_answer():
+    """On one stream a subagent's tokens reach the same place the answer does, and
+    counting them would leave a run whose own model did not stream answering with
+    nothing but its subagent's working.
+    """
+    expected = _a_result()
+    text, result = _render(
+        [
+            RunEvent(kind="token", text="reading the files", agent="extractor"),
+            RunEvent(kind="finished", text="42", result=expected),
+        ]
+    )
+
+    assert result is expected
+    assert text.endswith("42")
 
 
 def test_prose_and_tagged_lines_do_not_jam_together():

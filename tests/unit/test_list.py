@@ -271,8 +271,8 @@ def test_the_listing_says_what_a_compiled_subagent_costs(cfg):
     _subagent_catalogue(cfg)
     printed = "\n".join(render(inventory(cfg)))
 
-    assert "--tools" in printed
-    assert "do not restrict what it can call" in printed
+    assert "a tools: grant narrows" in printed
+    assert "not what it can call" in printed
 
 
 def test_a_workspace_with_no_compiled_subagent_says_nothing_about_them(cfg):

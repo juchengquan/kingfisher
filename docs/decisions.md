@@ -947,7 +947,9 @@ by name, so the `FilesystemMiddleware` its own docs suggest would replace the on
 holding the deployment's backend and permission rules, and middleware otherwise
 reaches a subagent only by the deployment registering it. The drift test reads the
 keys off the TypedDict, so one a deepagents upgrade adds has to be decided here.
-*(2026-09-25.)*
+*(2026-09-25.)* `CompiledSubAgent`'s `runnable` joined them: a graph built before
+the deployment saw it has its tools fixed, and the generic refusal listed every key
+but `build`, the one that does what its author meant. *(2026-10-12.)*
 
 **Considered and not taken: `own_subagents`, private nested helpers.** The key was
 reserved when `subagents:` was refused, so that a portable definition wanting a
