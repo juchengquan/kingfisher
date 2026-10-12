@@ -120,10 +120,14 @@ UNCONSULTED = {
 }
 
 #: And what to do about it. The half a reader acts on, and the half that would be
-#: wrong if one sentence served both: middleware is registered in code, a source id
-#: is declared in a file.
+#: wrong if one sentence served both: a middleware is a class this deployment offers,
+#: a source id is declared in a file.
+#:
+#: This said "Register the names", which sent a reader to write Python three lines
+#: after the same run had copied the examples into `middlewares/` -- and a file there
+#: counts as registered, which `middleware.md` says in as many words.
 REMEDY = {
-    "middlewares": "Register the names",
+    "middlewares": "Seed or write the middlewares first",
     # No file named here any more. It used to say `groups.yaml.example is beside
     # it`, and that example could not be the one you wanted: it shipped one
     # vocabulary and a workspace needs whichever names its own definitions ask for.

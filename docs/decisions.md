@@ -5529,6 +5529,36 @@ claims were found in one session -- the CLI's charter, a refusal naming
 caught by a test and the fourth by reading, so a rule for the fourth looked
 worth having. Measured before building, and it is not.
 
+
+**The prose was swept on 2026-10-12, and what it got wrong is the record of why.**
+Fourteen claims, each measured before being changed. The citations are the ones worth
+keeping here, because the rejected rule above is exactly what would have caught them and
+the reasoning for rejecting it still stands -- so the discipline is the only guard.
+
+`CLAUDE.md`'s own paragraph about the sentences worth keeping cited
+`test_the_shipped_star_costs_nothing_on_a_deployment_with_no_registry`, which has never
+existed; it offered that rule as its example of what the prose pass got wrong. Two more
+named rules that had been renamed out from under them, and one named a test module
+retired with the port it covered. Four of six candidates turned out to be real: two were
+*fragments of a wrapped name* that a line-by-line search reads as whole, and two in
+`guides/ports.md` are code a deployment writes rather than citations. A search for this
+has to join wrapped lines before concluding anything, which is the same trap that makes
+`grep` read a hit as an absence.
+
+Two claims were dead rather than stale. `withheld_by_kind`'s default-axis guard said
+`subagents` defaults to none, which the dataclass contradicts -- and the guard cannot
+change a report, since every axis defaults to `ALL` and `withheld(ALL, ...)` is empty.
+It stays, because what it skips is `names_of()` and that reads the catalogue; the comment
+now says so. The `'none'` fallback inside the pause refusal became unreachable when that
+refusal was guarded on 2026-10-01 and is gone.
+
+Two were behaviour. A private tool that shadows the catalogue's printed twice, under two
+annotations, because `shadowed` is a subset of `bundled_tools` and both loops printed it;
+the shadowing row says everything the plain one does, so it is the one kept. And
+`name_of`'s string guard -- the one stopping a middleware's name rendering as
+`<property object at 0x...>` -- had no case: every middleware in the suite spelt its own
+name, so the one class that inherits `AgentMiddleware.name` was rendered and never
+asserted on. *(2026-10-12, from an architecture review.)*
 Sixty-one module paths appear in `src/` prose. Resolved the way a reader does --
 sibling first, then the package root, then the tree -- twelve do not exist:
 **seven are illustrative** (`vendor_a/fetch.py` is a *workspace's* layout, not
@@ -5640,7 +5670,8 @@ the paragraph in `wiring.py` explaining why a factory's own exception is
 deliberately not wrapped -- delete it and someone helpfully wraps it -- and dropped
 the paragraph after it that says the same thing again at greater length. *(The
 pass removed both in the end; the reason lives in `guides/ports.md` now, and
-`test_named_store.py` holds the behaviour.)*
+`test_named_backend.py` holds the behaviour -- it was `test_named_store.py` while
+that port existed.)*
 
 **Four kinds were named as always-cut**, because a test alone drifts: repo
 history, a paragraph restating the one above it, framing that announces an

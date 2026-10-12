@@ -165,8 +165,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     # Unlike `list --as`, an absent one is not the operator's view. A listing is
     # read-only and whoever runs it is on the host with the policy in front of
-    # them; a turn acts, so this is left to the library to refuse -- which it
-    # does, naming this flag.
+    # them; a turn acts, so this is left to the library to refuse. It is the
+    # library's message, so it names the keyword argument and this flag both --
+    # it used to name only the argument, which a terminal cannot pass.
     # Off by default, because the default has to be right for somebody who does
     # not know sessions exist yet: a run whose files are gone before they knew
     # to look for them is worse than a directory they can delete later.
@@ -311,7 +312,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="show what this workspace offers a request",
         description=(
             "Every name a request may activate here, per grant, with where each "
-            "one came from. Exits non-zero if a catalogue will not load."
+            "one came from. Exits non-zero if anything here will not load, or if a\n"
+            "definition names something that is no longer where it says."
         ),
     )
     # A flag rather than the default. A listing whose default output is JSON is

@@ -10,7 +10,7 @@ from kingfisher.infrastructure.harness.host_paths import HOST_ROOTS, HostPathErr
 from kingfisher.layout import INPUTS_ROUTE, OUTPUTS_ROUTE
 
 #: Which arguments name a file. The convention this repository already keeps --
-#: `test_every_shipped_tool_taking_a_path_says_it_is_a_session_path` walks the shipped
+#: `test_every_shipped_tool_naming_a_file_reads_it_through_the_backend` walks the shipped
 #: tools looking for exactly this parameter name -- so widening it is a line here and a
 #: test, rather than a design question.
 PATH_ARGUMENTS: frozenset[str] = frozenset({"path"})

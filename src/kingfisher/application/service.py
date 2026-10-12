@@ -856,7 +856,7 @@ class Kingfisher(Sessions, Disposal):
         # not refused either. Comparing against it refused the one name that was right.
         if was is not None and request.agent is not None and was != request.agent:
             msg = (
-                f"session {session.id} paused under agent {was or 'none'!r}, "
+                f"session {session.id} paused under agent {was!r}, "
                 f"and this resume names {request.agent!r}"
             )
             raise DecisionError(msg)
@@ -1412,7 +1412,7 @@ class Kingfisher(Sessions, Disposal):
         """Run one task to completion. A drain of `stream`.
 
         `delete_session=True` disposes of the session the turn used -- directory,
-        conversation, claim and the store's copy -- once the turn has finished,
+        conversation and the claim -- once the turn has finished,
         and only then. A turn stopped at a bound keeps all of it: the partial
         work is real, and its conversation is what a retry on the same session
         is rebuilt from. A deletion that fails is on the result as

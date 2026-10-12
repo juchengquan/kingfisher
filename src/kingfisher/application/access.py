@@ -58,7 +58,8 @@ def caller_holds(
         msg = (
             "this deployment has an access policy, so a call must say who is "
             "calling: pass source_ids=[...] with the caller's source ids, or "
-            "source_ids=UNSCOPED to run without one"
+            "source_ids=UNSCOPED to run without one -- from the command line, "
+            "--as A,B or --as UNSCOPED"
         )
         raise AccessError(msg)
     return held_by(vocabulary, source_ids)
