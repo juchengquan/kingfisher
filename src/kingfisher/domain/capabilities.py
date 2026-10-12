@@ -147,7 +147,8 @@ def _narrow_switch(left: bool | None, right: bool | None) -> bool | None:
 
 def belongs_in(names: tuple[str, ...], *, field: str) -> str:
     """"that is a builtin tool -- name it in builtin_tools", agreeing in number."""
-    # `split`/`join` rather than `.replace`, which `test_domain_touches_nothing`
+    # `split`/`join` rather than `.replace`, which
+    # `test_domain_touches_nothing_outside_the_process`
     # forbids here: `Path.replace` renames a file, and the check reads names rather
     # than types. A blunt guard is the point of that test, so this bends to it.
     kind = " ".join(field[:-1].split("_"))

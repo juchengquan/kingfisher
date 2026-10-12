@@ -75,7 +75,8 @@ _EXPORTS = {
     # the only way to satisfy it was `from kingfisher.domain.ports import
     # CommandResult` -- reaching past the front door, which the consumer rule
     # forbids. Found by the kit: the reference runner in
-    # `test_root_and_runner_contracts` had to import it from somewhere.
+    # `tests/unit/test_confinement.py`'s reference runner had to import it from
+    # somewhere.
     "CommandResult": "kingfisher.domain.ports",
     # What a workspace tool annotates `runtime` with to be handed the turn's backend:
     # `runtime: ToolRuntime[ToolContext]`. A tool file is a caller outside this

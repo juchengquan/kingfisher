@@ -68,11 +68,16 @@ check is built the way it is -- driven rather than inspected, the control beside
 the escape, the real tree rather than a fixture -- looks like commentary on
 method, and is what stops the next editor simplifying the check into one that
 passes against the thing it was written for.
-`test_the_shipped_star_costs_nothing_on_a_deployment_with_no_registry` carries
-"delete the star and this still passes if it asserts on a spec of its own
-making", and `test_no_rule_here_is_parametrized_over_nothing` exists because a
+`test_kingfishers_own_backend_keeps_the_contract` carries "driven rather than
+inspected, and against the real builder rather than a `CompositeBackend` assembled
+here: a kit that checked a fixture of its own making would pass with every route
+wrong", and `test_no_rule_here_is_parametrized_over_nothing` exists because a
 rule with no cases passes whatever it was meant to check. Cutting those was the
 largest thing the prose pass got wrong.
+
+This paragraph named a third rule until 2026-10-12, and that rule did not exist --
+in the paragraph about the sentences worth keeping, which is the joke the next
+reader should not have to get. Cite a rule you have grepped for.
 
 There is no density to match. A file of one-line comments is not under-explained,
 and the shortest version that still stops the mistake is the right one.

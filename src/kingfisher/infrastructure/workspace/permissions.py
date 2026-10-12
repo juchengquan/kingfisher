@@ -50,7 +50,7 @@ def keep_tmp_private(session_dir: Path) -> None:
     session that must be private to its uid wants a mode on the session
     directory, which is a different change from the one that moved `TMPDIR`.
 
-    Silent when it cannot: a session directory handed over by a `SessionRoot`
+    Silent when it cannot: a session directory a deployment's own session backends
     provider may be a mount whose modes are not ours to set, and refusing the
     turn over the mode of a scratch directory would be a worse answer than
     running with the mode the provider chose.

@@ -303,8 +303,14 @@ def _subagents(found: Inventory) -> Iterator[str]:
         # this workspace, and the whole of what `list` is being asked here is where
         # the code actually is.
         carried = ", carried" if name in found.carried_bundles else ""
+        # A shadowing tool gets one row, from the loop below. `shadowed` is a subset of
+        # `bundled_tools`, so printing both put the same tool on two lines under two
+        # different annotations -- and the second says everything the first does.
+        shadowing = found.shadowed.get(name, ())
         for kind, held in (("tools", found.bundled_tools), ("skills", found.bundled_skills)):
             for own in held.get(name, ()):
+                if kind == "tools" and own in shadowing:
+                    continue
                 # Said on the line itself rather than in a note below, because the
                 # line above it is the one it contradicts: without this, a compiled
                 # subagent's private skill prints exactly like one that arrives.

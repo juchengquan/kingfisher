@@ -106,19 +106,6 @@ def test_only_the_models_a_deployment_granted(cfg, session_dir, monkeypatch):
         )
 
 
-def test_a_granted_model_goes_through(cfg, session_dir):
-    _define(cfg, PINNED)
-
-    specs = _built(
-        cfg,
-        session_dir,
-        granted_models=("cheap-model",),
-        run_on={"second-opinion": RunOn("cheap-model")},
-    )
-
-    assert _model_of(specs, "second-opinion") == "cheap-model"
-
-
 def test_the_deployment_clamps_what_a_request_asks_for():
     """A service intersects before running, so a caller cannot grant itself."""
     deployment = Capabilities(models=("cheap",))
@@ -133,7 +120,11 @@ def test_the_deployment_clamps_what_a_request_asks_for():
 
 def test_naming_a_model_replaces_the_file_wholesale(cfg, session_dir):
     """`second-opinion` names `gpt-5`, which this deployment's catalogue does not define
-    -- so without the override it would not build at all.
+    -- so without the override it would not build at all, and the grant admitting
+    `cheap-model` is what lets it.
+
+    `test_a_granted_model_goes_through` stood above this with the same body and no
+    docstring: two names for one assertion, and the one carrying the reason is this.
     """
     _define(cfg, PINNED)
 

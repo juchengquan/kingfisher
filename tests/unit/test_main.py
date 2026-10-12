@@ -126,12 +126,18 @@ def test_a_subagents_prose_is_marked_where_it_starts_and_ends():
 def test_a_run_with_no_subagents_is_rendered_exactly_as_before():
     """The regression that would be easy to miss: every run gaining a `[main]` line it
     never had.
+
+    The same events and the same expected string as
+    `test_consecutive_tokens_are_not_broken_apart`, which is why the tag is named here
+    rather than left to the equality. Byte-identical to its neighbour, this read as a
+    copy of it, and whoever cut one would have cut whichever they met second.
     """
     text, _ = _render(
         [RunEvent(kind="token", text="7 to"), RunEvent(kind="token", text=" seven.txt")]
     )
 
     assert text == "7 to seven.txt\n"
+    assert "[main]" not in text, "an unprefixed run must not gain a speaker tag"
 
 
 def test_the_models_own_formatting_survives():

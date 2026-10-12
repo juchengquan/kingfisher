@@ -456,6 +456,14 @@ def test_a_middleware_that_came_from_a_package_says_which(cfg, at_the_command_li
 
     printed = capsys.readouterr().out
     assert "(from langchain" in printed, "the package it arrived from"
+    # And the name, which is the one case `name_of`'s string guard is for:
+    # `AgentMiddleware.name` is a *property*, and this class does not override it, so
+    # without that guard the listing prints `<property object at 0x...>` as a
+    # middleware's name and `classes` is keyed by something no definition can select.
+    # Measured: removing the guard left the whole suite green, because every other
+    # middleware in it spells its own name.
+    assert "  todo_list" in printed or "  TodoListMiddleware" in printed
+    assert "property object" not in printed
 
 
 def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(

@@ -137,10 +137,10 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
     found = []
     for what, field, kind, names_of in offered:
         granted = getattr(allowed, field)
-        # Silent when the request left an axis alone. `subagents` defaults to
-        # none, so reporting every axis at its default would put a line about
-        # undeclared subagents on every run -- which is the noise this event
-        # exists to avoid being.
+        # Skips the work, not the answer: every axis defaults to `ALL`, and
+        # `withheld(ALL, ...)` is empty, so this changes no report. What it saves is
+        # `names_of()`, which for skills and subagents reads the catalogue. It used to
+        # say `subagents` defaults to none, which the dataclass contradicts.
         if granted == getattr(default, field):
             continue
         if left_out := withheld(granted, offered=visible(kind, tuple(names_of()))):

@@ -547,6 +547,29 @@ def test_two_sources_may_still_both_ship_one_skill_name():
     assert spec.skills == ("research::lookup", "legal::lookup")
 
 
+def test_a_shadowing_tool_gets_one_row_and_the_annotation_that_says_more(cfg):
+    """`shadowed` is a subset of `bundled_tools`, and both loops printed it -- so one
+    tool appeared twice under two different annotations, the second saying everything
+    the first did. `formats.md` promises the shadowing spelling, which is the one kept.
+    """
+    workspace_with_bundle(cfg, definition=INHERITS_AND_OWNS_SHARED, private="shared")
+
+    rows = [line for line in render(inventory(cfg)) if "shared  [private" in line]
+
+    assert rows == ["      shared  [private tool, shadowing the catalogue's]"]
+
+
+def test_a_private_tool_that_shadows_nothing_keeps_its_own_row(cfg):
+    """The control: skipping the plain row for a shadowing tool must not skip it for a
+    tool the catalogue never offered.
+    """
+    workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
+
+    rows = [line for line in render(inventory(cfg)) if "probe  [private" in line]
+
+    assert rows == ["      probe  [private tool]"]
+
+
 def test_the_main_agent_never_holds_another_subagents_private_tool(cfg, session_dir):
     """The point of the whole feature."""
     workspace_with_bundle(cfg)
