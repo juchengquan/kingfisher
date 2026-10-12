@@ -67,12 +67,31 @@ def shell_env(workspace: Path) -> dict[str, str]:
     }
 
 
+def _endpoint(style: str) -> tuple[str, str]:
+    """`base_url` and key for the wire format `style` names, out of models.yaml.
+
+    This used to read bespoke `ANTHROPIC_`/`OPENAI_` env vars; they were removed
+    from `.env` with nothing in the service reading them. The catalogue is where a
+    `base_url` lives and `key_env` says which variable holds the key, so the probe
+    now points at exactly what the service would build -- one fewer thing to drift.
+    """
+    from kingfisher.application.config import config_from_env
+
+    wire = "anthropic" if style == "anthropic" else "openai_responses"
+    endpoints = config_from_env().models.endpoints
+    for endpoint in endpoints.values():
+        if endpoint.api == wire:
+            return endpoint.base_url, endpoint.api_key
+    have = sorted({e.api for e in endpoints.values()})
+    raise SystemExit(f"no endpoint speaks {wire!r} in models.yaml; it has {have}")
+
+
 def build_model(style: str):
     """Always return a pre-built instance -- never a `provider:model` string."""
+    base_url, key = _endpoint(style)
     if style == "anthropic":
         from langchain_anthropic import ChatAnthropic
 
-        base_url, key = os.environ["ANTHROPIC_BASE_URL"], os.environ["ANTHROPIC_API_KEY"]
         return ChatAnthropic(
             model=MODEL_ID,
             base_url=base_url,
@@ -83,7 +102,6 @@ def build_model(style: str):
 
     from langchain_openai import ChatOpenAI
 
-    base_url, key = os.environ["OPENAI_BASE_URL"], os.environ["OPENAI_API_KEY"]
     return ChatOpenAI(
         model=MODEL_ID,
         base_url=base_url,
