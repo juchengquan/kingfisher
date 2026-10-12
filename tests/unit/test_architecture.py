@@ -3957,33 +3957,148 @@ def test_ty_exempts_test_modules_and_nothing_else_under_tests():
     )
 
 
+#: The module `resolve` lives in, by the tail of its dotted name. Matched that way
+#: rather than in full because `_production_files` yields paths, and an import may
+#: spell the package relatively.
+CONFINEMENT = "confinement"
+
+
+def _attribute_chain(node: ast.AST) -> str | None:
+    """An attribute chain as the source wrote it: `a.b.c` -> `"a.b.c"`.
+
+    Named apart from `_dotted` above, which flattens an *import statement*. Both turn
+    syntax into a dotted string and they are not the same question.
+
+    `None` for a chain rooted in anything but a name -- `f().resolve` is not a module
+    reach, and guessing at one would make this rule refuse what it cannot see.
+    """
+    parts: list[str] = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if not isinstance(node, ast.Name):
+        return None
+    parts.append(node.id)
+    return ".".join(reversed(parts))
+
+
+def _confinement_aliases(tree: ast.AST) -> set[str]:
+    """Local names in this file that stand for the confinement module.
+
+    `import ...sandbox.confinement as sb` binds `sb`, and `from ...sandbox import
+    confinement as sb` binds it too -- neither spells `confinement` at the call. The
+    unaliased forms need nothing here: `a.b.confinement.resolve` and
+    `confinement.resolve` both end in the module's own name, which the caller checks.
+    """
+    bound: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            bound.update(
+                alias.asname
+                for alias in node.names
+                if alias.asname and alias.name.split(".")[-1] == CONFINEMENT
+            )
+        elif isinstance(node, ast.ImportFrom):
+            bound.update(
+                alias.asname
+                for alias in node.names
+                if alias.asname and alias.name == CONFINEMENT
+            )
+    return bound
+
+
+def _reaches_resolve(tree: ast.AST) -> bool:
+    """Whether this file calls the confinement module's `resolve`, however it says so.
+
+    Six spellings, and the rule used to see two of them: it required an `ast.Name`
+    reading exactly `confinement`, so every aliased import and every `getattr` walked
+    past. Measured on 2026-10-12 by running the old matcher over all six.
+    """
+    aliases = _confinement_aliases(tree)
+
+    def is_the_module(node: ast.AST) -> bool:
+        name = _attribute_chain(node)
+        return name is not None and (name in aliases or name.split(".")[-1] == CONFINEMENT)
+
+    for node in ast.walk(tree):
+        # `confinement.resolve`, `a.b.confinement.resolve`, `sb.resolve`.
+        if isinstance(node, ast.Attribute) and node.attr == "resolve" and is_the_module(node.value):
+            return True
+        # `from ...confinement import resolve`, aliased or not.
+        if (
+            isinstance(node, ast.ImportFrom)
+            and (node.module or "").split(".")[-1] == CONFINEMENT
+            and any(alias.name == "resolve" for alias in node.names)
+        ):
+            return True
+        # `getattr(confinement, "resolve")`, which no amount of name-matching reaches.
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and len(node.args) >= 2
+            and isinstance(node.args[1], ast.Constant)
+            and node.args[1].value == "resolve"
+            and is_the_module(node.args[0])
+        ):
+            return True
+    return False
+
+
 def test_only_the_confinement_module_calls_resolve_directly():
     """`shell_confinement` is the one place a `Config` becomes a confinement."""
     # Production only. A test of `resolve` calls `resolve`, and exempting the
     # test tree is what lets that one keep testing the thing it is about.
-    offenders: list[str] = []
-    for path in _production_files():
-        if path.name == "confinement.py":
-            continue
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            reached = (
-                isinstance(node, ast.Attribute)
-                and node.attr == "resolve"
-                and isinstance(node.value, ast.Name)
-                and node.value.id == "confinement"
-            ) or (
-                isinstance(node, ast.ImportFrom)
-                and (node.module or "").endswith("confinement")
-                and any(alias.name == "resolve" for alias in node.names)
-            )
-            if reached:
-                offenders.append(path.name)
+    offenders = [
+        path.name
+        for path in _production_files()
+        if path.name != "confinement.py"
+        and _reaches_resolve(ast.parse(path.read_text(encoding="utf-8")))
+    ]
 
     assert not offenders, (
         f"{sorted(set(offenders))} call `confinement.resolve` directly — use "
         "`shell_confinement(cfg)`, so one place decides what a Config means"
     )
+
+
+#: Every way a file can reach that `resolve`, and the two the rule above used to see.
+#: A control beside the rule, because the matcher is the thing being asserted and a
+#: narrower one passes the rule itself -- which is how it came to see two of six.
+SPELLINGS = (
+    "confinement.resolve(cfg)",
+    "from kingfisher.infrastructure.sandbox.confinement import resolve",
+    "import kingfisher.infrastructure.sandbox.confinement as sb\nsb.resolve(cfg)",
+    "from kingfisher.infrastructure.sandbox import confinement as sb\nsb.resolve(cfg)",
+    "import kingfisher.infrastructure.sandbox.confinement\n"
+    "kingfisher.infrastructure.sandbox.confinement.resolve(cfg)",
+    'getattr(confinement, "resolve")(cfg)',
+)
+
+
+@pytest.mark.parametrize("source", SPELLINGS)
+def test_the_resolve_rule_sees_every_spelling_of_that_reach(source):
+    """Each of these is one file reaching past `shell_confinement`, and the rule above
+    is only worth its name if it sees all of them.
+    """
+    assert _reaches_resolve(ast.parse(source)), f"this spelling walks past the rule: {source!r}"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "other.resolve(cfg)",
+        "from kingfisher.domain.access import parse",
+        "confinement.profile(home=h)",
+        'getattr(confinement, "profile")(home=h)',
+        "make().resolve(cfg)",
+    ],
+)
+def test_the_resolve_rule_does_not_see_a_reach_that_is_not_one(source):
+    """The control the rule needs: a matcher answering `True` for everything would pass
+    every case above and refuse the whole codebase.
+    """
+    assert not _reaches_resolve(ast.parse(source))
 
 
 # -- the path every other rule starts from ---------------------------------
