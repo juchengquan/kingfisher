@@ -80,8 +80,9 @@ middlewares:
   # assembled, as the model this agent is already running;
   # `middlewares/compaction.py` is the argument.
   - compact
-# Named, so what this agent may do stays legible. It reads and it delegates.
-builtin_tools: [read_file, ls, glob, grep]
+# Named, so what this agent may do stays legible. It reads, and `task` is how it
+# delegates: naming `sweeper` below does not grant the tool that calls it.
+builtin_tools: [read_file, ls, glob, grep, task]
 tools: []
 # The other half of the pairing, and the reason there are two files. `sweeper`
 # runs under `call-cap-generous` while this agent runs under `call-cap-strict`,

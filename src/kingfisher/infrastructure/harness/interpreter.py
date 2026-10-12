@@ -6,18 +6,13 @@ import logging
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.kinds.subagents import TASK_TOOL
+from kingfisher.kinds.subagents import INTERPRETER_TOOL, TASK_TOOL
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence
 
     from kingfisher.config import Config
 
-
-#: The tool the sandbox registers. Handed to the library rather than left to its
-#: default, because a helper's tool objects are filtered by this name: a default that
-#: moved upstream would hand every nested helper the probe's sandbox again.
-INTERPRETER_TOOL = "eval"
 
 #: The one warning kingfisher asks for and does not want to hear. Matched on
 #: the message rather than silenced by level, because the same logger carries

@@ -29,6 +29,16 @@ wrong.*
   streaming callbacks into a subagent graph; only the final answer returns, as a
   tool result. No filtering is needed -- and no subagent visibility is available
   either, which is the same fact from the other side.
+
+  *Corrected 2026-10-12, against scripted models:* only the first sentence's
+  outcome held, and only for a graph streamed without `subgraphs=True`. The
+  callbacks do reach the subagent's model; langgraph's `StreamMessagesHandler`
+  drops a call from a non-empty namespace unless `subgraphs` is set. Set, the
+  subagent's chunks arrive under a `tools:<id>` namespace, each carrying
+  `lc_agent_name`. Kingfisher has streamed that way since the day of the probe
+  and tags a subagent's `model_call`, `tool_result` and `token` events with
+  `agent=<name>` -- `SubagentNames` in `infrastructure/harness/runtime.py`, held
+  by `tests/unit/test_stream_subagents.py`.
 - **Tool results arrive on the `messages` stream untruncated.** They must be
   skipped explicitly, or preview protection is bypassed and a 50KB file read
   reaches the terminal.
@@ -261,6 +271,16 @@ cost an experiment to establish.
   `tests/unit/test_tool_returns.py`, so the cases are not listed twice. What the
   test cannot say is which versions answered: langchain-core 1.5.5, langgraph
   1.2.11, deepagents 0.7.6. *(2026-09-04.)*
+- **A list or a tuple is read twice, and the second reading is the stricter.**
+  `_format_output` in langchain-core makes any list or tuple of strings and content
+  blocks into list content. langgraph's tool node then passes on only a string or a
+  list of typed block dicts and `json.dumps` everything else, saying in a comment that
+  a list of strings is valid content not every chat model is tested with. So
+  `("three", "columns")` reaches the model as JSON text, a list or tuple of blocks as
+  blocks, a string beside an image block as JSON with the image's base64 in it, and
+  `[]` as empty content. Reading `_format_output` alone predicts the first of those
+  wrong. Pinned by `tests/unit/test_tool_returns.py`. *(2026-10-12,
+  langgraph-prebuilt 1.1.0.)*
 - **A `Command` returned by a workspace tool is applied, not wrapped.**
   `_format_output` hands back any `ToolOutputMixin` untouched, and both
   `ToolMessage` and langgraph's `Command` are one -- so a tool can replace its own

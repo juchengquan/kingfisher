@@ -22,6 +22,7 @@ from kingfisher.domain.definition import Definition
 # parsing a tool reference -- the format referring to itself, which is why the
 # domain may name an asset kind's `spec` at all. See the exception stated and
 # measured in `test_domain_imports_only_the_standard_library_and_itself`.
+from kingfisher.kinds.subagents.spec import uncallable_helpers
 from kingfisher.kinds.tools.spec import claimed_sources
 
 DIRECTORY = "agents"
@@ -166,6 +167,12 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         absent=None,
         key="subagents",
     )
+    builtin = read.selection(document.get("builtin_tools"), absent=ALL, key="builtin_tools")
+    # At load, because at the call the agent's allowlist refuses `task`, and the model
+    # answers without its subagents where nobody who could fix the file sees it.
+    if (complaint := uncallable_helpers(builtin, written_subagents)) is not None:
+        msg = f"{source.name}: {complaint}"
+        raise AgentError(msg)
     audiences = {
         name: entries
         for name, entries in zip(
@@ -186,9 +193,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         name=fields.text(document["name"]),
         description=fields.text(document["description"]),
         system_prompt=fields.text(document["system_prompt"]),
-        builtin_tools=read.selection(
-            document.get("builtin_tools"), absent=ALL, key="builtin_tools"
-        ),
+        builtin_tools=builtin,
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),
         skills=written_skills,

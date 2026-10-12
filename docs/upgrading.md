@@ -17,6 +17,24 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## A definition naming subagents holds `task`, after #699
+
+An agent or subagent whose `subagents:` names anything, and whose `builtin_tools` is a
+list without `task`, is now refused at startup, and `doctor` fails on it. It could
+never call them: its own allowlist refused `task` at every call.
+
+- Add `task` to that `builtin_tools`, or leave the line out for every built-in.
+- **A `researcher.yaml` or `analyst.yaml` seeded from the shipped set** has this shape
+  and stops the workspace starting until it holds `task`. Neither had ever reached
+  `sweeper` or `auditor`.
+
+## A subagent listing `eval` is refused, after #699
+
+A subagent whose `builtin_tools` lists `eval` is now refused at startup, in a YAML file
+or a Python declaration alike. With `KINGFISHER_INTERPRETER_ENABLED` on it loaded and
+the subagent never held `eval`; with it off, the build refused it as an unknown tool.
+Take `eval` off the list. An agent listing it is unaffected.
+
 ## Calls from `eval` keep the guards, after #694
 
 For a deployment with `KINGFISHER_INTERPRETER_ENABLED` on. A program `eval` runs now

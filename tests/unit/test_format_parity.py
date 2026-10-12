@@ -227,7 +227,7 @@ def test_the_known_set_matches_the_spec_it_builds(kind):
 DOCUMENTS = {
     "nothing optional": HEAD,
     "every shared field, as a list": HEAD + (
-        "builtin_tools: [read_file, grep]\n"
+        "builtin_tools: [read_file, grep, task]\n"
         "tools: [csv_profile::csv_profile, fetch]\n"
         "skills: [tabular-qa]\n"
         "subagents: [reviewer]\n"
@@ -259,6 +259,9 @@ DOCUMENTS = {
         "middlewares:\n  - name: audit\n    settings: 3\n"
     ),
     "metadata that is not a mapping": HEAD + "metadata: [owner]\n",
+    "subagents named and no task to call them with": HEAD + (
+        "builtin_tools: [read_file]\nsubagents: [reviewer]\n"
+    ),
     "a blank description": "name: n\ndescription: ''\nsystem_prompt: |\n  Go.\n",
     "no description": "name: n\nsystem_prompt: |\n  Go.\n",
     "a prompt that reflows": "name: n\ndescription: d\nsystem_prompt: Go.\n",

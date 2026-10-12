@@ -15,7 +15,9 @@ description: Answers questions from the data, with the database behind a source 
 # this agent quietly reachable by no one, found weeks later by whoever needed
 # it.
 source_ids: [sales_db, audit_log]
-builtin_tools: [read_file, ls, glob, grep]
+# `task` is how it reaches `auditor` below. Naming a subagent does not grant the
+# tool that calls one, and a list without it is refused at load.
+builtin_tools: [read_file, ls, glob, grep, task]
 # **Only the entry that is actually restricted carries an audience**, and that
 # is the point of this file.
 #

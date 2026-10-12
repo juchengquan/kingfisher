@@ -166,7 +166,7 @@ def test_a_request_with_no_opinion_is_still_unrestricted():
 
 EVERYTHING = (
     "name: reviewer\ndescription: d\n"
-    "builtin_tools: [read_file]\ntools: [always_fails]\nskills: [tabular-qa]\n"
+    "builtin_tools: [read_file, task]\ntools: [always_fails]\nskills: [tabular-qa]\n"
     "subagents: [helper]\nmiddlewares: [audit]\n"
     "system_prompt: |\n  You review.\n"
 )

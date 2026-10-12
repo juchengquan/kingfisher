@@ -112,7 +112,29 @@ def test_a_tool_may_say_where_it_lives_and_the_claim_is_kept():
     assert spec.tool_sources == {"csv_profile": "csv_profile"}
 
 
+@pytest.mark.parametrize("subagents", ["[sweeper]", '["*"]'])
+def test_naming_subagents_with_built_ins_that_leave_out_task_is_refused(subagents):
+    """The shipped `researcher` named `sweeper` and `analyst` named `auditor`, each
+    listing built-ins without `task`, so neither could reach a subagent at all.
+    """
+    body = MINIMAL + f"builtin_tools: [read_file, grep]\nsubagents: {subagents}\n"
+
+    with pytest.raises(AgentError, match="Add task to builtin_tools"):
+        _read(body, "plain.yaml")
+
+    assert _read(body.replace("grep]", "grep, task]"), "plain.yaml").subagents, "the control"
+
+
 # -- where the two formats disagree, deliberately ---------------------------
+
+
+def test_an_agent_may_list_the_code_sandbox():
+    """The sandbox is wired into the agent's own graph, so the refusal a subagent meets
+    for `eval` would leave the one definition that holds it unable to name it.
+    """
+    spec = _read(MINIMAL + "builtin_tools: [read_file, eval]\n", "plain.yaml")
+
+    assert spec.builtin_tools == ("read_file", "eval")
 
 
 def test_an_agent_may_name_every_subagent_and_a_subagent_may_not():

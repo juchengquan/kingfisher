@@ -125,6 +125,40 @@ def test_naming_none_is_the_default():
     assert spec.subagents is None
 
 
+@pytest.mark.parametrize("listed", ["[read_file, grep]", "[]"])
+def test_naming_helpers_with_built_ins_that_leave_out_task_is_refused(listed):
+    """The shipped `reviewer` named `profiler` and listed its built-ins without `task`,
+    so every consultation was refused at run time and nothing said so at load.
+    """
+    body = REVIEWER.replace("subagents:", f"builtin_tools: {listed}\nsubagents:")
+
+    with pytest.raises(SubagentError) as raised:
+        a_subagent(body, "reviewer.yaml")
+
+    assert str(raised.value).startswith("reviewer.yaml: subagents names second-opinion")
+    assert "Add task to builtin_tools" in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    "written", ["", 'builtin_tools: ["*"]\n', "builtin_tools: [read_file, task]\n"]
+)
+def test_naming_helpers_loads_wherever_task_is_held(written):
+    """The control the refusal needs: a rule refusing every subagent with helpers passes
+    the test above.
+    """
+    spec = a_subagent(REVIEWER.replace("subagents:", f"{written}subagents:"), "reviewer.yaml")
+
+    assert spec.subagents == ("second-opinion",)
+
+
+@pytest.mark.parametrize("written", ["", "subagents: []\n"])
+def test_a_subagent_naming_no_helpers_may_leave_task_out(written):
+    """A rule reading `builtin_tools` alone would refuse every narrow subagent there is."""
+    body = HELPER.replace("system_prompt:", f"builtin_tools: [read_file]\n{written}system_prompt:")
+
+    assert a_subagent(body, "second-opinion.yaml").builtin_tools == ("read_file",)
+
+
 # -- one level, structurally ----------------------------------------------
 
 

@@ -748,6 +748,40 @@ a tool from code, and the code did what it should while its text said the opposi
 Giving an unrestricted request `tools.*` would now mean the same guarded list, and is
 not done here. *(2026-10-11.)*
 
+**A definition naming subagents has to hold the tool that calls them.** The shipped
+`reviewer` named `profiler` and left `task` off its `builtin_tools`, so its own
+allowlist refused every consultation at the call -- where the model reads the error and
+answers without the helper -- and nothing said so at load. The same shape on an agent
+was measured before refusing it there: the shipped `researcher` and `analyst` each list
+their built-ins without `task`, and driving either one to its subagent came back `task
+is not available for this request`. Neither had ever reached `sweeper` or `auditor`.
+
+Both formats refuse it at load now, in the same words, from one function: `subagents:`
+naming anything while `builtin_tools` is a list without `task`. An omitted list and
+`["*"]` hold it. A *request* narrowing `task` away is left alone and still narrowed at
+the call, because there the caller chose it and the file is not wrong. Both shipped
+agents hold `task`. *(2026-10-12.)*
+
+**A subagent may not list `eval`.** The entry on calls from `eval` left this open: with
+the sandbox wired, a subagent listing it loaded and was built without it, and without
+the sandbox the same file was refused at build as naming an unknown tool. Read against
+the code first, no subagent holds the sandbox in any configuration -- deepagents builds a
+subagent's stack from its own spec and none of the parent's middleware, the
+`general-purpose` one kingfisher supplies carries the guards, the allowlist and the
+agent's registered middleware, a nested helper's tool objects leave `eval` out, and a
+compiled subagent may not list built-ins at all. So it is refused at load whether or not
+the sandbox is wired, in a document and a portable declaration alike, and the agent
+format still takes it.
+
+A subagent could hold a tool *called* `eval` only through middleware a deployment
+registers itself, which an agent has to list for a subagent to choose it, and an agent
+runs everything it lists -- beside the sandbox, under the same name, or with the sandbox
+off as a name the build's probe never saw. Neither is a configuration to keep open.
+
+The name moved from `infrastructure/harness/interpreter.py` to `kinds/subagents` beside
+`TASK_TOOL`, for that constant's reason and because a kind may not name a layer: the
+helper filter and the refusal key on one spelling. *(2026-10-12.)*
+
 **The skills switch is the deployment's, for subagents too.** `cfg.skills_enabled`
 says what is wired and a request says what it wants of that. The subagent branch asked
 only the request, so a workspace with skills switched off still handed a subagent an

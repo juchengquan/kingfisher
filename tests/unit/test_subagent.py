@@ -7,7 +7,14 @@ import pytest
 from kingfisher.domain.capabilities import ALL
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.rules import resolved_model
-from kingfisher.kinds.subagents.spec import KNOWN, REFUSED, RunOn, SubagentError, SubagentSpec
+from kingfisher.kinds.subagents.spec import (
+    KNOWN,
+    REFUSED,
+    RunOn,
+    SubagentError,
+    SubagentSpec,
+    declared,
+)
 from tests.conftest import a_subagent
 
 MINIMAL = """name: reviewer
@@ -225,6 +232,40 @@ def test_every_known_field_still_parses():
     assert spec.tools == ("read_file",)
     assert spec.middlewares == ("audit",)
     assert spec.wanted == "gpt-5"
+
+
+#: Both ways of writing a subagent that lists built-ins. A compiled declaration
+#: refuses `builtin_tools` outright, so it has no list to put `eval` in.
+LISTS_BUILT_INS = {
+    "document": lambda listed: a_subagent(
+        f"name: reviewer\ndescription: d\nbuiltin_tools: [{', '.join(listed)}]\n"
+        "system_prompt: |\n  You review.\n",
+        "reviewer.yaml",
+    ),
+    "portable declaration": lambda listed: declared(
+        {
+            "name": "reviewer",
+            "description": "d",
+            "system_prompt": "Go.",
+            "builtin_tools": list(listed),
+        },
+        "reviewer.py",
+    ),
+}
+
+
+@pytest.mark.parametrize("reader", sorted(LISTS_BUILT_INS))
+def test_a_subagent_listing_the_code_sandbox_is_refused(reader):
+    """With the sandbox wired, a subagent listing `eval` loaded and was built without
+    it, while on a deployment without the sandbox the same file was refused.
+    """
+    read = LISTS_BUILT_INS[reader]
+
+    assert read(("read_file",)).builtin_tools == ("read_file",), "the control"
+    with pytest.raises(SubagentError, match="the agent's alone") as raised:
+        read(("read_file", "eval"))
+
+    assert str(raised.value).startswith("reviewer.")
 
 
 #: The fields that refuse `*` outright, and a word from the reason each gives. Not

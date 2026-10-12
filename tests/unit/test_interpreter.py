@@ -432,10 +432,10 @@ def test_a_nested_helper_is_handed_no_sandbox(cfg, session_dir):
         "system_prompt: |\n  You ask.\n",
         encoding="utf-8",
     )
-    # Listing `eval` itself, so the helper's own grant is not what keeps it away.
+    # No `builtin_tools`, which is every built-in and `eval` among them, so the
+    # helper's own grant is not what keeps it away. Listing it is refused at load.
     (subagents_dir(wired) / "helper.yaml").write_text(
-        "name: helper\ndescription: Computes.\nbuiltin_tools: [read_file, eval]\n"
-        "system_prompt: |\n  You compute.\n",
+        "name: helper\ndescription: Computes.\nsystem_prompt: |\n  You compute.\n",
         encoding="utf-8",
     )
 
