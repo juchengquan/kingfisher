@@ -88,10 +88,10 @@ class Inventory:
     agent_subagents: Mapping[str, tuple[str, ...]] = _NO_NAMES
     agents_error: str | None = None
 
-    #: The agent's own tools, granted with `--builtin-tools`. Empty when the
+    #: The agent's own tools, granted with `builtin_tools:`. Empty when the
     #: build failed, which `tools_error` says.
     builtin_tools: tuple[str, ...] = ()
-    #: What the workspace defined, granted with `--tools`. A separate axis, not
+    #: What the workspace defined, granted with `tools:`. A separate axis, not
     #: a second pile: a subtraction taken from the union produced a grant of
     #: built-in names on the workspace axis.
     tools: tuple[str, ...] = ()
@@ -200,7 +200,7 @@ class Inventory:
     #: Which of them are graphs the workspace built rather than definitions kingfisher
     #: assembles. Carried because it changes what the rest of the listing *means* for
     #: them: deepagents runs a compiled graph as given and never applies a tool
-    #: allowlist to it, so `--tools` is not a limit on one.
+    #: allowlist to it, so a `tools:` grant is not a limit on one.
     compiled_subagents: tuple[str, ...] = ()
 
     #: Kept so a caller does not have to reach for `cfg` to know whether an

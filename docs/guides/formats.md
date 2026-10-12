@@ -404,8 +404,8 @@ for a path to pick out.
 **Built-ins take no path.** They have no file, and they live on the separate
 `builtin_tools:` axis.
 
-**Requests do not take one either.** `--tools` and `capabilities.tools` name
-tools plainly: a request arrives from a caller who has no idea what your folders
+**Requests do not take one either.** `capabilities.tools` names tools
+plainly: a request arrives from a caller who has no idea what your folders
 look like, so asking them for a path would make your layout part of your API.
 
 ```yaml
@@ -796,7 +796,7 @@ not a bundle. That folder is the package, and what is under it is importable as
 `surveyor.tools`; the `__init__.py` decides what it exports.
 
 **A tool grant is not a limit here.** deepagents runs the graph as given and
-never applies kingfisher's allowlist to it, so `--tools` narrows what `build`
+never applies kingfisher's allowlist to it, so `tools:` narrows what `build`
 *receives* and nothing stops the graph calling something it closed over.
 `kingfisher list` marks these `[compiled]` and says so underneath.
 
@@ -1036,8 +1036,8 @@ list` prints the mismatch under the subagent and `doctor` fails on
 
 **The subagent holds them whatever the request granted.** Activating `redactor`
 is what grants its parts — a caller never names them, which is the point, since
-naming them would mean knowing they exist. `--without-subagents redactor`
-declines the whole subagent; there is no finer lever, deliberately. For the same
+naming them would mean knowing they exist. Leaving `redactor` out of a request's
+`capabilities.subagents` declines the whole subagent; there is no finer lever, deliberately. For the same
 reason a bundled entry takes no `source_ids`: it reaches whoever reaches the
 subagent.
 

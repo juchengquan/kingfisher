@@ -184,7 +184,7 @@ def all_but(excluded: tuple[str, ...], *, offered: Iterable[str]) -> tuple[str, 
     missing = [name for name in excluded if name not in known]
 
     # An ambiguous name is not an absent one, and saying so matters more here
-    # than on the granting side. `--without-skills lookup` against two of them
+    # than on the granting side. Withholding `lookup` when two sources offer it
     # is a subtraction that refuses, so nothing dangerous happens -- but told it
     # is "unknown", a reader goes looking for a skill they can see in the
     # listing printed underneath. The two mistakes send them to different

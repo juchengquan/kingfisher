@@ -80,14 +80,14 @@ def _tools(found: Inventory) -> Iterator[str]:
     # Printed as one pile, this listing advertised `read_file` beside `csv_profile` and
     # left a reader to guess which flag took which -- and guessing wrong is the "that is
     # a builtin tool" refusal.
-    yield "builtin tools — grant with --builtin-tools"
+    yield "builtin tools — grant with builtin_tools: in an agent file"
     for name in found.builtin_tools or ("(could not introspect)",):
         yield f"  {name}"
 
     # Through the same renderer a refusal uses, so the listing and the refusal
     # cannot drift: a name two files define is printed as the reference, because
-    # that is what a `--tools` line then has to say.
-    yield "\nworkspace tools — grant with --tools"
+    # that is what a `tools:` line then has to say.
+    yield "\nworkspace tools — grant with tools: in an agent file"
     yield offered(dict(found.tool_sources), found.tools)
 
 
@@ -317,8 +317,8 @@ def _subagents(found: Inventory) -> Iterator[str]:
         # graph as given and never applies our allowlist to it, so a tool grant
         # is a suggestion there rather than a limit -- and nothing else in this
         # output would say so.
-        yield "  (a compiled subagent brings its own graph: --tools and"
-        yield "   --builtin-tools do not restrict what it can call)"
+        yield "  (a compiled subagent brings its own graph: a tools: grant narrows"
+        yield "   what it is handed, not what it can call)"
     if not found.subagents:
         yield f"  (none)  — try {SEED_HINT}"
     for folder in found.orphaned_assets:

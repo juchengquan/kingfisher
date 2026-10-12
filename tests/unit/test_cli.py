@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import argparse
+import io
+import re
+import tokenize
 from dataclasses import replace
 from pathlib import Path
 
@@ -9,8 +13,8 @@ import pytest
 
 from kingfisher import DefaultBackends, Kingfisher, Origin
 from kingfisher.kinds.skills.catalogue import reachable
-from kingfisher.presentation.cli.__main__ import main
-from tests.conftest import start, verbs
+from kingfisher.presentation.cli.__main__ import build_parser, main
+from tests.conftest import repository_root, start, verbs
 
 
 def test_bare_invocation_prints_help_and_does_nothing(capsys):
@@ -926,3 +930,45 @@ def test_a_session_that_will_not_delete_does_not_fail_the_turn(cfg, monkeypatch,
 
     assert main(["run", "t", "--agent", "assistant", "--delete-session"]) == 0
     assert "not deleted" in capsys.readouterr().err
+
+
+# -- the flags the command names ----------------------------------------------
+
+#: Flags the command's own words name and it does not take, each with why: another
+#: program's, or one named in order to say there is none.
+NOT_OURS = {
+    "--dry-run": "named by `reap --help` to say there is none",
+    "--memory": "docker's, in doctor's advice on a container that may swap",
+    "--memory-swap": "docker's, in the same advice",
+}
+
+
+def _options(parser: argparse.ArgumentParser) -> set[str]:
+    found: set[str] = set()
+    for action in parser._actions:
+        found |= set(action.option_strings)
+        if isinstance(action, argparse._SubParsersAction):
+            for sub in action.choices.values():
+                found |= _options(sub)
+    return found
+
+
+def test_every_flag_the_command_names_is_one_it_takes():
+    """The listing told a reader to grant with `--tools` and `--builtin-tools`, which
+    only the test driver has -- `run` refused both as unrecognised. Read from the
+    command's own source rather than its rendered output, so a message on a path no
+    test drives is held too.
+    """
+    taken = _options(build_parser())
+    named: dict[str, list[str]] = {}
+    for path in sorted((repository_root() / "src/kingfisher/presentation/cli").glob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        for token in tokenize.generate_tokens(io.StringIO(source).readline):
+            if token.type in (tokenize.STRING, tokenize.FSTRING_MIDDLE):
+                for flag in re.findall(r"(?<![\w-])--[a-z][a-z-]*", token.string):
+                    named.setdefault(flag, []).append(f"{path.name}:{token.start[0]}")
+
+    unknown = {flag: where for flag, where in named.items() if flag not in taken | set(NOT_OURS)}
+    assert not unknown, f"named, and taken by no kingfisher command: {unknown}"
+    # A reason kept for a flag nothing names any more is one nobody can check.
+    assert set(NOT_OURS) <= set(named), sorted(set(NOT_OURS) - set(named))
