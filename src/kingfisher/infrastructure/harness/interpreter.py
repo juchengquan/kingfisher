@@ -9,8 +9,15 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.kinds.subagents import TASK_TOOL
 
 if TYPE_CHECKING:
+    from collections.abc import Collection, Sequence
+
     from kingfisher.config import Config
 
+
+#: The tool the sandbox registers. Handed to the library rather than left to its
+#: default, because a helper's tool objects are filtered by this name: a default that
+#: moved upstream would hand every nested helper the probe's sandbox again.
+INTERPRETER_TOOL = "eval"
 
 #: The one warning kingfisher asks for and does not want to hear. Matched on
 #: the message rather than silenced by level, because the same logger carries
@@ -33,8 +40,17 @@ def quieten_expected_snapshot_drop() -> None:
         logger.addFilter(_ExpectedSnapshotDrop())
 
 
-def _interpreter(cfg: Config, permitted: tuple[str, ...] | None) -> Any:
+def _interpreter(
+    cfg: Config,
+    permitted: tuple[str, ...] | None,
+    *,
+    gated: Collection[str] = (),
+    workspace: Sequence[Any] = (),
+) -> Any:
     """The JavaScript sandbox, if this deployment wired one.
+
+    `workspace` is the granted workspace tools, each already wrapped by
+    `guarded_tools`, and `gated` the names this agent stops on.
 
     `max_snapshot_bytes=1` drops the VM image instead of storing it, and that is the
     whole reason the sandbox is affordable to leave on. The library otherwise
@@ -67,13 +83,34 @@ def _interpreter(cfg: Config, permitted: tuple[str, ...] | None) -> Any:
     # inevitable, so the remedy belongs beside the cause.
     quieten_expected_snapshot_drop()
 
-    # `None` here is the library's "no allowlist", which is what an
-    # unrestricted request resolves to. A request that granted no tools gets an
-    # empty list, which is the opposite and has to stay distinguishable.
+    # A call from code never passes `ToolNode`, so no `wrap_tool_call` sees it, and
+    # it was never a tool call on the model's message, which is what a gate reads.
+    # Whatever this list holds has to be safe with neither.
+    #
+    # A workspace tool goes in as its `GuardedTool`, never by name: a name is
+    # matched to the bare object the agent registered, which from here reads
+    # another session's files and ends the turn when it raises.
+    #
+    # A gated tool is left out, since from here it would run with nobody asked. It
+    # stays callable directly, behind its gate.
+    #
+    # `None` turns `tools.*` off -- the library's default, not an allowlist of
+    # everything -- so an unrestricted request reaches no tool from code at all.
+    wrapped = {one.name for one in workspace}
     ptc: list[Any] | None = (
-        None if permitted is None else [t for t in permitted if t != TASK_TOOL]
+        None
+        if permitted is None
+        else [
+            *(one for one in workspace if one.name not in gated),
+            *(
+                name
+                for name in permitted
+                if name != TASK_TOOL and name not in wrapped and name not in gated
+            ),
+        ]
     )
     return CodeInterpreterMiddleware(
+        tool_name=INTERPRETER_TOOL,
         # `task` is refused here by the library: it is always the top-level
         # `task()` global, and routing it through `tools.*` as well would give
         # two dispatch paths, the second losing `responseSchema`. Delegation is
@@ -82,8 +119,10 @@ def _interpreter(cfg: Config, permitted: tuple[str, ...] | None) -> Any:
         # Dispatch from code follows the same grant as dispatch from a tool
         # call. Left at its default this would let a request that withheld
         # `task` subagent anyway, from inside the sandbox -- a hole of exactly
-        # the shape the subagent ceiling exists to close.
-        subagents=permitted is None or TASK_TOOL in permitted,
+        # the shape the subagent ceiling exists to close. A gate on `task` is
+        # the same hole with a person in it: `task()` from code would run the
+        # subagent with nobody asked.
+        subagents=(permitted is None or TASK_TOOL in permitted) and TASK_TOOL not in gated,
         mode="thread",
         # Below any real snapshot, so every one is dropped. See the docstring:
         # the image is a constant 1,280KB written every turn regardless of use.

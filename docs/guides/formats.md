@@ -524,6 +524,9 @@ One more line in `reviewer.yaml`:
 subagents: [second-opinion]
 ```
 
+If `reviewer` lists its `builtin_tools`, `task` has to be on that list too. It is the
+tool a helper is called through, and naming a helper does not grant it.
+
 And the subagent it names, which is an ordinary definition — the only thing
 that makes it a helper is being named above:
 

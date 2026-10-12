@@ -2,7 +2,9 @@ name: reviewer
 description: |-
   Independently re-checks numeric claims in a draft answer against the underlying files. Use before reporting figures you computed once.
 # No workspace tools: `[]` is none, and omitting the line would mean all.
-builtin_tools: [read_file, ls, glob, grep, execute]
+# `task` is how it reaches `profiler` below. Naming a helper does not grant the
+# tool that calls one, and without it every consultation is refused.
+builtin_tools: [read_file, ls, glob, grep, execute, task]
 tools: []
 # Omitting this would leave the subagent with no skills at all, which is
 # not what omitting `tools` means. Its body is its procedure; this adds the

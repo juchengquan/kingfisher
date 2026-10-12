@@ -17,6 +17,29 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## Calls from `eval` keep the guards, after #694
+
+For a deployment with `KINGFISHER_INTERPRETER_ENABLED` on. A program `eval` runs now
+meets what a direct call meets.
+
+- **`tools.<name>()` for a workspace tool reaches the guarded one.** A `path` argument
+  is translated into the session, and a host path or another session's path under any
+  other argument is refused, as a direct call's is.
+- **A tool that refuses or raises hands the program its error text**, `Error: <type>:
+  <message>`, as an ordinary value. A program that caught the failure with `try` now
+  has to look at the value instead, and one that did not no longer ends the turn.
+- **A tool the agent gates with `interrupt_on` is absent from `tools.*`**, and a gate on
+  `task` takes `task()` out of the program, an unrestricted request's too. Both are
+  still callable directly, where they pause.
+- **A helper a subagent consults has no `eval`**, as a top-level subagent never had.
+  Calling it answers that `eval` is not a valid tool.
+
+## The shipped `reviewer` holds `task`, after #694
+
+`task` is how `reviewer` consults `profiler`, and its `builtin_tools` left it out, so
+every consultation was refused. A `reviewer.yaml` seeded before this still refuses them:
+add `task` to its `builtin_tools`.
+
 ## A subagent's skills read flat, after #690
 
 A subagent's own skills sit directly in its folder: `skills/<name>/SKILL.md`. A

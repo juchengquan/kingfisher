@@ -13,6 +13,7 @@ from kingfisher.domain.capabilities import (
     narrowed,
 )
 from kingfisher.infrastructure.catalogue import Definitions
+from kingfisher.infrastructure.harness.interpreter import INTERPRETER_TOOL
 from kingfisher.kinds.subagents import TASK_TOOL
 from kingfisher.kinds.tools.spec import Found, Offering
 
@@ -152,7 +153,13 @@ def _tool_objects(graph: Any) -> Mapping[str, Any]:
     by_name = getattr(getattr(node, "bound", None), "tools_by_name", None)
     if not isinstance(by_name, dict):
         return {}
-    return {name: tool for name, tool in by_name.items() if name != TASK_TOOL}
+    # `eval` here is the probe's own sandbox, wired before the grant is known and
+    # never narrowed: a helper holding it would reach `task()` past its own
+    # allowlist, and its runtime would outlive the turn, since `release_interpreter`
+    # closes only the agent's. Without it a nested helper holds what a top-level
+    # subagent does.
+    left_out = {TASK_TOOL, INTERPRETER_TOOL}
+    return {name: tool for name, tool in by_name.items() if name not in left_out}
 
 
 def _resolve_tools(
