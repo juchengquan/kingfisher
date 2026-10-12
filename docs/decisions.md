@@ -694,6 +694,51 @@ did not build nothing catches one -- measured for `ToolException`, `ValueError` 
 before it leaves the tool. That also keeps `ToolMessage.status` true, which
 `show_your_work` reads to report a call as failed. *(2026-09-18.)*
 
+**A call from `eval` is a fifth way to dispatch, and it met none of the guards.** With
+the sandbox wired, a narrowed request's `eval` holds `tools.<name>()` for each tool it
+was granted, and `task()` wherever it may delegate. Both go through langchain-quickjs's
+own bridge rather than `ToolNode`, so no `wrap_tool_call` on any graph sees them, and no
+approval gate does either: a gate reads the model's message, and a call from code is
+never on it. Measured against the same call made directly, which refused or paused each
+time: a tool reading its own argument returned another session's `inputs/` file and the
+host's `/etc/hosts`; `/inputs/x` reached a tool untranslated; the shipped `csv_profile`
+on a missing file ended a `Kingfisher.run` turn with `FileNotFoundError`;
+`tools.writeFile` under `interrupt_on: [write_file]` wrote with no pause; and `task()`
+under `interrupt_on: [task]` ran the subagent with no pause. What held was the built-in
+file tools refusing a host path, which the backend does whoever calls, and the request's
+allowlist, since what the sandbox is handed is built from it.
+
+Three changes, each where its gap was:
+
+- **The granted workspace tools go in as `GuardedTool`s, built-ins as names.** This is
+  the compiled-subagent exception above taken a second time, for its reason -- a call
+  that never reaches `ToolNode` has no middleware to meet -- and not a reversal of
+  rewriting the call: every graph `tool_guards` reaches still rewrites. A built-in needs
+  no wrapper, because its refusal is the backend's. What a wrapped tool refuses or raises
+  comes back to the program as the tool's error text, and the turn goes on.
+- **A gated tool is left out of `tools.*`, and a gate on `task` turns `task()` off.**
+  Gating `eval` instead would put a person in front of arithmetic, and the gated tool is
+  still callable directly, behind its gate. The sandbox was re-wired only for a narrowed
+  request, so an unrestricted one with a gate kept the probe's `task()`; it is re-wired
+  whenever there is a gate now.
+- **A nested helper is handed no `eval`.** A helper is given the probe graph's tool
+  objects, and the probe's sandbox is wired before the grant is known and never narrowed.
+  A helper whose own allowlist refused `task` reached a subagent through `task()`, and
+  `release_interpreter` walks only the agent's graph, so a `quickjs-worker` thread
+  outlived every turn that used one. A top-level subagent never had `eval` -- deepagents
+  hands a subagent none of its parent's middleware -- and a helper now matches it.
+
+A subagent that lists `eval` in `builtin_tools` gets nothing for it, at either level and
+without a word, where on a deployment with the sandbox off the same file is refused as
+naming an unknown tool. Refusing it everywhere would be a rule for the definition format,
+and was left for a change of its own.
+
+The comment at the wiring called `None` the library's "no allowlist", and a test's
+docstring agreed. `None` turns `tools.*` off: an unrestricted request has never reached
+a tool from code, and the code did what it should while its text said the opposite.
+Giving an unrestricted request `tools.*` would now mean the same guarded list, and is
+not done here. *(2026-10-11.)*
+
 **The skills switch is the deployment's, for subagents too.** `cfg.skills_enabled`
 says what is wired and a request says what it wants of that. The subagent branch asked
 only the request, so a workspace with skills switched off still handed a subagent an

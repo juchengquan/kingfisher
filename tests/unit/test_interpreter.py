@@ -2,16 +2,29 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, ToolMessage
+from langgraph.checkpoint.memory import InMemorySaver
 
-from kingfisher import backend_at
+from kingfisher import Kingfisher, backend_at, default_backends
 from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.interpreter import release_interpreter
-from tests.conftest import FakeToolCallingModel, dispatched
+from kingfisher.kinds.agents.catalogue import LocalAgentRepository
+from tests.conftest import (
+    FakeToolCallingModel,
+    an_agent,
+    dispatched,
+    start,
+    subagents_dir,
+    tools_dir,
+)
+from tests.unit.scripted import Scripted
+from tests.unit.test_subagent_helpers import _helper, _tools_of
 
 
 def _model():
@@ -65,8 +78,10 @@ def test_a_request_that_withheld_the_shell_cannot_reach_it_from_code(cfg, sessio
     assert "read_file" in _ptc(interpreter)
 
 
-def test_an_unrestricted_request_gets_no_allowlist(cfg, session_dir):
-    """`None`, not an empty tuple."""
+def test_an_unrestricted_request_gets_no_tool_namespace(cfg, session_dir):
+    """`None` is the library's *off*, not an allowlist of everything: an unrestricted
+    request reaches no tool from code, and a list here would widen that unannounced.
+    """
     wired = replace(cfg, interpreter_enabled=True)
     built = build_agent(
         wired, backend=backend_at(wired, session_dir), model=_model()
@@ -184,6 +199,259 @@ def test_the_cap_is_not_the_librarys_default(cfg, session_dir):
     assert ours < theirs, f"cap {ours} is no tighter than the library default {theirs}"
 
 
+# -- a call from code keeps the guards a direct call has ----------------------
+#
+# Driven rather than inspected: the bridge dispatches past `ToolNode`, so what decides
+# these is what the call meets when it runs, and an assertion on `ptc` would pass
+# against a wrapper that guards nothing.
+
+#: The shapes a deployment's tools come in: one taking `path`, one taking a file under
+#: another name, one that raises, and one reading the turn's backend.
+CODE_TOOLS = '''
+from pathlib import Path
+
+from langchain.tools import ToolRuntime
+from langchain_core.tools import tool
+
+from kingfisher import ToolContext
+
+
+@tool
+def peek(path: str) -> str:
+    """Read a file. `path` is the same virtual path the file tools take."""
+    return Path(path).read_text()
+
+
+@tool
+def peek_any(input_file: str) -> str:
+    """Read whatever file it is handed."""
+    return Path(input_file).read_text()
+
+
+@tool
+def always_fails(anything: str) -> str:
+    """Raise, every time."""
+    raise FileNotFoundError("/inputs/nothing-here.csv")
+
+
+def backend_read(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
+    """Read a file through the session's backend."""
+    (got,) = runtime.context.backend.download_files([file_path])
+    return got.content.decode()
+
+
+TOOLS = [peek, peek_any, always_fails, backend_read]
+'''
+
+THEIRS = "IN-ANOTHER-SESSION"
+MINE = "MINE-IN-THIS-SESSION"
+
+NARROWED = Capabilities(
+    builtin_tools=("eval", "read_file", "write_file"),
+    tools=("peek", "peek_any", "always_fails", "backend_read"),
+)
+
+
+def _with_code_tools(cfg, session_dir) -> str:
+    """A workspace holding `CODE_TOOLS`, a file in this session and one in another."""
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "code_tools.py").write_text(CODE_TOOLS, encoding="utf-8")
+    other = cfg.workspace / "sessions" / "other-session" / "inputs"
+    other.mkdir(parents=True, exist_ok=True)
+    (other / "theirs.txt").write_text(THEIRS, encoding="utf-8")
+    (session_dir / "inputs" / "mine.txt").write_text(MINE, encoding="utf-8")
+    return str(other / "theirs.txt")
+
+
+def _from_code(cfg, session_dir, code, *, capabilities=NARROWED, agent=None):
+    """What one `eval` of `code` answered, and the turn's last word."""
+    built = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(
+            responses=[
+                AIMessage(
+                    content="",
+                    tool_calls=[{"name": "eval", "args": {"code": code}, "id": "ev"}],
+                ),
+                AIMessage(content="done"),
+            ]
+        ),
+        capabilities=capabilities,
+        agent=agent,
+        # A gate needs somewhere to pause into, and the agents here that carry one
+        # are refused without it.
+        checkpointer=InMemorySaver() if agent is not None else None,
+    )
+    try:
+        out = built.graph.invoke(
+            {"messages": [{"role": "user", "content": "go"}]},
+            config={"configurable": {"thread_id": "from-code"}},
+            context=built.context,
+        )
+    finally:
+        # A turn that raised skipped `after_agent`, and a runtime left open hangs the
+        # process at exit instead of failing the test that opened it.
+        release_interpreter(cfg, built.graph)
+    (answered,) = [m for m in out["messages"] if isinstance(m, ToolMessage)]
+    return str(answered.content), str(out["messages"][-1].content)
+
+
+@pytest.mark.parametrize(
+    ("call", "refused_with"),
+    [
+        ("tools.peekAny({input_file: OTHER})", "is a host path"),
+        ("tools.peekAny({input_file: '/etc/hosts'})", "is a host path"),
+        # Under `path` it is translated rather than refused, so it lands in this
+        # session, where no such file is.
+        ("tools.peek({path: OTHER})", "FileNotFoundError"),
+    ],
+)
+def test_a_workspace_tool_called_from_code_cannot_read_outside_the_session(
+    cfg, session_dir, call, refused_with
+):
+    """From `eval` a tool reading its own argument returned another session's file and
+    the host's `/etc/hosts`, since `WorkspaceToolPaths` never saw the call.
+    """
+    wired = replace(cfg, interpreter_enabled=True)
+    other = _with_code_tools(wired, session_dir)
+    program = call.replace("OTHER", json.dumps(other))
+
+    answered, _ = _from_code(wired, session_dir, f"(async () => await {program})()")
+
+    assert THEIRS not in answered
+    assert refused_with in answered
+
+
+def test_a_path_handed_to_a_tool_from_code_is_this_sessions(cfg, session_dir):
+    """`/inputs/mine.txt` reached the tool from `eval` as written, so the tool looked
+    for it at the root of the host and raised.
+    """
+    wired = replace(cfg, interpreter_enabled=True)
+    _with_code_tools(wired, session_dir)
+
+    answered, _ = _from_code(
+        wired, session_dir, "(async () => await tools.peek({path: '/inputs/mine.txt'}))()"
+    )
+
+    assert MINE in answered
+
+
+def test_a_tool_that_raises_under_code_fails_the_call_and_not_the_turn(cfg, session_dir):
+    """Uncaught in the program, a workspace tool's `FileNotFoundError` ended the turn:
+    `WorkspaceToolErrors` wraps a tool call, and a call from code is not one.
+    """
+    wired = replace(cfg, interpreter_enabled=True)
+    _with_code_tools(wired, session_dir)
+
+    answered, last = _from_code(
+        wired, session_dir, "(async () => await tools.alwaysFails({anything: 'x'}))()"
+    )
+
+    assert "FileNotFoundError" in answered
+    assert last == "done"
+
+
+def test_a_tool_taking_the_turns_backend_still_gets_it_from_code(cfg, session_dir):
+    """The bridge injects `runtime` only where the tool's schema declares it, so a
+    wrapper that hid the declaration would call the tool without its backend.
+    """
+    wired = replace(cfg, interpreter_enabled=True)
+    _with_code_tools(wired, session_dir)
+
+    answered, _ = _from_code(
+        wired,
+        session_dir,
+        "(async () => await tools.backendRead({file_path: '/inputs/mine.txt'}))()",
+    )
+
+    assert MINE in answered
+
+
+@pytest.mark.parametrize(
+    ("gated", "spelled"),
+    # A built-in, which reaches the sandbox by name, and a workspace tool, which
+    # reaches it as an object: two lists, and a gate has to empty both.
+    [("write_file", "writeFile"), ("peek", "peek")],
+)
+def test_a_gated_tool_is_out_of_reach_from_code(cfg, session_dir, gated, spelled):
+    """Under `interrupt_on: [write_file]` a `tools.writeFile` from `eval` wrote with no
+    pause: the gate reads the model's tool calls, and a call from code is never one.
+    """
+    wired = replace(cfg, interpreter_enabled=True)
+    _with_code_tools(wired, session_dir)
+    an_agent(wired, "gated", interrupt_on=f"[{gated}]")
+    an_agent(wired, "ungated", interrupt_on="[execute]")
+    agents = LocalAgentRepository(wired.catalogue_roots["agents"]).specs
+    program = f"(async () => typeof tools.{spelled})()"
+
+    gated_answer, _ = _from_code(wired, session_dir, program, agent=agents["gated"])
+    ungated_answer, _ = _from_code(wired, session_dir, program, agent=agents["ungated"])
+
+    assert "undefined" in gated_answer
+    # The control: without it this passes for a tool the request never granted.
+    assert "function" in ungated_answer
+
+
+def test_a_gate_on_task_takes_task_out_of_code_on_an_unrestricted_request(
+    cfg, session_dir
+):
+    """`task()` from `eval` ran the subagent with no pause under `interrupt_on: [task]`:
+    an unrestricted request never re-wired the sandbox, so it never heard of the gate.
+    """
+    wired = replace(cfg, interpreter_enabled=True)
+    subagents_dir(wired).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(wired) / "kept.yaml").write_text(
+        "name: kept\ndescription: Answers.\nsystem_prompt: |\n  You answer.\n",
+        encoding="utf-8",
+    )
+    an_agent(wired, "gated", interrupt_on="[task]", subagents="[kept]")
+    an_agent(wired, "ungated", interrupt_on="[execute]", subagents="[kept]")
+    agents = LocalAgentRepository(wired.catalogue_roots["agents"]).specs
+    program = "(async () => typeof task)()"
+
+    gated_answer, _ = _from_code(
+        wired, session_dir, program, capabilities=Capabilities(), agent=agents["gated"]
+    )
+    ungated_answer, _ = _from_code(
+        wired, session_dir, program, capabilities=Capabilities(), agent=agents["ungated"]
+    )
+
+    assert "undefined" in gated_answer
+    assert "function" in ungated_answer
+
+
+def test_a_nested_helper_is_handed_no_sandbox(cfg, session_dir):
+    """A helper was handed the probe graph's `eval`, built before the grant and never
+    narrowed: its `task()` reached a subagent its own allowlist refused.
+    """
+    wired = replace(cfg, interpreter_enabled=True)
+    subagents_dir(wired).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(wired) / "outer.yaml").write_text(
+        "name: outer\ndescription: Consults.\nsubagents: [helper]\n"
+        "system_prompt: |\n  You ask.\n",
+        encoding="utf-8",
+    )
+    # Listing `eval` itself, so the helper's own grant is not what keeps it away.
+    (subagents_dir(wired) / "helper.yaml").write_text(
+        "name: helper\ndescription: Computes.\nbuiltin_tools: [read_file, eval]\n"
+        "system_prompt: |\n  You compute.\n",
+        encoding="utf-8",
+    )
+
+    graph = build_agent(
+        wired,
+        backend=backend_at(wired, session_dir),
+        model=_model(),
+        capabilities=Capabilities(
+            builtin_tools=("eval", "task", "read_file"), tools=(), subagents=("outer", "helper")
+        ),
+    ).graph
+
+    assert "eval" in dispatched(graph), "the sandbox was not wired -- this proves nothing"
+    assert "eval" not in _tools_of(_helper(graph, "outer", "helper"))
+
+
 # -- giving the runtime back ----------------------------------------------
 
 
@@ -299,3 +567,79 @@ def test_releasing_costs_nothing_when_the_interpreter_is_off(cfg, session_dir):
     release_interpreter(cfg, graph)
 
     assert not _quickjs_workers()
+
+
+def _close_every_interpreter() -> None:
+    """Close whatever runtime is still open, wherever its middleware is held.
+
+    The net under the test below, for the reason `_force_close` is one: a runtime left
+    open hangs the process at exit. That test is about a runtime held by no graph the
+    turn returns, so there is no graph to walk and the heap is searched instead.
+    """
+    import gc
+    from contextlib import suppress
+
+    from langchain_quickjs import CodeInterpreterMiddleware
+
+    for held in gc.get_objects():
+        if isinstance(held, CodeInterpreterMiddleware):
+            with suppress(Exception):
+                held._registry.close()
+
+
+def test_no_sandbox_outlives_a_turn_in_which_a_helper_reached_for_it(scripted):
+    """A nested helper's `eval` came off the probe graph, whose runtime
+    `release_interpreter` never sees, so a `quickjs-worker` outlived every such turn.
+
+    Driven through the service, because the teardown under test is the turn's own.
+    The agent calls `eval` as well, so the turn opens a runtime whatever the helper
+    holds -- without it this passes against a sandbox that never started.
+    """
+    wired = replace(scripted, interpreter_enabled=True)
+    subagents_dir(wired).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(wired) / "outer.yaml").write_text(
+        "name: outer\ndescription: Consults.\nsubagents: [inner]\n"
+        "system_prompt: |\n  You ask.\n",
+        encoding="utf-8",
+    )
+    (subagents_dir(wired) / "inner.yaml").write_text(
+        "name: inner\ndescription: Computes.\nsystem_prompt: |\n  You compute.\n",
+        encoding="utf-8",
+    )
+    an_agent(wired, "only", subagents="[outer, inner]")
+    start(wired, "s")
+
+    def calls(name, args, call_id):
+        return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": call_id}])
+
+    Scripted.script.extend(
+        [
+            calls("eval", {"code": "1 + 1"}, "agent-eval"),
+            calls("task", {"description": "go", "subagent_type": "outer"}, "to-outer"),
+            calls("task", {"description": "go", "subagent_type": "inner"}, "to-inner"),
+            calls("eval", {"code": "1 + 1"}, "helper-eval"),
+            AIMessage(content="INNER-DONE"),
+            AIMessage(content="OUTER-DONE"),
+            AIMessage(content="done"),
+        ]
+    )
+    try:
+        events = list(
+            Kingfisher(wired, backends=default_backends).stream(
+                Request(
+                    "go",
+                    agent="only",
+                    session_id="s",
+                    capabilities=Capabilities(
+                        builtin_tools=("eval", "task", "read_file"), tools=()
+                    ),
+                )
+            )
+        )
+        remaining = _quickjs_workers()
+    finally:
+        _close_every_interpreter()
+
+    evaluated = [e.text for e in events if e.kind == "tool_result" and e.tool == "eval"]
+    assert "<result>2</result>" in evaluated, "the agent's own eval never ran"
+    assert not remaining, "a sandbox outlived the turn that opened it"

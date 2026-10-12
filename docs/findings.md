@@ -404,6 +404,40 @@ deserves re-measuring before it decides anything.*
 A sized tmpfs supplies what mirage was wanted for -- memory-backed files at real
 paths, with a kernel-enforced limit -- and puts no library under every turn.
 
+## The code sandbox
+
+*langchain-quickjs 0.3.5, 2026-10-11: driven through `eval` against the same call made
+directly, and `filter_tools_for_ptc` called on its own.*
+
+- **`ptc=None` turns `tools.*` off.** It is the library's default and means the program
+  reaches no tool at all, not every tool. `[]` exposes nothing either: only a list
+  naming something does.
+- **A list entry is a name or a `BaseTool`, and an object wins.** A name is matched
+  against the tools the agent holds; an object is exposed as given, held or not.
+  `filter_tools_for_ptc` puts every object ahead of the name matches and keeps the
+  first of each name, so a name an object already answers to is dropped, whichever
+  order the list wrote them in. Kingfisher hands over no such name anyway.
+- **Neither `tools.<name>()` nor `task()` passes through `ToolNode`.** The bridge calls
+  `tool.arun(args)` and `task_tool.arun` itself, so no `wrap_tool_call` on the graph
+  sees the call. Nor does an `interrupt_on` gate: `HumanInTheLoopMiddleware` is an
+  `after_model` hook reading the tool calls on the model's message, and a call from
+  code is never on it. The library's own docstrings warn of the gate for both.
+- **The bridge injects `runtime`, state and store as `ToolNode` would**, by reading the
+  tool's own schema with langgraph's `_get_all_injected_args`. A wrapper has to
+  advertise the inner tool's full `args_schema`, injected fields included, or the tool
+  is called without them; `tool_call_schema` drops them.
+- **An exception the program does not catch leaves `eval` as itself.** The original is
+  re-raised out of the evaluation and meets whatever wraps the `eval` call: in
+  kingfisher, `HostPathGuard` turned the backend's host-path refusal into a failed
+  `eval` result, and a workspace tool's `FileNotFoundError` ended the turn. Caught in
+  the program, either reads as `HostError: Host function failed`, its message lost. A
+  tool with `handle_tool_error` returns its error text as an ordinary value instead.
+- **The `tools.*` reference renders a return type from `tool.func` or
+  `tool.coroutine`**, so a `BaseTool` with neither reads `Promise<unknown>` where the
+  same function as a `StructuredTool` reads `Promise<string>`.
+- **`task()` exists whenever `subagents=True` and the agent holds a `task` tool**, and
+  dispatches inside an `eval` already approved.
+
 ## Costs worth knowing
 
 *Re-measured 2026-09-03. All three had drifted, and one of them was never the

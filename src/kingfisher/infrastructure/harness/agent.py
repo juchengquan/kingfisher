@@ -66,7 +66,7 @@ from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
 from kingfisher.infrastructure.harness.session_paths import SessionPaths
 from kingfisher.infrastructure.harness.tool_context import ToolContext
-from kingfisher.infrastructure.harness.tool_guards import tool_guards
+from kingfisher.infrastructure.harness.tool_guards import guarded_tools, tool_guards
 from kingfisher.infrastructure.prompting import memory_guidelines, system_prompt
 from kingfisher.infrastructure.sandbox.confinement import EXTERNAL
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
@@ -505,12 +505,20 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     _refuse_unknown_gates(agent, gated, surface.offers)
     permitted = surface.permitted
 
-    if interpreter_at is not None and permitted is not None:
+    if interpreter_at is not None and (permitted is not None or gated):
         # Re-wired now that the union is known. It had to be in place for the
         # probe -- `eval` is a tool, so a request naming it needs it in the
         # enumerated set -- but unrestricted, since the grant was not resolved
-        # yet. A caller that withheld the shell must not reach it from code.
-        middleware[interpreter_at] = _interpreter(cfg, permitted)
+        # yet. A caller that withheld the shell must not reach it from code, and
+        # an unrestricted request must not reach a gated `task` from it either.
+        middleware[interpreter_at] = _interpreter(
+            cfg,
+            permitted,
+            gated=gated,
+            # Wrapped, as a compiled subagent's are and for its reason: a call from
+            # code meets none of the guards on this graph's stack.
+            workspace=guarded_tools(surface.carried, paths),
+        )
 
     # Both kinds read it, so it is resolved before either branch. It used to
     # be bound inside the subagents' block, which meant an agent with no

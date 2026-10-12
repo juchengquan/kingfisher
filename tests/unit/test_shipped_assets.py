@@ -455,24 +455,49 @@ def test_the_preset_that_grants_a_skill_is_told_about_it(
 
 
 def test_the_shipped_subagent_consults_its_helper_under_the_agent_that_ships_it(
-    workspace_with_presets, session_dir, fake_model, shipped
+    workspace_with_presets, session_dir, shipped
 ):
-    """`reviewer` names `profiler`, and `assistant` grants both, so the agent a reader
-    runs first has a subagent with a helper.
+    """`reviewer.yaml` named `profiler` and left `task` off its own `builtin_tools`, so
+    every consultation was refused -- while a check that `task` was registered passed.
 
     Read off `assistant.yaml` rather than written out: what could regress is the file
-    that ships the pairing dropping half of it.
+    that ships the pairing dropping half of it. Driven, because the refusal is the
+    reviewer's own allowlist and arrives only when the call is made.
     """
     declared = LocalAgentRepository(shipped / "agents").specs["assistant"].subagents
     wired = replace(workspace_with_presets, skills_enabled=True)
+
+    def calls(who: str) -> AIMessage:
+        return AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "task", "args": {"description": "go", "subagent_type": who}, "id": who}
+            ],
+        )
+
     graph = build_agent(
         wired,
         backend=backend_at(wired, session_dir),
-        model=fake_model,
+        model=FakeToolCallingModel(
+            responses=[
+                calls("reviewer"),
+                calls("profiler"),
+                AIMessage(content="PROFILER-ANSWERED"),
+                AIMessage(content="REVIEWER-DONE"),
+                AIMessage(content="done"),
+            ]
+        ),
         capabilities=Capabilities(subagents=declared),
     ).graph
 
-    assert "task" in _tools_of(_subagent(graph, "reviewer")), "reviewer lost its helper"
+    out = graph.invoke(
+        {"messages": [{"role": "user", "content": "go"}]}, {"recursion_limit": 20}
+    )
+
+    # Refused, the reviewer takes the profiler's line as its own answer and reports
+    # that instead, so what came back from it says which happened.
+    (reported,) = [m.content for m in out["messages"] if isinstance(m, ToolMessage)]
+    assert reported == "REVIEWER-DONE"
 
 
 def test_a_caller_naming_the_subagent_alone_gets_it_without_its_helper(
