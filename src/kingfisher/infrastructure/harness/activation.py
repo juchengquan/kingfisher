@@ -85,6 +85,15 @@ def within_reach(
     return tuple(name for name in names if reaches(defined[name].source_ids, held))
 
 
+def offered_to(defined: Mapping[str, SubagentSpec], held: frozenset[str] | None) -> str:
+    """The subagents a refusal of an unknown one lists to this caller.
+
+    Only the listing: what is unknown is still asked of every definition, so a file's
+    typo is refused whoever is calling.
+    """
+    return f"{tuple(sorted(within_reach(defined, defined, held)))}"
+
+
 def indistinct_subagents(  # noqa: PLR0913 -- the agent and the caller are what make
     # this the build's roster rather than the request's
     cfg: Config,
@@ -208,12 +217,19 @@ def _activated_subagents(
     # `ALL` is every subagent the workspace defines, resolved here because here
     # is where "what it defines" is known.
     activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
-    refuse_unoffered(activated, offered=defined, kind="subagent", subject="this request")
+    refuse_unoffered(
+        activated,
+        offered=defined,
+        kind="subagent",
+        subject="this request",
+        listing=offered_to(defined, held),
+    )
     # After the unknown-name check, not before: naming one that does not exist
     # and naming two that do are different mistakes, and the first would
     # otherwise be reported as the second.
     refuse_two_of_a_name(activated, subject="this request")
     # A subagent's own `source_ids:` holds wherever it is used, so one this caller
     # cannot reach is dropped as an agent's narrowed entry is -- after the refusals,
-    # which are about what the request named and must not depend on who sent it.
+    # since whether one is raised is about what the request named and must not
+    # depend on who sent it. What one lists does, through `offered_to`.
     return defined, within_reach(activated, defined, held)

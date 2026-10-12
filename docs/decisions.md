@@ -1736,6 +1736,15 @@ imports deepagents, and two answers to one question inside one listing is how it
 fields came apart before. The tests drive each output for `C` and the control for `A`.
 *(2026-10-12.)*
 
+**A refusal of a subagent nothing defines offers only the ones the caller reaches.**
+The entry above left one output naming the rest. Measured with a real turn, a caller in
+`C` whose agent's file, request or subagent's file named a subagent nothing defines was
+refused with every definition listed after `offered:`, `insider` and `ledger` among
+them. Both refusals list through `offered_to` now, which is `within_reach` over every
+definition. Whether one is raised is unchanged: what is unknown is still asked of every
+definition, so a typo in a file is refused whoever is calling, and a caller in `A` or a
+run with no `source_ids.yaml` reads the list it read before. *(2026-10-12.)*
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds

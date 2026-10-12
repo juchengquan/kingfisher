@@ -91,6 +91,9 @@ def subagent_helpers(
     activated: Selection,
     *,
     held: frozenset[str] | None = None,
+    #: What the refusal below lists: `offered_to`, for this caller. No default, since
+    #: `refuse_unoffered`'s own is every definition, out of reach or not.
+    listing: str,
 ) -> tuple[str, ...]:
     """Which subagents this one may consult, of the ones it names."""
     if spec.subagents is None:
@@ -100,7 +103,11 @@ def subagent_helpers(
     # `defined`, so a name settled here to one of them is an edge no walk has seen,
     # and a loop through it builds without end.
     refuse_unoffered(
-        named, offered=defined, kind="subagent", subject=f"subagent {spec.name!r}"
+        named,
+        offered=defined,
+        kind="subagent",
+        subject=f"subagent {spec.name!r}",
+        listing=listing,
     )
     return tuple(narrowed(spec.declares(held).subagents, by=activated) or ())
 
