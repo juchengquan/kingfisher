@@ -78,7 +78,9 @@ from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.activation import (
     defined_subagents,
+    for_the_caller,
     indistinct_subagents,
+    settled_request,
 )
 from kingfisher.infrastructure.harness.agent import (
     Assembled,
@@ -755,7 +757,8 @@ class Kingfisher(Sessions, Disposal):
         placement = yield from place_inputs(getattr(request, "inputs", ()), files)
 
         # What this deployment permits, narrowed by what the request asked for.
-        allowed = self._effective_grants(source_ids).intersect(request.capabilities)
+        granted = self._effective_grants(source_ids)
+        allowed = granted.intersect(request.capabilities)
         # Named here rather than inline below, because two things want it and
         # the expression is a mouthful. `None` for a run with no policy or an
         # `UNSCOPED` one: both see the whole workspace, so there is nothing to
@@ -779,6 +782,18 @@ class Kingfisher(Sessions, Disposal):
             if self._graph is None or held is not None
             else None
         )
+        if self._graph is None:
+            # Here, where the request's own names are still apart from the grant and
+            # the agent that clamp them -- the build is handed the three combined --
+            # and before the build and the reports both read them: a bare name settled
+            # to the one this caller reaches is what both have to see.
+            allowed = settled_request(
+                self.cfg,
+                allowed,
+                ceiling=for_the_caller(agent, granted, held=held).subagents,
+                held=held,
+                catalogue=self.catalogue,
+            )
         history = yield from read_transcript(harness)
         # Read where the transcript is, and only for a graph built here: one the
         # deployment supplied has nothing hooked to record into it.

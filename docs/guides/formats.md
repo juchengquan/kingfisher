@@ -1499,6 +1499,13 @@ absent from listings, from the "this workspace offers …" in a refusal, and fro
 the report of what a run withheld. Naming one gives the same answer naming a typo
 does, so nothing lets a caller enumerate the catalogue by guessing.
 
+A mistake in a definition's own file is the file's, so it is refused whoever is
+calling: a subagent nothing defines, two of a name, a loop. What such a refusal offers
+instead is still only what the caller reaches, but three of them name what they are
+about, out of reach or not, because no true wording hides that it exists: a file naming
+a bare name two subagents share, an agent's file naming both, and a loop. A caller
+meets these only through a file the operator has to fix anyway.
+
 The operator's view is the whole of it:
 
 ```
