@@ -146,7 +146,7 @@ true of every agent in the workspace.
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table below. Unset means all of them; `[]` means none |
 | `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none |
 | `skills` | optional | Which procedures it is told about. Unset grants **none**; write `["*"]` for every skill the workspace offers |
-| `subagents` | optional | Subagents it may consult. Unset grants **none**; `["*"]` is every subagent the workspace offers |
+| `subagents` | optional | Subagents it may consult. Unset grants **none**; `["*"]` is every subagent the workspace offers. A `builtin_tools` list has to include `task`, the tool one is called through |
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
 | `model` | optional | One entry in your `models.yaml`. Unset runs the `default:` there. A list is refused |
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
@@ -302,7 +302,8 @@ Three things worth knowing before you restrict this list:
 - **`read_file` is close to mandatory.** The filesystem tooling assumes it. An
   allowlist without it produces an agent that cannot see its own workspace.
 - **Omitting `task` disables subagents** however many you activate — `task` is
-  how delegation happens.
+  how delegation happens. A definition whose `subagents:` names any while its
+  `builtin_tools` leaves `task` out is refused when the catalogue loads.
 - **`execute` is the one that matters for isolation.** It bypasses the
   filesystem permission layer entirely, so a request that activates the shell
   can reach anything the process can, including skills it did not activate. Deny
@@ -504,7 +505,7 @@ on the spot, so every entry after the first would be unreachable.
 | `name` | required | What a request activates it by. Authoritative — the filename is not |
 | `description` | required | Single line. This is what the parent agent sees when deciding whether to delegate, so write it as a trigger, not a title |
 | `system_prompt` | required | The subagent's whole instruction, written after `\|` |
-| `builtin_tools` | optional | deepagents' own set, listed in the tools table above. Unset means all of them; `[]` means none |
+| `builtin_tools` | optional | deepagents' own set, listed in the tools table above. Unset means all of them; `[]` means none. `eval` is refused here: the code sandbox is the agent's alone, and no subagent is handed it |
 | `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none. An entry written `{name: x, source: bundled}` comes from this subagent's own folder instead — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it. `source: bundled` works here too |
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
@@ -525,7 +526,8 @@ subagents: [second-opinion]
 ```
 
 If `reviewer` lists its `builtin_tools`, `task` has to be on that list too. It is the
-tool a helper is called through, and naming a helper does not grant it.
+tool a helper is called through, and naming a helper does not grant it, so a list
+without it is refused when the catalogue loads.
 
 And the subagent it names, which is an ordinary definition — the only thing
 that makes it a helper is being named above:

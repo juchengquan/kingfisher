@@ -4,6 +4,9 @@ behaviour.
 
 from __future__ import annotations
 
+import json
+
+import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher import backend_at
@@ -70,6 +73,33 @@ TOOLS = [answers]
 '''
 
 
+TEXT = {"type": "text", "text": "a chart"}
+IMAGE = {"type": "image", "base64": "iVBORw0KGgo=", "mime_type": "image/png"}
+
+SEVERAL = '''
+TEXT = {text!r}
+IMAGE = {image!r}
+
+
+def answers(x: str):
+    """Return several things. Use never; this is a fixture."""
+    return {value}
+
+
+TOOLS = [answers]
+'''
+
+#: What a tool returns when it returns several things, and what the model is shown.
+RETURNED_SEVERAL = {
+    "a tuple of strings": ('("three", "columns")', '["three", "columns"]'),
+    "a tuple of other things": ('("rows", 3)', '["rows", 3]'),
+    "a list of blocks, an image among them": ("[TEXT, IMAGE]", [TEXT, IMAGE]),
+    "a tuple of blocks": ("(TEXT, IMAGE)", [TEXT, IMAGE]),
+    "a string beside a block": ('["a chart", IMAGE]', json.dumps(["a chart", IMAGE])),
+    "an empty list": ("[]", []),
+}
+
+
 def _results(cfg, session_dir, body: str) -> list[ToolMessage]:
     """Install a tool with that body, have a model call it once, and return every tool
     result the run produced.
@@ -97,13 +127,13 @@ def _results(cfg, session_dir, body: str) -> list[ToolMessage]:
 
 
 def test_what_the_model_is_shown(cfg, session_dir):
-    """The four rows of the table the guide prints, asserted as the model sees them
-    rather than as langchain computes them.
+    """The table's rows for a single value, asserted as the model sees them rather
+    than as langchain computes them.
 
     `status` is asserted with the content because the guide's claim is that *nothing
     fails*: a tool returning the wrong shape reports success and tells the model
     something unhelpful, and a row that started raising would still pass a content-only
-    check on the other three.
+    check on the others.
     """
     for body, shown in [
         (STRING, "three columns"),
@@ -115,6 +145,24 @@ def test_what_the_model_is_shown(cfg, session_dir):
 
         assert [m.content for m in results] == [shown]
         assert [m.status for m in results] == ["success"]
+
+
+@pytest.mark.parametrize("returned", sorted(RETURNED_SEVERAL))
+def test_what_the_model_is_shown_for_several_things(cfg, session_dir, returned):
+    """A row of the guide's table for a list or a tuple that stopped being true.
+
+    Driven through a built agent rather than `_format_output`, which is the first of
+    two readings: it makes any list or tuple of strings and blocks into content, and
+    langgraph's tool node then encodes all but a list of typed blocks. Reading the
+    first alone predicts `("three", "columns")` arriving as two strings.
+    """
+    value, shown = RETURNED_SEVERAL[returned]
+    body = SEVERAL.format(text=TEXT, image=IMAGE, value=value)
+
+    results = _results(cfg, session_dir, body)
+
+    assert [m.content for m in results] == [shown]
+    assert [m.status for m in results] == ["success"]
 
 
 def test_a_command_is_applied_rather_than_wrapped(cfg, session_dir) -> None:

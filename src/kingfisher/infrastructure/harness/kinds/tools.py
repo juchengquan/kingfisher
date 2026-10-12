@@ -13,8 +13,7 @@ from kingfisher.domain.capabilities import (
     narrowed,
 )
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.harness.interpreter import INTERPRETER_TOOL
-from kingfisher.kinds.subagents import TASK_TOOL
+from kingfisher.kinds.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.kinds.tools.spec import Found, Offering
 
 if TYPE_CHECKING:

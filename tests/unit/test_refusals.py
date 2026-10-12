@@ -126,6 +126,13 @@ def a_subagent_missing_a_field(cfg):
     _write(_root(cfg, "subagents") / "thin.yaml", "description: A subagent.\n")
 
 
+def a_subagent_listing_the_code_sandbox(cfg):
+    _write(
+        _root(cfg, "subagents") / "s.yaml",
+        SUBAGENT.format(name="s") + "builtin_tools: [read_file, eval]\n",
+    )
+
+
 #: A portable declaration -- no `build`, so kingfisher assembles it -- with one key
 #: spliced in. One template rather than a literal per defect: every defect below
 #: differs by exactly that key, and separate copies would let all but one drift out
@@ -247,7 +254,7 @@ class Refusal:
 REFUSALS: dict[str, Refusal] = {
     "kinds/agents/catalogue.py::LocalAgentRepository._defined": Refusal(
         1, defect=two_agents_of_a_name),
-    "kinds/agents/spec.py::parse": Refusal(3, defect=an_agent_missing_a_field),
+    "kinds/agents/spec.py::parse": Refusal(4, defect=an_agent_missing_a_field),
     "kinds/agents/spec.py::_gated_tools": Refusal(
         1, defect=an_agent_gating_every_tool_with_a_star),
     # Raises the error class it was handed, which is how it stayed out of the first
@@ -296,7 +303,9 @@ REFUSALS: dict[str, Refusal] = {
     # one missing a key, so the old defect reaches `_portable` and never gets here.
     "kinds/subagents/spec.py::declared": Refusal(
         4, defect=a_compiled_subagent_whose_build_is_not_callable),
-    "kinds/subagents/spec.py::parse": Refusal(2, defect=a_subagent_missing_a_field),
+    "kinds/subagents/spec.py::parse": Refusal(3, defect=a_subagent_missing_a_field),
+    "kinds/subagents/spec.py::_refuse_the_sandbox": Refusal(
+        1, defect=a_subagent_listing_the_code_sandbox),
     "kinds/tools/catalogue.py::CarriedTools.found": Refusal(
         1, defect=a_portable_subagent_carrying_two_tools_of_a_name),
     "kinds/tools/catalogue.py::LocalToolRepository.found": Refusal(

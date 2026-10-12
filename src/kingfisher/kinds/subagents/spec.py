@@ -22,8 +22,9 @@ from typing import Any
 
 from kingfisher.domain import fields
 from kingfisher.domain.access import AUDIENCED
-from kingfisher.domain.capabilities import ALL, bare_name
+from kingfisher.domain.capabilities import ALL, Selection, bare_name
 from kingfisher.domain.definition import Definition
+from kingfisher.kinds.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.kinds.tools.spec import claimed_sources
 
 DIRECTORY = "subagents"
@@ -428,13 +429,13 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
     _require(entry, "name", "description", "system_prompt", source=source)
 
     read = fields.Reader(source=source, error=SubagentError)
+    builtin = read.selection(entry.get("builtin_tools"), absent=ALL, key="builtin_tools")
+    _refuse_the_sandbox(builtin, source=source)
     return SubagentSpec(
         name=fields.text(entry["name"]),
         description=fields.text(entry["description"]),
         system_prompt=fields.text(entry["system_prompt"]),
-        builtin_tools=read.selection(
-            entry.get("builtin_tools"), absent=ALL, key="builtin_tools"
-        ),
+        builtin_tools=builtin,
         # Explicit, and the one line here that would be a hole if it were left out.
         # The field defaults to `ALL`, which means *inherit whatever the request
         # granted* -- so a definition saying nothing about workspace tools, which
@@ -554,6 +555,40 @@ def _refuse_unknown(document: Mapping[str, object], source: Path) -> None:
         msg = f"{source.name}: {complaint}"
         raise SubagentError(msg)
 
+
+def uncallable_helpers(builtin_tools: Selection, subagents: Selection) -> str | None:
+    """Why a definition could never call the subagents it names, or `None` if it can.
+
+    The agent format asks it too, so the two refuse in the same words.
+    """
+    if not subagents or builtin_tools == ALL or TASK_TOOL in (builtin_tools or ()):
+        return None
+    named = "every subagent" if subagents == ALL else ", ".join(subagents)
+    return (
+        f"subagents names {named}, and builtin_tools leaves out {TASK_TOOL!r}, the tool "
+        f"a subagent is called through. Naming one does not grant it, so every call "
+        f"would be refused when it was made. Add {TASK_TOOL} to builtin_tools, or "
+        f"leave builtin_tools out for every built-in"
+    )
+
+
+def _refuse_the_sandbox(builtin_tools: Selection, *, source: str) -> None:
+    """Refuse a subagent listing the code sandbox's tool, whether or not one is wired.
+
+    With it wired, nothing else would: the definition loads, the name is one the agent
+    offers, and the subagent is built without it.
+    """
+    if builtin_tools in (ALL, None) or INTERPRETER_TOOL not in builtin_tools:
+        return
+    msg = (
+        f"{source}: builtin_tools lists {INTERPRETER_TOOL!r}, the code sandbox, which is "
+        f"the agent's alone -- no subagent is handed it at any depth, so the entry "
+        f"would grant nothing. Take it off the list, and leave the computing to the "
+        f"agent that consults this one"
+    )
+    raise SubagentError(msg)
+
+
 def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     """One definition, from its decoded fields."""
     reader = fields.Reader(source=source.name, error=SubagentError)
@@ -573,6 +608,13 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             raise SubagentError(msg)
 
     wanted = fields.wanted_model(document, reader)
+
+    # `[read_file, grep]` and a block list are the same thing to YAML, so both reach
+    # here already parsed. Absent means inherit for tools and none for skills -- the
+    # asymmetry the format has always had, said in the values rather than in a
+    # reader that special-cases one of them.
+    builtin = reader.selection(document.get("builtin_tools"), absent=ALL, key="builtin_tools")
+    _refuse_the_sandbox(builtin, source=source.name)
 
     # Read once, then split. A `tools:` entry may be written `where::what`, and
     # only `what` may reach the rest of kingfisher -- a grant, an allowlist and
@@ -606,6 +648,12 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             "one, so it is always a loop. Name the subagents this one consults"
         ),
     )
+    # At load, because the only other place this shows is the call: the subagent's own
+    # allowlist refuses `task` there, the model reads the error and carries on without
+    # its helper, and nobody who could fix the file ever sees it.
+    if (complaint := uncallable_helpers(builtin, written_subagents)) is not None:
+        msg = f"{source.name}: {complaint}"
+        raise SubagentError(msg)
     audiences = {
         name: entries
         for name, entries in zip(
@@ -619,14 +667,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         name=fields.text(document["name"]),
         description=fields.text(document["description"]),
         system_prompt=fields.text(document["system_prompt"]),
-        # `[read_file, grep]` and a block list are the same thing to YAML, so
-        # both reach here already parsed.
-        # Absent means inherit for tools and none for skills -- the
-        # asymmetry the format has always had, now said in the values
-        # rather than in a reader that special-cases one of them.
-        builtin_tools=reader.selection(
-            document.get("builtin_tools"), absent=ALL, key="builtin_tools"
-        ),
+        builtin_tools=builtin,
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),
         skills=written_skills,

@@ -129,12 +129,15 @@ decides what the model is shown:
 | `"three columns"` | `three columns`, unchanged |
 | `{"rows": 3}` | `{"rows": 3}` — `json.dumps`, so a `set` or a `datetime` is not what you meant |
 | `None` | `null` |
+| `("three", "columns")`, or the same as a list | `["three", "columns"]` — JSON, like any other list |
+| a list or tuple of content blocks: `[{"type": "text", "text": "…"}, {"type": "image", "base64": "…", "mime_type": "image/png"}]` | the blocks themselves — a multimodal result. Every item has to be a block of a type LangChain knows (`text`, `image`, `image_url`, `json`, `search_result`, `custom_tool_call_output`, `document`, `file`). Anything else among them, a plain string included, and the whole value is JSON instead, an image's base64 with it |
+| `[]` or `()` | nothing at all — a list of no blocks |
 | anything JSON will not take | its `repr` |
 
 Nothing fails in any of those rows, and that is the point. A tool returning the
 wrong shape does not raise; it tells the model something unhelpful, in a
-transcript nobody reads until the answer is already wrong. The first row is the
-only one where you decide what it says.
+transcript nobody reads until the answer is already wrong. A string and a list of
+blocks are the only returns where you decide what it says.
 
 Two shapes escape the coercion: a `ToolMessage` or a langgraph `Command` is
 returned as-is and never wrapped, so a tool can write its own result or update
@@ -148,7 +151,7 @@ that is documented rather than refused.
 A two-tuple is content-and-artifact only if you asked for it with
 `@tool(response_format="content_and_artifact")`, which then *requires* the pair
 and raises naming the type it got instead. Without that declaration a tuple is
-an ordinary value and arrives JSON-encoded like the rest.
+read as a list: JSON, unless every item is a content block.
 
 ## When a tool fails
 
