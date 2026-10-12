@@ -12,7 +12,7 @@ from collections import deque
 from typing import ClassVar
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 
@@ -33,6 +33,8 @@ class Scripted(BaseChatModel):
     timeout: float
 
     script: ClassVar[deque[AIMessage]] = deque()
+    #: What each call was handed, in order: what the model saw, after every middleware.
+    heard: ClassVar[list[list[BaseMessage]]] = []
 
     @property
     def _llm_type(self) -> str:
@@ -42,4 +44,5 @@ class Scripted(BaseChatModel):
         return self
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        self.heard.append(list(messages))
         return ChatResult(generations=[ChatGeneration(message=self.script.popleft())])

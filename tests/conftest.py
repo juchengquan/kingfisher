@@ -51,8 +51,10 @@ def scripted(cfg):
         name: replace(endpoint, adapter=row) for name, endpoint in cfg.models.endpoints.items()
     }
     Scripted.script.clear()
+    Scripted.heard.clear()
     yield replace(cfg, models=replace(cfg.models, endpoints=endpoints))
     Scripted.script.clear()
+    Scripted.heard.clear()
 
 
 class RecordedEvents:

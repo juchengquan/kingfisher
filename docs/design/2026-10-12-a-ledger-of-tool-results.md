@@ -1,10 +1,12 @@
 # A ledger of tool results
 
-**Status:** slice 1 of 3 has landed: results are recorded, kept as files, written to
-the ledger and listed on `RunResult.ledger`. The stamp, the delta and the index are
-still to come. Slice 1 settled two things this left open: a result file the backend
-refuses leaves its row with `path` null rather than failing the call, and a `task`
-answer's access is the `task` grant's own audience held together with its run's.
+**Status:** slices 1 and 2 of 3 have landed: results are recorded, kept as files,
+written to the ledger and listed on `RunResult.ledger`, and the model sees them, each
+result stamped with its id and the next user message carrying the delta. The rolled-up
+index is still to come. Slice 1 settled two things this left open: a result file the
+backend refuses leaves its row with `path` null rather than failing the call, and a
+`task` answer's access is the `task` grant's own audience held together with its run's.
+Slice 2 settled the rest of what the model sees, under *What the model sees*.
 **Date:** 2026-10-12.
 **Occasion:** the owner's notes on artifacts named three pieces of work. The first, *a
 tool that creates a file saves it and returns where it went*, shipped, and its entry in
@@ -96,14 +98,20 @@ threads langgraph runs parallel calls on.
 number is the last one in the ledger plus one, read when the turn starts.
 
 **Stamped into the result.** A last line, `[A-0042]`, is appended to the text the model
-gets, and a result made of content blocks gains a text block. deepagents' stub keeps the
-head and the tail of a result, so the stamp survives offloading. `task` returns a
-`Command` carrying a `ToolMessage`, and the stamp goes on that message.
+gets, and a result made of content blocks gains a text block. That block's text is
+`\n[A-0042]`: the transcript and langchain's `.text` join blocks with nothing between
+them, and a bare id would read as the end of the result's last line. deepagents' stub
+keeps the head and the tail of a result, so the stamp survives offloading. `task`
+returns a `Command` carrying a `ToolMessage`, and the stamp goes on a copy of that
+message in a copy of the `Command`. A result with no row, from a file tool or a failed
+call, has no stamp. One whose file the backend refused is stamped all the same, since
+its row exists.
 
 ### Storage
 
 **Each result is written as it arrives,** to `/scratchpad/results/A-0042-<tool>.txt`,
-or `.json` where the text parses as JSON. The file holds the result without the stamp.
+or `.json` where the text parses as JSON. The file holds the result without the stamp,
+and the row's `size` does not count it.
 It is written through the turn's backend under the turn's rules, as a tool's own
 `upload_files` is. It lives in `/scratchpad` because the agent reads it back with
 `read_file`, which reads a range of lines, and searches it with `grep`. That needs no new
@@ -112,7 +120,8 @@ tool. It is also working material, and is swept with the session.
 **A result deepagents offloaded is not kept twice.** The recorder cannot know at the
 time, because eviction runs outside it. So at the end of the turn, an entry whose call
 id has a file in `/scratchpad/large_tool_results/` points there instead, and its own
-copy is removed. That costs one listing per turn. A nested helper has no eviction, so
+copy is removed. That costs one listing per turn. deepagents' copy is what eviction
+was handed, so it ends in the stamp. A nested helper has no eviction, so
 its copy stays.
 
 **The ledger is written once per turn** to `.harness/ledger.jsonl`, beside the
@@ -150,7 +159,8 @@ grace period is needed.
 Each turn also writes one closing line, `{"turn": "<turn id>", "summarised": true}`, with
 no `id`. Turn ids are opaque strings, not a sequence, so the file's order is the turn
 order, and a turn that recorded nothing still appears. `summarised` drives the index
-below.
+below. A turn that resumed a paused one adds `"resumed": true`, which the delta needs.
+Each key is written only when it is true.
 
 ### What the model sees
 
@@ -168,8 +178,27 @@ below.
   </ledger_delta>
   ```
 
-  `turn_message` adds it beside the scratchpad line and the new-files line. It goes in
+  `turn_message` adds it after the scratchpad line and the new-files line. It goes in
   the user message, not the system prompt, which is the cached prefix.
+
+  Slice 2 settled its details:
+
+  - **"Since the previous user message" spans a resume.** A resume adds no message, so
+    the delta covers the trailing turns back to and including the last one that was
+    not a resume, which is what the `resumed` mark on a closing line is for. A paused
+    turn's rows and its resume's rows arrive together in the next message. A turn is
+    read by the turn its rows name rather than where they sit, so rows a crash left
+    without a closing line are not counted as the next turn's.
+  - **A run whose `task` never answered** -- a pause the next request superseded, or a
+    turn cut short inside a subagent -- has nothing to sit under. Its entries follow
+    the rest, unindented, each ending `(its task never answered)`.
+  - **A line is `<id> <tool> <args> -> <size>  <path>`.** No args part where a call
+    had none, and `not kept` where `path` is null. The size is bytes under a KB, the
+    nearest KB under an MB and MB to a tenth above it, the unit picked after rounding
+    so nothing reads as 1024 KB. The row's `summary` is not shown.
+  - **No block at all** when nothing was recorded since the last message, on a resume,
+    which has no message, or for a graph the deployment supplied, which has no ledger
+    and need not have kingfisher's prompt to explain one.
 - **After a turn that summarised, the rolled-up index replaces the delta.** It shows the
   last five turns in full, as above, and every older turn as one line: its id range and
   a count by tool. The turn that summarised finds deepagents' `_summarization_event` in
@@ -178,6 +207,7 @@ below.
   index arrives every turn from then on.
 - **`system.md` gains one fixed paragraph** explaining `[A-0042]`, the delta, the index
   and where an entry's file is. The text never changes, so the cached prefix holds.
+  Slice 2 wrote it without the index, which slice 3 adds.
 
 ### What the caller sees
 
@@ -220,7 +250,10 @@ On 2026-10-12, against deepagents 0.7.6, langchain 1.3.15 and langgraph 1.2.11.
   characters each. It writes to `<artifacts_root>/large_tool_results/` under
   `sanitize_tool_call_id` of the call id, and exempts the built-in file tools. The stub
   keeps a head and tail preview, so a last-line stamp shows in it. `execute` writes its
-  own capture to the same folder.
+  own capture to the same folder. Driven in slice 2 for both shapes of result: a block
+  list's text blocks are joined with newlines into one stub, a plain string where they
+  were all text and a text block beside the media otherwise, and the stamp is the last
+  line of either.
 - **The compaction record is readable.** `_summarization_event` is private state. It is
   absent from what `invoke` returns and present in `get_state().values`, which is what
   `_settled` reads. This was measured with a toy middleware declaring a private field,

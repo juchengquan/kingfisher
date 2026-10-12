@@ -8,7 +8,7 @@ import re
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import AgentMiddleware
@@ -80,13 +80,15 @@ def _running(call: Mapping[str, Any]) -> Iterator[None]:
 
 
 class Recorder(AgentMiddleware):
-    """Record each successful tool result, and keep it as a file in the session.
+    """Record each successful tool result, keep it as a file in the session, and end
+    what the model is handed with the result's id.
 
     First in what `tool_guards` returns, and each of the three things that position
     gives is needed. It is inside deepagents' eviction, so it sees a long result
-    whole. It is ahead of `WorkspaceToolPaths`, so it records the arguments the model
-    wrote rather than the host paths they become. And it is ahead of a deployment's
-    middleware, so it records what that middleware left, which is what the model reads.
+    whole, and the stub eviction leaves shows the id in its tail. It is ahead of
+    `WorkspaceToolPaths`, so it records the arguments the model wrote rather than the
+    host paths they become. And it is ahead of a deployment's middleware, so it
+    records what that middleware left, which is what the model reads.
     """
 
     def __init__(self, ledger: Ledger, backend: Any, audiences: Audiences | None) -> None:
@@ -100,39 +102,42 @@ class Recorder(AgentMiddleware):
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         with _running(request.tool_call):
             result = handler(request)
-        if (made := self._recorded(request.tool_call, result)) is not None:
-            entry, content = made
-            try:
-                answers = self._backend.upload_files([(entry.path, content)])
-            except Exception as exc:  # noqa: BLE001 -- a save must never fail the call
-                answers = exc
-            self._unkept(entry, answers)
-        return result
+        answer = _answer_in(result, request.tool_call.get("id"))
+        if answer is None or (made := self._recorded(request.tool_call, answer)) is None:
+            return result
+        entry, content = made
+        try:
+            answers = self._backend.upload_files([(entry.path, content)])
+        except Exception as exc:  # noqa: BLE001 -- a save must never fail the call
+            answers = exc
+        self._unkept(entry, answers)
+        return _stamped(result, answer, entry.id)
 
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
         with _running(request.tool_call):
             result = await handler(request)
-        if (made := self._recorded(request.tool_call, result)) is not None:
-            entry, content = made
-            try:
-                answers = await self._backend.aupload_files([(entry.path, content)])
-            except Exception as exc:  # noqa: BLE001 -- a save must never fail the call
-                answers = exc
-            self._unkept(entry, answers)
-        return result
+        answer = _answer_in(result, request.tool_call.get("id"))
+        if answer is None or (made := self._recorded(request.tool_call, answer)) is None:
+            return result
+        entry, content = made
+        try:
+            answers = await self._backend.aupload_files([(entry.path, content)])
+        except Exception as exc:  # noqa: BLE001 -- a save must never fail the call
+            answers = exc
+        self._unkept(entry, answers)
+        return _stamped(result, answer, entry.id)
 
     def _recorded(
-        self, call: Mapping[str, Any], result: Any
+        self, call: Mapping[str, Any], answer: ToolMessage
     ) -> tuple[LedgerEntry, bytes] | None:
         """The entry for one call and the bytes its file holds, or `None` to record nothing."""
         tool = str(call.get("name") or "")
         if tool in UNRECORDED:
             return None
-        answer = _answer_in(result, call.get("id"))
         # A failed call has nothing worth finding again, and the conversation shows it.
-        if answer is None or answer.status == "error":
+        if answer.status == "error":
             return None
         text = str(answer.text)
         content = text.encode("utf-8")
@@ -198,6 +203,30 @@ def _answer_in(result: Any, call_id: Any) -> ToolMessage | None:
         return None
     found = [one for one in result.update.get("messages") or () if isinstance(one, ToolMessage)]
     return next((one for one in found if one.tool_call_id == call_id), None)
+
+
+def _stamped(result: Any, answer: ToolMessage, number: str) -> Any:
+    """The result with its id as a last line, in what the model is handed.
+
+    Copied rather than changed in place: a tool may hand back a message it still
+    holds, and the id would go wherever else that message goes. A list of blocks gains
+    a block whose text starts on a new line, because the transcript and `.text` join
+    blocks with nothing between them, and the bare id would read as the end of the
+    result's last line.
+    """
+    mark = f"\n[{number}]"
+    content = answer.content
+    marked = answer.model_copy(
+        update={
+            "content": f"{content}{mark}"
+            if isinstance(content, str)
+            else [*content, {"type": "text", "text": mark}]
+        }
+    )
+    if result is answer:
+        return marked
+    messages = [marked if one is answer else one for one in result.update["messages"]]
+    return replace(result, update={**result.update, "messages": messages})
 
 
 def _cut(text: str, limit: int) -> str:

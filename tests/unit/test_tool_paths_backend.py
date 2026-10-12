@@ -63,7 +63,7 @@ def test_a_skills_file_reaches_a_tool_where_the_backend_keeps_it(scripted):
         )
     )
 
-    assert _said(events) == "the template"
+    assert _said(events) == "the template\n[A-0001]"
 
 
 def test_the_pinned_agent_is_not_handed_to_a_tool(scripted):
@@ -101,7 +101,7 @@ def test_a_backend_keeping_sessions_elsewhere_on_this_host_still_serves_a_path(
 
     events = list(kf.stream(Request("go", agent="only", inputs=(source,))))
 
-    assert _said(events) == "alpha"
+    assert _said(events) == "alpha\n[A-0001]"
 
 
 # -- the pieces --------------------------------------------------------------
