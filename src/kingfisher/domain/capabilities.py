@@ -220,6 +220,17 @@ def refuse_ungranted_models(wanted: Iterable[str], *, granted: Selection, subjec
         raise CapabilityError(msg)
 
 
+def unoffered(asked: Iterable[str], *, offered: Iterable[str]) -> tuple[str, ...]:
+    """The names in `asked` that nothing offers as written.
+
+    Public so that `kingfisher list` reports by the test a run refuses with: a
+    listing reading the same names a second way could call one fine that the run
+    then refuses.
+    """
+    known = set(offered)
+    return tuple(name for name in asked if name not in known)
+
+
 def refuse_unoffered(
     asked: Iterable[str],
     *,
@@ -230,7 +241,7 @@ def refuse_unoffered(
 ) -> None:
     """Refuse a name nothing offers, whoever named it."""
     known = set(offered)
-    if unknown := tuple(name for name in asked if name not in known):
+    if unknown := unoffered(asked, offered=known):
         # A name two sources offer is not a name nobody offers, and the same
         # distinction `all_but` makes on the way out matters more on the way in:
         # subtracting an ambiguous name leaves one behind, but *granting* one

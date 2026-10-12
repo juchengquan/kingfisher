@@ -7,7 +7,7 @@ import json
 import pytest
 
 from kingfisher.presentation.cli.__main__ import main
-from tests.conftest import subagents_dir
+from tests.conftest import an_agent, subagents_dir
 
 
 def test_listing_reports_a_workspace_that_will_not_load(cfg, at_the_command_line, capsys):
@@ -580,9 +580,11 @@ OUT_OF_REACH = ("shadowy", "hushhush", "quietly", "buried", "clandestine")
 
 #: The same, for subagents whose faults are reported rather than refused by a listing:
 #: one listing less than its folder holds, one naming a tool by a moved path, a
-#: compiled one with a skill it can never be shown, and a folder no definition is
-#: named for.
-BROKEN_OUT_OF_REACH = ("muddled", "stray", "drifter", "stowaway", "cargo", "ghostly")
+#: compiled one with a skill it can never be shown, a folder no definition is named
+#: for, and one naming a helper nobody defines.
+BROKEN_OUT_OF_REACH = (
+    "muddled", "stray", "drifter", "stowaway", "cargo", "ghostly", "wanderer", "nowhere"
+)
 
 
 def _private(path, name: str, body: str = '"""Does a thing."""\n    return ""') -> None:
@@ -645,6 +647,11 @@ def _broken_subagents_out_of_reach(cfg) -> None:
     )
     _skill(root / "stowaway" / "skills" / "cargo", "cargo")
     _private(root / "ghostly" / "tools" / "boo.py", "boo")
+    (root / "wanderer.yaml").write_text(
+        "name: wanderer\ndescription: A subagent.\nsource_ids: [A]\n"
+        "subagents: [nowhere]\nsystem_prompt: |\n  Go.\n",
+        encoding="utf-8",
+    )
 
 
 @pytest.mark.parametrize("form", ["text", "json"])
@@ -728,6 +735,90 @@ def test_a_scoped_listing_reports_no_fault_of_a_subagent_out_of_reach(
     assert (whole_code, [one for one in BROKEN_OUT_OF_REACH if one not in whole]) == (1, [])
     named = [one for one in BROKEN_OUT_OF_REACH if one in scoped]
     assert (scoped_code, named) == (0, []), f"the {form} form named {named}"
+
+
+#: Each way a definition can name a subagent that a run then refuses: the files under
+#: `subagents/` as `where: (name, its subagents line)`, the agent's own line, and the
+#: name the listing should blame on whom.
+UNRESOLVED = {
+    "a helper nobody defines": (
+        {"reviewer.yaml": ("reviewer", "[ghost]")}, "[reviewer]", "subagent 'reviewer'", "ghost"
+    ),
+    "a helper two files define": (
+        {
+            "reviewer.yaml": ("reviewer", "[second]"),
+            "a/second.yaml": ("second", None),
+            "b/second.yaml": ("second", None),
+        },
+        "[reviewer]",
+        "subagent 'reviewer'",
+        "second",
+    ),
+    "a subagent nobody defines": (
+        {"reviewer.yaml": ("reviewer", None)}, "[reviewer, ghost]", "agent 'lead'", "ghost"
+    ),
+    "a subagent two files define": (
+        {"a/second.yaml": ("second", None), "b/second.yaml": ("second", None)},
+        "[second]",
+        "agent 'lead'",
+        "second",
+    ),
+}
+
+
+def _define(cfg, files, agent_line: str) -> None:
+    for where, (name, helpers) in files.items():
+        path = subagents_dir(cfg) / where
+        path.parent.mkdir(parents=True, exist_ok=True)
+        line = "" if helpers is None else f"subagents: {helpers}\n"
+        path.write_text(
+            f"name: {name}\ndescription: A subagent.\n{line}system_prompt: |\n  Go.\n",
+            encoding="utf-8",
+        )
+    an_agent(cfg, "lead", subagents=agent_line)
+
+
+@pytest.mark.parametrize("case", sorted(UNRESOLVED))
+def test_a_subagent_name_a_run_refuses_fails_the_listing(case, cfg, at_the_command_line, capsys):
+    """Each of these exited 0 and said nothing while every run reaching the name
+    refused it -- measured through the real command, where the agent's own subagents
+    line dropped the name without a word.
+    """
+    files, agent_line, subject, name = UNRESOLVED[case]
+    _define(cfg, files, agent_line)
+
+    assert main(["list"]) == 1
+    assert f"{subject}: {name}" in capsys.readouterr().out
+    assert main(["list", "--json"]) == 1
+    assert json.loads(capsys.readouterr().out)["unresolved_subagents"] == {subject: [name]}
+
+
+def test_a_shared_name_written_with_its_file_is_not_reported(cfg, at_the_command_line, capsys):
+    """The control: what the rule above tells a reader to write must pass it, by
+    either kind -- a check comparing bare names would report it too.
+    """
+    _define(
+        cfg,
+        {
+            "reviewer.yaml": ("reviewer", "[a/second.yaml::second]"),
+            "a/second.yaml": ("second", None),
+            "b/second.yaml": ("second", None),
+        },
+        "[reviewer, b/second.yaml::second]",
+    )
+
+    assert main(["list", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["unresolved_subagents"] == {}
+
+
+def test_an_agent_granted_every_subagent_is_not_reported(cfg, at_the_command_line, capsys):
+    """`*` read as a name is one no subagent has, which reported an agent granted all
+    of them as naming a subagent that does not exist.
+    """
+    _define(cfg, {"reviewer.yaml": ("reviewer", None)}, '["*"]')
+
+    assert main(["list", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["unresolved_subagents"] == {}
 
 
 @pytest.mark.parametrize("form", ["text", "json"])
@@ -1353,6 +1444,7 @@ def test_a_listing_with_nothing_wrong_says_none_of_that():
 TROUBLES_BESIDE_THE_ERRORS = {
     "moved_tools": ({"agent 'analyst'": ("csv_profile",)}, "csv_profile"),
     "miscounted_bundles": ({"redactor": "its folder holds two"}, "its folder holds two"),
+    "unresolved_subagents": ({"agent 'analyst'": ("phantom",)}, "phantom"),
 }
 
 

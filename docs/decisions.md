@@ -659,6 +659,15 @@ a loop that exists only if the choice goes one way. What makes skipping it safe 
 that the build refuses the same name against the same keys before following it.
 *(2026-10-12.)*
 
+**A subagent name nothing answers to is reported, not refused at load.** An agent
+or subagent naming one -- unknown, or the bare name two files share -- loads, and
+the run reaching it refuses it. `kingfisher list` names who wrote it and exits 1;
+it used to exit 0, and an agent's own subagent line dropped the name without a
+word. Refusing at load, as a helper listed without `task` is, was considered and
+not taken: that shape cannot work in any catalogue, while this one is one file at
+odds with the rest, and refusing it at load would stop every request over a
+definition none of them may use. *(2026-10-12.)*
+
 **A subagent may be a compiled graph rather than a spec**, told apart by
 extension. `SUBAGENTS` is declared and never inferred; name and description are
 static text and only the graph comes from a function; the function receives the
@@ -3780,9 +3789,9 @@ Every rule that proved those errors were carried asserted on `--json`. That is h
 three of them passed while the person most likely to be running the command -- somebody
 looking at a broken workspace -- was told nothing. The rule now has two halves driven
 over the same total set: each `*_error` makes the listing non-zero, **and** each one is
-said in the rendered text. The two troubles that are not a kind's error, `moved_tools`
-and `miscounted_bundles`, are held by a table pinned against `failed`'s own source, so
-a fourth cannot be added to the exit code and forgotten by the renderer.
+said in the rendered text. The troubles that are not a kind's error -- `moved_tools`
+and `miscounted_bundles` then -- are held by a table pinned against `failed`'s own
+source, so another cannot be added to the exit code and forgotten by the renderer.
 
 `moved_tools` was the worst of the three to be silent about, and this file already said
 why: an agent naming a tool by a path it has moved from loads, runs, and quietly does
