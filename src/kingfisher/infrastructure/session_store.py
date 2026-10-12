@@ -137,6 +137,9 @@ _ENTRY_ID = re.compile(r"A-(\d+)")
 #: On the closing line of a turn that resumed a paused one, and only there.
 RESUMED = "resumed"
 
+#: On the closing line of a turn that ended on a summarised conversation, and only there.
+SUMMARISED = "summarised"
+
 
 @dataclass(frozen=True)
 class KeptLedger:
@@ -152,10 +155,18 @@ class KeptLedger:
     #: subagent paused at a gate finishes in the next turn, and its answer is
     #: recorded there, after the entries its run made before the pause.
     runs: Mapping[str, tuple[Listed, ...]] = field(default_factory=dict)
-    #: The entries recorded since the last user message, in the order written. A
-    #: resume adds no message, so that is every turn back to and including the last
-    #: one that was not a resume.
-    since: tuple[LedgerEntry, ...] = ()
+    #: Each exchange's entries in the order written, oldest first, an exchange that
+    #: recorded nothing included. An exchange is a turn that carried a user message and
+    #: the resumes after it, which carry none, so a paused `task` and its answer are
+    #: never in two.
+    exchanges: tuple[tuple[LedgerEntry, ...], ...] = ()
+    #: Whether a turn of the last exchange ended on a summarised conversation.
+    summarised: bool = False
+
+    @property
+    def since(self) -> tuple[LedgerEntry, ...]:
+        """The entries recorded since the last user message."""
+        return self.exchanges[-1] if self.exchanges else ()
 
 
 def read_ledger(harness: Any) -> Steps[KeptLedger]:
@@ -169,7 +180,8 @@ def _kept(text: str) -> KeptLedger:
     last = 0
     paths: set[str] = set()
     runs: dict[str, list[Listed]] = {}
-    since: list[LedgerEntry] = []
+    exchanges: list[list[LedgerEntry]] = []
+    summarised = False
     # Each turn's entries, until its closing line says whether it was a resume.
     unclosed: dict[str, list[LedgerEntry]] = {}
     for line in text.splitlines():
@@ -199,13 +211,19 @@ def _kept(text: str) -> KeptLedger:
             # without their closing line are followed by the next turn's, and would
             # be counted as its own.
             closed = unclosed.pop(row["turn"], [])
-            since = [*since, *closed] if row.get(RESUMED) else closed
+            if row.get(RESUMED) and exchanges:
+                exchanges[-1].extend(closed)
+                summarised = summarised or bool(row.get(SUMMARISED))
+            else:
+                exchanges.append(closed)
+                summarised = bool(row.get(SUMMARISED))
     return KeptLedger(
         lines=tuple(lines),
         last=last,
         paths=frozenset(paths),
         runs={run: tuple(found) for run, found in runs.items()},
-        since=tuple(since),
+        exchanges=tuple(tuple(one) for one in exchanges),
+        summarised=summarised,
     )
 
 
@@ -226,23 +244,26 @@ def _entry(row: Mapping[str, Any]) -> LedgerEntry | None:
     return LedgerEntry(**held)
 
 
-def write_ledger(
+def write_ledger(  # noqa: PLR0913 -- the closing line's two marks, by keyword so
+    # that neither is ever passed for the other
     harness: Any,
     earlier: KeptLedger,
     entries: Sequence[LedgerEntry],
     *,
     turn: str,
     resumed: bool = False,
+    summarised: bool = False,
 ) -> Steps[None]:
     """Replace the ledger with what it held, this turn's rows, and this turn's closing line.
 
     The closing line is written however many rows the turn recorded: turn ids are not
     a sequence, so the file's order is the only record of the turns' order.
     """
+    marks = {RESUMED: resumed, SUMMARISED: summarised}
     rows = [
         *earlier.lines,
         *(json.dumps(asdict(entry), ensure_ascii=False) for entry in entries),
-        json.dumps({"turn": turn, **({RESUMED: True} if resumed else {})}),
+        json.dumps({"turn": turn, **{mark: True for mark, said in marks.items() if said}}),
     ]
     yield from harness.store(LEDGER_FILE, ("\n".join(rows) + "\n").encode("utf-8"))
 

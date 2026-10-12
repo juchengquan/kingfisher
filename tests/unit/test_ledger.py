@@ -25,7 +25,7 @@ from langgraph.types import Command
 
 from assets_examples.middlewares.tool_note import ToolNote
 from kingfisher import Kingfisher, Request, default_backends
-from kingfisher.application.turn import ledger_delta, turn_message
+from kingfisher.application.turn import ledger_delta, ledger_index, turn_message
 from kingfisher.domain.access import parse
 from kingfisher.domain.request import Decision, Resume
 from kingfisher.domain.result import AWAITING, MAIN, WORKING, LedgerEntry
@@ -34,9 +34,19 @@ from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import DefaultBackends, backend_at
 from kingfisher.infrastructure.harness.ledger import Ledger
 from kingfisher.infrastructure.harness.middlewares.recorder import Recorder
+from kingfisher.infrastructure.prompting import render_system_prompt
 from kingfisher.infrastructure.sandbox.confinement import EXTERNAL
-from kingfisher.infrastructure.session_store import KeptLedger
-from kingfisher.layout import HARNESS, LEDGER_FILE, PAUSED_STATE, RESULTS, SCRATCH, TRANSCRIPT_FILE
+from kingfisher.infrastructure.session_store import KeptLedger, entry_id
+from kingfisher.layout import (
+    HARNESS,
+    LEDGER_FILE,
+    PAUSED_STATE,
+    RESULTS,
+    RESULTS_ROUTE,
+    SCRATCH,
+    SCRATCH_ROUTE,
+    TRANSCRIPT_FILE,
+)
 from tests.conftest import FakeToolCallingModel, an_agent, start, subagents_dir, tools_dir
 from tests.unit.scripted import Scripted
 
@@ -148,7 +158,7 @@ def _read(cfg, virtual: str) -> str:
 
 
 def test_a_result_is_recorded_kept_and_handed_to_the_caller(ledgered):
-    """The whole of the first slice: a result the model was handed has a row, a file
+    """The whole of what a turn records: a result the model was handed has a row, a file
     holding it, and the same row on the caller's result, serialisable as JSON.
     """
     result = _run(
@@ -1045,7 +1055,7 @@ def test_the_delta_follows_what_the_turn_message_already_said():
     """The task leads and the turn's own facts follow it, as before; the delta anywhere
     ahead of them splits the task from what it says about where to work.
     """
-    message = turn_message("go", ("a.txt",), (_entry(1, "search"),))
+    message = turn_message("go", ("a.txt",), KeptLedger(exchanges=((_entry(1, "search"),),)))
 
     assert message == (
         "go\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
@@ -1194,3 +1204,309 @@ def test_the_system_prompt_is_the_same_whatever_the_ledger_holds(ledgered):
     assert first.type == later.type == "system"
     assert first.content == later.content
     assert _listed_in(_asked(2)) == ["A-0001"], "the control: the ledger had nothing to say"
+
+
+# -- the index, once the conversation has been summarised --------------------------
+
+#: A model window, in tokens, that the turns below stay well inside and one long
+#: question goes past on its own. deepagents' trigger counts the system prompt and
+#: tools as well, so a window much narrower summarises every turn.
+WINDOW = 20_000
+
+#: Past that window by itself, at the four characters a token deepagents counts.
+LONG = "q" * 70_000
+
+
+def _windowed(cfg, window: int = WINDOW):
+    """`cfg` with every model declaring `window`, which is what deepagents' real
+    summariser reads to decide when to fire.
+    """
+    models = {
+        name: replace(one, extra={"profile": {"max_input_tokens": window}})
+        for name, one in cfg.models.models.items()
+    }
+    return replace(cfg, models=replace(cfg.models, models=models))
+
+
+def _say(kf: Kingfisher, task: str, *script: AIMessage):
+    Scripted.script.extend(script)
+    return kf.run(Request(task, agent="only", session_id="s"))
+
+
+def _closing(cfg) -> list[dict[str, Any]]:
+    return [row for row in _rows(cfg) if "id" not in row]
+
+
+def _block_in(message: str, tag: str) -> list[str] | None:
+    """The lines of one block in a message, or `None` where it has none."""
+    if f"<{tag}>" not in message:
+        return None
+    return message.split(f"<{tag}>\n", 1)[1].split(f"\n</{tag}>", 1)[0].splitlines()
+
+
+def test_a_turn_says_on_its_closing_line_whether_it_ended_summarised(ledgered):
+    """The summary is private state only the turn's final state holds, so read anywhere
+    else, or under a key deepagents renamed, the mark is never written and the index
+    never shown -- and written regardless, a turn that summarised nothing claims to.
+
+    Driven through deepagents' real summariser: a mark set by hand passes whatever the
+    key is called.
+    """
+    cfg = _windowed(ledgered)
+    kf = Kingfisher(cfg, backends=default_backends)
+
+    short = _say(kf, "go", AIMessage(content="done"))
+    assert Scripted.summaries == 0, "the control: a short turn was summarised"
+    long = _say(kf, LONG, AIMessage(content="done"))
+
+    assert Scripted.summaries == 1, "the summariser never fired on the long turn"
+    assert _closing(cfg) == [{"turn": short.turn_id}, {"turn": long.turn_id, "summarised": True}]
+
+
+def test_a_resume_of_a_summarised_turn_is_marked_summarised_too(ledgered):
+    """A resume carries on the paused turn's conversation, summary and all: unmarked, the
+    next message lists a delta for a conversation whose earlier lines are gone.
+    """
+    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
+    cfg = _windowed(ledgered)
+    kf = Kingfisher(cfg, backends=default_backends)
+    # Something before the long question, which a summary needs to replace.
+    asked = _say(kf, "go", AIMessage(content="done"))
+    paused = _say(kf, LONG, _calls(("sql_query", {"query": "select 1"}, "c1")))
+    assert paused.stop_reason == AWAITING, "the turn never stopped at the gate"
+    assert Scripted.summaries == 1, "the summariser never fired on the paused turn"
+
+    Scripted.script.append(AIMessage(content="done"))
+    resumed = kf.run(
+        Resume(
+            session_id="s",
+            decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+        )
+    )
+
+    assert _closing(cfg) == [
+        {"turn": asked.turn_id},
+        {"turn": paused.turn_id, "summarised": True},
+        {"turn": resumed.turn_id, "resumed": True, "summarised": True},
+    ]
+
+
+def test_once_a_turn_summarised_the_next_message_carries_the_index_and_not_the_delta(
+    ledgered,
+):
+    """The delta lists only what is new, and the messages that listed the rest are what
+    a summary replaces: shown it after a summary, the model has lost every earlier id.
+
+    Through the turn loop and the real summariser over several turns, reading what the
+    model was handed, because the mark crosses from one turn's final state to the next
+    turn's message and nothing short of both turns shows it arriving.
+    """
+    cfg = _windowed(ledgered)
+    kf = Kingfisher(cfg, backends=default_backends)
+    _say(kf, "go", _calls(("web_search", {"query": "one"}, "c1")), AIMessage(content="done"))
+    _say(kf, LONG, _calls(("web_search", {"query": "two"}, "c2")), AIMessage(content="done"))
+    assert Scripted.summaries >= 1, "the summariser never fired on the long turn"
+    _say(kf, "go", AIMessage(content="done"))
+    _say(kf, "go", AIMessage(content="done"))
+
+    # Two calls a turn for the first two, one for each after.
+    assert len(Scripted.heard) == 6
+    assert _block_in(_asked(2), "ledger_delta") is not None, "the long turn had no delta"
+    assert _block_in(_asked(2), "ledger_index") is None, "indexed before anything summarised"
+    for after in (4, 5):
+        assert _block_in(_asked(after), "ledger_delta") is None
+        assert [line.split()[0] for line in _block_in(_asked(after), "ledger_index") or ()] == [
+            "A-0001",
+            "A-0002",
+        ]
+    # The cached prefix, whichever block the message carried.
+    assert {Scripted.heard[call][0].type for call in (0, 2, 4, 5)} == {"system"}
+    assert len({Scripted.heard[call][0].text for call in (0, 2, 4, 5)}) == 1
+
+
+def _hand_written(cfg, *turns: tuple[str, tuple[str, ...]]) -> None:
+    """A ledger of one recorded result a turn, each turn closed with the marks given."""
+    rows = []
+    for number, (turn, marks) in enumerate(turns, start=1):
+        rows.append(json.dumps(asdict(replace(_entry(number, "web_search"), turn=turn))))
+        rows.append(json.dumps({"turn": turn, **dict.fromkeys(marks, True)}))
+    ledger = _session(cfg) / HARNESS / LEDGER_FILE
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+
+#: Each block, and the one a message carries in its place.
+_INSTEAD = {"ledger_delta": "ledger_index", "ledger_index": "ledger_delta"}
+
+
+@pytest.mark.parametrize(
+    ("earlier", "asked", "resumed", "shown"),
+    [
+        ((), (), (), "ledger_delta"),
+        (("summarised",), (), (), "ledger_delta"),
+        ((), ("summarised",), (), "ledger_index"),
+        ((), (), ("summarised",), "ledger_index"),
+    ],
+    ids=["none", "an-earlier-exchange", "the-asked-turn", "its-resume"],
+)
+def test_the_index_follows_a_summary_since_the_last_message_and_no_other(
+    ledgered, earlier, asked, resumed, shown
+):
+    """A resume adds no message, so read off the last turn alone a summary made before
+    a pause is missed whenever its resume did not summarise again -- and read further
+    back than the last message, one the conversation has since outgrown shows an index
+    nothing needs.
+    """
+    _hand_written(ledgered, ("t1", earlier), ("t2", asked), ("t3", ("resumed", *resumed)))
+
+    _run(ledgered, AIMessage(content="done"))
+
+    assert _block_in(_asked(), shown) is not None
+    assert _block_in(_asked(), _INSTEAD[shown]) is None
+
+
+def _one_each(*numbers: int) -> list[tuple[LedgerEntry, ...]]:
+    """An exchange for each number, each recording one search."""
+    return [(_entry(number, "search"),) for number in numbers]
+
+
+def _full(*numbers: int) -> list[str]:
+    """Those searches, each as the delta lists it."""
+    return [
+        f"{entry_id(n)} search -> 100 B  /scratchpad/results/{entry_id(n)}-search.txt"
+        for n in numbers
+    ]
+
+
+#: An exchange whose `task` ran three calls and answered, and then searched once more.
+DELEGATED = (
+    _entry(2, "web_search", run="t1"),
+    _entry(3, "sql_query", run="t1"),
+    _entry(4, "web_search", run="t1"),
+    _entry(5, "task", call="t1"),
+    _entry(6, "web_search"),
+)
+
+
+def test_the_last_five_exchanges_are_listed_in_full_and_each_older_one_as_a_line():
+    """Moved, the boundary lists too much or too little in full, and out of order the
+    one-line rows read as the latest work rather than the oldest.
+    """
+    shown = ledger_index([*_one_each(1), DELEGATED, *_one_each(7, 8, 9, 10, 11)])
+
+    assert shown.splitlines() == [
+        "<ledger_index>",
+        "A-0001: 1 search",
+        "A-0002..A-0006: 3 web_search, 1 sql_query, 1 task",
+        *_full(7, 8, 9, 10, 11),
+        "</ledger_index>",
+    ]
+    # Exactly five: the oldest of them is listed in full, not rolled up.
+    assert ledger_index(_one_each(7, 8, 9, 10, 11)).splitlines()[1:-1] == _full(7, 8, 9, 10, 11)
+
+
+def test_an_exchange_in_full_is_listed_exactly_as_the_delta_lists_it():
+    """The index's recent part is the delta's rendering of each exchange: copied rather
+    than reused, the two drift, and a subagent's results stop sitting under its answer
+    in one of them.
+    """
+    unanswered = (_entry(12, "web_search", run="t9"), _entry(13, "search"))
+
+    shown = ledger_index([DELEGATED, unanswered]).splitlines()[1:-1]
+
+    assert shown == [
+        *ledger_delta(DELEGATED).splitlines()[1:-1],
+        *ledger_delta(unanswered).splitlines()[1:-1],
+    ]
+    assert shown[1].startswith("  A-0002"), "the control: nothing sat under its answer"
+    assert shown[-1].endswith("(its task never answered)"), "the control: all answered"
+
+
+def test_an_exchange_that_recorded_nothing_has_no_line_and_is_not_counted():
+    """Most exchanges record nothing, and counted among the five they push one that did
+    out of the full listing, to make room for lines that say nothing.
+    """
+    empty: tuple[LedgerEntry, ...] = ()
+
+    shown = ledger_index(
+        [empty, *_one_each(1), empty, *_one_each(2, 3), empty, *_one_each(4, 5, 6), empty]
+    )
+
+    assert shown.splitlines()[1:-1] == ["A-0001: 1 search", *_full(2, 3, 4, 5, 6)]
+
+
+def test_a_resume_is_rolled_up_with_the_turn_it_answered(ledgered):
+    """A paused `task` answers in its resume, and counted as an exchange of its own the
+    rolled-up line splits one task's work in two, its answer counted apart from the
+    results it rests on.
+
+    Through real turns, because the grouping is read back from the closing lines the
+    turns themselves wrote, and a hand-written ledger would only agree with itself.
+    """
+    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
+    cfg = _windowed(ledgered)
+    kf = Kingfisher(cfg, backends=default_backends)
+    paused = _say(
+        kf,
+        "go",
+        _task("t1"),
+        _calls(("web_search", {"query": "BYD"}, "c1")),
+        _calls(("sql_query", {"query": "select 1"}, "c2")),
+    )
+    assert paused.stop_reason == AWAITING, "the subagent never stopped at the gate"
+    Scripted.script.extend([AIMessage(content="thin margins"), AIMessage(content="done")])
+    kf.run(
+        Resume(
+            session_id="s",
+            decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+        )
+    )
+    for n in range(3, 8):
+        _say(kf, "go", _calls(("web_search", {"query": f"q{n}"}, f"c{n}")), AIMessage("done"))
+    assert Scripted.summaries == 0, "the control: summarised before the long turn"
+    _say(kf, LONG, AIMessage(content="done"))
+    assert Scripted.summaries >= 1, "the summariser never fired on the long turn"
+
+    _say(kf, "go", AIMessage(content="done"))
+
+    index = _block_in(_asked(), "ledger_index") or [""]
+    assert index[0] == "A-0001..A-0003: 1 sql_query, 1 task, 1 web_search"
+    assert [line.split()[0] for line in index[1:]] == [entry_id(n) for n in range(4, 9)]
+
+
+def test_an_older_results_file_is_found_by_its_id_as_the_prompt_says(ledgered):
+    """Rolled up, an exchange keeps only its ids, so an id is all the model has to find
+    a result by: named or ended otherwise than `system.md` says, the file is one it
+    cannot find again.
+
+    Through the agent's own `glob` and `grep`, under the rules its turn runs with, and
+    with the patterns read out of the prompt rather than written here, so that a test
+    spelling them right cannot pass beside a prompt spelling them wrong.
+    """
+    taught = " ".join(render_system_prompt().split())
+    by_name = re.search(r"`glob` for `([^`]+)` in `([^`]+)`", taught)
+    by_line = re.search(r"ends in its `([^`]+)` line, so `grep` for that in `([^`]+)`", taught)
+    assert by_name and by_line, "the prompt no longer says how to find a file by its id"
+    first = _run(
+        ledgered,
+        _calls(("web_search", {"query": "EV"}, "c1")),
+        _calls(("loud", {}, "c2")),
+        AIMessage(content="done"),
+    )
+    kept, offloaded = (next(e for e in first.ledger if e.tool == t) for t in ("web_search", "loud"))
+    assert kept.path.startswith(RESULTS_ROUTE), "the control: the search was not kept"
+    assert offloaded.path == f"{SCRATCH_ROUTE}large_tool_results/c2", "the control: not offloaded"
+
+    example = entry_id(42)
+    _run(
+        ledgered,
+        _calls(
+            ("glob", {"pattern": by_name[1].replace(example, kept.id), "path": by_name[2]}, "c3"),
+            ("grep", {"pattern": by_line[1].replace(example, offloaded.id), "path": by_line[2]},
+             "c4"),
+        ),
+        AIMessage(content="done"),
+    )
+
+    assert kept.path in _handed("c3").text
+    assert offloaded.path in _handed("c4").text

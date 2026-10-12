@@ -231,6 +231,19 @@ for the next reader who reaches for one.*
   trigger fires before every call: the stock prompt (about 2.4k tokens) at a 3.2k
   window summarized before seven of nine calls. At 8k it fired once in sixteen.
   *(2026-09-30.)*
+- **Its event is in the final state of a turn that summarised, and of no other.**
+  Driven through `build_agent`'s stack by the service's own turn loop, a fresh graph
+  each turn: at a 6,000-token window the first three short turns did not summarise and
+  the final `get_state().values` of each held no `_summarization_event`; every turn from
+  the fourth did, and held one. Nothing carries it into the next turn's graph, but once
+  the replayed transcript is past the trigger every turn summarises again, because the
+  messages kingfisher writes back are the whole conversation and never the summarised
+  view. It needs something before the last message to replace: a first turn of one
+  70,000-character question was past the trigger and made no event. And a last message
+  longer than `keep` is kept whole rather than summarised away. The ledger's
+  `summarised` mark rests on this, and
+  `test_a_turn_says_on_its_closing_line_whether_it_ended_summarised` holds it.
+  *(2026-10-12, deepagents 0.7.6.)*
 
 ## Skills and subagents
 

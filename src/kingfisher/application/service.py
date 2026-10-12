@@ -1002,13 +1002,7 @@ class Kingfisher(Sessions, Disposal):
             # A resume adds no message: it continues a superstep that already has
             # everything it needs, and a new user turn appended there would be one
             # the model never saw asked.
-            message=(
-                turn_message(
-                    asked, placement.placed, earlier.since if earlier is not None else ()
-                )
-                if asked
-                else ""
-            ),
+            message=turn_message(asked, placement.placed, earlier) if asked else "",
             session=session,
             turn=turn,
             logger=logger,
@@ -1104,11 +1098,20 @@ class Kingfisher(Sessions, Disposal):
             # answer still says so.
             return None
 
-    def _record_ledger(self, prepared: Prepared) -> Steps[tuple[LedgerEntry, ...]]:
+    def _record_ledger(
+        self, prepared: Prepared, snapshot: Any
+    ) -> Steps[tuple[LedgerEntry, ...]]:
         """Keep what this turn's tools returned, whether or not the turn paused."""
         if prepared.ledger is None:
             return ()
-        return (yield from keep_ledger(prepared.files, prepared.harness, prepared.ledger))
+        return (
+            yield from keep_ledger(
+                prepared.files,
+                prepared.harness,
+                prepared.ledger,
+                summarised=runtime.summarised_in(snapshot),
+            )
+        )
 
     def _record_transcript(self, prepared: Prepared, snapshot: Any) -> Steps[None]:
         """Write what was said this turn, as records this package owns."""
@@ -1248,7 +1251,7 @@ class Kingfisher(Sessions, Disposal):
             # Before the paused state as well as before the transcript: a resume
             # carries on from that state, so it is as much the conversation as the
             # transcript is, and a result in either must already have its row.
-            turn.recorded = yield from self._record_ledger(prepared)
+            turn.recorded = yield from self._record_ledger(prepared, snapshot)
             turn.awaiting = yield from self._settle_pause(prepared, snapshot)
             if turn.awaiting:
                 turn.pending.append(decision_needed(turn.awaiting))

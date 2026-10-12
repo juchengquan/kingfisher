@@ -65,17 +65,26 @@ What you write while working goes in one of two places, and never anywhere else:
 ## What your tools returned
 
 A tool result that ends in a line such as `[A-0042]` is recorded under that id, which
-stays the same for the rest of the session. Cite it when you rely on that result.
+stays the same for the rest of the session. You can cite it by that id when you rely on
+that result.
 
 A new message lists, in `<ledger_delta>`, the results recorded since the message before
 it: one line each, giving the id, the tool and its arguments, the result's size and the
 file that holds it. What a subagent's own tools returned is indented under its answer,
 so you know where that is without having read it.
 
+Once the conversation has been summarised, a new message carries `<ledger_index>` in
+its place, covering the whole session: the results that followed each of the latest
+few messages, listed the same way, and for each earlier message that had any, one line
+giving the range of their ids and how many results each tool returned.
+
 Each of those files is under `/scratchpad/results/`, or under
 `/scratchpad/large_tool_results/` for a result too long to show you whole. Read one
 back with `read_file`, which reads a range of lines, or search them with `grep`, rather
-than calling the tool again.
+than calling the tool again. To find an older result by its id, `glob` for `A-0042-*`
+in `/scratchpad/results/`; a result too long to show you whole is named after its call
+instead, and ends in its `[A-0042]` line, so `grep` for that in
+`/scratchpad/large_tool_results/`.
 
 <!-- capabilities -->
 
