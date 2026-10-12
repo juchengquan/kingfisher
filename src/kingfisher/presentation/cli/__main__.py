@@ -861,22 +861,41 @@ def _reap(args: argparse.Namespace) -> int:
         print(f"not reaped -- {failure}", file=sys.stderr)
 
     if not result.removed and not result.failures:
-        _nothing_reaped(result.kept, age, from_config=args.older_than is None)
+        _nothing_reaped(
+            result.kept, result.busy, age, from_config=args.older_than is None
+        )
     return 1 if result.failures else 0
 
 
-def _nothing_reaped(kept: int, age: float, *, from_config: bool) -> None:
+def _nothing_reaped(kept: int, busy: int, age: float, *, from_config: bool) -> None:
     """Say what decided, because a sweep that removes nothing reads as a broken one.
 
     The ordinary case on a workspace in daily use is that nothing has expired,
     and a command that prints nothing at all there is one whose next user
     deletes the directory by hand -- which leaves the conversation, the claim
     and whatever a store kept exactly where they were.
+
+    `busy` is named before the age, because the age is the wrong answer when a turn
+    is what spared the session: `expired` folds a busy session into `kept`, so this
+    blamed the age for one `kingfisher sessions` prints as hours idle -- two commands
+    contradicting each other on one workspace. It also offers advice that cannot work,
+    since no age sweeps a session a turn is running in.
     """
     if kept == 0:
         print("nothing to reap -- this workspace holds no sessions")
         return
-    why = f"none of the {_count(kept)} here has been idle longer than {_age(age)}"
+    if busy == kept:
+        # No age sweeps these, so naming one would be advice that cannot work.
+        held = "it" if kept == 1 else "each of them"
+        print(f"nothing to reap -- a turn is running in {held}; reap again when it finishes")
+        return
+    rest = kept - busy
+    waited = f"has been idle longer than {_age(age)}"
+    if busy:
+        print(f"nothing to reap -- {_count(busy)} is busy, and none of the other "
+              f"{_count(rest)} here {waited}")
+        return
+    why = f"none of the {_count(kept)} here {waited}"
     if not from_config:
         print(f"nothing to reap -- {why}")
         return
