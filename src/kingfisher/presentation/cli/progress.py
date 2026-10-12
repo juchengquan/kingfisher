@@ -31,6 +31,9 @@ class Progress:
         self._split = self._progress is not self._answer
         self._owed = False
         self._speaker: str | None = None
+        #: Whether any of the asked-for agent's own prose reached `answer`. A subagent's
+        #: does not count: it is not the answer, even on one stream.
+        self._answered = False
 
     def write(self, event: RunEvent) -> RunResult | None:
         """Show one event. Returns the `RunResult` if this was the last."""
@@ -40,10 +43,14 @@ class Progress:
         if self._owed:
             self._progress.write("\n")
             self._owed = False
-        # The terminal event carries the result and is not itself printed. Nor
-        # is `result.answer` printed afterwards: it already arrived, a word at
-        # a time, and saying it again would read as the model answering twice.
+        # The terminal event carries the result and is not itself printed. Its answer
+        # is, when none of it streamed: a model that does not stream sends no tokens,
+        # and the answer exists only on the result. When it did stream, saying it
+        # again would read as the model answering twice.
         if event.kind == "finished":
+            if not self._answered and event.result is not None and event.result.answer:
+                self._answer.write(event.result.answer)
+                self._answer.flush()
             return event.result
         print(event, file=self._progress, flush=True)
         return None
@@ -69,6 +76,8 @@ class Progress:
             self._owed = True
         self._answer.write(event.text)
         self._answer.flush()
+        if event.agent is None:
+            self._answered = True
 
     def _say_who(self, agent: str | None) -> None:
         """Name the speaker, once, at the seam where it changes."""

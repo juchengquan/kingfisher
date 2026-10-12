@@ -349,6 +349,21 @@ def test_the_answer_goes_to_stdout_and_the_watching_to_stderr(cfg, monkeypatch, 
     assert "forty two" not in shown.err
 
 
+def test_an_answer_that_did_not_stream_is_printed_when_the_run_ends(cfg, monkeypatch, capsys):
+    """A model that does not stream sends no `token` events, and the answer exists only
+    on the result. One line of `models.yaml` -- `disable_streaming: true`, a kwarg the
+    shipped example documents -- made `run` print nothing and exit 0 while `kf.run` on
+    the same request answered.
+    """
+    from kingfisher import RunEvent
+
+    _ran(monkeypatch, [RunEvent(kind="run_start", text="t001"), _finished()], cfg)
+
+    assert main(["run", "do a thing", "--agent", "assistant"]) == 0
+
+    assert capsys.readouterr().out == "42"
+
+
 def test_a_warning_of_kingfishers_own_is_one_plain_line(cfg, session_dir, monkeypatch, capsys):
     """The unconfined-shell warning reached `run` in Python's default shape: a path into
     the package, a line number and the `warnings.warn` source line, around the one
