@@ -17,6 +17,34 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## A turn records what its tools returned, after #708
+
+Every turn kingfisher builds the graph for now records each tool result the model was
+handed. A deployment that supplies its own graph records nothing.
+
+- **`RunResult.ledger` is new**: this turn's entries, a `LedgerEntry` each, in the order
+  they were numbered. Each holds an id such as `A-0001`, the turn and the call, the
+  tool and its arguments as the model wrote them, the audience it was offered under,
+  its size, where it is kept, and a one-line summary. A subagent's own calls are
+  `working` entries under the `task` call that started them, and its answer is a
+  `main` one. The built-in file tools and failed calls are not recorded. It serialises
+  to JSON with the rest of the result.
+- **Each result is kept in the session, under `/scratchpad/results/`**, as
+  `A-0001-<tool>.txt`, or `.json` where the text parses as JSON. A result deepagents
+  offloaded points at its copy in `/scratchpad/large_tool_results/` instead. A file
+  the backend refuses leaves its entry with no `path` and a warning in the log, and
+  the call is not failed for it.
+- **`.harness/ledger.jsonl` is new**: every entry the session has recorded, one JSON
+  row each, and a closing line `{"turn": ...}` for each turn, a turn that recorded
+  nothing included. It is written at the end of every turn, one that paused for a
+  decision included, before the transcript and the paused state.
+- **A backend of your own is asked for three more things**: `upload_files` under
+  `/scratchpad/results/` as each result arrives, `ls` of that folder and of the offload
+  folder at the end of a turn, and `delete` of a result file no row names. Built on
+  `backend_at`, there is nothing to do.
+- **Older sessions** number from `A-0001` on their next turn. There is nothing to
+  migrate.
+
 ## A run and a listing name only the subagents a caller reaches, after #707
 
 What a caller is told about subagents now matches what is built for them.

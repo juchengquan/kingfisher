@@ -71,6 +71,44 @@ class PendingDecision:
     decisions: tuple[str, ...] = ()
 
 
+#: Who may reach a recorded result, as JSON holds it: names any one of which will
+#: do, a nested tuple being names that must all be held, and `("*",)` for everyone.
+Listed = tuple[str | tuple[str, ...], ...]
+
+#: A result recorded by the agent the caller asked, and one recorded inside a
+#: subagent it consulted.
+MAIN = "main"
+WORKING = "working"
+
+
+@dataclass(frozen=True)
+class LedgerEntry:
+    """One tool result a turn recorded, with the fields of its row in the ledger."""
+
+    #: `A-` and the session's running number, never reused within a session.
+    id: str
+    turn: str
+    #: The tool call's own id.
+    call: str
+    #: The parent's `task` call id for a `working` entry, and `None` for a `main` one.
+    run: str | None
+    #: `main` or `working`.
+    role: str
+    tool: str
+    #: Each argument as the model wrote it, `name=value`, a long value cut.
+    args: str
+    #: The audience the result was produced under, or `None` where no
+    #: `source_ids.yaml` is in force. Recorded and never acted on.
+    access: Listed | None
+    #: The result's length in bytes, as the tool returned it.
+    size: int
+    #: Where the result is kept in the session, or `None` where the backend refused
+    #: the file; the row is kept either way.
+    path: str | None
+    #: The tool, its arguments and the first line of its result. No model writes it.
+    summary: str
+
+
 @dataclass(frozen=True)
 class RunResult:
     session_id: str
@@ -104,6 +142,11 @@ class RunResult:
     #: when this turn superseded it. Reported rather than swallowed, because a human
     #: decision quietly dropped is the one failure here that leaves no other trace.
     discarded: tuple[str, ...] = ()
+    #: What this turn's tools returned, one entry each in the order they were
+    #: numbered, a subagent's own calls included. Not the built-in file tools, whose
+    #: results are files already, and not a call that failed. Empty for a graph the
+    #: deployment supplied, which kingfisher did not build and cannot hook.
+    ledger: tuple[LedgerEntry, ...] = ()
 
     @property
     def completed(self) -> bool:

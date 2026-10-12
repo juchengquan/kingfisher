@@ -361,6 +361,16 @@ did not work. All of it langchain-core 1.5.5, langgraph 1.2.11, deepagents 0.7.6
 - **The default backend routes on the leading slash.** `skills/x/SKILL.md` and
   `/skills/x/SKILL.md` validate to one path and are two files to the backend: the
   first misses the `/skills/` route and is looked for under the session.
+- **A context variable set around the parent's `task` call reaches every call the
+  subagent makes, calls made together included.** A `wrap_tool_call` first in
+  `tool_guards` set one around `task`, and the subagent's own read it for two calls
+  made in one message and for a nested helper's call. Under `stream` the two ran on two
+  pool threads that started in the same instant; under `astream`, as two tasks on the
+  loop. langgraph's `BackgroundExecutor.submit` runs each call in a `copy_context()`
+  taken as it is submitted, and asyncio copies one into each task, so a value set
+  before the subagent starts is in all of them. The ledger's `RUN` rests on this, and
+  `test_a_subagents_results_are_working_entries_of_the_run_that_started_it` holds
+  both paths. *(2026-10-12, langgraph 1.2.11, langchain 1.3.15, deepagents 0.7.6.)*
 
 ## The Linux fence
 

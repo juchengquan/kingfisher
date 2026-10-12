@@ -1376,6 +1376,10 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
             "checkpointing",
             "interpreter",
             "kinds.declared_middleware",
+            # A turn makes the collector its graphs record into and keeps what they
+            # recorded when it ends; keeping it asks where deepagents offloaded a
+            # result, which is deepagents' own answer to read.
+            "ledger",
             "runlog",
             "runtime",
         }
@@ -1779,6 +1783,9 @@ WITNESSES: dict[str, str] = {
     # a gate at all, and one that cannot catch `DecisionError` cannot tell a bad
     # answer from a broken session.
     "PendingDecision": "embedder",
+    # What `RunResult.ledger` holds, one per recorded result. A caller keeping or
+    # showing those entries names the type to do it.
+    "LedgerEntry": "embedder",
     "Resume": "embedder",
     "Decision": "embedder",
     "DecisionError": "embedder",
@@ -2238,12 +2245,16 @@ SDK_LOADING: frozenset[str] = frozenset({
     # `ToolContext` cheap for a tool file to import.
     "kingfisher.infrastructure.harness.permitted_backend",
     # Kingfisher's own middleware, each a subclass of a langchain or deepagents class,
-    # and `tool_guards`, which composes three of them. `host_paths` and `session_paths`
+    # and `tool_guards`, which composes them. `host_paths` and `session_paths`
     # are what those are built on and name no runtime class, which is what keeps
     # `HostPathError` cheap for a backend author to import.
     "kingfisher.infrastructure.harness.middlewares.host_path_guard",
     "kingfisher.infrastructure.harness.middlewares.narrowing",
+    "kingfisher.infrastructure.harness.middlewares.recorder",
     "kingfisher.infrastructure.harness.middlewares.workspace_tools",
+    # The collector a turn's recorders share, and keeping what they recorded, which
+    # asks deepagents where it offloads a result and how it names the file.
+    "kingfisher.infrastructure.harness.ledger",
     "kingfisher.infrastructure.harness.tool_guards",
     "kingfisher.infrastructure.harness.checkpointing",
     "kingfisher.infrastructure.harness.kinds.declared_middleware",
@@ -2364,6 +2375,8 @@ LIGHT_EXPORTS = frozenset({
     # consumer deciding whether to approve a call should not load an agent runtime
     # to read what the call was.
     "PendingDecision", "Resume", "Decision",
+    # A recorded result, on the same result and as light, for the same reason.
+    "LedgerEntry",
     # The errors a caller must tell apart. Public so a consumer outside the package can
     # catch them by name -- the server being the first such consumer.
     "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError",

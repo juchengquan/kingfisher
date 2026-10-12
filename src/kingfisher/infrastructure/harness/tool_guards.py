@@ -12,6 +12,7 @@ from langchain_core.tools import BaseTool, StructuredTool, ToolException
 from kingfisher.domain.references import UnsafeReferenceError
 from kingfisher.infrastructure.harness.host_paths import HostPathError
 from kingfisher.infrastructure.harness.middlewares.host_path_guard import HostPathGuard
+from kingfisher.infrastructure.harness.middlewares.recorder import Recorder
 from kingfisher.infrastructure.harness.middlewares.workspace_tools import (
     WorkspaceToolErrors,
     WorkspaceToolPaths,
@@ -19,7 +20,11 @@ from kingfisher.infrastructure.harness.middlewares.workspace_tools import (
 from kingfisher.infrastructure.harness.session_paths import SessionPaths, refusal_text
 
 
-def tool_guards(names: frozenset[str], paths: SessionPaths | None) -> list[AgentMiddleware]:
+def tool_guards(
+    names: frozenset[str],
+    paths: SessionPaths | None,
+    recorder: Recorder | None = None,
+) -> list[AgentMiddleware]:
     """What every graph holding workspace tools gets wrapped in, built once.
 
     Three graphs hold them -- the agent, a subagent, and the `general-purpose` subagent
@@ -34,8 +39,14 @@ def tool_guards(names: frozenset[str], paths: SessionPaths | None) -> list[Agent
     there whether or not this graph holds a workspace tool. The other two are about the
     tools themselves, so they need names -- and translation needs the turn's backend to
     translate against, which every graph here is handed the same one of.
+
+    `recorder` is the turn's, made for the definition this graph was built from, or
+    `None` where no turn will keep what is recorded.
     """
-    guards: list[AgentMiddleware] = [HostPathGuard()]
+    # First, so it records what the model is handed and the arguments the model
+    # wrote: everything after it may rewrite one or the other.
+    guards: list[AgentMiddleware] = [] if recorder is None else [recorder]
+    guards.append(HostPathGuard())
     if names:
         # Beside each other and in this order, which the subagent's stack is pinned to:
         # both are about a workspace tool call, and the translation rewrites the

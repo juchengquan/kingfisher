@@ -63,6 +63,7 @@ from kingfisher.infrastructure.harness.middlewares.narrowing import (
     NarrowedSkills,
     ToolAllowlist,
 )
+from kingfisher.infrastructure.harness.middlewares.recorder import Audiences, Recorder
 from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
 from kingfisher.infrastructure.harness.session_paths import SessionPaths
@@ -80,6 +81,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from langgraph.graph.state import CompiledStateGraph
+
+    from kingfisher.infrastructure.harness.ledger import Ledger
 
 
 @dataclass(frozen=True)
@@ -344,8 +347,13 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     workspace_tools: Sequence[Found] | None = None,
     agent: AgentSpec | None = None,
     held: frozenset[str] | None = None,
+    ledger: Ledger | None = None,
 ) -> Assembled:
-    """Wire model, backend and checkpointer into a deep agent, and say what was wired."""
+    """Wire model, backend and checkpointer into a deep agent, and say what was wired.
+
+    `ledger` is the turn's, which every graph built here records into; `None` records
+    nothing, which is right for a build no turn will keep.
+    """
     # The agent file is the baseline and the request only ever subtracts from it. One
     # lattice, applied in the one direction it already goes: what a caller asks for
     # cannot exceed what the definition declared. One function, because the run's report
@@ -371,7 +379,20 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # below -- memory declined, skills narrowed -- applies to both.
     under_rules = PermittedBackend(backend, permissions)
     paths = SessionPaths(under_rules, sessions_root(cfg.workspace))
-    middleware: list[Any] = [TodoListMiddleware(), *tool_guards(guarded, paths)]
+
+    def recording(definition: object | None) -> Recorder | None:
+        """A recorder for one graph, reading access off `definition`'s audiences.
+
+        One per graph, as every middleware here is, all into the turn's one ledger. It
+        saves through `under_rules`, so a result file is held to the rules a tool's own
+        save is.
+        """
+        if ledger is None:
+            return None
+        audiences = Audiences.of(definition) if cfg.access is not None else None
+        return Recorder(ledger, under_rules, audiences)
+
+    middleware: list[Any] = [TodoListMiddleware(), *tool_guards(guarded, paths, recording(agent))]
     extras: dict[str, Any] = {}
 
     # One answer to "are skills on", for this agent and for every subagent it
@@ -591,6 +612,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                 paths=paths,
                 run_on=wanted.get(name),
                 held=held,
+                recorder=recording(defined[name]),
                 extra_middleware=declared_middleware(
                     defined[name],
                     registry,
@@ -697,7 +719,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             # the same guards around them. Without them a tool call through this
             # subagent reached the tool with its paths untranslated.
             "middleware": (
-                tool_guards(guarded, paths)
+                # The agent's recorder too: these are the agent's tools, offered under
+                # the agent's audiences.
+                tool_guards(guarded, paths, recording(agent))
                 + ([ToolAllowlist(permitted)] if permitted is not None else [])
                 + _deployment_middleware(
                     agent, registry, capabilities.middlewares, provisions=agent_provisions

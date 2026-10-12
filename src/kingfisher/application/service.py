@@ -67,6 +67,7 @@ from kingfisher.domain.request import DecisionError, Request, Resume
 from kingfisher.domain.result import (
     AWAITING,
     END_TURN,
+    LedgerEntry,
     PendingDecision,
     RunEvent,
     RunResult,
@@ -102,6 +103,7 @@ from kingfisher.infrastructure.harness.kinds.declared_middleware import (
     MiddlewareFactory,
     refuse_unbuildable_middleware,
 )
+from kingfisher.infrastructure.harness.ledger import Ledger, keep_ledger
 from kingfisher.infrastructure.harness.runlog import LoggedRunEvents, RunLogger
 from kingfisher.infrastructure.session_files import (
     collect_artifacts,
@@ -112,10 +114,12 @@ from kingfisher.infrastructure.session_store import (
     AGENT_MARK,
     PENDING_MARK,
     HarnessFiles,
+    KeptLedger,
     agent_started_with,
     clear_pause,
     pending_as_mark,
     pending_from_mark,
+    read_ledger,
     read_pause_mark,
     read_transcript,
     remember_agent,
@@ -167,6 +171,8 @@ class _Turn:
     #: Gated calls this turn stopped on, filled by the lifecycle from the one state
     #: read it already makes. Non-empty is what makes `stop_reason` `awaiting_decision`.
     awaiting: tuple[PendingDecision, ...] = ()
+    #: What this turn's tools returned, as the lifecycle kept it.
+    recorded: tuple[LedgerEntry, ...] = ()
 
 
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
@@ -421,6 +427,7 @@ class Kingfisher(Sessions, Disposal):
         agent: AgentSpec | None,
         held: frozenset[str] | None,
         files: Any,
+        ledger: Ledger | None = None,
     ) -> Any:
         """What serves one request, rooted at its session.
 
@@ -462,6 +469,7 @@ class Kingfisher(Sessions, Disposal):
             middleware_registry=self.middlewares,
             checkpointer=self.threads if checkpointer is _UNSET else checkpointer,
             catalogue=self.catalogue,
+            ledger=ledger,
         )
 
     def _files_for(self, session_id: str) -> Steps[Any]:
@@ -772,6 +780,9 @@ class Kingfisher(Sessions, Disposal):
             else None
         )
         history = yield from read_transcript(harness)
+        # Read where the transcript is, and only for a graph built here: one the
+        # deployment supplied has nothing hooked to record into it.
+        earlier = (yield from read_ledger(harness)) if self._graph is None else None
         return (
             yield on_host(
                 self._built_turn,
@@ -788,6 +799,7 @@ class Kingfisher(Sessions, Disposal):
                 unprotected=unprotected,
                 placement=placement,
                 history=history,
+                earlier=earlier,
             )
         )
 
@@ -886,6 +898,7 @@ class Kingfisher(Sessions, Disposal):
         unprotected: tuple[str, ...],
         placement: Any,
         history: tuple[Any, ...],
+        earlier: KeptLedger | None = None,
     ) -> Prepared:
         """The saver, the graph and the turn itself: what setup builds rather than asks
         for. Done in one piece, on kingfisher's pool for `astream`, because building
@@ -898,6 +911,11 @@ class Kingfisher(Sessions, Disposal):
         graph = None
         try:
             saver = checkpointer if paused is None else self._restored(session, paused)
+            # A caller-supplied id wins; otherwise one is made. No directory is
+            # claimed, so there is nothing to be atomic about any more. Before the
+            # build, because every row the graph records names the turn.
+            turn = session.allocate_turn(request.turn_id)
+            ledger = Ledger(turn.id, earlier) if earlier is not None else None
             built = self._graph_for(
                 request,
                 capabilities=allowed,
@@ -905,6 +923,7 @@ class Kingfisher(Sessions, Disposal):
                 agent=agent,
                 held=held,
                 files=files,
+                ledger=ledger,
             )
             # `isinstance` rather than `getattr(built, "graph", built)`: the two shapes
             # `_graph_for` returns are named types, and a duck test here would also
@@ -941,9 +960,6 @@ class Kingfisher(Sessions, Disposal):
                 agent=agent,
                 held=held,
             )
-            # A caller-supplied id wins; otherwise one is made. No directory is
-            # claimed, so there is nothing to be atomic about any more.
-            turn = session.allocate_turn(request.turn_id)
             logger = RunLogger(
                 self.run_events,
                 model=cfg.models.default,
@@ -978,6 +994,7 @@ class Kingfisher(Sessions, Disposal):
             # opened it and this would be empty for every pause after that.
             agent_name=agent.name if agent is not None else None,
             history=history,
+            ledger=ledger,
             # A resume adds no message: it continues a superstep that already has
             # everything it needs, and a new user turn appended there would be one
             # the model never saw asked.
@@ -1033,6 +1050,7 @@ class Kingfisher(Sessions, Disposal):
         stop_reason: str,
         waiting: tuple[PendingDecision, ...] = (),
         discarded: tuple[str, ...] = (),
+        ledger: tuple[LedgerEntry, ...] = (),
     ) -> RunEvent:
         """The terminal event, built the same way whichever loop produced it."""
         return RunEvent(
@@ -1049,6 +1067,7 @@ class Kingfisher(Sessions, Disposal):
                 # wrote, which no file tool would have reported.
                 artifacts=kept,
                 stop_reason=stop_reason,
+                ledger=ledger,
             ),
         )
 
@@ -1074,6 +1093,12 @@ class Kingfisher(Sessions, Disposal):
             # than by suppressing everything, so a graph that genuinely cannot
             # answer still says so.
             return None
+
+    def _record_ledger(self, prepared: Prepared) -> Steps[tuple[LedgerEntry, ...]]:
+        """Keep what this turn's tools returned, whether or not the turn paused."""
+        if prepared.ledger is None:
+            return ()
+        return (yield from keep_ledger(prepared.files, prepared.harness, prepared.ledger))
 
     def _record_transcript(self, prepared: Prepared, snapshot: Any) -> Steps[None]:
         """Write what was said this turn, as records this package owns."""
@@ -1209,18 +1234,22 @@ class Kingfisher(Sessions, Disposal):
         # One read, before anything is let go of: the saver still holds the
         # paused state, and `_settle_pause` is what writes it out.
         snapshot = yield on_host(self._settled, prepared)
-        turn.awaiting = yield from self._settle_pause(prepared, snapshot)
-        if turn.awaiting:
-            turn.pending.append(decision_needed(turn.awaiting))
-            # A bound that already fired keeps the reason it gave. Both are true
-            # -- the gate is real and the checkpoint is written either way -- and
-            # `stop_reason` answers why the turn *ended*, which for a turn cut
-            # off at its deadline is the deadline and not the question it was
-            # holding. The pending calls are reported regardless, so a caller is
-            # never left guessing what was in flight.
-            if turn.stop_reason == END_TURN:
-                turn.stop_reason = AWAITING
         try:
+            # Before the paused state as well as before the transcript: a resume
+            # carries on from that state, so it is as much the conversation as the
+            # transcript is, and a result in either must already have its row.
+            turn.recorded = yield from self._record_ledger(prepared)
+            turn.awaiting = yield from self._settle_pause(prepared, snapshot)
+            if turn.awaiting:
+                turn.pending.append(decision_needed(turn.awaiting))
+                # A bound that already fired keeps the reason it gave. Both are true
+                # -- the gate is real and the checkpoint is written either way -- and
+                # `stop_reason` answers why the turn *ended*, which for a turn cut
+                # off at its deadline is the deadline and not the question it was
+                # holding. The pending calls are reported regardless, so a caller is
+                # never left guessing what was in flight.
+                if turn.stop_reason == END_TURN:
+                    turn.stop_reason = AWAITING
             turn.kept = yield from self._keep(prepared, snapshot)
         finally:
             # The slot goes back however the turn ended -- answered, refused
@@ -1290,6 +1319,7 @@ class Kingfisher(Sessions, Disposal):
                 stop_reason=turn.stop_reason,
                 waiting=turn.awaiting,
                 discarded=turn.prepared.discarded,
+                ledger=turn.recorded,
             ),
         )
 

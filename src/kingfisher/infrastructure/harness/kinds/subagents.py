@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from kingfisher.config import Config
+    from kingfisher.infrastructure.harness.middlewares.recorder import Recorder
     from kingfisher.kinds.skills.registry import SkillRegistry
 
 
@@ -298,6 +299,10 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     #: The caller's source ids, for this definition's own audiences. `tools` above is
     #: the agent's ceiling, narrowed by the agent's audiences and never by these.
     held: frozenset[str] | None = None,
+    #: The turn's recorder, made for this definition. A compiled subagent's tools have
+    #: no middleware to carry it, so its calls go unrecorded and its answer is
+    #: recorded by its parent, as the result of `task`.
+    recorder: Recorder | None = None,
 ) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`."""
     if spec.build is not None:
@@ -369,7 +374,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # carry the attribute this once guessed from, and without it a subagent's tools
     # lost translation and the host-path refusal with nothing said.
     middleware.extend(
-        tool_guards(frozenset(entry.name for entry in (*catalogue, *private)), paths)
+        tool_guards(frozenset(entry.name for entry in (*catalogue, *private)), paths, recorder)
     )
     if allowed != ALL:
         # `None` is a subagent permitted nothing, which is an empty allowlist rather

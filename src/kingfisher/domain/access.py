@@ -8,6 +8,7 @@ from typing import Final, Literal
 
 from kingfisher.domain import fields
 from kingfisher.domain.capabilities import ALL, Selection
+from kingfisher.domain.result import Listed
 
 #: The selection fields that may be written as a mapping of name to audience.
 #: `builtin_tools` is absent because deepagents registers those itself: kingfisher
@@ -151,6 +152,46 @@ def narrowed_for(spec: object, held: frozenset[str] | None) -> dict[str, Selecti
         )
         for field in AUDIENCED
     }
+
+
+def jointly(audiences: Iterable[Audience]) -> Audience:
+    """Who reaches every one of these, as one audience.
+
+    Each is an or of ands, and so is the answer: every way of picking one entry from
+    each, held together, keeping only the ways no other needs less than.
+    """
+    ways: set[frozenset[str]] = {frozenset()}
+    for audience in audiences:
+        if audience == ALL:
+            continue
+        picked = {
+            way | (one if isinstance(one, frozenset) else frozenset((one,)))
+            for way in ways
+            for one in audience
+        }
+        ways = {way for way in picked if not any(other < way for other in picked)}
+    if ways == {frozenset()}:
+        return ALL
+    return tuple(
+        next(iter(way)) if len(way) == 1 else way
+        for way in sorted(ways, key=lambda way: (len(way), sorted(way)))
+    )
+
+
+def listed(audience: Audience) -> Listed:
+    """An audience as a ledger row holds it, which JSON can: a set becomes a sorted
+    tuple, and everyone is `("*",)` so the field is a list whoever it names.
+    """
+    if audience == ALL:
+        return (ALL,)
+    return tuple(tuple(sorted(one)) if isinstance(one, frozenset) else one for one in audience)
+
+
+def unlisted(written: Sequence[str | Sequence[str]]) -> Audience:
+    """What `listed` wrote, read back from a row: a list where it wrote a tuple."""
+    if list(written) == [ALL]:
+        return ALL
+    return tuple(one if isinstance(one, str) else frozenset(one) for one in written)
 
 
 def _singular(field_name: str) -> str:

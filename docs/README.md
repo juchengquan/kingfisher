@@ -74,7 +74,8 @@ slices land.
 - [A ledger of tool results](design/2026-10-12-a-ledger-of-tool-results.md) — a
   record of every tool result a turn produced, each saved under an id the agent can
   find again after a long conversation is summarised, and listed for the caller.
-  Nothing built.
+  Its first slice has landed: results are recorded, kept and listed on
+  `RunResult.ledger`. The model is not told of them yet.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
