@@ -10,7 +10,7 @@ from kingfisher.application import access
 from kingfisher.application.origins import Origin, Origins
 from kingfisher.config import Config
 from kingfisher.domain.access import AccessReport, SourceIds, Stated, narrowed_for, reaches
-from kingfisher.domain.capabilities import ALL, CapabilityError, Selection
+from kingfisher.domain.capabilities import ALL, CapabilityError, Selection, unoffered
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.kinds.agents.spec import AgentError
 from kingfisher.kinds.importing import defined_in_a_workspace
@@ -131,6 +131,11 @@ class Inventory:
     #: not load, which is not the answer "nothing moved" and must not be reported as
     #: one -- an empty mapping cannot tell the two apart.
     moved_tools_checked: bool = True
+
+    #: Definition -> the subagents it names that the catalogue has no key for, keyed
+    #: as `moved_tools` is: one nobody defines, or a bare name two files share, which
+    #: the catalogue keys by file. A run reaching the name refuses it.
+    unresolved_subagents: Mapping[str, tuple[str, ...]] = _NO_NAMES
 
     #: Definitions whose `source: bundled` entries and own folder disagree, by the
     #: name a grant uses, each with how the two differ.
@@ -395,6 +400,24 @@ def _moved_tools(resolved: Definitions) -> Mapping[str, tuple[str, ...]] | None:
         return None
 
 
+def _unresolved_subagents(resolved: Definitions) -> Mapping[str, tuple[str, ...]] | None:
+    """Definitions naming a subagent the catalogue has no key for, or `None` when
+    that could not be asked, for the reason `_moved_tools` gives.
+    """
+    try:
+        defined = resolved.subagents.specs
+        return MappingProxyType({
+            _subject(kind, name): missing
+            for kind, specs in (("agent", resolved.agents.specs), ("subagent", defined))
+            for name, spec in specs.items()
+            # `*` is every key, so it cannot name one that is not.
+            if spec.subagents not in (None, ALL)
+            and (missing := unoffered(spec.subagents, offered=defined))
+        })
+    except (AgentError, SubagentError):
+        return None
+
+
 def _miscounted_bundles(resolved: Definitions) -> Mapping[str, str] | None:
     """Definitions whose bundled entries no longer match their own folder, or `None`
     when that could not be asked.
@@ -620,6 +643,7 @@ def inventory(
 
     middlewares, middlewares_error = _middlewares(resolved)
     moved_tools = _moved_tools(resolved)
+    unresolved_subagents = _unresolved_subagents(resolved)
     miscounted_bundles = _miscounted_bundles(resolved)
 
     builtin, workspace_tools, sources, tools_error = _tools(cfg, resolved)
@@ -763,6 +787,11 @@ def inventory(
         middlewares_error=middlewares_error,
         moved_tools=_NO_NAMES if moved_tools is None else _kept(moved_tools, reached_subjects),
         moved_tools_checked=moved_tools is not None,
+        unresolved_subagents=(
+            _NO_NAMES
+            if unresolved_subagents is None
+            else _kept(unresolved_subagents, reached_subjects)
+        ),
         miscounted_bundles=(
             _NOTHING
             if miscounted_bundles is None

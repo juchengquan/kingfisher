@@ -717,6 +717,10 @@ subagents/team/surveyor.yaml       name: surveyor
 its own — which is every catalogue with no clash — the bare name is the key and
 nothing changes.
 
+A definition naming a subagent by a name that is no key — one nobody defines,
+or the bare name two files share — still loads. A run reaching that name refuses
+it, and `kingfisher list` names who wrote it and exits 1.
+
 The refusal sits where the constraint lives: an agent's roster is keyed by name,
 so an *agent* granted two of a name is refused. Two definitions in one catalogue
 that no single agent holds together are not a conflict.

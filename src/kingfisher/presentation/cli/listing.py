@@ -66,6 +66,7 @@ def render(found: Inventory) -> Iterator[str]:
     yield from _middlewares(found)
     yield from _bundles(found)
     yield from _misnamed_tools(found)
+    yield from _unresolved_subagents(found)
     yield from _access(found)
 
 
@@ -142,6 +143,21 @@ def _misnamed_tools(found: Inventory) -> Iterator[str]:
     yield "\ntools named by a path they have moved from"
     for subject, names in sorted(found.moved_tools.items()):
         yield f"  {subject}: {', '.join(sorted(names))}"
+
+
+def _unresolved_subagents(found: Inventory) -> Iterator[str]:
+    """Definitions naming a subagent the catalogue has no key for.
+
+    Said here or nowhere: an agent's `subagents:` line above prints what a run
+    activates, so the name it could not resolve is simply not on it.
+    """
+    if not found.unresolved_subagents:
+        return
+    yield "\nsubagent names matching nothing under subagents"
+    for subject, names in sorted(found.unresolved_subagents.items()):
+        yield f"  {subject}: {', '.join(sorted(names))}"
+    yield "  (a run reaching one is refused: write each as listed under subagents,"
+    yield "   where a name two files share is spelt with its file)"
 
 
 def origins_document(origins: Origins) -> dict[str, object]:
@@ -365,6 +381,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "middlewares_error": found.middlewares_error,
         "moved_tools": {k: list(v) for k, v in found.moved_tools.items()},
         "moved_tools_checked": found.moved_tools_checked,
+        "unresolved_subagents": {k: list(v) for k, v in found.unresolved_subagents.items()},
         "bundled_tools": {k: list(v) for k, v in found.bundled_tools.items()},
         "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
         "bundled_misplaced": {k: list(v) for k, v in found.bundled_misplaced.items()},
@@ -421,9 +438,10 @@ def failed(found: Inventory) -> bool:
 
     A definition whose bundled entries and folder disagree is the first sort: the
     catalogue refuses it, so a listing that exited zero over one would be promising
-    a deployment that cannot start.
+    a deployment that cannot start. One naming a subagent the catalogue has no key
+    for loads, and every run reaching that name is refused.
     """
-    if found.moved_tools or found.miscounted_bundles:
+    if found.moved_tools or found.miscounted_bundles or found.unresolved_subagents:
         return True
     if any(kind.error is not None for kind in found.by_kind()):
         return True
