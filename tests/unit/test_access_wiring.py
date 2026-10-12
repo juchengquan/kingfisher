@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 
 import pytest
@@ -17,6 +18,7 @@ from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.middlewares.narrowing import ToolAllowlist
 from kingfisher.infrastructure.steps import drive
 from kingfisher.infrastructure.workspace import ensure_session_layout
+from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import (
     an_agent,
     declared_subagents,
@@ -575,6 +577,8 @@ SUBAGENTS = [
 ]
 '''
 
+ABC = "source_ids: [A, B, C]\n"
+
 #: Names every subagent itself and grants both skills, so nothing a subagent loses
 #: below is the agent's doing.
 BOSS = """name: boss
@@ -609,7 +613,9 @@ def delegating(cfg):
     agents = cfg.catalogue_roots["agents"]
     agents.mkdir(parents=True, exist_ok=True)
     (agents / "boss.yaml").write_text(BOSS, encoding="utf-8")
-    return replace(cfg, access=vocabulary("source_ids: [A, B, C]\n"), skills_enabled=True)
+    # In the workspace too, for `kingfisher list`, which reads it from there.
+    (cfg.workspace / "source_ids.yaml").write_text(ABC, encoding="utf-8")
+    return replace(cfg, access=vocabulary(ABC), skills_enabled=True)
 
 
 def delegated(cfg, source_ids: tuple[str, ...]):
@@ -707,3 +713,145 @@ def test_a_caller_every_audience_admits_gets_everything_each_subagent_names(dele
     assert {"http_fetch", "sql_query"} <= set(
         dispatched(subagent_of(built, "profiler")["runnable"])
     )
+
+
+# -- what a caller is told about a subagent out of reach --------------------
+
+#: Keeps `plain-helper` from `C` with its own entry, where `insider` is kept by its
+#: own line, and names nothing else but `second-opinion`.
+GATEKEEPER = """name: gatekeeper
+description: Delegates less.
+source_ids: [A, B, C]
+subagents:
+  - name: plain-helper
+    source_ids: [A]
+  - second-opinion
+system_prompt: |
+  You delegate.
+"""
+
+
+def on_the_default_host(cfg, *names: str) -> None:
+    """Put these subagents on `cheap-model`, which shares the default's host, so a run
+    has something to report about each one it activates.
+    """
+    for name in names:
+        path = subagents_dir(cfg) / f"{name}.yaml"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace("system_prompt:", "model: cheap-model\nsystem_prompt:"),
+            encoding="utf-8",
+        )
+
+
+def told(cfg, source_ids: tuple[str, ...], *, agent: str = "boss", **asked):
+    """The subagents one real turn tells this caller were not granted, and that run on
+    the main agent's host, read off the events before the model is reached.
+    """
+    kf = Kingfisher(cfg, backends=default_backends)
+    turn = kf.stream(
+        Request("go", agent=agent, capabilities=Capabilities(**asked)), source_ids=source_ids
+    )
+    found: dict[str, set[str]] = {"withheld": set(), "indistinct": set()}
+    try:
+        for event in turn:
+            if event.kind == "run_start":
+                break
+            if event.kind == "withheld" and " subagent(s) " in event.text:
+                found["withheld"] |= set(event.text.split(": ", 1)[1].split(", "))
+            elif event.kind == "indistinct" and event.agent is not None:
+                found["indistinct"].add(event.agent)
+    finally:
+        turn.close()
+    return found
+
+
+def listed(capsys, source_ids: str, *, as_json: bool = False) -> str:
+    """What `kingfisher list --as` prints for one caller."""
+    assert main(["list", "--as", source_ids, *(["--json"] if as_json else [])]) == 0
+    return capsys.readouterr().out
+
+
+def test_a_subagent_out_of_reach_is_not_reported_as_withheld(delegating):
+    """A request narrowing `subagents:` told a caller in `C` that `insider` and `ledger`
+    were not granted, though their own `source_ids:` exist to hide them from `C`.
+    """
+    assert told(delegating, ("C",), subagents=("reviewer",))["withheld"] == {
+        "plain-helper",
+        "profiler",
+        "second-opinion",
+    }
+
+
+@pytest.mark.parametrize("as_json", [False, True])
+def test_a_scoped_listing_chains_no_agent_to_a_subagent_out_of_reach(
+    as_json, delegating, at_the_command_line, capsys
+):
+    """`list --as C` left `insider` and `ledger` out of its subagents and still printed
+    both on `boss`'s `subagents:` line.
+    """
+    printed = listed(capsys, "C", as_json=as_json)
+
+    assert [one for one in ("insider", "ledger") if one in printed] == []
+    assert "reviewer" in printed
+
+
+def test_a_subagent_out_of_reach_is_not_reported_as_running_on_the_callers_host(
+    delegating,
+):
+    """The report of a subagent that meant to run elsewhere read the request's `"*"`,
+    and told a caller in `C` which model `insider` asks for.
+    """
+    on_the_default_host(delegating, "insider", "plain-helper")
+
+    assert told(delegating, ("C",))["indistinct"] == {"plain-helper"}
+
+
+def test_the_listing_chains_what_an_agent_activates_for_this_caller(
+    delegating, at_the_command_line, capsys
+):
+    """The chain read the agent's raw `subagents:` line, so `C` saw `plain-helper` under
+    `gatekeeper`, whose own entry keeps it from them.
+    """
+    (delegating.catalogue_roots["agents"] / "gatekeeper.yaml").write_text(
+        GATEKEEPER, encoding="utf-8"
+    )
+
+    chains = {
+        held: json.loads(listed(capsys, held, as_json=True))["agent_subagents"]["gatekeeper"]
+        for held in ("C", "A")
+    }
+
+    assert chains == {"C": ["second-opinion"], "A": ["plain-helper", "second-opinion"]}
+
+
+def test_a_run_reports_only_the_subagents_it_activated(delegating):
+    """Reading the request's grant, the report named `plain-helper` to a caller in `C`
+    whom `gatekeeper`'s entry keeps it from, and `insider` to a caller in `A` whose
+    agent never names it.
+    """
+    (delegating.catalogue_roots["agents"] / "gatekeeper.yaml").write_text(
+        GATEKEEPER, encoding="utf-8"
+    )
+    on_the_default_host(delegating, "insider", "plain-helper")
+
+    assert told(delegating, ("C",), agent="gatekeeper")["indistinct"] == set()
+    assert told(delegating, ("A",), agent="gatekeeper")["indistinct"] == {"plain-helper"}
+
+
+def test_a_caller_every_audience_admits_is_told_about_each_subagent(
+    delegating, at_the_command_line, capsys
+):
+    """The control: every absence above also holds for a report that named these
+    subagents to nobody.
+    """
+    on_the_default_host(delegating, "insider", "plain-helper")
+
+    assert {"insider", "ledger"} <= told(delegating, ("A",), subagents=("reviewer",))["withheld"]
+    assert told(delegating, ("A",))["indistinct"] == {"insider", "plain-helper"}
+    assert {"insider", "ledger"} <= set(
+        json.loads(listed(capsys, "A", as_json=True))["agent_subagents"]["boss"]
+    )
+    printed = listed(capsys, "A")
+    assert "insider" in printed
+    assert "ledger" in printed

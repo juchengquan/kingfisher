@@ -23,9 +23,10 @@ from kingfisher.kinds.subagents.spec import RunOn, SubagentSpec
 from kingfisher.layout import SKILLS_ROUTE
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from kingfisher.config import Config
+    from kingfisher.kinds.agents.spec import AgentSpec
 
 
 def available_skills(cfg: Config, *, catalogue: Definitions | None = None) -> tuple[str, ...]:
@@ -62,27 +63,53 @@ def unrunnable_subagents(
     return tuple(found)
 
 
-def indistinct_subagents(
+def for_the_caller(
+    agent: AgentSpec | None, asked: Capabilities, *, held: frozenset[str] | None
+) -> Capabilities:
+    """What a request may use: what the agent declares for this caller, narrowed by
+    what the request asked for.
+    """
+    return agent.declares(held).intersect(asked) if agent is not None else asked
+
+
+def within_reach(
+    names: Iterable[str], defined: Mapping[str, SubagentSpec], held: frozenset[str] | None
+) -> tuple[str, ...]:
+    """`names`, less each subagent whose own `source_ids:` does not reach this caller.
+
+    The build drops those, so whatever tells a caller about subagents drops them too:
+    out of reach reads as not offered, and a report naming one says it exists.
+    """
+    if held is None:
+        return tuple(names)
+    return tuple(name for name in names if reaches(defined[name].source_ids, held))
+
+
+def indistinct_subagents(  # noqa: PLR0913 -- the agent and the caller are what make
+    # this the build's roster rather than the request's
     cfg: Config,
     capabilities: Capabilities,
     *,
     catalogue: Definitions | None = None,
     run_on: Mapping[str, RunOn] | None = None,
+    agent: AgentSpec | None = None,
+    held: frozenset[str] | None = None,
 ) -> tuple[tuple[str, str], ...]:
     """`(name, why)` for each activated subagent that asked to run elsewhere and did
     not.
     """
+    capabilities = for_the_caller(agent, capabilities, held=held)
     if capabilities.subagents is None:
         return ()
     defined = defined_subagents(cfg, catalogue=catalogue)
-    activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
+    named = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
     wanted = run_on or {}
 
     found = []
-    for name in activated:
-        spec = defined.get(name)
-        if spec is None:
-            continue  # `build_agent` refuses this; reporting is not its job
+    # A name nothing defines is skipped rather than refused: `build_agent` refuses it,
+    # and reporting is not its job.
+    for name in within_reach((n for n in named if n in defined), defined, held):
+        spec = defined[name]
         try:
             model = resolved_model(spec.wanted, override=wanted.get(name))
         except ConfigError:
@@ -189,6 +216,4 @@ def _activated_subagents(
     # A subagent's own `source_ids:` holds wherever it is used, so one this caller
     # cannot reach is dropped as an agent's narrowed entry is -- after the refusals,
     # which are about what the request named and must not depend on who sent it.
-    if held is not None:
-        activated = tuple(n for n in activated if reaches(defined[n].source_ids, held))
-    return defined, activated
+    return defined, within_reach(activated, defined, held)

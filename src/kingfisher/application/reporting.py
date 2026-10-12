@@ -12,6 +12,7 @@ from kingfisher.infrastructure.harness.activation import (
     activatable_skills,
     available_skills,
     defined_subagents,
+    within_reach,
 )
 from kingfisher.infrastructure.harness.kinds.tools import (
     registered_tools,
@@ -99,6 +100,15 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
         gone = {same(name) for name in lost} - {None}
         return tuple(name for name in names if same(name) not in gone)
 
+    def subagents() -> tuple[str, ...]:
+        """Every subagent, less each one whose own `source_ids:` misses this caller.
+
+        `denied` cannot see those: it is what the agent's line removed, and a subagent's
+        own line is read off the subagent.
+        """
+        defined = defined_subagents(cfg, catalogue=catalogue)
+        return within_reach(defined, defined, held)
+
     offered = (
         # Built-ins and workspace tools are granted apart, so they are reported
         # apart: "3 tool(s) not granted" meant nothing when it could have been
@@ -122,12 +132,7 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
             "skills",
             lambda: available_skills(cfg, catalogue=catalogue) if cfg.skills_enabled else (),
         ),
-        (
-            "subagent",
-            "subagents",
-            "subagents",
-            lambda: tuple(defined_subagents(cfg, catalogue=catalogue)),
-        ),
+        ("subagent", "subagents", "subagents", subagents),
     )
     found = []
     for what, field, kind, names_of in offered:
