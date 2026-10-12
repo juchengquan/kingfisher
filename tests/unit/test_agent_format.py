@@ -255,8 +255,12 @@ def test_two_agents_of_one_name_are_refused_rather_than_disambiguated(tmp_path):
         _ = LocalAgentRepository(tmp_path).names
 
 
-def test_a_yml_file_is_named_rather_than_silently_skipped(tmp_path):
-    _write(tmp_path, "assistant.yml", "assistant")
+@pytest.mark.parametrize("name", ["assistant.yml", "assistant.YML", "assistant.YAML"])
+def test_a_yml_file_is_named_rather_than_silently_skipped(tmp_path, name):
+    """`.YML` and `.YAML` were skipped without a word: the near miss was matched in
+    lower case only.
+    """
+    _write(tmp_path, name, "assistant")
 
     with pytest.raises(AgentError, match=r"rename it to assistant\.yaml"):
         _ = LocalAgentRepository(tmp_path).names

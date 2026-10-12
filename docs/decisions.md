@@ -663,6 +663,8 @@ That read "an unrecognised extension in `subagents/` is an error" until now, tho
 it was reversed the day it was written: a folder there may be a Python package, and
 a package may hold a fixture or a prompt beside its `__init__.py`, so the one real
 confusion is named rather than every unfamiliar suffix refused. *(2026-09-17.)*
+`.YML` and `.YAML` are the same confusion and were skipped without a word, so the
+suffix is compared in lower case. *(2026-10-12.)*
 
 **One stack for every graph that holds the workspace tools.** Three graphs hold
 them -- the agent, a subagent, and the `general-purpose` subagent deepagents supplies
