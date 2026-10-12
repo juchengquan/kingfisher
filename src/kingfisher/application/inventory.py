@@ -482,18 +482,17 @@ def _audiences(specs: Mapping[str, object], *, kind: str) -> dict[str, Stated]:
 
 def _access(
     cfg: Config,
-    source_ids: Iterable[str] | None,
     *,
     agents: Mapping[str, object],
     subagents: Mapping[str, object],
-) -> tuple[dict[str, Mapping[str, Stated]], AccessReport, frozenset[str] | None, dict[str, str]]:
-    """What the definitions say, what restricts nobody, and whose view this is."""
+) -> tuple[dict[str, Mapping[str, Stated]], AccessReport, dict[str, str]]:
+    """What the definitions say, and what restricts nobody."""
     stated = {
         "agents": _audiences(agents, kind="agent"),
         "subagents": _audiences(subagents, kind="subagent"),
     }
     if cfg.access is None:
-        return stated, AccessReport(), None, {}
+        return stated, AccessReport(), {}
     # The same walk `Kingfisher` runs at construction, and the same functions -- which
     # is the point. A listing that disagreed with startup about who reaches what would
     # be worse than neither saying anything, and until these were shared nothing but a
@@ -506,8 +505,7 @@ def _access(
         if (complaint := access.undeclared_in(specs, kind=kind, vocabulary=cfg.access))
         is not None
     }
-    held = access.held_by(cfg.access, source_ids)
-    return stated, report, held, broken
+    return stated, report, broken
 
 
 def _reaching(
@@ -643,6 +641,9 @@ def inventory(
 ) -> Inventory:
     """Ask the workspace what it offers, through the catalogue a run would use."""
     resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
+    # Whose view this is, before the agents are read: each one's chain is what it
+    # activates for this caller.
+    held = access.held_by(cfg.access, source_ids)
 
     middlewares, middlewares_error = _middlewares(resolved)
     moved_tools = _moved_tools(resolved)
@@ -703,7 +704,9 @@ def inventory(
         agent_sources = MappingProxyType(dict(resolved.agents.sources))
         agent_subagents = MappingProxyType(
             {
-                name: activated(spec.subagents, resolved.subagents.specs)
+                # `declares(held)`, which is what the build reads: an entry the agent's
+                # own audience keeps from this caller is not activated for them.
+                name: activated(spec.declares(held).subagents, resolved.subagents.specs)
                 for name, spec in defined_agents.items()
             }
         )
@@ -714,9 +717,7 @@ def inventory(
         # somebody goes because something is broken.
         agents_error = str(exc)
 
-    stated, report, held, broken = _access(
-        cfg, source_ids, agents=defined_agents, subagents=specs
-    )
+    stated, report, broken = _access(cfg, agents=defined_agents, subagents=specs)
     reaching = _reaching(held, stated)
     scoped = held is not None
     # A scoped view carries only what that caller reaches, and the policy itself is
@@ -763,9 +764,15 @@ def inventory(
         # Membership in the names above, in both views -- the chains are keyed from
         # the same walk as the names, so an unscoped listing keeps all of them
         # without a branch of its own. Key these off a different walk and the
-        # unscoped view starts silently dropping chains.
+        # unscoped view starts silently dropping chains. A chain's own names are kept
+        # to `for_caller_subagents` too: the build drops a subagent its own line keeps
+        # from this caller, whichever agent names it.
         agent_subagents=MappingProxyType(
-            {name: chain for name, chain in agent_subagents.items() if name in for_caller}
+            {
+                name: tuple(one for one in chain if one in for_caller_subagents)
+                for name, chain in agent_subagents.items()
+                if name in for_caller
+            }
         ),
         # `or`, not replace: a kind that already failed to load has the more
         # fundamental problem, and saying the second one instead would send a

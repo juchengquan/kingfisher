@@ -930,8 +930,16 @@ class Kingfisher(Sessions, Disposal):
                 held=held,
             )
             shared = subagent_only(allowed, cfg, catalogue=self.catalogue)
+            # The agent and the caller as well as the grant, so this reports on what the
+            # build activated. The grant alone may be `"*"`, which names every subagent --
+            # those the agent never named, and those out of this caller's reach.
             indistinct = indistinct_subagents(
-                cfg, allowed, catalogue=self.catalogue, run_on=request.run_on
+                cfg,
+                allowed,
+                catalogue=self.catalogue,
+                run_on=request.run_on,
+                agent=agent,
+                held=held,
             )
             # A caller-supplied id wins; otherwise one is made. No directory is
             # claimed, so there is nothing to be atomic about any more.

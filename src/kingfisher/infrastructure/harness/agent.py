@@ -32,6 +32,7 @@ from kingfisher.infrastructure.harness.activation import (
     _private_skills,
     _skill_denials,
     activatable_skills,
+    for_the_caller,
 )
 from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
@@ -347,9 +348,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     """Wire model, backend and checkpointer into a deep agent, and say what was wired."""
     # The agent file is the baseline and the request only ever subtracts from it. One
     # lattice, applied in the one direction it already goes: what a caller asks for
-    # cannot exceed what the definition declared.
-    asked = capabilities or Capabilities()
-    capabilities = agent.declares(held).intersect(asked) if agent is not None else asked
+    # cannot exceed what the definition declared. One function, because the run's report
+    # of what it activated has to read the same answer.
+    capabilities = for_the_caller(agent, capabilities or Capabilities(), held=held)
     roots = catalogue or Definitions.from_config(cfg)
     # Every backend, and that is the point: a check only some builds ran would be a
     # check nothing here exercises.

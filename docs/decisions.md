@@ -1715,6 +1715,27 @@ other direction and is gone, with the same claim in `auditor.yaml`: out of reach
 as not offered, and the report names nothing source-id narrowing removed. The tests
 build the guide's example for `C` and the control for `A`. *(2026-10-12.)*
 
+**What a caller is told about subagents follows the same reach as the build.** Once
+the build dropped a subagent for its own line, three outputs still named it. Measured
+with a real turn and the real command, a caller in `C` and subagents written
+`source_ids: [A]`: a request narrowing `subagents:` was told `insider` and `ledger` were
+not granted, because the withheld report filtered what the agent's audiences removed
+and nothing a subagent's own line did; `kingfisher list --as C` left both out of its
+subagents and printed them on `boss`'s chain, which read the agent's raw `subagents:`;
+and the report of a subagent running on the main agent's host was asked with the
+request's grant, `"*"`, so it named `insider`'s model. That report also named, for any
+caller, subagents an agent never names, and the chain named an entry the agent's own
+audience keeps from the caller.
+
+The build and both run reports now drop a subagent through `within_reach`, and the
+host report reads the build's roster: the agent's declaration for this caller, through
+the `for_the_caller` the build clamps with, then `within_reach`. A listing's chain is
+what the agent declares for this caller, kept to `for_caller_subagents` as every other
+field naming a subagent is. The listing does not call `within_reach`: `activation`
+imports deepagents, and two answers to one question inside one listing is how its
+fields came apart before. The tests drive each output for `C` and the control for `A`.
+*(2026-10-12.)*
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds

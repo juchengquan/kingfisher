@@ -17,6 +17,20 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## A run and a listing name only the subagents a caller reaches, after #707
+
+What a caller is told about subagents now matches what is built for them.
+
+- **The withheld report leaves out a subagent whose own `source_ids:` misses the
+  caller.** A request narrowing `subagents:` was told such a subagent was not granted.
+- **`kingfisher list --as` prints an agent's `subagents:` chain for that caller**, in
+  the text form and as `agent_subagents` in `--json`. A subagent whose own line misses
+  them, or that the agent's entry keeps from them, is left out of the chain.
+- **The `indistinct` event names only subagents this run activated.** It used to read
+  the request's grant, so a request leaving `subagents` at `"*"` heard about every
+  subagent in the catalogue, including ones the agent never names. This applies to
+  every deployment, with or without a `source_ids.yaml`.
+
 ## A subagent's own `source_ids` narrow what it is built with, after #705
 
 For a deployment with a `source_ids.yaml`. A subagent's own `source_ids:` line, and the
