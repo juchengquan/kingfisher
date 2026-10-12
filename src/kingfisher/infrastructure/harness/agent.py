@@ -33,6 +33,7 @@ from kingfisher.infrastructure.harness.activation import (
     _skill_denials,
     activatable_skills,
     for_the_caller,
+    offered_to,
 )
 from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
@@ -636,6 +637,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         # once each, the same catalogue is twenty.
         compiled: dict[tuple[str, bool, int], Any] = {}
 
+        listing = offered_to(defined, held)
+
         # What the main agent itself runs, as an object a helper can be handed.
         # A top-level subagent needs none of this -- deepagents gives it the
         # agent's own model -- but `SubAgentMiddleware` gives a nested one
@@ -666,7 +669,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                     # `activated` rather than the grant, which may be `"*"`: a
                     # helper out of this caller's reach was left out of it.
                     for helper in subagent_helpers(
-                        defined[name], defined, activated, held=held
+                        defined[name], defined, activated, held=held, listing=listing
                     )
                 ]
                 compiled[key] = _built(

@@ -17,6 +17,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## A refusal of an unknown subagent lists only those a caller reaches, after #711
+
+For a deployment with a `source_ids.yaml`. When an agent's file, a request or a
+subagent's file names a subagent nothing defines, the refusal's `offered:` list leaves
+out each subagent whose own `source_ids:` misses the caller. The refusal is still raised
+for every caller. A caller who reaches every subagent, and a deployment with no
+`source_ids.yaml`, read the same message as before.
+
 ## The model is shown an index once a conversation is summarised, after #710
 
 Once deepagents has summarised a conversation, the user message lists everything the

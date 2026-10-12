@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 from dataclasses import replace
 
@@ -12,7 +13,7 @@ from deepagents.middleware import SubAgentMiddleware
 from kingfisher import backend_at, default_backends
 from kingfisher.application.service import Kingfisher
 from kingfisher.domain.access import UNSCOPED, AccessError, parse
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.middlewares.narrowing import ToolAllowlist
@@ -855,3 +856,101 @@ def test_a_caller_every_audience_admits_is_told_about_each_subagent(
     printed = listed(capsys, "A")
     assert "insider" in printed
     assert "ledger" in printed
+
+
+# -- what a refusal offers a caller instead ---------------------------------
+
+#: The three places a subagent is named, each naming `ghost`, which nothing defines:
+#: an agent's own file, a request under an agent offering every subagent, and a
+#: subagent's file naming a helper.
+GHOSTLY = """name: ghostly
+description: Names a subagent nothing defines.
+source_ids: [A, B, C]
+subagents: [plain-helper, ghost]
+system_prompt: |
+  You delegate.
+"""
+
+OPENER = """name: opener
+description: Offers every subagent, so a request may name any.
+source_ids: [A, B, C]
+subagents: ["*"]
+system_prompt: |
+  You delegate.
+"""
+
+ASKER = """name: asker
+description: Delegates to a subagent whose helper is a typo.
+source_ids: [A, B, C]
+subagents: [helpless]
+system_prompt: |
+  You delegate.
+"""
+
+HELPLESS = """name: helpless
+description: Names a helper nothing defines.
+source_ids: [A, B, C]
+subagents: [plain-helper, ghost]
+system_prompt: |
+  You help.
+"""
+
+WHERE = ["agent", "request", "helper"]
+
+
+def naming_a_ghost(cfg, where: str) -> tuple[str, Capabilities]:
+    """Write what names `ghost` at `where`; the agent to run and what to ask of it."""
+    agents = cfg.catalogue_roots["agents"]
+    if where == "agent":
+        (agents / "ghostly.yaml").write_text(GHOSTLY, encoding="utf-8")
+        return "ghostly", Capabilities()
+    if where == "request":
+        (agents / "opener.yaml").write_text(OPENER, encoding="utf-8")
+        return "opener", Capabilities(subagents=("ghost",))
+    (subagents_dir(cfg) / "helpless.yaml").write_text(HELPLESS, encoding="utf-8")
+    (agents / "asker.yaml").write_text(ASKER, encoding="utf-8")
+    return "asker", Capabilities()
+
+
+def offered_instead(cfg, source_ids: tuple[str, ...] | None, where: str) -> set[str]:
+    """The subagents one real turn's refusal of `ghost` lists to this caller."""
+    agent, asked = naming_a_ghost(cfg, where)
+    kf = Kingfisher(cfg, backends=default_backends)
+    with pytest.raises(CapabilityError, match=r"unknown subagent\(s\): ghost;") as refused:
+        turn = kf.stream(Request("go", agent=agent, capabilities=asked), source_ids=source_ids)
+        try:
+            for event in turn:
+                if event.kind == "run_start":
+                    break
+        finally:
+            turn.close()
+    return set(ast.literal_eval(str(refused.value).split("; offered: ", 1)[1]))
+
+
+#: Every subagent `delegating` defines that `C` reaches, which is all but `insider`
+#: and `ledger`.
+REACHED_BY_C = {"plain-helper", "profiler", "reviewer", "second-opinion"}
+
+
+@pytest.mark.parametrize("where", WHERE)
+def test_refusing_an_unknown_subagent_lists_none_out_of_the_callers_reach(delegating, where):
+    """Refusing `ghost` listed every subagent the catalogue defines, so a caller in `C`
+    read `insider` and `ledger` there, whose own `source_ids:` exist to hide them.
+    """
+    expected = REACHED_BY_C | ({"helpless"} if where == "helper" else set())
+
+    assert offered_instead(delegating, ("C",), where) == expected
+
+
+@pytest.mark.parametrize("where", WHERE)
+@pytest.mark.parametrize("source_ids", [("A",), None], ids=["A", "no-policy"])
+def test_refusing_an_unknown_subagent_lists_every_one_a_caller_reaches(
+    delegating, where, source_ids
+):
+    """The control: a refusal listing nothing out of reach to anybody, a caller in `A` or
+    a run with no `source_ids.yaml`, would pass the test above.
+    """
+    cfg = delegating if source_ids is not None else replace(delegating, access=None)
+    expected = REACHED_BY_C | {"insider", "ledger"} | ({"helpless"} if where == "helper" else set())
+
+    assert offered_instead(cfg, source_ids, where) == expected
