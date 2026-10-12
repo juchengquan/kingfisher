@@ -2063,28 +2063,35 @@ two concurrent turns would then race to write different bytes to the file each i
 bound by. On Linux, bubblewrap binds the directory read-only over the session it
 has already mounted. *(2026-09-08.)*
 
-**Known gap, not measured: a pattern holds a path, and nothing stops the path
-moving.** The macOS denial matches `.harness` by where it is. The shell may write
-anywhere in the workspace, and no rule denies a write on `sessions/` itself or on the
-folders above it, so a shell may be able to rename `sessions/`, rewrite the moved
-`.harness` where the pattern no longer matches, and rename it back. That holds in a
-shared workspace and in one holding a single session alike. A hard link may be a
-second way round: Apple's own profiles name `file-link` beside `file-write*`, so a
-link made into a writable folder may not be a write the pattern ever sees.
+**Measured and closed: a pattern held `.harness` by where it sat, and the path could
+move.** The macOS denial matches `.harness` by position under `sessions/`. The rest of
+the workspace is writable, and nothing denied the directories *above* a `.harness`, so
+a shell could carry one out from under the pattern. Measured on 2026-10-12 with a real
+`sandbox-exec`, through the backend the agent runs under, two moves rewrote a pinned
+agent and put it back: renaming `sessions/` aside, and -- in a shared workspace --
+carrying a single session's folder out of `sessions/`. Both in the single-session
+layout and the shared one.
 
-Neither has been run. Both were found by reading the profile while the single-session
-layout was added, and an attempt to measure them with a real `sandbox-exec` stopped
-before any probe ran, so this records the suspicion rather than a result. The Linux
-fences should not share it, by reasoning and not by run. Bubblewrap mounts `.harness`
-read-only, and a mount can neither be renamed out from under its path nor linked
-across. Landlock never grants `sessions/` or the workspace, so the shell cannot rename
-either, and it refuses a link that would give a file more rights at its new path than
-it had at its old one.
+`_sessions_denial` closes them, by denying writes to the nodes those moves rename:
+`sessions/` always, and each `sessions/<id>/` where there are many. Rename and unlink
+are a `file-write*` against the name, the same reading the profile's own rule rests on,
+and `$` ends the pattern at the node so the session's own folders stay writable --
+measured, the session still makes, renames and removes its own directories, and a new
+session is the harness's to lay down, unconfined, not the shell's. The depth differs by
+layout as `_harness_denial`'s does: with one session the session is `sessions/` and its
+work sits at `sessions/<dir>`, so only `sessions` is named; with many, a session is
+`sessions/<id>` and its work a level deeper, so both are.
 
-What closes it is likely a deny on writes to `sessions/` and the folders above it, and
-on links into `.harness`. Each has to be measured first against the profile
-kingfisher writes, in both layouts, with the shell still able to create, rename and
-delete inside the session's own folders. *(2026-10-07.)*
+The link vector the first write of this entry suspected -- a hard or soft link made in a
+writable folder, which `file-write*` might not see -- was measured closed on the same
+day and pinned by `test_a_link_from_a_writable_folder_does_not_reach_the_harness`, so no
+rule names `file-link`: the measurement did not justify one. `doctor` stays `ok` on
+macOS, now for a gap that is shut rather than one unnoticed; a location-based deny is
+only ever as good as the paths it enumerates, and that caveat lives here rather than in
+a check that would cry wolf on every run. The Linux fences never shared this, measured
+elsewhere and reasoned here: bubblewrap mounts `.harness` read-only, which cannot be
+renamed out from under its path, and Landlock never grants `sessions/` or the workspace,
+so the shell cannot rename either. *(2026-10-12.)*
 
 **Landlock cannot take back what it has granted, and the Linux job is what
 established that.** The first version of this granted the session writable and

@@ -507,3 +507,115 @@ def test_a_shell_in_a_shared_session_cannot_make_sessions_harness(cfg, session_d
 
     assert outcome.exit_code != 0
     check_sessions(cfg.workspace, only=None)
+
+
+# -- the enclosing folder cannot be moved out from under the harness rule --------
+
+
+def _pin(workspace, *parts):
+    harness = workspace.joinpath(*parts, HARNESS)
+    harness.mkdir(parents=True, exist_ok=True)
+    pinned = harness / PINNED_AGENT
+    pinned.write_text("name: pinned\n", encoding="utf-8")
+    return pinned
+
+
+@macos
+def test_the_shell_cannot_relocate_sessions_to_reach_a_harness_shared(cfg, session_dir):
+    """The measured gap: the harness is denied by where it sits, so moving `sessions/`
+    aside slid it out from under the rule, let the pin be rewritten, and moved it back.
+    """
+    backend = default_backends.open(cfg, session_dir.name)
+    pinned = _pin(cfg.workspace, "sessions", session_dir.name)
+    ws = cfg.workspace
+
+    backend.execute(
+        f'mv "{ws}/sessions" "{ws}/moved" '
+        f'&& printf "name: mine" > "{ws}/moved/{session_dir.name}/{HARNESS}/{PINNED_AGENT}"; '
+        f'mv "{ws}/moved" "{ws}/sessions"'
+    )
+
+    assert pinned.read_text(encoding="utf-8") == "name: pinned\n"
+
+
+@macos
+def test_the_shell_cannot_relocate_sessions_to_reach_a_harness_one(one):
+    """The same, where the one session is `sessions/` itself."""
+    backend = default_backends.open(one, THE_ONE)
+    pinned = _pin(one.workspace, "sessions")
+    ws = one.workspace
+
+    backend.execute(
+        f'mv "{ws}/sessions" "{ws}/moved" '
+        f'&& printf "name: mine" > "{ws}/moved/{HARNESS}/{PINNED_AGENT}"; '
+        f'mv "{ws}/moved" "{ws}/sessions"'
+    )
+
+    assert pinned.read_text(encoding="utf-8") == "name: pinned\n"
+
+
+@macos
+def test_moving_one_session_out_of_sessions_does_not_free_its_harness(cfg, session_dir):
+    """A session folder carried out of `sessions/` would take its `.harness` to a path
+    the rule no longer matches.
+    """
+    backend = default_backends.open(cfg, session_dir.name)
+    pinned = _pin(cfg.workspace, "sessions", session_dir.name)
+    ws, sid = cfg.workspace, session_dir.name
+
+    backend.execute(
+        f'mv "{ws}/sessions/{sid}" "{ws}/out" '
+        f'&& printf "name: mine" > "{ws}/out/{HARNESS}/{PINNED_AGENT}"; '
+        f'mv "{ws}/out" "{ws}/sessions/{sid}"'
+    )
+
+    assert pinned.read_text(encoding="utf-8") == "name: pinned\n"
+
+
+@macos
+def test_denying_the_move_leaves_the_session_s_own_work_writable(cfg, session_dir):
+    """The bound: the node is denied, not its contents, so the session keeps all of its
+    own folders to write in. A deny that stopped those would be a worse rule.
+    """
+    backend = default_backends.open(cfg, session_dir.name)
+
+    assert backend.execute("echo fine > outputs/ok.txt").exit_code == 0
+    nested = backend.execute("mkdir -p outputs/nested && echo fine > outputs/nested/ok")
+    assert nested.exit_code == 0
+
+
+@macos
+def test_the_shell_cannot_fabricate_a_sibling_session(cfg, session_dir):
+    """Laying down a session folder is the harness's to do, unconfined, not the agent's
+    -- and a shell that could would also be a shell that could move one.
+    """
+    backend = default_backends.open(cfg, session_dir.name)
+
+    assert backend.execute(f'mkdir "{cfg.workspace / "sessions" / "newcomer"}"').exit_code != 0
+
+
+@macos
+def test_a_link_from_a_writable_folder_does_not_reach_the_harness(one):
+    """Measured closed, and pinned so it stays closed: a hard or soft link made in a
+    writable folder is not a way to write the pin the `.harness` rule guards.
+    """
+    backend = default_backends.open(one, THE_ONE)
+    pinned = _pin(one.workspace, "sessions")
+    target = one.workspace / "sessions" / HARNESS / PINNED_AGENT
+
+    backend.execute(f'ln "{target}" outputs/hard 2>/dev/null; printf "name: mine" > outputs/hard')
+    soft = f'ln -s "{target}" outputs/soft 2>/dev/null; printf "name: mine" > outputs/soft'
+    backend.execute(soft)
+
+    assert pinned.read_text(encoding="utf-8") == "name: pinned\n"
+
+
+@macos
+def test_the_one_session_can_reorganize_its_own_folders(one):
+    """The single-session rule names `sessions/` and not what it holds, so the session's
+    own directories -- the harness aside -- can still be made, renamed and removed."""
+    backend = default_backends.open(one, THE_ONE)
+
+    out = backend.execute("mkdir work && mv work renamed && rmdir renamed && echo ok")
+
+    assert out.exit_code == 0 and "ok" in out.output

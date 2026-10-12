@@ -370,9 +370,39 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     # rename-over are all `file-write*` against this name, and rename-over is
     # the one a `subpath` deny on the parent directory would have been reached
     # for to catch.
+    # Before the `itself` and `_harness_denial` denies, so those stay the last matching
+    # rules for their own paths. This denies writes to the `sessions/` directory node,
+    # and where there are many each session's folder node -- the directories above a `.harness` that
+    # the regex guards it by position. Without it the shell could rename an enclosing
+    # folder, write the pin where the pattern no longer reaches, and rename it back;
+    # measured doing exactly that before this line. It denies the node and not its
+    # contents, so the session's own work stays writable.
+    lines.append(_sessions_denial(workspace, one_session=one_session))
     lines.append(f"(deny file-write* (path {_sb(itself)}))")
     lines.append(_harness_denial(workspace, one_session=one_session))
     return "\n".join(lines) + "\n"
+
+
+def _sessions_denial(workspace: Path, *, one_session: bool) -> str:
+    """Deny writes to the directories a `.harness` is guarded by the position of.
+
+    `_harness_denial` matches `.harness` by where it sits under `sessions/`, so an
+    enclosing directory that moves takes `.harness` to a path the pattern no longer
+    reaches. The folders between the workspace and a `.harness` are `sessions/` and, in
+    a workspace holding many, each `sessions/<id>/`; the workspace root itself cannot be
+    renamed, its parent being denied already. This denies writes to those nodes -- which
+    is what rename and unlink are, a `file-write*` against the name -- and `$` stops it
+    reaching their contents, so a session's own folders stay writable.
+
+    The depth differs by layout, as `_harness_denial`'s does: with one session the
+    session *is* `sessions/`, whose own work sits at `sessions/<dir>`, so only
+    `sessions` itself is named; with many, a session is `sessions/<id>`, whose work sits
+    a level deeper, so both `sessions` and `sessions/<id>` are named.
+    """
+    root = re.escape(f"{Path(workspace).resolve()}/sessions")
+    tail = "$" if one_session else "(/[^/]+)?$"
+    return f'(deny file-write* (regex #"^{root}{tail}"))'
+
 
 
 def _harness_denial(workspace: Path, *, one_session: bool) -> str:
