@@ -5522,6 +5522,27 @@ and it happened inside the file. *(Measured 2026-09-04.)*
 43 held and one had lost its subject. Three of them exist *because* a rule had
 stopped working silently. *(2026-08-18, `mutating-the-architecture-rules.md`.)*
 
+
+**A rule matching one spelling of a reach matches one spelling.**
+`test_only_the_confinement_module_calls_resolve_directly` required an `ast.Name` reading
+exactly `confinement`, so it saw two of the six ways a file can reach that `resolve`:
+every aliased import walked past it, so did the full dotted chain, and so did
+`getattr`. Measured on 2026-10-12 by running the old matcher over all six, and then by
+writing each one into a real production file and asking whether the rule failed -- which
+is the only form of that question worth asking, since a matcher can be right about a
+string and wrong about the repository.
+
+The rule resolves the module now: which local names are bound to it, attribute chains
+flattened to dotted strings, the direct import of the function, and `getattr` with a
+constant name. Two parametrized rules sit beside it -- the six spellings it must see and
+five near misses it must not -- because the matcher is the thing being asserted and the
+narrower one passed the rule itself. That is how it came to see two of six.
+
+The repository had the lesson twice already, in
+`test_a_harness_edge_is_seen_however_it_is_spelled` and
+`test_an_aliased_import_reads_the_name_it_renames`. Neither was applied here, which is
+the same shape as the bubblewrap fixture on 2026-10-05: a lesson written down for one
+rule and not carried to its neighbour. *(2026-10-12, from an architecture review.)*
 **Rejected: a rule against prose naming a module that is not there.** Four stale
 claims were found in one session -- the CLI's charter, a refusal naming
 `access.yaml`, `pyproject.toml` citing a rule it had reversed, and
