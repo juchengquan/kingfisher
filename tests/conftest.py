@@ -52,9 +52,11 @@ def scripted(cfg):
     }
     Scripted.script.clear()
     Scripted.heard.clear()
+    Scripted.summaries = 0
     yield replace(cfg, models=replace(cfg.models, endpoints=endpoints))
     Scripted.script.clear()
     Scripted.heard.clear()
+    Scripted.summaries = 0
 
 
 class RecordedEvents:

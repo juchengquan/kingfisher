@@ -17,6 +17,32 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## The model is shown an index once a conversation is summarised, after #710
+
+Once deepagents has summarised a conversation, the user message lists everything the
+ledger holds rather than only what is new.
+
+- **A closing line in `.harness/ledger.jsonl` can say `"summarised": true`**, for a turn
+  whose final state holds deepagents' summary, and a resume of such a turn says it too.
+  Other turns' lines are unchanged. A backend of your own has nothing new to do.
+- **The user message carries `<ledger_index>` in place of `<ledger_delta>`** when a
+  turn since the previous user message summarised. The last five exchanges that
+  recorded anything are listed as the delta lists them, and each older one is a line
+  such as `A-0001..A-0012: 5 web_search, 5 http_fetch, 2 task`: its range of ids, then
+  how many results each tool returned, most first. An exchange is a turn that carried a
+  message and the resumes after it. A session that never recorded anything gets no
+  block, as before.
+- **`system.md`'s *What your tools returned* changed.** The id is now something the
+  model *can* cite rather than is told to, a paragraph explains the index, and a
+  sentence says how to find an older result's file by its id. Its text is still the
+  same every turn. Anything that compares the rendered system prompt against a copy
+  sees it change.
+- **Signatures.** `turn_message` takes the `KeptLedger` a turn read, or `None`, in place
+  of the entries to list. `KeptLedger` holds `exchanges` and `summarised`, and `since`
+  is now a property of `exchanges`. `keep_ledger` takes `summarised=`, which it requires,
+  and `write_ledger` takes it too. `ledger_index` and `ledger_shown` are new beside
+  `ledger_delta`.
+
 ## The model sees what its tools returned, after #709
 
 What the ledger records is now shown to the model, as well as to the caller.

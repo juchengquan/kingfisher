@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from time import monotonic
 from typing import TYPE_CHECKING, Any
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
 
     from kingfisher.config import Config
     from kingfisher.domain.transcript import Message
+    from kingfisher.infrastructure.session_store import KeptLedger
 
 
 @dataclass(frozen=True)
@@ -86,11 +88,12 @@ class Prepared:
 
 
 def turn_message(
-    task: str, placed: tuple[str, ...], since: Sequence[LedgerEntry] = ()
+    task: str, placed: tuple[str, ...], earlier: KeptLedger | None = None
 ) -> str:
     """The task, plus this turn's facts and nothing more.
 
-    `since` is what the ledger recorded after the last user message.
+    `earlier` is the ledger as the turn found it, or `None` for a graph the deployment
+    supplied, which records nothing and need not have kingfisher's prompt to explain it.
     """
     # Named because `/inputs` changed under a session the agent may already have
     # looked at. It is also where a caller's files for *this* request land now --
@@ -98,7 +101,8 @@ def turn_message(
     arrived = f" New files in {INPUTS_ROUTE}: {', '.join(placed)}." if placed else ""
     # Here and never in the system prompt, which is the cached prefix: a line that
     # changes every turn there would miss the cache on every call.
-    delta = f"\n\n{ledger_delta(since)}" if since else ""
+    shown = ledger_shown(earlier) if earlier is not None else ""
+    ledger = f"\n\n{shown}" if shown else ""
     # Both names for the one directory. `system.md` states the rule -- drop the
     # leading slash for the shell -- and stating it there was not enough: over
     # ten runs of one task the agent passed the virtual path to `execute` 4
@@ -113,15 +117,61 @@ def turn_message(
         f"{task}\n\n"
         f"{SCRATCH_ROUTE} is yours to work in (from the shell, {SCRATCH})."
         f"{arrived}"
-        f"{delta}"
+        f"{ledger}"
     )
 
 
 _KB = 1024
 
+#: How many of the latest exchanges that recorded anything the index lists in full.
+IN_FULL = 5
+
+
+def ledger_shown(earlier: KeptLedger) -> str:
+    """What a new message says of the ledger: the delta, the index, or nothing.
+
+    The index once a turn since the last message ended on a summarised conversation:
+    the delta lists only what is new, and the messages that listed the rest are what
+    the summary replaced. Read off the summariser's own mark rather than estimated
+    from the conversation's size, which would be a copy of its threshold to drift
+    whenever the model or its settings change.
+    """
+    if not earlier.summarised:
+        return ledger_delta(earlier.since) if earlier.since else ""
+    return ledger_index(earlier.exchanges) if any(earlier.exchanges) else ""
+
 
 def ledger_delta(entries: Sequence[LedgerEntry]) -> str:
-    """Entries the ledger recorded, a line each.
+    """Entries the ledger recorded, a line each."""
+    return _block("ledger_delta", _listed(entries))
+
+
+def ledger_index(exchanges: Sequence[Sequence[LedgerEntry]]) -> str:
+    """Every exchange that recorded anything: the latest few as the delta lists them,
+    and each one before those as a line of its ids and a count by tool.
+    """
+    recorded = [one for one in exchanges if one]
+    older, recent = recorded[:-IN_FULL], recorded[-IN_FULL:]
+    return _block(
+        "ledger_index",
+        [*map(_rolled_up, older), *(line for one in recent for line in _listed(one))],
+    )
+
+
+def _block(tag: str, lines: Sequence[str]) -> str:
+    return "\n".join([f"<{tag}>", *lines, f"</{tag}>"])
+
+
+def _rolled_up(entries: Sequence[LedgerEntry]) -> str:
+    """One exchange as a line: the ids it spans, then each tool, most results first."""
+    first, last = entries[0].id, entries[-1].id
+    span = first if first == last else f"{first}..{last}"
+    counted = sorted(Counter(one.tool for one in entries).items(), key=lambda c: (-c[1], c[0]))
+    return f"{span}: {', '.join(f'{n} {tool}' for tool, n in counted)}"
+
+
+def _listed(entries: Sequence[LedgerEntry]) -> list[str]:
+    """A line an entry.
 
     Each `task` answer is followed by its run's entries, indented: the parent is shown
     where they are and never what they hold. A run whose `task` never answered -- a
@@ -140,7 +190,7 @@ def ledger_delta(entries: Sequence[LedgerEntry]) -> str:
     lines.extend(
         f"{_delta_line(one)}  (its task never answered)" for one in entries if one.run in under
     )
-    return "\n".join(["<ledger_delta>", *lines, "</ledger_delta>"])
+    return lines
 
 
 def _delta_line(entry: LedgerEntry) -> str:

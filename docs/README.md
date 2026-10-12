@@ -71,13 +71,6 @@ slices land.
   bring skills of its own while the skills kingfisher read and the skills the agent
   sees stay one list. The check it rests on has landed; the feature waits for a
   deployment that needs it.
-- [A ledger of tool results](design/2026-10-12-a-ledger-of-tool-results.md) — a
-  record of every tool result a turn produced, each saved under an id the agent can
-  find again after a long conversation is summarised, and listed for the caller.
-  Two of its three slices have landed: results are recorded, kept and listed on
-  `RunResult.ledger`, and the model sees each one's id and, in the next message, a
-  list of what was recorded since the last. The index that replaces that list once
-  a conversation has been summarised is still to come.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
@@ -96,6 +89,8 @@ what persists and where*, which is where the two halves of it belonged.
 are under a section of that name in `decisions.md`.
 *A tool's path is the backend's path* was built in four; its decisions are under a
 section of that name in `decisions.md`.
+*A ledger of tool results* was built in three; its decisions are under
+*What a turn's tools returned* in `decisions.md`.
 
 A document belongs there while it is arguing for something; once it is built its
 decisions move to `decisions.md`, anything it measured about upstream moves to

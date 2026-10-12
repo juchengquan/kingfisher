@@ -68,8 +68,13 @@ class Ledger:
             return tuple(self._entries)
 
 
-def keep_ledger(files: Any, harness: Any, ledger: Ledger) -> Steps[tuple[LedgerEntry, ...]]:
+def keep_ledger(
+    files: Any, harness: Any, ledger: Ledger, *, summarised: bool
+) -> Steps[tuple[LedgerEntry, ...]]:
     """Keep this turn's entries, and say where each result is now.
+
+    `summarised` is whether the turn ended on a summarised conversation, which only
+    its final state says.
 
     The ledger is written after every result file and before the conversation, so a
     row never names a missing file and a result the conversation shows always has a
@@ -78,7 +83,12 @@ def keep_ledger(files: Any, harness: Any, ledger: Ledger) -> Steps[tuple[LedgerE
     """
     entries = yield from _repointed(files, ledger.entries)
     yield from write_ledger(
-        harness, ledger.earlier, entries, turn=ledger.turn, resumed=ledger.resumed
+        harness,
+        ledger.earlier,
+        entries,
+        turn=ledger.turn,
+        resumed=ledger.resumed,
+        summarised=summarised,
     )
     yield from _swept(files, ledger.earlier.paths | {e.path for e in entries if e.path})
     return entries

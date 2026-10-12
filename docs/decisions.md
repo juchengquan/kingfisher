@@ -24,7 +24,7 @@ lines apart.
 |---|---|
 | **What a deployment authors** | [The definition format](#the-definition-format) · [The catalogue](#the-catalogue) · [Agents and delegation](#agents-and-delegation) · [Packaging](#packaging-where-the-definitions-live) |
 | **What a request may do** | [Capabilities](#capabilities) · [Source-id access](#source-id-access) · [Models and endpoints](#models-and-endpoints) |
-| **What a run meets** | [What a tool returns](#what-a-tool-returns) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) · [A session is its backend](#a-session-is-its-backend) · [A tool's path is the backend's path](#a-tools-path-is-the-backends-path) |
+| **What a run meets** | [What a tool returns](#what-a-tool-returns) · [What a turn's tools returned](#what-a-turns-tools-returned) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) · [A session is its backend](#a-session-is-its-backend) · [A tool's path is the backend's path](#a-tools-path-is-the-backends-path) |
 | **The surfaces** | [The command line](#the-command-line) · [What doctor promises](#what-doctor-promises) · [Where a deployment reads from](#where-a-deployment-reads-from) · [The HTTP service](#the-http-service) · [The front door](#the-front-door) |
 | **The codebase itself** | [Layering](#layering) · [Splitting a file](#splitting-a-file) · [The architecture rules](#the-architecture-rules) · [How much a comment says](#how-much-a-comment-says) · [The size of the test suite](#the-size-of-the-test-suite) |
 | | [Proposals, and what became of them](#proposals-and-what-became-of-them) |
@@ -1923,15 +1923,154 @@ agent chose the path, the default included, and can `ls` first when it cares.
 conversation and is sent again with every model call after it; `read_file` hands the
 image to the model when it wants to look.
 
-**No machine-readable copy of these facts.** The result line is for the model. A
-structured record of what a turn saved waits for the ledger's design, where it would be
-one shape for every tool rather than a convention each tool keeps. Nor does `system.md`
-gain a line: each tool's docstring says what its `save_as` does.
+**No machine-readable copy of these facts.** The result line is for the model. The
+structured record is the ledger's, one shape for every tool rather than a convention
+each tool keeps: the result line is kept as a row of what the turn's tools returned,
+under *What a turn's tools returned*. Nor does `system.md` gain a line: each tool's
+docstring says what its `save_as` does.
 
 These are the first shipped tools that write, which *A tool's path is the backend's
 path* gave as a reason a `path` under a write-denied scope is safe to hand over.
 Neither takes `path`; both write through `ToolContext` under the turn's rules, so that
 decision is untouched. *(2026-10-12.)*
+
+## What a turn's tools returned
+
+**Every tool result the model is handed is recorded, kept as a file and given an id,
+and kingfisher writes the record, never the model.** One ledger, two readers: the model
+reads a rendering of it in the user message, and the caller reads the turn's rows on
+`RunResult.ledger`. It exists for what goes wrong once deepagents summarises a long
+conversation: an earlier result is somewhere in one history file with nothing saying
+where it starts, and the summary's list of what was produced is the summarising
+model's memory of it. Settled with the owner question by question and built in three
+slices; the owner's plan, *Artifact provenance for conversational agents*, is kept
+outside the repository and this is its first stage. *(2026-10-12.)*
+
+**What is recorded: every successful result but the file tools'.** `ls`, `glob`,
+`grep`, `read_file`, `write_file`, `edit_file` and `delete` touch what is a file
+already, and a row each would bury the rest; `execute`, `task`, workspace and MCP tools
+are recorded. A failed call has nothing worth finding again and the conversation shows
+it. A subagent's results are *working* entries under the parent's `task` call, nested
+helpers included, and its answer is a *main* one.
+
+**Middleware, not the stream.** The stream reaches further, to a compiled subagent's
+own calls, and needs no lock, but it can only watch, and the ledger changes the result:
+the id stamped on it now, perhaps a handle later, which would need middleware anyway
+and two collectors kept in step. The stream also replays results after a superseded
+pause and carries results the approval step made up, each needing a filter that rests
+on how langgraph shapes its chunks. Middleware sees only real calls.
+
+**The recorder is first in `tool_guards`, and each thing that position gives is
+needed.** Inside deepagents' eviction, so it sees a long result whole and the id
+survives in the stub's tail. Ahead of `WorkspaceToolPaths`, so it records the arguments
+the model wrote rather than the host paths they become. Ahead of a deployment's
+middleware, which `build_agent` appends after `tool_guards`, so it records what the
+model was shown, a `ToolNote` reminder included. Moved, nothing fails a call; a test
+for each of the three is what goes red. The turn hands one collector to every graph it
+builds, with a lock because calls made together run on threads, and a context variable
+names the `task` call a subagent runs inside; `findings.md` has it reaching both loops.
+
+**Ids run for the session, `A-` and at least four digits.** Not per turn, as the
+owner's plan had them: regeneration would reuse turn numbers, and a running number never
+repeats. The next is the last in the ledger plus one. The id is the result's last line,
+or a text block holding `\n[A-0042]` after a block list, which the transcript joins
+with nothing between; eviction's stub keeps the head and tail, so it shows there.
+
+**Each result is a file in `/scratchpad/results/`, `A-0042-<tool>.txt` or `.json`,**
+written as it arrives through the turn's backend under the turn's rules, without the
+id. The scratchpad, because the agent reads a range of one back with `read_file` and
+searches with `grep`, which needs no new tool, and because it is working material swept
+with the session. A file the backend refuses leaves the row's `path` null and the call
+succeeds: failed, the model may make the call again and run the tool twice.
+
+**An offloaded result is pointed at deepagents' copy, not kept twice.** Eviction runs
+outside the recorder, so at the end of the turn one `ls` of `large_tool_results/`
+repoints each entry whose call id is there, and kingfisher's copy goes in the sweep.
+deepagents' copy ends in the id. A nested helper has no eviction and keeps its own.
+
+**Result files, then the ledger, then the transcript, then a sweep.** In that order a
+row never names a missing file and a result the conversation shows always has a row;
+the other way round, a crash leaves the next turn reading an id the ledger never gave
+out, and giving it again. A paused turn writes its rows before its state, since its
+results are as real as a finished turn's. The sweep then removes any result file no row
+names. Only a turn that died before its rows leaves one, and one turn runs per session
+at a time, so there is no grace period. The ledger is `.harness/ledger.jsonl`, read when
+the turn starts and rewritten whole when it ends. SQLite, as the plan had it, is for
+writers that interleave, and here there is one, writing wherever the session's backend
+keeps it. A line a crash cut short is dropped rather than refused, because refused it
+would refuse every turn after.
+
+**Access is recorded and not acted on, because the session is the boundary.** A row
+holds the audience its tool was granted under, and a `task` answer holds its run's
+audiences together, since an answer can repeat anything the run read. Nothing filters
+on it. A session belongs to one caller, and where a caller's entitlements change between
+turns every turn replays the transcript, which carries the content already, so filtering
+the ledger alone would be no boundary. Callers who must not see each other's data use
+separate sessions. Results served only through access-checked tools were declined on
+the same ground, with one more: the shell reads the whole session whatever the file
+tools are told. It is kept so that a later design can act on it without old rows
+lacking it.
+
+**No model-written summaries.** A row's `summary` is the tool, its short arguments and
+the first line of the result. A model-written one costs a call per result, and is the
+summary-from-memory the ledger exists to replace.
+
+**What the model sees goes in the user message, never the system prompt.** The system
+prompt is the cached prefix, and anything there that moves with the ledger misses the
+cache on every call. `system.md` has fixed text, *What your tools returned*, explaining
+the id, both blocks and where the files are. A new message carries `<ledger_delta>`, the
+rows since the previous user message, a subagent's indented under its answer so the
+parent sees where they are and never what they hold. A resume adds no message, so
+*since* reaches back to the last turn that was not one, and a run whose `task` never
+answered has its rows after the rest with a note. There is no block when nothing was
+recorded, on a resume, or for a graph the deployment supplied.
+
+**After a summary, the index replaces the delta, and nothing estimates size.** The delta
+lists only what is new, and the messages that listed the rest are what the summary
+replaced. So when any turn since the previous user message ended on a summarised
+conversation, the message carries `<ledger_index>`: the last five exchanges that
+recorded anything listed as the delta lists them, and each older one as a line of its
+id range and a count by tool, main and working entries alike, most first; an exchange
+that recorded nothing has no line. An exchange is a turn that carried a message and the
+resumes after it, so a paused `task` and its answer are never split. It is shown on the
+summariser's own mark rather than an estimate of the conversation's size, which would be
+a copy of its threshold to drift when the model or its settings change. Every turn
+summarises again once the replayed transcript is past the trigger, so in practice the
+index arrives every turn from then on.
+
+**A turn's closing line carries two marks, each written only when true.** Every turn
+writes `{"turn": ...}`, one that recorded nothing included, because turn ids are not a
+sequence and the file's order is the turns' order. `resumed` marks a resume, which is
+how the delta and the index find the last user message. `summarised` marks a turn whose
+final state holds deepagents' `_summarization_event`, read where `_settled` reads the
+pause because the event is private state that `invoke` leaves out. It means the turn
+*ended on* a summarised conversation: a resume restores the paused turn's checkpoint,
+event and all, and that counts too, so nothing tries to tell the two apart.
+
+**`ledger_*`, not `artifact_*`.** The owner's notes named the blocks `<artifact_index>`
+and `<artifact_delta>`. In kingfisher an artifact is a file under `/outputs` or
+`/memory`, as `RunResult.artifacts` lists, and the word would come to mean two things.
+
+**Not built, and still open.**
+
+- **A handle in place of a large result's stub.** A handle in place of *every* result,
+  as the plan has it, was declined: most results are needed at once, and reading each
+  back would double the round trips of every search.
+- **Reusing a result for an identical call within a freshness window, declared
+  supersession, and "derived from" links.** Each needs information nothing supplies.
+- **Regeneration, which gets a design of its own:** rewinding or forking, what becomes
+  of files already in `/outputs`, how a client names a turn. Every row records its turn
+  so that it can filter by one when it lands.
+- **Calls inside `eval` and inside a compiled subagent,** which no hook sees. A compiled
+  subagent's answer is still recorded, through `task`. Nor is what the shell writes;
+  `RunResult.artifacts` is the sound view of files.
+- **Finding an old entry by anything but its id.** Settled for now as finding its file:
+  `glob` for `A-0042-*` under `/scratchpad/results/`, or `grep` for its `[A-0042]` line
+  under `/scratchpad/large_tool_results/` where deepagents offloaded it, as `system.md`
+  says and `test_an_older_results_file_is_found_by_its_id_as_the_prompt_says` drives. A
+  rolled-up line keeps only ids and counts, and the ledger is under `.harness`, which the
+  file tools refuse, so a rolled-up entry's arguments and summary are out of reach. If
+  that proves too little, the index could also be written as a readable file there.
 
 ## Tool failure
 

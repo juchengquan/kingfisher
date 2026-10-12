@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from kingfisher.application.turn import ledger_delta
+from kingfisher.application.turn import ledger_delta, ledger_index
 from kingfisher.infrastructure.harness.kinds.subagents import as_subagent
 from kingfisher.infrastructure.prompting import (
     USER_PROMPT_FILE,
@@ -87,11 +87,22 @@ def test_the_prompt_names_a_recorded_result_as_the_ledger_does():
     with the prompt, or not at all, and pass either way.
     """
     text = render_system_prompt()
-    tag = ledger_delta(()).splitlines()[0]
 
     assert f"`{RESULTS_ROUTE}`" in text
     assert f"`[{entry_id(42)}]`" in text
-    assert f"`{tag}`" in text
+    for block in (ledger_delta(()), ledger_index(())):
+        assert f"`{block.splitlines()[0]}`" in text
+
+
+def test_the_prompt_lets_the_model_cite_a_result_and_does_not_tell_it_to():
+    """Worded as an instruction, the model hangs an id on every claim whether or not the
+    reader wants one; the owner asked for the sentence to give permission instead.
+    """
+    # As read, not as wrapped in the file.
+    text = " ".join(render_system_prompt().split())
+
+    assert "You can cite it by that id when you rely on that result." in text
+    assert "Cite it" not in text
 
 
 def test_nothing_the_agent_is_told_sends_it_to_a_run_directory():

@@ -271,6 +271,22 @@ def answer_in(namespace: Any, mode: str, chunk: Any) -> str | None:
     return getattr(messages[-1], "text", None) or ""
 
 
+#: Where deepagents' summariser keeps the summary it made. Private state, so what
+#: `invoke` returns leaves it out and only the graph's own state has it.
+SUMMARY_EVENT = "_summarization_event"
+
+
+def summarised_in(snapshot: Any) -> bool:
+    """Whether a turn ended on a conversation deepagents had summarised.
+
+    Including one summarised before the turn began, which a resume's restored state
+    can carry: either way, the messages before the summary are gone from what the
+    model is shown.
+    """
+    values = getattr(snapshot, "values", None)
+    return isinstance(values, Mapping) and values.get(SUMMARY_EVENT) is not None
+
+
 #: The graph node a subagent's pause arrives on: it stopped inside the tool call that
 #: runs it, so the task belongs to the tool node rather than to any gate.
 TOOLS_NODE = "tools"
