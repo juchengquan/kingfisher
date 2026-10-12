@@ -224,6 +224,34 @@ def test_a_clean_catalogue_says_its_tool_references_are_fine(cfg, shipped):
     assert checks["tool references"].verdict == "ok"
 
 
+def test_doctor_names_every_definition_naming_a_subagent_there_is_not(cfg):
+    """`kingfisher list` failed on these and `doctor` called the workspace fine, so
+    the command whose job is to warn before a run said nothing a run would refuse.
+    """
+    from tests.unit.test_list import UNRESOLVED, _define
+
+    files, _, _, _ = UNRESOLVED["a helper two files define"]
+    _define(cfg, files, "[reviewer, ghost]")
+
+    checks = [c for c in examine(cfg) if c.name == "subagent references"]
+
+    assert checks and all(c.verdict == "fail" for c in checks)
+    said = " | ".join(c.detail for c in checks)
+    assert "agent 'lead' names ghost" in said
+    assert "subagent 'reviewer' names second" in said
+
+
+def test_a_clean_catalogue_says_its_subagent_references_are_fine(cfg, shipped):
+    """The control, against the shipped presets because they name subagents from
+    both kinds -- an empty workspace would pass a check that failed every name.
+    """
+    seed(cfg, shipped)
+
+    checks = {c.name: c for c in examine(cfg)}
+
+    assert checks["subagent references"].verdict == "ok"
+
+
 def test_an_unconfined_shell_warns_and_does_not_fail(cfg, capsys, monkeypatch):
     """The distinction the exit code turns on."""
     from dataclasses import replace
@@ -1199,14 +1227,26 @@ def _broken(cfg, where: str) -> None:
     target.write_text(text, encoding="utf-8")
 
 
-#: Which of the two checks each breakage stops, and which it leaves able to run.
+#: Which of the checks each breakage stops, and which it leaves able to run.
 #: Measured rather than reasoned: a broken catalogue tool sets the bundles' error too,
 #: and the folder check still runs -- so `doctor` cannot infer "not checked" from the
 #: other rows' errors, and each of these says what it actually did.
 STOPPED_BY = {
-    "the subagent's own tool": {"bundled entries": "warn", "tool references": "ok"},
-    "a catalogue tool": {"bundled entries": "ok", "tool references": "warn"},
-    "a subagent file": {"bundled entries": "warn", "tool references": "warn"},
+    "the subagent's own tool": {
+        "bundled entries": "warn",
+        "tool references": "ok",
+        "subagent references": "ok",
+    },
+    "a catalogue tool": {
+        "bundled entries": "ok",
+        "tool references": "warn",
+        "subagent references": "ok",
+    },
+    "a subagent file": {
+        "bundled entries": "warn",
+        "tool references": "warn",
+        "subagent references": "warn",
+    },
 }
 
 

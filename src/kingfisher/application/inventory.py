@@ -136,6 +136,9 @@ class Inventory:
     #: as `moved_tools` is: one nobody defines, or a bare name two files share, which
     #: the catalogue keys by file. A run reaching the name refuses it.
     unresolved_subagents: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    #: Whether `unresolved_subagents` was asked at all, for the reason
+    #: `moved_tools_checked` gives.
+    unresolved_subagents_checked: bool = True
 
     #: Definitions whose `source: bundled` entries and own folder disagree, by the
     #: name a grant uses, each with how the two differ.
@@ -792,6 +795,7 @@ def inventory(
             if unresolved_subagents is None
             else _kept(unresolved_subagents, reached_subjects)
         ),
+        unresolved_subagents_checked=unresolved_subagents is not None,
         miscounted_bundles=(
             _NOTHING
             if miscounted_bundles is None
