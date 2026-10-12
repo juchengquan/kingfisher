@@ -2415,6 +2415,22 @@ cannot. `busy` is a stat per session rather than a listing of a shared directory
 which is the cost. *(The claim has since moved onto the session's backend, as
 `SessionClaims`; see "A session is its backend".)*
 
+
+**A constant's property and a constant's wiring need separate rules.**
+`claim_stale_after` is the turn deadline plus the longest model timeout, so a claim
+outlives the window a turn stops *in* -- and a rule was written for exactly that. It
+supplies the constant by hand at every call, which holds the property and says nothing
+about whether `_admit` passes it. Measured on 2026-10-11: reinstating the original bug
+at that call site -- `stale_after=cfg.turn_timeout_s` -- left all 2,546 tests green,
+while the same mutation at `Disposal` reddens
+`test_retention_and_claim_agree_on_when_a_claim_went_stale`. One of the constant's two
+readers was held and the other was not.
+
+The wiring is watched at the `claim` seam rather than raced: a turn runs, and what it
+passed is recorded. The rule also asserts that the two numbers *differ*, because they
+were the same number once and a rule comparing against either would have passed then --
+which is the shape this review kept finding, in a rule written to prevent it.
+*(2026-10-11, from an architecture review.)*
 **No migration and no fallback reader; the marker carries a layout version.**
 The failure a fallback would paper over is silence rather than breakage: a pin
 the new code cannot find means a session re-pins and may change agent
