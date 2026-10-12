@@ -1315,6 +1315,22 @@ in both forms, rather than naming the fields that leaked. The four that did were
 closed set, and a field added later would leak the same way past a field-by-field
 assertion. *(2026-09-26, from an architecture review.)*
 
+**Nor for the fields naming a subagent, until 2026-10-12.** The filter covered
+`agents` and `subagents` and carried every field keyed by a subagent whole: the tools
+and skills in its own folder, the compiled ones, the ones shadowing the catalogue, and
+the faults a listing reports. The rule above searched the right way and could not see
+it, because its fixture held no `subagents/` and every such field was empty where it
+was asserted. Measured through the real command, a caller holding `B` was shown, for
+subagents only `A` reaches, seven fields of names in `--json`, and a moved-tool line
+and an orphaned folder in the text form.
+
+They are kept to the same `for_caller_subagents` answer now, and `moved_tools` to both
+answers, through the one function that words its keys. Orphaned folders are left out
+of a scoped view: they belong to no definition to filter by, and they are the
+operator's diagnostic. A scoped listing's exit status follows the view, so a fault in a
+subagent the caller cannot open does not fail it. The rule's fixture holds subagents
+out of reach, valid and faulty. *(2026-10-12, from an architecture review.)*
+
 **It did not hold for the tool and skill catalogues at all**, and the reason is worth
 reading: those two have nowhere to *write* an audience. A tool module and a skill's own
 file carry no `source_ids:` line -- an audience for one exists only as an entry inside

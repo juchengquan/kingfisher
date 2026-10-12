@@ -574,6 +574,79 @@ system_prompt: |
 """
 
 
+#: Names belonging to subagents only `A` reaches: a subagent with its own folder, the
+#: private tool, skill and too-deep skill in it, and a compiled one.
+OUT_OF_REACH = ("shadowy", "hushhush", "quietly", "buried", "clandestine")
+
+#: The same, for subagents whose faults are reported rather than refused by a listing:
+#: one listing less than its folder holds, one naming a tool by a moved path, a
+#: compiled one with a skill it can never be shown, and a folder no definition is
+#: named for.
+BROKEN_OUT_OF_REACH = ("muddled", "stray", "drifter", "stowaway", "cargo", "ghostly")
+
+
+def _private(path, name: str, body: str = '"""Does a thing."""\n    return ""') -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"def {name}(path: str) -> str:\n    {body}\n\n\nTOOLS = [{name}]\n", encoding="utf-8"
+    )
+
+
+def _skill(folder, name: str) -> None:
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "SKILL.md").write_text(
+        f"---\nname: {name}\ndescription: Something to do.\n---\nDo it.\n", encoding="utf-8"
+    )
+
+
+def _subagents_out_of_reach(cfg) -> None:
+    """Every per-subagent field a valid workspace fills, for a subagent `B` cannot open.
+
+    The private `line_count` shadows the catalogue's, so `shadowed` names it too.
+    """
+    root = cfg.catalogue_roots["subagents"]
+    folder = root / "shadowy"
+    _private(folder / "tools" / "hushhush.py", "hushhush")
+    _private(folder / "tools" / "own_count.py", "line_count")
+    _skill(folder / "skills" / "quietly", "quietly")
+    _skill(folder / "skills" / "group" / "buried", "buried")
+    (folder / "shadowy.yaml").write_text(
+        "name: shadowy\ndescription: A subagent.\nsource_ids: [A]\n"
+        "tools: [{name: hushhush, source: bundled}, {name: line_count, source: bundled}]\n"
+        "skills: [{name: quietly, source: bundled}]\nsystem_prompt: |\n  Go.\n",
+        encoding="utf-8",
+    )
+    (root / "clandestine.py").write_text(
+        "def build(model, tools):\n    return None\n\n\n"
+        "SUBAGENTS = [{'name': 'clandestine', 'description': 'A compiled one.', "
+        "'build': build, 'source_ids': ['A']}]\n",
+        encoding="utf-8",
+    )
+
+
+def _broken_subagents_out_of_reach(cfg) -> None:
+    root = cfg.catalogue_roots["subagents"]
+    _private(root / "muddled" / "tools" / "stray.py", "stray")
+    (root / "muddled" / "muddled.yaml").write_text(
+        "name: muddled\ndescription: A subagent.\nsource_ids: [A]\nsystem_prompt: |\n  Go.\n",
+        encoding="utf-8",
+    )
+    (root / "drifter.yaml").write_text(
+        "name: drifter\ndescription: A subagent.\nsource_ids: [A]\n"
+        "tools: [moved.py::line_count]\nsystem_prompt: |\n  Go.\n",
+        encoding="utf-8",
+    )
+    (root / "stowaway").mkdir(parents=True)
+    (root / "stowaway" / "stowaway.py").write_text(
+        "def build(model, tools):\n    return None\n\n\n"
+        "SUBAGENTS = [{'name': 'stowaway', 'description': 'A compiled one.', "
+        "'build': build, 'source_ids': ['A']}]\n",
+        encoding="utf-8",
+    )
+    _skill(root / "stowaway" / "skills" / "cargo", "cargo")
+    _private(root / "ghostly" / "tools" / "boo.py", "boo")
+
+
 @pytest.mark.parametrize("form", ["text", "json"])
 def test_a_scoped_listing_carries_nothing_out_of_reach(form, cfg, at_the_command_line, capsys):
     """Both forms, and asserted over the whole output rather than field by field.
@@ -587,13 +660,20 @@ def test_a_scoped_listing_carries_nothing_out_of_reach(form, cfg, at_the_command
     Searching the rendered output for the name, rather than naming the fields that
     leaked, is deliberate: the four that did were not a closed set, and a field added
     later would leak the same way past a field-by-field assertion.
+
+    And subagents out of reach in the workspace, with folders of their own: without
+    them every per-subagent field is empty, and the rule passes whatever those fields
+    would have held.
     """
     _workspace(cfg, NARROW, A_ONLY)
+    _subagents_out_of_reach(cfg)
 
     assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
 
     printed = capsys.readouterr().out
     assert "hidden" not in printed, f"the {form} form named an agent this caller cannot open"
+    named = [one for one in OUT_OF_REACH if one in printed]
+    assert not named, f"the {form} form named {named}, which belong to subagents out of reach"
     assert "narrow" in printed, "and it should still show the one they can"
 
 
@@ -626,17 +706,44 @@ def test_a_buried_skill_is_kept_to_callers_who_reach_its_subagent(
 
 
 @pytest.mark.parametrize("form", ["text", "json"])
+def test_a_scoped_listing_reports_no_fault_of_a_subagent_out_of_reach(
+    form, cfg, at_the_command_line, capsys
+):
+    """A moved tool, a miscounted folder, a stranded skill and an orphan, each naming a
+    subagent or a folder the caller cannot attribute -- and the operator's listing, the
+    control, names all of them and fails.
+
+    The exit status follows the caller's view too: failing a listing over a fault in a
+    subagent the caller cannot open would say there is one.
+    """
+    _workspace(cfg, NARROW)
+    _broken_subagents_out_of_reach(cfg)
+    as_json = ["--json"] if form == "json" else []
+
+    whole_code = main(["list", *as_json])
+    whole = capsys.readouterr().out
+    scoped_code = main(["list", "--as", "B", *as_json])
+    scoped = capsys.readouterr().out
+
+    assert (whole_code, [one for one in BROKEN_OUT_OF_REACH if one not in whole]) == (1, [])
+    named = [one for one in BROKEN_OUT_OF_REACH if one in scoped]
+    assert (scoped_code, named) == (0, []), f"the {form} form named {named}"
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
 def test_the_operator_still_sees_all_of_it(form, cfg, at_the_command_line, capsys):
     """The control both rules above need: the filtering is the caller's view, not the
     listing losing the ability to say who reaches what.
     """
     _workspace(cfg, NARROW, A_ONLY)
+    _subagents_out_of_reach(cfg)
 
     assert main(["list"] + (["--json"] if form == "json" else [])) == 0
 
     printed = capsys.readouterr().out
     assert "hidden" in printed
     assert "narrow" in printed
+    assert [one for one in OUT_OF_REACH if one not in printed] == []
     # The tools half of the same control, so the rules below are not passing on a
     # listing that shows the operator nothing either.
     assert "line_count" in printed

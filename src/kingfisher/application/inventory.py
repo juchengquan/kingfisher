@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Container, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
@@ -361,6 +361,16 @@ def _bundled(
     return tools, skills, shadowed, error, orphans, carried
 
 
+def _subject(kind: str, name: str) -> str:
+    """A definition as a refusal words it, which is how `moved_tools` is keyed."""
+    return f"{kind} {name!r}"
+
+
+def _kept[V](by_name: Mapping[str, V], reached: Container[str]) -> Mapping[str, V]:
+    """Only the entries for definitions this caller reaches."""
+    return MappingProxyType({name: one for name, one in by_name.items() if name in reached})
+
+
 def _moved_tools(resolved: Definitions) -> Mapping[str, tuple[str, ...]] | None:
     """Definitions naming a tool by a path it no longer lives at, or `None` when that
     could not be asked.
@@ -373,7 +383,7 @@ def _moved_tools(resolved: Definitions) -> Mapping[str, tuple[str, ...]] | None:
     try:
         offers = Offering.of(resolved.tools.found)
         return MappingProxyType({
-            f"{kind} {name!r}": tuple(one for one, _claimed, _actual in moved)
+            _subject(kind, name): tuple(one for one, _claimed, _actual in moved)
             for kind, specs in (
                 ("agent", resolved.agents.specs),
                 ("subagent", resolved.subagents.specs),
@@ -694,6 +704,12 @@ def inventory(
     # else, and two answers to what a caller reaches is how they came apart.
     for_caller = reaching("agents", agents)
     for_caller_subagents = reaching("subagents", subagents)
+    # Every field naming a subagent is kept to the same answer. One left whole names a
+    # subagent this caller cannot open, in `--json` and in the text form alike.
+    reached_subjects = {
+        *(_subject("agent", name) for name in for_caller),
+        *(_subject("subagent", name) for name in for_caller_subagents),
+    }
     # The catalogues that audience nothing themselves, filtered by what the definitions
     # this caller reaches offer them -- not by an audience of their own. A
     # `reaching("tools", ...)` stood here and could filter nothing: `_access` builds
@@ -745,34 +761,37 @@ def inventory(
         subagents_error=subagents_error or broken.get("subagents"),
         middlewares=middlewares,
         middlewares_error=middlewares_error,
-        moved_tools=_NO_NAMES if moved_tools is None else moved_tools,
+        moved_tools=_NO_NAMES if moved_tools is None else _kept(moved_tools, reached_subjects),
         moved_tools_checked=moved_tools is not None,
-        miscounted_bundles=_NOTHING if miscounted_bundles is None else miscounted_bundles,
+        miscounted_bundles=(
+            _NOTHING
+            if miscounted_bundles is None
+            else _kept(miscounted_bundles, for_caller_subagents)
+        ),
         miscounted_bundles_checked=miscounted_bundles is not None,
-        bundled_tools=bundled_tools,
-        bundled_skills=bundled_skills,
+        bundled_tools=_kept(bundled_tools, for_caller_subagents),
+        bundled_skills=_kept(bundled_skills, for_caller_subagents),
         # Computed here rather than in `_bundled`, which is the only place that
         # knows what is in a bundle and not which definitions carry a graph.
         stranded_skills=MappingProxyType(
             {
                 name: bundled_skills[name]
                 for name in compiled_subagents
-                if bundled_skills.get(name)
+                if name in for_caller_subagents and bundled_skills.get(name)
             }
         ),
-        bundled_misplaced=MappingProxyType(
-            {
-                name: deep
-                for name, deep in bundled_misplaced.items()
-                if name in for_caller_subagents
-            }
-        ),
-        shadowed=shadowed if shadowed is not None else _NO_NAMES,
+        bundled_misplaced=_kept(bundled_misplaced, for_caller_subagents),
+        shadowed=_kept(shadowed, for_caller_subagents) if shadowed is not None else _NO_NAMES,
         shadowed_checked=shadowed is not None,
-        carried_bundles=carried,
+        carried_bundles=tuple(name for name in carried if name in for_caller_subagents),
         bundles_error=bundles_error,
-        orphaned_assets=orphaned_assets,
-        compiled_subagents=compiled_subagents,
+        # Empty for a scoped view. An orphan is a folder no definition is named for, so
+        # it reaches nobody to filter it against; it is the operator's diagnostic, and
+        # a caller's view carries none of those, as it carries none of the policy.
+        orphaned_assets=() if scoped else orphaned_assets,
+        compiled_subagents=tuple(
+            name for name in compiled_subagents if name in for_caller_subagents
+        ),
         skills_enabled=cfg.skills_enabled,
         # `None` and empty for a scoped view: the vocabulary, the per-definition
         # audiences and the report of what restricts nobody are all the policy, and
