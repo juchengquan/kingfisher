@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 from dataclasses import replace
 
 import pytest
 import yaml
 from deepagents.middleware import SubAgentMiddleware
+from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher import backend_at, default_backends
 from kingfisher.application.service import Kingfisher
@@ -30,6 +32,7 @@ from tests.conftest import (
     subagents_dir,
     tools_dir,
 )
+from tests.unit.scripted import Scripted
 
 TOOL = '''
 def line_count(path: str) -> str:
@@ -954,3 +957,250 @@ def test_refusing_an_unknown_subagent_lists_every_one_a_caller_reaches(
     expected = REACHED_BY_C | {"insider", "ledger"} | ({"helpless"} if where == "helper" else set())
 
     assert offered_instead(cfg, source_ids, where) == expected
+
+
+# -- a name a caller writes, out of reach or never written ------------------
+
+
+def refusal(cfg, source_ids: tuple[str, ...] | None, agent: str, asked: Capabilities) -> str:
+    """What one real turn refuses this caller with, or `""` when it reaches the model."""
+    kf = Kingfisher(cfg, backends=default_backends)
+    try:
+        turn = kf.stream(Request("go", agent=agent, capabilities=asked), source_ids=source_ids)
+        try:
+            for event in turn:
+                if event.kind == "run_start":
+                    break
+        finally:
+            turn.close()
+    except CapabilityError as refused:
+        return str(refused)
+    return ""
+
+
+def opening(cfg) -> str:
+    """Write `opener`, which offers every subagent, so a request's names reach the build."""
+    (cfg.catalogue_roots["agents"] / "opener.yaml").write_text(OPENER, encoding="utf-8")
+    return "opener"
+
+
+#: What no message to `C` may name: the two `delegating` hides by their own line, and
+#: the `x` that `two_of_x` hides the same way.
+HIDDEN_FROM_C = ("insider", "ledger", "b/x.yaml::x")
+
+
+def naming_none_hidden(*messages: str) -> bool:
+    return not [name for name in HIDDEN_FROM_C for one in messages if name in one]
+
+
+@pytest.mark.parametrize("name", ["insider", "ledger"])
+def test_a_request_naming_a_subagent_out_of_reach_reads_what_a_typo_reads(delegating, name):
+    """Under an agent offering every subagent, `C` naming `insider` ran without it and was
+    told nothing while `ghost` was refused, so guessing told a real name from a typo.
+    """
+    agent = opening(delegating)
+
+    hidden = refusal(delegating, ("C",), agent, Capabilities(subagents=(name,)))
+    typo = refusal(delegating, ("C",), agent, Capabilities(subagents=("ghost",)))
+
+    assert typo.startswith("this request names unknown subagent(s): ghost;")
+    assert hidden == typo.replace("ghost", name)
+    assert naming_none_hidden(typo)
+
+
+def test_a_typo_and_a_subagent_out_of_reach_are_refused_together(delegating):
+    """Both are unknown to `C`, so a refusal naming one and passing over the other would
+    say which was real.
+    """
+    message = refusal(
+        delegating, ("C",), opening(delegating), Capabilities(subagents=("ghost", "insider"))
+    )
+
+    assert message.startswith("this request names unknown subagent(s): ghost, insider;")
+
+
+@pytest.mark.parametrize("source_ids", [("A",), None], ids=["A", "no-policy"])
+def test_a_caller_who_reaches_the_subagent_named_still_runs_with_it(delegating, source_ids):
+    """The control: refusing `insider` to everybody would pass the tests above."""
+    cfg = delegating if source_ids is not None else replace(delegating, access=None)
+    agent = opening(cfg)
+
+    assert refusal(cfg, source_ids, agent, Capabilities(subagents=("insider",))) == ""
+    assert refusal(cfg, source_ids, agent, Capabilities(subagents=("ghost",))).startswith(
+        "this request names unknown subagent(s): ghost;"
+    )
+
+
+@pytest.mark.parametrize("name", ["insider", "ghost"])
+def test_an_agent_listing_its_subagents_narrows_either_name_silently(delegating, name):
+    """`boss` lists its subagents, so neither name reaches the build as written, and
+    refusing one of them but not the other would reopen the gap.
+    """
+    assert refusal(delegating, ("C",), "boss", Capabilities(subagents=(name,))) == ""
+
+
+# -- two subagents called `x`, one of them out of reach ---------------------
+
+X = """name: x
+description: The {where} x.
+source_ids: {source_ids}
+system_prompt: |
+  You x.
+"""
+
+
+@pytest.fixture
+def two_of_x(delegating):
+    """`delegating` and `opener`, with an `x` every caller reaches and another only `A`
+    does.
+    """
+    for where, source_ids in (("a", "[A, B, C]"), ("b", "[A]")):
+        folder = subagents_dir(delegating) / where
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "x.yaml").write_text(
+            X.format(where=where, source_ids=source_ids), encoding="utf-8"
+        )
+    opening(delegating)
+    return delegating
+
+
+def test_every_subagent_means_every_one_the_caller_reaches(two_of_x):
+    """`"*"` was every definition, so `C`, reaching one `x`, was refused for activating
+    two and shown the other's file.
+    """
+    assert refusal(two_of_x, ("C",), "opener", Capabilities()) == ""
+    assert "Activate the one you meant: a/x.yaml::x, b/x.yaml::x" in refusal(
+        two_of_x, ("A",), "opener", Capabilities()
+    )
+
+
+def test_a_bare_name_means_the_one_the_caller_reaches(two_of_x):
+    """`C` writing `x` was refused because more than one source offers it, with the
+    spelling only `A` reaches listed as the fix.
+    """
+    on_the_default_host(two_of_x, "a/x")
+
+    run = told(two_of_x, ("C",), agent="opener", subagents=("x",))
+
+    # The reports read what the build activated, which is the `x` this caller reaches.
+    assert run["indistinct"] == {"a/x.yaml::x"}
+    assert "a/x.yaml::x" not in run["withheld"]
+    assert naming_none_hidden(*run["withheld"])
+
+
+def test_a_bare_name_two_reachable_subagents_share_is_still_refused(two_of_x):
+    """The control: settling a bare name for everybody would pass the test above."""
+    assert "write a/x.yaml::x, b/x.yaml::x" in refusal(
+        two_of_x, ("A",), "opener", Capabilities(subagents=("x",))
+    )
+
+
+def test_naming_the_other_x_reads_what_a_typo_reads(two_of_x):
+    """`C` naming `b/x.yaml::x` ran without it and was told nothing, where a spelling
+    nothing defines was refused.
+    """
+    hidden = refusal(two_of_x, ("C",), "opener", Capabilities(subagents=("b/x.yaml::x",)))
+    typo = refusal(two_of_x, ("C",), "opener", Capabilities(subagents=("b/y.yaml::x",)))
+
+    assert typo.startswith("this request names unknown subagent(s): b/y.yaml::x;")
+    assert hidden == typo.replace("b/y.yaml::x", "b/x.yaml::x")
+    assert naming_none_hidden(typo)
+
+
+# -- a mistake in a file, refused for every caller --------------------------
+
+#: Keeps `ghost` from `C` with its entry, so only a check reading the file as written
+#: refuses it to them.
+SHADY = """name: shady
+description: Names a subagent nothing defines, behind an audience.
+source_ids: [A, B, C]
+subagents:
+  - plain-helper
+  - name: ghost
+    source_ids: [A]
+system_prompt: |
+  You delegate.
+"""
+
+
+def test_an_agents_own_typo_is_refused_in_its_name(delegating):
+    """An agent's typo was refused as "this request names", sending the caller to fix a
+    request that named nothing.
+    """
+    agent, asked = naming_a_ghost(delegating, "agent")
+
+    assert refusal(delegating, ("C",), agent, asked).startswith(
+        "agent 'ghostly' names unknown subagent(s): ghost;"
+    )
+
+
+@pytest.mark.parametrize("source_ids", [("C",), ("A",)])
+def test_an_agents_typo_behind_an_entry_audience_is_refused_for_every_caller(
+    delegating, source_ids
+):
+    """The agent's names were checked as this caller reaches them, so a typo its entry
+    keeps from `C` was refused for `A` and ran silently for `C`.
+    """
+    (delegating.catalogue_roots["agents"] / "shady.yaml").write_text(SHADY, encoding="utf-8")
+
+    message = refusal(delegating, source_ids, "shady", Capabilities())
+
+    assert message.startswith("agent 'shady' names unknown subagent(s): ghost;")
+
+
+# -- what the model is told when it asks for one ----------------------------
+
+
+def task(*names: str, at: str = "") -> AIMessage:
+    """One model turn calling `task` for each of these, each call's id `at` + its name."""
+    return AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "task", "args": {"description": "go", "subagent_type": n}, "id": at + n}
+            for n in names
+        ],
+    )
+
+
+def results_shown() -> dict[str, str]:
+    """Every tool result a scripted turn showed any of its models, by call id, less the
+    ledger id stamped on each, which counts calls and so differs between any two.
+    """
+    return {
+        message.tool_call_id: re.sub(r"\n\[[^\]\n]+\]$", "", str(message.content))
+        for heard in Scripted.heard
+        for message in heard
+        if isinstance(message, ToolMessage)
+    }
+
+
+def test_a_task_out_of_reach_reads_what_a_task_to_a_typo_reads(delegating, scripted):
+    """Both refusals of a `task` -- `DeclaredSubagentsOnly` at the agent, deepagents' own
+    inside a subagent -- list what was built, so either would tell `insider` from
+    `ghost` the moment it listed or worded the two apart.
+    """
+    Scripted.script.extend([
+        task("reviewer"),
+        # `reviewer`, which consults `plain-helper` and, for `C`, not `insider`.
+        task("insider", "ghost", at="nested-"),
+        AIMessage(content="reviewed"),
+        task("insider", "ghost", at="top-"),
+        AIMessage(content="done"),
+        # Spare, so a build that let `insider` run fails on what the models were shown
+        # rather than on a script it ran out of.
+        *[AIMessage(content="spare")] * 4,
+    ])
+    kf = Kingfisher(replace(delegating, models=scripted.models), backends=default_backends)
+
+    list(kf.stream(Request("go", agent="boss"), source_ids=("C",)))
+    shown = results_shown()
+
+    # Each level's own refusal, listing what it reaches: a test passing on another
+    # refusal, or on an empty list, would say nothing about these two.
+    assert "does not exist" in shown["nested-ghost"]
+    assert "plain-helper" in shown["nested-ghost"]
+    assert "is not a subagent this request may use" in shown["top-ghost"]
+    assert "reviewer" in shown["top-ghost"]
+    for at in ("nested-", "top-"):
+        assert shown[at + "insider"] == shown[at + "ghost"].replace("ghost", "insider")
+        assert naming_none_hidden(shown[at + "ghost"])

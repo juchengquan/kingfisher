@@ -1701,11 +1701,12 @@ never showed it, because `analyst` narrows the same tools the same way and the
 agent's grant is the subagent's ceiling.
 
 The build follows the guide now. A subagent its own line does not reach is left out of
-what a request activates, as an entry the agent narrowed away is, and after the
-refusals, which are about what the request named and not about who sent it. What a
-built one holds goes through its `declares(held)` before the request's grant -- tools
-on both paths, skills, helpers -- while what is refused stays the file's own names, so
-a typo is refused whoever is calling. Helpers are narrowed by the activated set rather
+what an agent's list activates, as an entry the agent narrowed away is, and a request
+naming one is refused as a typo is -- see *A name a request writes reads the same
+whether nothing defines it or it is out of reach*, below, which reversed the rule this
+entry first recorded. What a built one holds goes through its `declares(held)` before
+the request's grant -- tools on both paths, skills, helpers -- while what is refused
+stays the file's own names, so a typo is refused whoever is calling. Helpers are narrowed by the activated set rather
 than by the grant, which may be `"*"` and says nothing about reach. `build_agent` had
 also rebound `held` to the walked tool names a dozen lines after reading it as the
 caller's, so that local is `guarded` now.
@@ -1744,6 +1745,43 @@ them. Both refusals list through `offered_to` now, which is `within_reach` over 
 definition. Whether one is raised is unchanged: what is unknown is still asked of every
 definition, so a typo in a file is refused whoever is calling, and a caller in `A` or a
 run with no `source_ids.yaml` reads the list it read before. *(2026-10-12.)*
+
+**A name a request writes reads the same whether nothing defines it or it is out of
+reach.** The entries above held that whether a refusal is raised is about what the
+request named and must not depend on who sent it, and that left the guide's promise
+open. Measured with a real turn, a caller in `C` under an agent writing
+`subagents: ["*"]`: naming `ghost` was refused, and naming `insider` -- defined, and kept
+from `C` by its own line -- ran without it and said nothing. So `C` could tell a real
+name from a typo by guessing, which is the one thing *out of reach reads as not
+offered* exists to stop. Closing the gap was chosen over rewording the guide to admit
+it, and for a request the old rule is reversed: whether a name is refused, and what the
+refusal says, now depend on who sent it, because that is the only way they can stop
+depending on what exists.
+
+A request's own names are settled in the service, by `settled_request`, where they are
+still apart from the deployment's grant and from the agent that clamp them. Where both
+offer every subagent the names reach the build as written, so each is checked against
+what the caller reaches: one out of reach is refused in a typo's words, with the same
+`offered:` list, and a request naming both kinds lists both. Where either is a list it
+narrows the request silently, a typo and a name out of reach alike, as it did. The same
+reading settles two definitions of one name when the caller reaches one: a bare `x`
+means that one rather than being refused as offered by two sources, and `"*"` expands
+to what the caller reaches, so neither refusal of two of a name fires for them or names
+the other. Settled there rather than in the build, because the build is handed the
+grant and the request already combined, and a grant listing a subagent out of `C`'s
+reach would otherwise have `C` refused for a name `C` never wrote.
+
+A file's mistakes stay caller-independent: a subagent nothing defines, two of a name or
+a loop, written in an agent's or a subagent's file, is refused whoever is calling,
+because it is the file's fault and no caller can fix it. An agent's names are checked
+as its file wrote them now, by `refuse_misnamed_by` before the agent and the request
+are combined, so a typo behind an entry audience is refused for a caller the entry
+excludes too, and the refusal names the agent instead of "this request". What one lists
+follows the caller through `offered_to`. Three still name a definition out of the
+caller's reach, because no true wording of them hides that it exists: a file naming a
+bare name two definitions share, an agent's file naming both, and a loop through
+definitions the caller cannot reach. They are left as they were for the owner to word.
+*(2026-10-12.)*
 
 ## Models and endpoints
 

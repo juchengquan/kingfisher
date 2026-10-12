@@ -34,6 +34,7 @@ from kingfisher.infrastructure.harness.activation import (
     activatable_skills,
     for_the_caller,
     offered_to,
+    refuse_misnamed_by,
 )
 from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
@@ -359,7 +360,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # lattice, applied in the one direction it already goes: what a caller asks for
     # cannot exceed what the definition declared. One function, because the run's report
     # of what it activated has to read the same answer.
-    capabilities = for_the_caller(agent, capabilities or Capabilities(), held=held)
+    asked = capabilities or Capabilities()
+    capabilities = for_the_caller(agent, asked, held=held)
     roots = catalogue or Definitions.from_config(cfg)
     # Every backend, and that is the point: a check only some builds ran would be a
     # check nothing here exercises.
@@ -497,6 +499,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             **attached,
         )
 
+    # `asked`, not `capabilities`: combined, the agent's names are the ones this caller
+    # reaches, and a typo behind an entry audience would be refused to some callers only.
+    refuse_misnamed_by(cfg, agent, asked, held=held, catalogue=roots)
     defined, activated = _activated_subagents(cfg, capabilities, catalogue=roots, held=held)
     surface = _resolve_tools(
         str(roots.tools.root) if roots.tools.root is not None else "the catalogue",

@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from deepagents import FilesystemPermission
 
 from kingfisher.config import ConfigError
 from kingfisher.domain.access import reaches
-from kingfisher.domain.capabilities import ALL, Capabilities, refuse_unoffered
+from kingfisher.domain.capabilities import (
+    ALL,
+    Capabilities,
+    Selection,
+    bare_name,
+    narrowed,
+    refuse_unoffered,
+)
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.backend import bundled_skill_mounts
 from kingfisher.infrastructure.harness.kinds.subagents import indistinct
@@ -86,12 +94,78 @@ def within_reach(
 
 
 def offered_to(defined: Mapping[str, SubagentSpec], held: frozenset[str] | None) -> str:
-    """The subagents a refusal of an unknown one lists to this caller.
-
-    Only the listing: what is unknown is still asked of every definition, so a file's
-    typo is refused whoever is calling.
-    """
+    """The subagents a refusal of an unknown one lists to this caller."""
     return f"{tuple(sorted(within_reach(defined, defined, held)))}"
+
+
+def settled_request(
+    cfg: Config,
+    asked: Capabilities,
+    *,
+    ceiling: Selection,
+    held: frozenset[str] | None,
+    catalogue: Definitions | None = None,
+) -> Capabilities:
+    """`asked`, each subagent it names settled to the one it means for this caller.
+
+    `ceiling` is what clamps the request's subagents: the deployment's grant under the
+    agent's declaration. A list there narrows the request silently, a typo and a name
+    out of reach alike, so only `"*"` leaves anything to settle.
+    """
+    if ceiling != ALL or not isinstance(asked.subagents, tuple):
+        return asked
+    defined = defined_subagents(cfg, catalogue=catalogue)
+    reached = within_reach(defined, defined, held)
+    names = tuple(dict.fromkeys(_one_reached(name, reached) for name in asked.subagents))
+    # Against what this caller reaches rather than every definition: a request naming
+    # one out of reach has to read what a typo reads, or guessing tells the two apart.
+    refuse_unoffered(
+        names,
+        offered=reached,
+        kind="subagent",
+        subject="this request",
+        listing=offered_to(defined, held),
+    )
+    return replace(asked, subagents=names)
+
+
+def _one_reached(name: str, reached: Iterable[str]) -> str:
+    """The definition a bare name means to a caller who reaches one of those sharing it.
+
+    Refused as two of a name instead, the refusal would say that the other exists.
+    """
+    mine = [key for key in reached if bare_name(key) == name]
+    return mine[0] if len(mine) == 1 else name
+
+
+def refuse_misnamed_by(
+    cfg: Config,
+    agent: AgentSpec | None,
+    asked: Capabilities,
+    *,
+    held: frozenset[str] | None,
+    catalogue: Definitions | None = None,
+) -> None:
+    """Refuse a subagent an agent's own file names wrong, of those this request asks for.
+
+    The file's names as written rather than as this caller reaches them: a mistake in
+    the file is refused whoever is calling. Only the listing follows the caller.
+    """
+    if agent is None or not isinstance(agent.subagents, tuple):
+        return
+    written = narrowed(asked.subagents, by=agent.subagents)
+    if not written:
+        return
+    defined = defined_subagents(cfg, catalogue=catalogue)
+    subject = f"agent {agent.name!r}"
+    refuse_unoffered(
+        written,
+        offered=defined,
+        kind="subagent",
+        subject=subject,
+        listing=offered_to(defined, held),
+    )
+    refuse_two_of_a_name(written, subject=subject)
 
 
 def indistinct_subagents(  # noqa: PLR0913 -- the agent and the caller are what make
@@ -214,9 +288,14 @@ def _activated_subagents(
     # shipped subagent on a model their credentials reach, and a catalogue-wide
     # refusal would fire before the override could apply. So it stays per-subagent,
     # at `as_subagent`, where the override has already been resolved.
-    # `ALL` is every subagent the workspace defines, resolved here because here
-    # is where "what it defines" is known.
-    activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
+    # `ALL` is every subagent this caller reaches, resolved here because here is where
+    # "what it defines" is known. Every definition would hand two of a name to a
+    # caller who reaches one of them, and the refusal would name the other.
+    activated = (
+        within_reach(defined, defined, held)
+        if capabilities.subagents == ALL
+        else capabilities.subagents
+    )
     refuse_unoffered(
         activated,
         offered=defined,
@@ -228,8 +307,9 @@ def _activated_subagents(
     # and naming two that do are different mistakes, and the first would
     # otherwise be reported as the second.
     refuse_two_of_a_name(activated, subject="this request")
-    # A subagent's own `source_ids:` holds wherever it is used, so one this caller
-    # cannot reach is dropped as an agent's narrowed entry is -- after the refusals,
-    # since whether one is raised is about what the request named and must not
-    # depend on who sent it. What one lists does, through `offered_to`.
+    # Dropped rather than refused. The service settled a request's own names for this
+    # caller before anything clamped them (`settled_request`), and an agent's were
+    # refused as its file wrote them (`refuse_misnamed_by`), so what is out of reach
+    # here is an entry of a list -- an agent's, or a deployment's grant -- and a list
+    # narrows a subagent out of reach as silently as one it never held.
     return defined, within_reach(activated, defined, held)

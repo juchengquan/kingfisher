@@ -17,6 +17,37 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## A request naming a subagent out of a caller's reach is refused as a typo is, after #712
+
+For a deployment with a `source_ids.yaml`, where the agent writes `subagents: ["*"]`
+and the deployment grants every subagent, so a request's names reach the build as
+written:
+
+- **A request naming a subagent whose own `source_ids:` misses the caller is refused**,
+  with the message a name nothing defines gets:
+  `this request names unknown subagent(s): insider; offered: (...)`. It used to run
+  without it and say nothing. A request naming one of each lists both.
+- **Two subagents of one name, of which the caller reaches one**, read as one. `"*"`
+  is no longer refused for activating two, a bare `x` activates the one the caller
+  reaches instead of being refused as offered by more than one source, and the other's
+  qualified spelling is refused as unknown. A caller reaching both is refused as before.
+
+An agent listing its subagents by name, or a deployment granting a list of them, still
+narrows a request's names silently, out of reach or not.
+
+For every deployment:
+
+- **An agent's own mistake is refused in its name.** A subagent nothing defines reads
+  `agent 'boss' names unknown subagent(s): ghost; offered: (...)`, where it read
+  `this request names ...`, and two of a name reads `agent 'boss' activates 2
+  subagents called 'x'`.
+- **An agent's names are checked as its file wrote them.** A typo in an entry whose
+  `source_ids:` misses the caller is refused for that caller too, where the turn ran
+  without it.
+
+A caller who reaches every subagent, and a deployment with no `source_ids.yaml`, are
+refused for the same requests as before, and read the same `offered:` lists.
+
 ## A refusal of an unknown subagent lists only those a caller reaches, after #711
 
 For a deployment with a `source_ids.yaml`. When an agent's file, a request or a
