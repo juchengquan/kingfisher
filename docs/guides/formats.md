@@ -719,7 +719,7 @@ nothing changes.
 
 A definition naming a subagent by a name that is no key — one nobody defines,
 or the bare name two files share — still loads. A run reaching that name refuses
-it, and `kingfisher list` names who wrote it and exits 1.
+it, and `kingfisher list` and `doctor` name who wrote it and fail.
 
 The refusal sits where the constraint lives: an agent's roster is keyed by name,
 so an *agent* granted two of a name is refused. Two definitions in one catalogue

@@ -461,6 +461,32 @@ def _tool_references(found: Inventory) -> Iterator[Check]:
         )
 
 
+def _subagent_references(found: Inventory) -> Iterator[Check]:
+    """A definition naming a subagent the catalogue has no key for.
+
+    A failure though startup refuses nothing: every run reaching the name is
+    refused, which for an agent is every run the request does not narrow it out of.
+    """
+    if not found.unresolved_subagents_checked:
+        yield Check(
+            "subagent references",
+            "warn",
+            "not checked -- a catalogue it reads did not load, which is above",
+        )
+        return
+    if not found.unresolved_subagents:
+        yield Check("subagent references", "ok", "every definition names subagents there are")
+        return
+    for subject, names in sorted(found.unresolved_subagents.items()):
+        yield Check(
+            "subagent references",
+            "fail",
+            f"{subject} names {', '.join(names)}, which matches no subagent here",
+            "write each as `kingfisher list` lists it under subagents, where a name two "
+            "files share is spelt with its file",
+        )
+
+
 def _bundled_entries(found: Inventory) -> Iterator[Check]:
     """A definition's `source: bundled` entries, against the folder they come from.
 
@@ -910,6 +936,7 @@ def examine(
             found = inventory(cfg)
         checks += _catalogues(found)
         checks += _tool_references(found)
+        checks += _subagent_references(found)
         checks += _bundled_entries(found)
         checks += _subagent_tools(found)
         # After the counts, because it explains one: a zero that is ordinary and

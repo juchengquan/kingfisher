@@ -382,6 +382,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "moved_tools": {k: list(v) for k, v in found.moved_tools.items()},
         "moved_tools_checked": found.moved_tools_checked,
         "unresolved_subagents": {k: list(v) for k, v in found.unresolved_subagents.items()},
+        "unresolved_subagents_checked": found.unresolved_subagents_checked,
         "bundled_tools": {k: list(v) for k, v in found.bundled_tools.items()},
         "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
         "bundled_misplaced": {k: list(v) for k, v in found.bundled_misplaced.items()},
