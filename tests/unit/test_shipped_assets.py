@@ -183,6 +183,8 @@ def test_every_preset_tool_loads(shipped):
         # And a class, which is the third. See below.
         "sql_explain",
         "web_search",
+        # The two that make a file and answer with where it went.
+        "bar_chart", "csv_filter",
     }
 
 
@@ -1907,7 +1909,11 @@ def test_every_shipped_file_tool_works_on_a_backend_with_nothing_on_this_host(sh
     sessions somewhere else still gets working examples. A backend that answers from
     memory has no host path for a tool to open, so a tool that opened one fails here.
     """
-    from deepagents.backends.protocol import BackendProtocol, FileDownloadResponse
+    from deepagents.backends.protocol import (
+        BackendProtocol,
+        FileDownloadResponse,
+        FileUploadResponse,
+    )
 
     from kingfisher.kinds.tools.catalogue import LocalToolRepository
     from tests.conftest import on_backend
@@ -1928,24 +1934,32 @@ def test_every_shipped_file_tool_works_on_a_backend_with_nothing_on_this_host(sh
                 for p in paths
             ]
 
+        def upload_files(self, files):
+            held.update(files)
+            return [FileUploadResponse(path=p, error=None) for p, _ in files]
+
     found = {
         one.name: one.tool
         for root in (shipped / "tools", shipped / "subagents" / "redactor" / "tools")
         for one in LocalToolRepository(root).found
     }
     asked = {
-        "line_count": "/inputs/rows.csv",
-        "csv_profile": "/inputs/rows.csv",
-        "csv_columns": "/inputs/rows.csv",
-        "log_levels": "/inputs/app.log",
-        "status_codes": "/inputs/access.log",
-        "mask_secrets": "/inputs/config.ini",
+        "line_count": {"file_path": "/inputs/rows.csv"},
+        "csv_profile": {"file_path": "/inputs/rows.csv"},
+        "csv_columns": {"file_path": "/inputs/rows.csv"},
+        "log_levels": {"file_path": "/inputs/app.log"},
+        "status_codes": {"file_path": "/inputs/access.log"},
+        "mask_secrets": {"file_path": "/inputs/config.ini"},
+        "bar_chart": {"file_path": "/inputs/rows.csv"},
+        "csv_filter": {"file_path": "/inputs/rows.csv", "column": "region", "value": "north"},
     }
 
-    answers = {name: on_backend(found[name], Remote(), file_path=at) for name, at in asked.items()}
+    answers = {name: on_backend(found[name], Remote(), **args) for name, args in asked.items()}
 
     assert answers["line_count"].startswith("rows.csv: 3 line(s)")
     assert "region" in answers["csv_columns"]
     assert "ERROR 1" in answers["log_levels"]
     assert "503: 1" in answers["status_codes"]
     assert "sk-live-123" not in answers["mask_secrets"]
+    assert held["/outputs/chart.svg"].startswith(b"<svg ")
+    assert held["/outputs/filtered.csv"] == b"region,sales\nnorth,10\n"
