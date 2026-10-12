@@ -31,7 +31,8 @@ if TYPE_CHECKING:
 
 #: What a definition file is called, and the spelling that used to vanish. `.yml` is
 #: valid YAML everywhere else, so a file named that way is a definition somebody wrote
-#: and kingfisher silently did not read.
+#: and kingfisher silently did not read. Either in another case is the same file to
+#: whoever wrote it, and on macOS's default filesystem to the editor too.
 #:
 #: Here for the reason everything else in this module is: what a document is called is
 #: a fact about the document rather than about what either kind means, and both kinds
@@ -69,7 +70,7 @@ def documents_in(
             found.extend(documents_in(entry, error=error, skipping=skipping))
         elif entry.name.endswith(SUFFIX):
             found.append(entry)
-        elif entry.suffix == NEAR_MISS:
+        elif entry.suffix.lower() in (SUFFIX, NEAR_MISS):
             msg = (
                 f"{entry.name}: kingfisher reads {SUFFIX!r} here, so this file is "
                 f"not loaded -- rename it to {entry.stem}{SUFFIX}"

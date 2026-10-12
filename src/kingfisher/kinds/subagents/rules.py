@@ -95,6 +95,11 @@ def refuse_cycles(specs: Mapping[str, SubagentSpec]) -> None:
             # reported by the same path every time rather than by whichever
             # branch the dict happened to yield first.
             for helper in sorted(named, reverse=True):
+                # A name that is no key is no edge: unknown, or shared by two
+                # files with nothing saying which. Safe because the build refuses
+                # it against these same keys before following it. Resolving it to
+                # every file it could mean would refuse the whole catalogue over a
+                # loop that exists only if the choice goes one way.
                 if helper in specs:
                     stack.append((helper, False))
 

@@ -99,12 +99,14 @@ def test_two_kinds_claiming_one_name_are_told_apart_by_file(cfg):
     ]
 
 
-def test_a_yml_file_is_refused_rather_than_skipped(cfg):
+@pytest.mark.parametrize("name", ["reviewer.yml", "reviewer.YML", "reviewer.YAML"])
+def test_a_yml_file_is_refused_rather_than_skipped(cfg, name):
     """`.yml` is valid YAML everywhere else, so a file named that way is a definition
-    somebody wrote and kingfisher silently did not read.
+    somebody wrote and kingfisher silently did not read -- and in upper case it still
+    was, either suffix.
     """
     root = cfg.workspace / "subagents"
-    _write(root, "reviewer.yml", PROMPTED)
+    _write(root, name, PROMPTED)
 
     with pytest.raises(SubagentError, match=r"reviewer\.yaml"):
         _ = LocalSubagentRepository(root).specs

@@ -84,6 +84,9 @@ def subagent_helpers(
     if spec.subagents is None:
         return ()
     named = tuple(defined) if spec.subagents == ALL else spec.subagents
+    # Refused, never resolved: `refuse_cycles` walked only names that are keys of
+    # `defined`, so a name settled here to one of them is an edge no walk has seen,
+    # and a loop through it builds without end.
     refuse_unoffered(
         named, offered=defined, kind="subagent", subject=f"subagent {spec.name!r}"
     )

@@ -652,6 +652,13 @@ read. The catalogue has been read at startup since, and a cycle is still not
 refused there: `kingfisher list` reports one, and the first build of an agent with
 subagents refuses it. *(2026-09-17.)*
 
+A name the walk cannot place is no edge: a helper nobody defines, or a bare name
+two files share with nothing saying which. Resolving the shared one to every file
+it could mean was considered and not taken -- it refuses the whole catalogue over
+a loop that exists only if the choice goes one way. What makes skipping it safe is
+that the build refuses the same name against the same keys before following it.
+*(2026-10-12.)*
+
 **A subagent may be a compiled graph rather than a spec**, told apart by
 extension. `SUBAGENTS` is declared and never inferred; name and description are
 static text and only the graph comes from a function; the function receives the
@@ -663,6 +670,8 @@ That read "an unrecognised extension in `subagents/` is an error" until now, tho
 it was reversed the day it was written: a folder there may be a Python package, and
 a package may hold a fixture or a prompt beside its `__init__.py`, so the one real
 confusion is named rather than every unfamiliar suffix refused. *(2026-09-17.)*
+`.YML` and `.YAML` are the same confusion and were skipped without a word, so the
+suffix is compared in lower case. *(2026-10-12.)*
 
 **One stack for every graph that holds the workspace tools.** Three graphs hold
 them -- the agent, a subagent, and the `general-purpose` subagent deepagents supplies
