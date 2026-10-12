@@ -915,7 +915,11 @@ class Kingfisher(Sessions, Disposal):
             # claimed, so there is nothing to be atomic about any more. Before the
             # build, because every row the graph records names the turn.
             turn = session.allocate_turn(request.turn_id)
-            ledger = Ledger(turn.id, earlier) if earlier is not None else None
+            ledger = (
+                Ledger(turn.id, earlier, resumed=resume is not None)
+                if earlier is not None
+                else None
+            )
             built = self._graph_for(
                 request,
                 capabilities=allowed,
@@ -998,7 +1002,13 @@ class Kingfisher(Sessions, Disposal):
             # A resume adds no message: it continues a superstep that already has
             # everything it needs, and a new user turn appended there would be one
             # the model never saw asked.
-            message=turn_message(asked, placement.placed) if asked else "",
+            message=(
+                turn_message(
+                    asked, placement.placed, earlier.since if earlier is not None else ()
+                )
+                if asked
+                else ""
+            ),
             session=session,
             turn=turn,
             logger=logger,

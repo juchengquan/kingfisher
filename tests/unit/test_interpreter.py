@@ -641,5 +641,5 @@ def test_no_sandbox_outlives_a_turn_in_which_a_helper_reached_for_it(scripted):
         _close_every_interpreter()
 
     evaluated = [e.text for e in events if e.kind == "tool_result" and e.tool == "eval"]
-    assert "<result>2</result>" in evaluated, "the agent's own eval never ran"
+    assert "<result>2</result>\n[A-0001]" in evaluated, "the agent's own eval never ran"
     assert not remaining, "a sandbox outlived the turn that opened it"

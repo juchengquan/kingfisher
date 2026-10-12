@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
@@ -134,6 +134,9 @@ def entry_id(number: int) -> str:
 
 _ENTRY_ID = re.compile(r"A-(\d+)")
 
+#: On the closing line of a turn that resumed a paused one, and only there.
+RESUMED = "resumed"
+
 
 @dataclass(frozen=True)
 class KeptLedger:
@@ -149,6 +152,10 @@ class KeptLedger:
     #: subagent paused at a gate finishes in the next turn, and its answer is
     #: recorded there, after the entries its run made before the pause.
     runs: Mapping[str, tuple[Listed, ...]] = field(default_factory=dict)
+    #: The entries recorded since the last user message, in the order written. A
+    #: resume adds no message, so that is every turn back to and including the last
+    #: one that was not a resume.
+    since: tuple[LedgerEntry, ...] = ()
 
 
 def read_ledger(harness: Any) -> Steps[KeptLedger]:
@@ -162,14 +169,19 @@ def _kept(text: str) -> KeptLedger:
     last = 0
     paths: set[str] = set()
     runs: dict[str, list[Listed]] = {}
+    since: list[LedgerEntry] = []
+    # Each turn's entries, until its closing line says whether it was a resume.
+    unclosed: dict[str, list[LedgerEntry]] = {}
     for line in text.splitlines():
         try:
             row = json.loads(line)
         except ValueError:
-            # Dropped rather than refused. A backend has no rename, so a turn that died
-            # writing the ledger can leave half a line, and refusing it would refuse every
-            # turn after. Its rows were never shown in a transcript, which is written
-            # after this file, so the numbers they held are free to be given again.
+            # Dropped rather than refused. Every turn rewrites the whole file and a
+            # backend has no rename, so a crash mid-write can cut it anywhere, earlier
+            # turns' rows included, and refusing what is left would refuse every turn
+            # after. A number lost that way may be given again though a transcript
+            # already shows it stamped, and its file is swept. Accepted, as the
+            # transcript's own exposure to a crash mid-write is.
             continue
         if not isinstance(row, dict):
             continue
@@ -179,19 +191,48 @@ def _kept(text: str) -> KeptLedger:
         if isinstance(row.get("path"), str):
             paths.add(row["path"])
         if isinstance(row.get("run"), str) and isinstance(row.get("access"), list):
-            runs.setdefault(row["run"], []).append(
-                tuple(one if isinstance(one, str) else tuple(one) for one in row["access"])
-            )
+            runs.setdefault(row["run"], []).append(_listed(row["access"]))
+        if (entry := _entry(row)) is not None:
+            unclosed.setdefault(entry.turn, []).append(entry)
+        elif "id" not in row and isinstance(row.get("turn"), str):
+            # By the turn a row names rather than where it sits: rows a crash left
+            # without their closing line are followed by the next turn's, and would
+            # be counted as its own.
+            closed = unclosed.pop(row["turn"], [])
+            since = [*since, *closed] if row.get(RESUMED) else closed
     return KeptLedger(
         lines=tuple(lines),
         last=last,
         paths=frozenset(paths),
         runs={run: tuple(found) for run, found in runs.items()},
+        since=tuple(since),
     )
 
 
+def _listed(access: list[Any]) -> Listed:
+    return tuple(one if isinstance(one, str) else tuple(one) for one in access)
+
+
+_FIELDS = tuple(one.name for one in fields(LedgerEntry))
+
+
+def _entry(row: Mapping[str, Any]) -> LedgerEntry | None:
+    """A row as the entry it was written from, or `None` for a closing line."""
+    if not all(name in row for name in _FIELDS):
+        return None
+    held = {name: row[name] for name in _FIELDS}
+    if isinstance(held["access"], list):
+        held["access"] = _listed(held["access"])
+    return LedgerEntry(**held)
+
+
 def write_ledger(
-    harness: Any, earlier: KeptLedger, entries: Sequence[LedgerEntry], *, turn: str
+    harness: Any,
+    earlier: KeptLedger,
+    entries: Sequence[LedgerEntry],
+    *,
+    turn: str,
+    resumed: bool = False,
 ) -> Steps[None]:
     """Replace the ledger with what it held, this turn's rows, and this turn's closing line.
 
@@ -201,7 +242,7 @@ def write_ledger(
     rows = [
         *earlier.lines,
         *(json.dumps(asdict(entry), ensure_ascii=False) for entry in entries),
-        json.dumps({"turn": turn}),
+        json.dumps({"turn": turn, **({RESUMED: True} if resumed else {})}),
     ]
     yield from harness.store(LEDGER_FILE, ("\n".join(rows) + "\n").encode("utf-8"))
 

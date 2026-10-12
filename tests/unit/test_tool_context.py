@@ -676,7 +676,7 @@ def test_a_turn_the_service_runs_hands_the_tool_its_sessions_backend(scripted):
 
     events = list(kf.stream(Request("go", agent="only", session_id=_session(scripted))))
 
-    assert _results(events) == [("first_line", "alpha")]
+    assert _results(events) == [("first_line", "alpha\n[A-0001]")]
 
 
 def test_a_resumed_turn_is_handed_it_again(scripted):
@@ -702,7 +702,7 @@ def test_a_resumed_turn_is_handed_it_again(scripted):
         )
     )
 
-    assert _results(events) == [("first_line", "alpha")]
+    assert _results(events) == [("first_line", "alpha\n[A-0001]")]
 
 
 def test_a_graph_the_caller_built_is_driven_with_no_context_at_all(cfg):

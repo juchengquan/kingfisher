@@ -3,13 +3,15 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+from kingfisher.application.turn import ledger_delta
 from kingfisher.infrastructure.harness.kinds.subagents import as_subagent
 from kingfisher.infrastructure.prompting import (
     USER_PROMPT_FILE,
     render_system_prompt,
     system_prompt,
 )
-from kingfisher.layout import INPUTS, OUTPUTS, SCRATCH
+from kingfisher.infrastructure.session_store import entry_id
+from kingfisher.layout import INPUTS, OUTPUTS, RESULTS_ROUTE, SCRATCH
 from tests.conftest import a_subagent
 
 
@@ -75,6 +77,21 @@ def test_the_prompt_names_the_folders_deepagents_writes_on_its_own(cfg, session_
 
     for folder in ("large_tool_results", "conversation_history"):
         assert f"`{root}/{folder}/`" in text, folder
+
+
+def test_the_prompt_names_a_recorded_result_as_the_ledger_does():
+    """The folder, the id and the tag are each the recorder's or the delta's spelling;
+    renamed on one side alone, the agent is told to look for something never written.
+
+    Read off the code that writes each, since a literal here would be renamed along
+    with the prompt, or not at all, and pass either way.
+    """
+    text = render_system_prompt()
+    tag = ledger_delta(()).splitlines()[0]
+
+    assert f"`{RESULTS_ROUTE}`" in text
+    assert f"`[{entry_id(42)}]`" in text
+    assert f"`{tag}`" in text
 
 
 def test_nothing_the_agent_is_told_sends_it_to_a_run_directory():

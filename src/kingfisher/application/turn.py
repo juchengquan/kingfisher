@@ -6,11 +6,13 @@ from dataclasses import dataclass
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.domain.result import PendingDecision, RunEvent
+from kingfisher.domain.result import LedgerEntry, PendingDecision, RunEvent
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.layout import INPUTS_ROUTE, SCRATCH, SCRATCH_ROUTE
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from kingfisher.config import Config
     from kingfisher.domain.transcript import Message
 
@@ -83,12 +85,20 @@ class Prepared:
     subagent_only: tuple[str, ...] = ()
 
 
-def turn_message(task: str, placed: tuple[str, ...]) -> str:
-    """The task, plus this turn's facts and nothing more."""
+def turn_message(
+    task: str, placed: tuple[str, ...], since: Sequence[LedgerEntry] = ()
+) -> str:
+    """The task, plus this turn's facts and nothing more.
+
+    `since` is what the ledger recorded after the last user message.
+    """
     # Named because `/inputs` changed under a session the agent may already have
     # looked at. It is also where a caller's files for *this* request land now --
     # they used to have a turn directory of their own, and this line said where.
     arrived = f" New files in {INPUTS_ROUTE}: {', '.join(placed)}." if placed else ""
+    # Here and never in the system prompt, which is the cached prefix: a line that
+    # changes every turn there would miss the cache on every call.
+    delta = f"\n\n{ledger_delta(since)}" if since else ""
     # Both names for the one directory. `system.md` states the rule -- drop the
     # leading slash for the shell -- and stating it there was not enough: over
     # ten runs of one task the agent passed the virtual path to `execute` 4
@@ -103,7 +113,52 @@ def turn_message(task: str, placed: tuple[str, ...]) -> str:
         f"{task}\n\n"
         f"{SCRATCH_ROUTE} is yours to work in (from the shell, {SCRATCH})."
         f"{arrived}"
+        f"{delta}"
     )
+
+
+_KB = 1024
+
+
+def ledger_delta(entries: Sequence[LedgerEntry]) -> str:
+    """Entries the ledger recorded, a line each.
+
+    Each `task` answer is followed by its run's entries, indented: the parent is shown
+    where they are and never what they hold. A run whose `task` never answered -- a
+    pause superseded, a turn cut short -- has nothing to sit under, so its entries
+    follow the rest, each saying why.
+    """
+    under: dict[str, list[LedgerEntry]] = {}
+    for entry in entries:
+        if entry.run is not None:
+            under.setdefault(entry.run, []).append(entry)
+    lines: list[str] = []
+    for entry in entries:
+        if entry.run is None:
+            lines.append(_delta_line(entry))
+            lines.extend(f"  {_delta_line(one)}" for one in under.pop(entry.call, ()))
+    lines.extend(
+        f"{_delta_line(one)}  (its task never answered)" for one in entries if one.run in under
+    )
+    return "\n".join(["<ledger_delta>", *lines, "</ledger_delta>"])
+
+
+def _delta_line(entry: LedgerEntry) -> str:
+    called = f"{entry.tool} {entry.args}" if entry.args else entry.tool
+    return f"{entry.id} {called} -> {_size(entry.size)}  {entry.path or 'not kept'}"
+
+
+def _size(size: int) -> str:
+    """Bytes under a KB, the nearest KB under an MB, and MB to a tenth.
+
+    The unit is chosen after rounding, so a size just short of an MB never reads as
+    1024 KB.
+    """
+    if size < _KB:
+        return f"{size} B"
+    if (kb := (size + _KB // 2) // _KB) < _KB:
+        return f"{kb} KB"
+    return f"{size / (_KB * _KB):.1f} MB"
 
 
 def consume(

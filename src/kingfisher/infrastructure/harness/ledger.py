@@ -27,9 +27,12 @@ class Ledger:
     turn: the graph is built per turn too.
     """
 
-    def __init__(self, turn: str, earlier: KeptLedger) -> None:
+    def __init__(self, turn: str, earlier: KeptLedger, *, resumed: bool = False) -> None:
         self.turn = turn
         self.earlier = earlier
+        #: Whether this turn answers a paused one. Its closing line says so, because a
+        #: resume adds no user message and the next one's delta reaches back past it.
+        self.resumed = resumed
         # Calls made together run on threads, each with its own recorder.
         self._lock = threading.Lock()
         self._entries: list[LedgerEntry] = []
@@ -74,7 +77,9 @@ def keep_ledger(files: Any, harness: Any, ledger: Ledger) -> Steps[tuple[LedgerE
     until the ledger is written.
     """
     entries = yield from _repointed(files, ledger.entries)
-    yield from write_ledger(harness, ledger.earlier, entries, turn=ledger.turn)
+    yield from write_ledger(
+        harness, ledger.earlier, entries, turn=ledger.turn, resumed=ledger.resumed
+    )
     yield from _swept(files, ledger.earlier.paths | {e.path for e in entries if e.path})
     return entries
 

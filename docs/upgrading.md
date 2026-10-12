@@ -17,6 +17,34 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## The model sees what its tools returned, after #709
+
+What the ledger records is now shown to the model, as well as to the caller.
+
+- **A recorded result ends in its id.** The model is handed it with a last line such
+  as `[A-0001]`, and a result made of content blocks gains a text block holding
+  `\n[A-0001]`. So do the `tool_result` events a caller streams and the transcript,
+  which hold what the model was handed, and so does `RunResult.answer` for a turn a
+  bound cut short just after a tool ran, which was that tool's result before too. A
+  file tool's result, a failed call's and anything from a graph you supplied carry
+  none. The result file and `LedgerEntry.size` are the result without it. deepagents'
+  copy of an offloaded result, where such an entry's `path` points, ends in it.
+- **The user message can end in a `<ledger_delta>` block**, after the scratchpad line
+  and the new-files line: a line for each entry recorded since the previous user
+  message, with what a subagent's tools returned indented under its answer. A message
+  after a turn that recorded nothing has none, and a resume adds no message to carry
+  one.
+- **A resume's closing line in `.harness/ledger.jsonl` is
+  `{"turn": ..., "resumed": true}`.** An asked turn's is unchanged. A backend of your
+  own has nothing new to do.
+- **`turn_message` takes a third argument**, the entries to list, and lists none
+  without it. `KeptLedger.since` holds them for a turn, and `Ledger` and
+  `write_ledger` take `resumed=`.
+- **`system.md` has a section more, *What your tools returned***, explaining the id,
+  the delta and where each result's file is. Its text is the same every turn, so the
+  cached prefix holds. Anything that compares the rendered system prompt against a
+  copy sees it change.
+
 ## A turn records what its tools returned, after #708
 
 Every turn kingfisher builds the graph for now records each tool result the model was

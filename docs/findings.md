@@ -216,6 +216,16 @@ for the next reader who reaches for one.*
   `grep` tool's description says offloaded results are under `/large_tool_results/`
   "by default", and does not change with the root. `tests/unit/test_offloads.py`
   drives both evictions. *(2026-10-11, deepagents 0.7.6.)*
+- **Eviction joins a block list's text with newlines, and keeps what it was handed.**
+  `_extract_text_from_message` joins every text block with `\n`, for the size check
+  and for the file, where langchain's `.text` and kingfisher's transcript join them
+  with nothing. The stub then stands in for all the text blocks: a plain string where
+  every block was text, and one text block ahead of the media blocks otherwise. A
+  line appended by a `wrap_tool_call` inside eviction, as the ledger's id is, is the
+  stub's last line in both shapes and the offloaded file's too.
+  `test_the_id_outlasts_eviction_of_a_result_made_of_blocks` and
+  `test_an_offloaded_result_is_pointed_at_deepagents_copy` drive it. *(2026-10-12,
+  deepagents 0.7.6, langchain-core 1.5.5.)*
 - **Its trigger counts the system prompt and tools; its `keep` does not.** With a
   window small enough that those approach three quarters of it, a profile-based
   trigger fires before every call: the stock prompt (about 2.4k tokens) at a 3.2k
