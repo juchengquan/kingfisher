@@ -1826,6 +1826,48 @@ filesystem rather than in graph state. `findings.md` has the measurement and
 `tests/unit/test_tool_returns.py` pins the behaviour, so a langchain change lands
 there rather than at a deployment's first tool call. *(2026-09-04.)*
 
+**A tool that creates a file saves it and returns where it went, never its contents.**
+A file is the purpose of an image generator, a chart, an export. Returned, it is its
+whole body in the model's context and nothing the caller can open; saved, it is one
+line. Output that is only a side effect of a tool's work -- a result that runs long --
+is middleware's: deepagents' eviction to `/scratchpad/large_tool_results/` handles it
+now, and a ledger may later. `guides/tools.md` gives the recipe under *A tool that
+creates a file*, and `bar_chart` and `csv_filter` ship following it.
+
+**There is no kingfisher helper.** A save helper was the alternative, and a tool calling
+`runtime.context.backend.upload_files` itself was preferred: the call is deepagents'
+and already documented, and the whole save is about ten lines. What a helper would have
+guarded is the one mistake that fails in silence -- `upload_files` hands a refused path
+back on the response's `error` rather than raising it, so a tool that does not look
+answers "Saved" for a file that is not there. That is held instead by the recipe
+carrying the check in its example code rather than in a warning after it, and by the
+two shipped tools, whose tests point each at `/inputs/` and expect a failure with
+nothing written; a test runs the guide's example the same way.
+
+**`save_as`, never `path`.** Optional: left out, the file goes to `/outputs/` under a
+name the tool picks, which is what the caller is handed back; given, it is a full
+virtual path and may name anywhere the turn may write, the session's rules refusing the
+rest. `path` was the obvious name and is taken -- kingfisher rewrites an argument called
+`path` to the host file a tool *reads*, and the backend refuses that as a host path.
+
+**An existing file is overwritten without a word.** Saying "replaced" was the
+alternative, and it costs every such tool a lookup before each save to find out. The
+agent chose the path, the default included, and can `ls` first when it cares.
+
+**An image is returned as a path, never as image blocks.** A block stays in the
+conversation and is sent again with every model call after it; `read_file` hands the
+image to the model when it wants to look.
+
+**No machine-readable copy of these facts.** The result line is for the model. A
+structured record of what a turn saved waits for the ledger's design, where it would be
+one shape for every tool rather than a convention each tool keeps. Nor does `system.md`
+gain a line: each tool's docstring says what its `save_as` does.
+
+These are the first shipped tools that write, which *A tool's path is the backend's
+path* gave as a reason a `path` under a write-denied scope is safe to hand over.
+Neither takes `path`; both write through `ToolContext` under the turn's rules, so that
+decision is untouched. *(2026-10-12.)*
+
 ## Tool failure
 
 **A workspace tool's exception is a failed tool result, not a dead run.**

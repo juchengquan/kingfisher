@@ -372,6 +372,110 @@ started it. And `runtime.context` is `None` when the deployment passed `graph=` 
 `Kingfisher`: a graph kingfisher did not build is driven the way its builder
 left it, so a tool written this way needs a graph kingfisher assembled.
 
+## A tool that creates a file
+
+A tool whose purpose is a file — a chart, a generated image, an export — saves the
+file and returns where it went, never the file itself. Returned, a chart is its whole
+markup in the model's context and nothing the caller can open; saved, it is one line.
+A result that is only long is a different case and not the tool's to manage:
+deepagents already saves one over about 20,000 tokens under
+`/scratchpad/large_tool_results/` and hands the model a stub naming it.
+
+There is no kingfisher helper for this. The tool saves through the backend above, in
+about ten lines, and keeps to one convention so that every such tool answers alike:
+
+- **An optional `save_as` argument.** Left out, the file goes to
+  `/outputs/<a name the tool chooses>`, which is what the caller is handed back when
+  the turn ends. Given, it is a full virtual path, such as `/scratchpad/try1.svg` for
+  a draft. It may name anywhere the turn may write, and the session's rules refuse
+  the rest — `/inputs/`, `/skills/`, `/.harness/`. Say so in the docstring, in a
+  sentence: the model learns the argument nowhere else.
+- **Not `path`.** That name is [a file the tool reads](#a-file-the-tool-reads-is-an-argument-called-path),
+  rewritten to a host path before the tool runs.
+- **Bytes, through `upload_files`**, with text encoded as UTF-8 first.
+- **The response's `error`, checked in the code.** A refused path is not raised. It
+  comes back on the response as `permission_denied` — `invalid_path` for one that
+  climbs out with `..`, `is_directory` for a folder — and nothing is written. A tool
+  that skips the check tells the model it saved a file that does not exist, and
+  nothing anywhere fails. Raise, as [a failing tool does](#when-a-tool-fails).
+- **A file already there is replaced without a word.** The agent chose the path.
+- **One line per file:** `Saved <name> (<type>, <size>) to <path>`, the size as a
+  person reads one, and after a dash a short note the tool writes itself when there
+  is something worth saying. A string, as [every result should be](#what-a-tool-returns).
+
+```python
+import csv
+import io
+from pathlib import PurePosixPath
+
+from langchain.tools import ToolRuntime
+
+from kingfisher import ToolContext
+
+
+def save_table(
+    columns: list[str],
+    rows: list[list[str]],
+    runtime: ToolRuntime[ToolContext],
+    save_as: str = "/outputs/table.csv",
+) -> str:
+    """Save a table as a CSV file, quoted properly. Use to hand over a table you
+    have built. `save_as` is where it goes, a full virtual path such as
+    `/scratchpad/draft.csv`; leave it out for `/outputs/table.csv`."""
+    out = io.StringIO()
+    csv.writer(out).writerows([columns, *rows])
+    data = out.getvalue().encode("utf-8")
+
+    (sent,) = runtime.context.backend.upload_files([(save_as, data)])
+    if sent.error:
+        raise OSError(f"not saved to {save_as}: {sent.error}")
+
+    name = PurePosixPath(save_as).name
+    return f"Saved {name} (CSV, {_size(len(data))}) to {save_as} — {len(rows)} rows"
+
+
+def _size(count: int) -> str:
+    if count < 1024:
+        return f"{count} B"
+    if count < 1024 * 1024:
+        return f"{count / 1024:.1f} KB"
+    return f"{count / 1024 / 1024:.1f} MB"
+
+
+TOOLS = [save_table]
+```
+
+The model reads `Saved table.csv (CSV, 44 B) to /outputs/table.csv — 3 rows`, or,
+pointed at `/inputs/`, a failed result:
+
+```
+Error: OSError: not saved to /inputs/table.csv: permission_denied
+```
+
+The shipped `bar_chart` and `csv_filter` are the same recipe on a file the tool reads
+first.
+
+**Several files are one call.** `upload_files` takes a list of pairs and answers one
+response per pair, in order, and a refused one does not stop the rest — so check
+every response, and let the failure say which files did land:
+
+```python
+sent = runtime.context.backend.upload_files([(chart_at, svg), (table_at, table)])
+failed = [f"{one.path}: {one.error}" for one in sent if one.error]
+if failed:
+    landed = ", ".join(one.path for one in sent if not one.error) or "nothing"
+    raise OSError(f"not saved: {'; '.join(failed)}; saved: {landed}")
+```
+
+On success, return one `Saved …` line per file, joined with newlines.
+
+**An image is a path too.** [The table above](#what-a-tool-returns) lets a tool return
+image blocks, and one that makes an image should not: a block stays in the
+conversation and is sent again with every model call after it, where a path costs a
+line. The agent opens the file with `read_file` when it wants to look — a `.png`,
+`.jpg`, `.gif` or `.webp` comes back as an image to a model that takes one, and an SVG
+as its markup.
+
 ## A tool is code, and it runs in the kingfisher process
 
 Not in the agent's sandbox, and not under the filesystem permissions. The backend
