@@ -1680,6 +1680,41 @@ session, which is what a caller who means no caller writes. `kingfisher list`
 stays exempt for the reason recorded beside it -- read-only, run by whoever has
 the policy file in front of them. *(2026-09-18.)*
 
+**A subagent's own line is a ceiling at build, where it had been one only on
+paper.** `formats.md` has said since audiences moved into the definitions that a
+subagent's `source_ids:` is its intrinsic ceiling -- who reaches it wherever it is
+used, and the default audience for its `tools`, `skills` and `subagents` entries --
+intersected with the parent's entry, and the field's first comment said it held even
+for a compiled subagent. The listing read it that way. The build never asked:
+`SubagentSpec.declares` had no caller, `as_subagent`, `compiled`, `subagent_skills`
+and `subagent_helpers` read the raw selections, and nothing turned a subagent away
+for its own line, so the agent's `declares` was the only place a caller's source ids
+narrowed a build. Never built rather than lost -- the commit that wrote the promise
+wrote `declares` beside it and no call to it.
+
+Measured through `build_agent` with the guide's own `reviewer` and a caller in `C`:
+a `reviewer` holding `sql_query`, told about a skill its entry keeps from `C`,
+consulting a helper the same way; a subagent written `source_ids: [A]` built because
+the agent named it; and a compiled declaration's `build` handed the tool its per-tool
+audience withholds. A caller in `A` got the identical build. The shipped `auditor`
+never showed it, because `analyst` narrows the same tools the same way and the
+agent's grant is the subagent's ceiling.
+
+The build follows the guide now. A subagent its own line does not reach is left out of
+what a request activates, as an entry the agent narrowed away is, and after the
+refusals, which are about what the request named and not about who sent it. What a
+built one holds goes through its `declares(held)` before the request's grant -- tools
+on both paths, skills, helpers -- while what is refused stays the file's own names, so
+a typo is refused whoever is calling. Helpers are narrowed by the activated set rather
+than by the grant, which may be `"*"` and says nothing about reach. `build_agent` had
+also rebound `held` to the walked tool names a dozen lines after reading it as the
+caller's, so that local is `guarded` now.
+
+The guide's sentence that such a subagent "reports what was withheld" was wrong in the
+other direction and is gone, with the same claim in `auditor.yaml`: out of reach reads
+as not offered, and the report names nothing source-id narrowing removed. The tests
+build the guide's example for `C` and the control for `A`. *(2026-10-12.)*
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds

@@ -17,6 +17,23 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## A subagent's own `source_ids` narrow what it is built with, after #705
+
+For a deployment with a `source_ids.yaml`. A subagent's own `source_ids:` line, and the
+audiences on its `tools:`, `skills:` and `subagents:` entries, now narrow it for each
+caller, as `formats.md` always said. Until now only `kingfisher list` read them.
+
+- **A subagent whose own `source_ids:` does not reach the caller is no longer built**,
+  where an agent names it or as another subagent's helper. It was built for every caller
+  the agent admitted.
+- **A subagent holds only the tools, skills and helpers its own entries give this
+  caller.** A compiled subagent's `build` is handed only the tools its per-tool audiences
+  admit.
+- Nothing changes where the agent's own audiences already narrow the same names, as the
+  shipped `analyst` does for `auditor`, nor in a deployment with no `source_ids.yaml`.
+- Prompts should cope with the shorter list, as `auditor`'s does: the caller is not told
+  what a subagent lacks.
+
 ## A definition naming subagents holds `task`, after #699
 
 An agent or subagent whose `subagents:` names anything, and whose `builtin_tools` is a

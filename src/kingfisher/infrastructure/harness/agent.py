@@ -362,7 +362,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # Every walked tool, not the granted ones: a request that activated none of
     # them cannot reach one, and narrowing this to the grant would mean building
     # the guard from a set that is computed after it.
-    held = frozenset(entry.name for entry in walked)
+    guarded = frozenset(entry.name for entry in walked)
     permissions = read_only_permissions()
     # The turn's backend under the turn's rules, and one of it: what a tool is handed as
     # `runtime.context.backend`, and what a tool's `path` is resolved through. Built
@@ -370,7 +370,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # below -- memory declined, skills narrowed -- applies to both.
     under_rules = PermittedBackend(backend, permissions)
     paths = SessionPaths(under_rules, sessions_root(cfg.workspace))
-    middleware: list[Any] = [TodoListMiddleware(), *tool_guards(held, paths)]
+    middleware: list[Any] = [TodoListMiddleware(), *tool_guards(guarded, paths)]
     extras: dict[str, Any] = {}
 
     # One answer to "are skills on", for this agent and for every subagent it
@@ -474,7 +474,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             **attached,
         )
 
-    defined, activated = _activated_subagents(cfg, capabilities, catalogue=roots)
+    defined, activated = _activated_subagents(cfg, capabilities, catalogue=roots, held=held)
     surface = _resolve_tools(
         str(roots.tools.root) if roots.tools.root is not None else "the catalogue",
         capabilities,
@@ -568,7 +568,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                 # a subagent asked only the request before this, so a workspace with
                 # skills off still handed one an index of the shared catalogue.
                 skills=(
-                    subagent_skills(defined[name], offered, capabilities.skills)
+                    subagent_skills(defined[name], offered, capabilities.skills, held=held)
                     if skills_on
                     else None
                 ),
@@ -589,6 +589,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                 private_skills=_private_skills(roots, name),
                 paths=paths,
                 run_on=wanted.get(name),
+                held=held,
                 extra_middleware=declared_middleware(
                     defined[name],
                     registry,
@@ -639,8 +640,10 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                         # cheap model quietly ran the expensive one.
                         inherited=mine if mine is not None else root,
                     )
+                    # `activated` rather than the grant, which may be `"*"`: a
+                    # helper out of this caller's reach was left out of it.
                     for helper in subagent_helpers(
-                        defined[name], defined, capabilities.subagents
+                        defined[name], defined, activated, held=held
                     )
                 ]
                 compiled[key] = _built(
@@ -693,7 +696,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             # the same guards around them. Without them a tool call through this
             # subagent reached the tool with its paths untranslated.
             "middleware": (
-                tool_guards(held, paths)
+                tool_guards(guarded, paths)
                 + ([ToolAllowlist(permitted)] if permitted is not None else [])
                 + _deployment_middleware(
                     agent, registry, capabilities.middlewares, provisions=agent_provisions

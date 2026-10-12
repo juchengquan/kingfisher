@@ -6,6 +6,7 @@ from dataclasses import replace
 
 import pytest
 import yaml
+from deepagents.middleware import SubAgentMiddleware
 
 from kingfisher import backend_at, default_backends
 from kingfisher.application.service import Kingfisher
@@ -13,9 +14,19 @@ from kingfisher.domain.access import UNSCOPED, AccessError, parse
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.harness.middlewares.narrowing import ToolAllowlist
 from kingfisher.infrastructure.steps import drive
 from kingfisher.infrastructure.workspace import ensure_session_layout
-from tests.conftest import an_agent, harness_in, tools_dir
+from tests.conftest import (
+    an_agent,
+    declared_subagents,
+    dispatched,
+    harness_in,
+    middleware_of,
+    subagent_of,
+    subagents_dir,
+    tools_dir,
+)
 
 TOOL = '''
 def line_count(path: str) -> str:
@@ -490,3 +501,209 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
 
     assert any(name.endswith("::audit") for name in advertised)
     assert any(name.endswith("::review") for name in advertised)
+
+
+# -- a subagent's own audiences, wherever it is used ------------------------
+
+DELEGATED_TOOL = '''
+def {name}(q: str) -> str:
+    """{name}."""
+    return "0"
+
+
+TOOLS = [{name}]
+'''
+
+#: `formats.md`'s example, with a skill and a helper written the same way, and one
+#: helper -- `insider` -- that its own line rather than this entry keeps from `C`.
+REVIEWER = """name: reviewer
+description: Reviews.
+source_ids: [A, B, C]
+tools:
+  - name: sql_query
+    source_ids: [A, B]
+  - name: http_fetch
+    source_ids: [A, B, C]
+skills:
+  - name: audit
+    source_ids: [A, B]
+  - name: review
+subagents:
+  - name: second-opinion
+    source_ids: [A, B]
+  - plain-helper
+  - insider
+system_prompt: |
+  You review.
+"""
+
+OPEN_TO_ALL = """name: {name}
+description: Helps.
+source_ids: [A, B, C]
+system_prompt: |
+  You help.
+"""
+
+INSIDER = """name: insider
+description: Only for A.
+source_ids: [A]
+system_prompt: |
+  You keep it.
+"""
+
+COMPILED = '''
+def _build(model, tools):
+    from langchain.agents import create_agent
+
+    return create_agent(model, tools)
+
+
+SUBAGENTS = [
+    {
+        "name": "profiler",
+        "description": "Profiles.",
+        "source_ids": ["A", "B", "C"],
+        "tools": [{"name": "sql_query", "source_ids": ["A"]}, "http_fetch"],
+        "build": _build,
+    },
+    {
+        "name": "ledger",
+        "description": "Only for A.",
+        "source_ids": ["A"],
+        "build": _build,
+    },
+]
+'''
+
+#: Names every subagent itself and grants both skills, so nothing a subagent loses
+#: below is the agent's doing.
+BOSS = """name: boss
+description: Delegates.
+source_ids: [A, B, C]
+skills: [audit, review]
+subagents: [reviewer, second-opinion, plain-helper, insider, profiler, ledger]
+system_prompt: |
+  You delegate.
+"""
+
+
+@pytest.fixture
+def delegating(cfg):
+    """An agent every caller opens, delegating to subagents whose own lines narrow `C`."""
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    for name in ("sql_query", "http_fetch"):
+        (tools_dir(cfg) / f"{name}.py").write_text(
+            DELEGATED_TOOL.format(name=name), encoding="utf-8"
+        )
+    for name in ("audit", "review"):
+        folder = cfg.skills_dir / name
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "SKILL.md").write_text(SKILL.format(name=name), encoding="utf-8")
+    subagents = subagents_dir(cfg)
+    subagents.mkdir(parents=True, exist_ok=True)
+    (subagents / "reviewer.yaml").write_text(REVIEWER, encoding="utf-8")
+    for name in ("second-opinion", "plain-helper"):
+        (subagents / f"{name}.yaml").write_text(OPEN_TO_ALL.format(name=name), encoding="utf-8")
+    (subagents / "insider.yaml").write_text(INSIDER, encoding="utf-8")
+    (subagents / "graphs.py").write_text(COMPILED, encoding="utf-8")
+    agents = cfg.catalogue_roots["agents"]
+    agents.mkdir(parents=True, exist_ok=True)
+    (agents / "boss.yaml").write_text(BOSS, encoding="utf-8")
+    return replace(cfg, access=vocabulary("source_ids: [A, B, C]\n"), skills_enabled=True)
+
+
+def delegated(cfg, source_ids: tuple[str, ...]):
+    """What `boss` is built with for one caller, as `create_deep_agent` received it."""
+    kf = Kingfisher(cfg, backends=default_backends)
+    session = session_at(kf, "as-" + "".join(source_ids))
+    return build_agent(
+        kf.cfg,
+        agent=kf.agent_named("boss", source_ids=source_ids),
+        held=kf.held_for(source_ids),
+        backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
+        capabilities=kf._effective_grants(source_ids),
+        catalogue=kf.catalogue,
+        checkpointer=None,
+    )
+
+
+def holding(built, name: str) -> dict[str, set[str]]:
+    """The tools, allowlist, skills and helpers one assembled subagent was handed."""
+    found: dict[str, set[str]] = {
+        "tools": {
+            getattr(one, "name", getattr(one, "__name__", ""))
+            for one in subagent_of(built, name).get("tools", ())
+        },
+        "allowed": set(),
+        "skills": set(),
+        "helpers": set(),
+    }
+    for one in middleware_of(built, name):
+        if isinstance(one, ToolAllowlist):
+            found["allowed"] = set(one._allowed)
+        elif type(one).__name__ == "NarrowedSkills":
+            found["skills"] = {skill.rsplit("::", 1)[-1] for skill in one._allowed}
+        elif isinstance(one, SubAgentMiddleware):
+            found["helpers"] = {helper["name"] for helper in one._subagents}
+    return found
+
+
+def built_names(built) -> set[str]:
+    return {spec["name"] for spec in declared_subagents(built)}
+
+
+def test_a_caller_in_c_gets_a_reviewer_holding_http_fetch_and_not_sql_query(delegating):
+    """`formats.md`'s own example: the build read `reviewer`'s raw `tools:` and handed a
+    caller in `C` the `sql_query` its own entry keeps from them.
+    """
+    held = holding(delegated(delegating, ("C",)), "reviewer")
+
+    assert held["tools"] == {"http_fetch"}
+    assert "http_fetch" in held["allowed"]
+    assert "sql_query" not in held["allowed"]
+
+
+def test_a_subagents_own_audiences_narrow_its_skills_and_helpers_too(delegating):
+    """The other two audienced fields were read raw as well, and a helper whose own line
+    excludes the caller was built under a parent that named it.
+    """
+    built = delegated(delegating, ("C",))
+    held = holding(built, "reviewer")
+
+    assert held["skills"] == {"review"}
+    assert held["helpers"] == {"plain-helper"}
+    # `reviewer`'s entry narrows `reviewer`'s context and not the agent's.
+    assert "second-opinion" in built_names(built)
+
+
+@pytest.mark.parametrize("name", ["insider", "ledger"])
+def test_a_subagent_whose_own_source_ids_exclude_the_caller_is_not_built(delegating, name):
+    """An agent naming a subagent built it for every caller that agent admitted, a
+    document and a compiled declaration alike, whatever the subagent's own line said.
+    """
+    assert name not in built_names(delegated(delegating, ("C",)))
+
+
+def test_a_compiled_subagent_is_handed_only_the_tools_its_audiences_admit(delegating):
+    """`build` was handed every tool the declaration listed, its per-tool audience unread."""
+    graph = subagent_of(delegated(delegating, ("C",)), "profiler")["runnable"]
+
+    assert "http_fetch" in dispatched(graph)
+    assert "sql_query" not in dispatched(graph)
+
+
+def test_a_caller_every_audience_admits_gets_everything_each_subagent_names(delegating):
+    """The control: every absence above also holds for a build that withheld these names
+    from everyone.
+    """
+    built = delegated(delegating, ("A",))
+    held = holding(built, "reviewer")
+
+    assert held["tools"] == {"http_fetch", "sql_query"}
+    assert {"http_fetch", "sql_query"} <= held["allowed"]
+    assert held["skills"] == {"audit", "review"}
+    assert held["helpers"] == {"second-opinion", "plain-helper", "insider"}
+    assert {"insider", "ledger"} <= built_names(built)
+    assert {"http_fetch", "sql_query"} <= set(
+        dispatched(subagent_of(built, "profiler")["runnable"])
+    )

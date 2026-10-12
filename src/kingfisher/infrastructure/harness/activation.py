@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from deepagents import FilesystemPermission
 
 from kingfisher.config import ConfigError
+from kingfisher.domain.access import reaches
 from kingfisher.domain.capabilities import ALL, Capabilities, refuse_unoffered
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.backend import bundled_skill_mounts
@@ -161,6 +162,7 @@ def _activated_subagents(
     capabilities: Capabilities,
     *,
     catalogue: Definitions | None = None,
+    held: frozenset[str] | None = None,
 ) -> tuple[Mapping[str, Any], tuple[str, ...]]:
     """Which subagents this request wired, and every definition available."""
     if capabilities.subagents is None:
@@ -184,4 +186,9 @@ def _activated_subagents(
     # and naming two that do are different mistakes, and the first would
     # otherwise be reported as the second.
     refuse_two_of_a_name(activated, subject="this request")
+    # A subagent's own `source_ids:` holds wherever it is used, so one this caller
+    # cannot reach is dropped as an agent's narrowed entry is -- after the refusals,
+    # which are about what the request named and must not depend on who sent it.
+    if held is not None:
+        activated = tuple(n for n in activated if reaches(defined[n].source_ids, held))
     return defined, activated

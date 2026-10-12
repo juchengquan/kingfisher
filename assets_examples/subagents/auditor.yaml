@@ -17,7 +17,7 @@ tools:
     # The compounding case, in three lines. Reached on `audit_log` alone, this
     # subagent holds `line_count` and not `sql_query`; reached on `sales_db` it
     # holds both. Nothing is refused, nothing errors -- it simply runs with
-    # less, and the run reports `tool sql_query` as withheld.
+    # less, and the caller is not told: out of reach reads as not offered.
     source_ids: [sales_db]
   # The same requirement as `agents/analyst.yaml` writes, by the same name --
   # which is the whole argument for naming one. Two definitions, one place to

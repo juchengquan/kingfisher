@@ -51,9 +51,15 @@ def _identities(registry: SkillRegistry, selection: Selection) -> Selection:
 
 
 def subagent_skills(
-    spec: SubagentSpec, offered: SkillRegistry, activated: Selection
+    spec: SubagentSpec,
+    offered: SkillRegistry,
+    activated: Selection,
+    *,
+    held: frozenset[str] | None = None,
 ) -> Selection:
     """Which skills a subagent is told about, or `None` for none."""
+    # The file's own names are refused, not the caller's share of them: a typo is
+    # the file's fault whoever is asking.
     if spec.skills is not None and spec.skills != ALL:
         # `None` is none and `ALL` is whatever the request itself has -- neither
         # names anything, so neither can name something the workspace lacks.
@@ -74,11 +80,16 @@ def subagent_skills(
     # so a name left as written reached the subagent as an empty index: every
     # `skills:` a subagent declared was inert, silently, whichever way it was
     # spelled.
-    return narrowed(_identities(offered, spec.skills), by=_identities(offered, activated))
+    reached = spec.declares(held).skills
+    return narrowed(_identities(offered, reached), by=_identities(offered, activated))
 
 
 def subagent_helpers(
-    spec: SubagentSpec, defined: Mapping[str, Any], activated: Selection
+    spec: SubagentSpec,
+    defined: Mapping[str, Any],
+    activated: Selection,
+    *,
+    held: frozenset[str] | None = None,
 ) -> tuple[str, ...]:
     """Which subagents this one may consult, of the ones it names."""
     if spec.subagents is None:
@@ -90,7 +101,7 @@ def subagent_helpers(
     refuse_unoffered(
         named, offered=defined, kind="subagent", subject=f"subagent {spec.name!r}"
     )
-    return tuple(narrowed(named, by=activated) or ())
+    return tuple(narrowed(spec.declares(held).subagents, by=activated) or ())
 
 
 def _host(url: str) -> str:
@@ -181,6 +192,7 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     paths: SessionPaths | None = None,
     run_on: RunOn | None = None,
     default_model: Any = None,
+    held: frozenset[str] | None = None,
 ) -> dict[str, Any]:
     """A subagent the workspace built itself, wrapped the way deepagents takes one."""
     model = model_object(
@@ -203,7 +215,7 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     # `spelt` for the same reason the parent needs it: this definition may have
     # written `where::what` for a tool no other file defines, and `narrowed`
     # would drop it silently rather than hand the subagent nothing loudly.
-    written = Offering.of(catalogue).spelt(spec.tools)
+    written = Offering.of(catalogue).spelt(spec.declares(held).tools)
     shared = select(narrowed(written, by=tools), catalogue)
     # Bundle first and the catalogue's namesake dropped, which is the assembled
     # path's rule read here rather than copied: `build` is handed one list and
@@ -283,6 +295,9 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     #: answer. `None` is the ordinary case: the file decides.
     run_on: RunOn | None = None,
     extra_middleware: list[Any] | None = None,
+    #: The caller's source ids, for this definition's own audiences. `tools` above is
+    #: the agent's ceiling, narrowed by the agent's audiences and never by these.
+    held: frozenset[str] | None = None,
 ) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`."""
     if spec.build is not None:
@@ -299,6 +314,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
             paths=paths,
             run_on=run_on,
             default_model=default_model,
+            held=held,
         )
 
     subagent: dict[str, Any] = {
@@ -318,7 +334,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # applied here to exist at all; deciding what it *is* does not belong here.
     allowed = ceiling(
         spec.builtin_tools,
-        Offering.of(catalogue).spelt(spec.tools),
+        Offering.of(catalogue).spelt(spec.declares(held).tools),
         granted_builtin=builtin_tools,
         granted_tools=tools,
         subject=f"subagent {spec.name!r}",
