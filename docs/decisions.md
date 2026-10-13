@@ -2321,12 +2321,37 @@ summary-from-memory the ledger exists to replace.
 **What the model sees goes in the user message, never the system prompt.** The system
 prompt is the cached prefix, and anything there that moves with the ledger misses the
 cache on every call. `system.md` has fixed text, *What your tools returned*, explaining
-the id, both blocks and where the files are. A new message carries `<ledger_delta>`, the
-rows since the previous user message, a subagent's indented under its answer so the
-parent sees where they are and never what they hold. A resume adds no message, so
-*since* reaches back to the last turn that was not one, and a run whose `task` never
-answered has its rows after the rest with a note. There is no block when nothing was
-recorded, on a resume, or for a graph the deployment supplied.
+the id, both blocks and where the files are, and that text reaches the agent's prompt
+alone. A new message carries `<ledger_delta>`, the rows since the previous user message,
+a subagent's indented under its answer so the parent sees where they are and never what
+they hold. A resume adds no message, so *since* reaches back to the last turn that was
+not one, and a run whose `task` never answered has its rows after the rest with a note.
+There is no block when nothing was recorded, on a resume, or for a graph the deployment
+supplied.
+
+**A subagent reads the id on its results and is told nothing about it, and that is left
+as it is.** Measured: the agent's prompt is 9,543 characters and explains the id; a
+subagent's is 1,902 and does not, being its own `system_prompt:` and the workspace's
+`PROMPT.md`. This is not an oversight but two decisions meeting, each deliberate and
+each held by a rule -- the recorder stamps every graph the build makes, and a subagent
+is given its own text and nothing of the harness's, asserted byte for byte and again by
+length.
+
+The stamp is addressed to the agent rather than to the subagent that passes it. The
+fixed text above tells the agent that a subagent's own results are indented under its
+answer, so the ids are the agent's handle on delegated work; a subagent seeing the
+trailing line in passing is incidental to that.
+
+Both ways of closing it cost more than it does. Explaining the id to a subagent means
+harness prose in every subagent's prompt, which is the thing those two rules refuse --
+and the section entire cannot be the text sent, since two of its four paragraphs
+describe the `<ledger_delta>` and `<ledger_index>` blocks, which arrive in a message to
+the agent and never to a subagent, so a subagent would be handed two claims that are
+false for it. Not stamping inside a subagent costs the other direction: deepagents keeps
+an evicted result with the id on the end, and *grep for the `[A-0042]` line* is how the
+prompt says to find one too long to show whole, so an unstamped subagent result would be
+the one nothing could find. *(2026-10-13, from an architecture review; the alternatives
+were built far enough to price them.)*
 
 **After a summary, the index replaces the delta, and nothing estimates size.** The delta
 lists only what is new, and the messages that listed the rest are what the summary
