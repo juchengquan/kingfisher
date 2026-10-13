@@ -479,6 +479,40 @@ def test_a_keys_file_that_is_named_and_wrong_refuses_to_start(tmp_path, body, sa
     assert str(named) in str(refused.value)
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        "minimax: {planted}: oops\n",
+        "gateway: [{planted}\n",
+        "models:\n\tminimax: {planted}\n",
+    ],
+    ids=["stray-colon", "unclosed-bracket", "tab-indent"],
+)
+def test_a_malformed_keys_file_is_refused_without_printing_the_key(tmp_path, body):
+    """PyYAML reproduces the source line it stopped on, caret and all, and in a keys
+    file that line is a key -- so the one message saying the file is wrong printed the
+    secret the file exists to keep out of everything else, and the command prints it.
+
+    Three shapes a person actually types, because what gets quoted depends on where the
+    parser stopped. The `not-yaml` case above cannot see this: its value is harmless, so
+    it passed with the leak present.
+    """
+    planted = "sk-live-DO-NOT-PRINT-0123456789"
+    named = keys_at(tmp_path, body.format(planted=planted))
+
+    with pytest.raises(ConfigError, match="not valid YAML") as refused:
+        load(written(tmp_path, TWO_WAYS), OTHER, keys_file=named)
+
+    said = str(refused.value)
+    # The prefix and not only the whole string: PyYAML truncates a long line in the
+    # snippet it quotes, so the tab case leaked all but the last nine characters of this
+    # key while still not containing it whole -- asserting the whole secret was absent
+    # passed on that case with the leak in place, which is how this assertion was found.
+    assert "sk-live" not in said, "the refusal printed part of the key"
+    assert planted not in said, "the refusal printed the key"
+    assert "line" in said, "nothing in the refusal says where to look"
+
+
 def test_a_keys_file_it_cannot_read_refuses_to_start(tmp_path):
     named = keys_at(tmp_path)
     named.chmod(0)

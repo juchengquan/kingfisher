@@ -116,6 +116,29 @@ def _mapping(value: Any, where: str) -> Mapping[str, Any]:
     return value
 
 
+def _without_the_line(exc: yaml.YAMLError) -> str:
+    """Why the parse failed, with the place instead of the text.
+
+    `str()` on one of PyYAML's marked errors reproduces the source line it stopped on,
+    with a caret under the column. For a keys file that line *is* a key, and a refusal
+    is printed -- so the one message saying the file is wrong undid the whole reason the
+    key was kept in a file of its own. A line and a column are what a person needs in
+    order to go and look, and they carry nothing.
+
+    Both parse sites use it. `models.yaml` refuses an `api_key:` field, but only once it
+    parses: malformed, it quoted whatever line it stopped on exactly as this one did.
+    """
+    problem = getattr(exc, "problem", None)
+    if not isinstance(problem, str):
+        # Not every `YAMLError` is a marked one, and the others put their detail in
+        # `str()` too. Nothing is said rather than guessing which parts of it are safe.
+        return "it could not be parsed"
+    mark = getattr(exc, "problem_mark", None)
+    if mark is None:
+        return problem
+    return f"{problem} (line {mark.line + 1}, column {mark.column + 1})"
+
+
 def _keys(path: Path | None) -> Mapping[str, str] | None:
     """The keys file's entries, or `None` where no keys file is named.
 
@@ -136,7 +159,7 @@ def _keys(path: Path | None) -> Mapping[str, str] | None:
     try:
         parsed = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        msg = f"{path}: not valid YAML: {exc}"
+        msg = f"{path}: not valid YAML: {_without_the_line(exc)}"
         raise ConfigError(msg) from exc
     if parsed is None:
         return {}
@@ -327,7 +350,7 @@ def load(
     try:
         parsed = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        msg = f"{path}: not valid YAML: {exc}"
+        msg = f"{path}: not valid YAML: {_without_the_line(exc)}"
         raise ConfigError(msg) from exc
 
     document = _mapping(parsed, str(path))

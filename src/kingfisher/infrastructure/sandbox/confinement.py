@@ -239,6 +239,11 @@ def _no_landlock_here() -> str:
     )
 
 
+def _keys_file(cfg: Config) -> tuple[Path, ...]:
+    """The keys file, where one is named, and nothing where none is."""
+    return () if cfg.models.keys_file is None else (cfg.models.keys_file,)
+
+
 def shell_confinement(cfg: Config, *, skills: tuple[Path, ...] | None = None) -> Confinement:
     """The confinement this deployment will actually use, from its `Config`."""
     return resolve(
@@ -247,7 +252,16 @@ def shell_confinement(cfg: Config, *, skills: tuple[Path, ...] | None = None) ->
         extra=cfg.shell_path_extra,
         skills=(cfg.skills_dir, *cfg.skills_mounts.values()) if skills is None else skills,
         definitions=tuple(cfg.catalogue_roots.values()),
-        authored=tuple(cfg.authored_files.values()),
+        # The keys file joins them here rather than in `authored_files`, which also
+        # decides what `ensure_layout` scaffolds -- and a keys file that does not exist
+        # must not be written. The reason to protect it is the one `profile` already
+        # gives for `models.yaml`: a shell that can edit it picks the key the next start
+        # sends, and one that can make it unparseable refuses the start outright.
+        #
+        # macOS only, and nothing is missing on Linux: there the whole workspace is
+        # writable and this list is what carves exceptions out of it, while both Linux
+        # fences grant the session and nothing above it.
+        authored=(*cfg.authored_files.values(), *_keys_file(cfg)),
         one_session=cfg.session_id is not None,
     )
 

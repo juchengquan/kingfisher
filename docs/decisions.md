@@ -1911,6 +1911,28 @@ is said rather than silent, so `seed` places `keys.yaml.example` beside
 it out. What every rule here leans on is measured in `guides/configuration.md`, under
 *What each fence hides*. *(2026-10-11, `where-the-command-line-keeps-its-keys.md`.)*
 
+**A refusal about a credentials file says where it failed, not what was there.** PyYAML
+reproduces the source line it stopped on, caret and all, so `not valid YAML: <error>`
+printed the key sitting on that line -- and the command prints the refusal. Measured on
+three shapes a person types. The parser's complaint and a line and column are kept,
+which is what somebody needs in order to go and look; the content is not. `models.yaml`
+is read by the same two lines and took the same change: it refuses an `api_key:` field,
+but only once the file parses, and malformed it quoted whatever line it stopped on
+exactly as the keys file did. The test that should have caught this used a body whose
+value was harmless, so it passed with the leak in place.
+
+**The keys file is protected from the shell where `models.yaml` already was.** The
+argument is the one `profile` makes for an authored file: a shell able to edit it picks
+the key the next start sends, and one able to make it unparseable refuses that start
+outright -- which is the strongest case for the rule rather than an exception to it.
+Named in `shell_confinement` and not in `authored_files_for`, because that mapping also
+decides what `ensure_layout` scaffolds and a keys file must never be written for a
+deployment that did not ask for one. Linux is owed nothing: there the writable set is
+the session's own directories and nothing above them, so the workspace and everything a
+deployment authored in it are already out of the shell's reach. `protected_files` exists
+only in the macOS profile because only there is the whole workspace writable and this
+list what carves the exceptions out of it. *(2026-10-13, from an architecture review.)*
+
 **A model's window is declared under `extra: profile:`, not as a key of its own.**
 `profile` is a constructor argument of every langchain chat model, and `extra` is
 where a row hands its class what this format does not define, so it reached the

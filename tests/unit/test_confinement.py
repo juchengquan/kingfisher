@@ -838,6 +838,36 @@ def test_the_shell_cannot_change_the_files_a_deployment_authors(cfg, session_dir
     assert beside.read_text(encoding="utf-8") == "y"
 
 
+@macos
+def test_the_shell_cannot_change_the_keys_file(cfg, session_dir):
+    """A keys file was writable where `models.yaml` beside it was not, and on no
+    argument: the reason `profile` gives for protecting an authored file is that a shell
+    able to edit it picks what the next start sends, which a credentials file is the
+    strongest case of rather than an exception to.
+
+    Three of the four ways above -- overwrite, replace by rename, delete. Creating one
+    where there was none is already held for `source_ids.yaml`, and the profile names a
+    path whether or not it exists.
+    """
+    keys = cfg.workspace / "keys.yaml"
+    keys.write_text("minimax: sk-as-written\n", encoding="utf-8")
+    beside = cfg.workspace / "notes.yaml"
+    beside.write_text("as written\n", encoding="utf-8")
+    named = replace(cfg, models=replace(cfg.models, keys_file=keys))
+    scratch = session_dir / "outputs" / "swap"
+    backend = backend_at(named, session_dir)
+
+    backend.execute(f'printf x > "{keys}"')
+    backend.execute(f'printf y > "{scratch}" && mv "{scratch}" "{keys}"')
+    backend.execute(f'rm -f "{keys}"')
+    backend.execute(f'printf z > "{beside}"')
+
+    assert keys.read_text(encoding="utf-8") == "minimax: sk-as-written\n"
+    # The control, as for the files above: the same commands against a file beside it,
+    # so a pass here is the profile refusing rather than the commands never running.
+    assert beside.read_text(encoding="utf-8") == "z"
+
+
 def test_an_authored_file_is_denied_by_its_exact_path(tmp_path):
     """By `path`, as the profile's own rule is, so the deny names the file rather than
     whatever directory it happens to sit in -- `models.yaml` sits in the workspace, which
