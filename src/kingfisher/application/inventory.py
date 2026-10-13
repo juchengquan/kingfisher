@@ -81,10 +81,9 @@ class Inventory:
     agents: Mapping[str, str] = _NOTHING
     #: Agent name -> the file it came from.
     agent_sources: Mapping[str, str] = _NOTHING
-    #: Subagent names each agent reaches, its own and theirs, resolved through
-    #: the chain. Printed because nobody maintains it: an agent file names the
-    #: subagents it calls, and what *those* call comes along -- so this is the
-    #: only place the whole tree is visible without opening every file.
+    #: The subagents each agent activates: the ones its own file names, and no
+    #: further. Their helpers are deliberately not walked -- `activated` says why,
+    #: and walking the chain here once printed a subagent the build would drop.
     agent_subagents: Mapping[str, tuple[str, ...]] = _NO_NAMES
     agents_error: str | None = None
 
@@ -232,9 +231,14 @@ class Inventory:
     #: the roll-up below is inverted from exactly this.
     audiences: Mapping[str, Mapping[str, Stated]] = _NO_AUDIENCES
     #: Whose view this is, expanded, or `None` for the operator's view of
-    #: everything. Set, the names above have already been filtered to what this
-    #: caller reaches -- so the printer never filters and the two views cannot
-    #: come apart.
+    #: everything. Set, every field above has been answered for this caller here,
+    #: so the printer never filters and the two views cannot come apart. The
+    #: filtering is not all one shape, and the differences are the point: a field
+    #: naming a definition is kept to what the caller reaches, a catalogue that
+    #: audiences nothing itself is kept to what those definitions offer, and the
+    #: policy and the faults that reach nobody are dropped outright. This said the
+    #: names had *already* been filtered, which is the claim the record logged as
+    #: false on 2026-09-26 and which was false again for four fields below it.
     held: frozenset[str] | None = None
 
     def by_kind(self) -> tuple[Catalogued, ...]:
@@ -777,7 +781,15 @@ def inventory(
         # `or`, not replace: a kind that already failed to load has the more
         # fundamental problem, and saying the second one instead would send a
         # reader to a source id in a file that does not parse.
-        agents_error=agents_error or broken.get("agents"),
+        #
+        # `broken` is withheld from a scoped view along with the rest of the policy
+        # below. It names a definition this caller cannot open, the source id that
+        # definition named, and every source id the deployment declares -- so a caller
+        # was handed the whole vocabulary beside the `access: null` that withholds it,
+        # and their listing failed for a fault in a file out of their reach. The
+        # catalogue-read half stays: a kind that will not load is a kind nobody gets,
+        # and an empty list with no reason given is worse than the reason.
+        agents_error=agents_error or (None if scoped else broken.get("agents")),
         builtin_tools=builtin,
         tools=tuple(name for name in workspace_tools if offers_tool(name)),
         tool_sources=MappingProxyType(
@@ -787,12 +799,20 @@ def inventory(
         skills={
             name: registry.description(name) for name in registry.names if offers_skill(name)
         },
-        skills_unloadable=tuple(registry.unloadable),
-        skills_misplaced=tuple(resolved.skills.misplaced),
-        skills_misfiled=tuple(registry.misfiled),
+        # A misfiled skill is loaded and offered, so it filters as `skills` above does,
+        # by what a definition this caller reaches offers them: unfiltered, the fault
+        # named a skill and its directory where `skills` itself had correctly kept both
+        # out. The other two never loaded, so no definition offers them by name and
+        # there is nothing to filter against -- the operator's diagnostic, like an
+        # orphan below, and a scoped view carries none of those.
+        skills_unloadable=() if scoped else tuple(registry.unloadable),
+        skills_misplaced=() if scoped else tuple(resolved.skills.misplaced),
+        skills_misfiled=tuple(
+            (where, name) for where, name in registry.misfiled if offers_skill(name)
+        ),
         subagents=MappingProxyType(dict(for_caller_subagents)),
         subagent_sources=reaching("subagents", subagent_sources),
-        subagents_error=subagents_error or broken.get("subagents"),
+        subagents_error=subagents_error or (None if scoped else broken.get("subagents")),
         middlewares=middlewares,
         middlewares_error=middlewares_error,
         moved_tools=_NO_NAMES if moved_tools is None else _kept(moved_tools, reached_subjects),

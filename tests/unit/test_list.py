@@ -591,7 +591,11 @@ OUT_OF_REACH = ("shadowy", "hushhush", "quietly", "buried", "clandestine")
 #: compiled one with a skill it can never be shown, a folder no definition is named
 #: for, and one naming a helper nobody defines.
 BROKEN_OUT_OF_REACH = (
-    "muddled", "stray", "drifter", "stowaway", "cargo", "ghostly", "wanderer", "nowhere"
+    "muddled", "stray", "drifter", "stowaway", "cargo", "ghostly", "wanderer", "nowhere",
+    # An agent's own, because the per-definition fault maps key agents as well as
+    # subagents and the two halves are filtered by separate expressions: with only
+    # subagents here, pointing the agent half at every agent changed nothing.
+    "straying", "noplace",
 )
 
 
@@ -634,7 +638,20 @@ def _subagents_out_of_reach(cfg) -> None:
     )
 
 
-def _broken_subagents_out_of_reach(cfg) -> None:
+def _broken_definitions_out_of_reach(cfg) -> None:
+    """Faults belonging to definitions only `A` reaches, of both kinds.
+
+    The agent is not decoration: `moved_tools` and `unresolved_subagents` key agents
+    and subagents alike, and the listing filters the two halves with separate
+    expressions -- so a fixture of subagents alone leaves the agent half unheld.
+    """
+    agents = cfg.catalogue_roots["agents"]
+    agents.mkdir(parents=True, exist_ok=True)
+    (agents / "straying.yaml").write_text(
+        "name: straying\ndescription: An agent.\nsource_ids: [A]\n"
+        "tools: [adrift.py::line_count]\nsubagents: [noplace]\nsystem_prompt: |\n  Go.\n",
+        encoding="utf-8",
+    )
     root = cfg.catalogue_roots["subagents"]
     _private(root / "muddled" / "tools" / "stray.py", "stray")
     (root / "muddled" / "muddled.yaml").write_text(
@@ -721,18 +738,18 @@ def test_a_buried_skill_is_kept_to_callers_who_reach_its_subagent(
 
 
 @pytest.mark.parametrize("form", ["text", "json"])
-def test_a_scoped_listing_reports_no_fault_of_a_subagent_out_of_reach(
+def test_a_scoped_listing_reports_no_fault_of_a_definition_out_of_reach(
     form, cfg, at_the_command_line, capsys
 ):
-    """A moved tool, a miscounted folder, a stranded skill and an orphan, each naming a
-    subagent or a folder the caller cannot attribute -- and the operator's listing, the
-    control, names all of them and fails.
+    """A moved tool, a miscounted folder, a stranded skill, an orphan and an agent of
+    its own, each naming a definition or a folder the caller cannot attribute -- and
+    the operator's listing, the control, names all of them and fails.
 
     The exit status follows the caller's view too: failing a listing over a fault in a
     subagent the caller cannot open would say there is one.
     """
     _workspace(cfg, NARROW)
-    _broken_subagents_out_of_reach(cfg)
+    _broken_definitions_out_of_reach(cfg)
     as_json = ["--json"] if form == "json" else []
 
     whole_code = main(["list", *as_json])
@@ -743,6 +760,96 @@ def test_a_scoped_listing_reports_no_fault_of_a_subagent_out_of_reach(
     assert (whole_code, [one for one in BROKEN_OUT_OF_REACH if one not in whole]) == (1, [])
     named = [one for one in BROKEN_OUT_OF_REACH if one in scoped]
     assert (scoped_code, named) == (0, []), f"the {form} form named {named}"
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_a_scoped_listing_carries_no_undeclared_source_id_out_of_reach(
+    form, cfg, at_the_command_line, capsys
+):
+    """The complaint names the definition, the source id that definition wrote, and
+    every source id the deployment declares -- so a caller was handed the whole
+    vocabulary beside the `access: null` that exists to withhold it, and their listing
+    failed over a file out of their reach.
+
+    The operator's view is the control: it names them all and fails, which is what the
+    scoped silence is measured against. Only `list --as` and `inventory(source_ids=...)`
+    reach this state; a deployment in it is refused at construction.
+
+    One of each kind, because the complaint is built per kind and carried in a field per
+    kind: with a subagent alone, putting the agents' complaint back into a scoped view
+    changed nothing here.
+    """
+    _workspace(cfg, NARROW, A_ONLY)
+    agents = cfg.catalogue_roots["agents"]
+    (agents / "trespasser.yaml").write_text(
+        "name: trespasser\ndescription: An agent.\nsource_ids: [A, YAK]\n"
+        "system_prompt: |\n  Go.\n",
+        encoding="utf-8",
+    )
+    root = cfg.catalogue_roots["subagents"]
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "insider.yaml").write_text(
+        "name: insider\ndescription: A subagent.\nsource_ids: [A, ZEBRA]\n"
+        "system_prompt: |\n  Go.\n",
+        encoding="utf-8",
+    )
+    as_json = ["--json"] if form == "json" else []
+    told = ("insider", "ZEBRA", "trespasser", "YAK")
+
+    whole_code = main(["list", *as_json])
+    whole = capsys.readouterr().out
+    scoped_code = main(["list", "--as", "B", *as_json])
+    scoped = capsys.readouterr().out
+
+    named = [one for one in told if one in scoped]
+    assert (scoped_code, named) == (0, []), f"the {form} form named {named}"
+    assert (whole_code, [one for one in told if one not in whole]) == (1, [])
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_a_scoped_listing_carries_only_the_skill_faults_it_reaches(
+    form, cfg, at_the_command_line, capsys
+):
+    """A misfiled skill *is* loaded and offered, so the fault names a skill and its
+    directory where `skills` itself had correctly kept both out of this caller's view.
+    A skill that never loaded reaches nobody, so its directory is the operator's
+    business like an orphan.
+
+    The skill this caller does reach is the half that stops the fix being "empty it":
+    filtered by what the definitions they reach offer, the fault they can act on
+    survives. Driven with the skills switch off, which is where the fault fields are
+    reported from anyway.
+    """
+    reaches_it = NARROW.replace("system_prompt:", "skills: [shown]\nsystem_prompt:")
+    out_of_reach = A_ONLY.replace("system_prompt:", "skills: [concealed]\nsystem_prompt:")
+    _workspace(cfg, reaches_it, out_of_reach)
+    for folder, declares in (("shown_dir", "shown"), ("concealed_dir", "concealed")):
+        where = cfg.skills_dir / folder
+        where.mkdir(parents=True, exist_ok=True)
+        (where / "SKILL.md").write_text(
+            f"---\nname: {declares}\ndescription: Something to do.\n---\nDo it.\n",
+            encoding="utf-8",
+        )
+    nested = cfg.skills_dir / "too" / "deep" / "buriedskill"
+    nested.mkdir(parents=True, exist_ok=True)
+    (nested / "SKILL.md").write_text(
+        "---\nname: buriedskill\ndescription: Something to do.\n---\nDo it.\n", encoding="utf-8"
+    )
+    unreadable = cfg.skills_dir / "wontparse"
+    unreadable.mkdir(parents=True, exist_ok=True)
+    (unreadable / "SKILL.md").write_text("---\nnot: yaml: at all\n", encoding="utf-8")
+    as_json = ["--json"] if form == "json" else []
+    withheld = ("concealed", "wontparse", "buriedskill")
+
+    assert main(["list", *as_json]) == 0
+    whole = capsys.readouterr().out
+    assert main(["list", "--as", "B", *as_json]) == 0
+    scoped = capsys.readouterr().out
+
+    named = [one for one in withheld if one in scoped]
+    assert not named, f"the {form} form named {named}, which this caller cannot reach"
+    assert "shown_dir" in scoped, "the fault this caller can act on went with them"
+    assert [one for one in (*withheld, "shown_dir") if one not in whole] == []
 
 
 #: Each way a definition can name a subagent that a run then refuses: the files under

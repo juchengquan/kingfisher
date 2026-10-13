@@ -1466,6 +1466,37 @@ written for it:
 know nothing about that difference: it reads what the definition resolved to for this
 caller. *(2026-09-27, from an architecture review.)*
 
+**Nor for the faults, until 2026-10-13.** Three rounds had settled what a scoped view
+carries and the faults were in none of them. `broken` -- the complaint `undeclared_in`
+makes about a definition naming a source id the vocabulary does not declare -- went into
+`agents_error` and `subagents_error` whole. Measured through the real command: a caller
+holding `B` was handed the name of a subagent out of their reach, the source id that
+subagent wrote, and every source id the deployment declares, printed beside the `access:
+null` that exists to withhold exactly that, and their listing exited 1 over a file they
+cannot open. Only `list --as` and `inventory(source_ids=...)` reach that state, since a
+deployment in it is refused at construction. The three skills fault fields went in whole
+too, with `skills` beside them correctly empty.
+
+**The faults are not all filtered the same way, and the differences are the whole of
+it.** A misfiled skill is loaded and offered, so it is kept to what the definitions this
+caller reaches offer, exactly as `skills` is -- emptying it instead would take away the
+one skill fault a caller can act on, and a rule holds that half so the three cannot be
+collapsed into one `if scoped`. A skill that would not load, and one nested past the
+level skills are read at, never got a name for any definition to offer: there is nothing
+to filter them against, and they are the operator's diagnostic like an orphaned folder.
+`broken` is the policy reached by another route, so it goes with the rest of the policy.
+`Inventory.held`'s own comment claimed the names above it had already been filtered --
+the claim this record logged as false in September, false again for these four fields --
+and it now says what each kind of filtering actually is.
+
+Both complaints are built per kind and carried in a field per kind, and the per-
+definition fault maps key agents as well as subagents -- so a fixture holding subagents
+alone leaves the agents' half of each one unheld. Pointing the agent half of the fault
+filter at every agent was the only survivor of that review's twenty-one mutations, and
+the first version of the rule written here for `broken` had the very same gap, found by
+mutating it. Each fixture holds one of both kinds now. *(2026-10-13, from an
+architecture review.)*
+
 **The HTTP surface asks who is calling; it still authenticates nobody.**
 `create_app(source_ids_from=...)` takes a callable given the request and returning
 source ids, and `from_header` is shipped but never defaulted -- the header is an
