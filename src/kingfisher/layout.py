@@ -66,7 +66,11 @@ SESSION_DIRS: tuple[str, ...] = (INPUTS, OUTPUTS, MEMORY, SCRATCH)
 
 #: Where a recorded tool result is kept, under the scratchpad: the agent reads one
 #: back with `read_file` and searches them with `grep`, and they go with the session.
-RESULTS = "results"
+#: Not `results`, the name anyone gives a folder of their own work: the agent and its
+#: tools write in the scratchpad too, and this folder is the recorder's. Beside
+#: deepagents' `large_tool_results/`, which keeps those too long to show, the two
+#: read as one pair.
+TOOL_RESULTS = "tool_results"
 
 #: Where skills live.
 SKILLS = "skills"
@@ -141,7 +145,7 @@ BUNDLED_SKILLS_ROUTE = _route(SKILLS, RESERVED_SKILL_FOLDER)
 #: the same name with a slash.
 OUTPUTS_ROUTE = _route(OUTPUTS)
 SCRATCH_ROUTE = _route(SCRATCH)
-RESULTS_ROUTE = _route(SCRATCH, RESULTS)
+TOOL_RESULTS_ROUTE = _route(SCRATCH, TOOL_RESULTS)
 
 #: A route the agent may not read or write, which is the only reason it is one:
 #: `FilesystemMiddleware` refuses `permissions=` outright unless every rule path

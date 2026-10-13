@@ -306,8 +306,8 @@ drives it with no context, and such a tool finds `runtime.context` is `None`.
 with `upload_files` under `/inputs/`, what a turn left is listed with `glob` under
 `/outputs/` and `/memory/`, and `Kingfisher.artifact` fetches one with
 `download_files`. Each tool result a turn records is saved with `upload_files` under
-`/scratchpad/results/`, behind the turn's permissions as a tool's own save is; at the
-end of the turn that folder and deepagents' offload folder are listed with `ls`, and
+`/scratchpad/tool_results/`, behind the turn's permissions as a tool's own save is; at
+the end of the turn that folder and deepagents' offload folder are listed with `ls`, and
 a result file no row of the ledger names is removed with `delete`. So all of those
 work on a backend that keeps the session somewhere other than the directory it was
 handed. `/inputs` has to take that upload

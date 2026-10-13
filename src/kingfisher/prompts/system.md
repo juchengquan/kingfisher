@@ -78,12 +78,12 @@ its place, covering the whole session: the results that followed each of the lat
 few messages, listed the same way, and for each earlier message that had any, one line
 giving the range of their ids and how many results each tool returned.
 
-Each of those files is under `/scratchpad/results/`, or under
+Each of those files is under `/scratchpad/tool_results/`, or under
 `/scratchpad/large_tool_results/` for a result too long to show you whole. Read one
 back with `read_file`, which reads a range of lines, or search them with `grep`, rather
 than calling the tool again. To find an older result by its id, `glob` for `A-0042-*`
-in `/scratchpad/results/`; a result too long to show you whole is named after its call
-instead, and ends in its `[A-0042]` line, so `grep` for that in
+in `/scratchpad/tool_results/`; a result too long to show you whole is named after its
+call instead, and ends in its `[A-0042]` line, so `grep` for that in
 `/scratchpad/large_tool_results/`.
 
 <!-- capabilities -->

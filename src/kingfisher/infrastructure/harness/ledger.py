@@ -17,7 +17,7 @@ from kingfisher.infrastructure.session_store import (
     write_ledger,
 )
 from kingfisher.infrastructure.steps import Steps, changing, reading
-from kingfisher.layout import RESULTS_ROUTE
+from kingfisher.layout import TOOL_RESULTS_ROUTE
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -144,7 +144,7 @@ def _swept(files: Any, named: frozenset[str] | set[str]) -> Steps[None]:
     the agent's file in the turn that wrote it, after the tool had told it the write
     succeeded.
     """
-    listing = yield reading(files, "ls", RESULTS_ROUTE)
+    listing = yield reading(files, "ls", TOOL_RESULTS_ROUTE)
     for one in listing.entries or ():
         if one.get("is_dir") or one["path"] in named:
             continue

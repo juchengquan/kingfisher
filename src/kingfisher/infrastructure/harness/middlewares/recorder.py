@@ -19,7 +19,7 @@ from kingfisher.domain.access import Audience, jointly, listed, stated, unlisted
 from kingfisher.domain.result import MAIN, WORKING, LedgerEntry, Listed
 from kingfisher.kinds.subagents import TASK_TOOL
 from kingfisher.kinds.tools.spec import split_reference
-from kingfisher.layout import RESULTS_ROUTE
+from kingfisher.layout import TOOL_RESULTS_ROUTE
 
 if TYPE_CHECKING:
     from kingfisher.infrastructure.harness.ledger import Ledger
@@ -156,7 +156,7 @@ class Recorder(AgentMiddleware):
                 args=args,
                 access=access,
                 size=len(content),
-                path=f"{RESULTS_ROUTE}{number}-{_segment(tool)}{_suffix(text)}",
+                path=f"{TOOL_RESULTS_ROUTE}{number}-{_segment(tool)}{_suffix(text)}",
                 summary=_summary(tool, args, text),
             )
         )

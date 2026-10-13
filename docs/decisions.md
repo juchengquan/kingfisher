@@ -2143,12 +2143,15 @@ repeats. The next is the last in the ledger plus one. The id is the result's las
 or a text block holding `\n[A-0042]` after a block list, which the transcript joins
 with nothing between; eviction's stub keeps the head and tail, so it shows there.
 
-**Each result is a file in `/scratchpad/results/`, `A-0042-<tool>.txt` or `.json`,**
+**Each result is a file in `/scratchpad/tool_results/`, `A-0042-<tool>.txt` or `.json`,**
 written as it arrives through the turn's backend under the turn's rules, without the
 id. The scratchpad, because the agent reads a range of one back with `read_file` and
 searches with `grep`, which needs no new tool, and because it is working material swept
-with the session. A file the backend refuses leaves the row's `path` null and the call
-succeeds: failed, the model may make the call again and run the tool twice.
+with the session. Named `tool_results/`, not `results/` as it first was: that is the
+name anyone gives a folder of their own work, and the agent and its tools write in the
+scratchpad too. Beside deepagents' `large_tool_results/` the two read as one pair, each
+result in one or the other. A file the backend refuses leaves the row's `path` null
+and the call succeeds: failed, the model may make the call again and run the tool twice.
 
 **An offloaded result is pointed at deepagents' copy, not kept twice.** Eviction runs
 outside the recorder, so at the end of the turn one `ls` of `large_tool_results/`
@@ -2240,8 +2243,8 @@ and `<artifact_delta>`. In kingfisher an artifact is a file under `/outputs` or
   subagent's answer is still recorded, through `task`. Nor is what the shell writes;
   `RunResult.artifacts` is the sound view of files.
 - **Finding an old entry by anything but its id.** Settled for now as finding its file:
-  `glob` for `A-0042-*` under `/scratchpad/results/`, or `grep` for its `[A-0042]` line
-  under `/scratchpad/large_tool_results/` where deepagents offloaded it, as `system.md`
+  `glob` for `A-0042-*` under `/scratchpad/tool_results/`, or `grep` for its `[A-0042]`
+  line under `/scratchpad/large_tool_results/` where deepagents offloaded it, as `system.md`
   says and `test_an_older_results_file_is_found_by_its_id_as_the_prompt_says` drives. A
   rolled-up line keeps only ids and counts, and the ledger is under `.harness`, which the
   file tools refuse, so a rolled-up entry's arguments and summary are out of reach. If

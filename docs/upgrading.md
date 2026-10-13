@@ -17,6 +17,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## Recorded results are kept under `/scratchpad/tool_results/`, after #724
+
+- **The folder is `/scratchpad/tool_results/`**, where it was `/scratchpad/results/`.
+  An entry's `path`, the rows of `.harness/ledger.jsonl` and the lists the model is
+  shown all name the new one. In `kingfisher.layout`, `RESULTS` and `RESULTS_ROUTE`
+  are now `TOOL_RESULTS` and `TOOL_RESULTS_ROUTE`.
+- **A backend of your own** is asked for the same `upload_files`, `ls` and `delete`,
+  under the new folder. Built on `backend_at`, there is nothing to do.
+- **Older sessions** go on working. Their rows still name files in `results/`, which
+  stay where they are, and the next turn saves into `tool_results/`. The end-of-turn
+  sweep now lists only the new folder. There is nothing to migrate, and reaping a
+  session removes both.
+
 ## A request naming a subagent out of a caller's reach is refused as a typo is, after #712
 
 For a deployment with a `source_ids.yaml`, where the agent writes `subagents: ["*"]`
