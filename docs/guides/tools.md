@@ -139,6 +139,12 @@ wrong shape does not raise; it tells the model something unhelpful, in a
 transcript nobody reads until the answer is already wrong. A string and a list of
 blocks are the only returns where you decide what it says.
 
+One block is not shown as returned. A PDF `file` block over 256 KB, from any tool,
+reaches the model as a line saying how large it is and how to read it instead: sent
+whole, it would go out again with every model call after it, and can end the turn.
+Return a PDF that large as a path, the way
+[a tool that creates a file](#a-tool-that-creates-a-file) does.
+
 Two shapes escape the coercion: a `ToolMessage` or a langgraph `Command` is
 returned as-is and never wrapped, so a tool can write its own result or update
 graph state. That is LangChain's door rather than one kingfisher holds, and two
