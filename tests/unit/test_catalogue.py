@@ -87,30 +87,34 @@ def test_omitted_it_is_the_three_directories_config_names(cfg):
     )
 
 
-def test_relocated_directories_are_created_rather_than_silently_empty(tmp_path, cfg):
-    """The gap this closes, and it predates the feature."""
-    elsewhere = tmp_path / "elsewhere"
-    relocated = replace(
-        cfg,
-        skills_root=elsewhere / "s",
-        subagents_root=elsewhere / "a",
-        tools_root=elsewhere / "t",
-    )
-    assert not (elsewhere / "a").exists()
+def test_a_missing_kind_folder_means_none_of_that_kind_and_is_never_made(cfg):
+    """Catches a start writing into the definitions folder, which other deployments may
+    read and a failed mount would leave empty, rather than reading it as it is."""
+    for kind in ("skills", "subagents", "tools"):
+        shutil.rmtree(cfg.catalogue_roots[kind])
 
-    roots = resolve_definitions(relocated)
+    catalogue = Kingfisher(cfg, backends=default_backends).catalogue
 
-    assert all(path.is_dir() for path in _roots(roots).values())
+    assert available_skills(cfg, catalogue=catalogue) == ()
+    assert catalogue.subagents.specs == {}
+    assert catalogue.tools.found == ()
+    assert not any(cfg.catalogue_roots[kind].exists() for kind in ("skills", "subagents", "tools"))
+
+
+def test_a_missing_definitions_folder_is_refused_rather_than_made(tmp_path, cfg):
+    """Making one would serve an empty catalogue where a seed or a mount failed."""
+    unseeded = replace(cfg, definitions=tmp_path / "never-seeded")
+
+    with pytest.raises(ConfigError, match="kingfisher seed"):
+        resolve_definitions(unseeded)
+    assert not unseeded.definitions.exists()
 
 
 def test_a_supplied_catalogue_must_already_exist(tmp_path, cfg):
     """Creating one would hide the failure it is there to surface."""
     missing = tmp_path / "never-staged"
     with pytest.raises(ConfigError, match="not a directory"):
-        resolve_definitions(
-            cfg,
-            {"skills": missing, "subagents": missing, "tools": missing},
-        )
+        resolve_definitions(cfg, missing)
     assert not missing.exists()
 
 
@@ -124,7 +128,7 @@ def test_a_supplied_catalogue_gets_no_kind_folder_made_anywhere(tmp_path, cfg):
     supplied = _roots(_staged(staged))
     fresh = replace(cfg, workspace=tmp_path / "fresh")
 
-    kf = Kingfisher(fresh, catalogue=supplied, backends=default_backends)
+    kf = Kingfisher(fresh, catalogue=staged, backends=default_backends)
 
     assert not set(DEFINITION_KINDS) & {p.name for p in kf.workspace.iterdir()}, (
         "a kind folder in the workspace, where a supplied catalogue is not read from"
@@ -134,19 +138,30 @@ def test_a_supplied_catalogue_gets_no_kind_folder_made_anywhere(tmp_path, cfg):
     )
 
 
-def test_a_supplied_catalogue_names_all_three(tmp_path, cfg):
-    """Leaving one out would mean an empty one, which is never what was meant."""
-    roots = _staged(tmp_path / "staged")
-    with pytest.raises(ConfigError, match="missing tools"):
-        staged = _roots(roots)
-        resolve_definitions(cfg, {"skills": staged["skills"], "subagents": staged["subagents"]})
+def test_a_supplied_folder_missing_a_kind_offers_none_of_it(tmp_path, cfg):
+    """Catches a kind the staged folder left out being read from the configured folder
+    instead, which would serve definitions the deployment chose not to supply.
+    """
+    (tools_dir(cfg) / "extra.py").write_text(TOOL, encoding="utf-8")
+    staged = tmp_path / "staged"
+    _staged(staged, skill="staged-only")
+    shutil.rmtree(staged / "tools")
+
+    roots = resolve_definitions(cfg, staged)
+
+    assert roots.skills.root == staged / "skills"
+    assert available_skills(cfg, catalogue=roots) == ("staged-only",)
+    assert workspace_tool_names(cfg, catalogue=roots) == ()
+    # The control: the configured folder does offer it, so the line above is not
+    # passing on a tool that never loads.
+    assert workspace_tool_names(cfg) == ("elsewhere",)
 
 
-def test_the_agent_reads_the_supplied_catalogue_and_not_the_workspace(tmp_path, cfg):
+def test_the_agent_reads_the_supplied_catalogue_and_not_the_configured_one(tmp_path, cfg):
     """Supplied roots replace the configured ones; they do not add to them."""
-    (cfg.skills_dir / "in-the-workspace").mkdir(parents=True)
-    (cfg.skills_dir / "in-the-workspace" / "SKILL.md").write_text(
-        "---\nname: in-the-workspace\ndescription: A skill.\n---\nDo the thing.\n",
+    (cfg.skills_dir / "configured").mkdir(parents=True)
+    (cfg.skills_dir / "configured" / "SKILL.md").write_text(
+        "---\nname: configured\ndescription: A skill.\n---\nDo the thing.\n",
         encoding="utf-8",
     )
     roots = _staged(tmp_path / "staged", skill="staged-only", subagent=SUBAGENT, tool=TOOL)
@@ -156,7 +171,7 @@ def test_the_agent_reads_the_supplied_catalogue_and_not_the_workspace(tmp_path, 
     assert workspace_tool_names(cfg, catalogue=roots) == ("elsewhere",)
 
     # And the configured one is still what is read when nothing is supplied.
-    assert available_skills(cfg) == ("in-the-workspace",)
+    assert available_skills(cfg) == ("configured",)
 
 
 def test_the_skills_route_follows_the_catalogue(tmp_path, cfg, session_dir):
@@ -206,11 +221,7 @@ def test_a_broken_catalogue_fails_at_startup(tmp_path, cfg):
     """Rather than on the first turn, when a caller is already waiting."""
     missing = tmp_path / "never-staged"
     with pytest.raises(ConfigError):
-        Kingfisher(
-            cfg,
-            backends=default_backends,
-            catalogue={"skills": missing, "subagents": missing, "tools": missing},
-        )
+        Kingfisher(cfg, backends=default_backends, catalogue=missing)
 
 
 NOT_MIDDLEWARE = """
@@ -353,8 +364,8 @@ def test_the_three_directories_are_attributes_not_keys(cfg):
 
 
 def test_resolving_accepts_one_that_is_already_resolved(tmp_path, cfg):
-    """A deployment stages directories and hands over a mapping, which is the documented
-    seam.
+    """Something that already holds a `Definitions` -- another kingfisher, a fixture --
+    should not have to take it apart to pass it back.
     """
     staged = _staged(tmp_path / "staged")
 
@@ -388,8 +399,6 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
     from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
     from tests.unit.test_run import StubAgent
 
-    for kind in ("skills", "subagents", "tools"):
-        (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "a.yaml").write_text(
         "name: alpha\ndescription: A.\nsystem_prompt: |\n  x\n", encoding="utf-8"
     )
@@ -419,8 +428,6 @@ def test_a_definition_written_after_wiring_is_not_this_deployments(cfg):
     """The cost of reading once, stated as behaviour rather than left to be discovered."""
     from tests.unit.test_run import StubAgent
 
-    for kind in ("skills", "subagents", "tools"):
-        (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)
     service = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends)
 
     (subagents_dir(cfg) / "late.yaml").write_text(
@@ -544,8 +551,6 @@ def test_a_definition_that_will_not_parse_fails_at_startup_too(cfg):
 
     Mutation-tested: emptying `warm` leaves this the only test that notices.
     """
-    for kind in ("skills", "subagents", "tools"):
-        (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "broken.yaml").write_text(
         "name: broken\ndescription: A.\nsystem_prompt: |\n  x\nnonsense_field: true\n",
         encoding="utf-8",

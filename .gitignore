@@ -233,11 +233,14 @@ __marimo__/
 assets/*
 !assets/README.md
 
-# This checkout doubles as a workspace when the CLI is run from it, so the
-# workspace's own `models.yaml` lands at the root. It is one deployment's
-# endpoints, not the project's -- `src/kingfisher/templates/models.yaml.example`
-# is the tracked template, and is what a reader should be reading.
+# This checkout doubles as a deployment when the CLI is run from it, and
+# `compose.yaml` mounts `./definitions` as one. A `models.yaml` at the root or in
+# there is one deployment's endpoints, not the project's --
+# `src/kingfisher/templates/models.yaml.example` is the tracked template, and
+# `assets_examples/` the tracked definitions, and those are what a reader should be
+# reading.
 /models.yaml
+/definitions/
 
 # And the whole workspace, when `KINGFISHER_WORKSPACE` points inside the
 # checkout rather than at the root: sessions, memory, pinned agents and run

@@ -9,28 +9,25 @@ absolute, why the sandbox is on by default — and it is where an argument for a
 value belongs. This page is the list, for when you want to know what exists
 rather than why.
 
-**One variable is required.** `KINGFISHER_WORKSPACE` has no default and raises
-`ConfigError` when it is missing; everything else defaults inside it or is off.
-That is deliberate: a workspace is the one thing kingfisher cannot invent, and
-a default would put a deployment's sessions somewhere the call site never
-mentions.
+**Two variables are required**, and they name two folders kept apart.
+`KINGFISHER_DEFINITIONS_DIR` is what people write: the definitions, `models.yaml`
+and `source_ids.yaml`. `KINGFISHER_WORKSPACE` is what sessions make. Neither has a
+default, each raises `ConfigError` when it is missing, and everything else is off
+or defaults inside one of them. That is deliberate: these are the two things
+kingfisher cannot invent, and a default would put a deployment's sessions, or the
+definitions it serves, somewhere the call site never mentions. Seeding needs only
+the definitions folder, since that is all it writes.
 
 ## Where things live
 
 | Variable | What it does | Default |
 | --- | --- | --- |
-| `KINGFISHER_WORKSPACE` | The workspace. Everything below defaults inside it. | **required** |
-| `KINGFISHER_ASSETS` | Where `kingfisher seed` copies definitions from. Without it seeding lays the workspace out, writes `models.yaml.example`, and then refuses — in that order, so a deployment with nothing to seed still gets somewhere to start. | none |
-| `KINGFISHER_MODELS_FILE` | The model catalogue: which models exist, where each runs, which key it uses. | `<workspace>/models.yaml` |
+| `KINGFISHER_WORKSPACE` | What sessions make: `sessions/`, and kingfisher's own `.kingfisher/` beside it. | **required** |
+| `KINGFISHER_DEFINITIONS_DIR` | What people write, under fixed names: `agents/`, `middlewares/`, `skills/`, `subagents/` and `tools/`; `models.yaml`, the model catalogue — which models exist, where each runs, which key it uses; and `source_ids.yaml`, the source-id vocabulary, whose absence turns access control off entirely. A missing kind folder means none of that kind. A start reads it and never writes it: a folder that is not there is refused rather than made. Neither it nor the workspace may be inside the other. | **required** |
+| `KINGFISHER_ASSETS` | Where `kingfisher seed` copies definitions from. Without it seeding lays the definitions folder out, writes `models.yaml.example`, and then refuses — in that order, so a deployment with nothing to seed still gets somewhere to start. | none |
 | `KINGFISHER_MODEL_KEYS_FILE` | The file an endpoint's `key:` names an entry in, one `name: key` line each. Read only once this names it; named and missing, unreadable or not such a list, it refuses startup. Keep it out of the workspace, and on macOS under the home folder — see *What each fence hides*. `seed` places a `keys.yaml.example` to copy out; `doctor` says where each key came from, and warns when the shell or another user can read the file. | none |
 | `KINGFISHER_ADAPTERS_FACTORY` | `module:name` naming something callable with no arguments that returns wire formats of your own, for an endpoint's `api` to name. See [below](#a-wire-format-kingfisher-does-not-ship). | none — `anthropic` and `openai_responses` only |
-| `KINGFISHER_SOURCE_IDS_FILE` | The source-id vocabulary. No file means access control is off entirely. | `<workspace>/source_ids.yaml` |
-| `KINGFISHER_AGENTS_DIR` | Relocate the agents catalogue. | inside the workspace |
-| `KINGFISHER_MIDDLEWARES_DIR` | Relocate the middlewares catalogue. Code, like the tools one. | inside the workspace |
-| `KINGFISHER_SKILLS_DIR` | Relocate the skills catalogue — this is how several deployments share one reviewed set. | inside the workspace |
 | `KINGFISHER_SKILLS_MOUNTS` | Further skills directories, as `label=path` pairs separated by `:`. Each is offered at `/skills/<label>/` and granted as `<label>::<name>`, for a party that cannot write into the catalogue. Skills sit directly in each one, and nothing creates or seeds it. The shell reaches a mount's scripts as `$KINGFISHER_SKILLS/<label>/...`, through a view of links kingfisher keeps in `<workspace>/.kingfisher/`. | none |
-| `KINGFISHER_SUBAGENTS_DIR` | Relocate the subagents catalogue. | inside the workspace |
-| `KINGFISHER_TOOLS_DIR` | Relocate the tools catalogue. | inside the workspace |
 | `KINGFISHER_SESSION_BACKENDS_FACTORY` | `module:name` naming something callable with no arguments that returns a `SessionBackends`, for the `kingfisher` command. Only the command reads it — `Kingfisher` takes its session backends as `backends=` — and it is how `sessions`, `reap` and `artifact` see sessions yours keep elsewhere. `KINGFISHER_SESSION_STORE` and `KINGFISHER_SESSION_STORE_FACTORY`, which configured the store this replaced, are refused if still set, and so is `KINGFISHER_BACKEND_FACTORY`, this setting's old name. | `default_backends` |
 | `KINGFISHER_SESSION_ID` | Makes the workspace hold one session, under this id, laid out in `<workspace>/sessions` itself rather than in a folder of its own. A request naming no session runs in it, a request naming any other id is refused as one nobody issued, and deleting it empties the folder for a fresh conversation under the same id. Must be one name — not `.` or `..`, holding neither `/` nor NUL. A workspace holding sessions the other way is refused at startup, set or unset, and so is a changed id: the session records the id it was laid out for, and is refused under any other until the setting goes back or `sessions/` is cleared. | unset — a folder per session |
 | *(none)* | Where session directories are, while a turn runs. No setting moves them; mount `<workspace>/sessions` on whatever device you want them on. | `<workspace>/sessions` |
@@ -43,14 +40,16 @@ checks containment per access, which a bind mount passes and a symlink does not.
 A deployment whose sessions should not be directories on this host at all names a
 backend that keeps them itself — see [`ports.md`](ports.md).
 
-The `*_DIR` settings exist because definitions are authored and reviewed
-rather than produced by a run — one per definition kind, and
-`test_every_definition_kind_relocates_by_its_own_variable` is what keeps it one
-per kind as kinds are added. Relocating them is safe for the reason relocating
-the state directory is: the agent reaches a catalogue through a route, and the
-shell has no business there. A relocated kind's folder is made where the setting
-points and none is made for it in the workspace; one left there from before
-stays, unread, until you delete it.
+The definitions folder is apart from the workspace because definitions are
+authored and reviewed rather than produced by a run, and one reviewed set can serve
+several deployments. Keeping it elsewhere is safe for the reason it is worth doing:
+the agent reaches a catalogue through a route, and the shell has no business there
+— on macOS a definitions folder under your home folder is hidden from the shell but
+for `skills/`, whose scripts it runs. One folder rather than a setting per kind:
+`KINGFISHER_AGENTS_DIR`, its four siblings, `KINGFISHER_MODELS_FILE` and
+`KINGFISHER_SOURCE_IDS_FILE` moved one thing each, and are refused if still set. A
+definition left in a workspace from before is read by nothing; delete it, or move it
+into the definitions folder.
 
 ## Limits
 
@@ -84,7 +83,7 @@ including a value that looks entirely deliberate: `y`, `enabled` and a path are
 all off, with no error. That is worth knowing before you write one from memory.
 
 All four carry `_ENABLED` so that "whether" is visibly a different question from
-"where" — `KINGFISHER_SKILLS_ENABLED` beside `KINGFISHER_SKILLS_DIR`. The bare
+"where" — `KINGFISHER_SKILLS_ENABLED` beside `KINGFISHER_SKILLS_MOUNTS`. The bare
 names are read by nothing. `kingfisher doctor` reports one that is still set,
 which is the only thing that will: a name that stops being read takes its
 setting's effect with it and says nothing.
@@ -138,14 +137,15 @@ The fences differ in shape, not just in strength. On Linux, bubblewrap and Landl
 start from nothing and grant the shell a list: the system directories, the
 interpreter, the skills, and the session's own directory. macOS `sandbox-exec` does
 the opposite. It allows everything and denies the operator's home, then gives the
-workspace and the interpreter back inside it. What follows from that, measured on
-2026-10-01 -- on macOS by probes through `backend_at`, on Linux from the fences'
-code:
+workspace, the interpreter and the skills back inside it. What follows from that,
+measured on 2026-10-01 -- on macOS by probes through `backend_at`, on Linux from the
+fences' code -- and for the definitions folder on 2026-10-13, the same way:
 
 | The shell reading… | macOS `sandbox-exec` | bubblewrap | Landlock | No fence |
 |---|---|---|---|---|
 | The operator's home | hidden | hidden | hidden | readable |
-| The workspace, `models.yaml` included | readable; writes refused to `models.yaml` and the definitions | hidden | hidden | readable |
+| The workspace | readable | hidden | hidden | readable |
+| The definitions folder, `models.yaml` included | under the home folder, hidden but for `skills/`; elsewhere readable; never writable | `skills/` only, read-only | `skills/` only, read-only | readable |
 | Other sessions' folders | readable and writable | hidden | hidden | readable and writable |
 | Anywhere else -- `/tmp`, `/Users/Shared`, `/opt` | readable | hidden | hidden | readable |
 | `/etc`, `/usr` | readable | readable | readable | readable |
@@ -173,7 +173,8 @@ command lines are readable. The kernel is expected to refuse another process's
 
 **Kingfisher does not keep the model keys from the shell; where they sit decides it.**
 On macOS, keep the keys file `KINGFISHER_MODEL_KEYS_FILE` names under the home folder
-and out of the workspace, keep `.env` under it too and start kingfisher from there,
+and out of the workspace and the definitions folder, keep `.env` under it too and
+start kingfisher from there,
 and do not export keys before it starts. A key set in code with
 `Endpoint(api_key=...)` reaches no file and no starting environment. A remote backend
 runs its shell on another machine, and this one's keys are not there to read.

@@ -371,7 +371,7 @@ def _under_a_policy(cfg):
     vocabulary = "source_ids: [A]\n"
     # On the config as well as in the file: setup resolves an agent only where a
     # graph was not injected *or* a policy is in force, and these rules inject one.
-    (cfg.workspace / "source_ids.yaml").write_text(vocabulary, encoding="utf-8")
+    (cfg.definitions / "source_ids.yaml").write_text(vocabulary, encoding="utf-8")
     return replace_cfg(
         cfg, access=parse(yaml.safe_load(vocabulary), source="source_ids.yaml")
     )

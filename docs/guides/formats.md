@@ -175,7 +175,7 @@ each agent activates, which is that list rather than the chain below it.
 
 **The agent itself has to work.** A model your catalogue does not define
 refuses. **Anything below it that cannot run is left out and reported** — which
-is what lets a freshly seeded workspace run at all when one subagent names a
+is what lets a freshly seeded deployment run at all when one subagent names a
 model you have not set up.
 
 ### Approval gates
@@ -277,8 +277,8 @@ rename it to reviewer.yaml
 ## Tools — `/tools/<module>.py`, at any depth
 
 Two kinds. The **built-in set** comes with the agent and you select from it by
-name. **Workspace tools** are Python you write, imported from the workspace's
-`tools/` directory and added to that set.
+name. **Workspace tools** are Python you write, imported from the `tools/`
+directory in `KINGFISHER_DEFINITIONS_DIR` and added to that set.
 
 ### The built-in set
 
@@ -311,8 +311,8 @@ Three things worth knowing before you restrict this list:
 
 ### Workspace tools
 
-Python you write, imported from the workspace's `tools/` directory and added to
-the built-in set. A module declares `TOOLS`, the list it contributes, and a tool
+Python you write, imported from the `tools/` directory in the definitions folder
+and added to the built-in set. A module declares `TOOLS`, the list it contributes, and a tool
 is a LangChain tool — from `@tool`, from a `BaseTool` subclass you instantiate,
 or a plain function.
 
@@ -883,8 +883,8 @@ from acme_agents import SUBAGENTS
 ```
 
 Kingfisher discovers no packages and names none. Installing one changes nothing
-until somebody writes that line, and the line lives in the workspace beside every
-other definition, where `kingfisher list` and `doctor` already report from.
+until somebody writes that line, and the line lives in the definitions folder
+beside every other definition, where `kingfisher list` and `doctor` already report from.
 
 **The shape decides the rules, not where the entry came from.** A re-export hands
 over mappings indistinguishable from ones typed into the same file, so there is
@@ -1254,8 +1254,8 @@ system_prompt: |
   ...
 ```
 
-`<workspace>/source_ids.yaml` by default; `KINGFISHER_SOURCE_IDS_FILE` points elsewhere,
-so several deployments can share one vocabulary. Read once at startup, so a
+`source_ids.yaml` in `KINGFISHER_DEFINITIONS_DIR`, beside the definitions it governs,
+so every deployment sharing that folder shares one vocabulary. Read once at startup, so a
 revocation lands on restart. A file that is present and will not parse stops the
 deployment: a vocabulary that cannot be honoured must never come up as *no*
 vocabulary, because then no audience can be checked at all.

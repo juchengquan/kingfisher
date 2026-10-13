@@ -460,8 +460,8 @@ _INHERITING_SUBAGENT = _SUBAGENT.replace("model: cheap-model\n", "")
 
 def _with_a_subagent(cfg, session_dir, injected, definition: str = _SUBAGENT):
     """One build in which an agent and its subagent both name the same middleware."""
-    (cfg.workspace / "subagents").mkdir(exist_ok=True)
-    (cfg.workspace / "subagents" / "reviewer.yaml").write_text(definition, encoding="utf-8")
+    (cfg.definitions / "subagents").mkdir(exist_ok=True)
+    (cfg.definitions / "subagents" / "reviewer.yaml").write_text(definition, encoding="utf-8")
 
     built = build_agent(
         cfg,
@@ -506,8 +506,8 @@ def test_a_subagent_that_inherits_is_given_no_model_of_its_own(cfg, session_dir)
     would stop being true one level down.
     """
     injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
-    (cfg.workspace / "subagents").mkdir(exist_ok=True)
-    (cfg.workspace / "subagents" / "reviewer.yaml").write_text(
+    (cfg.definitions / "subagents").mkdir(exist_ok=True)
+    (cfg.definitions / "subagents" / "reviewer.yaml").write_text(
         _INHERITING_SUBAGENT, encoding="utf-8"
     )
 
@@ -527,7 +527,7 @@ def test_a_subagent_that_inherits_is_given_no_model_of_its_own(cfg, session_dir)
 
 def _a_pinned_subagent(cfg, session_dir, injected) -> dict:
     """The same subagent, pinned, as the control for the rule above."""
-    (cfg.workspace / "subagents" / "reviewer.yaml").write_text(_SUBAGENT, encoding="utf-8")
+    (cfg.definitions / "subagents" / "reviewer.yaml").write_text(_SUBAGENT, encoding="utf-8")
     built = build_agent(
         cfg,
         agent=_named(("wants",), subagents=("reviewer",)),

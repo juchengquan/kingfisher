@@ -256,16 +256,16 @@ def test_skills_stay_shared_across_sessions(cfg):
     main.prepare_smoke(replace(cfg, skills_enabled=True), cfg.workspace, "smoke3")
     session = cfg.workspace / "sessions" / "smoke3"
 
-    assert (cfg.workspace / "skills" / "tabular-qa" / "SKILL.md").is_file()
+    assert (cfg.definitions / "skills" / "tabular-qa" / "SKILL.md").is_file()
     assert not (session / "skills" / "tabular-qa").exists()
     assert not (session / "skills").exists()
 
 
 def _unused(cfg, tmp_path):
-    """A `Config` whose workspace does not exist yet."""
+    """A `Config` whose definitions folder does not exist yet."""
     from dataclasses import replace
 
-    return replace(cfg, workspace=tmp_path / "brand-new")
+    return replace(cfg, definitions=tmp_path / "brand-new")
 
 
 def _driver_on(monkeypatch, target, source=None):
@@ -281,7 +281,7 @@ def _driver_on(monkeypatch, target, source=None):
     return driver
 
 
-def test_a_new_workspace_seeds_itself(cfg, tmp_path, monkeypatch):
+def test_a_new_definitions_folder_seeds_itself(cfg, tmp_path, monkeypatch):
     """A7, and the reason the flag is not the only way in."""
     fresh = _unused(cfg, tmp_path)
     driver = _driver_on(monkeypatch, fresh)
@@ -291,10 +291,10 @@ def test_a_new_workspace_seeds_itself(cfg, tmp_path, monkeypatch):
     assert reachable(fresh.skills_dir)
 
 
-def test_a_new_workspace_says_what_it_wrote(cfg, tmp_path, capsys, monkeypatch):
-    """`is_new_workspace` also fires on a *misconfigured* workspace -- an unstable `~`,
-    a changed variable -- and a wrong path holding ten files reads more like success
-    than an empty one does.
+def test_a_new_definitions_folder_says_what_it_wrote(cfg, tmp_path, capsys, monkeypatch):
+    """A folder that is not there is as likely a *misconfigured* path -- an unstable
+    `~`, a changed variable -- as a first run, and a wrong path holding ten files reads
+    more like success than an empty one does.
     """
     fresh = _unused(cfg, tmp_path)
     driver = _driver_on(monkeypatch, fresh)
@@ -302,7 +302,7 @@ def test_a_new_workspace_says_what_it_wrote(cfg, tmp_path, capsys, monkeypatch):
     driver.main(["driver.py", "--list"])
 
     printed = capsys.readouterr().out
-    assert "created a new workspace" in printed
+    assert f"created a new definitions folder at {fresh.definitions}" in printed
 
     # The half this test is named for -- what it *wrote* -- is a loop, and an
     # empty one passes. Seeding writing no skills at all is exactly the failure
@@ -335,7 +335,9 @@ def test_the_driver_says_what_to_do_about_what_it_left(cfg, tmp_path, capsys, mo
     assert "register those" not in printed
 
 
-def test_a_workspace_that_already_exists_does_not_reseed(cfg, tmp_path, capsys, monkeypatch):
+def test_a_definitions_folder_that_already_exists_does_not_reseed(
+    cfg, tmp_path, capsys, monkeypatch
+):
     """The half that makes the other half safe."""
     fresh = _unused(cfg, tmp_path)
     driver = _driver_on(monkeypatch, fresh)
@@ -350,28 +352,30 @@ def test_a_workspace_that_already_exists_does_not_reseed(cfg, tmp_path, capsys, 
     assert edited.read_text(encoding="utf-8").endswith("mine\n")
 
 
-def test_a_new_workspace_seeds_before_the_catalogue_is_read(tmp_path, capsys, monkeypatch):
+def test_a_new_definitions_folder_seeds_before_the_catalogue_is_read(
+    tmp_path, capsys, monkeypatch
+):
     """The ordering, which is the whole reason any of this can work.
 
-    `models.yaml` lives *inside* the workspace, so a first run cannot load one:
-    `config_from_env` used to raise before the directory it needed had been created,
-    and the error it printed said to run `--seed-assets`, which failed the same way.
-    A first run could not reach seeding at all -- precisely the run seeding is for.
-    Measured on a workspace with no catalogue: it still seeds, and still exits 2 for
-    the missing file.
+    `models.yaml` lives *inside* the definitions folder, so a first run cannot load
+    one: `config_from_env` used to raise before the directory it needed had been
+    created, and the error it printed said to run `--seed-assets`, which failed the
+    same way. A first run could not reach seeding at all -- precisely the run seeding
+    is for. Measured on a folder with no catalogue: it still seeds, and still exits 2
+    for the missing file.
     """
     from tests.conftest import repository_root
     from tests.integration import driver
 
-    workspace = tmp_path / "brand-new"
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(workspace))
+    definitions = tmp_path / "brand-new"
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(definitions))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(repository_root() / "assets_examples"))
-    monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
 
     assert driver.main(["driver.py", "--list"]) == 2  # no catalogue, as expected
 
-    assert reachable(workspace / "skills")
-    assert (workspace / workspace_layout.EXAMPLE).is_file()
+    assert reachable(definitions / "skills")
+    assert (definitions / workspace_layout.EXAMPLE).is_file()
 
 
 def test_the_catalogue_error_stops_naming_a_command_that_already_ran(tmp_path):
@@ -414,15 +418,15 @@ def test_a_first_run_with_nothing_to_seed_is_quiet(cfg, tmp_path, capsys, monkey
     printed = capsys.readouterr().out
     assert f"seeded {workspace_layout.EXAMPLE}" not in printed
     assert "seeded skills/" not in printed
-    assert (fresh.workspace / workspace_layout.EXAMPLE).is_file()
+    assert (fresh.definitions / workspace_layout.EXAMPLE).is_file()
 
 
 def test_a_first_run_refused_for_want_of_definitions_seeds_on_the_next(
     cfg, tmp_path, capsys, monkeypatch
 ):
-    """The driver laid the workspace out before asking where to seed from, so a refused
-    first run wrote the marker, and the run after setting KINGFISHER_ASSETS -- what the
-    refusal said to do -- found a workspace that was no longer new and never seeded it.
+    """The driver once laid out before asking where to seed from, so a refused first run
+    left behind what made it look set up, and the run after setting KINGFISHER_ASSETS --
+    what the refusal said to do -- found nothing new and never seeded.
     """
     from dataclasses import replace
 

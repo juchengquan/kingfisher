@@ -1805,7 +1805,7 @@ WITNESSES: dict[str, str] = {
     # `README.md` opens on these four and the package docstring on `run`. A
     # reader who copied either is owed them.
     "definitions_source": "document",
-    "ensure_layout": "document",
+    "ensure_definitions": "document",
     "paths_from_env": "document",
     "seed": "document",
     "run": "document",
@@ -2393,7 +2393,7 @@ LIGHT_EXPORTS = frozenset({
     # route: `testing` reaches the standard library, and `CommandResult` is a
     # frozen dataclass in `domain.ports`.
     "COMMAND_RUNNER_CONTRACT", "CommandResult",
-    "ensure_layout", "config_from_env",
+    "ensure_definitions", "config_from_env",
     # What a `KINGFISHER_ADAPTERS_FACTORY` returns. Light because the setting is read
     # by `config_from_env`, and a row names its class as a string for exactly this.
     "Adapter", "Landing",

@@ -33,7 +33,7 @@ from kingfisher import (
     UnsafeReferenceError,
     config_from_env,
     definitions_source,
-    ensure_layout,
+    ensure_definitions,
     inventory,
     paths_from_env,
     seed,
@@ -435,13 +435,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _seed(source: str | None = None, *, everything: bool = False) -> int:
-    """Fill the workspace with definitions."""
+    """Fill the definitions folder."""
     paths = paths_from_env()
-    # The destination has to exist before anything is copied into it, and this is
-    # idempotent -- an already-laid-out workspace is untouched.
-    ensure_layout(
-        paths.workspace, authored=paths.authored_files, catalogue_roots=paths.catalogue_roots
-    )
+    # Before the source is asked for, which refuses when none is named: a deployment
+    # with nothing to seed still gets its folders and `models.yaml.example`, which is
+    # somewhere to start. Idempotent, so a folder already laid out is untouched.
+    ensure_definitions(paths.definitions)
 
     tree = definitions_source(paths, source)
     written = seed(paths, tree, everything=everything)

@@ -94,7 +94,7 @@ def test_skills_is_routed_for_the_same_reason(cfg, session_dir):
     """
     backend = backend_at(cfg, session_dir)
     assert "/skills/" in backend.routes
-    assert str((cfg.workspace / "skills").resolve()) == str(backend.routes["/skills/"].cwd)
+    assert str((cfg.definitions / "skills").resolve()) == str(backend.routes["/skills/"].cwd)
 
 
 def test_every_route_the_layout_declares_is_one_the_backend_mounts(cfg, session_dir):

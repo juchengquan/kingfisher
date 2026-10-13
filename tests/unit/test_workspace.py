@@ -3,13 +3,13 @@ from __future__ import annotations
 import os
 import shutil
 
-import pytest
-
 from kingfisher import WorkspacePaths, default_backends
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.workspace import (
     EXAMPLE,
+    EXAMPLES,
     LocalSessionDirs,
+    ensure_definitions,
     ensure_layout,
     ensure_session_layout,
 )
@@ -24,142 +24,124 @@ from tests.conftest import StubCheckpointer
 def test_layout_is_created_and_idempotent(tmp_path):
     ws = ensure_layout(tmp_path / "ws")
     ensure_layout(ws)
-    for name in (*LAYOUT_DIRS, *DEFINITION_KINDS):
+    for name in LAYOUT_DIRS:
         assert (ws / name).is_dir()
     assert (ws / ".kingfisher" / "WORKSPACE").exists()
 
 
-@pytest.mark.parametrize("kind", DEFINITION_KINDS)
-def test_a_moved_kind_is_made_where_it_points_and_not_in_the_workspace(kind, tmp_path):
-    """The layout made all five kinds in the workspace whatever `KINGFISHER_*_DIR` said,
-    so a deployment that moved one still got an empty folder there that nothing read.
-    """
-    elsewhere = tmp_path / "catalogue" / kind
-    paths = WorkspacePaths(tmp_path / "ws", **{f"{kind}_root": elsewhere})
-
-    ws = ensure_layout(paths.workspace, catalogue_roots=paths.catalogue_roots)
-
-    assert elsewhere.is_dir(), "the moved kind has no folder where it is read from"
-    assert not (ws / kind).exists(), "a folder in the workspace that nothing reads"
-    assert all((ws / other).is_dir() for other in DEFINITION_KINDS if other != kind), (
-        "a kind that did not move lost its folder"
-    )
-
-
-def test_a_folder_a_moved_kind_left_behind_is_kept(tmp_path):
-    """A layout that tidied away a moved kind's old folder would delete an operator's
-    directory on the first start after the setting changed.
+def test_the_workspace_layout_holds_nothing_a_person_writes(tmp_path):
+    """A kind folder or a worked example in the workspace is a place to write a
+    definition or a catalogue that nothing reads: both are read from the definitions
+    folder.
     """
     ws = ensure_layout(tmp_path / "ws")
-    moved = WorkspacePaths(ws, skills_root=tmp_path / "catalogue" / "skills")
 
-    ensure_layout(ws, catalogue_roots=moved.catalogue_roots)
-
-    assert (ws / "skills").is_dir()
+    assert {p.name for p in ws.iterdir()} == set(LAYOUT_DIRS)
 
 
-def test_the_service_makes_a_moved_kind_where_it_points(tmp_path):
-    """`Kingfisher` laid out every kind in the workspace, so a deployment that moved its
-    skills started with an empty `skills/` beside its sessions as well.
+def test_the_definitions_folder_is_laid_out_and_idempotent(tmp_path):
+    folder = ensure_definitions(tmp_path / "definitions")
+    ensure_definitions(folder)
+
+    for name in DEFINITION_KINDS:
+        assert (folder / name).is_dir(), name
+    for name in EXAMPLES:
+        assert (folder / name).is_file(), name
+
+
+def test_a_kind_folder_already_in_the_workspace_is_kept(tmp_path):
+    """A layout that tidied away a workspace's own `skills/` would delete an operator's
+    definitions on the first start after they moved to the definitions folder.
+    """
+    ws = tmp_path / "ws"
+    (ws / "skills" / "mine").mkdir(parents=True)
+
+    ensure_layout(ws)
+
+    assert (ws / "skills" / "mine").is_dir()
+
+
+def test_a_start_makes_no_kind_folder(tmp_path):
+    """A start that made the kinds it did not find would write into a folder several
+    deployments read, and hide a mount that failed behind a catalogue that is merely
+    empty.
     """
     from kingfisher import Kingfisher
     from kingfisher.config import Config
     from tests.conftest import FAKE_CATALOGUE
 
-    elsewhere = tmp_path / "catalogue" / "skills"
-    cfg = Config(workspace=tmp_path / "ws", models=FAKE_CATALOGUE, skills_root=elsewhere)
+    definitions = tmp_path / "definitions"
+    definitions.mkdir()
+    cfg = Config(workspace=tmp_path / "ws", definitions=definitions, models=FAKE_CATALOGUE)
 
     kf = Kingfisher(cfg, backends=default_backends)
 
-    assert elsewhere.is_dir()
-    assert not (kf.workspace / "skills").exists(), "a folder in the workspace nothing reads"
+    assert not list(definitions.iterdir()), "a start wrote into the definitions folder"
+    assert not set(DEFINITION_KINDS) & {p.name for p in kf.workspace.iterdir()}, (
+        "a folder in the workspace that nothing reads"
+    )
 
 
-def test_the_layout_carries_the_catalogue_example(tmp_path):
+def test_the_definitions_folder_carries_the_catalogue_example(tmp_path):
     """`models.yaml` is required and has no fallback, so its worked example is the one
     document a new deployment cannot start without reading -- and the error it hits
     without one names this file as the place to look.
     """
-    ws = ensure_layout(tmp_path / "ws")
+    folder = ensure_definitions(tmp_path / "definitions")
 
-    assert (ws / EXAMPLE).is_file()
-    assert "models" in (ws / EXAMPLE).read_text(encoding="utf-8")
+    assert (folder / EXAMPLE).is_file()
+    assert "models" in (folder / EXAMPLE).read_text(encoding="utf-8")
 
 
-def test_the_layout_carries_a_keys_example_holding_no_keys(tmp_path):
-    """Placed beside the catalogue's, so it is found where people look. It holds no live
-    entry, so renaming it in place puts nothing readable in the workspace until a key is
-    typed into it -- and its first lines say to copy it out first.
+def test_the_definitions_folder_carries_a_keys_example_holding_no_keys(tmp_path):
+    """Placed beside the catalogue's, whose `key:` entries name its lines. It holds no
+    live entry, so renaming it in place puts no key in a folder several deployments read
+    until one is typed into it -- and its first lines say to copy it out first.
     """
     import yaml
 
     from kingfisher.infrastructure.workspace.layout import KEYS_EXAMPLE
 
-    ws = ensure_layout(tmp_path / "ws")
-    text = (ws / KEYS_EXAMPLE).read_text(encoding="utf-8")
+    folder = ensure_definitions(tmp_path / "definitions")
+    text = (folder / KEYS_EXAMPLE).read_text(encoding="utf-8")
 
     assert yaml.safe_load(text) is None, "the example carries a live entry"
     assert "KINGFISHER_MODEL_KEYS_FILE" in text
-    assert "out of this workspace" in text
+    assert "out of this folder" in text
 
 
 def test_the_catalogue_example_is_refreshed_but_not_rewritten(tmp_path):
     """Neither of the two obvious rules."""
-    ws = ensure_layout(tmp_path / "ws")
-    example = ws / EXAMPLE
+    folder = ensure_definitions(tmp_path / "definitions")
+    example = folder / EXAMPLE
     untouched = example.stat().st_mtime_ns
 
-    ensure_layout(ws)
+    ensure_definitions(folder)
     assert example.stat().st_mtime_ns == untouched, "rewrote an identical file"
 
     example.write_text("# stale\n", encoding="utf-8")
-    ensure_layout(ws)
+    ensure_definitions(folder)
     assert example.read_text(encoding="utf-8") != "# stale\n", "never refreshed"
 
 
-def test_the_example_lands_beside_a_relocated_catalogue(tmp_path):
-    """Beside the file it is an example of, which is not always the workspace."""
-    ws = tmp_path / "ws"
-    shared = tmp_path / "catalogue" / "models.yaml"
+def test_the_example_lands_beside_the_catalogue_it_describes(tmp_path):
+    """Asked of where `models.yaml` is read from rather than of a folder written out
+    here, so moving the catalogue without its example fails rather than passing on a
+    copy that sits where nothing reads.
+    """
+    paths = WorkspacePaths(tmp_path / "definitions", workspace=tmp_path / "ws")
 
-    ensure_layout(ws, authored={"models.yaml": shared, "source_ids.yaml": ws / "source_ids.yaml"})
+    ensure_definitions(paths.definitions)
 
-    assert (shared.parent / EXAMPLE).is_file()
-    assert not (ws / EXAMPLE).exists(), "a second copy where nothing reads it"
+    assert (paths.authored_files["models.yaml"].parent / EXAMPLE).is_file()
 
 
 def test_no_source_ids_example_is_placed_anywhere(tmp_path):
     """`groups.yaml.example` shipped and was placed for two days, and went."""
-    ws = tmp_path / "ws"
-    policy = tmp_path / "policy" / "source_ids.yaml"
+    folder = ensure_definitions(tmp_path / "definitions")
 
-    ensure_layout(ws, authored={"models.yaml": ws / "models.yaml", "source_ids.yaml": policy})
-
-    assert not list(policy.parent.glob("*.example")), "a source ids example came back"
-    assert not list(ws.glob("source_ids.yaml*")), "a source ids file appeared in the workspace"
-    assert (ws / EXAMPLE).is_file(), "the catalogue did not move, so its example stays"
-
-
-@pytest.mark.skipif(os.geteuid() == 0, reason="root writes into a mode 0o500 directory")
-def test_an_unwritable_destination_falls_back_to_the_workspace(tmp_path):
-    """Furniture is best-effort, and a shared catalogue is often read-only."""
-    ws = tmp_path / "ws"
-    locked = tmp_path / "locked"
-    locked.mkdir()
-    locked.chmod(0o500)
-
-    try:
-        ensure_layout(
-            ws,
-            authored={
-                "models.yaml": locked / "models.yaml",
-                "source_ids.yaml": ws / "source_ids.yaml",
-            },
-        )
-    finally:
-        locked.chmod(0o700)
-
-    assert (ws / EXAMPLE).is_file()
+    assert not list(folder.glob("source_ids.yaml*")), "a source ids file or example came back"
+    assert (folder / EXAMPLE).is_file(), "the control: the catalogue's example is there"
 
 
 def test_no_gitignore_is_written_for_a_repository_nothing_manages(workspace):
@@ -183,7 +165,8 @@ def sweep(workspace, keep, checkpointer):
     from tests.conftest import FAKE_CATALOGUE
     from tests.unit.test_run import StubAgent
 
-    cfg = Config(workspace=workspace, models=FAKE_CATALOGUE)
+    definitions = ensure_definitions(workspace.parent / "definitions")
+    cfg = Config(workspace=workspace, definitions=definitions, models=FAKE_CATALOGUE)
     kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends, threads=checkpointer)
     return kf.reap(older_than_seconds=keep, now=time.time())
 

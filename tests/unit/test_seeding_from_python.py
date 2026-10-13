@@ -7,12 +7,12 @@ import pytest
 from kingfisher import (
     WorkspacePaths,
     definitions_source,
-    ensure_layout,
+    ensure_definitions,
     seed,
 )
 from kingfisher.config import ConfigError
 from tests.conftest import repository_root
-from tests.integration.seed_example import main, seed_workspace
+from tests.integration.seed_example import main, seed_definitions
 
 
 @pytest.fixture
@@ -25,67 +25,54 @@ def assets_examples():
     return repository_root() / "assets_examples"
 
 
-def test_the_readme_flow_seeds_a_workspace(tmp_path, assets_examples):
+def test_the_readme_flow_seeds_a_definitions_folder(tmp_path, assets_examples):
     """The four calls from the README, in the order it gives them."""
-    paths = WorkspacePaths(tmp_path / "ws")
+    paths = WorkspacePaths(tmp_path / "definitions")
 
-    ensure_layout(
-        paths.workspace, authored=paths.authored_files, catalogue_roots=paths.catalogue_roots
-    )
+    ensure_definitions(paths.definitions)
     source = definitions_source(paths, assets_examples)
     done = seed(paths, source)
 
     assert done.written, "the documented flow seeded nothing"
-    assert not done.overwritten, "a fresh workspace has nothing to overwrite"
+    assert not done.overwritten, "a fresh folder has nothing to overwrite"
     # What landed is loadable, which is the half `test_seeding.py` cannot see:
     # it asserts on what `seed` reported, and this asserts on what is on disk.
     # `general` rather than `assistant`, which names middleware and so arrives
     # only with `everything=True`.
-    assert (paths.workspace / "agents" / "general.yaml").is_file()
-    assert (paths.workspace / "skills").is_dir()
+    assert (paths.definitions / "agents" / "general.yaml").is_file()
+    assert (paths.definitions / "skills").is_dir()
 
 
-def test_laying_out_alone_writes_the_example_catalogue(tmp_path, assets_examples):
+def test_laying_out_alone_writes_the_example_catalogue(tmp_path):
     """`models.yaml.example` arrives with the layout, before anything is seeded."""
-    paths = WorkspacePaths(tmp_path / "ws")
+    paths = WorkspacePaths(tmp_path / "definitions")
 
-    ensure_layout(paths.workspace, authored=paths.authored_files)
+    ensure_definitions(paths.definitions)
 
-    assert (paths.workspace / "models.yaml.example").is_file(), (
-        "laying out the workspace no longer writes the example catalogue, so the "
-        "README's ordering has stopped meaning anything"
+    assert (paths.definitions / "models.yaml.example").is_file(), (
+        "laying out the definitions folder no longer writes the example catalogue, so "
+        "the README's ordering has stopped meaning anything"
     )
 
 
-def test_the_flow_follows_a_relocated_catalogue(tmp_path, assets_examples):
-    """The README's first two calls, for a deployment that moved `models.yaml`."""
-    shared = tmp_path / "shared"
-    paths = WorkspacePaths(tmp_path / "ws", models_file=shared / "models.yaml")
-
-    seed(paths, definitions_source(paths, assets_examples))
-
-    assert (shared / "models.yaml.example").is_file(), (
-        "seeding wrote the example where the catalogue is not read from"
-    )
-
-
-def test_the_flow_makes_no_folder_for_a_moved_kind(tmp_path, assets_examples):
-    """`seed` laid the workspace out with every kind in it, so a deployment that moved
-    its skills got them seeded where it pointed and an empty `skills/` beside them.
+def test_the_flow_writes_nothing_into_a_workspace(tmp_path, assets_examples):
+    """Seeding laid a workspace out and put `models.yaml.example` in it, where nothing
+    reads it: the catalogue and every definition are read from the definitions folder.
     """
-    elsewhere = tmp_path / "shared" / "skills"
-    paths = WorkspacePaths(tmp_path / "ws", skills_root=elsewhere)
+    workspace = tmp_path / "ws"
+    paths = WorkspacePaths(tmp_path / "definitions", workspace=workspace)
 
+    ensure_definitions(paths.definitions)
     seed(paths, definitions_source(paths, assets_examples))
 
-    assert any(elsewhere.iterdir()), "the moved catalogue was not seeded"
-    assert not (paths.workspace / "skills").exists(), "a skills/ nothing reads"
+    assert (paths.definitions / "models.yaml.example").is_file(), "the control"
+    assert not workspace.exists(), "seeding made or wrote into the workspace"
 
 
 def test_the_flow_reports_what_it_left_behind(tmp_path, assets_examples):
     """The field the README tells you to read, and why it tells you."""
-    paths = WorkspacePaths(tmp_path / "ws")
-    ensure_layout(paths.workspace)
+    paths = WorkspacePaths(tmp_path / "definitions")
+    ensure_definitions(paths.definitions)
 
     done = seed(paths, definitions_source(paths, assets_examples))
 
@@ -96,7 +83,7 @@ def test_the_flow_reports_what_it_left_behind(tmp_path, assets_examples):
     for left in done.skipped:
         assert left.label, "a skip with no label says nothing to a caller"
         assert left.names, "a skip has to name what it would have needed"
-        assert not (paths.workspace / left.label).exists(), (
+        assert not (paths.definitions / left.label).exists(), (
             f"{left.label} was reported skipped and copied anyway"
         )
 
@@ -105,8 +92,8 @@ def test_everything_takes_what_the_default_leaves(tmp_path, assets_examples):
     """The other half of the README paragraph, for a deployment that registered the
     names.
     """
-    paths = WorkspacePaths(tmp_path / "ws")
-    ensure_layout(paths.workspace)
+    paths = WorkspacePaths(tmp_path / "definitions")
+    ensure_definitions(paths.definitions)
 
     default = seed(paths, definitions_source(paths, assets_examples))
     complete = seed(paths, definitions_source(paths, assets_examples), everything=True)
@@ -117,7 +104,7 @@ def test_everything_takes_what_the_default_leaves(tmp_path, assets_examples):
         "README documents does nothing"
     )
     for left in default.skipped:
-        assert (paths.workspace / left.label).is_file(), (
+        assert (paths.definitions / left.label).is_file(), (
             f"{left.label} was left behind by the default and not taken by --all"
         )
 
@@ -126,11 +113,12 @@ def test_a_workspace_paths_is_destination_enough(tmp_path, assets_examples):
     """`seed` takes a destination, not a whole `Config`.
 
     Driven rather than asserted about the annotation, because what matters is that it
-    works with no catalogue on disk -- the state this asserts by never writing one.
+    works with no catalogue on disk and no workspace named -- the state this asserts by
+    never writing either.
     """
-    paths = WorkspacePaths(tmp_path / "ws")
-    ensure_layout(paths.workspace)
-    assert not (paths.workspace / "models.yaml").exists(), "no catalogue yet, deliberately"
+    paths = WorkspacePaths(tmp_path / "definitions")
+    assert paths.workspace is None, "no workspace, deliberately"
+    assert not (paths.definitions / "models.yaml").exists(), "no catalogue yet, deliberately"
 
     assert seed(paths, definitions_source(paths, assets_examples)).written
 
@@ -138,7 +126,7 @@ def test_a_workspace_paths_is_destination_enough(tmp_path, assets_examples):
 def test_no_source_configured_says_how_to_name_one(tmp_path, monkeypatch):
     """Nothing ships, so there is no set to fall back on."""
     monkeypatch.delenv("KINGFISHER_ASSETS", raising=False)
-    paths = WorkspacePaths(tmp_path / "ws")
+    paths = WorkspacePaths(tmp_path / "definitions")
 
     with pytest.raises(ConfigError, match="KINGFISHER_ASSETS"):
         definitions_source(paths)
@@ -147,21 +135,21 @@ def test_no_source_configured_says_how_to_name_one(tmp_path, monkeypatch):
 # -- the script on the live shelf ----------------------------------------
 
 
-def test_the_example_script_seeds_a_workspace(tmp_path, assets_examples):
+def test_the_example_script_seeds_a_definitions_folder(tmp_path, assets_examples):
     """`tests/integration/seed_example.py` is driven, not just readable."""
-    done = seed_workspace(tmp_path / "ws", assets_examples)
+    done = seed_definitions(tmp_path / "definitions", assets_examples)
 
     assert done.written
-    assert (tmp_path / "ws" / "agents" / "general.yaml").is_file()
-    assert (tmp_path / "ws" / "models.yaml.example").is_file(), (
-        "the example stopped laying the workspace out before seeding it"
+    assert (tmp_path / "definitions" / "agents" / "general.yaml").is_file()
+    assert (tmp_path / "definitions" / "models.yaml.example").is_file(), (
+        "the example stopped laying the folder out before seeding it"
     )
 
 
 def test_the_example_script_takes_everything_too(tmp_path, assets_examples):
     """Both branches, because the flag is half of what the example teaches."""
-    default = seed_workspace(tmp_path / "a", assets_examples)
-    complete = seed_workspace(tmp_path / "b", assets_examples, everything=True)
+    default = seed_definitions(tmp_path / "a", assets_examples)
+    complete = seed_definitions(tmp_path / "b", assets_examples, everything=True)
 
     assert default.skipped
     assert not complete.skipped
@@ -170,7 +158,7 @@ def test_the_example_script_takes_everything_too(tmp_path, assets_examples):
 
 def test_the_example_script_reports_what_it_left(tmp_path, assets_examples, capsys):
     """Its output is its point, so the output is what this asserts."""
-    code = main(["--workspace", str(tmp_path / "ws"), "--from", str(assets_examples)])
+    code = main(["--definitions", str(tmp_path / "definitions"), "--from", str(assets_examples)])
     printed = capsys.readouterr().out
 
     assert code == 0
@@ -189,13 +177,13 @@ def test_the_example_script_refuses_with_no_source_configured(tmp_path, monkeypa
     than a snippet.
     """
     monkeypatch.delenv("KINGFISHER_ASSETS", raising=False)
-    workspace = tmp_path / "ws"
+    definitions = tmp_path / "definitions"
 
-    code = main(["--workspace", str(workspace)])
+    code = main(["--definitions", str(definitions)])
 
     assert code == 2, "a missing source is a configuration error, not an empty run"
     assert "KINGFISHER_ASSETS" in capsys.readouterr().err
-    assert (workspace / "models.yaml.example").is_file(), (
-        "the refusal left an unlaid-out workspace, so the explicit `ensure_layout` "
-        "in the example buys nothing and the README's reason for it is wrong"
+    assert (definitions / "models.yaml.example").is_file(), (
+        "the refusal left no laid-out folder, so the explicit `ensure_definitions` in "
+        "the example buys nothing and the README's reason for it is wrong"
     )

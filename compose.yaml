@@ -62,13 +62,15 @@ services:
       # survivable on a disk and is not survivable in memory shared by every
       # session in this container.
       KINGFISHER_SESSION_MAX_BYTES: "134217728"
-      KINGFISHER_MODELS_FILE: /config/models.yaml
     volumes:
       # Where sessions are kept when the container is not. A named volume today
       # and a bucket tomorrow: `SessionStore` is the seam, and this side of it
       # is the deployment's business.
       - kept:/kept
-      - ./models.yaml:/config/models.yaml:ro
+      # The definitions folder, `models.yaml` included, kept on the host where it is
+      # reviewed. Writable only so `docker compose run kingfisher seed` can fill it
+      # the first time: a start reads it and never writes it.
+      - ./definitions:/definitions
 
 volumes:
   kept:

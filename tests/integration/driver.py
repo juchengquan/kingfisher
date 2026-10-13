@@ -40,7 +40,6 @@ from kingfisher import (
     ConfigError,
     Request,
     config_from_env,
-    ensure_layout,
     paths_from_env,
 )
 from kingfisher.config import Config
@@ -49,8 +48,8 @@ from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.harness.runlog import usage_of
 from kingfisher.infrastructure.workspace import (
     SEED_HINT,
+    ensure_layout,
     ensure_session_layout,
-    is_new_workspace,
     seeding,
 )
 from kingfisher.layout import OUTPUTS
@@ -99,7 +98,7 @@ def prepare_smoke(cfg: Config, workspace: Path, session_id: str) -> list[str]:
     seeded = []
     if seed_sample_data(directory):
         seeded.append("dataset into /inputs")
-    if cfg.skills_enabled and seed_sample_skill(workspace):
+    if cfg.skills_enabled and seed_sample_skill(cfg.definitions):
         seeded.append("skill into /skills")
     return seeded
 
@@ -235,23 +234,26 @@ def main(argv: list[str]) -> int:
     load_dotenv()
     args = build_parser().parse_args(argv[1:])
 
-    # The directories first, and the catalogue after. A brand-new workspace has
-    # no `models.yaml` -- it is a file *inside* the workspace -- so `config_from_env`
-    # used to fail before the directory it needed had been created, and the
-    # error told you to run `--seed-assets`, which failed the same way. A first
-    # run could not reach seeding at all, which is precisely the run seeding is
-    # for. This ordering is what makes the message it prints true.
+    # The directories first, and the catalogue after. A brand-new definitions folder
+    # has no `models.yaml` -- it is a file *inside* that folder -- so `config_from_env`
+    # would fail before seeding had made it, and a first run could not reach seeding
+    # at all, which is precisely the run seeding is for. This ordering is what makes
+    # the message it prints true.
     try:
         paths = paths_from_env()
     except ConfigError as exc:
         print(f"configuration error: {exc}", file=sys.stderr)
         print("copy .env.example to .env and fill it in", file=sys.stderr)
         return 2
+    if paths.workspace is None:
+        print("configuration error: KINGFISHER_WORKSPACE is required", file=sys.stderr)
+        print("copy .env.example to .env and fill it in", file=sys.stderr)
+        return 2
 
-    fresh = is_new_workspace(paths.workspace)
-    # Asked before the layout, because laying it out writes the marker: a refusal after
-    # that leaves a workspace that is no longer new, and the run that follows the advice
-    # below never seeds it.
+    fresh = not paths.definitions.exists()
+    # Asked before seeding, because seeding makes the folder: a refusal after that
+    # leaves one that is no longer new, and the run that follows the advice below never
+    # seeds it.
     if fresh:
         try:
             source = seeding.definitions_source(paths)
@@ -259,15 +261,14 @@ def main(argv: list[str]) -> int:
             print(f"configuration error: {exc}", file=sys.stderr)
             print(f"this driver takes no --from; {SEED_HINT} does", file=sys.stderr)
             return 2
-    workspace = ensure_layout(paths.workspace, catalogue_roots=paths.catalogue_roots)
-    if fresh:
-        print(f"created a new workspace at {workspace}")
+    workspace = ensure_layout(paths.workspace)
 
-    # A new workspace seeds itself. It is empty by definition, so nothing can be
-    # overwritten, and this is the first moment the destination exists. It says what it
-    # wrote, because `is_new_workspace` also fires on a *misconfigured* one -- a wrong
-    # path holding ten files reads more like success than an empty one does.
+    # A new definitions folder seeds itself. It does not exist yet, so nothing can be
+    # overwritten. It says what it wrote, because a path that does not exist is as
+    # likely a misconfigured one as a first run -- and ten definitions arriving
+    # somewhere unexpected read more like success than an empty folder does.
     if fresh:
+        print(f"created a new definitions folder at {paths.definitions}")
         result = seeding.seed(paths, source)
         # `report` rather than a loop of this driver's own. What it prints about a
         # skipped definition is the reason `--agent researcher` would otherwise fail

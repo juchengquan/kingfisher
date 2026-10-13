@@ -8,12 +8,10 @@ pip install kingfisher
 ```
 
 ```python
-from kingfisher import definitions_source, ensure_layout, paths_from_env, seed
+from kingfisher import definitions_source, ensure_definitions, paths_from_env, seed
 
 paths = paths_from_env()
-ensure_layout(
-    paths.workspace, authored=paths.authored_files, catalogue_roots=paths.catalogue_roots
-)
+ensure_definitions(paths.definitions)
 
 done = seed(paths, definitions_source(paths))
 for name in done.written:
@@ -22,23 +20,23 @@ for left in done.skipped:
     print(f"skipped {left.label} — needs {', '.join(left.names)}")
 ```
 
-Four calls, and the first is belt-and-braces rather than an ordering you have to
-get right. `seed` lays the workspace out itself, so `models.yaml.example` arrives
-whether or not you call `ensure_layout` — a deployment told to write
-`models.yaml` and given no example of one is a dead end, and the library closes
-it from the inside. `authored` is where that example goes: `models.yaml` and
-`source_ids.yaml` both relocate, and an example a directory away from the file it
-describes is the same dead end wearing a different coat. `catalogue_roots` is
-where each kind of definition is read from, and its folder is made there: a kind
-moved with `KINGFISHER_SKILLS_DIR` or a sibling gets none in the workspace, where
-a definition would sit unread.
+A deployment keeps two folders apart. `KINGFISHER_DEFINITIONS_DIR` is what people
+write — agents, middlewares, skills, subagents, tools, and `models.yaml` and
+`source_ids.yaml` beside them — and several deployments can point at one.
+`KINGFISHER_WORKSPACE` is what sessions make. Seeding writes into the first and
+needs nothing else; a start only reads it, and never creates it.
+
+Four calls, and the second is belt-and-braces rather than an ordering you have to
+get right. `seed` lays the definitions folder out itself, so `models.yaml.example`
+arrives whether or not you call `ensure_definitions` — a deployment told to write
+`models.yaml` and given no example of one is a dead end, and the library closes it
+from the inside.
 
 What the explicit call still buys is the path `seed` never reaches.
 `definitions_source` refuses when a deployment has named no assets, and it
 refuses *before* seeding starts — so without the line above, that deployment gets
-an empty directory and a traceback instead of a laid-out workspace and an error
-explaining itself. Cheap, idempotent, and it only shows up on the day something
-is misconfigured.
+no folder at all instead of a laid-out one and an error explaining itself. Cheap,
+idempotent, and it only shows up on the day something is misconfigured.
 
 `seed` requires a directory to copy from and will not invent one;
 `definitions_source` is what turns configuration into that directory, reading
@@ -48,7 +46,7 @@ same two:
     kingfisher seed                          # from KINGFISHER_ASSETS
     kingfisher seed --from ./my-definitions  # from here instead
 
-**Read `skipped`, or your workspace will quietly be missing agents.** A
+**Read `skipped`, or your deployment will quietly be missing agents.** A
 definition naming middleware or source ids this deployment has not registered is
 refused when it is built, so seeding one produces a file that cannot run.
 `seed` leaves those behind and says which names each would have needed;
@@ -58,9 +56,9 @@ among them, and ships the middleware they name beside them -- so seed that set
 with `--all`.
 
 `seed` takes a *destination* rather than a whole `Config` — anything with a
-`workspace` and `catalogue_roots`, which both `WorkspacePaths` and `Config`
-satisfy. That is what lets it run on a fresh workspace, before there is a
-`models.yaml` inside it to read.
+`definitions` folder, which both `WorkspacePaths` and `Config` satisfy. That is
+what lets it run on a fresh folder, before there is a `models.yaml` inside it to
+read.
 
 The formats — agents, skills, subagents, and the catalogue they live in — are
 documented in [`docs/guides/formats.md`](docs/guides/formats.md). Tools and
@@ -72,7 +70,7 @@ deepagents actually does underneath it.
 
 `kingfisher list` shows what a workspace offers a request, kind by kind, and
 where each one came from. `kingfisher seed` writes a starting
-workspace. `kingfisher sessions` shows what that workspace is holding — one line
+definitions folder. `kingfisher sessions` shows what the workspace is holding — one line
 per session, how long it has been idle and what it costs — and `kingfisher reap`
 deletes the ones it is finished with. `kingfisher artifact --session ID
 outputs/report.html` fetches one file a turn produced, by the name the run

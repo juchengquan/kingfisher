@@ -252,9 +252,9 @@ def shell_confinement(cfg: Config, *, skills: tuple[Path, ...] | None = None) ->
         extra=cfg.shell_path_extra,
         skills=(cfg.skills_dir, *cfg.skills_mounts.values()) if skills is None else skills,
         definitions=tuple(cfg.catalogue_roots.values()),
-        # The keys file joins them here rather than in `authored_files`, which also
-        # decides what `ensure_layout` scaffolds -- and a keys file that does not exist
-        # must not be written. The reason to protect it is the one `profile` already
+        # The keys file joins them here rather than in `authored_files`, which names
+        # what sits in the definitions folder -- and a keys file is kept out of that
+        # shared folder. The reason to protect it is the one `profile` already
         # gives for `models.yaml`: a shell that can edit it picks the key the next start
         # sends, and one that can make it unparseable refuses the start outright.
         #

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import os
-from dataclasses import fields, replace
+from dataclasses import fields
 from pathlib import Path
 
 import pytest
 
 from kingfisher.application import config as config_module
 from kingfisher.application.config import Environment, config_from_env
-from kingfisher.config import DEFAULT_THREAD_POOL_SIZE, ConfigError
+from kingfisher.config import DEFAULT_THREAD_POOL_SIZE, FOLDED_SETTINGS, ConfigError
 from kingfisher.domain.access import AccessError
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from tests.conftest import FAKE_CATALOGUE, subagents_dir
@@ -35,17 +35,22 @@ models:
 """
 
 
+def bare(tmp_path: Path) -> dict[str, str]:
+    """A workspace and a definitions folder holding nothing at all."""
+    definitions = tmp_path / "definitions"
+    definitions.mkdir(exist_ok=True)
+    return {
+        "KINGFISHER_WORKSPACE": str(tmp_path / "ws"),
+        "KINGFISHER_DEFINITIONS_DIR": str(definitions),
+    }
+
+
 @pytest.fixture
 def env(tmp_path):
     """A deployment with a catalogue on disk and both its keys present."""
-    path = tmp_path / "models.yaml"
-    path.write_text(CATALOGUE, encoding="utf-8")
-    return {
-        "KINGFISHER_WORKSPACE": str(tmp_path / "ws"),
-        "KINGFISHER_MODELS_FILE": str(path),
-        "GATEWAY_API_KEY": "sk-gateway",
-        "OPENAI_API_KEY": "sk-openai",
-    }
+    values = bare(tmp_path)
+    (tmp_path / "definitions" / "models.yaml").write_text(CATALOGUE, encoding="utf-8")
+    return {**values, "GATEWAY_API_KEY": "sk-gateway", "OPENAI_API_KEY": "sk-openai"}
 
 
 # -- the catalogue is required ---------------------------------------------
@@ -57,7 +62,7 @@ def test_the_catalogue_is_required_with_no_default(tmp_path):
     first time kingfisher is pointed somewhere new.
     """
     with pytest.raises(ConfigError, match="no model catalogue at"):
-        config_from_env({"KINGFISHER_WORKSPACE": str(tmp_path / "ws")})
+        config_from_env(bare(tmp_path))
 
 
 def test_the_absent_file_error_shows_a_working_example(tmp_path):
@@ -65,21 +70,102 @@ def test_the_absent_file_error_shows_a_working_example(tmp_path):
     an unusually explanatory `.env.example`.
     """
     with pytest.raises(ConfigError) as raised:
-        config_from_env({"KINGFISHER_WORKSPACE": str(tmp_path / "ws")})
+        config_from_env(bare(tmp_path))
 
     message = str(raised.value)
     for expected in ("endpoints:", "api: anthropic", "key_env:", "default:", "models:"):
         assert expected in message
 
 
-def test_it_defaults_inside_the_workspace(tmp_path):
-    workspace = tmp_path / "ws"
-    workspace.mkdir()
-    (workspace / "models.yaml").write_text(CATALOGUE, encoding="utf-8")
+def test_the_catalogue_is_read_from_the_definitions_folder(env, tmp_path):
+    """A `models.yaml` read from anywhere else is one a deployment did not review."""
+    assert config_from_env(env).models.source == tmp_path / "definitions" / "models.yaml"
 
-    cfg = config_from_env({"KINGFISHER_WORKSPACE": str(workspace), "GATEWAY_API_KEY": "sk-gateway"})
 
-    assert cfg.models.source == workspace / "models.yaml"
+# -- the two folders ---------------------------------------------------------
+
+
+def test_the_definitions_folder_is_required(tmp_path):
+    """A default would put it inside the workspace again, which is the mix this ends."""
+    with pytest.raises(ConfigError, match="KINGFISHER_DEFINITIONS_DIR is required"):
+        config_from_env({"KINGFISHER_WORKSPACE": str(tmp_path / "ws")})
+
+
+def test_a_definitions_folder_that_is_not_there_is_refused_rather_than_made(env, tmp_path):
+    """A start that made one would hide a mount that failed behind an empty catalogue,
+    and write into a folder several deployments may read.
+    """
+    missing = tmp_path / "not-mounted"
+
+    with pytest.raises(ConfigError, match="not a directory"):
+        config_from_env({**env, "KINGFISHER_DEFINITIONS_DIR": str(missing)})
+
+    assert not missing.exists()
+
+
+def test_seeding_needs_the_definitions_folder_and_nothing_else(tmp_path):
+    """Seeding writes into the definitions folder alone, so a deployment that only
+    seeds is not asked for a workspace -- while serving one still is.
+    """
+    only = {"KINGFISHER_DEFINITIONS_DIR": str(tmp_path / "definitions")}
+
+    paths = Environment(only).paths()
+
+    assert paths.workspace is None
+    assert paths.catalogue_roots["skills"] == tmp_path / "definitions" / "skills"
+    with pytest.raises(ConfigError, match="KINGFISHER_WORKSPACE is required"):
+        config_from_env(only)
+
+
+@pytest.mark.parametrize(
+    ("workspace", "definitions"),
+    [("same", "same"), ("defs/ws", "defs"), ("ws", "ws/defs")],
+    ids=["one-folder", "workspace-inside", "definitions-inside"],
+)
+def test_two_folders_that_overlap_are_refused(env, tmp_path, workspace, definitions):
+    """Either way round loses what the split is for: sessions written into the folder
+    people review, or definitions where every session's shell can read them.
+
+    Asked of the environment, of seeding's half of it and of a `Config` built in code,
+    because each is a way in that would otherwise lay one folder over the other.
+    """
+    from kingfisher.config import Config
+
+    (tmp_path / definitions).mkdir(parents=True)
+    values = {
+        **env,
+        "KINGFISHER_WORKSPACE": str(tmp_path / workspace),
+        "KINGFISHER_DEFINITIONS_DIR": str(tmp_path / definitions),
+    }
+
+    with pytest.raises(ConfigError, match="neither may be inside the other"):
+        config_from_env(values)
+    with pytest.raises(ConfigError, match="neither may be inside the other"):
+        Environment(values).paths()
+    with pytest.raises(ConfigError, match="neither may be inside the other"):
+        Config(
+            workspace=tmp_path / workspace,
+            definitions=tmp_path / definitions,
+            models=FAKE_CATALOGUE,
+        )
+
+
+def test_two_folders_side_by_side_are_not_refused(env):
+    """The control beside the refusals: a rule refusing every pair passes all of them."""
+    assert config_from_env(env).workspace.parent == config_from_env(env).definitions.parent
+
+
+@pytest.mark.parametrize("setting", sorted(FOLDED_SETTINGS))
+def test_a_setting_that_moved_one_kind_is_refused(env, tmp_path, setting):
+    """Ignored, it would serve the definitions folder's copy where the deployment chose
+    another -- and seeding would copy into a folder it was never told about.
+    """
+    values = {**env, setting: str(tmp_path / "elsewhere")}
+
+    with pytest.raises(ConfigError, match=f"{setting} was removed"):
+        config_from_env(values)
+    with pytest.raises(ConfigError, match=f"{setting} was removed"):
+        Environment(values).paths()
 
 
 # -- what it resolves to ---------------------------------------------------
@@ -151,7 +237,7 @@ def test_a_default_naming_nothing_is_a_different_error(env, tmp_path):
     """A broken file and an unfinished deployment read differently and are worded
     differently.
     """
-    (tmp_path / "models.yaml").write_text(
+    (tmp_path / "definitions" / "models.yaml").write_text(
         CATALOGUE.replace("default: MiniMax-M3", "default: typo-5"), encoding="utf-8"
     )
 
@@ -194,58 +280,31 @@ def test_the_host_side_roots_are_no_longer_settings(env):
         assert not hasattr(cfg, gone), f"{gone} is still a setting"
 
 
-def test_the_catalogue_defaults_inside_the_workspace(env):
-    """Unset changes nothing: definitions stay where they have always been."""
+def test_every_kind_is_read_from_its_own_name_in_the_definitions_folder(env, tmp_path):
+    """Asked of the kinds rather than listed, so a sixth kind meets this the day it is
+    added -- the way `middlewares` arrived once with no way to reach it.
+    """
     cfg = config_from_env(env)
+    definitions = tmp_path / "definitions"
 
-    assert cfg.skills_root is None
-    assert cfg.subagents_root is None
-    assert cfg.skills_dir == cfg.workspace / "skills"
-    assert subagents_dir(cfg) == cfg.workspace / "subagents"
+    assert cfg.catalogue_roots == {kind: definitions / kind for kind in DEFINITION_KINDS}
+    assert cfg.skills_dir == definitions / "skills"
+    assert subagents_dir(cfg) == definitions / "subagents"
+    assert cfg.authored_files == {
+        "models.yaml": definitions / "models.yaml",
+        "source_ids.yaml": definitions / "source_ids.yaml",
+    }
 
 
-def test_the_catalogue_can_be_shared_between_workspaces(env, tmp_path):
-    """The point of the phase: one reviewed set of definitions, deployed once, rather
+def test_the_definitions_can_be_shared_between_workspaces(env, tmp_path):
+    """The point of the folder: one reviewed set of definitions, deployed once, rather
     than a copy per workspace that nobody can audit centrally.
     """
-    cfg = config_from_env(
-        {
-            **env,
-            "KINGFISHER_SKILLS_DIR": str(tmp_path / "catalogue" / "skills"),
-            "KINGFISHER_SUBAGENTS_DIR": str(tmp_path / "catalogue" / "subagents"),
-        }
-    )
+    one = config_from_env(env)
+    other = config_from_env({**env, "KINGFISHER_WORKSPACE": str(tmp_path / "other")})
 
-    assert cfg.skills_dir == tmp_path / "catalogue" / "skills"
-    assert subagents_dir(cfg) == tmp_path / "catalogue" / "subagents"
-
-
-@pytest.mark.parametrize("kind", DEFINITION_KINDS)
-def test_every_definition_kind_relocates_by_its_own_variable(kind, env, tmp_path):
-    """Driven rather than read off the source, because the chain that broke had four
-    links and a check on any one of them passes while the value goes nowhere.
-
-    `middlewares` was unreachable from the day it arrived: `definition_roots_for` took
-    a `middlewares_root` under a comment promising each root "separately relocatable by
-    its own environment variable", no variable was read for it, neither
-    `WorkspacePaths` nor `Config` carried the field, and neither call site passed it.
-    Nothing was red, because nothing went from the kinds to the settings that move
-    them. Parametrized over `DEFINITION_KINDS` so a sixth kind meets this on the day it
-    is added rather than the day somebody notices.
-    """
-    elsewhere = tmp_path / "catalogue" / kind
-    values = {**env, f"KINGFISHER_{kind.upper()}_DIR": str(elsewhere)}
-
-    # Both answers. They are two call sites with two chances to forget:
-    # `WorkspacePaths` is what lays a workspace out before a catalogue can be
-    # read, and `Config` is what every reader asks afterwards.
-    laid_out = Environment(values).paths().catalogue_roots
-    configured = config_from_env(values).catalogue_roots
-
-    # The set rather than the one entry, so a variable wired to the wrong root
-    # fails here too -- which a lone `roots[kind] == elsewhere` would not catch.
-    assert {name for name, path in laid_out.items() if path == elsewhere} == {kind}
-    assert {name for name, path in configured.items() if path == elsewhere} == {kind}
+    assert one.workspace != other.workspace
+    assert one.catalogue_roots == other.catalogue_roots
 
 
 def test_the_file_shows_exactly_the_knobs_that_exist():
@@ -308,6 +367,7 @@ def test_no_message_names_a_variable_nothing_reads():
         | set(health.RETIRED_PREFIXES)
         | set(REMOVED_STORE_SETTINGS)
         | set(RENAMED_SETTINGS)
+        | set(FOLDED_SETTINGS)
     )
     package = _Path(kingfisher.__file__).parent
 
@@ -416,94 +476,34 @@ def test_the_execution_timeout_is_named_for_what_it_bounds(env):
     assert not [f for f in fields(cfg) if f.name == "timeout_s"]
 
 
-def test_the_paths_half_honours_the_catalogue_overrides(monkeypatch, tmp_path):
-    """The reason seeding reads `paths_from_env` rather than one env var."""
-    from kingfisher import paths_from_env
-
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
-    monkeypatch.setenv("KINGFISHER_SKILLS_DIR", str(tmp_path / "elsewhere" / "skills"))
-
-    roots = paths_from_env().catalogue_roots
-
-    assert roots["skills"] == tmp_path / "elsewhere" / "skills"
-    assert roots["subagents"] == tmp_path / "ws" / "subagents"  # the others still default
-
-
 def test_the_two_records_cannot_disagree_about_where_things_go(tmp_path):
     """`Config` and `WorkspacePaths` answer the same question, and one of them is used
     to seed while the other is used to serve.
     """
     from kingfisher.config import Config, WorkspacePaths
 
-    overrides = {"skills_root": tmp_path / "s", "tools_root": tmp_path / "t"}
-    paths = WorkspacePaths(workspace=tmp_path / "ws", **overrides)
+    paths = WorkspacePaths(definitions=tmp_path / "defs", workspace=tmp_path / "ws")
     cfg = Config(
         workspace=tmp_path / "ws",
+        definitions=tmp_path / "defs",
         models=FAKE_CATALOGUE,
         turn_timeout_s=1,
         execution_timeout_s=1,
-        **overrides,
     )
 
     assert paths.catalogue_roots == cfg.catalogue_roots
-
-
-def test_the_two_records_cannot_disagree_about_the_authored_files(tmp_path):
-    """The same rule as above for the two files a deployment writes itself."""
-    from kingfisher.config import Config, WorkspacePaths
-
-    elsewhere = tmp_path / "shared"
-    paths = WorkspacePaths(
-        workspace=tmp_path / "ws",
-        models_file=elsewhere / "models.yaml",
-        source_ids_file=elsewhere / "source_ids.yaml",
-    )
-    cfg = Config(
-        workspace=tmp_path / "ws",
-        models=replace(FAKE_CATALOGUE, source=elsewhere / "models.yaml"),
-        access_source=elsewhere / "source_ids.yaml",
-        turn_timeout_s=1,
-        execution_timeout_s=1,
-    )
-
     assert paths.authored_files == cfg.authored_files
-    assert paths.authored_files["models.yaml"] == elsewhere / "models.yaml"
 
 
-def test_the_authored_files_default_into_the_workspace(tmp_path):
-    """The ordinary deployment, which relocates neither."""
-    from kingfisher.config import WorkspacePaths
-
-    files = WorkspacePaths(workspace=tmp_path / "ws").authored_files
-
-    assert files == {
-        "models.yaml": tmp_path / "ws" / "models.yaml",
-        "source_ids.yaml": tmp_path / "ws" / "source_ids.yaml",
-    }
-
-
-def test_seeding_sees_a_relocated_catalogue(tmp_path, monkeypatch):
-    """`paths_from_env` is what a first run has, and it has to carry these."""
-    from kingfisher import paths_from_env
-
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(tmp_path / "shared" / "models.yaml"))
-    monkeypatch.delenv("KINGFISHER_SOURCE_IDS_FILE", raising=False)
-
-    files = paths_from_env().authored_files
-
-    assert files["models.yaml"] == tmp_path / "shared" / "models.yaml"
-    assert files["source_ids.yaml"] == tmp_path / "ws" / "source_ids.yaml"
-
-
-def test_a_config_is_a_seeding_destination(tmp_path):
+def test_a_config_is_a_seeding_destination(tmp_path, cfg):
     """Both records satisfy the protocol the seeder asks for, by shape and without
     either being told about it.
     """
     from kingfisher.config import WorkspacePaths
     from kingfisher.infrastructure.workspace import Destination
 
-    assert isinstance(WorkspacePaths(workspace=tmp_path), Destination)
+    assert isinstance(WorkspacePaths(definitions=tmp_path), Destination)
+    assert isinstance(cfg, Destination)
 
 
 # -- the source-id vocabulary ------------------------------------------------------
@@ -516,42 +516,20 @@ def test_a_workspace_without_a_vocabulary_file_has_none(env):
     assert config_from_env(env).access is None
 
 
-def test_a_vocabulary_in_the_workspace_is_read(env):
-    workspace = Path(env["KINGFISHER_WORKSPACE"])
-    workspace.mkdir(parents=True, exist_ok=True)
-    (workspace / "source_ids.yaml").write_text("source_ids: [A, B]\n", encoding="utf-8")
+def test_a_vocabulary_in_the_definitions_folder_is_read(env, tmp_path):
+    (tmp_path / "definitions" / "source_ids.yaml").write_text(
+        "source_ids: [A, B]\n", encoding="utf-8"
+    )
     access = config_from_env(env).access
     assert access is not None
     assert set(access.names) == {"A", "B"}
 
 
-def test_the_vocabulary_file_can_be_relocated(env, tmp_path):
-    """It can be deployed once and shared by several workspaces, the way a model
-    catalogue can -- it holds content a person authored and reviewed.
-    """
-    elsewhere = tmp_path / "vocab.yaml"
-    elsewhere.write_text("source_ids: [B]\n", encoding="utf-8")
-    access = config_from_env({**env, "KINGFISHER_SOURCE_IDS_FILE": str(elsewhere)}).access
-    assert access is not None
-    assert access.names == {"B": ("B",)}
-
-
-def test_a_relocated_vocabulary_wins_over_one_in_the_workspace(env, tmp_path):
-    workspace = Path(env["KINGFISHER_WORKSPACE"])
-    workspace.mkdir(parents=True, exist_ok=True)
-    (workspace / "source_ids.yaml").write_text("source_ids: [A]\n", encoding="utf-8")
-    elsewhere = tmp_path / "vocab.yaml"
-    elsewhere.write_text("source_ids: [B]\n", encoding="utf-8")
-    access = config_from_env({**env, "KINGFISHER_SOURCE_IDS_FILE": str(elsewhere)}).access
-    assert access is not None
-    assert set(access.names) == {"B"}
-
-
-def test_a_vocabulary_that_will_not_parse_stops_the_deployment(env):
+def test_a_vocabulary_that_will_not_parse_stops_the_deployment(env, tmp_path):
     """Fail closed."""
-    workspace = Path(env["KINGFISHER_WORKSPACE"])
-    workspace.mkdir(parents=True, exist_ok=True)
-    (workspace / "source_ids.yaml").write_text("source_ids: [A\n", encoding="utf-8")
+    (tmp_path / "definitions" / "source_ids.yaml").write_text(
+        "source_ids: [A\n", encoding="utf-8"
+    )
     with pytest.raises(AccessError):
         config_from_env(env)
 
@@ -578,10 +556,10 @@ def test_one_path_reading_now_rather_than_two(tmp_path):
     """
     from kingfisher.application.config import Environment
 
-    reading = Environment({"KINGFISHER_WORKSPACE": "ws", "KINGFISHER_TOOLS_DIR": "tools"})
+    reading = Environment({"KINGFISHER_DEFINITIONS_DIR": "defs", "KINGFISHER_ASSETS": "assets"})
 
-    assert reading.optional_path("KINGFISHER_TOOLS_DIR") == Path("tools").resolve()
-    assert reading.paths().tools_root == reading.optional_path("KINGFISHER_TOOLS_DIR")
+    assert reading.optional_path("KINGFISHER_ASSETS") == Path("assets").resolve()
+    assert reading.paths().assets == reading.optional_path("KINGFISHER_ASSETS")
     assert reading.optional_path("KINGFISHER_UNSET") is None
 
 
@@ -592,7 +570,10 @@ def test_the_exported_functions_are_the_class(tmp_path, monkeypatch):
     """
     from kingfisher.application.config import Environment, paths_from_env
 
-    environ = {"KINGFISHER_WORKSPACE": str(tmp_path / "ws")}
+    environ = {
+        "KINGFISHER_WORKSPACE": str(tmp_path / "ws"),
+        "KINGFISHER_DEFINITIONS_DIR": str(tmp_path / "defs"),
+    }
 
     assert paths_from_env(environ) == Environment(environ).paths()
 
@@ -604,6 +585,7 @@ def test_a_reader_with_no_mapping_reads_the_process(monkeypatch, tmp_path):
     from kingfisher.application.config import Environment
 
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(tmp_path / "defs"))
 
     assert Environment.current().paths().workspace == (tmp_path / "ws").resolve()
 

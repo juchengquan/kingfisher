@@ -252,7 +252,7 @@ class Kingfisher(Sessions, Disposal):
         # through them, and only the graph's builder knows where its backend keeps a
         # session.
         backends: SessionBackends,
-        catalogue: Definitions | Mapping[str, Path] | None = None,
+        catalogue: Definitions | Path | None = None,
         grants: Capabilities | None = None,
         middlewares: Mapping[str, MiddlewareFactory] | None = None,
         graph: Any | None = None,
@@ -265,27 +265,19 @@ class Kingfisher(Sessions, Disposal):
         self._pool = thread_pool(self.cfg.thread_pool_size)
 
         # Before anything is made, and here rather than inside `ensure_layout`, because
-        # this is the caller serving sessions under a setting. Seeding lays the workspace
-        # out too, reads no session setting, and asked would refuse a workspace holding
-        # one session for a setting it never read.
+        # this is the caller serving sessions under a setting. `ensure_layout` is public,
+        # and a caller laying a workspace out for some other reason reads no session
+        # setting, so asked it would refuse a workspace holding one session for a
+        # setting it never read.
         check_sessions(self.cfg.workspace, only=self.cfg.session_id)
         # Only what sessions share. Each session's own layout is made per
         # request, because its path is not known until the request names it.
-        self.workspace: Path = ensure_layout(
-            self.cfg.workspace,
-            authored=self.cfg.authored_files,
-            # No kind folder for a supplied catalogue: whoever staged it made them, and
-            # the configured ones are not read, so one made there would be a place to
-            # put a definition that never loads.
-            catalogue_roots=self.cfg.catalogue_roots if catalogue is None else {},
-        )
+        self.workspace: Path = ensure_layout(self.cfg.workspace)
 
         # Where the reviewed definitions are read from, settled once. Omitted,
-        # it is the catalogue directories `cfg` names -- one per definition kind,
-        # which `DEFINITION_KINDS` is the list of -- and that is what it has
-        # always been; supplied, a deployment has staged them somewhere itself
-        # and this
-        # is the only place that has to know. Resolved here rather than per
+        # it is the definitions folder `cfg` names; supplied, a deployment has
+        # staged them somewhere itself and this is the only place that has to
+        # know. Resolved here rather than per
         # request so a deployment that fetches them pays once, and so a
         # catalogue that cannot be read fails at startup rather than serving an
         # agent that has quietly been told about nothing.
@@ -403,8 +395,7 @@ class Kingfisher(Sessions, Disposal):
             if source_ids is not None:
                 msg = (
                     "this deployment has no access policy, so naming source ids means "
-                    "nothing here -- write source_ids.yaml in the workspace, or set "
-                    "KINGFISHER_SOURCE_IDS_FILE"
+                    "nothing here -- write source_ids.yaml in KINGFISHER_DEFINITIONS_DIR"
                 )
                 raise AccessError(msg)
             return self.grants

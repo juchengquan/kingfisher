@@ -24,27 +24,7 @@ def test_a_plain_workspace_reports_every_catalogue_as_derived(cfg):
     for kind in ("agents", "middlewares", "skills", "subagents", "tools"):
         entry = getattr(found, kind)
         assert entry.kind == "default", kind
-        assert entry.path == cfg.workspace / kind, kind
-
-
-def test_a_relocated_catalogue_is_told_apart_from_a_derived_one(cfg, tmp_path):
-    """`doctor` warns on one and not the other, so a string comparison on the path is
-    not enough -- the kinds have to differ.
-    """
-    elsewhere = tmp_path / "shared-skills"
-    elsewhere.mkdir()
-
-    found = Origins.of(replace(cfg, skills_root=elsewhere))
-
-    assert found.skills == Origin("relocated", elsewhere)
-    assert found.subagents.kind == "default"
-
-
-def test_naming_the_derived_path_explicitly_is_still_derived(cfg):
-    """A deployment that spells out the default is not relocated."""
-    found = Origins.of(replace(cfg, skills_root=cfg.workspace / "skills"))
-
-    assert found.skills.kind == "default"
+        assert entry.path == cfg.definitions / kind, kind
 
 
 def test_a_catalogue_supplied_at_construction_is_reported_as_itself(cfg, tmp_path):
@@ -83,9 +63,9 @@ def test_a_repository_with_no_directory_has_no_path(cfg):
     assert found.subagents == Origin("supplied", None)
 
 
-def test_an_absent_source_ids_file_still_says_where_it_looked(cfg, tmp_path):
+def test_an_absent_source_ids_file_still_says_where_it_looked(cfg):
     """The line this whole record was worth building for."""
-    looked = tmp_path / "ws" / "source_ids.yaml"
+    looked = cfg.authored_files["source_ids.yaml"]
 
     found = Origins.of(replace(cfg, access=None, access_source=looked))
 
@@ -195,36 +175,53 @@ def test_kingfishers_own_backends_with_a_runner_still_keep_kingfishers_sessions(
 def test_asking_for_origins_does_not_create_the_directories_it_reports(cfg, tmp_path):
     """A report must not change what it reports on."""
     fresh = tmp_path / "never-laid-out"
+    unseeded = tmp_path / "never-seeded"
 
-    found = Origins.of(replace(cfg, workspace=fresh))
+    found = Origins.of(replace(cfg, workspace=fresh, definitions=unseeded))
 
-    assert found.skills.path == fresh / "skills"
+    assert found.skills.path == unseeded / "skills"
+    assert found.sessions.path == fresh / "sessions"
     assert not fresh.exists()
+    assert not unseeded.exists()
 
 
-def test_the_line_factors_out_the_workspace_and_keeps_every_key(cfg):
+def test_the_line_factors_out_both_roots_and_keeps_every_key(cfg):
     """Short enough to read, and still greppable for any one place.
 
-    Spelled in full this is about 450 characters of which most is one repeated
-    prefix. Collapsing the ordinary entries instead would be shorter still and would
+    Spelled in full this is about 450 characters of which most is one of two repeated
+    prefixes. Collapsing the ordinary entries instead would be shorter still and would
     delete the path somebody is looking for.
     """
     line = Origins.of(cfg).line()
 
-    assert line.startswith(f"workspace={cfg.workspace} ")
-    assert " skills=./skills " in line
-    assert " tools=./tools " in line, "the catalogue no listing has ever named"
+    assert line.startswith(f"workspace={cfg.workspace} definitions={cfg.definitions} ")
+    assert " skills=definitions/skills " in line
+    assert " tools=definitions/tools " in line, "the catalogue no listing has ever named"
+    assert line.endswith(" sessions=./sessions")
 
 
-def test_a_relocated_path_is_the_only_absolute_one_on_the_line(cfg, tmp_path):
+def test_the_block_names_the_definitions_folder_beside_the_workspace(cfg):
+    """Catches the header leaving out the root every `definitions/` below it is
+    relative to."""
+    block = Origins.of(cfg).block()
+
+    assert block[0].startswith("workspace ")
+    assert block[0].endswith(f" : {cfg.workspace}")
+    assert block[1].startswith("definitions ")
+    assert block[1].endswith(f" : {cfg.definitions}")
+    assert any(row.endswith(" : definitions/skills") for row in block)
+
+
+def test_a_path_outside_both_roots_is_the_only_absolute_one_on_the_line(cfg, tmp_path):
     """What the relative spelling is for."""
     elsewhere = tmp_path / "shared"
     elsewhere.mkdir()
+    catalogue = Definitions.from_roots({**cfg.catalogue_roots, "skills": elsewhere})
 
-    line = Origins.of(replace(cfg, skills_root=elsewhere)).line()
+    line = Origins.of(cfg, catalogue=catalogue).line()
 
-    assert f"skills={elsewhere}" in line
-    assert " subagents=./subagents " in line
+    assert f" skills={elsewhere}(overridden) " in line
+    assert " subagents=definitions/subagents " in line
 
 
 def test_no_value_on_the_line_contains_a_space(cfg, tmp_path):

@@ -51,7 +51,7 @@ def test_a_skills_file_reaches_a_tool_where_the_backend_keeps_it(scripted):
     `<session>/skills/...`, which does not exist, while `read_file` read the same path.
     """
     _with_the_tool(scripted)
-    template = scripted.workspace / "skills" / "report" / "template.md"
+    template = scripted.skills_dir / "report" / "template.md"
     template.parent.mkdir(parents=True, exist_ok=True)
     template.write_text("the template\n", encoding="utf-8")
     start(scripted, "s")
@@ -169,11 +169,11 @@ def test_a_subagent_is_handed_the_parents_paths_on_any_backend(cfg, tmp_path):
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "first_line.py").write_text(FIRST_LINE, encoding="utf-8")
-    (cfg.workspace / "subagents").mkdir(parents=True, exist_ok=True)
-    (cfg.workspace / "subagents" / "reviewer.yaml").write_text(
+    (cfg.definitions / "subagents").mkdir(parents=True, exist_ok=True)
+    (cfg.definitions / "subagents" / "reviewer.yaml").write_text(
         "name: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n", encoding="utf-8"
     )
-    backend = ElsewhereFiles(tmp_path / "kept", cfg.workspace / "skills")
+    backend = ElsewhereFiles(tmp_path / "kept", cfg.definitions / "skills")
     assert not hasattr(backend, "workspace"), "the attribute is there; test proves nothing"
 
     built = build_agent(

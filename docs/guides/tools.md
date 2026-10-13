@@ -495,5 +495,5 @@ way you treat the rest of your source: it is yours, not the agent's.
 
 ## Where the directory lives
 
-`KINGFISHER_TOOLS_DIR` relocates it, the way `KINGFISHER_SKILLS_DIR` does, so a
+It is `tools/` in `KINGFISHER_DEFINITIONS_DIR`, beside every other kind, so a
 catalogue of tools can be deployed once and shared by every workspace.

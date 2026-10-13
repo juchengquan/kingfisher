@@ -3,10 +3,10 @@
 # Required. There is no default and no fallback: a default would silently pick a
 # destination nobody chose the first time kingfisher is pointed somewhere new,
 # and a fallback would make "file absent" look exactly like "file found",
-# including when KINGFISHER_MODELS_FILE points at the wrong path.
+# including when KINGFISHER_DEFINITIONS_DIR points at the wrong folder.
 #
-# Defaults to <workspace>/models.yaml; move it with KINGFISHER_MODELS_FILE.
-# Point several deployments at one file and they share a reviewed catalogue
+# Read from models.yaml in KINGFISHER_DEFINITIONS_DIR, beside the definitions.
+# Point several deployments at one folder and they share a reviewed catalogue
 # instead of each keeping a copy nobody can audit centrally -- which is why no
 # credential appears below. Keys are named, not written, so this file belongs in
 # version control and in code review. It says where your prompts go.

@@ -87,9 +87,12 @@ def test_the_setting_is_read_where_the_catalogue_loads(tmp_path):
     """Read anywhere later, `kingfisher doctor` and `run` refuse the same file a
     deployment's own program accepts, because neither can be handed an argument.
     """
+    definitions = tmp_path / "definitions"
+    definitions.mkdir()
+    catalogue(definitions)
     cfg = config_from_env({
         "KINGFISHER_WORKSPACE": str(tmp_path / "workspace"),
-        "KINGFISHER_MODELS_FILE": str(catalogue(tmp_path)),
+        "KINGFISHER_DEFINITIONS_DIR": str(definitions),
         "KINGFISHER_ADAPTERS_FACTORY": f"{HERE}:documented",
         **KEYS,
     })

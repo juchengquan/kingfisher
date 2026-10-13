@@ -45,7 +45,7 @@ def _write(directory, name, body):
 
 
 def test_a_python_file_and_a_yaml_file_share_the_directory(cfg):
-    root = cfg.workspace / "subagents"
+    root = cfg.definitions / "subagents"
     _write(root, "researcher.py", COMPILED.format(name="researcher"))
     _write(root, "reviewer.yaml", PROMPTED)
 
@@ -61,7 +61,7 @@ def test_a_package_is_one_subagent_and_its_helpers_stay_private(cfg):
     """The case that made folders worth having: a graph with a few auxiliary functions,
     where only the compiled agent is exposed.
     """
-    root = cfg.workspace / "subagents"
+    root = cfg.definitions / "subagents"
     _write(root / "deep_research", "__init__.py", COMPILED.format(name="deep-research"))
     _write(root / "deep_research", "steps.py", "SUBAGENTS = [{'name': 'nope'}]\n")
 
@@ -70,7 +70,7 @@ def test_a_package_is_one_subagent_and_its_helpers_stay_private(cfg):
 
 def test_a_package_still_has_its_documents_read(cfg):
     """The walk stops at a package for *modules* and never stops for documents."""
-    root = cfg.workspace / "subagents"
+    root = cfg.definitions / "subagents"
     _write(root / "analysis", "__init__.py", COMPILED.format(name="profiler-graph"))
     _write(root / "analysis", "profiler.yaml", PROMPTED)
 
@@ -78,7 +78,7 @@ def test_a_package_still_has_its_documents_read(cfg):
 
 
 def test_a_leading_underscore_keeps_a_flat_helper_private(cfg):
-    root = cfg.workspace / "subagents"
+    root = cfg.definitions / "subagents"
     _write(root, "researcher.py", COMPILED.format(name="researcher"))
     _write(root, "_shared.py", "raise AssertionError('never imported')\n")
 
@@ -89,7 +89,7 @@ def test_two_kinds_claiming_one_name_are_told_apart_by_file(cfg):
     """One namespace, so the rule that already handled two YAML files handles this
     without knowing the second one is Python.
     """
-    root = cfg.workspace / "subagents"
+    root = cfg.definitions / "subagents"
     _write(root, "reviewer.yaml", PROMPTED)
     _write(root, "other.py", COMPILED.format(name="reviewer"))
 
@@ -105,7 +105,7 @@ def test_a_yml_file_is_refused_rather_than_skipped(cfg, name):
     somebody wrote and kingfisher silently did not read -- and in upper case it still
     was, either suffix.
     """
-    root = cfg.workspace / "subagents"
+    root = cfg.definitions / "subagents"
     _write(root, name, PROMPTED)
 
     with pytest.raises(SubagentError, match=r"reviewer\.yaml"):
@@ -122,7 +122,7 @@ def test_a_module_without_the_export_names_itself(cfg):
     with a message about the wrong thing, and a looser assertion here passed that
     mutation.
     """
-    root = cfg.workspace / "subagents"
+    root = cfg.definitions / "subagents"
     _write(root, "researcher.py", "RESEARCHER = object()\n")
 
     with pytest.raises(SubagentError, match=r"researcher\.py") as raised:
@@ -133,7 +133,7 @@ def test_a_module_without_the_export_names_itself(cfg):
 
 def test_a_bare_mapping_is_refused_because_a_mapping_is_iterable(cfg):
     """`SUBAGENTS = {...}` would loop over its own key names."""
-    root = cfg.workspace / "subagents"
+    root = cfg.definitions / "subagents"
     _write(root, "researcher.py", "SUBAGENTS = {'name': 'r', 'description': 'd'}\n")
 
     with pytest.raises(SubagentError, match="list or tuple"):
@@ -244,7 +244,7 @@ def test_a_spec_cannot_carry_both_a_prompt_and_a_builder():
 
 def test_a_compiled_subagent_reaches_deepagents_as_a_runnable(cfg, session_dir):
     """The shape deepagents wants: three keys, and the graph it will run."""
-    _write(cfg.workspace / "subagents", "researcher.py", COMPILED.format(name="researcher"))
+    _write(cfg.definitions / "subagents", "researcher.py", COMPILED.format(name="researcher"))
 
     built = build_agent(
         cfg,
@@ -268,7 +268,7 @@ def test_the_compiled_shape_is_deepagents_own(cfg, session_dir):
     """
     from deepagents.middleware.subagents import CompiledSubAgent
 
-    _write(cfg.workspace / "subagents", "researcher.py", COMPILED.format(name="researcher"))
+    _write(cfg.definitions / "subagents", "researcher.py", COMPILED.format(name="researcher"))
 
     built = build_agent(
         cfg,
@@ -283,7 +283,7 @@ def test_the_compiled_shape_is_deepagents_own(cfg, session_dir):
 
 def test_a_build_that_returns_nothing_is_refused(cfg, session_dir):
     _write(
-        cfg.workspace / "subagents",
+        cfg.definitions / "subagents",
         "researcher.py",
         "SUBAGENTS = [{'name': 'researcher', 'description': 'd', "
         "'build': lambda model, tools: None}]\n",
@@ -314,7 +314,7 @@ SUBAGENTS = [
 
 def test_a_class_under_build_is_refused_rather_than_constructed(cfg, session_dir):
     """`callable()` accepts a class, so this loaded and was *constructed*."""
-    _write(cfg.workspace / "subagents", "researcher.py", A_CLASS)
+    _write(cfg.definitions / "subagents", "researcher.py", A_CLASS)
 
     with pytest.raises(SubagentError, match="not a graph"):
         build_agent(
@@ -327,7 +327,7 @@ def test_a_class_under_build_is_refused_rather_than_constructed(cfg, session_dir
 
 def test_the_refusal_names_what_was_returned_and_the_class_trap(cfg, session_dir):
     """A reader has to know which of the two mistakes they made."""
-    _write(cfg.workspace / "subagents", "researcher.py", A_CLASS)
+    _write(cfg.definitions / "subagents", "researcher.py", A_CLASS)
 
     with pytest.raises(SubagentError) as refused:
         build_agent(
@@ -414,9 +414,9 @@ TOOLS = [probe]
 
 
 def _with_probe(cfg):
-    _write(cfg.workspace / "tools", "probe.py", PROBE)
+    _write(cfg.definitions / "tools", "probe.py", PROBE)
     _write(
-        cfg.workspace / "subagents",
+        cfg.definitions / "subagents",
         "researcher.py",
         RECORDING.format(extra='        "tools": ["probe"],\n'),
     )
@@ -464,9 +464,9 @@ def test_a_compiled_subagents_tool_is_wired_to_this_session(cfg, session_dir):
     The shipped `scribe` is where this was found -- it handed `show-your-work`
     path-taking tools and the first call died on `log_levels('/inputs/api.log')`.
     """
-    _write(cfg.workspace / "tools", "probe.py", PATH_PROBE)
+    _write(cfg.definitions / "tools", "probe.py", PATH_PROBE)
     _write(
-        cfg.workspace / "subagents",
+        cfg.definitions / "subagents",
         "researcher.py",
         RECORDING.format(extra='        "tools": ["probe"],\n'),
     )

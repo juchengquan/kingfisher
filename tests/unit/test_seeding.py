@@ -167,7 +167,7 @@ def test_a_workspace_tool_reaches_the_assembled_agent(cfg, fixture_pack):
     """The whole point: a file in the workspace becomes a tool the agent has."""
     from tests.conftest import dispatched
 
-    shutil.copytree(fixture_pack / "tools", cfg.workspace / "tools", dirs_exist_ok=True)
+    shutil.copytree(fixture_pack / "tools", cfg.definitions / "tools", dirs_exist_ok=True)
 
     tools = dispatched(
         build_agent(cfg, backend=backend_at(cfg, ensure_session_layout(cfg.workspace / "s"))).graph
@@ -181,7 +181,7 @@ def test_a_workspace_tool_may_not_shadow_a_builtin(cfg):
     """`tools_by_name` is a dict, so the real `read_file` would just stop existing --
     quietly, which is the failure this refuses everywhere else.
     """
-    tools_dir = cfg.workspace / "tools"
+    tools_dir = cfg.definitions / "tools"
     tools_dir.mkdir(parents=True, exist_ok=True)
     (tools_dir / "shadow.py").write_text(
         "from langchain_core.tools import tool\n\n\n"
@@ -221,12 +221,15 @@ def test_seeding_does_not_claim_the_catalogue_example(cfg):
     assert not [entry for entry in result.overwritten if entry.endswith(".example")]
 
 
-def test_seeding_alone_leaves_a_workspace_that_can_start(tmp_path):
-    """The other half of the test above, and the one the library got wrong."""
+def test_seeding_alone_leaves_a_definitions_folder_that_can_start(tmp_path):
+    """The other half of the test above, and the one the library got wrong.
+
+    From an environment naming no workspace, because seeding needs none.
+    """
     from kingfisher import paths_from_env
 
     fresh = tmp_path / "untouched"
-    paths = paths_from_env({"KINGFISHER_WORKSPACE": str(fresh)})
+    paths = paths_from_env({"KINGFISHER_DEFINITIONS_DIR": str(fresh)})
 
     result = seeding.seed(paths, FIXTURE)
 
@@ -238,7 +241,7 @@ def test_seeding_alone_leaves_a_workspace_that_can_start(tmp_path):
 
 def test_seeding_never_writes_the_catalogue_itself(cfg):
     """The one file seeding must not touch."""
-    catalogue = cfg.workspace / "models.yaml"
+    catalogue = cfg.definitions / "models.yaml"
     catalogue.write_text("mine: do not touch\n", encoding="utf-8")
 
     seeding.seed(cfg, FIXTURE)

@@ -25,13 +25,13 @@ class Origin:
     kind: Kind
     path: Path | None = None
 
-    def spelled(self, workspace: Path) -> str:
+    def spelled(self, workspace: Path, definitions: Path) -> str:
         """This entry as it appears on the startup line."""
         if self.kind == "supplied":
             return "<supplied>"
         if self.path is None:
             return "unset"
-        where = _under(self.path, workspace)
+        where = _under(self.path, workspace, definitions)
         if self.kind == "unset":
             return f"unset({where})"
         if self.kind == "overridden":
@@ -43,10 +43,12 @@ class Origin:
 class Origins:
     """Every place this deployment reads from, settled once."""
 
-    #: Everything else is relative to this, which is why it is a bare `Path`
-    #: rather than an `Origin`: a workspace is never derived, never supplied and
-    #: never unset -- `KINGFISHER_WORKSPACE` is the one setting with no default.
+    #: What sessions make, and what `./` means below. A bare `Path` rather than an
+    #: `Origin`, as is the one after it: neither is ever derived, supplied or unset,
+    #: since each is a setting with no default.
     workspace: Path
+    #: What people write, and what `definitions/` means below.
+    definitions: Path
 
     agents: Origin
     middlewares: Origin
@@ -82,37 +84,40 @@ class Origins:
         """Read the configuration, and the collaborators that can override it."""
         return cls(
             workspace=cfg.workspace,
+            definitions=cfg.definitions,
             **{
                 kind: _catalogue(cfg, kind, catalogue) for kind in DEFINITION_KINDS
             },  # type: ignore[arg-type]
-            models=_file(cfg.models.source, cfg.workspace / "models.yaml"),
+            models=_file(cfg.models.source, cfg.definitions / "models.yaml"),
             source_ids=_source_ids(cfg),
             seed=_configured(cfg.assets),
             sessions=_sessions(cfg, sessions),
         )
 
     def line(self) -> str:
-        """Every entry, on one line, with the workspace factored out.
+        """Every entry, on one line, with the two roots factored out.
 
         Spelled out in full this is about 450 characters, most of its values
-        sharing one prefix -- and the entries worth noticing, the ones that are
-        somewhere else, are buried in the repetition. Relative brings it to about 240
-        *and* leaves the relocated ones as the only absolute paths, so the eye finds
-        them without reading.
+        sharing one prefix or the other -- and the entries worth noticing, the ones
+        that are somewhere else, are buried in the repetition. Relative brings it to
+        about 240 *and* leaves the relocated ones as the only absolute paths, so the
+        eye finds them without reading.
         """
         pairs = " ".join(
-            f"{name}={origin.spelled(self.workspace)}" for name, origin in self.entries()
+            f"{name}={origin.spelled(self.workspace, self.definitions)}"
+            for name, origin in self.entries()
         )
-        return f"workspace={self.workspace} {pairs}"
+        return f"workspace={self.workspace} definitions={self.definitions} {pairs}"
 
     def block(self) -> tuple[str, ...]:
         """The same answer as a header, one place per line."""
-        names = ("workspace", *(name for name, _ in self.entries()))
+        names = ("workspace", "definitions", *(name for name, _ in self.entries()))
         width = max(len(name) for name in names)
         return (
             f"{'workspace'.ljust(width)} : {self.workspace}",
+            f"{'definitions'.ljust(width)} : {self.definitions}",
             *(
-                f"{name.ljust(width)} : {origin.spelled(self.workspace)}"
+                f"{name.ljust(width)} : {origin.spelled(self.workspace, self.definitions)}"
                 for name, origin in self.entries()
             ),
         )
@@ -126,12 +131,17 @@ class Origins:
         )
 
 
-def _under(path: Path, workspace: Path) -> str:
-    """A path inside the workspace as `./name`, anything else in full."""
+def _under(path: Path, workspace: Path, definitions: Path) -> str:
+    """A path inside the workspace as `./name`, one inside the definitions folder as
+    `definitions/name`, anything else in full."""
     if path == workspace:
         return "."
     if path.is_relative_to(workspace):
         return f"./{path.relative_to(workspace)}"
+    if path == definitions:
+        return "definitions"
+    if path.is_relative_to(definitions):
+        return f"definitions/{path.relative_to(definitions)}"
     return str(path)
 
 
@@ -158,14 +168,14 @@ def _catalogue(cfg: Config, kind: str, catalogue: Definitions | None) -> Origin:
     """One definition catalogue, comparing what is read against what is configured."""
     configured = cfg.catalogue_roots[kind]
     if catalogue is None:
-        return Origin(_derived(configured, cfg.workspace / kind), configured)
+        return Origin("default", configured)
 
     root = getattr(catalogue, kind).root
     if root is None:
         return Origin("supplied")
     if root != configured:
         return Origin("overridden", root)
-    return Origin(_derived(root, cfg.workspace / kind), root)
+    return Origin("default", root)
 
 
 def _source_ids(cfg: Config) -> Origin:
@@ -174,7 +184,9 @@ def _source_ids(cfg: Config) -> Origin:
         return Origin("supplied") if cfg.access is not None else Origin("unset")
     if cfg.access is None:
         return Origin("unset", cfg.access_source)
-    return Origin(_derived(cfg.access_source, cfg.workspace / "source_ids.yaml"), cfg.access_source)
+    return Origin(
+        _derived(cfg.access_source, cfg.definitions / "source_ids.yaml"), cfg.access_source
+    )
 
 
 def _sessions(cfg: Config, backends: object | None) -> Origin:

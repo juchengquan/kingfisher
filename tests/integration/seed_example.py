@@ -1,4 +1,4 @@
-"""Seeding a workspace from Python, as short as it goes. Not a test."""
+"""Seeding a definitions folder from Python, as short as it goes. Not a test."""
 
 from __future__ import annotations
 
@@ -11,22 +11,21 @@ from kingfisher import (
     Seeded,
     WorkspacePaths,
     definitions_source,
-    ensure_layout,
+    ensure_definitions,
     seed,
 )
 
 
-def seed_workspace(
-    workspace: Path, source: str | Path | None = None, *, everything: bool = False
+def seed_definitions(
+    definitions: Path, source: str | Path | None = None, *, everything: bool = False
 ) -> Seeded:
-    """Copy definitions into `workspace`, and return what happened."""
-    paths = WorkspacePaths(workspace)
+    """Copy definitions into the folder `definitions`, and return what happened."""
+    paths = WorkspacePaths(definitions)
 
-    # Belt-and-braces rather than an ordering that has to be got right: `seed` lays the
-    # workspace out itself, so `models.yaml.example` arrives either way.
-    ensure_layout(
-        paths.workspace, authored=paths.authored_files, catalogue_roots=paths.catalogue_roots
-    )
+    # Before the source is asked for, which refuses when none is named: `seed` lays
+    # the folder out itself, so this only buys `models.yaml.example` for a deployment
+    # with nothing to seed yet -- somewhere to start rather than a bare refusal.
+    ensure_definitions(paths.definitions)
 
     # An explicit path wins, else `KINGFISHER_ASSETS`, else a `ConfigError`
     # naming both ways to say where. Nothing ships with the library, so there is
@@ -39,7 +38,9 @@ def seed_workspace(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--workspace", metavar="DIR", help="default: KINGFISHER_WORKSPACE")
+    parser.add_argument(
+        "--definitions", metavar="DIR", help="default: KINGFISHER_DEFINITIONS_DIR"
+    )
     parser.add_argument("--from", dest="source", metavar="DIR", help="what to copy from")
     parser.add_argument(
         "--all",
@@ -54,9 +55,9 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         # `paths_from_env()` is the other way to answer this, and is what the
-        # README shows; spelled out here so the script takes a `--workspace`.
-        workspace = Path(args.workspace) if args.workspace else _from_env()
-        done = seed_workspace(workspace, args.source, everything=args.everything)
+        # README shows; spelled out here so the script takes a `--definitions`.
+        definitions = Path(args.definitions) if args.definitions else _from_env()
+        done = seed_definitions(definitions, args.source, everything=args.everything)
     except ConfigError as exc:
         # The refusal says which setting to write, so printing it is the whole
         # of the handling. Exit 2 rather than 1: nothing was attempted.
@@ -65,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # The half a caller forgets, and the reason this script exists rather than the
     # README snippet alone: a definition naming middleware or source ids this
-    # deployment has not got is left behind, and a workspace quietly missing an
+    # deployment has not got is left behind, and a folder quietly missing an
     # agent you can see in the source directory is worse than one that says why.
     # `report` is what to copy -- writing these lines by hand is what this script
     # used to do, and it told a reader to *register* a source id.
@@ -79,10 +80,10 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _from_env() -> Path:
-    """`KINGFISHER_WORKSPACE`, or the refusal that names it."""
+    """`KINGFISHER_DEFINITIONS_DIR`, or the refusal that names it."""
     from kingfisher import paths_from_env
 
-    return paths_from_env().workspace
+    return paths_from_env().definitions
 
 
 if __name__ == "__main__":  # pragma: no cover -- driven through `main` by the test

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field, fields
 from functools import cached_property
 from pathlib import Path
 
-from kingfisher.config import NO_MOUNTS, Config, ConfigError
+from kingfisher.config import NO_MOUNTS, Config, ConfigError, definition_roots_for
 from kingfisher.domain.capabilities import SEPARATOR
 from kingfisher.domain.ports import (
     AgentRepository,
@@ -192,44 +192,36 @@ STAGED_KINDS: tuple[str, ...] = tuple(
 )
 
 
-def resolve_definitions(
-    cfg: Config, supplied: Definitions | Mapping[str, Path] | None = None
-) -> Definitions:
+def resolve_definitions(cfg: Config, supplied: Definitions | Path | None = None) -> Definitions:
     """Where this deployment's definitions are read from, settled once.
 
-    * **Derived from `cfg`** -- kingfisher's own, so they are created, at the roots
-      `ensure_layout` makes for the same `cfg`, so the two give one answer about
-      which folders exist. Without it, `KINGFISHER_SKILLS_DIR` pointing somewhere
-      that does not exist yet yields an empty catalogue and a clean start.
-    * **Supplied by the caller** -- theirs, so they must already be there.
-      Creating one would hide a staging failure behind a catalogue that is
-      merely empty, and an agent told about no skills at all is exactly the
+    * **A folder** -- the one `cfg` names, or one the caller staged -- read as it is.
+      The folder has to exist, and a kind folder missing inside it means none of that
+      kind. Nothing is created: the folder may be one several deployments read, and
+      making one would hide a mount or a staging that failed behind a catalogue that
+      is merely empty. An agent told about no skills at all is exactly the
       silent-emptiness this module's neighbours keep refusing.
+    * **A `Definitions` the caller built** -- theirs, so every directory it names
+      must already be there.
     """
-    if supplied is None:
-        derived = cfg.catalogue_roots
-        for path in derived.values():
-            path.mkdir(parents=True, exist_ok=True)
-        return Definitions.from_config(cfg)
-
-    # Either shape. A deployment stages directories and hands over a mapping,
-    # which is the documented seam; something that already holds a `Definitions`
-    # -- another kingfisher, a test fixture -- should not have to take it apart
-    # to pass it back.
     if not isinstance(supplied, Definitions):
-        if missing := tuple(kind for kind in STAGED_KINDS if kind not in supplied):
+        folder = cfg.definitions if supplied is None else Path(supplied)
+        if not folder.is_dir():
             msg = (
-                f"catalogue is missing {', '.join(missing)}; it names all of "
-                f"{', '.join(STAGED_KINDS)}, since a deployment that leaves one out "
-                "means an empty one rather than the configured one"
+                f"KINGFISHER_DEFINITIONS_DIR is {folder}, which is not a directory. "
+                "`kingfisher seed` makes one and fills it"
+                if supplied is None
+                else f"catalogue {folder} is not a directory; a supplied catalogue is "
+                "staged by whoever supplies it, and kingfisher will not create one in "
+                "case the staging is what failed"
             )
             raise ConfigError(msg)
-        # The mounts are the deployment's, not the catalogue's: a staged catalogue
+        # The mounts are the deployment's, not the catalogue's: a staged folder
         # replaces the directories kingfisher would have read, not what it mounts.
-        supplied = Definitions.from_roots(supplied, skills_mounts=cfg.skills_mounts)
+        return Definitions.from_roots(definition_roots_for(folder), skills_mounts=cfg.skills_mounts)
 
-    # Checked however it arrived, and only where there is something to check: a
-    # repository with a `root` of `None` has no directory that could be missing.
+    # Only where there is something to check: a repository with a `root` of `None`
+    # has no directory that could be missing.
     roots = {kind: getattr(supplied, kind).root for kind in STAGED_KINDS}
     if absent := tuple(
         f"{kind} ({path})" for kind, path in roots.items() if path is not None and not path.is_dir()

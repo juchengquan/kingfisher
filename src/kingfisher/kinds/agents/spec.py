@@ -123,7 +123,7 @@ class AgentSpec(Definition):
 
 _NO_FOLDER = (
     "an agent has no folder of its own for it to come from. Put the file in the "
-    "workspace's catalogue and name it plainly, or hand it to a subagent, whose own "
+    "definitions folder's catalogue and name it plainly, or hand it to a subagent, whose own "
     "folder keeps it from every agent"
 )
 

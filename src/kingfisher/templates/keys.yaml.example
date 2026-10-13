@@ -1,8 +1,8 @@
 # What the keys file looks like -- the file KINGFISHER_MODEL_KEYS_FILE names.
 #
-# Copy it out of this workspace before writing a key in it. On macOS the agent's
-# shell can read the workspace, so a key left here is one it can read; under your
-# home folder and outside the workspace, the sandbox hides it:
+# Copy it out of this folder before writing a key in it: the definitions folder is
+# shared and reviewed, and a key is neither. Under your home folder and outside the
+# workspace, the macOS sandbox hides it from the agent's shell:
 #
 #   mkdir -p ~/.config/kingfisher
 #   cp keys.yaml.example ~/.config/kingfisher/keys.yaml

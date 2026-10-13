@@ -727,7 +727,7 @@ def delegating(cfg):
     agents.mkdir(parents=True, exist_ok=True)
     (agents / "boss.yaml").write_text(BOSS, encoding="utf-8")
     # In the workspace too, for `kingfisher list`, which reads it from there.
-    (cfg.workspace / "source_ids.yaml").write_text(ABC, encoding="utf-8")
+    (cfg.definitions / "source_ids.yaml").write_text(ABC, encoding="utf-8")
     return replace(cfg, access=vocabulary(ABC), skills_enabled=True)
 
 

@@ -15,8 +15,8 @@ from tests.conftest import FakeToolCallingModel, a_subagent, middleware_of
 
 
 def define(cfg, body: str, name: str = "reviewer") -> None:
-    (cfg.workspace / "subagents").mkdir(parents=True, exist_ok=True)
-    (cfg.workspace / "subagents" / f"{name}.yaml").write_text(body, encoding="utf-8")
+    (cfg.definitions / "subagents").mkdir(parents=True, exist_ok=True)
+    (cfg.definitions / "subagents" / f"{name}.yaml").write_text(body, encoding="utf-8")
 
 
 def offer_skills(cfg, *names: str) -> None:

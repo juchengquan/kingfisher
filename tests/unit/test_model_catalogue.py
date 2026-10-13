@@ -259,8 +259,10 @@ def test_a_deployment_can_supply_models_without_a_file_at_all(tmp_path):
     from tests.conftest import FAKE_CATALOGUE
     from tests.unit.test_run import StubAgent
 
-    assert not (tmp_path / "models.yaml").exists()
-    cfg = Config(workspace=tmp_path / "ws", models=FAKE_CATALOGUE)
+    definitions = tmp_path / "definitions"
+    definitions.mkdir()
+    cfg = Config(workspace=tmp_path / "ws", definitions=definitions, models=FAKE_CATALOGUE)
+    assert not cfg.authored_files["models.yaml"].exists()
 
     service = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends)
 
@@ -470,7 +472,7 @@ def test_an_entry_the_keys_file_lacks_drops_the_endpoint_naming_both(tmp_path):
 )
 def test_a_keys_file_that_is_named_and_wrong_refuses_to_start(tmp_path, body, says):
     """A path somebody wrote is a mistake to say at once, where an endpoint without its
-    key is one machine's ordinary state -- the line `KINGFISHER_MODELS_FILE` already draws.
+    key is one machine's ordinary state -- the line a missing `models.yaml` already draws.
     """
     named = tmp_path / "keys.yaml" if body is None else keys_at(tmp_path, body)
 

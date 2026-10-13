@@ -587,11 +587,10 @@ def backend_at(
     refuse_unmountable(skills_dir, skills.mounts)
 
     _require_layout(session_dir)
-    # `FilesystemBackend` wants the root to exist. A *supplied* catalogue was
-    # already refused by `resolve_definitions` if it did not, so this only ever
-    # creates a derived one -- and stays here for the callers that build a
-    # backend directly, without a service to have resolved anything for them.
-    skills_dir.mkdir(parents=True, exist_ok=True)
+    # Not created where it is missing: it is in the definitions folder, which a
+    # start only reads, and a missing one means no skills. Both Linux fences grant
+    # only the paths that exist, and the route below answers a read with "not
+    # found" either way.
     # The view as well as what it points at: every fence checks the resolved path,
     # so the targets need their grant, and the Linux one also has to reach the
     # links themselves.

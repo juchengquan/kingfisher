@@ -45,7 +45,7 @@ def agent_snapshot(session_dir) -> Path:
 
 
 def _agent(cfg) -> None:
-    root = cfg.workspace / "agents"
+    root = cfg.definitions / "agents"
     root.mkdir(parents=True, exist_ok=True)
     (root / "assistant.yaml").write_text(AGENT, encoding="utf-8")
 

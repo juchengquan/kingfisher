@@ -483,7 +483,7 @@ def test_the_starter_agent_the_refusal_prints_actually_loads(cfg):
     from kingfisher.infrastructure.workspace import starter_agent
     from kingfisher.kinds.agents.spec import parse
 
-    printed = starter_agent(cfg.workspace / "agents")
+    printed = starter_agent(cfg.definitions / "agents")
     block = printed.split("A minimal one:\n\n", 1)[1].split("\n\nOmitting", 1)[0]
     document = yaml.safe_load(textwrap.dedent(block))
 
@@ -511,15 +511,16 @@ def test_a_workspace_with_no_agents_is_told_how_to_write_one(cfg):
 
 
 def test_the_starter_names_where_agents_are_read_from(cfg, tmp_path):
-    """It said "a file in agents/" to a deployment whose agents had moved, which sends
-    the reader to write one in the workspace, where nothing reads it.
+    """It said "a file in agents/", which sends the reader to write one in the
+    workspace, where nothing reads it.
     """
     from dataclasses import replace
 
     from kingfisher import Kingfisher, default_backends
 
+    (tmp_path / "catalogue").mkdir()
     elsewhere = tmp_path / "catalogue" / "agents"
-    kf = Kingfisher(replace(cfg, agents_root=elsewhere), backends=default_backends)
+    kf = Kingfisher(replace(cfg, definitions=elsewhere.parent), backends=default_backends)
 
     with pytest.raises(CapabilityError) as refused:
         kf.agent_named("assistant")

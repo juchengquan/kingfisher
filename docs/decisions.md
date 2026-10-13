@@ -1139,6 +1139,60 @@ definition naming somebody read as naming nobody. `test_every_way_of_naming_a_so
 drives each through `seed` itself, since what goes wrong is the copying rather than
 the reading. *(2026-09-24, from an architecture review.)*
 
+**Definitions have a folder of their own, apart from the workspace.**
+`KINGFISHER_DEFINITIONS_DIR` is required and holds every kind, with `models.yaml` and
+`source_ids.yaml` beside them, under fixed names. `KINGFISHER_WORKSPACE` holds what
+sessions make -- `sessions/` and `.kingfisher/` -- and nothing a person writes. The two
+were one folder, with seven settings to pull the authored half out an item at a time,
+and a deployment that set none of them kept its reviewed definitions beside its
+sessions, in the one folder the macOS fence lets every session's shell read.
+
+*One folder, not a setting per kind.* `KINGFISHER_AGENTS_DIR`, its four siblings,
+`KINGFISHER_MODELS_FILE` and `KINGFISHER_SOURCE_IDS_FILE` are removed and refused if
+still set: ignored, each would serve the definitions folder's copy where a deployment
+had chosen another. What they bought was moving part of a catalogue, and the case
+that wants it -- skills somebody else maintains -- is what `KINGFISHER_SKILLS_MOUNTS`
+is for, and that stays. `Kingfisher(catalogue=...)` takes one folder for the same
+reason, or a `Definitions` for a caller that stages its kinds apart.
+
+*Required, with no default inside the workspace*, because a default would rebuild the
+mix by omission. Seeding writes into this folder and nowhere else, so it needs
+nothing else: `WorkspacePaths.workspace` is optional, and `config_from_env` is what
+asks for the workspace.
+
+*A start reads the folder and writes nothing there.* It may be shared, or mounted
+read-only, so a start that made kind folders or placed `models.yaml.example` in it
+would be one deployment changing everyone's, and one that made a missing folder would
+hide a failed mount behind an empty catalogue. A folder that is not there is refused;
+a kind folder missing inside it means none of that kind. So `backend_at` no longer
+makes `skills/`, and `skill_registry.sources` offers no source for a root that is not
+there: deepagents logs "Cannot load skills" about a source it cannot list, on every
+turn. `ensure_layout` lays out the workspace alone, and `ensure_definitions` -- which
+seeding calls, and which replaces it on the package root -- makes the kind folders and
+places both examples beside `models.yaml`. That settles *"Beside it" means beside the
+file* by leaving one place to be beside.
+
+*Neither folder may be inside the other*, refused by `Config` and `WorkspacePaths`
+alike so that one built in code meets it too. Sessions inside the definitions put
+runtime state in the folder people review; definitions inside the workspace are back
+where every session's shell can read them.
+
+*What the shell reaches*, measured on macOS through `backend_at`: a definitions folder
+outside the home folder is readable and never writable, and under the home folder it
+is hidden but for `skills/`, which the fence gives back because skill scripts run
+there. The profile still denies the definition roots and the two files by path. They
+lie outside every writable root now, so those rules cover nothing today; they are what
+holds if a definitions folder is ever let back inside the workspace.
+
+*Nothing checks for definitions left in a workspace.* They are read by nothing, and
+moving them is a one-time job for whoever upgrades. A check on what sits at the
+workspace's top would also be one a session's shell can set off, since on macOS it may
+make a folder there. `doctor`'s warning for a relocated catalogue holding nothing went
+with relocation: it existed because a mistyped `*_DIR` was created rather than
+refused, and a definitions folder that is not there is refused now. `Origins` carries
+`definitions` beside `workspace`, and spells a path inside it `definitions/<name>` as
+it spells one in the workspace `./<name>`. *(2026-10-13.)*
+
 ## Capabilities
 
 **One refusal, with the caller naming itself.** Tool-name rules live in a value

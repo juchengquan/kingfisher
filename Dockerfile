@@ -48,11 +48,13 @@ COPY assets_examples/ ./assets_examples/
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     KINGFISHER_WORKSPACE=/workspace \
+    KINGFISHER_DEFINITIONS_DIR=/definitions \
     KINGFISHER_ASSETS=/app/assets_examples
 
-# Nothing here creates /workspace. It is a mount, and a directory baked into the
-# image would be a silent fallback when the mount is missing -- exactly the
-# failure this deployment cannot afford, since it would be a real disk.
+# Nothing here creates /workspace or /definitions. Each is a mount, and a directory
+# baked into the image would be a silent fallback when the mount is missing --
+# exactly the failure this deployment cannot afford: for the workspace it would be a
+# real disk, and for the definitions an empty catalogue.
 
 ENTRYPOINT ["kingfisher"]
 CMD ["doctor"]
