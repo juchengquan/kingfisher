@@ -8,9 +8,12 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 import pytest
+from deepagents.middleware.summarization import compute_summarization_defaults
 
 from kingfisher.config import Adapter, ConfigError, Endpoint, ModelProfile
 from kingfisher.infrastructure.harness.models import ADAPTERS, build_model
+from kingfisher.infrastructure.model_catalogue import load
+from tests.conftest import repository_root
 
 if TYPE_CHECKING:
     from typing import Any
@@ -195,3 +198,22 @@ def test_a_row_naming_an_absent_class_fails_where_it_is_built():
     missing_module = replace(row, chat_class="no_such_package:Thing")
     with pytest.raises(ModuleNotFoundError, match="no_such_package"):
         missing_module.resolve()
+
+
+def test_the_shipped_minimax_row_sizes_the_summarizer_from_its_window(tmp_path):
+    """langchain has no profile for MiniMax, so a profile under `extra` that the loader
+    dropped or the class ignored left the summarizer at 170,000 tokens and six messages
+    on a 1M window, with nothing saying so.
+
+    The shipped template, through the loader, rather than a row written here: the row
+    is what a seeded workspace starts from.
+    """
+    keys = tmp_path / "keys.yaml"
+    keys.write_text("minimax: sk-not-real\nopenai: sk-not-real\n", encoding="utf-8")
+    template = repository_root() / "src" / "kingfisher" / "templates" / "models.yaml.example"
+    models = load(template, {}, keys_file=keys)
+
+    model = build_model(*models.resolve("MiniMax-M3"))
+
+    assert model.profile == {"max_input_tokens": 1_000_000}
+    assert compute_summarization_defaults(model)["trigger"] == ("fraction", 0.85)

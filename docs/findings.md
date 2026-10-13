@@ -258,6 +258,15 @@ for the next reader who reaches for one.*
   PDF has no retry; and where the catch does run, it cuts a `read_file` result to
   its text blocks -- none, for a PDF -- and tells the model to page with `offset`
   and `limit`. *(2026-10-13, deepagents 0.7.6, langchain-core 1.5.5.)*
+- **A model's profile sizes the summarizer, and one passed in replaces langchain's.**
+  `ChatAnthropic` built without `profile=` fills it from langchain's own table:
+  `claude-sonnet-4-5` arrives with a full profile, `max_input_tokens` 1,000,000 among
+  it, and `MiniMax-M3`, which the table lacks, with `None` -- so the summarizer takes
+  its fixed 170,000 tokens and six messages. Built with `profile=`, the class keeps
+  that dict as given: `{"max_input_tokens": 200000}` on `claude-sonnet-4-5` is the
+  whole profile, `pdf_inputs` and `tool_calling` gone with the rest. A row's `extra:`
+  reaches the constructor, so `extra: {profile: ...}` in `models.yaml` is this.
+  *(2026-10-13, langchain-anthropic 1.5.6.)*
 
 ## Skills and subagents
 
