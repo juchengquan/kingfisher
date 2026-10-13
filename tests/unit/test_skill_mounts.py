@@ -44,8 +44,6 @@ def mounted(cfg, tmp_path):
     _skill(cfg.skills_dir, "local", "local", "The catalogue's own.")
     vendor = tmp_path / "vendor-skills"
     _skill(vendor, "lookup", "lookup", "The vendor's way.")
-    for kind in ("subagents", "tools"):
-        (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)
     return replace(cfg, skills_enabled=True, skills_mounts={"vendor": vendor})
 
 
@@ -74,6 +72,7 @@ def test_the_variable_reads_label_path_pairs(tmp_path):
     """The shape `.env.example` shows is the shape that parses."""
     paths = paths_from_env({
         "KINGFISHER_WORKSPACE": str(tmp_path / "ws"),
+        "KINGFISHER_DEFINITIONS_DIR": str(tmp_path / "definitions"),
         "KINGFISHER_SKILLS_MOUNTS": f"vendor={tmp_path / 'a'}:team={tmp_path / 'b'}",
     })
 
@@ -89,6 +88,7 @@ def test_a_malformed_or_repeated_mount_is_refused(tmp_path, value):
     with pytest.raises(ConfigError, match="KINGFISHER_SKILLS_MOUNTS"):
         paths_from_env({
             "KINGFISHER_WORKSPACE": str(tmp_path / "ws"),
+            "KINGFISHER_DEFINITIONS_DIR": str(tmp_path / "definitions"),
             "KINGFISHER_SKILLS_MOUNTS": value,
         })
 

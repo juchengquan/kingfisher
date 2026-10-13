@@ -25,14 +25,12 @@ from kingfisher.infrastructure.harness.agent import (
 from kingfisher.infrastructure.harness.backend import backend_at, skills_sources
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.prompting import memory_guidelines
-from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.layout import MEMORY
 from tests.conftest import (
     FakeToolCallingModel,
     declared_subagents,
     dispatched,
     subagent_of,
-    subagents_dir,
 )
 
 SUBAGENT = """name: reviewer
@@ -55,16 +53,16 @@ class RecordingModel(FakeToolCallingModel):
         return self
 
 
-def _write_skill(workspace, name):
-    directory = workspace / "skills" / name
+def _write_skill(definitions, name):
+    directory = definitions / "skills" / name
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "SKILL.md").write_text(
         f"---\nname: {name}\ndescription: A skill.\n---\nDo the thing.\n", encoding="utf-8"
     )
 
 
-def _write_subagent(workspace, text=SUBAGENT, filename="reviewer.yaml"):
-    directory = workspace / "subagents"
+def _write_subagent(definitions, text=SUBAGENT, filename="reviewer.yaml"):
+    directory = definitions / "subagents"
     directory.mkdir(exist_ok=True)
     (directory / filename).write_text(text, encoding="utf-8")
 
@@ -114,8 +112,8 @@ def test_an_unrestricted_run_is_offered_the_shell(cfg, session_dir):
 
 
 def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, session_dir):
-    _write_skill(cfg.workspace, "tabular-qa")
-    _write_skill(cfg.workspace, "other")
+    _write_skill(cfg.definitions, "tabular-qa")
+    _write_skill(cfg.definitions, "other")
 
     with_skills = replace(cfg, skills_enabled=True)
     built = build_agent(
@@ -151,7 +149,7 @@ def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, session_di
 
 def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, session_dir):
     """Unrestricted is not "restricted to everything": no filter, no deny rules."""
-    _write_skill(cfg.workspace, "tabular-qa")
+    _write_skill(cfg.definitions, "tabular-qa")
     wired = replace(cfg, skills_enabled=True)
     built = build_agent(
         wired,
@@ -169,7 +167,7 @@ def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, session_dir):
 
 
 def test_activating_a_subagent_passes_its_definition_through(cfg, session_dir):
-    _write_subagent(cfg.workspace)
+    _write_subagent(cfg.definitions)
     built = build_agent(cfg, backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reviewer",)),
@@ -187,7 +185,7 @@ def test_requesting_no_subagents_is_distinct_from_not_asking(cfg, session_dir):
     """`()` activates none where the default `ALL` activates every one the workspace
     offers -- so the reviewer written above is absent here.
     """
-    _write_subagent(cfg.workspace)
+    _write_subagent(cfg.definitions)
     built = build_agent(cfg, backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=()),
@@ -198,8 +196,8 @@ def test_requesting_no_subagents_is_distinct_from_not_asking(cfg, session_dir):
 
 def test_naming_something_the_workspace_lacks_fails_loudly(cfg, session_dir):
     """Rather than running with quietly less than the caller asked for."""
-    _write_skill(cfg.workspace, "tabular-qa")
-    _write_subagent(cfg.workspace)
+    _write_skill(cfg.definitions, "tabular-qa")
+    _write_subagent(cfg.definitions)
 
     for caps, message in (
         (Capabilities(skills=("ghost",)), "unknown skill"),
@@ -328,7 +326,7 @@ def test_a_subagent_with_restricted_tools_builds_for_real(cfg, session_dir):
     """Regression: `SubAgent.tools` takes tool *objects* deepagents will register, not a
     selection by name.
     """
-    _write_subagent(cfg.workspace, RESTRICTED_SUBAGENT, "reader.yaml")
+    _write_subagent(cfg.definitions, RESTRICTED_SUBAGENT, "reader.yaml")
 
     build_agent(cfg, backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
@@ -337,7 +335,7 @@ def test_a_subagent_with_restricted_tools_builds_for_real(cfg, session_dir):
 
 
 def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, session_dir):
-    _write_subagent(cfg.workspace, RESTRICTED_SUBAGENT, "reader.yaml")
+    _write_subagent(cfg.definitions, RESTRICTED_SUBAGENT, "reader.yaml")
     built = build_agent(cfg, backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reader",)),
@@ -366,7 +364,7 @@ def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch,
     provider and reads credentials from the environment -- around the configured
     endpoint entirely.
     """
-    _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.yaml")
+    _write_subagent(cfg.definitions, MODEL_SUBAGENT, "cheap.yaml")
     built = build_agent(cfg, backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("cheap",)),
@@ -383,7 +381,7 @@ def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch,
 
 def test_the_environment_cannot_reroute_a_subagent(cfg, monkeypatch, session_dir):
     """The definition is the only author of where a subagent runs."""
-    _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.yaml")
+    _write_subagent(cfg.definitions, MODEL_SUBAGENT, "cheap.yaml")
     monkeypatch.setenv("KINGFISHER_MODEL_SUBAGENT", "operator-choice")
     monkeypatch.setenv("KINGFISHER_PROVIDER_SUBAGENT", "openai")
     built = build_agent(
@@ -500,45 +498,24 @@ def test_the_memory_block_keeps_a_cache_breakpoint_of_its_own(cfg, session_dir):
     assert any("cache_control" in block for block in blocks[:-1])
 
 
-def test_the_catalogue_can_live_outside_the_workspace(cfg, session_dir, tmp_path):
-    """One reviewed set of definitions, deployed once, serving every workspace."""
-    catalogue = tmp_path / "catalogue" / "skills"
-    (catalogue / "shared").mkdir(parents=True)
-    (catalogue / "shared" / "SKILL.md").write_text(
-        "---\nname: shared\ndescription: A procedure every deployment gets.\n---\nBody.\n",
-        encoding="utf-8",
-    )
-    relocated = replace(cfg, skills_root=catalogue, skills_enabled=True)
+def test_skills_are_read_from_the_definitions_folder_and_never_the_workspace(cfg, session_dir):
+    """Catches the skills catalogue being read from anywhere but the definitions folder,
+    a `skills/` left in the workspace included."""
+    _write_skill(cfg.definitions, "shared")
+    _write_skill(cfg.workspace, "planted")
+    wired = replace(cfg, skills_enabled=True)
 
-    backend = backend_at(relocated, session_dir)
+    backend = backend_at(wired, session_dir)
 
-    assert str(backend.routes["/skills/"].cwd) == str(catalogue.resolve())
+    assert str(backend.routes["/skills/"].cwd) == str((cfg.definitions / "skills").resolve())
     assert backend.read("/skills/shared/SKILL.md").error is None
-    # Offered to the agent without any copy existing in the workspace.
-    assert available_skills(relocated) == ("shared",)
-    assert not (relocated.workspace / "skills" / "shared").exists()
-
-
-def test_subagents_relocate_independently_of_skills(cfg, tmp_path):
-    """A deployment may share one catalogue of procedures while keeping its own
-    subagents, or the reverse -- so they are two roots, not one.
-    """
-    catalogue = tmp_path / "catalogue" / "subagents"
-    catalogue.mkdir(parents=True)
-    (catalogue / "reviewer.yaml").write_text(
-        "name: reviewer\ndescription: Checks arithmetic.\nsystem_prompt: |\n  You review.\n",
-        encoding="utf-8",
-    )
-    relocated = replace(cfg, subagents_root=catalogue)
-
-    assert set(LocalSubagentRepository(subagents_dir(relocated)).specs) == {"reviewer"}
-    assert LocalSubagentRepository(relocated.workspace / "subagents").specs == {}
+    assert available_skills(wired) == ("shared",)
 
 
 def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir):
     """The override wins, but only when there is one."""
-    (cfg.workspace / "subagents").mkdir(parents=True, exist_ok=True)
-    (cfg.workspace / "subagents" / "reviewer.yaml").write_text(
+    (cfg.definitions / "subagents").mkdir(parents=True, exist_ok=True)
+    (cfg.definitions / "subagents" / "reviewer.yaml").write_text(
         "name: reviewer\ndescription: d\nmodel: cheap-model\nsystem_prompt: |\n  You review.\n",
         encoding="utf-8",
     )

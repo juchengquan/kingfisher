@@ -39,7 +39,7 @@ SKILL = "---\nname: sampling\ndescription: How to sample a file.\n---\n\n# Sampl
 
 def write_portable(cfg, *, extra: str = "", with_skills: bool = False) -> None:
     """A workspace whose `surveyor` is declared in Python and carries its own."""
-    root = cfg.workspace / "subagents"
+    root = cfg.definitions / "subagents"
     root.mkdir(parents=True, exist_ok=True)
     if with_skills:
         folder = root / "surveyor" / "skills" / "sampling"
@@ -76,7 +76,7 @@ def write_portable(cfg, *, extra: str = "", with_skills: bool = False) -> None:
     )
     (root / "surveyor.py").write_text(module + "\n", encoding="utf-8")
 
-    tools = cfg.workspace / "tools"
+    tools = cfg.definitions / "tools"
     tools.mkdir(parents=True, exist_ok=True)
     (tools / "shared.py").write_text(
         TOOL.format(name="shared", answer="from the catalogue"), encoding="utf-8"
@@ -178,7 +178,7 @@ def test_the_spec_says_none_rather_than_staying_quiet(cfg):
     """
     write_portable(cfg)
 
-    spec = LocalSubagentRepository(cfg.workspace / "subagents").specs["surveyor"]
+    spec = LocalSubagentRepository(cfg.definitions / "subagents").specs["surveyor"]
 
     assert spec.tools is None
 
@@ -255,7 +255,7 @@ def test_a_relative_skills_path_is_refused(cfg):
     package would find its skills from one working directory and silently offer none
     from the next.
     """
-    root = cfg.workspace / "subagents"
+    root = cfg.definitions / "subagents"
     root.mkdir(parents=True, exist_ok=True)
     (root / "s.py").write_text(
         "SUBAGENTS = [{'name': 's', 'description': 'd', 'system_prompt': 'Go.', "
@@ -272,7 +272,7 @@ def test_a_portable_entry_carries_tools_and_names_none(cfg, named):
     """A name is a lookup in a catalogue this definition has never seen, and the long
     form a document writes is a name too -- so both are refused, with the reason.
     """
-    root = cfg.workspace / "subagents"
+    root = cfg.definitions / "subagents"
     root.mkdir(parents=True, exist_ok=True)
     (root / "s.py").write_text(
         "SUBAGENTS = [{'name': 's', 'description': 'd', 'system_prompt': 'Go.', "
@@ -369,7 +369,7 @@ def test_a_carried_skills_folder_is_not_reported_as_abandoned(cfg):
     publishes, so this passes whether or not anything reads the path -- which is how
     the shipped example passed against a check that was doing nothing.
     """
-    root = cfg.workspace / "subagents"
+    root = cfg.definitions / "subagents"
     folder = root / "assets" / "skills" / "sampling"
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "SKILL.md").write_text(SKILL, encoding="utf-8")
@@ -435,7 +435,7 @@ def test_carrying_is_read_off_the_backing_rather_than_the_file_extension(cfg):
     """
     from kingfisher.application.inventory import inventory
 
-    root = cfg.workspace / "subagents" / "surveyor"
+    root = cfg.definitions / "subagents" / "surveyor"
     root.mkdir(parents=True, exist_ok=True)
     (root / "tools").mkdir(exist_ok=True)
     (root / "tools" / "probe.py").write_text(
@@ -500,7 +500,7 @@ def test_a_subagent_with_one_axis_open_builds_in_a_workspace_with_no_tools(
     """
     for kind in ("skills", "subagents", "tools"):
         (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)
-    (cfg.workspace / "subagents" / filename).write_text(text, encoding="utf-8")
+    (cfg.definitions / "subagents" / filename).write_text(text, encoding="utf-8")
 
     subagent = built(cfg, session_dir, Capabilities(subagents=("surveyor",)))
 

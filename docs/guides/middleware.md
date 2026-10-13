@@ -157,7 +157,7 @@ LangChain chat model, a deepagents backend and a frozen spec. The other two
 examples import `langchain` and nothing else, and `compaction.py` imports
 deepagents' summarizer -- neither imports kingfisher.
 
-## Or put it in the workspace
+## Or put it in the definitions folder
 
 `middlewares/` is a definition kind, so a deployment that does not need to wire
 anything in Python can write a file instead and `kingfisher seed` will copy it:
@@ -229,8 +229,8 @@ ceilinged thing can raise is not a ceiling.
 **A definition that writes `["*"]` gets everything registered and granted.** That
 is worth knowing before adding an entry to the dict: registering a new middleware
 attaches it to every definition holding a star, and no file mentions it. A file
-in the workspace's `middlewares/` counts as registered, and `kingfisher seed`
-copies the examples there — so on a seeded workspace a star takes every one of
+in the definitions folder's `middlewares/` counts as registered, and `kingfisher
+seed` copies the examples there — so on a seeded deployment a star takes every one of
 them, which is why no shipped definition writes one. A star also resolves quietly
 smaller when a request narrows the axis, where a *named* entry refuses — so a
 definition that must have its audit hook should name it.

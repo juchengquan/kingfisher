@@ -164,6 +164,7 @@ def origins_document(origins: Origins) -> dict[str, object]:
     """Where everything was read from, for a script rather than a person."""
     return {
         "workspace": str(origins.workspace),
+        "definitions": str(origins.definitions),
         **{
             name: {"kind": origin.kind, "path": None if origin.path is None else str(origin.path)}
             for name, origin in origins.entries()

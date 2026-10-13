@@ -17,6 +17,35 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## Definitions in a folder of their own, after #734
+
+- **`KINGFISHER_DEFINITIONS_DIR` is required**, beside `KINGFISHER_WORKSPACE`. It holds
+  `agents/`, `middlewares/`, `skills/`, `subagents/`, `tools/`, `models.yaml` and
+  `source_ids.yaml`, under those names. Move them out of the workspace into a folder of
+  their own, with neither folder inside the other, and set it. The workspace keeps
+  `sessions/` and `.kingfisher/`.
+- **Seven settings are refused if still set:** `KINGFISHER_AGENTS_DIR`,
+  `KINGFISHER_MIDDLEWARES_DIR`, `KINGFISHER_SKILLS_DIR`, `KINGFISHER_SUBAGENTS_DIR`,
+  `KINGFISHER_TOOLS_DIR`, `KINGFISHER_MODELS_FILE` and `KINGFISHER_SOURCE_IDS_FILE`.
+  What each one named goes under its own name in the definitions folder.
+- **A start reads the definitions folder and writes nothing there.** One that does not
+  exist is refused rather than made, and a kind folder missing inside it means none of
+  that kind. `kingfisher seed` makes and fills one, and needs only
+  `KINGFISHER_DEFINITIONS_DIR`.
+- **Definitions left in a workspace are read by nothing**, and nothing checks for them.
+  Delete them once they are moved.
+- **In Python**, `Config` takes `definitions=` (keyword, required) and has lost
+  `skills_root`, `subagents_root`, `tools_root`, `agents_root` and `middlewares_root`.
+  `WorkspacePaths` takes `definitions` first, its `workspace` is optional, and it has
+  lost the same five and `models_file` and `source_ids_file`. `ensure_layout(workspace)`
+  takes the workspace alone and lays out only that; `ensure_definitions(definitions)`
+  lays out a definitions folder, and is on the package root where `ensure_layout` was.
+  A seeding destination needs only `.definitions`. `Kingfisher(catalogue=...)` takes a
+  folder laid out like the definitions folder, or a `Definitions`, where it took one
+  folder per kind.
+- **`kingfisher list` and `doctor`** print a `definitions` line under `workspace` and
+  spell a path inside it `definitions/<name>`; `--json` carries `"definitions"`.
+
 ## The shell's path rule is in `execute`'s description, after #731
 
 - **`execute`'s description is no longer deepagents' word for word.** Its "Use absolute
@@ -694,6 +723,10 @@ backend* and *A tool's path is the backend's path*, explains why.
 | `KINGFISHER_SESSION_ID is '…', and … holds the session laid out for '…'` | The setting was changed on a workspace already holding a session | Set it back to the id laid out, clear `sessions/` to start the new one afresh, or use another workspace; see *One session per workspace* |
 | `KINGFISHER_SESSION_ID is set, and … holds sessions of their own -- …` | The setting was turned on for a workspace that already holds sessions | Clear `sessions/`, unset it, or use another workspace; see *One session per workspace* |
 | `KINGFISHER_SESSION_STORE was removed: …` | The old store setting is still set | Unset it; see *Settings* |
+| `KINGFISHER_DEFINITIONS_DIR is required but not set` | A deployment from before the definitions had a folder of their own | Move them into one and set it; see *Definitions in a folder of their own* |
+| `KINGFISHER_SKILLS_DIR was removed: skills is read from KINGFISHER_DEFINITIONS_DIR now, …` (or any of its six siblings) | A setting that moved one kind is still set | Move what it named into the definitions folder and unset it; see *Definitions in a folder of their own* |
+| `KINGFISHER_DEFINITIONS_DIR is …, which is not a directory` | The folder is not there, or its mount failed | Run `kingfisher seed`, or fix the mount; a start never makes it |
+| `… neither may be inside the other …` | The definitions folder and the workspace are one folder, or one holds the other | Give each a folder of its own; see *Definitions in a folder of their own* |
 | `TypeError: backends= takes a SessionBackends …` | A plain factory function, or one backend, passed as `backends=` | Subclass `DefaultBackends` |
 | `TypeError: … missing 1 required keyword-only argument: 'backends'` | `Kingfisher(...)` called without `backends=`, with or without a graph | Pass `backends=default_backends`, or session backends of your own; see *Session backends always given* |
 | `a pre-built graph needs session backends named beside it …` | `run()` or `stream()` given `graph=` without `backends=` | Name `backends=` beside the graph |

@@ -359,7 +359,10 @@ def test_the_readme_snippet_runs_and_uses_only_the_public_api(
             for imported in (part.strip() for part in name.split(",")):
                 assert imported in kingfisher.__all__, imported
 
-        monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+        # Seeding needs a definitions folder and nothing else, so the snippet is run
+        # where no workspace is named.
+        monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(tmp_path / "definitions"))
+        monkeypatch.delenv("KINGFISHER_WORKSPACE", raising=False)
         # The snippet resolves its source the way any caller does, so the
         # variable it reads has to be set -- which is itself part of what the
         # README now claims.
@@ -985,16 +988,9 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     from kingfisher.infrastructure.workspace import seed
 
     class Destination:
-        workspace = tmp_path
-        catalogue_roots = {
-            kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")
-        }
-        # Neither file relocated, which is the ordinary deployment. Spelled out
-        # rather than borrowed from `authored_files_for`, because the point of a
+        # Written out rather than a `WorkspacePaths`, because the point of a
         # destination written here is that the protocol is satisfied by shape.
-        authored_files = {
-            name: tmp_path / name for name in ("models.yaml", "source_ids.yaml")
-        }
+        definitions = tmp_path
 
     done = seed(Destination(), shipped)
 
@@ -1041,16 +1037,9 @@ def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_pa
     from kingfisher.infrastructure.workspace import seed
 
     class Destination:
-        workspace = tmp_path
-        catalogue_roots = {
-            kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")
-        }
-        # Neither file relocated, which is the ordinary deployment. Spelled out
-        # rather than borrowed from `authored_files_for`, because the point of a
+        # Written out rather than a `WorkspacePaths`, because the point of a
         # destination written here is that the protocol is satisfied by shape.
-        authored_files = {
-            name: tmp_path / name for name in ("models.yaml", "source_ids.yaml")
-        }
+        definitions = tmp_path
 
     done = seed(Destination(), shipped, everything=True)
 
@@ -1062,8 +1051,8 @@ def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_pa
     assert (tmp_path / "subagents" / "sweeper.yaml").is_file()
 
 
-def test_seed_copies_the_middleware_examples_into_a_workspace(shipped, tmp_path):
-    """A destination naming `middlewares` gets the files, not just the directory.
+def test_seed_copies_the_middleware_examples_into_a_definitions_folder(shipped, tmp_path):
+    """`middlewares/` is seeded as every kind is: the files, not just the directory.
 
     Driven against the real tree rather than asserted over it, because what could
     regress is the copying rather than the wording -- and the wording is what was
@@ -1076,14 +1065,7 @@ def test_seed_copies_the_middleware_examples_into_a_workspace(shipped, tmp_path)
     from kingfisher.infrastructure.workspace import seed
 
     class Destination:
-        workspace = tmp_path
-        catalogue_roots = {
-            kind: tmp_path / kind
-            for kind in ("agents", "skills", "subagents", "tools", "middlewares")
-        }
-        authored_files = {
-            name: tmp_path / name for name in ("models.yaml", "source_ids.yaml")
-        }
+        definitions = tmp_path
 
     done = seed(Destination(), shipped)
 
@@ -1100,16 +1082,9 @@ def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_pat
     from kingfisher.infrastructure.workspace import middleware_named, seed
 
     class Destination:
-        workspace = tmp_path
-        catalogue_roots = {
-            kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")
-        }
-        # Neither file relocated, which is the ordinary deployment. Spelled out
-        # rather than borrowed from `authored_files_for`, because the point of a
+        # Written out rather than a `WorkspacePaths`, because the point of a
         # destination written here is that the protocol is satisfied by shape.
-        authored_files = {
-            name: tmp_path / name for name in ("models.yaml", "source_ids.yaml")
-        }
+        definitions = tmp_path
 
     seed(Destination(), shipped)
 

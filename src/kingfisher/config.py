@@ -108,59 +108,57 @@ class ModelProfile:
         return params
 
 
-def definition_roots_for(  # noqa: PLR0913, PLR0917 -- one per root, each
-    # separately relocatable by its own environment variable
-    workspace: Path,
-    skills_root: Path | None = None,
-    subagents_root: Path | None = None,
-    tools_root: Path | None = None,
-    agents_root: Path | None = None,
-    middlewares_root: Path | None = None,
-) -> dict[str, Path]:
-    """Each definition directory: an override, or a name in the workspace."""
+def definition_roots_for(definitions: Path) -> dict[str, Path]:
+    """Each definition directory, by the name it has in the definitions folder."""
     return {
-        "agents": agents_root or workspace / "agents",
-        "middlewares": middlewares_root or workspace / "middlewares",
-        "skills": skills_root or workspace / "skills",
-        "subagents": subagents_root or workspace / "subagents",
-        "tools": tools_root or workspace / "tools",
+        "agents": definitions / "agents",
+        "middlewares": definitions / "middlewares",
+        "skills": definitions / "skills",
+        "subagents": definitions / "subagents",
+        "tools": definitions / "tools",
     }
 
 
-def authored_files_for(
-    workspace: Path,
-    models_file: Path | None = None,
-    source_ids_file: Path | None = None,
-) -> dict[str, Path]:
-    """The two files a deployment writes itself: an override, or a name in the
-    workspace.
+def authored_files_for(definitions: Path) -> dict[str, Path]:
+    """The two files a deployment writes itself, beside its definitions."""
+    return {
+        "models.yaml": definitions / "models.yaml",
+        "source_ids.yaml": definitions / "source_ids.yaml",
+    }
+
+
+def refuse_overlap(workspace: Path, definitions: Path) -> None:
+    """Refuse a workspace and a definitions folder that are one, or one inside the other.
+
+    Either way round loses what the split is for. Sessions inside the definitions put
+    runtime state in the folder several deployments read and somebody reviews; the
+    definitions inside the workspace are in the one place the macOS fence lets every
+    session's shell read.
     """
-    return {
-        "models.yaml": models_file or workspace / "models.yaml",
-        "source_ids.yaml": source_ids_file or workspace / "source_ids.yaml",
-    }
+    workspace, definitions = Path(workspace).resolve(), Path(definitions).resolve()
+    if workspace.is_relative_to(definitions) or definitions.is_relative_to(workspace):
+        msg = (
+            f"KINGFISHER_WORKSPACE is {workspace} and KINGFISHER_DEFINITIONS_DIR is "
+            f"{definitions}; neither may be inside the other. The workspace holds what "
+            "sessions make and the definitions folder what people write, so give each "
+            "a folder of its own"
+        )
+        raise ConfigError(msg)
 
 
 @dataclass(frozen=True)
 class WorkspacePaths:
     """Where a deployment keeps things, before anything has been read."""
 
-    workspace: Path
-    skills_root: Path | None = None
-    subagents_root: Path | None = None
-    tools_root: Path | None = None
-    agents_root: Path | None = None
-    middlewares_root: Path | None = None
+    #: Where the definitions are read from, which is the one thing seeding needs.
+    definitions: Path
+    #: `None` where the deployment named none, which only seeding may do: it writes
+    #: into the definitions folder and never into a workspace.
+    workspace: Path | None = None
     #: Skills directories beside the catalogue, each mounted at `/skills/<label>/`.
     #: Not a definition root: a mount is somebody else's directory, so nothing
     #: creates it and nothing seeds into it.
     skills_mounts: Mapping[str, Path] = NO_MOUNTS
-    #: The two single files, relocated. Not beside the definition roots because they
-    #: are not directories and do not move together with them: one reviewed `models.yaml` shared
-    #: across a fleet is the arrangement `compose.yaml` ships, and a source-id policy may
-    #: sit somewhere else again.
-    models_file: Path | None = None
-    source_ids_file: Path | None = None
     #: Where definitions are *copied from*, which is the opposite direction to the
     #: definition roots — those say where a catalogue is read, this says what
     #: seeding hands it. Deliberately not beside them for that reason.
@@ -170,20 +168,17 @@ class WorkspacePaths:
     #: Only the act of seeding needs it, so only seeding refuses without it.
     assets: Path | None = None
 
+    def __post_init__(self) -> None:
+        if self.workspace is not None:
+            refuse_overlap(self.workspace, self.definitions)
+
     @property
     def catalogue_roots(self) -> dict[str, Path]:
-        return definition_roots_for(
-            self.workspace,
-            self.skills_root,
-            self.subagents_root,
-            self.tools_root,
-            self.agents_root,
-            self.middlewares_root,
-        )
+        return definition_roots_for(self.definitions)
 
     @property
     def authored_files(self) -> dict[str, Path]:
-        return authored_files_for(self.workspace, self.models_file, self.source_ids_file)
+        return authored_files_for(self.definitions)
 
 
 class ConfigError(RuntimeError):
@@ -210,6 +205,20 @@ REMOVED_STORE_SETTINGS = ("KINGFISHER_SESSION_STORE", "KINGFISHER_SESSION_STORE_
 RENAMED_SETTINGS: Mapping[str, str] = MappingProxyType(
     {"KINGFISHER_BACKEND_FACTORY": "KINGFISHER_SESSION_BACKENDS_FACTORY"}
 )
+
+#: Settings that each moved one thing out of the workspace, refused where they are
+#: still set, by the name the thing has in `KINGFISHER_DEFINITIONS_DIR` now. Refused
+#: rather than reported, because the folder named there is what a deployment chose to
+#: serve, and carrying on would serve a different one without a word.
+FOLDED_SETTINGS: Mapping[str, str] = MappingProxyType({
+    "KINGFISHER_AGENTS_DIR": "agents",
+    "KINGFISHER_MIDDLEWARES_DIR": "middlewares",
+    "KINGFISHER_SKILLS_DIR": "skills",
+    "KINGFISHER_SUBAGENTS_DIR": "subagents",
+    "KINGFISHER_TOOLS_DIR": "tools",
+    "KINGFISHER_MODELS_FILE": "models.yaml",
+    "KINGFISHER_SOURCE_IDS_FILE": "source_ids.yaml",
+})
 
 class MissingCredentialsWarning(UserWarning):
     """An endpoint in `models.yaml` whose key is not set here, so it was dropped.
@@ -304,6 +313,7 @@ class Models:
 class Config:
     """Everything kingfisher needs to build an agent for one workspace."""
 
+    #: What sessions make: `sessions/` and the harness's own `.kingfisher/`.
     workspace: Path
     #: What this deployment can run, where, and under which names.
     #:
@@ -360,16 +370,6 @@ class Config:
     # this deployment's own API keys, `~/.aws` and the GitHub CLI's token, and
     # `http_fetch` is one tool call away from sending them.
     shell_sandbox: str = "auto"
-    # Where the definitions live. `None` derives them from the workspace, and
-    # what makes that worth overriding is that these hold *content a person
-    # authored*: pointing several deployments at one directory is how a
-    # reviewed catalogue serves all of them instead of each keeping a copy
-    # nobody can audit centrally.
-    skills_root: Path | None = None
-    subagents_root: Path | None = None
-    tools_root: Path | None = None
-    agents_root: Path | None = None
-    middlewares_root: Path | None = None
     skills_mounts: Mapping[str, Path] = NO_MOUNTS
     # Where definitions are copied *from*, which is the opposite direction to
     # the definition roots. Carried here as well as on `WorkspacePaths` because
@@ -377,6 +377,12 @@ class Config:
     # mistyped or emptied source is the likeliest thing standing between an
     # install and a run once the definitions stop arriving with the wheel.
     assets: Path | None = None
+    # What people write, apart from what sessions make: every definition kind, and
+    # `models.yaml` and `source_ids.yaml` beside them. Keyword-only and without a
+    # default, so a `Config` built by hand says where its definitions are rather than
+    # inheriting a folder inside the workspace. One folder rather than one per kind:
+    # several deployments point at it, and one path is what they agree on.
+    definitions: Path = field(kw_only=True)
     # The one session this workspace holds, or `None` for a workspace holding any
     # number. Set, kingfisher's own backends keep that session in `sessions/` itself
     # and know no other id, and a request naming none runs in it. A setting rather than
@@ -429,24 +435,27 @@ class Config:
             default=ModelProfile.timeout_s,
         )
 
+    def __post_init__(self) -> None:
+        refuse_overlap(self.workspace, self.definitions)
+
     @property
     def skills_dir(self) -> Path:
         """The skills catalogue. Shared by every session this workspace serves."""
-        return self.skills_root or self.workspace / "skills"
+        return self.definitions / "skills"
 
     @property
     def catalogue_roots(self) -> dict[str, Path]:
         """Every definition directory, together, as one answer."""
-        return definition_roots_for(
-            self.workspace,
-            self.skills_root,
-            self.subagents_root,
-            self.tools_root,
-            self.agents_root,
-            self.middlewares_root,
-        )
+        return definition_roots_for(self.definitions)
 
     @property
     def authored_files(self) -> dict[str, Path]:
         """Where `models.yaml` and `source_ids.yaml` are read from, found or not."""
-        return authored_files_for(self.workspace, self.models.source, self.access_source)
+        # Where they were actually read, ahead of where the folder says. A `Config` built
+        # in code may load either from anywhere, and the macOS profile denies the shell
+        # this list: the one it must not edit is the one the next start reads.
+        beside = authored_files_for(self.definitions)
+        return {
+            "models.yaml": self.models.source or beside["models.yaml"],
+            "source_ids.yaml": self.access_source or beside["source_ids.yaml"],
+        }

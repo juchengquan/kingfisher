@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import shutil
 from dataclasses import replace
 
 import pytest
@@ -68,6 +70,32 @@ def test_an_empty_catalogue_is_not_an_error(cfg):
     cfg.skills_dir.mkdir(parents=True, exist_ok=True)
 
     assert _read(cfg.skills_dir).names == ()
+
+
+def test_a_missing_skills_folder_is_no_skills_and_no_source(tmp_path, caplog):
+    """Handed a source it cannot list, deepagents logs "Cannot load skills" -- when the
+    catalogue is read, and on every turn after -- for a folder a deployment simply
+    does not have.
+    """
+    missing = tmp_path / "definitions" / "skills"
+
+    with caplog.at_level(logging.WARNING):
+        registry = _read(missing)
+
+    assert registry.names == ()
+    assert skill_registry.sources(missing) == ()
+    assert "Cannot load skills" not in caplog.text
+
+
+def test_building_a_backend_does_not_make_the_skills_folder(cfg, session_dir):
+    """The definitions folder is read by a start and never written: it may be shared,
+    or mounted read-only.
+    """
+    shutil.rmtree(cfg.skills_dir)
+
+    backend_at(cfg, session_dir)
+
+    assert not cfg.skills_dir.exists()
 
 
 # -- the bug it exists to close -------------------------------------------

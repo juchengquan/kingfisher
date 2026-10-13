@@ -132,6 +132,7 @@ def test_the_json_document_survives_a_round_trip(cfg):
     # Under `origins` now, with every other place beside it. `Path` is what
     # made this test worth having and the record still holds them, one layer in.
     assert isinstance(document["origins"]["workspace"], str)
+    assert document["origins"]["definitions"] == str(cfg.definitions)
     assert document["origins"]["skills"] == {
         "kind": "default",
         "path": str(cfg.skills_dir),
@@ -145,10 +146,10 @@ def test_the_header_names_every_catalogue_including_tools(cfg):
     from kingfisher import inventory
     from kingfisher.presentation.cli.listing import render
 
-    header = list(render(inventory(cfg)))[:10]
+    header = list(render(inventory(cfg)))[:11]
 
     assert [line.split(" :")[0].strip() for line in header] == [
-        "workspace", "agents", "middlewares", "skills", "subagents", "tools",
+        "workspace", "definitions", "agents", "middlewares", "skills", "subagents", "tools",
         "models", "source_ids", "seed", "sessions",
     ]
 
@@ -250,7 +251,7 @@ system_prompt: |
 
 
 def _subagent_catalogue(cfg):
-    directory = cfg.workspace / "subagents"
+    directory = cfg.definitions / "subagents"
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "researcher.py").write_text(COMPILED_MODULE, encoding="utf-8")
     (directory / "reviewer.yaml").write_text(PROMPTED_DEFINITION, encoding="utf-8")
@@ -291,7 +292,7 @@ def test_a_workspace_with_no_compiled_subagent_says_nothing_about_them(cfg):
     from kingfisher.application.inventory import inventory
     from kingfisher.presentation.cli.listing import render
 
-    directory = cfg.workspace / "subagents"
+    directory = cfg.definitions / "subagents"
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "reviewer.yaml").write_text(PROMPTED_DEFINITION, encoding="utf-8")
 
@@ -571,7 +572,7 @@ def _workspace(
     for document in agents:
         name = document.split("name: ", 1)[1].split("\n", 1)[0]
         (directory / f"{name}.yaml").write_text(document, encoding="utf-8")
-    (cfg.workspace / "source_ids.yaml").write_text(vocabulary, encoding="utf-8")
+    (cfg.definitions / "source_ids.yaml").write_text(vocabulary, encoding="utf-8")
     return cfg
 
 
@@ -1463,7 +1464,7 @@ def test_the_listing_reports_a_definition_naming_an_undeclared_source_id(
     from tests.conftest import an_agent
 
     an_agent(cfg, "analyst", source_ids="[analists]")
-    (cfg.workspace / "source_ids.yaml").write_text("source_ids: [analysts]\n", encoding="utf-8")
+    (cfg.definitions / "source_ids.yaml").write_text("source_ids: [analysts]\n", encoding="utf-8")
 
     assert main(["list"]) == 1, "a workspace that will not build is a non-zero listing"
 
@@ -1477,7 +1478,7 @@ def test_the_listing_is_clean_when_every_source_id_is_declared(cfg, at_the_comma
     from tests.conftest import an_agent
 
     an_agent(cfg, "analyst", source_ids="[analysts]")
-    (cfg.workspace / "source_ids.yaml").write_text("source_ids: [analysts]\n", encoding="utf-8")
+    (cfg.definitions / "source_ids.yaml").write_text("source_ids: [analysts]\n", encoding="utf-8")
 
     assert main(["list"]) == 0
     assert "cannot load" not in capsys.readouterr().out

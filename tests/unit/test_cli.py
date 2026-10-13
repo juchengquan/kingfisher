@@ -26,32 +26,59 @@ def test_bare_invocation_prints_help_and_does_nothing(capsys):
     assert "list" in printed
 
 
-def test_seeding_needs_no_model_catalogue(cfg, monkeypatch, capsys, shipped):
-    """The point of running on the paths half of the configuration."""
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+def test_seeding_needs_no_model_catalogue(tmp_path, monkeypatch, capsys, shipped):
+    """The point of running on the paths half of the configuration: no catalogue and
+    no workspace, only the folder it writes into -- which then holds the catalogue's
+    worked example.
+    """
+    definitions = tmp_path / "definitions"
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(definitions))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
-    monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
-    assert not (cfg.workspace / "models.yaml").exists()
+    monkeypatch.delenv("KINGFISHER_WORKSPACE", raising=False)
 
     assert main(["seed"]) == 0
 
     printed = capsys.readouterr().out
     assert "seeded" in printed
-    assert (cfg.workspace / "models.yaml.example").is_file()
+    assert (definitions / "models.yaml.example").is_file()
+    assert not (definitions / "models.yaml").exists()
 
 
-def test_seeding_puts_the_example_where_the_catalogue_is_read_from(
-    cfg, monkeypatch, capsys, shipped, tmp_path
+def test_seeding_with_nothing_to_copy_still_leaves_somewhere_to_start(
+    tmp_path, monkeypatch, capsys
 ):
-    """`compose.yaml` sets `KINGFISHER_MODELS_FILE`, so this is the shipped case."""
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
+    """Catches the command refusing for want of a source before it lays the definitions
+    folder out, which leaves a deployment with nothing to seed yet no folder and no
+    `models.yaml.example` -- a refusal with nowhere to go next.
+    """
+    definitions = tmp_path / "definitions"
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(definitions))
+    monkeypatch.delenv("KINGFISHER_ASSETS", raising=False)
+
+    assert main(["seed"]) == 2
+
+    assert "no definitions to seed from" in capsys.readouterr().err
+    assert (definitions / "models.yaml.example").is_file()
+
+
+def test_seeding_refuses_a_setting_that_named_where_it_wrote(
+    monkeypatch, capsys, shipped, tmp_path
+):
+    """A deployment still naming its catalogue with `KINGFISHER_MODELS_FILE` is refused
+    before anything is written: carrying on would seed a folder it never named, beside
+    a catalogue it is not reading.
+    """
+    definitions = tmp_path / "definitions"
     elsewhere = tmp_path / "config"
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(definitions))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(elsewhere / "models.yaml"))
 
-    assert main(["seed"]) == 0
+    assert main(["seed"]) == 2
 
-    assert (elsewhere / "models.yaml.example").is_file()
+    assert "KINGFISHER_MODELS_FILE was removed" in capsys.readouterr().err
+    assert not definitions.exists()
+    assert not elsewhere.exists()
 
 
 def test_the_skip_line_says_which_of_the_two_reasons_it_was(cfg, monkeypatch, capsys, shipped):
@@ -59,7 +86,7 @@ def test_the_skip_line_says_which_of_the_two_reasons_it_was(cfg, monkeypatch, ca
     are per-kind -- what seed did not consult, and what to do -- and the remedy alone
     reads as advice about nothing in particular until the line says what was named.
     """
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(cfg.definitions))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
     assert main(["seed"]) == 0
@@ -71,7 +98,7 @@ def test_the_skip_line_says_which_of_the_two_reasons_it_was(cfg, monkeypatch, ca
 
 def test_the_skip_message_carries_the_line_to_write(cfg, monkeypatch, capsys, shipped):
     """A remedy is only actionable if it is about the source ids you are missing."""
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(cfg.definitions))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
     assert main(["seed"]) == 0
@@ -90,7 +117,7 @@ def test_the_line_is_printed_once_for_every_definition_skipped(
     """Two definitions are skipped for source ids and they want overlapping but different
     sets.
     """
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(cfg.definitions))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
     assert main(["seed"]) == 0
@@ -109,7 +136,7 @@ def test_no_line_is_printed_when_nothing_wanted_a_source_id(cfg, monkeypatch, ca
         "---\nname: only\ndescription: A skill.\n---\n\nDo the thing.\n",
         encoding="utf-8",
     )
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(cfg.definitions))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(tmp_path / "plain"))
 
     assert main(["seed"]) == 0
@@ -117,17 +144,17 @@ def test_no_line_is_printed_when_nothing_wanted_a_source_id(cfg, monkeypatch, ca
     assert "source_ids.yaml" not in capsys.readouterr().out
 
 
-def test_seeding_a_workspace_that_does_not_exist_yet_creates_it(
+def test_seeding_a_definitions_folder_that_does_not_exist_yet_creates_it(
     tmp_path, monkeypatch, capsys, shipped
 ):
-    """`ensure_layout` before the copy."""
-    workspace = tmp_path / "brand-new"
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(workspace))
+    """`ensure_definitions` before the copy."""
+    definitions = tmp_path / "brand-new"
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(definitions))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
     assert main(["seed"]) == 0
 
-    assert workspace.is_dir()
+    assert definitions.is_dir()
     assert "seeded" in capsys.readouterr().out
 
 
@@ -135,7 +162,7 @@ def test_seeding_from_an_empty_directory_says_so(cfg, monkeypatch, capsys, tmp_p
     """A caller pointing `--from` at a directory with nothing in it."""
     empty = tmp_path / "empty"
     empty.mkdir()
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(cfg.definitions))
     monkeypatch.setattr("sys.argv", ["kingfisher", "seed", "--from", str(empty)])
 
     assert main(["seed", "--from", str(empty)]) == 1
@@ -206,14 +233,14 @@ def test_the_env_file_beside_you_is_read(tmp_path, monkeypatch, capsys, shipped)
     """The failure this was written for."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".env").write_text(
-        f"KINGFISHER_WORKSPACE={tmp_path / 'ws'}\n", encoding="utf-8"
+        f"KINGFISHER_DEFINITIONS_DIR={tmp_path / 'definitions'}\n", encoding="utf-8"
     )
-    monkeypatch.delenv("KINGFISHER_WORKSPACE", raising=False)
+    monkeypatch.delenv("KINGFISHER_DEFINITIONS_DIR", raising=False)
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
     assert main(["seed"]) == 0
 
-    assert (tmp_path / "ws").is_dir()
+    assert (tmp_path / "definitions").is_dir()
 
 
 def test_a_parent_directorys_env_file_is_not_read(tmp_path, monkeypatch):
@@ -223,13 +250,15 @@ def test_a_parent_directorys_env_file_is_not_read(tmp_path, monkeypatch):
     installed package starts in `site-packages`; naming the path is what takes that
     away.
     """
-    (tmp_path / ".env").write_text("KINGFISHER_WORKSPACE=/should/never/be/read\n", encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        "KINGFISHER_DEFINITIONS_DIR=/should/never/be/read\n", encoding="utf-8"
+    )
     below = tmp_path / "below"
     below.mkdir()
     monkeypatch.chdir(below)
-    monkeypatch.delenv("KINGFISHER_WORKSPACE", raising=False)
+    monkeypatch.delenv("KINGFISHER_DEFINITIONS_DIR", raising=False)
 
-    assert main(["seed"]) == 2  # no workspace named anywhere it looked
+    assert main(["seed"]) == 2  # no definitions folder named anywhere it looked
 
     assert not Path("/should/never/be/read").exists()
 
@@ -238,9 +267,9 @@ def test_the_environment_wins_over_the_file(tmp_path, monkeypatch, capsys, shipp
     """`override=False`, and it matters."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".env").write_text(
-        f"KINGFISHER_WORKSPACE={tmp_path / 'from-the-file'}\n", encoding="utf-8"
+        f"KINGFISHER_DEFINITIONS_DIR={tmp_path / 'from-the-file'}\n", encoding="utf-8"
     )
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "from-the-shell"))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(tmp_path / "from-the-shell"))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
     assert main(["seed"]) == 0
@@ -254,13 +283,13 @@ def test_no_env_file_is_the_ordinary_case(tmp_path, monkeypatch, capsys, shipped
     stop the command reaching the environment.
     """
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(tmp_path / "definitions"))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
     assert not (tmp_path / ".env").exists()
 
     assert main(["seed"]) == 0
 
-    assert (tmp_path / "ws").is_dir()
+    assert (tmp_path / "definitions").is_dir()
 
 
 def test_the_refusal_names_the_file_it_looked_at(tmp_path, monkeypatch, capsys):
@@ -413,13 +442,12 @@ def test_a_warning_from_someone_elses_code_is_left_as_it_was(cfg, monkeypatch, c
     assert warnings.showwarning is handler, "the plain handler must not outlive the run"
 
 
-def test_a_verb_other_than_run_says_a_warning_plainly_too(cfg, tmp_path, monkeypatch, capsys):
+def test_a_verb_other_than_run_says_a_warning_plainly_too(cfg, monkeypatch, capsys):
     """Only `run` had the plain line, and `list` loads the model catalogue as well: its
     warning about a missing key -- the only report of one `list` gives -- still came out
     as a path, a line number and `UserWarning`.
     """
-    models = tmp_path / "models.yaml"
-    models.write_text(
+    (cfg.definitions / "models.yaml").write_text(
         "endpoints:\n"
         "  here:\n    api: anthropic\n    base_url: http://127.0.0.1:9/never-called\n"
         "    key_env: HERE_KEY\n"
@@ -430,7 +458,7 @@ def test_a_verb_other_than_run_says_a_warning_plainly_too(cfg, tmp_path, monkeyp
         encoding="utf-8",
     )
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(models))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(cfg.definitions))
     monkeypatch.setenv("HERE_KEY", "not-a-real-key")
     monkeypatch.delenv("THERE_KEY", raising=False)
 
@@ -502,55 +530,57 @@ def test_who_is_calling_reaches_the_library(cfg, monkeypatch):
 # the thing nothing covered.
 
 
-def test_seeding_lands_in_the_catalogue_not_the_workspace(
-    cfg, tmp_path, shipped, monkeypatch, capsys
+def test_seeding_lands_in_the_definitions_folder_not_the_workspace(
+    cfg, shipped, monkeypatch, capsys
 ):
-    """They are the same directory until a deployment moves them, and a preset written
-    to `workspace/skills` is invisible to an agent reading the relocated one -- the
-    bug this has caught before.
+    """A preset written to `workspace/skills` is invisible to an agent reading the
+    definitions folder -- the bug this has caught before, with a workspace named
+    beside the folder seeding was meant for.
     """
-    catalogue = tmp_path / "catalogue"
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(cfg.definitions))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
-    monkeypatch.setenv("KINGFISHER_SKILLS_DIR", str(catalogue / "skills"))
-    monkeypatch.setenv("KINGFISHER_SUBAGENTS_DIR", str(catalogue / "subagents"))
 
     assert main(["seed"]) == 0
 
-    assert reachable(catalogue / "skills")
-    assert not reachable(cfg.workspace / "skills")
+    assert reachable(cfg.skills_dir)
+    assert not (cfg.workspace / "skills").exists()
     assert "seeded" in capsys.readouterr().out
 
 
-def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, shipped, monkeypatch):
-    """The default, and the case the old code got right -- worth keeping, or the fix
-    above could quietly break the ordinary setup.
+def test_seeding_refuses_a_definitions_folder_inside_the_workspace(
+    cfg, shipped, monkeypatch, capsys
+):
+    """Seeding needs no workspace, and still refuses one that would hold what it writes:
+    definitions there are in the one place every session's shell may read.
     """
+    inside = cfg.workspace / "definitions"
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(inside))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
-    assert main(["seed"]) == 0
-    assert reachable(cfg.skills_dir)
+    assert main(["seed"]) == 2
+
+    assert "neither may be inside the other" in capsys.readouterr().err
+    assert not inside.exists()
 
 
-def test_seeding_puts_tools_in_the_tool_catalogue(tmp_path, shipped, monkeypatch):
-    """The third catalogue, and the third chance to seed where nothing reads -- or,
-    short of that, to leave an empty `tools/` in the workspace looking like the place.
+def test_seeding_never_makes_a_workspace(tmp_path, shipped, monkeypatch):
+    """Not even one it is told about: seeding writes what people author, and the
+    workspace is what a start lays out on the machine that serves sessions.
     """
     from kingfisher.kinds.tools.catalogue import LocalToolRepository
 
-    # A fresh workspace rather than `cfg`'s, which the fixture laid out before any
-    # setting moved a kind, so its `tools/` would be there whatever seeding did.
     workspace = tmp_path / "fresh"
-    catalogue = tmp_path / "catalogue"
+    definitions = tmp_path / "definitions"
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(workspace))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(definitions))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
-    monkeypatch.setenv("KINGFISHER_TOOLS_DIR", str(catalogue / "tools"))
 
     assert main(["seed"]) == 0
 
-    assert "http_fetch" in LocalToolRepository(catalogue / "tools").names
-    assert not (workspace / "tools").exists(), "a tools/ in the workspace that nothing reads"
+    assert "http_fetch" in LocalToolRepository(definitions / "tools").names, "nothing seeded"
+    assert not workspace.exists()
 
 
 # -- `sessions` and `reap`, the workspace's own housekeeping -----------------

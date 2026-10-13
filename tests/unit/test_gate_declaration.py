@@ -148,7 +148,7 @@ def test_the_gates_reach_deepagents_as_the_argument_a_subagent_inherits(
     means scripting a model the subagent resolves for itself -- so a change in how
     deepagents propagates the argument would pass here.
     """
-    directory = cfg.workspace / "subagents"
+    directory = cfg.definitions / "subagents"
     directory.mkdir(exist_ok=True)
     (directory / "scribe.yaml").write_text(
         "name: scribe\ndescription: Writes.\nsystem_prompt: |\n  Write.\n", encoding="utf-8"

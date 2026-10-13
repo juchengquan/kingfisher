@@ -16,7 +16,11 @@ from langchain_core.language_models.fake_chat_models import FakeMessagesListChat
 from kingfisher.config import Adapter, Config, Endpoint, Landing, ModelProfile, Models
 from kingfisher.infrastructure.harness.models import ADAPTERS
 from kingfisher.infrastructure.steps import drive
-from kingfisher.infrastructure.workspace import ensure_layout, ensure_session_layout
+from kingfisher.infrastructure.workspace import (
+    ensure_definitions,
+    ensure_layout,
+    ensure_session_layout,
+)
 from tests.unit.scripted import Scripted
 
 if TYPE_CHECKING:
@@ -85,6 +89,12 @@ class StubCheckpointer:
 @pytest.fixture
 def workspace(tmp_path):
     return ensure_layout(tmp_path / "ws")
+
+
+@pytest.fixture
+def definitions(tmp_path):
+    """A definitions folder beside the workspace, laid out as seeding leaves one."""
+    return ensure_definitions(tmp_path / "definitions")
 
 
 @pytest.fixture
@@ -178,18 +188,19 @@ def models_document() -> dict[str, object]:
     }
 
 
-def models_file(workspace: Path) -> Path:
+def models_file(definitions: Path) -> Path:
     """Write that catalogue where a command will read it, and say where."""
-    path = Path(workspace) / "models.yaml"
+    path = Path(definitions) / "models.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(models_document(), sort_keys=False), encoding="utf-8")
     return path
 
 
 @pytest.fixture
-def cfg(workspace):
+def cfg(workspace, definitions):
     return Config(
         workspace=workspace,
+        definitions=definitions,
         models=FAKE_CATALOGUE,
         turn_timeout_s=3600,
         execution_timeout_s=30,
@@ -211,7 +222,8 @@ def at_the_command_line(cfg, monkeypatch):
     say so themselves: that is a different arrangement, not this one written out.
     """
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(models_file(cfg.workspace)))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(cfg.definitions))
+    models_file(cfg.definitions)
     monkeypatch.setenv(FAKE_KEY_VAR, "not-a-real-key")
     return cfg
 
@@ -484,7 +496,7 @@ def workspace_with_presets(cfg, shipped):
     # `agents` stays out: `build_agent` takes capabilities rather than an agent
     # definition, and two of the shipped agents cannot run on a bare checkout.
     for kind in ("skills", "subagents", "tools"):
-        shutil.copytree(shipped / kind, cfg.workspace / kind, dirs_exist_ok=True)
+        shutil.copytree(shipped / kind, cfg.definitions / kind, dirs_exist_ok=True)
     return cfg
 
 
@@ -560,6 +572,7 @@ def an_inventory(**wrong: Any) -> Any:
     return Inventory(
         origins=Origins(
             workspace=Path("/nowhere"),
+            definitions=Path("/nowhere-definitions"),
             agents=nowhere,
             middlewares=nowhere,
             skills=nowhere,

@@ -109,7 +109,7 @@ _EXPORTS = {
     "RunResult": "kingfisher.domain.result",
     "SessionInfo": "kingfisher.domain.session",
     "definitions_source": "kingfisher.infrastructure.workspace",
-    "ensure_layout": "kingfisher.infrastructure.workspace",
+    "ensure_definitions": "kingfisher.infrastructure.workspace",
     "kinds_at": "kingfisher.infrastructure.workspace",
     "seed": "kingfisher.infrastructure.workspace",
     "Seeded": "kingfisher.infrastructure.workspace",
@@ -170,7 +170,7 @@ __all__ = [
     "config_from_env",
     "default_backends",
     "definitions_source",
-    "ensure_layout",
+    "ensure_definitions",
     "inventory",
     "kinds_at",
     "paths_from_env",
@@ -238,7 +238,7 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace import (
         definitions_source as definitions_source,
     )
-    from kingfisher.infrastructure.workspace import ensure_layout as ensure_layout
+    from kingfisher.infrastructure.workspace import ensure_definitions as ensure_definitions
     from kingfisher.infrastructure.workspace import kinds_at as kinds_at
     from kingfisher.infrastructure.workspace import seed as seed
     from kingfisher.kinds.subagents.spec import RunOn as RunOn

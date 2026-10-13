@@ -50,28 +50,28 @@ def test_seeding_from_the_worked_set_writes_all_of_it(cfg, shipped):
     assert any(entry.startswith("tools/") for entry in written), written
 
 
-def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(cfg, tmp_path):
+def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(tmp_path):
     """It is kingfisher's own, not a definition, so it does not come from the source --
     and a caller's own directory has no reason to hold one.
     """
-    from kingfisher.infrastructure.workspace import EXAMPLE, ensure_layout
+    from kingfisher import WorkspacePaths
+    from kingfisher.infrastructure.workspace import EXAMPLE
 
     mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
-    ensure_layout(cfg.workspace)
+    into = WorkspacePaths(tmp_path / "definitions")
 
-    assert (cfg.workspace / EXAMPLE).is_file()
-    assert EXAMPLE not in seeding.seed(cfg, mine).written
+    written = seeding.seed(into, mine).written
+
+    assert (into.authored_files["models.yaml"].parent / EXAMPLE).is_file()
+    assert EXAMPLE not in written
 
 
 def test_seeding_writes_no_source_ids_file_at_all(cfg, tmp_path):
     """Neither a policy nor an example, and the second half is the newer half."""
-    from kingfisher.infrastructure.workspace import ensure_layout
-
     mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
-    ensure_layout(cfg.workspace)
     seeding.seed(cfg, mine)
 
-    assert not list(cfg.workspace.glob("source_ids.yaml*")), (
+    assert not list(cfg.definitions.glob("source_ids.yaml*")), (
         "seeding produced a source ids file -- neither the policy nor an example "
         "belongs here"
     )
@@ -117,7 +117,7 @@ def test_the_variable_reaches_a_first_run(monkeypatch, tmp_path):
     """On `WorkspacePaths`, not only on `Config`."""
     from kingfisher.application.config import paths_from_env
 
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(tmp_path / "definitions"))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(tmp_path / "mine"))
 
     assert paths_from_env().assets == tmp_path / "mine"
@@ -127,7 +127,7 @@ def test_no_variable_is_not_an_error_by_itself(monkeypatch, tmp_path):
     """A workspace seeded once runs for years without this being set."""
     from kingfisher.application.config import paths_from_env
 
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(tmp_path / "definitions"))
     monkeypatch.delenv("KINGFISHER_ASSETS", raising=False)
 
     assert paths_from_env().assets is None

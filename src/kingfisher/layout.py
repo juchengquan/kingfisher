@@ -1,8 +1,8 @@
 """The workspace layout, as data. Belongs to no layer, which is why it sits here.
 
 The tiers are about durability, not about a tool. Versioning the authored tier is an
-operator's business, best done wherever `KINGFISHER_SKILLS_DIR` points rather than
-around 200MB of sessions.
+operator's business, best done in `KINGFISHER_DEFINITIONS_DIR`, which is kept apart
+from the 200MB of sessions for that reason among others.
 """
 
 from __future__ import annotations

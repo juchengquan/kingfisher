@@ -83,7 +83,7 @@ def test_a_broken_subagent_does_not_take_the_agents_half_down(cfg):
     from kingfisher.application.inventory import inventory
 
     an_agent(cfg, "only")
-    subagents = cfg.workspace / "subagents"
+    subagents = cfg.definitions / "subagents"
     subagents.mkdir(parents=True, exist_ok=True)
     (subagents / "broken.yaml").write_text("name: [unclosed\n", encoding="utf-8")
 
@@ -102,7 +102,7 @@ def test_a_broken_agent_catalogue_is_a_failure_too(cfg):
     this command, whose whole job is saying what would stop a run, did not. A broken
     agent file passed `doctor` and then stopped `Kingfisher(...)` dead.
     """
-    agents = cfg.workspace / "agents"
+    agents = cfg.definitions / "agents"
     agents.mkdir(parents=True, exist_ok=True)
     (agents / "broken.yaml").write_text("name: [unclosed\n", encoding="utf-8")
 
@@ -428,38 +428,27 @@ def test_both_forms_of_doctor_say_where_it_read_from(cfg, at_the_command_line, c
     assert str(cfg.workspace) in printed
 
 
-def test_an_empty_catalogue_somebody_pointed_at_is_not_an_empty_workspace(cfg, tmp_path):
-    """The two look identical and the remedies are opposite."""
-    from dataclasses import replace
+def test_a_mistyped_definitions_folder_is_refused_not_reported_empty(
+    tmp_path, monkeypatch, capsys
+):
+    """An empty folder at a mistyped path reads exactly like one nobody has seeded, and
+    the remedies are opposite -- so a path that is not there is refused, and not made.
+    """
+    mistyped = tmp_path / "defintions"
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(mistyped))
 
-    elsewhere = tmp_path / "staged-subagents"
-    elsewhere.mkdir()
+    assert main(["doctor"]) == 2
 
-    checks = {c.name: c for c in examine(replace(cfg, subagents_root=elsewhere))}
-
-    assert checks["subagents directory"].verdict == "warn"
-    assert str(elsewhere) in checks["subagents directory"].detail
-    assert "created rather than refused" in checks["subagents directory"].detail
+    assert "which is not a directory" in capsys.readouterr().err
+    assert not mistyped.exists()
 
 
 def test_an_empty_catalogue_where_it_belongs_says_nothing(cfg):
-    """A fresh workspace is the ordinary state, and warning about it would make the
-    check above noise on every first run.
+    """A fresh definitions folder is the ordinary state, and warning about it would be
+    noise on every first run.
     """
     assert "subagents directory" not in {c.name for c in examine(cfg)}
-
-
-def test_a_relocated_catalogue_that_holds_something_says_nothing(cfg, tmp_path):
-    """Sharing a catalogue across deployments is the arrangement the setting exists for."""
-    from dataclasses import replace
-
-    from tests.conftest import an_agent
-
-    moved = replace(cfg, agents_root=tmp_path / "shared-agents")
-    (tmp_path / "shared-agents").mkdir()
-    an_agent(moved, "only")
-
-    assert "agents directory" not in {c.name for c in examine(moved)}
 
 
 def test_a_configuration_that_is_being_ignored_is_said_out_loud(cfg, tmp_path):
@@ -623,16 +612,15 @@ def test_an_endpoint_no_model_uses_is_not_called_keyed(cfg, tmp_path):
     assert "ELSEWHERE_KEY" in checks["credentials"].detail
 
 
-def test_doctor_says_a_missing_key_once_and_inside_its_report(cfg, tmp_path, monkeypatch, capsys):
+def test_doctor_says_a_missing_key_once_and_inside_its_report(cfg, monkeypatch, capsys):
     """`doctor` printed the loader's `UserWarning` about a missing key above its report,
     and then its `credentials` check said the same thing again inside it.
     """
     import warnings
 
-    path = tmp_path / "half.yaml"
-    path.write_text(TWO_ENDPOINTS, encoding="utf-8")
+    (cfg.definitions / "models.yaml").write_text(TWO_ENDPOINTS, encoding="utf-8")
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(path))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(cfg.definitions))
     monkeypatch.setenv("GATEWAY_KEY", "sk-gateway")
     monkeypatch.delenv("ELSEWHERE_KEY", raising=False)
 
@@ -1284,10 +1272,10 @@ def _broken(cfg, where: str) -> None:
     from tests.unit.test_bundles import BROKEN, OWN_TOOL_ONLY, workspace_with_bundle
 
     workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
-    subagents = cfg.workspace / "subagents"
+    subagents = cfg.definitions / "subagents"
     target, text = {
         "the subagent's own tool": (subagents / "surveyor" / "tools" / "probe.py", BROKEN),
-        "a catalogue tool": (cfg.workspace / "tools" / "shared.py", BROKEN),
+        "a catalogue tool": (cfg.definitions / "tools" / "shared.py", BROKEN),
         "a subagent file": (subagents / "bad.yaml", "name: [\n"),
     }[where]
     target.write_text(text, encoding="utf-8")
@@ -1542,14 +1530,13 @@ def test_the_command_line_says_which_keys_env_added(cfg, tmp_path, monkeypatch, 
     """Driven through `main`, with a real `.env`: the half of the rule no examine-level
     test reaches is the command line recording what it loaded.
     """
-    path = tmp_path / "half.yaml"
-    path.write_text(TWO_ENDPOINTS, encoding="utf-8")
+    (cfg.definitions / "models.yaml").write_text(TWO_ENDPOINTS, encoding="utf-8")
     (tmp_path / ".env").write_text("GATEWAY_KEY=sk-from-dotenv\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("GATEWAY_KEY", raising=False)
     monkeypatch.setenv("ELSEWHERE_KEY", "sk-exported")
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(path))
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(cfg.definitions))
     monkeypatch.setenv("KINGFISHER_SHELL_SANDBOX", "off")
 
     main(["doctor"])

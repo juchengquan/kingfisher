@@ -367,7 +367,7 @@ OWN_TOOL_AND_SKILL = owner(skills=("sampling",))
 
 def workspace_with_bundle(cfg, definition=PRIVATE_OWNER, private="probe"):
     """A workspace whose `surveyor` brings one tool of its own."""
-    bundle = cfg.workspace / "subagents" / "surveyor"
+    bundle = cfg.definitions / "subagents" / "surveyor"
     bundle.mkdir(parents=True, exist_ok=True)
     (bundle / "surveyor.yaml").write_text(definition, encoding="utf-8")
     (bundle / "tools").mkdir(exist_ok=True)
@@ -376,7 +376,7 @@ def workspace_with_bundle(cfg, definition=PRIVATE_OWNER, private="probe"):
     (bundle / "tools" / f"{private}.py").write_text(
         TOOL.format(name=private, answer="from the bundle"), encoding="utf-8"
     )
-    tools = cfg.workspace / "tools"
+    tools = cfg.definitions / "tools"
     tools.mkdir(exist_ok=True)
     (tools / "shared.py").write_text(
         TOOL.format(name="shared", answer="from the catalogue"), encoding="utf-8"
@@ -424,7 +424,7 @@ def test_only_what_the_definition_lists_reaches_the_subagent(cfg, session_dir):
     folder -- `warm` refusing the pair does not help a caller that skipped it.
     """
     workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
-    unlisted = cfg.workspace / "subagents" / "surveyor" / "tools" / "later.py"
+    unlisted = cfg.definitions / "subagents" / "surveyor" / "tools" / "later.py"
     unlisted.write_text(TOOL.format(name="later", answer="ok"), encoding="utf-8")
 
     subagent = built_subagent(cfg, session_dir)
@@ -593,7 +593,7 @@ SKILL = "---\nname: {name}\ndescription: {description}\n---\n\nDo the thing.\n"
 
 def with_private_skill(cfg, name="sampling"):
     """A `surveyor` whose bundle also holds a skill."""
-    bundle = cfg.workspace / "subagents" / "surveyor"
+    bundle = cfg.definitions / "subagents" / "surveyor"
     folder = bundle / "skills" / name
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "SKILL.md").write_text(
@@ -622,7 +622,7 @@ def with_buried_skill(cfg, name="deep"):
     """A skill one folder down inside `surveyor`'s own `skills/`, where the catalogue
     would allow it and a subagent's folder does not.
     """
-    folder = cfg.workspace / "subagents" / "surveyor" / "skills" / "group" / name
+    folder = cfg.definitions / "subagents" / "surveyor" / "skills" / "group" / name
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "SKILL.md").write_text(
         SKILL.format(name=name, description="Goes deeper than it should."), encoding="utf-8"
@@ -645,7 +645,7 @@ def test_a_skill_in_a_subfolder_of_a_subagents_folder_is_neither_granted_nor_sho
         (where / name / "SKILL.md").write_text(
             SKILL.format(name=name, description=f"The {name} procedure."), encoding="utf-8"
         )
-    subagents = cfg.workspace / "subagents"
+    subagents = cfg.definitions / "subagents"
     subagents.mkdir(parents=True, exist_ok=True)
     entry = {
         "name": "carrier",
@@ -799,7 +799,7 @@ def test_a_listing_says_when_a_bundle_shadows_the_catalogue(cfg):
 
 def renamed(cfg):
     """Rename a working `surveyor` out from under its folder."""
-    definition = cfg.workspace / "subagents" / "surveyor" / "surveyor.yaml"
+    definition = cfg.definitions / "subagents" / "surveyor" / "surveyor.yaml"
     definition.write_text(
         definition.read_text(encoding="utf-8").replace("name: surveyor", "name: surveys"),
         encoding="utf-8",
@@ -829,7 +829,7 @@ def test_a_listing_does_not_report_a_grouping_folder_that_holds_no_assets(cfg):
     organisation, and a check that reported every folder naming no definition would
     put a warning on it forever.
     """
-    define(cfg.workspace / "subagents" / "analysis", "profiler")
+    define(cfg.definitions / "subagents" / "analysis", "profiler")
 
     found = inventory(cfg)
 
@@ -839,8 +839,8 @@ def test_a_listing_does_not_report_a_grouping_folder_that_holds_no_assets(cfg):
 
 def orphaned_folder(cfg):
     """A grouping folder holding a `tools/` that no definition is named for."""
-    define(cfg.workspace / "subagents" / "analysis", "profiler")
-    tools = cfg.workspace / "subagents" / "analysis" / "tools"
+    define(cfg.definitions / "subagents" / "analysis", "profiler")
+    tools = cfg.definitions / "subagents" / "analysis" / "tools"
     tools.mkdir()
     (tools / "probe.py").write_text(PROBE, encoding="utf-8")
 
@@ -880,7 +880,7 @@ def test_doctor_names_the_subagent_whose_private_tools_will_not_load(cfg):
     its own: a reader has to be told which subagent to go and open.
     """
     workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
-    bundle = cfg.workspace / "subagents" / "surveyor" / "tools"
+    bundle = cfg.definitions / "subagents" / "surveyor" / "tools"
     (bundle / "probe.py").write_text(BROKEN, encoding="utf-8")
 
     checks = {check.name: check for check in examine(cfg)}
@@ -960,7 +960,7 @@ def test_a_broken_private_tool_makes_the_listing_non_zero(cfg):
     named the two kinds that existed when it was written.
     """
     workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
-    bundle = cfg.workspace / "subagents" / "surveyor" / "tools"
+    bundle = cfg.definitions / "subagents" / "surveyor" / "tools"
     (bundle / "probe.py").write_text(BROKEN, encoding="utf-8")
 
     found = inventory(cfg)
@@ -972,7 +972,7 @@ def test_a_broken_private_tool_makes_the_listing_non_zero(cfg):
 def test_a_broken_bundle_does_not_hide_the_rest_of_the_listing(cfg):
     """The other half of the same bug: one bad tool printed one section of four."""
     workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
-    (cfg.workspace / "subagents" / "surveyor" / "tools" / "probe.py").write_text(
+    (cfg.definitions / "subagents" / "surveyor" / "tools" / "probe.py").write_text(
         BROKEN, encoding="utf-8"
     )
 
@@ -1025,7 +1025,7 @@ def test_a_tool_the_folder_gained_is_refused(cfg):
     ignoring it is the silent loss the next test is about.
     """
     listing(cfg, tools=("probe",))
-    arrived = cfg.workspace / "subagents" / "surveyor" / "tools" / "later.py"
+    arrived = cfg.definitions / "subagents" / "surveyor" / "tools" / "later.py"
     arrived.write_text(TOOL.format(name="later", answer="ok"), encoding="utf-8")
 
     with pytest.raises(SubagentError) as raised:
@@ -1098,7 +1098,7 @@ def test_a_definition_with_an_empty_folder_is_not_asked_to_list_anything(cfg):
     """A folder named after its definition that holds no assets is still a bundle,
     and there is nothing in it to list.
     """
-    define(cfg.workspace / "subagents" / "surveyor", "surveyor")
+    define(cfg.definitions / "subagents" / "surveyor", "surveyor")
 
     catalogue = Definitions.from_config(cfg).warm()
 
@@ -1266,13 +1266,13 @@ INHERITS_AND_OWNS_PROBE = '["*", {"name": "probe", "source": "bundled"}]'
 
 def compiled_bundle(cfg, *, skill=False, tools=INHERITS_AND_OWNS_PROBE):
     """A workspace whose `surveyor` is a graph in a folder holding its own tool."""
-    folder = cfg.workspace / "subagents" / "surveyor"
+    folder = cfg.definitions / "subagents" / "surveyor"
     (folder / "tools").mkdir(parents=True, exist_ok=True)
     (folder / "surveyor.py").write_text(COMPILED_LISTING % tools, encoding="utf-8")
     (folder / "tools" / "probe.py").write_text(
         TOOL.format(name="probe", answer="from the bundle"), encoding="utf-8"
     )
-    shared = cfg.workspace / "tools"
+    shared = cfg.definitions / "tools"
     shared.mkdir(exist_ok=True)
     (shared / "shared.py").write_text(
         TOOL.format(name="shared", answer="from the catalogue"), encoding="utf-8"

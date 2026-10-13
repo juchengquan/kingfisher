@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from importlib import resources
 from pathlib import Path
 
@@ -34,10 +33,10 @@ TEMPLATES = "kingfisher.templates"
 EXAMPLE = "models.yaml.example"
 
 
-#: What the keys file `KINGFISHER_MODEL_KEYS_FILE` names looks like. Placed in the
-#: workspace, where people look, holding no live entry and saying to copy it out first:
-#: the workspace is what the macOS fence lets the shell read, and `doctor` warns when
-#: the keys file is left there.
+#: What the keys file `KINGFISHER_MODEL_KEYS_FILE` names looks like. Placed beside
+#: `models.yaml`, whose `key:` entries name its lines, holding no live entry and saying
+#: to copy it out first: the definitions folder is shared, and `doctor` warns when the
+#: keys file sits where the shell can read it.
 KEYS_EXAMPLE = "keys.yaml.example"
 
 #: The examples this package places.
@@ -92,8 +91,8 @@ def check_layout(workspace: Path) -> None:
     There is no migration and no fallback reader on purpose. A fallback would
     have to stay for as long as anyone might have an old workspace, which is
     forever, and nothing would ever say the day had come to remove it. Sessions
-    are disposable here; the authored tier that is not is what
-    `KINGFISHER_SKILLS_DIR` keeps somewhere else.
+    are disposable here; the authored tier that is not is in
+    `KINGFISHER_DEFINITIONS_DIR`, apart from them.
     """
     marker = Path(workspace) / MARKER
     if not marker.is_file():
@@ -113,8 +112,8 @@ def check_layout(workspace: Path) -> None:
         f"and one opened here would carry on without them; there is no migration. "
         f"Delete what is left from layout {found} -- {', '.join(left)} -- and the "
         f"marker is brought up to date on the next start; or point "
-        f"KINGFISHER_WORKSPACE at a new workspace. Definitions relocate with "
-        f"KINGFISHER_SKILLS_DIR and its siblings and do not have to move."
+        f"KINGFISHER_WORKSPACE at a new workspace. Definitions are in "
+        f"KINGFISHER_DEFINITIONS_DIR and do not have to move."
     )
     raise ConfigError(msg)
 
@@ -199,13 +198,8 @@ def record_session_id(session: Path, session_id: str) -> None:
         (session / HARNESS / SESSION_ID_RECORD).write_text(session_id, encoding="utf-8")
 
 
-def ensure_layout(
-    workspace: Path,
-    *,
-    authored: Mapping[str, Path] | None = None,
-    catalogue_roots: Mapping[str, Path] | None = None,
-) -> Path:
-    """Create the workspace layout, and each kind's folder where it is read from. Idempotent.
+def ensure_layout(workspace: Path) -> Path:
+    """Create the workspace layout. Idempotent.
 
     No `.gitignore` is written, and nothing here runs git. A shipped one listed two
     of the five things a workspace holds, so it read as complete while being wrong:
@@ -213,10 +207,9 @@ def ensure_layout(
     commit a 21MB pip cache. An operator who wants version control is better served
     writing the rules they actually want.
 
-    A workspace is runtime state. The 132KB of authored content in it -- `skills`,
-    `subagents`, `tools` against 256MB of sessions and harness state -- is what
-    `KINGFISHER_SKILLS_DIR` and its four siblings exist to relocate, and versioning
-    belongs there rather than around the sessions.
+    A workspace is runtime state, and nothing in it is authored: the definitions are
+    in `KINGFISHER_DEFINITIONS_DIR`, which is where versioning belongs, and
+    `ensure_definitions` lays that out.
     """
     workspace = Path(workspace).expanduser().resolve()
     # Before anything is created in it, so a workspace this version cannot serve
@@ -225,49 +218,29 @@ def ensure_layout(
     check_layout(workspace)
     for name in LAYOUT_DIRS:
         (workspace / name).mkdir(parents=True, exist_ok=True)
-    # Where the catalogue is read from and nowhere else: a kind that was moved gets no
-    # folder in the workspace, because an empty one there is where a reader puts a
-    # definition that is then never loaded. A caller holding only a directory is
-    # saying the definitions are read from it, which for most deployments is true.
-    # An empty mapping makes none, for a catalogue its caller staged.
-    #
-    # Nothing a moved kind left in the workspace is removed, empty or not: it is the
-    # operator's folder to delete, and this runs on every start.
-    roots = definition_roots_for(workspace) if catalogue_roots is None else catalogue_roots
-    for root in roots.values():
-        Path(root).mkdir(parents=True, exist_ok=True)
 
     marker = workspace / MARKER
     if not marker.exists() or _layout_of(marker) != LAYOUT_VERSION:
         marker.write_text(MARKER_TEXT, encoding="utf-8")
-
-    _place_example(workspace, authored)
     return workspace
 
 
-def _place_example(workspace: Path, authored: Mapping[str, Path] | None = None) -> None:
-    """Put each worked example where the file it is an example of is read from."""
-    beside = dict(authored or {})
+def ensure_definitions(definitions: Path) -> Path:
+    """Create a definitions folder: a folder per kind, and the worked examples. Idempotent.
+
+    Seeding's to call, and nothing else's. A start only reads this folder, because
+    several deployments may read it too, and one that wrote into it would be changing
+    theirs; one that made it would hide a mount that failed behind an empty folder.
+    """
+    definitions = Path(definitions).expanduser().resolve()
+    for root in definition_roots_for(definitions).values():
+        root.mkdir(parents=True, exist_ok=True)
     for name in EXAMPLES:
         source = resources.files(TEMPLATES).joinpath(name)
         if not source.is_file():  # a packaging fault, caught by a test
             continue
         text = source.read_text(encoding="utf-8")
-        # By filename, so the two halves of the pair cannot be mapped to each
-        # other anywhere else: `authored` is keyed by the name of the real file,
-        # and this is that name with `.example` on the end.
-        wanted = beside.get(name.removesuffix(".example"), workspace / name).parent
-        for target in _candidates(wanted / name, workspace / name):
-            if target.is_file() and target.read_text(encoding="utf-8") == text:
-                break
-            try:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(text, encoding="utf-8")
-            except OSError:
-                continue
-            break
-
-
-def _candidates(wanted: Path, fallback: Path) -> tuple[Path, ...]:
-    """Where to try writing one example, in order, without trying twice."""
-    return (wanted,) if wanted == fallback else (wanted, fallback)
+        target = definitions / name
+        if not (target.is_file() and target.read_text(encoding="utf-8") == text):
+            target.write_text(text, encoding="utf-8")
+    return definitions

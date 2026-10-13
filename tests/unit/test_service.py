@@ -80,13 +80,13 @@ def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
 
 def test_construction_prepares_only_what_sessions_share(cfg):
     """Eagerly, so a broken workspace fails at startup rather than mid-turn -- but only
-    the shared tier.
+    the shared tier, and no definition kind, which nothing reads from the workspace.
     """
     service = Kingfisher(cfg, backends=default_backends, threads=StubCheckpointer())
 
     assert service.workspace.is_dir()
-    assert (service.workspace / "skills").is_dir()
     assert (service.workspace / "sessions").is_dir()
+    assert not (service.workspace / "skills").exists()
     assert not (service.workspace / "inputs").exists()
 
 
@@ -112,8 +112,8 @@ def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
 
 
 def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
-    """Deliberately not cached: it reads the workspace's skills and subagent
-    definitions, which a user can edit between turns.
+    """Deliberately not cached: it reads the skills and subagent definitions, which a
+    user can edit between turns.
     """
     # A real checkpointer: this builds a real agent, and deepagents type-checks
     # the saver it is handed.

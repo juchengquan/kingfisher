@@ -9,6 +9,7 @@ from pathlib import Path
 
 from kingfisher.config import (
     DEFAULT_THREAD_POOL_SIZE,
+    FOLDED_SETTINGS,
     REMOVED_STORE_SETTINGS,
     RENAMED_SETTINGS,
     Config,
@@ -123,23 +124,24 @@ class Environment:
         return found
 
     def paths(self) -> WorkspacePaths:
-        """Where this deployment keeps things, without reading the model catalogue."""
+        """Where this deployment keeps things, without reading the model catalogue.
+
+        The workspace is optional here and required by `config`: seeding reads this
+        and nothing else, and it writes into the definitions folder alone.
+        """
+        # Here rather than in `config`, so that seeding refuses them too: each one
+        # named the folder a deployment's definitions were copied into as well as read.
+        for old, now in FOLDED_SETTINGS.items():
+            if self.optional_text(old):
+                msg = (
+                    f"{old} was removed: {now} is read from KINGFISHER_DEFINITIONS_DIR "
+                    f"now, as {now} inside it. Move it there and unset {old}"
+                )
+                raise ConfigError(msg)
         return WorkspacePaths(
-            workspace=Path(self.require("KINGFISHER_WORKSPACE")).expanduser().resolve(),
-            skills_root=self.optional_path("KINGFISHER_SKILLS_DIR"),
-            subagents_root=self.optional_path("KINGFISHER_SUBAGENTS_DIR"),
-            tools_root=self.optional_path("KINGFISHER_TOOLS_DIR"),
-            agents_root=self.optional_path("KINGFISHER_AGENTS_DIR"),
-            middlewares_root=self.optional_path("KINGFISHER_MIDDLEWARES_DIR"),
+            definitions=Path(self.require("KINGFISHER_DEFINITIONS_DIR")).expanduser().resolve(),
+            workspace=self.optional_path("KINGFISHER_WORKSPACE"),
             skills_mounts=self.mounts("KINGFISHER_SKILLS_MOUNTS"),
-            # Read here rather than only in `config` below for the reason the
-            # definition roots are: laying a workspace out places the worked example
-            # for each of these, and that happens before a catalogue can be
-            # read. A deployment that relocated its catalogue and got the
-            # example in the workspace has been handed an annotated file for a
-            # path nothing reads.
-            models_file=self.optional_path("KINGFISHER_MODELS_FILE"),
-            source_ids_file=self.optional_path("KINGFISHER_SOURCE_IDS_FILE"),
             # Read here rather than at the command that uses it, so that a rule
             # scanning this module can see it: one read at a CLI edge would go
             # undocumented with nothing to notice.
@@ -168,21 +170,29 @@ class Environment:
             if part
         )
         paths = self.paths()
-        # Where it defaults and why it relocates is `authored_files_for`, which
-        # `paths` already answered: seeding places this file's worked example
-        # and runs before any of this, so the two must not decide separately.
-        #
+        # `require` only ever raises here, in the words every required setting gets.
+        workspace = paths.workspace or Path(self.require("KINGFISHER_WORKSPACE"))
+        # Before the catalogue is read out of it, which would otherwise say only that
+        # `models.yaml` is missing. Never created here: the folder may be one several
+        # deployments read, and a start that made one would be one deployment writing
+        # into all of theirs -- or hiding a mount that failed behind an empty folder.
+        if not paths.definitions.is_dir():
+            msg = (
+                f"KINGFISHER_DEFINITIONS_DIR is {paths.definitions}, which is not a "
+                "directory. `kingfisher seed` makes one and fills it"
+            )
+            raise ConfigError(msg)
         # One file rather than several, unlike the definition roots: endpoints
         # and models cross-reference, and splitting them would let half a
         # catalogue load.
         models_file = paths.authored_files["models.yaml"]
         # The source-id vocabulary, and nothing else: who reaches what is written in the
-        # definitions themselves. Defaults and relocates exactly as the catalogue above
-        # does, through the same function.
+        # definitions themselves.
         access_file = paths.authored_files["source_ids.yaml"]
 
         return Config(
-            workspace=paths.workspace,
+            workspace=workspace,
+            definitions=paths.definitions,
             # Resolved here, beside the catalogue, rather than handed to `Kingfisher`:
             # `api` is checked as the file loads, and `kingfisher doctor` and `run`
             # build their own instance with nowhere to pass an argument.
@@ -206,14 +216,6 @@ class Environment:
             thread_pool_size=self.number("KINGFISHER_THREAD_POOL_SIZE", DEFAULT_THREAD_POOL_SIZE),
             shell_path_extra=path_extra,
             shell_sandbox=self.values.get("KINGFISHER_SHELL_SANDBOX", "auto"),
-            # From `paths`, not read again here: it is the one reader of these
-            # roots, so a fresh workspace is seeded into the same directories a
-            # configured one is served from.
-            skills_root=paths.skills_root,
-            subagents_root=paths.subagents_root,
-            tools_root=paths.tools_root,
-            agents_root=paths.agents_root,
-            middlewares_root=paths.middlewares_root,
             skills_mounts=paths.skills_mounts,
             assets=paths.assets,
             session_id=self.session_id(),

@@ -144,7 +144,7 @@ def _keys(path: Path | None) -> Mapping[str, str] | None:
 
     Refused rather than read around when it is named and wrong. A path somebody wrote
     is a mistake to say at once, where an endpoint missing its key is one machine's
-    ordinary state -- the line `KINGFISHER_MODELS_FILE` already draws.
+    ordinary state -- the line a missing `models.yaml` already draws.
     """
     if path is None:
         return None
@@ -325,7 +325,8 @@ def load(
     except OSError as exc:
         msg = (
             f"no model catalogue at {path}. kingfisher needs one to know where to send "
-            f"prompts; set KINGFISHER_MODELS_FILE or write that file. A minimal one:\n\n"
+            f"prompts, and reads it from KINGFISHER_DEFINITIONS_DIR; write that file "
+            f"there. A minimal one:\n\n"
             f"    endpoints:\n"
             f"      minimax:\n"
             f"        api: anthropic\n"

@@ -200,8 +200,15 @@ async def _timed(calls) -> float:
 def main() -> int:
     pool = int(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_THREAD_POOL_SIZE
     sessions = [f"s{i}" for i in range(max(COUNTS))]
-    with tempfile.TemporaryDirectory() as workspace:
-        cfg = Config(workspace=Path(workspace), models=FAKE_CATALOGUE, thread_pool_size=pool)
+    with tempfile.TemporaryDirectory() as root:
+        definitions = Path(root) / "definitions"
+        definitions.mkdir()
+        cfg = Config(
+            workspace=Path(root) / "ws",
+            definitions=definitions,
+            models=FAKE_CATALOGUE,
+            thread_pool_size=pool,
+        )
         kf = Kingfisher(
             cfg, graph=StubAgent("ok"), backends=Remote(sessions), threads=StubCheckpointer()
         )

@@ -1,7 +1,7 @@
 # The source-id vocabulary: which names exist here, and which covers which.
 #
-# Copy this to `$KINGFISHER_WORKSPACE/source_ids.yaml`, or point
-# `KINGFISHER_SOURCE_IDS_FILE` at it. It is the only central file source-id
+# Copy this to `$KINGFISHER_DEFINITIONS_DIR/source_ids.yaml`, beside the
+# definitions it governs. It is the only central file source-id
 # access has, and it is the one `seed` does not copy -- `seed` copies
 # definitions, and this is not one. A deployment writing it is deciding
 # something about itself.

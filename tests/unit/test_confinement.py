@@ -496,17 +496,17 @@ def test_the_agent_can_still_write_everything_it_is_meant_to(cfg, session_dir):
 
 
 @macos
-def test_a_catalogue_deployed_outside_the_workspace_stays_readable(cfg, session_dir, tmp_path):
-    """`KINGFISHER_SKILLS_DIR` exists so several deployments can share one reviewed
-    catalogue, which means it commonly sits outside the workspace -- and a shared
-    directory lives in somebody's home as often as not.
+def test_a_catalogue_deployed_outside_the_workspace_stays_readable(cfg, session_dir):
+    """`KINGFISHER_DEFINITIONS_DIR` is a folder of its own so several deployments can
+    share one reviewed catalogue -- and a shared directory lives in somebody's home as
+    often as not, which is the one directory the profile denies.
     """
     catalogue = Path.home() / "kingfisher-catalogue-probe" / "skills"
     (catalogue / "demo").mkdir(parents=True, exist_ok=True)
     (catalogue / "demo" / "run.sh").write_text("echo from-the-catalogue\n")
     try:
-        relocated = replace(cfg, skills_root=catalogue, skills_enabled=True)
-        backend = backend_at(relocated, session_dir)
+        shared = replace(cfg, definitions=catalogue.parent, skills_enabled=True)
+        backend = backend_at(shared, session_dir)
 
         result = backend.execute('sh "$KINGFISHER_SKILLS/demo/run.sh"')
 
@@ -724,9 +724,8 @@ def test_the_shell_cannot_write_into_a_definition_root(cfg, session_dir):
     for kind in ["agents", "skills", "subagents", "tools"]:
         root = cfg.catalogue_roots[kind]
         # Created first, or the write fails for want of a directory and the test
-        # passes without the profile doing anything. `agents/` is not in the
-        # fixture's layout, and that vacuity was real: dropping the protection
-        # entirely left this parametrisation green for `agents`.
+        # passes without the profile doing anything. That vacuity was real: with
+        # `agents/` missing, dropping the protection entirely left it green.
         root.mkdir(parents=True, exist_ok=True)
         backend = backend_at(cfg, session_dir)
         target = root / "written-by-the-agent"
@@ -870,8 +869,7 @@ def test_the_shell_cannot_change_the_keys_file(cfg, session_dir):
 
 def test_an_authored_file_is_denied_by_its_exact_path(tmp_path):
     """By `path`, as the profile's own rule is, so the deny names the file rather than
-    whatever directory it happens to sit in -- `models.yaml` sits in the workspace, which
-    has to stay writable.
+    whatever directory it happens to sit in, which may be one that has to stay writable.
     """
     workspace = tmp_path / "ws"
     models = workspace / "config" / "models.yaml"
@@ -890,21 +888,33 @@ def test_an_authored_file_is_denied_by_its_exact_path(tmp_path):
 
 
 @macos
-def test_a_relocated_authored_file_is_denied_where_it_was_moved_to(cfg, tmp_path):
-    """The files are named by where the configuration reads them from, not by the
-    names they have in a workspace, so an access policy kept in a subfolder is covered --
-    and named by the real path, because the profile matches real paths and a
-    configuration may spell one through a link.
+def test_an_authored_file_is_denied_by_its_real_path(cfg, tmp_path):
+    """Catches the access policy going unprotected when the definitions folder is
+    named through a link, because the profile matches real paths.
     """
-    link = tmp_path / "linked-workspace"
-    link.symlink_to(cfg.workspace)
-    moved = link / "policy" / "source_ids.yaml"
+    link = tmp_path / "linked-definitions"
+    link.symlink_to(cfg.definitions)
 
-    confinement.shell_confinement(replace(cfg, access_source=moved))
+    confinement.shell_confinement(replace(cfg, definitions=link))
     written = confinement.profile_path(cfg.workspace).read_text(encoding="utf-8")
-    real = cfg.workspace.resolve() / "policy" / "source_ids.yaml"
+    real = cfg.definitions.resolve() / "source_ids.yaml"
 
     assert f'(deny file-write* (path "{real}"))' in written
+    assert str(link) not in written
+
+
+@macos
+def test_a_catalogue_read_from_elsewhere_is_denied_where_it_was_read(cfg, tmp_path):
+    """Catches a `Config` built in code, whose `models.yaml` was read from outside the
+    definitions folder, leaving the file the next start reads writable by the shell --
+    which then chooses where prompts go.
+    """
+    elsewhere = tmp_path / "shared" / "models.yaml"
+
+    confinement.shell_confinement(replace(cfg, models=replace(cfg.models, source=elsewhere)))
+    written = confinement.profile_path(cfg.workspace).read_text(encoding="utf-8")
+
+    assert f'(deny file-write* (path "{elsewhere.resolve()}"))' in written
 
 
 # -- the profile is not the agent's to edit either ------------------------

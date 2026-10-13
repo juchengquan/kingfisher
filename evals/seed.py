@@ -35,9 +35,9 @@ EXAMPLES = next(
 ) / "assets_examples"
 
 
-def seed_sample_skill(workspace: Path) -> bool:
-    """Copy the sample skill into the workspace. True if anything changed."""
-    target = Path(workspace) / "skills" / SKILL_NAME
+def seed_sample_skill(definitions: Path) -> bool:
+    """Copy the sample skill into the definitions folder. True if anything changed."""
+    target = Path(definitions) / "skills" / SKILL_NAME
     source = EXAMPLES / "skills" / SKILL_NAME
     if not source.is_dir():  # pragma: no cover -- this repository ships it
         msg = f"missing sample skill: {source}"

@@ -26,73 +26,65 @@ from tests.integration import driver
 #: sentence and cannot drift from the type it asks.
 AXES: tuple[str, ...] = tuple(f.name for f in fields(Capabilities))
 
-#: What the workspace layout creates that is not a definition kind, and what each
-#: one is instead. A directory in neither this table nor `DEFINITION_KINDS` is one
-#: the layout makes and nothing reads.
+#: What the workspace layout creates, and what each one is instead of a definition
+#: kind. A directory in neither this table nor `DEFINITION_KINDS` is one a layout
+#: makes and nothing reads.
 NOT_A_KIND_DIRECTORY = {
     "sessions": "the unit of isolation; one backend root per session",
     ".kingfisher": "the harness's own, which the agent may read through but not write",
 }
 
 
-def test_the_layout_names_every_kind_a_catalogue_reads(tmp_path):
-    """It named three of the five, so a workspace had two answers to which directories
-    it has: the layout's on a fresh start, and resolving a catalogue's on the first
-    read -- which creates all five.
+def test_the_definitions_layout_names_every_kind_a_catalogue_reads(tmp_path):
+    """The layout named three of the five, so `agents` and `middlewares` -- each
+    arriving after the tuple did -- were made by hand in tests, and the same call
+    spread to the three that already existed, 69 times across 28 files.
 
-    `agents` and `middlewares` were the two outside it, each because it arrived after
-    the tuple did. What that cost was not a failure but a habit: tests made the
-    missing two by hand, and the same call spread to the three that already existed,
-    69 times across 28 files.
-
-    Driven rather than read off `LAYOUT_DIRS`, which names no kind: the kinds come from
-    `catalogue_roots`, and a check on the tuple alone passes while the layout makes
-    none of them.
+    Driven rather than read off a tuple: the kinds come from `definition_roots_for`,
+    and a check on a constant passes while the layout makes none of them.
     """
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from kingfisher.infrastructure.workspace import ensure_definitions
+
+    made = {p.name for p in ensure_definitions(tmp_path / "definitions").iterdir() if p.is_dir()}
+
+    assert made == set(DEFINITION_KINDS), (
+        "the definitions folder is laid out with a directory that is not a kind a "
+        "catalogue reads, or without one that is"
+    )
+
+
+def test_the_workspace_layout_makes_no_kind(tmp_path):
+    """A kind folder in the workspace is a place to write a definition that is never
+    read, because every kind is read from the definitions folder.
+    """
     from kingfisher.infrastructure.workspace import ensure_layout
     from kingfisher.layout import LAYOUT_DIRS
 
     made = {p.name for p in ensure_layout(tmp_path / "ws").iterdir() if p.is_dir()}
 
-    assert set(DEFINITION_KINDS) <= made, (
-        "a kind a catalogue reads is a directory a fresh workspace should already have"
+    assert made == set(NOT_A_KIND_DIRECTORY), (
+        "the workspace layout makes a directory that is not written down here"
     )
-    assert made == set(DEFINITION_KINDS) | set(NOT_A_KIND_DIRECTORY), (
-        "the layout makes a directory that is neither a kind nor written down here"
-    )
-    assert set(LAYOUT_DIRS) == set(NOT_A_KIND_DIRECTORY), (
-        "LAYOUT_DIRS is made in the workspace whatever is configured, so a kind in it "
-        "gets a folder there even when its setting moved it"
-    )
+    assert set(LAYOUT_DIRS) == set(NOT_A_KIND_DIRECTORY)
 
 
-def test_the_layout_and_the_first_read_make_the_same_folders(cfg, tmp_path):
-    """With a kind moved, the layout made its folder in the workspace and the first
-    read made it where the setting pointed, so a deployment had both and read one.
+def test_the_first_read_makes_no_folder(cfg, tmp_path):
+    """A first read that made the kinds it did not find would write into a folder
+    several deployments read, and hide a mount that failed behind a catalogue that is
+    merely empty. A kind with no folder is a kind with nothing in it.
     """
     from dataclasses import replace
 
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS, resolve_definitions
-    from kingfisher.infrastructure.workspace import ensure_layout
+    from kingfisher.infrastructure.catalogue import resolve_definitions
 
-    deployment = tmp_path / "deployment"
-    moved = replace(
-        cfg,
-        workspace=deployment / "ws",
-        **{f"{kind}_root": deployment / "catalogue" / kind for kind in DEFINITION_KINDS},
-    )
+    bare = tmp_path / "bare"
+    bare.mkdir()
 
-    ensure_layout(moved.workspace, catalogue_roots=moved.catalogue_roots)
-    laid_out = sorted(p for p in deployment.rglob("*") if p.is_dir())
-    resolve_definitions(moved)
+    found = resolve_definitions(replace(cfg, definitions=bare))
 
-    assert sorted(p for p in deployment.rglob("*") if p.is_dir()) == laid_out, (
-        "the first read made a folder the layout did not"
-    )
-    assert not set(DEFINITION_KINDS) & {p.name for p in moved.workspace.iterdir()}, (
-        "the layout made a moved kind's folder in the workspace"
-    )
+    assert not list(bare.iterdir()), "the first read made a folder in the definitions folder"
+    assert not found.agents.documents, "a kind with no folder read as holding something"
 
 
 #: Why a kind is not read from the catalogue directories.
@@ -218,11 +210,12 @@ def test_a_folder_that_is_not_a_kind_is_not_seeded_either(shipped, cfg):
     seeding.seed(cfg, shipped)
 
     for name in NOT_A_KIND:
-        assert not (cfg.workspace / name).exists(), (
+        assert not (cfg.definitions / name).exists(), (
             f"{name}/ is written off as unseeded and seeding wrote it anyway"
         )
-    # And the ordinary kinds did arrive, or the assertion above is vacuous.
-    assert (cfg.workspace / "agents").is_dir()
+    # And the ordinary kinds did arrive, or the assertion above is vacuous. Their
+    # contents rather than their folders, which the destination was laid out with.
+    assert any((cfg.definitions / "agents").iterdir())
 
 
 def _kinds_the_seeder_can_report() -> set[str]:

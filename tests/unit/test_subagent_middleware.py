@@ -27,8 +27,8 @@ class Audited(AgentMiddleware):
 
 
 def define(cfg, body: str, name: str = "reviewer") -> None:
-    (cfg.workspace / "subagents").mkdir(parents=True, exist_ok=True)
-    (cfg.workspace / "subagents" / f"{name}.yaml").write_text(body, encoding="utf-8")
+    (cfg.definitions / "subagents").mkdir(parents=True, exist_ok=True)
+    (cfg.definitions / "subagents" / f"{name}.yaml").write_text(body, encoding="utf-8")
 
 
 def build(cfg, registry=None, **caps):

@@ -43,18 +43,19 @@ models:
 
 
 def written(tmp_path, body: str = CATALOGUE):
-    path = tmp_path / "models.yaml"
-    path.write_text(body, encoding="utf-8")
+    definitions = tmp_path / "definitions"
+    definitions.mkdir(exist_ok=True)
+    (definitions / "models.yaml").write_text(body, encoding="utf-8")
     return {
         "KINGFISHER_WORKSPACE": str(tmp_path / "ws"),
-        "KINGFISHER_MODELS_FILE": str(path),
+        "KINGFISHER_DEFINITIONS_DIR": str(definitions),
         "MINIMAX_API_KEY": "sk-gateway",
     }
 
 
 def define(cfg, body: str, name: str = "reviewer") -> None:
-    (cfg.workspace / "subagents").mkdir(parents=True, exist_ok=True)
-    (cfg.workspace / "subagents" / f"{name}.yaml").write_text(body, encoding="utf-8")
+    (cfg.definitions / "subagents").mkdir(parents=True, exist_ok=True)
+    (cfg.definitions / "subagents" / f"{name}.yaml").write_text(body, encoding="utf-8")
 
 
 def build(cfg, session_dir, *, run_on=None, **caps):

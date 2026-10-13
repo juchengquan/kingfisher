@@ -63,8 +63,13 @@ def sources(root: Path | None) -> tuple[tuple[str, str], ...]:
     find all nine.
     """
     found = [(CATALOGUE, ROOT)]
-    if root is None or not root.is_dir():
+    if root is None:
         return tuple(found)
+    # None at all, not the root on its own: a missing `skills/` means no skills, and
+    # a source deepagents is handed to list is one it logs "Cannot load skills" about
+    # on every turn when the folder is not there.
+    if not root.is_dir():
+        return ()
     for entry in sorted(p for p in root.iterdir() if p.is_dir()):
         # A folder that *is* a skill is not a folder that *holds* them. Both
         # look like a directory under the root, and the difference is one level

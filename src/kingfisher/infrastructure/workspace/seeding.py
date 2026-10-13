@@ -1,4 +1,4 @@
-"""Copying a set of definitions into a workspace."""
+"""Copying a set of definitions into a deployment's definitions folder."""
 
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ from typing import Protocol, runtime_checkable
 
 import yaml
 
-from kingfisher.config import ConfigError
+from kingfisher.config import ConfigError, definition_roots_for
 from kingfisher.domain.access import AUDIENCED
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
-from kingfisher.infrastructure.workspace.layout import ensure_layout
+from kingfisher.infrastructure.workspace.layout import ensure_definitions
 
 #: Named in the refusal below, and only when it is really there.
 #:
@@ -39,9 +39,9 @@ SEED_HINT = "`kingfisher seed --from DIR`"
 def starter_agent(agents: Path) -> str:
     """How to write an agent by hand, for the reader `SEED_HINT` cannot help.
 
-    Names the directory agents are read from rather than `agents/`, because a setting
-    may have moved it out of the workspace, and a file written where nothing reads it
-    is the dead end this exists to get a reader out of.
+    Names the directory agents are read from rather than `agents/`, because that is in
+    the definitions folder rather than wherever the reader is standing, and a file
+    written where nothing reads it is the dead end this exists to get a reader out of.
     """
     return f"""\
 An agent is a file in {agents}/, and three fields are required. A minimal one:
@@ -58,16 +58,10 @@ Omitting `tools:` grants every tool there is; omitting `skills:` and
 
 @runtime_checkable
 class Destination(Protocol):
-    """Where seeding puts things: a workspace, its catalogues, and two files."""
+    """Where seeding puts things: a definitions folder, and nothing else."""
 
     @property
-    def workspace(self) -> Path: ...
-
-    @property
-    def catalogue_roots(self) -> dict[str, Path]: ...
-
-    @property
-    def authored_files(self) -> dict[str, Path]: ...
+    def definitions(self) -> Path: ...
 
 
 @runtime_checkable
@@ -78,16 +72,10 @@ class Source(Protocol):
     def assets(self) -> Path | None: ...
 
 
-def destinations(cfg: Destination) -> tuple[tuple[str, Path], ...]:
-    """Each kind of definition, and the catalogue it belongs in.
-
-    A kind the destination does not name is skipped rather than raised on: a
-    `Destination` is satisfied by shape, so one written when there were four
-    kinds hands over four roots, and indexing every kind made adding a fifth
-    a `KeyError` for all of them.
-    """
-    roots = cfg.catalogue_roots
-    return tuple((kind, roots[kind]) for kind in DEFINITION_KINDS if kind in roots)
+def destinations(into: Destination) -> tuple[tuple[str, Path], ...]:
+    """Each kind of definition, and the catalogue it belongs in."""
+    roots = definition_roots_for(into.definitions)
+    return tuple((kind, roots[kind]) for kind in DEFINITION_KINDS)
 
 
 #: The kinds whose definitions are YAML documents with a `middlewares:` field.
@@ -344,16 +332,13 @@ def definitions_source(paths: Source, override: str | Path | None = None) -> Pat
 
 def seed(into: Destination, source: Path, *, everything: bool = False) -> Seeded:
     """Copy definitions into this deployment's catalogues, and say what changed."""
-    # Before anything is copied, and not left to the caller. Seeding into a workspace
-    # that was never laid out succeeds, reports every definition written, and leaves no
-    # `models.yaml.example` -- which is the dead end that write was moved into
-    # `ensure_layout` to avoid: a deployment told to write `models.yaml` and given no
+    # Before anything is copied, and not left to the caller. Seeding into a folder
+    # never laid out succeeds, reports every definition written, and leaves no
+    # `models.yaml.example`: a deployment told to write `models.yaml` and given no
     # example of one. The CLI got the ordering right and nothing made a library caller
-    # do the same, so the obvious two-liner produced a workspace that looked seeded and
+    # do the same, so the obvious two-liner produced a folder that looked seeded and
     # could not start.
-    ensure_layout(
-        into.workspace, authored=into.authored_files, catalogue_roots=into.catalogue_roots
-    )
+    ensure_definitions(into.definitions)
 
     if not source.is_dir():
         msg = f"nothing to seed from: {source} is not a directory"

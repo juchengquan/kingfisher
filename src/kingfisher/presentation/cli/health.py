@@ -642,34 +642,17 @@ def _subagent_tools(found: Inventory) -> Iterator[Check]:
 
 
 def _where(cfg: Config, found: Inventory) -> Iterator[Check]:
-    """Two ways a catalogue is somewhere other than you think."""
+    """A catalogue read from somewhere other than the configuration says."""
     for kind in found.by_kind():
         origin = kind.origin
-
         if origin.kind == "overridden":
             yield Check(
                 f"{kind.name} directory",
                 "warn",
                 f"read from {origin.path}, while the configuration names "
                 f"{cfg.catalogue_roots[kind.name]} — a catalogue was supplied when this "
-                f"kingfisher was built, and the setting does nothing",
-                "drop the setting, or point it at what is actually read",
-            )
-            continue
-
-        # An empty catalogue at the derived path is a fresh workspace, and
-        # `SEED_HINT` already covers that everywhere it matters. An empty one at
-        # a path somebody *typed* is the other thing entirely -- and the two
-        # look identical, because resolving a catalogue creates the directory it
-        # was pointed at rather than refusing an absent one.
-        if origin.kind == "relocated" and not kind.defined:
-            yield Check(
-                f"{kind.name} directory",
-                "warn",
-                f"{origin.path} is where this deployment points {kind.name}, and it holds "
-                f"none — a mistyped path is created rather than refused, so this "
-                f"reads the same as a workspace nobody has seeded",
-                "check the path, or seed it",
+                f"kingfisher was built, and KINGFISHER_DEFINITIONS_DIR does nothing for it",
+                "point KINGFISHER_DEFINITIONS_DIR at what is actually read",
             )
 
 

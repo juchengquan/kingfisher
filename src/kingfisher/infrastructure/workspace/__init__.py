@@ -16,6 +16,7 @@ _EXPORTS = {
     "EXAMPLE": "kingfisher.infrastructure.workspace.layout",
     "EXAMPLES": "kingfisher.infrastructure.workspace.layout",
     "TEMPLATES": "kingfisher.infrastructure.workspace.layout",
+    "ensure_definitions": "kingfisher.infrastructure.workspace.layout",
     "ensure_layout": "kingfisher.infrastructure.workspace.layout",
     "is_new_workspace": "kingfisher.infrastructure.workspace.layout",
     "protect_inputs": "kingfisher.infrastructure.workspace.permissions",
@@ -55,6 +56,7 @@ __all__ = [
     "Source",
     "definitions_source",
     "destination_hint",
+    "ensure_definitions",
     "ensure_layout",
     "ensure_session_layout",
     "is_new_workspace",
@@ -76,6 +78,9 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.layout import EXAMPLE as EXAMPLE
     from kingfisher.infrastructure.workspace.layout import EXAMPLES as EXAMPLES
     from kingfisher.infrastructure.workspace.layout import TEMPLATES as TEMPLATES
+    from kingfisher.infrastructure.workspace.layout import (
+        ensure_definitions as ensure_definitions,
+    )
     from kingfisher.infrastructure.workspace.layout import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace.layout import is_new_workspace as is_new_workspace
     from kingfisher.infrastructure.workspace.permissions import protect_inputs as protect_inputs
