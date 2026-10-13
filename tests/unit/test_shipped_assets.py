@@ -183,20 +183,22 @@ def test_every_preset_tool_loads(shipped):
         # And a class, which is the third. See below.
         "sql_explain",
         "web_search",
-        # The three that make a file and answer with where it went.
-        "bar_chart", "csv_filter", "pdf_text",
+        # The four that make a file and answer with where it went.
+        "bar_chart", "csv_filter", "pdf_text", "pdf_pages",
     }
 
 
-def test_the_preset_tools_load_where_pdfplumber_is_not_installed(shipped, monkeypatch):
-    """The wheel does not carry pdfplumber, and one tool file that fails to import
-    refuses every tool in the workspace -- so `pdf_text` may import it only when called.
+def test_the_preset_tools_load_where_the_agent_group_is_not_installed(shipped, monkeypatch):
+    """The wheel carries neither pdfplumber nor pypdf, and one tool file that fails to
+    import refuses every tool in the workspace -- so `pdf_text` and `pdf_pages` may
+    import them only when called.
     """
     monkeypatch.setitem(sys.modules, "pdfplumber", None)
+    monkeypatch.setitem(sys.modules, "pypdf", None)
 
     tools = LocalToolRepository(shipped / "tools").tools
 
-    assert "pdf_text" in {tool_name(t) for t in tools}
+    assert {"pdf_text", "pdf_pages"} <= {tool_name(t) for t in tools}
 
 
 def test_the_shipped_set_shows_all_three_tool_shapes(shipped):
@@ -1965,6 +1967,7 @@ def test_every_shipped_file_tool_works_on_a_backend_with_nothing_on_this_host(sh
         "bar_chart": {"file_path": "/inputs/rows.csv"},
         "csv_filter": {"file_path": "/inputs/rows.csv", "column": "region", "value": "north"},
         "pdf_text": {"file_path": "/inputs/report.pdf"},
+        "pdf_pages": {"file_path": "/inputs/report.pdf", "pages": "2"},
     }
 
     answers = {name: on_backend(found[name], Remote(), **args) for name, args in asked.items()}
@@ -1979,3 +1982,4 @@ def test_every_shipped_file_tool_works_on_a_backend_with_nothing_on_this_host(sh
     assert held["/scratchpad/report.p1-2.txt"] == (
         b"--- page 1 ---\nalpha\n--- page 2 ---\nbeta\n"
     )
+    assert held["/scratchpad/report.p2.pdf"].startswith(b"%PDF-")

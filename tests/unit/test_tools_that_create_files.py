@@ -14,9 +14,11 @@ import re
 from xml.etree import ElementTree
 
 import pytest
+from pypdf import PdfReader
 
 from kingfisher import backend_at
 from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.harness.middlewares.large_pdf_guard import MAX_PDF_BYTES
 from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
 from tests.conftest import a_pdf, on_backend, repository_root
 
@@ -52,6 +54,11 @@ CALLS = {
         {"file_path": "/inputs/report.pdf"},
         "/scratchpad/report.p1-3.txt",
         "/scratchpad/try1.txt",
+    ),
+    "pdf_pages": (
+        {"file_path": "/inputs/report.pdf", "pages": "1-2"},
+        "/scratchpad/report.p1-2.pdf",
+        "/scratchpad/try1.pdf",
     ),
 }
 
@@ -121,6 +128,7 @@ def test_a_refused_target_is_a_failure_and_nothing_is_written(name, tools, hande
     ("bar_chart", "SVG image", "KB"),
     ("csv_filter", "CSV", "B"),
     ("pdf_text", "text", "B"),
+    ("pdf_pages", "PDF", "B"),
 ])
 def test_the_result_is_one_line_naming_the_file_its_kind_size_and_place(
     name, kind, unit, tools, handed
@@ -264,6 +272,68 @@ def test_two_ranges_left_to_the_default_land_in_two_files(tools, handed):
 
     assert _saved(handed, "/scratchpad/report.p1.txt") == b"--- page 1 ---\nRevenue rose\n"
     assert _saved(handed, "/scratchpad/report.p3.txt") == b"--- page 3 ---\nCosts fell\n"
+
+def test_the_slice_holds_exactly_the_pages_asked_for(tools, handed, session_dir):
+    """Counted from zero, the slice is the page after each one asked for, and the
+    agent describes a chart from the wrong page.
+    """
+    (session_dir / "inputs" / "long.pdf").write_bytes(a_pdf("one", "two", "three", "four", "five"))
+
+    said = on_backend(tools["pdf_pages"], handed, file_path="/inputs/long.pdf", pages="2-3,5")
+
+    saved = _saved(handed, "/scratchpad/long.p2-3_5.pdf")
+    assert saved is not None
+    assert [page.extract_text() for page in PdfReader(io.BytesIO(saved)).pages] == [
+        "two",
+        "three",
+        "five",
+    ]
+    assert "pages 2-3, 5 of 5; open it with read_file" in said
+
+
+@pytest.mark.parametrize(("texts", "says"), [
+    ([f"page {n} " + "x" * 1500 for n in range(1, 201)], "ask for fewer pages"),
+    (["x" * (MAX_PDF_BYTES + 1024)], "page 1 alone is"),
+])
+def test_a_slice_too_large_to_read_whole_is_refused_and_nothing_is_written(
+    texts, says, tools, handed, session_dir
+):
+    """Saved, it is a file kingfisher will never hand the model, and the model is told
+    "Saved" and to open it.
+    """
+    (session_dir / "inputs" / "big.pdf").write_bytes(a_pdf(*texts))
+    pages = f"1-{len(texts)}" if len(texts) > 1 else "1"
+
+    with pytest.raises(ValueError, match=re.escape(says)):
+        on_backend(tools["pdf_pages"], handed, file_path="/inputs/big.pdf", pages=pages)
+
+    assert _saved(handed, f"/scratchpad/big.p{pages}.pdf") is None
+
+
+def test_the_slice_limit_is_the_one_the_guard_applies(tools):
+    """Set below the guard, the tool refuses slices the model could have read; set
+    above, it saves slices the guard will replace with advice.
+    """
+    assert tools["pdf_pages"].func.__globals__["MAX_SLICE_BYTES"] == MAX_PDF_BYTES
+
+
+@pytest.mark.parametrize(("pages", "says"), [
+    ("4-9", "has 3 page(s); pages '4-9' names none of them"),
+    ("0", "has 3 page(s); pages '0' names none of them"),
+    ("seven", "pages 'seven': write page numbers and ranges"),
+])
+def test_pages_naming_no_page_of_the_document_are_no_slice(pages, says, tools, handed):
+    """Page 0 taken as the list's last page slices a page nobody asked for."""
+    with pytest.raises(ValueError, match=re.escape(says)):
+        on_backend(tools["pdf_pages"], handed, file_path="/inputs/report.pdf", pages=pages)
+
+
+def test_a_file_pypdf_cannot_read_is_a_failure_naming_it(tools, handed, session_dir):
+    """pypdf's own words name neither the file nor what went wrong with it."""
+    (session_dir / "inputs" / "notes.pdf").write_text("plain text\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"^/inputs/notes\.pdf: not a PDF this tool can read"):
+        on_backend(tools["pdf_pages"], handed, file_path="/inputs/notes.pdf", pages="1")
 
 def test_a_file_already_at_the_target_is_replaced(tools, handed):
     """A tool that refused a taken default would fail every second call that left

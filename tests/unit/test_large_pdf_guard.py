@@ -65,9 +65,9 @@ def _run(
     turn = {"messages": [{"role": "user", "content": "go"}]}
     if wait:
         return asyncio.run(
-            built.graph.ainvoke(turn, config={"recursion_limit": 12}, context=built.context)
+            built.graph.ainvoke(turn, config={"recursion_limit": 20}, context=built.context)
         )
-    return built.graph.invoke(turn, config={"recursion_limit": 12}, context=built.context)
+    return built.graph.invoke(turn, config={"recursion_limit": 20}, context=built.context)
 
 
 def _answer(model: _Shown, call_id: str = "c1") -> ToolMessage:
@@ -204,3 +204,24 @@ def test_the_guide_states_the_limit_the_guard_applies():
     guide = (repository_root() / "docs" / "guides" / "tools.md").read_text(encoding="utf-8")
 
     assert f"A PDF `file` block over {MAX_PDF_BYTES // 1024} KB" in guide
+
+
+def test_a_slice_pdf_pages_saves_is_handed_over_whole(cfg, session_dir):
+    """The route a model that reads PDFs takes to a page of one too large to send: a
+    slice the guard refused too would leave that model no way to see the page.
+    """
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    shutil.copy(repository_root() / "assets_examples" / "tools" / "pdf_pages.py", tools_dir(cfg))
+    pages = [f"page {n} " + "x" * 1500 for n in range(1, 201)]
+    (session_dir / "inputs" / "big.pdf").write_bytes(a_pdf(*pages))
+    model = _calls(
+        ("read_file", {"file_path": "/inputs/big.pdf"}),
+        ("pdf_pages", {"file_path": "/inputs/big.pdf", "pages": "2"}),
+        ("read_file", {"file_path": "/scratchpad/big.p2.pdf"}),
+    )
+
+    _run(cfg, session_dir, model)
+
+    assert not _files([_answer(model, "c1")]), "the whole document was handed over"
+    assert _answer(model, "c2").text.startswith("Saved big.p2.pdf (PDF, ")
+    assert [b["mime_type"] for b in _files([_answer(model, "c3")])] == ["application/pdf"]

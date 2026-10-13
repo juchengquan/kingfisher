@@ -2048,6 +2048,25 @@ given, with no middleware of kingfisher's, so its own `read_file` is unguarded. 
 blocks the summarizer counts by their base64 -- a `.pptx` `file` block, audio -- are
 left as they come, for whoever first meets a large one. *(2026-10-13.)*
 
+**`pdf_pages` saves a page range as a smaller PDF, for a model that reads PDFs.**
+`pdf_text` gives every model the words, and leaves out a chart, a table's layout and
+a scanned page. A slice of the pages worth looking at is a PDF `read_file` hands over
+whole, where the document it came from was too large to be. MiniMax reads no PDF --
+its Anthropic-compatible API takes text, tool and thinking blocks on every model and
+images on M3 only, by its own reference read on this date -- so on the default model
+this tool waits for a provider that does, as Anthropic's and OpenAI's models do.
+
+**A slice past 256 KB is refused, not saved.** `LargePdfGuard` would replace it with
+advice, so a saved one is a file the model is told to open and never sees. The tool
+keeps its own copy of the limit, because a shipped tool is written against the
+public API and the guard's module is not part of it; a test holds the copy to the
+guard's.
+
+**Copied, not drawn.** Pages turned into images would reach MiniMax-M3, which takes
+them, but drawing a page is PDFium -- native code, in kingfisher's process, outside
+every sandbox, which is what `pdf_text` was built to avoid. pypdf copies pages and
+is Python. *(2026-10-13.)*
+
 ## What a turn's tools returned
 
 **Every tool result the model is handed is recorded, kept as a file and given an id,

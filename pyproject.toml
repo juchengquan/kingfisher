@@ -157,8 +157,9 @@ dev = [
 # an interpreter that had them -- pip, uv, `find / -name python3.14` -- before
 # settling on a Homebrew Cellar path where its own `--break-system-packages`
 # install had landed. The skill said what to use and the environment did not
-# have it. A shipped tool needs one too: `assets_examples/tools/pdf_text.py` runs
-# pdfplumber in kingfisher's own process, which is this same interpreter.
+# have it. Shipped tools need them too: `assets_examples/tools/pdf_text.py` runs
+# pdfplumber and `pdf_pages.py` beside it pypdf, in kingfisher's own process, which
+# is this same interpreter.
 #
 # The CLI half of that skill is not pip-installable and is not here: `pdftotext`
 # and `qpdf` come from Homebrew, and reaching them is what
