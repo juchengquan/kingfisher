@@ -134,6 +134,22 @@ def entry_id(number: int) -> str:
 
 _ENTRY_ID = re.compile(r"A-(\d+)")
 
+#: The same shape at the front of a file name, which is what the sweep recognises its
+#: own writing by. Built from the pattern above rather than spelled again, so the id
+#: and the file named after it cannot drift apart.
+_RESULT_FILE = re.compile(_ENTRY_ID.pattern)
+
+
+def names_a_result(name: str) -> bool:
+    """Whether a file in the results folder is one a recorder wrote.
+
+    The agent writes in that folder too -- it reads its own results back out of it and
+    `prompts/system.md` sends it there -- so the sweep cannot treat everything it finds
+    as a result whose row has gone.
+    """
+    return _RESULT_FILE.match(name) is not None
+
+
 #: On the closing line of a turn that resumed a paused one, and only there.
 RESUMED = "resumed"
 

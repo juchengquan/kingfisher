@@ -455,6 +455,29 @@ def test_a_paused_turn_keeps_its_rows_before_its_state(ledgered):
     assert [(e.id, e.tool) for e in resumed.ledger] == [("A-0002", "sql_query")]
 
 
+def test_what_the_agent_writes_beside_the_results_is_left_alone(ledgered):
+    """The agent reads its results out of this folder and writes working files there
+    too, and the sweep took one away in the turn that wrote it -- the write having
+    succeeded, so the model was told it had a file it no longer had.
+
+    Driven through a real `write_file`, because the route is what decides this: nothing
+    denies the agent the folder, where `/.harness` is denied twice over.
+    """
+    _run(
+        ledgered,
+        _calls(
+            ("web_search", {"query": "EV"}, "c1"),
+            ("write_file", {"file_path": f"{RESULTS_ROUTE}notes.md", "content": "mine\n"}, "c2"),
+        ),
+        AIMessage(content="done"),
+    )
+
+    assert _kept(ledgered) == ["A-0001-web_search.txt", "notes.md"]
+    assert _read(ledgered, f"{RESULTS_ROUTE}notes.md") == "mine\n", (
+        "the write was refused rather than swept, which is a different decision"
+    )
+
+
 def test_a_result_file_no_row_names_is_swept(ledgered):
     """A turn that died before writing its rows leaves its files behind, and nothing
     else would ever remove them.
