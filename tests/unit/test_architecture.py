@@ -254,8 +254,17 @@ def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
 #: after a move here.
 
 
+#: The trees this repository keeps Python in. One list, because two rules read it and
+#: a second copy is a second thing to keep in step. `assets_examples` is apart from
+#: them: nothing there imports kingfisher, so the import rules must not walk it, while
+#: the shape rules below must -- it ships modules a deployment copies into its own
+#: workspace.
+CODE_AREAS: tuple[str, ...] = ("src", "tests", "evals", "spikes")
+EXAMPLES_AREA = "assets_examples"
+
+
 def _everything_that_imports_kingfisher() -> list[Path]:
-    areas = ("src", "tests", "evals", "spikes")
+    areas = CODE_AREAS
     found = [
         p
         for area in areas
@@ -268,6 +277,101 @@ def _everything_that_imports_kingfisher() -> list[Path]:
     # rule this feeds exists *because* a stale import in a tree nobody walked went
     # unnoticed -- so an area dropping out here has form.
     return sorted(found)
+
+
+def _every_module_here() -> list[Path]:
+    """Every Python file in the repository, which is wider than the set above.
+
+    `assets_examples/` is the addition: it ships modules a deployment copies into its
+    own workspace, and `ruff` reads it, so a mistake there reaches somebody. Named as
+    an addition rather than by writing the area list again, so the two cannot drift.
+    """
+    found = [*_everything_that_imports_kingfisher()]
+    examples = REPO / EXAMPLES_AREA
+    if examples.is_dir():
+        found += [p for p in examples.rglob("*.py") if "__pycache__" not in p.parts]
+    return sorted(found)
+
+
+def _bound_twice_at_module_level(tree: ast.Module) -> dict[str, list[int]]:
+    """Names this module assigns twice at its top level, and the lines.
+
+    Top-level `Assign` statements only, and the narrowness is the point: a name rebound
+    inside `try`/`except ImportError`, inside an `if` on the platform, or by a `for` is
+    being rebound on purpose, and this walk never enters those statements.
+    """
+    where: dict[str, list[int]] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    where.setdefault(target.id, []).append(node.lineno)
+    return {name: lines for name, lines in where.items() if len(lines) > 1}
+
+
+def test_every_area_on_disk_reaches_the_module_collection():
+    """`_every` refuses a collection that is empty and cannot see one that is partial.
+
+    Measured: dropping `src`, `tests`, `evals` and `spikes` from the walk left the 22
+    files of `assets_examples` behind, and the rule below passed over them -- 240 of
+    262 modules gone, with `_every` satisfied the whole time. So the areas are checked
+    one by one, against the list both collectors read rather than a second copy of it.
+    """
+    want = {name for name in (*CODE_AREAS, EXAMPLES_AREA) if (REPO / name).is_dir()}
+    assert want, "no area named here is on disk, so this rule is about nothing"
+
+    reached = {path.relative_to(REPO).parts[0] for path in _every_module_here()}
+
+    assert reached == want, (
+        f"{sorted(want - reached)} are on disk and reach no rule here, and "
+        f"{sorted(reached - want)} reach one without being named above"
+    )
+
+
+def test_no_module_binds_one_name_twice_at_the_top_level():
+    """The second definition wins in silence, and whatever read the first gets it.
+
+    Found by writing one: a new `DELEGATED_TOOL` in `test_access_wiring.py` collided
+    with a template of that name 276 lines further down, whose definition won, so the
+    fixture wrote an unformatted template out as a tool module. That one failed loudly,
+    because a template does not parse as Python. The case this rule is for is the one
+    where both values are valid -- then nothing says which won, and a rule asserting
+    against the wrong fixture passes.
+    """
+    twice = [
+        f"{path.relative_to(REPO).as_posix()}: {name} at {lines}"
+        for path in _every(_every_module_here(), "the repository's modules")
+        for name, lines in sorted(
+            _bound_twice_at_module_level(ast.parse(path.read_text(encoding="utf-8"))).items()
+        )
+    ]
+
+    assert not twice, (
+        f"{twice} bind one name twice at the top level -- the second wins and nothing "
+        "says so. Rename one, or move the rebinding inside the branch that means it"
+    )
+
+
+def test_the_shadowing_rule_can_tell_a_deliberate_rebinding_from_a_collision(tmp_path):
+    """Both directions, because the rule above runs over a tree with no offenders: a
+    predicate answering "no" to everything passes it for ever, and one answering "yes"
+    to the three ways a name is rebound on purpose would have to be carved out until it
+    covered nothing.
+    """
+    deliberate = tmp_path / "meant.py"
+    deliberate.write_text(
+        "try:\n    import fast as engine\nexcept ImportError:\n    import slow as engine\n"
+        "if 1:\n    LIMIT = 1\nelse:\n    LIMIT = 2\n"
+        "for x in (1, 2):\n    SEEN = x\n",
+        encoding="utf-8",
+    )
+    collided = tmp_path / "twice.py"
+    collided.write_text("A = 1\nB = 2\nA = 3\n", encoding="utf-8")
+
+    assert _bound_twice_at_module_level(ast.parse(deliberate.read_text(encoding="utf-8"))) == {}
+    assert _bound_twice_at_module_level(ast.parse(collided.read_text(encoding="utf-8"))) == {
+        "A": [1, 3]
+    }
 
 
 def _documents() -> list[Path]:
