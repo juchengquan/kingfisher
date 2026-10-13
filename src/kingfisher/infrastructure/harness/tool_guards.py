@@ -14,6 +14,7 @@ from kingfisher.infrastructure.harness.host_paths import HostPathError
 from kingfisher.infrastructure.harness.middlewares.host_path_guard import HostPathGuard
 from kingfisher.infrastructure.harness.middlewares.large_pdf_guard import LargePdfGuard
 from kingfisher.infrastructure.harness.middlewares.recorder import Recorder
+from kingfisher.infrastructure.harness.middlewares.shell_paths import ShellPaths
 from kingfisher.infrastructure.harness.middlewares.workspace_tools import (
     WorkspaceToolErrors,
     WorkspaceToolPaths,
@@ -38,9 +39,11 @@ def tool_guards(
     `HostPathGuard` is unconditional: the backend refuses a host path on every run, so
     the thing that turns that refusal into a correction the model can read has to be
     there whether or not this graph holds a workspace tool. So is `LargePdfGuard`,
-    because `read_file` is on every graph and hands a PDF over whole. The other two are
-    about the tools themselves, so they need names -- and translation needs the turn's
-    backend to translate against, which every graph here is handed the same one of.
+    because `read_file` is on every graph and hands a PDF over whole, and `ShellPaths`,
+    because `execute` is a built-in and a subagent holding it never sees `system.md`.
+    The other two are about the tools themselves, so they need names -- and translation
+    needs the turn's backend to translate against, which every graph here is handed the
+    same one of.
 
     `recorder` is the turn's, made for the definition this graph was built from, or
     `None` where no turn will keep what is recorded.
@@ -50,6 +53,7 @@ def tool_guards(
     guards: list[AgentMiddleware] = [] if recorder is None else [recorder]
     guards.append(HostPathGuard())
     guards.append(LargePdfGuard())
+    guards.append(ShellPaths())
     if names:
         # Beside each other and in this order, which the subagent's stack is pinned to:
         # both are about a workspace tool call, and the translation rewrites the

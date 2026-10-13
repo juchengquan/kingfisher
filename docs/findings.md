@@ -155,6 +155,16 @@ for the next reader who reaches for one.*
 
 ## Middleware
 
+- **`FilesystemMiddleware` tells whoever holds `execute` to use absolute paths, and
+  maps some mounts to host paths.** The tool's description says "Use absolute paths
+  and avoid `cd`". Beside it, on a `CompositeBackend` over a `LocalShellBackend`, the
+  system prompt gains "Shell paths vs. virtual paths": each routed mount with its host
+  path (in kingfisher `/inputs/`, `/memory/`, `/skills/` and `/.harness/`, which a
+  fence still denies where there is one), and the line that a mount without a mapping
+  is out of the shell's reach. Unrouted folders get no line at all, so `/outputs` and
+  `/scratchpad` read as unreachable although the shell starts in the session root and
+  reaches both. Every subagent holding `execute` gets both, and none of `system.md`.
+  *(2026-10-13, deepagents 0.7.6.)*
 - **`create_deep_agent` merges middleware by name, replacing in place.**
   `_apply_custom_middleware` matches on `.name`, which defaults to the class name,
   so a deployment's class named like one of deepagents' own removes it from the

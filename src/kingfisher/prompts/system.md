@@ -42,8 +42,9 @@ Tools this workspace defines take these same virtual paths.
 
 The two views do not mix, in either direction:
 
-- A virtual path is not a shell path. Passing `/inputs/<name>` to `execute` addresses
-  the host's root directory, not the workspace.
+- A virtual path is not a shell path. Passing `/inputs/<name>` to `execute`, or
+  writing it into a script the shell runs, addresses the host's root directory, not
+  the workspace.
 - A host path is not a file-tool path. Passing an absolute host path such as
   `/tmp/scratch.py` to `write_file` is refused, and the error names the virtual path
   to use instead. Left unguarded the leading `/` reads as the workspace root, so the

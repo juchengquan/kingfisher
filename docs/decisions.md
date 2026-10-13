@@ -2801,6 +2801,31 @@ each failing and costing about three times the whole task. `/scratch` and `scrat
 correspond the way every other route does, which is why the directory was renamed
 rather than given a prettier virtual name. *(2026-09-21.)*
 
+**`execute`'s own description states the shell's path rule, and a miss is answered
+with it.** deepagents' description of the tool says "Use absolute paths", and the
+only absolute paths a model knows are the file tools', which the shell reads from the
+host's root. `system.md` says otherwise, but a subagent is built with its own prompt
+and never sees it, and the description reaches every graph holding the shell. So
+`ShellPaths`, in `tool_guards`, replaces that line with the rule there -- appending it
+when deepagents has reworded the line, which
+`test_every_graph_holding_the_shell_is_told_its_paths_rather_than_absolute_ones` then
+fails on -- and
+appends a correction to an `execute` result whose error names a session folder spelt
+the file tools' way. A correction rather than a rewrite of the command, because the
+miss the agent made despite `system.md` was a path inside a script the command ran,
+which no rewrite sees. Not a copy of `system.md`'s table in every subagent's prompt:
+it would contradict the description beside it, and cost every subagent the tokens.
+deepagents' own host mappings for routed mounts are left as they are; both spellings
+reach the same files.
+
+Measured over ten real turns each way, five of an agent running its own script and five
+of it asking `reviewer` to work in the shell: turns with a miss did not fall, 3 before
+and 4 after, which at this size is noise. What changed is what followed one. Before,
+two of the three turns that missed missed again, three times and twice, and one went
+looking for the file with `ls`; after, each of the four was right on its next call. The
+spelling moved too, from 7 host-absolute paths and 6 relative ones in 29 shell calls to
+2 and 9 in 27. *(2026-10-13.)*
+
 **`HOME` is `scratch` too, and `.home` is gone.** The shell's `HOME` had a
 directory of its own so that whatever a tool caches under `~` would land in the
 session that caused it, be swept by `reap` and be counted by `session_bytes`.

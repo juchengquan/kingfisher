@@ -210,6 +210,7 @@ def test_what_a_subagent_carries_is_pinned_here_and_only_here(cfg, session_dir):
     assert [type(m).__name__ for m in middleware_of(built, "reviewer")] == [
         "HostPathGuard",
         "LargePdfGuard",
+        "ShellPaths",
         "WorkspaceToolErrors",
         # Beside the errors guard rather than anywhere else: both are about a
         # workspace tool call, and this one rewrites the arguments before the
@@ -222,7 +223,7 @@ def test_what_a_subagent_carries_is_pinned_here_and_only_here(cfg, session_dir):
     ]
 
 
-def test_a_bare_definition_carries_four_of_them(cfg, session_dir):
+def test_a_bare_definition_carries_five_of_them(cfg, session_dir):
     """The other end of the same pin, and it is not two."""
     from tests.conftest import tools_dir
 
@@ -235,6 +236,7 @@ def test_a_bare_definition_carries_four_of_them(cfg, session_dir):
     assert [type(m).__name__ for m in middleware_of(built, "reviewer")] == [
         "HostPathGuard",
         "LargePdfGuard",
+        "ShellPaths",
         "WorkspaceToolErrors",
         "WorkspaceToolPaths",
         "ToolAllowlist",
