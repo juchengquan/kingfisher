@@ -1377,9 +1377,32 @@ read-only builtin set cannot yield the shell to anyone.
 **Out of reach reads as not offered.** An asset a caller's source ids do not reach is
 absent from listings, from the "this workspace offers ..." in a refusal, and from
 the report of what a run withheld -- so nothing lets a caller enumerate the
-catalogue by guessing. The withheld report hides only what source-id narrowing
-removed, never what the agent simply never declared: the second is a fact about
-the agent and has always been reported.
+catalogue by guessing. A scoped view of it hides both what source-id
+narrowing removed and what no definition in reach offers at all: a tool and a skill
+have nowhere to write an audience of their own, so what can be asked of one is whether
+a definition this caller reaches offers it to them.
+
+**That exception was reversed on 2026-10-13.** It said the report hid only what source-
+id narrowing removed and never what the agent simply never declared, the second being a
+fact about the agent. It had been written when out of reach meant narrowing alone, and
+the 2026-09-27 entry widened the term for listings without widening it here -- so the
+two disagreed on one workspace. Measured: `list --as B` showed `tools: ['line_count']`
+while a run as `B` was told `1 tool(s) not granted: secret_export`, a tool no definition
+`B` reaches offers. The caller supplies `capabilities` themselves, so narrowing their
+own grant was the whole of what it took to be handed the catalogue.
+
+The report asks what the listing asks now, through the same function: `offers` moved
+into `domain/access.py` because two readers with their own answers to what a caller
+reaches is exactly how these came apart, and this makes one. What a *run* reaches is the
+agent it opened plus the subagents that agent can hand work to and this caller can open
+-- a caller who reaches a subagent reaches what it holds, through `task` -- and
+`subagents` in that function was the precedent, written for the same reason: `denied`
+sees the agent's own line and nothing else.
+
+A run with no vocabulary, and one under `UNSCOPED`, reach everything, so `held` is
+`None`, `offers` admits every name and the report says exactly what it always said. The
+reversal is for a caller holding a source id, which is who the sentence above is about.
+*(2026-10-13, from an architecture review.)*
 
 It did not hold for skills until 2026-09-17. The report's skills row was written when
 a skill took no audience and was left unfiltered when it gained one, so a caller was
