@@ -316,6 +316,40 @@ def on_backend(tool, backend, **args):
     return getattr(tool, "func", tool)(**args, runtime=runtime)
 
 
+def a_pdf(*texts: str) -> bytes:
+    """A PDF with one page per text, each page showing its text; `""` is a page with
+    none, which is what a scan is to text extraction.
+
+    Written out by hand, because nothing installed here draws text onto a new page.
+    """
+    objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "",  # the page tree, once its pages are numbered
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    kids = []
+    for text in texts:
+        content = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET" if text else ""
+        objects.append(f"<< /Length {len(content)} >>\nstream\n{content}\nendstream")
+        objects.append(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            f"/Resources << /Font << /F1 3 0 R >> >> /Contents {len(objects)} 0 R >>"
+        )
+        kids.append(f"{len(objects)} 0 R")
+    objects[1] = f"<< /Type /Pages /Kids [{' '.join(kids)}] /Count {len(kids)} >>"
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for number, body in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += f"{number} 0 obj\n{body}\nendobj\n".encode()
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    out += b"".join(f"{at:010d} 00000 n \n".encode() for at in offsets)
+    out += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n".encode()
+    out += f"startxref\n{xref}\n%%EOF\n".encode()
+    return bytes(out)
+
+
 def pin(kf, session_id: str, name: str) -> None:
     """Fix a session's agent before it has run, the way its first turn would.
 

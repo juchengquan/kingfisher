@@ -389,7 +389,9 @@ about ten lines, and keeps to one convention so that every such tool answers ali
   the turn ends. Given, it is a full virtual path, such as `/scratchpad/try1.svg` for
   a draft. It may name anywhere the turn may write, and the session's rules refuse
   the rest — `/inputs/`, `/skills/`, `/.harness/`. Say so in the docstring, in a
-  sentence: the model learns the argument nowhere else.
+  sentence: the model learns the argument nowhere else. A file that is only the
+  agent's working material, which the caller did not ask for, goes to
+  `/scratchpad/` instead, as `pdf_text`'s does.
 - **Not `path`.** That name is [a file the tool reads](#a-file-the-tool-reads-is-an-argument-called-path),
   rewritten to a host path before the tool runs.
 - **Bytes, through `upload_files`**, with text encoded as UTF-8 first.
@@ -452,8 +454,8 @@ pointed at `/inputs/`, a failed result:
 Error: OSError: not saved to /inputs/table.csv: permission_denied
 ```
 
-The shipped `bar_chart` and `csv_filter` are the same recipe on a file the tool reads
-first.
+The shipped `bar_chart`, `csv_filter` and `pdf_text` are the same recipe on a file the
+tool reads first.
 
 **Several files are one call.** `upload_files` takes a list of pairs and answers one
 response per pair, in order, and a refused one does not stop the rest — so check

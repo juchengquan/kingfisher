@@ -1953,7 +1953,7 @@ guarded is the one mistake that fails in silence -- `upload_files` hands a refus
 back on the response's `error` rather than raising it, so a tool that does not look
 answers "Saved" for a file that is not there. That is held instead by the recipe
 carrying the check in its example code rather than in a warning after it, and by the
-two shipped tools, whose tests point each at `/inputs/` and expect a failure with
+shipped tools that write, whose tests point each at `/inputs/` and expect a failure with
 nothing written; a test runs the guide's example the same way.
 
 **`save_as`, never `path`.** Optional: left out, the file goes to `/outputs/` under a
@@ -1980,6 +1980,32 @@ These are the first shipped tools that write, which *A tool's path is the backen
 path* gave as a reason a `path` under a write-denied scope is safe to hand over.
 Neither takes `path`; both write through `ToolContext` under the turn's rules, so that
 decision is untouched. *(2026-10-12.)*
+
+**A PDF is read as text a tool saves, not whole through `read_file`.** `read_file`
+hands a PDF over as one block whatever `offset` and `limit` say, and a large one can
+end the turn -- `findings.md` has how the summarizer counts it and why its retry
+never runs. `pdf_text` saves the text under a `--- page N ---` line per page, and the
+agent reads that a range of lines at a time and searches it with `grep`.
+
+**A tool, because a shell is not always there to run the library.** pdfplumber is in
+the agent's interpreter for the shell's sake, but a request has a shell only where
+the backend executes and the request was granted one, and a remote sandbox has
+whatever its own image installed. A workspace tool runs in kingfisher's process,
+which has the library wherever the `agent` group is installed, and reads through
+`download_files`, which every backend answers. Where the group is not installed the
+tool fails when called and every other tool still loads: it imports pdfplumber in
+its body, because one tool file that fails to import refuses the whole folder.
+
+**`/scratchpad/` when not told, not `/outputs/`.** The text is the agent's working
+material rather than something the caller asked for, and `/outputs/` is what the
+caller is handed back. The pages are in the default name, so a second range does
+not replace the first.
+
+**Text only, fifty pages a call.** The parse runs in kingfisher's own process, outside
+every sandbox and beside every other turn. pdfminer is Python; pdfplumber's
+`repair=` would run Ghostscript and `.to_image()` native PDFium, so neither is used.
+The cap keeps one call bounded however long the report, and the answer names the
+pages it left out. *(2026-10-13.)*
 
 ## What a turn's tools returned
 
