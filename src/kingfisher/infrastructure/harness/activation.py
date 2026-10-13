@@ -56,12 +56,16 @@ def defined_subagents(
     return dict((catalogue or Definitions.from_config(cfg)).subagents.specs)
 
 
-def unrunnable_subagents(
-    cfg: Config, *, catalogue: Definitions | None = None
-) -> tuple[tuple[str, str], ...]:
-    """`(name, why)` for each defined subagent this deployment cannot run."""
+def _unrunnable(cfg: Config, specs: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
+    """`(name, why)` for each of these a deployment cannot run.
+
+    Shared by both kinds rather than written twice, because two places deciding
+    whether a definition can run is how `doctor` came to answer for subagents only:
+    the agent half was never written, and the row said "every definition resolves to
+    a model" while the workspace's one agent could not start.
+    """
     found: list[tuple[str, str]] = []
-    for name, spec in sorted(defined_subagents(cfg, catalogue=catalogue).items()):
+    for name, spec in sorted(specs.items()):
         try:
             model = resolved_model(spec.wanted)
             if model is not None:
@@ -69,6 +73,21 @@ def unrunnable_subagents(
         except ConfigError as exc:
             found.append((name, str(exc)))
     return tuple(found)
+
+
+def unrunnable_subagents(
+    cfg: Config, *, catalogue: Definitions | None = None
+) -> tuple[tuple[str, str], ...]:
+    """`(name, why)` for each defined subagent this deployment cannot run."""
+    return _unrunnable(cfg, defined_subagents(cfg, catalogue=catalogue))
+
+
+def unrunnable_agents(
+    cfg: Config, *, catalogue: Definitions | None = None
+) -> tuple[tuple[str, str], ...]:
+    """`(name, why)` for each defined agent this deployment cannot run."""
+    resolved = catalogue or Definitions.from_config(cfg)
+    return _unrunnable(cfg, dict(resolved.agents.specs))
 
 
 def for_the_caller(

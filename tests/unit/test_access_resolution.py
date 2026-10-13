@@ -324,3 +324,21 @@ def test_a_compound_survives_a_row_and_comes_back_able_to_be_joined():
     assert row == ("A", ("B", "C")), "a row has to be JSON, so the set is a sorted list"
     assert unlisted(list(row)) == audience
     assert jointly([unlisted(list(row)), ("A",)]) == ("A",)
+
+
+
+def test_an_unknown_source_id_is_offered_only_the_names_a_caller_may_present():
+    """The refusal above lists what this deployment defines, and a compound is not
+    something a caller can hold -- `expand` refuses one in as many words. Listed, it
+    sent whoever mistyped a name straight into that second refusal.
+
+    `refuse_undeclared` still lists them, and should: there a *definition* is asking,
+    and a definition may name one.
+    """
+    ids = requiring(both=("A", "B"))
+
+    with pytest.raises(AccessError) as refused:
+        ids.expand(["Q"])
+
+    assert "this deployment defines A, B, C" in str(refused.value)
+    assert "both" not in str(refused.value)

@@ -190,6 +190,15 @@ def test_json_and_the_human_form_describe_the_same_workspace(cfg, at_the_command
     for name in document["skills"]:
         assert name in printed
 
+    # And the access section, which is where the two came apart. This workspace has no
+    # `source_ids.yaml`, so the human form prints none of it -- while `--json` carried
+    # every definition's `source_ids:` line, a policy the guide and the shipped example
+    # both call inert. Asserted in both directions, so that either form going silent
+    # does not pass it.
+    says_so = "access —" in printed
+    assert (document["access"] is not None) == says_so
+    assert bool(document["audiences"]) == says_so
+
 
 def test_a_broken_workspace_is_non_zero_in_either_format(cfg, at_the_command_line, capsys):
     """The exit code does not depend on the format, and the reason is in the document

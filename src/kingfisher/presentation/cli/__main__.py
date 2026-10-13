@@ -22,6 +22,7 @@ from kingfisher import (
     CapabilityError,
     ConfigError,
     Decision,
+    DecisionError,
     Held,
     QuotaExceededError,
     Request,
@@ -51,6 +52,7 @@ from kingfisher.config import MissingCredentialsWarning
 from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.workspace.seeding import REMEDY, UNCONSULTED
+from kingfisher.kinds.agents.spec import AgentError
 from kingfisher.presentation.cli.health import _retired, examine, worst
 from kingfisher.presentation.cli.listing import as_json, failed, origins_document, render
 from kingfisher.presentation.cli.progress import show
@@ -115,9 +117,10 @@ def build_parser() -> argparse.ArgumentParser:
         dest="everything",
         action="store_true",
         help=(
-            "also copy definitions that name middleware, which are left behind "
-            "by default because a workspace that has not registered those names "
-            "cannot build them"
+            "also copy definitions held back by default: the ones naming "
+            "middleware, which a workspace that has not registered those names "
+            "cannot build, and the ones naming source ids, which do nothing "
+            "until a source_ids.yaml declares them"
         ),
     )
     doing = sub.add_parser(
@@ -312,8 +315,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="show what this workspace offers a request",
         description=(
             "Every name a request may activate here, per grant, with where each "
-            "one came from. Exits non-zero if anything here will not load, or if a\n"
-            "definition names something that is no longer where it says."
+            "one came from. Exits non-zero if anything here will not load, if a\n"
+            "definition names something that is no longer where it says, or if one "
+            "names a subagent\nnothing here defines."
         ),
     )
     # A flag rather than the default. A listing whose default output is JSON is
@@ -758,10 +762,17 @@ def _list(*, as_document: bool = False, held: Held | None = None) -> int:
 
 
 def _age(seconds: float) -> str:
-    """A span in the units `--older-than` takes, so a listing reads into a flag."""
+    """A span in the units `--older-than` takes, so a listing reads into a flag.
+
+    Floored, because the number is read straight into `reap --older-than`: rounded,
+    1.6 days printed `2d` and `--older-than 2d` left the session where it was, and
+    2.4 days printed `2d` as well -- one figure covering sessions a sweep would take
+    and sessions it would not, which is the contradiction `_nothing_reaped` exists to
+    keep these two commands out of.
+    """
     for suffix, size in (("d", 24 * 3600), ("h", 3600), ("m", 60)):
         if seconds >= size:
-            return f"{seconds / size:.0f}{suffix}"
+            return f"{int(seconds // size)}{suffix}"
     return "<1m"
 
 
@@ -1008,8 +1019,10 @@ def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = N
 #: `AccessError` and `ConfigError` keep their own branches too, because each has
 #: something extra to say.
 REFUSALS = (
+    AgentError,
     ArtifactError,
     CapabilityError,
+    DecisionError,
     QuotaExceededError,
     SubagentError,
     UnknownSessionError,
@@ -1075,11 +1088,18 @@ def main(argv: list[str] | None = None) -> int:
         print("nothing to change -- run it again when that turn finishes", file=sys.stderr)
         return 2
     except REFUSALS as exc:
-        # Nine errors that reached a stranger as a traceback until `run` existed,
-        # because nothing but `run` could raise them from a command. Every one is the
-        # same shape as `ConfigError` below: something the person at the terminal wrote
-        # and can fix -- an agent they cannot reach, a session id that is not there, a
-        # file reference that does not resolve.
+        # Each of these reached a stranger as a traceback until `run` existed, because
+        # nothing but `run` could raise them from a command. Every one is the same shape
+        # as `ConfigError` below: something the person at the terminal wrote and can fix
+        # -- an agent they cannot reach, a session id that is not there, a file
+        # reference that does not resolve.
+        #
+        # `DecisionError` and `AgentError` were the two left out, and `decide` is where
+        # it showed: the same sentence about a session that is not waiting arrived as a
+        # clean exit 2 when `--approve` was absent and as a traceback with exit 1 when
+        # it was present -- a code the help assigns to a turn that ran and stopped at a
+        # gate. `AgentError` did the same on `run` for an `interrupt_on:` naming a tool
+        # that is not there.
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     except AccessError as exc:

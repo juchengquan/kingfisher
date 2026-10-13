@@ -426,8 +426,17 @@ def _catalogues(found: Inventory) -> Iterator[Check]:
         # The built-ins beside the kind rather than as one of their own: they are
         # not a catalogue, they come with deepagents, and a reader counting what a
         # request may grant wants both numbers in one line.
+        # "unknown" rather than a count, where the built-in set could not be read: a
+        # middleware that will not import takes the probe down with it, and `0 built
+        # in` beside an `ok` said this deployment had none where it has ten. The
+        # `FAIL` on the middlewares row above is the fault; this is the consequence.
+        built_in = (
+            f"{len(found.builtin_tools)} built in"
+            if found.builtin_tools_checked
+            else "built-in set unknown -- see middlewares"
+        )
         detail = (
-            f"{kind.defined} in the workspace, {len(found.builtin_tools)} built in"
+            f"{kind.defined} in the workspace, {built_in}"
             if kind.name == "tools"
             else f"{kind.defined} defined"
         )
@@ -672,24 +681,40 @@ def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:
     verb would pay it, so `kingfisher help` would cost a second to print text. The
     CLI starts in 40ms and should keep doing so.
     """
-    # Asked only when the catalogue parsed. `unrunnable_subagents` reads the
-    # same files, so a definition that will not load raises out of here instead
-    # of being reported -- and a diagnosis that stops at the first problem is
-    # what this command exists to replace. The check above already said so, so
-    # this one says nothing rather than saying it twice.
-    if found.subagents_error is not None:
+    # Asked only when the catalogues parsed. These read the same files, so a definition
+    # that will not load raises out of here instead of being reported -- and a
+    # diagnosis that stops at the first problem is what this command exists to replace.
+    # The checks above already said so, so this one says nothing rather than twice.
+    #
+    # Both kinds, since the agent half of the question is asked now: with only the
+    # subagent catalogue guarded, a workspace holding one unreadable agent file raised
+    # `AgentError` out of `doctor` itself, which
+    # `test_a_broken_agent_catalogue_is_a_failure_too` is what noticed.
+    unread = [
+        kind
+        for kind, failed in (("agent", found.agents_error), ("subagent", found.subagents_error))
+        if failed is not None
+    ]
+    if unread:
         yield Check(
             "definitions run",
             "warn",
-            "not checked -- the subagent catalogue did not load, which is above",
+            f"not checked -- the {' and '.join(unread)} "
+            f"{'catalogue' if len(unread) == 1 else 'catalogues'} did not load, "
+            "which is above",
         )
         return
 
     from kingfisher.infrastructure.harness.activation import (  # noqa: PLC0415
+        unrunnable_agents,
         unrunnable_subagents,
     )
 
-    unrunnable = unrunnable_subagents(cfg)
+    # Both kinds. This asked only about subagents, so the row said "every definition
+    # resolves to a model" and exited 0 while the workspace's one agent could not
+    # start -- `run --agent` refusing with the configuration error the row had just
+    # promised was absent, which is the one thing `--help` says this verb catches.
+    unrunnable = (*unrunnable_agents(cfg), *unrunnable_subagents(cfg))
     if not unrunnable:
         yield Check("definitions run", "ok", "every definition resolves to a model")
         return

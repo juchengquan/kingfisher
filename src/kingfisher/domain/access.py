@@ -280,7 +280,11 @@ class SourceIds:
             )
             raise AccessError(msg)
         if unknown := tuple(name for name in wanted if name not in self.names):
-            known = ", ".join(sorted(self.names)) or "none"
+            # Without the compounds: the clause above refuses one as something a caller
+            # may not present, and offering it here among the names to choose from sent
+            # them straight into that refusal. `refuse_undeclared` does list them, and
+            # should -- there it is a *definition* asking, and a definition may name one.
+            known = ", ".join(sorted(set(self.names) - set(self.compounds))) or "none"
             msg = (
                 f"unknown source id(s): {', '.join(sorted(set(unknown)))}; "
                 f"this deployment defines {known}"

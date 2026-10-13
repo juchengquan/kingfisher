@@ -4088,10 +4088,61 @@ report.md`, which must not publish a report that stopped halfway. A code per
 reason was rejected: it encodes in the exit status what one stderr line already
 says, in a vocabulary that grows every time `STOP_REASONS` does.
 
-Nine errors that could only ever have reached a stranger as a traceback are
+The errors that could only ever have reached a stranger as a traceback are
 reported instead, all as `2`. `SessionBusyError` keeps its own branch: it is the
 one that is not the caller's mistake, and "wait" is different advice from "fix
 something". *(2026-09-04, same document.)*
+
+**Two of those errors were missing, and `decide` is where it showed.** `DecisionError`
+and `AgentError` were in neither `REFUSALS` nor any sibling `except`. Measured: the same
+sentence about a session that is not waiting arrived as a clean exit `2` from `decide
+--session X` and as a traceback with exit `1` from `decide --session X --approve abc` --
+the code this entry assigns to a turn that ran and stopped at a bound, read by whatever
+script is watching. `AgentError` did the same on `run`, for an `interrupt_on:` naming a
+tool that is not there. It is taken at the module defining it rather than added to the
+front door, since no caller outside the wheel has asked for it; `SubagentError` beside
+it in that tuple is public because one did. The count that used to open the sentence
+above is gone with this: it was nine, then eleven, and nobody re-counted.
+
+**`doctor` asked whether every *subagent* resolves to a model and said "every
+definition".** `unrunnable_subagents` was the only half written, so the row read `ok
+definitions run -- every definition resolves to a model` and the command exited `0`
+while `run --agent` refused with exactly the configuration error the row had promised
+was absent. Both kinds are asked now, over one shared body rather than two, because two
+places deciding whether a definition can run is how the second half came to be missing
+in the first place. The guard above it widened with them: it skipped the check when the
+*subagent* catalogue had not loaded, and an unreadable agent file then raised out of
+`doctor` itself.
+
+**An unreadable built-in set is said to be unknown, not counted as zero.** A middleware
+that will not import takes down the probe the built-in set is read off. `tools_error` is
+deliberately not set there -- the tool catalogue walked fine, and `middlewares_error`
+already carries that fault with the file to open -- so nothing said the count was
+unavailable, and the row printed `0 built in` with an `ok` beside it over a deployment
+holding ten. `builtin_tools_checked` says so instead, beside `shadowed_checked` and
+`moved_tools_checked`, which draw the same distinction for their own fields. The comment
+on `builtin_tools` claimed `tools_error` covered this case; it did not, and a consumer
+reading `()` with no error as "none here" was reading the gap.
+
+**A `source_ids:` line is inert with no vocabulary, and `--json` now agrees.** The human
+form prints no access section at all where there is no `source_ids.yaml`, which is what
+the guide and the shipped example both describe; `as_json` published every definition's
+lines regardless, so the form a script reads reported a policy that is not in force.
+Answered in `inventory` rather than in the renderer, for the reason the 2026-09-26 entry
+gives: the record is what both forms are handed. The agreement rule that should have
+caught it compared only subagent and skill names, and its own workspace writes no
+`source_ids:` anywhere -- it compares the access fields now, in both directions, so
+neither form falling silent passes it.
+
+**A refusal offers only the source ids a caller may present.** `expand`'s "this
+deployment defines ..." listed every declared name, compounds included -- and the clause
+immediately above it refuses a compound as something a caller cannot hold, so whoever
+mistyped a name was sent straight into a second refusal. `refuse_undeclared` still lists
+them, and should: there a *definition* is asking, and a definition may name one. The
+idle column `sessions` prints is floored rather than rounded for the same kind of
+reason: it is read straight into `reap --older-than`, and rounded, one printed figure
+covered sessions a sweep would take and sessions it would not. *(2026-10-13, from an
+architecture review.)*
 
 **`help` went, and `--seed`, `--from` and `--all` went off the driver.**
 `kingfisher help seed` was byte-for-byte `kingfisher seed --help`; its only

@@ -2383,6 +2383,11 @@ LIGHT_EXPORTS = frozenset({
     "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError",
     "SessionBusyError", "SubagentError", "UnknownSessionError",
     "UnsafeReferenceError",
+    # `AgentError` is the one of these the command takes at its own address rather than
+    # through the door, since no consumer outside the wheel has asked for it. Light
+    # where `SubagentError` is: `kinds.agents.spec` is 23ms and 103 modules with no
+    # deepagents, measured.
+    "AgentError",
     # The runner's kit and the result type a runner builds. Light by the same
     # route: `testing` reaches the standard library, and `CommandResult` is a
     # frozen dataclass in `domain.ports`.
@@ -2487,6 +2492,10 @@ HEAVY_EXPORTS = frozenset({
     # modules, measured -- which is why `doctor` imports it inside the check
     # rather than at the top of `health`, where every other verb would pay it.
     "unrunnable_subagents",
+    # Its agent twin, beside it in the same module and heavy by the same route:
+    # 1,074ms and 3,162 modules, measured, which is why `doctor` imports both inside
+    # the check rather than at the top of `health`.
+    "unrunnable_agents",
     "Kingfisher", "run", "stream",
     # The default's class and its per-directory builder, and the command line's way to
     # the backends a setting names: all three are the backend module, which is

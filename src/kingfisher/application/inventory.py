@@ -87,9 +87,19 @@ class Inventory:
     agent_subagents: Mapping[str, tuple[str, ...]] = _NO_NAMES
     agents_error: str | None = None
 
-    #: The agent's own tools, granted with `builtin_tools:`. Empty when the
-    #: build failed, which `tools_error` says.
+    #: The agent's own tools, granted with `builtin_tools:`. Empty where the build
+    #: failed, which `tools_error` says -- and empty where it could not be read at
+    #: all, which only `builtin_tools_checked` says. A reader taking `()` with no
+    #: `tools_error` as "this deployment has none" was reading the second case as
+    #: the one the comment here used to describe.
     builtin_tools: tuple[str, ...] = ()
+    #: Whether the built-in set was read at all. `False` only where a middleware
+    #: that will not import took the probe down with it: the tool catalogue is fine
+    #: and `middlewares_error` carries that fault with the file to open, so
+    #: `tools_error` is deliberately left alone and this is what says the count is
+    #: unknown rather than zero. Beside `shadowed_checked` and
+    #: `moved_tools_checked`, which are the same distinction for their own fields.
+    builtin_tools_checked: bool = True
     #: What the workspace defined, granted with `tools:`. A separate axis, not
     #: a second pile: a subtraction taken from the union produced a grant of
     #: built-in names on the workspace axis.
@@ -581,8 +591,9 @@ def _builtin_tools(
 
 def _tools(
     cfg: Config, resolved: Definitions
-) -> tuple[tuple[str, ...], tuple[str, ...], Mapping[str, str], str | None]:
-    """The built-in set, what the workspace adds, where each one lives, and why not.
+) -> tuple[tuple[str, ...], tuple[str, ...], Mapping[str, str], str | None, bool]:
+    """The built-in set, what the workspace adds, where each one lives, why not, and
+    whether the built-in set was read at all.
 
     Lifted out of `inventory` for the reason `_bundled` and `_middlewares` are: one
     kind read, its failure carried rather than raised, and the answers handed back
@@ -592,6 +603,7 @@ def _tools(
     workspace_tools: tuple[str, ...] = ()
     sources: Mapping[str, str] = _NOTHING
     tools_error: str | None = None
+    checked = True
     try:
         # Inside the `try`, not before it. Walking the catalogue is what raises
         # -- two modules claiming one tool name, a module that will not import
@@ -636,8 +648,12 @@ def _tools(
         # already carries this one with the file to go and open. What is lost is the
         # built-in set, which no longer has a graph to be read off -- and saying
         # "tools failed" about that would send a reader to the wrong directory.
-        pass
-    return builtin, workspace_tools, sources, tools_error
+        #
+        # Said as its own answer instead, because the silence here is what let
+        # `doctor` print `0 built in` with an `ok` beside it over a deployment with
+        # ten of them, and `--json` hand a script `[]` with `tools_error: null`.
+        checked = False
+    return builtin, workspace_tools, sources, tools_error, checked
 
 
 def inventory(
@@ -654,7 +670,7 @@ def inventory(
     unresolved_subagents = _unresolved_subagents(resolved)
     miscounted_bundles = _miscounted_bundles(resolved)
 
-    builtin, workspace_tools, sources, tools_error = _tools(cfg, resolved)
+    builtin, workspace_tools, sources, tools_error, builtin_checked = _tools(cfg, resolved)
 
     registry = resolved.registry
     subagents: Mapping[str, str] = _NOTHING
@@ -791,6 +807,7 @@ def inventory(
         # and an empty list with no reason given is worse than the reason.
         agents_error=agents_error or (None if scoped else broken.get("agents")),
         builtin_tools=builtin,
+        builtin_tools_checked=builtin_checked,
         tools=tuple(name for name in workspace_tools if offers_tool(name)),
         tool_sources=MappingProxyType(
             {name: where for name, where in sources.items() if offers_tool(name)}
@@ -859,5 +876,11 @@ def inventory(
         access=None if scoped else cfg.access,
         access_report=AccessReport() if scoped else report,
         held=held,
-        audiences=_NO_AUDIENCES if scoped else stated,
+        # And empty with no vocabulary at all: a `source_ids:` line is inert until a
+        # `source_ids.yaml` declares the names, which `formats.md` and the shipped
+        # example both say, and the human form prints no access section in that state.
+        # `--json` carried every definition's lines, so the form a script reads
+        # reported a policy that is not in force. Here rather than in the renderer,
+        # because the record is what both forms are handed.
+        audiences=_NO_AUDIENCES if scoped or cfg.access is None else stated,
     )

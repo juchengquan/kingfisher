@@ -183,6 +183,7 @@ CITED_FROM = ("src", "tests", "service", ".github", "assets_examples")
 #: that reason, and two of the three would be skipped by the suffix filter below
 #: even if there were: `.fence-check` and `.sh` are not in `TEXT`.
 CITED_FROM_FILES = (
+    ".env.example",
     "Dockerfile",
     "Dockerfile.fence-check",
     "compose.yaml",

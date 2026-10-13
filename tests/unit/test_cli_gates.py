@@ -242,6 +242,55 @@ def test_asking_a_session_that_is_not_waiting_says_so(cfg, monkeypatch, capsys):
     assert "is not waiting on a decision" in capsys.readouterr().err
 
 
+def test_a_decision_a_session_is_not_waiting_for_is_refused_through_the_command(
+    cfg, at_the_command_line, capsys
+):
+    """The same sentence as the rule above, through `main` and with an answer attached
+    -- which is the path that had it.
+
+    `DecisionError` was in neither `REFUSALS` nor any sibling `except`, so the clean
+    exit 2 above became a traceback and exit 1: the code `decide --help` assigns to a
+    turn that ran and stopped at another gate, read by whatever script is watching.
+    """
+    from tests.conftest import start
+
+    start(cfg, "s-1")
+
+    code = cli.main(["decide", "--session", "s-1", "--approve", "abc"])
+
+    said = capsys.readouterr().err
+    assert code == 2
+    assert "is not waiting on a decision" in said
+    assert "Traceback" not in said, "the refusal reached the terminal as a traceback"
+
+
+def test_a_gate_on_a_name_nothing_answers_to_is_refused_through_the_command(
+    cfg, at_the_command_line, capsys
+):
+    """`AgentError` was the other one missing from `REFUSALS`, and `run` is where it
+    showed: an agent file naming a gate nothing matches gave a traceback and exit 1,
+    where the help assigns 1 to a turn that ran and stopped at a bound.
+
+    The message is the one worth reaching a terminal intact -- it lists what the gate
+    could have named.
+    """
+    agents = cfg.catalogue_roots["agents"]
+    agents.mkdir(parents=True, exist_ok=True)
+    (agents / "gated.yaml").write_text(
+        "name: gated\ndescription: An agent.\ninterrupt_on: [nosuchtool]\n"
+        "system_prompt: |\n  Go.\n",
+        encoding="utf-8",
+    )
+
+    code = cli.main(["run", "hi", "--agent", "gated"])
+
+    said = capsys.readouterr().err
+    assert code == 2
+    assert "which no tool here answers to" in said
+    assert "Offered:" in said, "the list of names a gate could have used went with it"
+    assert "Traceback" not in said, "the refusal reached the terminal as a traceback"
+
+
 def test_asking_about_a_session_that_does_not_exist_says_that_instead(
     cfg, monkeypatch, capsys
 ):
