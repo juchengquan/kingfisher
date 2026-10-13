@@ -10,7 +10,12 @@ from typing import TYPE_CHECKING, Any
 from deepagents.backends import CompositeBackend
 from deepagents.backends.utils import sanitize_tool_call_id
 
-from kingfisher.infrastructure.session_store import KeptLedger, entry_id, write_ledger
+from kingfisher.infrastructure.session_store import (
+    KeptLedger,
+    entry_id,
+    names_a_result,
+    write_ledger,
+)
 from kingfisher.infrastructure.steps import Steps, changing, reading
 from kingfisher.layout import RESULTS_ROUTE
 
@@ -127,14 +132,23 @@ def _repointed(files: Any, entries: tuple[LedgerEntry, ...]) -> Steps[tuple[Ledg
 
 
 def _swept(files: Any, named: frozenset[str] | set[str]) -> Steps[None]:
-    """Remove every result file no row names.
+    """Remove every result file a recorder wrote that no row names.
 
     Only a turn that died before writing its rows leaves one, beside the copies of
     results repointed above. One turn runs at a time, so a file without a row is never
     one a turn still running is about to name.
+
+    A recorder's own names rather than whatever the folder holds, because the agent is
+    a writer here too: `layout.py` puts the results inside the scratchpad so it can
+    read and grep them, and nothing refuses it the folder. Sweeping everything deleted
+    the agent's file in the turn that wrote it, after the tool had told it the write
+    succeeded.
     """
     listing = yield reading(files, "ls", RESULTS_ROUTE)
     for one in listing.entries or ():
-        if not one.get("is_dir") and one["path"] not in named:
-            # Its answer is not checked: a file left behind is swept by the next turn.
-            yield changing(files, "delete", one["path"])
+        if one.get("is_dir") or one["path"] in named:
+            continue
+        if not names_a_result(PurePosixPath(one["path"]).name):
+            continue
+        # Its answer is not checked: a file left behind is swept by the next turn.
+        yield changing(files, "delete", one["path"])

@@ -2106,13 +2106,21 @@ deepagents' copy ends in the id. A nested helper has no eviction and keeps its o
 row never names a missing file and a result the conversation shows always has a row;
 the other way round, a crash leaves the next turn reading an id the ledger never gave
 out, and giving it again. A paused turn writes its rows before its state, since its
-results are as real as a finished turn's. The sweep then removes any result file no row
-names. Only a turn that died before its rows leaves one, and one turn runs per session
-at a time, so there is no grace period. The ledger is `.harness/ledger.jsonl`, read when
-the turn starts and rewritten whole when it ends. SQLite, as the plan had it, is for
+results are as real as a finished turn's. The sweep then removes any result file *a
+recorder wrote* that no row names, recognised by the id its name begins with. Only a
+turn that died before its rows leaves one, and one turn runs per session at a time, so
+there is no grace period. The ledger is `.harness/ledger.jsonl`, read when the turn
+starts and rewritten whole when it ends. SQLite, as the plan had it, is for
 writers that interleave, and here there is one, writing wherever the session's backend
 keeps it. A line a crash cut short is dropped rather than refused, because refused it
-would refuse every turn after.
+would refuse every turn after. This said the sweep removed any file no row named, and
+that a dead turn was the only thing that could leave one: the agent is a writer here
+too -- the results sit inside the scratchpad precisely so it can read and grep them,
+`system.md` sends it there, and nothing refuses it the folder -- so the sweep deleted
+the agent's own file in the turn that wrote it, after the tool had reported the write
+as succeeding. Narrowing the sweep rather than refusing the write, because a draft
+under `/scratchpad` is something the tools guide offers a tool author in as many words.
+*(2026-10-13, from an architecture review.)*
 
 **Access is recorded and not acted on, because the session is the boundary.** A row
 holds the audience its tool was granted under, and a `task` answer holds its run's
