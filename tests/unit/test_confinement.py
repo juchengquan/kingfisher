@@ -1143,3 +1143,23 @@ def test_what_the_shell_reads_follows_each_fences_shape(tmp_path):
         assert reads(inside, fence, (system,)) is None
         assert str(system) in (reads(system / "keys.yaml", fence, (system,)) or "")
     assert "nothing" in (reads(hidden, "", ()) or ""), "with no fence, everything is read"
+
+
+def test_each_linux_fence_is_read_from_its_own_list_of_system_paths(cfg):
+    """One list serving both is how a mechanism gains a path it meant to deny:
+    bubblewrap binds no `/proc` or `/dev`, and `shell_readable` is what `doctor` asks
+    to say whether a fence can reach the keys file.
+
+    Asserted as a difference rather than against either list, so adding a system path
+    to both fences leaves this alone and giving one fence the other's list reddens it.
+    """
+    from kingfisher.infrastructure.sandbox import bubblewrap, fence
+
+    assert set(fence.SYSTEM_PATHS) != set(bubblewrap.SYSTEM_PATHS), (
+        "the two lists are identical, so this rule cannot tell them apart"
+    )
+
+    landlock = confinement.shell_readable(cfg, confinement.LANDLOCK)
+    bwrap = confinement.shell_readable(cfg, confinement.BUBBLEWRAP)
+
+    assert set(landlock) != set(bwrap)

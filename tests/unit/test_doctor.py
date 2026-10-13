@@ -12,6 +12,7 @@ import pytest
 from kingfisher import default_backends, seed
 from kingfisher.application.inventory import inventory
 from kingfisher.application.service import Kingfisher
+from kingfisher.infrastructure.sandbox.confinement import LINUX_FENCES
 from kingfisher.presentation.cli import health
 from kingfisher.presentation.cli.__main__ import main
 from kingfisher.presentation.cli.health import examine, worst
@@ -1415,6 +1416,47 @@ def test_a_keys_file_the_shell_can_read_is_warned_about(cfg, tmp_path, monkeypat
         assert check is not None and check.verdict == "warn", path
         assert says in check.detail
         assert "home folder" in check.remedy
+
+
+@pytest.mark.parametrize("mechanism", LINUX_FENCES, ids=str)
+def test_a_keys_file_a_linux_fence_grants_is_warned_about(cfg, tmp_path, monkeypatch, mechanism):
+    """The whole Linux branch of `shell_readable` was undriven: replacing its body with
+    `return ()` left the suite green, and this row then said the sandbox kept a keys
+    file that the fence in fact grants.
+
+    Linux is the deployment platform, so what stood between an operator and a false
+    "the sandbox keeps it from the agent's shell" was untested code. Both fences,
+    because each is built from its own list of system paths -- one list serving both is
+    how a mechanism gains a path it meant to deny.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _fenced_by(monkeypatch, mechanism)
+    granted = cfg.skills_dir / "keys.yaml"
+
+    check = _row(examine(_with_keys_file(cfg, granted)), "keys file")
+
+    assert check is not None and check.verdict == "warn"
+    assert str(cfg.skills_dir) in check.detail
+    assert mechanism in check.detail, "the row did not say which fence grants it"
+    assert "what the fence grants" in check.remedy
+
+
+@pytest.mark.parametrize("mechanism", LINUX_FENCES, ids=str)
+def test_a_keys_file_a_linux_fence_does_not_grant_is_said_to_be_hidden(
+    cfg, tmp_path, monkeypatch, mechanism
+):
+    """The control beside the rule above: a file neither fence grants is reported as
+    kept away, so the warning there is this check discriminating rather than warning
+    about everything it is shown.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _fenced_by(monkeypatch, mechanism)
+    elsewhere = tmp_path / ".config" / "kingfisher" / "keys.yaml"
+
+    check = _row(examine(_with_keys_file(cfg, elsewhere)), "keys file")
+
+    assert check is not None and check.verdict == "ok", check
+    assert "keeps from the agent's shell" in check.detail
 
 
 def test_a_keys_file_the_sandbox_hides_is_said_to_be_hidden(cfg, tmp_path, monkeypatch):
