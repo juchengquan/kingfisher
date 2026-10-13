@@ -216,10 +216,10 @@ def test_the_shell_cannot_write_the_sessions_own_harness(two_sessions):
 
 
 @needs_landlock
-def test_the_shell_cannot_write_the_harness_of_a_workspace_holding_one_session(cfg):
-    """There the session is `sessions/` itself, so the policy is generated from the
-    folder every session used to sit in -- driven through `default_backends`, which is
-    what decides that, rather than handed a path.
+def test_the_shell_cannot_write_the_harness_of_the_one_session_a_process_serves(cfg):
+    """Catches a process serving one session fencing it unlike any other -- driven
+    through `default_backends`, which decides where the session is, rather than handed
+    a path.
     """
     from dataclasses import replace
 
@@ -228,7 +228,7 @@ def test_the_shell_cannot_write_the_harness_of_a_workspace_holding_one_session(c
 
     one = replace(cfg, session_id="the-one")
     shell = default_backends.open(one, "the-one")
-    harness = one.workspace / "sessions" / HARNESS
+    harness = one.workspace / "sessions" / "the-one" / HARNESS
     pinned = harness / "agent.yaml"
     pinned.write_text("name: pinned\n", encoding="utf-8")
 

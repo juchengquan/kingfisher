@@ -383,11 +383,12 @@ class Config:
     # inheriting a folder inside the workspace. One folder rather than one per kind:
     # several deployments point at it, and one path is what they agree on.
     definitions: Path = field(kw_only=True)
-    # The one session this workspace holds, or `None` for a workspace holding any
-    # number. Set, kingfisher's own backends keep that session in `sessions/` itself
-    # and know no other id, and a request naming none runs in it. A setting rather than
-    # an argument to `DefaultBackends`, because `default_backends` is one object
-    # serving every workspace and is handed this `Config` on every call.
+    # The one session this process serves, or `None` for a process serving any number.
+    # Set, kingfisher's own backends know no other id and a request naming none runs
+    # in it; the session is kept in `sessions/<id>/` like any other, so processes
+    # each serving one can share a workspace. A setting rather than an argument to
+    # `DefaultBackends`, because `default_backends` is one object serving every
+    # workspace and is handed this `Config` on every call.
     session_id: str | None = None
     # The session backends the command line runs on, named rather than built here:
     # `module:name` for something callable with no arguments that returns a

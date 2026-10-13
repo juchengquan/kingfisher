@@ -30,7 +30,6 @@ from kingfisher.infrastructure.harness.host_paths import (
 from kingfisher.infrastructure.harness.host_paths import reject_host_path
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.threads import off_loop, thread_pool
-from kingfisher.infrastructure.workspace.layout import check_sessions, record_session_id
 from kingfisher.infrastructure.workspace.permissions import protect_inputs, writable_inputs
 from kingfisher.infrastructure.workspace.sessions import (
     LocalSessionDirs,
@@ -614,14 +613,14 @@ def backend_at(
         # deployment its host is exposed when nothing runs on it. This line rather
         # than the caller's, so the default filter says it once per process instead
         # of once per place that builds a backend.
-        said = confined.warning
-        if cfg.session_id is None:
-            # What it means for the people one workspace serves, said where a program
-            # running kingfisher sees it: most never run `doctor`.
-            said += (
-                " This workspace holds many sessions, so each session's agent can also "
-                "read and change the other sessions' files."
-            )
+        # What it means for the people one workspace serves, said where a program
+        # running kingfisher sees it: most never run `doctor`. Whatever
+        # `KINGFISHER_SESSION_ID` says, since it pins a process to one session and not
+        # a workspace: other processes may keep theirs beside it.
+        said = confined.warning + (
+            " A workspace may hold many sessions, and each session's agent can then also "
+            "read and change the other sessions' files."
+        )
         warnings.warn(said, stacklevel=1)
     shell = ConfinedLocalShellBackend(
         confined,
@@ -666,8 +665,8 @@ def backend_at(
 
 class DefaultBackends(SessionBackends):
     """Kingfisher's own `SessionBackends`: each session a directory under
-    `<workspace>/sessions` -- or `sessions/` itself, where `cfg.session_id` says the
-    workspace holds one -- each backend `backend_at` that directory.
+    `<workspace>/sessions`, named for its id, each backend `backend_at` that directory.
+    Where `cfg.session_id` is set, the one id it names is the only one these know.
 
     `default_backends` runs each session's commands here, under kingfisher's own
     fence. A deployment whose commands run somewhere else builds one with `runner=`,
@@ -703,19 +702,7 @@ class DefaultBackends(SessionBackends):
         *,
         catalogue: Definitions | None = None,
     ) -> WorkspaceScopedBackend:
-        where = _where(cfg, session_id)
-        # Here as well as at startup, because a deployment may drive these without a
-        # `Kingfisher` to have checked, and because this is the call that would lay one
-        # mode's session out over the other's.
-        check_sessions(cfg.workspace, only=cfg.session_id)
-        directory = ensure_session_layout(where)
-        if cfg.session_id is not None:
-            # On this disk rather than through the session's backend, as the pin and the
-            # transcript go: which id `sessions/` stands for is this class's own mapping,
-            # and `check_sessions` reads it off this disk before any backend is open. A
-            # turn writing it through `HarnessFiles` would put it in a deployment's own
-            # backends too, which map ids their own way and where nothing reads it.
-            record_session_id(directory, cfg.session_id)
+        directory = ensure_session_layout(_where(cfg, session_id))
         # Kernel-level, because the deny rule covers only the file tools. What it
         # could not harden is reported by the turn rather than raised: raising here
         # used to make one file owned by another user a session unusable for good.
@@ -726,15 +713,14 @@ class DefaultBackends(SessionBackends):
         return built
 
     def sessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
-        # Before listing, because a listing is what `reap` deletes from: read in the
-        # wrong mode, a lone session's `inputs/` and `memory/` are sessions of their own.
-        check_sessions(cfg.workspace, only=cfg.session_id)
         root = sessions_root(cfg.workspace)
         if cfg.session_id is not None:
             # Whether or not a turn has made it, and after a delete: it exists because
-            # the workspace is configured to hold it, so a first turn naming it is one
-            # naming an issued id.
-            return ((cfg.session_id, LocalSessionDirs().used_at(root)),)
+            # the process is configured to serve it, so a first turn naming it is one
+            # naming an issued id. Nothing else, though `sessions/` may hold others:
+            # they are other processes' to list and to reap, and a listing is what
+            # `reap` deletes from.
+            return ((cfg.session_id, LocalSessionDirs().used_at(root / cfg.session_id)),)
         return LocalSessionDirs().listing(root)
 
     def mark_used(self, cfg: Config, session_id: str) -> None:
@@ -745,11 +731,10 @@ class DefaultBackends(SessionBackends):
 
     def delete(self, cfg: Config, session_id: str) -> str | None:
         where = _where(cfg, session_id)
-        if cfg.session_id is not None:
-            # Emptied and not removed: `sessions/` is the workspace's own folder, made by
-            # its layout and the place a deployment mounts storage, and a mountpoint
-            # cannot be removed -- every delete would report a failure after succeeding.
-            return LocalSessionDirs().empty(where)
+        # Nothing there is deleted already, not a failure: a process serving one
+        # session lists its id before any turn has made the folder.
+        if not where.exists():
+            return None
         return LocalSessionDirs().remove_tree(where)
 
 

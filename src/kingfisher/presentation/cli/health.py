@@ -854,36 +854,34 @@ def _sessions_apart(cfg: Config) -> Iterator[Check]:
 
     `shell` says what the host is exposed to; this says the consequence for the people
     one workspace serves. A report, never a refusal: kingfisher is mostly run as a
-    package, and on many servers no fence can start. Quiet where it cannot happen -- one
-    session per workspace, or a Linux fence handing each turn its own session -- and for
-    session backends this command cannot see into, whose contract asks it of them.
+    package, and on many servers no fence can start. Quiet where it cannot happen -- a
+    Linux fence handing each turn its own session -- and for session backends this
+    command cannot see into, whose contract asks it of them. Not for a process serving
+    one session: `KINGFISHER_SESSION_ID` pins a process, not a workspace, and others may
+    keep their sessions beside its own.
     """
-    if cfg.session_id is not None or cfg.session_backends_factory:
+    if cfg.session_backends_factory:
         return
     confined = shell_confinement(cfg)
     if confined.mechanism in LINUX_FENCES:
         return
     if confined.mechanism == SANDBOX_EXEC:
         why = "the macOS sandbox hides the home folder, not one session from another"
-        remedy = "give each person a workspace of their own: KINGFISHER_SESSION_ID makes one"
+        remedy = "give each person a workspace of their own"
     elif confined.elsewhere:
         why = (
             "KINGFISHER_SHELL_SANDBOX is 'external', which keeps the host from the shell, "
             "not one session from another"
         )
-        remedy = "give each person a workspace of their own: KINGFISHER_SESSION_ID makes one"
+        remedy = "give each person a workspace of their own"
     else:
         why = "nothing kingfisher runs confines the shell here"
-        remedy = (
-            "turn the sandbox on, or give each person a workspace of their own: "
-            "KINGFISHER_SESSION_ID makes one"
-        )
-    remedy += " hold a single session"
+        remedy = "turn the sandbox on, or give each person a workspace of their own"
     yield Check(
         "sessions apart",
         "warn",
-        f"this workspace holds many sessions and {why}, so one session's agent can read "
-        f"and change another session's files",
+        f"this workspace can hold many sessions and {why}, so one session's agent can "
+        f"read and change another session's files",
         remedy,
     )
 

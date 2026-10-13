@@ -16,6 +16,7 @@ anything that gets an injection into a document.
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import os
 import platform
 import re
@@ -25,6 +26,7 @@ import sys
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 
 from kingfisher.config import Config
@@ -104,6 +106,9 @@ class Confinement:
     #: A deployment provided the `CommandRunner`, so what actually runs a command is
     #: code this process cannot inspect.
     supplied: bool = False
+    #: The profile the command runs under, for the mechanism that reads one. Carried
+    #: because its name is a digest of its rules, so nothing else can spell it.
+    profile: Path | None = None
 
     @property
     def confined(self) -> bool:
@@ -262,7 +267,6 @@ def shell_confinement(cfg: Config, *, skills: tuple[Path, ...] | None = None) ->
         # writable and this list is what carves exceptions out of it, while both Linux
         # fences grant the session and nothing above it.
         authored=(*cfg.authored_files.values(), *_keys_file(cfg)),
-        one_session=cfg.session_id is not None,
     )
 
 
@@ -293,7 +297,6 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     itself: Path,
     protected: tuple[Path, ...] = (),
     protected_files: tuple[Path, ...] = (),
-    one_session: bool = False,
 ) -> str:
     """A `sandbox-exec` profile denying the operator's home, minus what runs code.
 
@@ -386,61 +389,51 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     # for to catch.
     # Before the `itself` and `_harness_denial` denies, so those stay the last matching
     # rules for their own paths. This denies writes to the `sessions/` directory node,
-    # and where there are many each session's folder node -- the directories above a `.harness` that
-    # the regex guards it by position. Without it the shell could rename an enclosing
+    # and each session's folder node -- the directories above a `.harness` that the
+    # regex guards it by position. Without it the shell could rename an enclosing
     # folder, write the pin where the pattern no longer reaches, and rename it back;
     # measured doing exactly that before this line. It denies the node and not its
     # contents, so the session's own work stays writable.
-    lines.append(_sessions_denial(workspace, one_session=one_session))
+    lines.append(_sessions_denial(workspace))
     lines.append(f"(deny file-write* (path {_sb(itself)}))")
-    lines.append(_harness_denial(workspace, one_session=one_session))
+    lines.append(_harness_denial(workspace))
     return "\n".join(lines) + "\n"
 
 
-def _sessions_denial(workspace: Path, *, one_session: bool) -> str:
+def _sessions_denial(workspace: Path) -> str:
     """Deny writes to the directories a `.harness` is guarded by the position of.
 
     `_harness_denial` matches `.harness` by where it sits under `sessions/`, so an
     enclosing directory that moves takes `.harness` to a path the pattern no longer
-    reaches. The folders between the workspace and a `.harness` are `sessions/` and, in
-    a workspace holding many, each `sessions/<id>/`; the workspace root itself cannot be
-    renamed, its parent being denied already. This denies writes to those nodes -- which
-    is what rename and unlink are, a `file-write*` against the name -- and `$` stops it
-    reaching their contents, so a session's own folders stay writable.
-
-    The depth differs by layout, as `_harness_denial`'s does: with one session the
-    session *is* `sessions/`, whose own work sits at `sessions/<dir>`, so only
-    `sessions` itself is named; with many, a session is `sessions/<id>`, whose work sits
-    a level deeper, so both `sessions` and `sessions/<id>` are named.
+    reaches. The folders between the workspace and a `.harness` are `sessions/` and each
+    `sessions/<id>/`; the workspace root itself cannot be renamed, its parent being
+    denied already. This denies writes to those nodes -- which is what rename and unlink
+    are, a `file-write*` against the name -- and `$` stops it reaching their contents, so
+    a session's own folders stay writable.
     """
     root = re.escape(f"{Path(workspace).resolve()}/sessions")
-    tail = "$" if one_session else "(/[^/]+)?$"
-    return f'(deny file-write* (regex #"^{root}{tail}"))'
+    return f'(deny file-write* (regex #"^{root}(/[^/]+)?$"))'
 
 
 
-def _harness_denial(workspace: Path, *, one_session: bool) -> str:
-    """Refuse every session's `.harness` at once: `sessions/.harness` itself, in a
-    workspace holding one session, and `sessions/*/.harness` in one holding many.
+def _harness_denial(workspace: Path) -> str:
+    """Refuse every session's `.harness` at once: `sessions/*/.harness`.
 
     A regex rather than one `subpath` per session, and that is what keeps the
-    profile static. `shell.sb` has a single fixed path, so a profile naming the
-    sessions that exist when it is written would have to be rewritten as sessions
-    arrive -- and two concurrent turns would then race to write different bytes
-    to one file, each ending up bound by the other's.
+    profile static. A profile naming the sessions that exist when it is written would
+    have to be rewritten as sessions arrive, under a new name each time, and a turn
+    could be bound by one written before its own session existed.
 
     The character class is `[^/]+`, so it matches one session and not a path
     walking through several: `sessions/a/.harness` is denied and
-    `sessions/a/outputs/.harness` is not this rule's business -- nor is
-    `sessions/outputs/.harness` where `sessions/` is the session.
+    `sessions/a/outputs/.harness` is not this rule's business.
 
-    Where there are many, `sessions/.harness` is denied as well, though no session's
-    files are there: its presence is how `check_sessions` tells a workspace holding
-    one session, so a shell that could make it could lock this workspace.
+    `sessions/.harness` is matched too, by the optional segment, though no session's
+    files are there: a shell that made it would leave a folder the listing reads as a
+    session of its own.
     """
     root = re.escape(f"{Path(workspace).resolve()}/sessions/")
-    session = "" if one_session else "([^/]+/)?"
-    return f'(deny file-write* (regex #"^{root}{session}{re.escape(HARNESS)}(/|$)"))'
+    return f'(deny file-write* (regex #"^{root}([^/]+/)?{re.escape(HARNESS)}(/|$)"))'
 
 
 def _sb(path: Path) -> str:
@@ -528,15 +521,22 @@ def writable_roots(workspace: Path) -> tuple[Path, ...]:
     return (Path(workspace).resolve(),)
 
 
-def profile_path(workspace: Path) -> Path:
-    """Where this workspace's sandbox profile is written.
+def profile_path(workspace: Path, rules: str) -> Path:
+    """Where the sandbox profile holding `rules` is written: named for them.
 
-    Fixed rather than configurable. `KINGFISHER_STATE_DIR` used to move it, along
-    with the run logs, claims, pinned agents and scratch that shared that
-    directory; those are inside their sessions now, and a setting that relocates
-    one generated file is a knob with nothing behind it.
+    By content rather than under one name, because processes configured differently
+    may share a workspace -- several each serving one session -- and one name would be
+    one file each rewrote with its own rules, every turn bound by whichever wrote last.
+    The same rules are the same file, so turns of one process still share theirs.
+
+    In the harness's own folder rather than anywhere configurable.
+    `KINGFISHER_STATE_DIR` used to move it, along with the run logs, claims, pinned
+    agents and scratch that shared that directory; those are inside their sessions now,
+    and a setting that relocates one generated file is a knob with nothing behind it.
     """
-    return Path(workspace) / HARNESS_OWNED / SANDBOX_PROFILE
+    digest = hashlib.sha256(rules.encode()).hexdigest()[:16]
+    stem, _, suffix = SANDBOX_PROFILE.rpartition(".")
+    return Path(workspace) / HARNESS_OWNED / f"{stem}.{digest}.{suffix}"
 
 
 def protected_roots(
@@ -576,7 +576,6 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
     extra: tuple[str, ...] = (), skills: tuple[Path, ...] = (),
     definitions: tuple[Path, ...] = (),
     authored: tuple[Path, ...] = (),
-    one_session: bool = False,
 ) -> Confinement:
     """Choose a confinement for this deployment, writing any profile it needs."""
     if mode == BUBBLEWRAP:
@@ -607,38 +606,33 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
         )
 
     home = Path.home().resolve()
-    path = profile_path(workspace)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _write_atomically(
-        path,
-        profile(
-            home=home,
-            # Named separately from the writable roots it is usually the first
-            # of: `_harness_denial` builds a pattern under it, which needs the
-            # workspace itself rather than whatever happens to be writable.
-            workspace=workspace,
-            readable=readable_roots(workspace, extra, skills),
-            writable=writable_roots(workspace),
-            # The profile refuses writes to itself, so the rules cannot be
-            # rewritten by the shell they bind. See `profile`.
-            itself=path,
-            # The catalogue is instructions the agent follows, and by default it sits
-            # inside the workspace -- so "the workspace is writable" made a skill
-            # something the agent could rewrite for every later request, including in
-            # the other deployments sharing a relocated one. Read at the tool level too,
-            # by the deny rule `kingfisher.layout` declares for this route; both are
-            # needed, because the shell bypasses tool permissions entirely.
-            protected=protected_roots(workspace, skills, definitions),
-            # Resolved, because the profile matches real paths and a workspace under
-            # `/tmp` or `/var` is really under `/private`. A file that does not exist
-            # yet is named anyway: the shell must not be the one to create it.
-            protected_files=tuple(dict.fromkeys(Path(p).resolve() for p in authored)),
-            # Where the session's `.harness` is, which the workspace's setting decides --
-            # and the profile is still one text per workspace, as every input to it is.
-            one_session=one_session,
-        ),
+    rules = partial(
+        profile,
+        home=home,
+        # Named separately from the writable roots it is usually the first
+        # of: `_harness_denial` builds a pattern under it, which needs the
+        # workspace itself rather than whatever happens to be writable.
+        workspace=workspace,
+        readable=readable_roots(workspace, extra, skills),
+        writable=writable_roots(workspace),
+        # The catalogue is instructions the agent follows, so a writable one made a
+        # skill something the agent could rewrite for every later request, including
+        # in the other deployments sharing it. Read at the tool level too, by the deny
+        # rule `kingfisher.layout` declares for this route; both are needed, because
+        # the shell bypasses tool permissions entirely.
+        protected=protected_roots(workspace, skills, definitions),
+        # Resolved, because the profile matches real paths and a workspace under
+        # `/tmp` or `/var` is really under `/private`. A file that does not exist
+        # yet is named anyway: the shell must not be the one to create it.
+        protected_files=tuple(dict.fromkeys(Path(p).resolve() for p in authored)),
     )
-    return Confinement(wrap=_sandbox_exec(path), mechanism=SANDBOX_EXEC)
+    # Named for every rule but the one naming the file itself, which cannot be known
+    # before the name is; the profile then refuses writes to itself, so the rules
+    # cannot be rewritten by the shell they bind. See `profile`.
+    path = profile_path(workspace, rules(itself=Path(SANDBOX_PROFILE)))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _write_atomically(path, rules(itself=path))
+    return Confinement(wrap=_sandbox_exec(path), mechanism=SANDBOX_EXEC, profile=path)
 
 
 def _write_atomically(path: Path, text: str) -> None:

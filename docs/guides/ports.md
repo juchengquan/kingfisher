@@ -88,7 +88,7 @@ Things to know:
   confined when `local` is True, which is the default and what you get by not
   saying. A runner that ships the command elsewhere must set `local = False`,
   because the confinement names paths on *this* host — a `sandbox-exec -f
-  /Users/.../shell.sb` sent to another machine fails looking like a broken remote
+  /Users/.../shell.<digest>.sb` sent to another machine fails looking like a broken remote
   shell rather than a wrong prefix.
 - **Setting `local = False` when you are local loses the fence**, silently. The
   default is True so that forgetting the flag yields more confinement than
@@ -205,8 +205,9 @@ each was last used, `mark_used`, `size` and `delete` do what they say. `reap`,
 keeps each session as a directory under `<workspace>/sessions`, and refuses an id
 that is not one name in it — empty, `.`, `..`, or holding `/` or NUL — with
 the `UnknownSessionError` an id nobody issued gets. Where `KINGFISHER_SESSION_ID`
-is set, it keeps that one session in `<workspace>/sessions` itself, lists it
-whether or not a turn has run, and refuses every other id the same way. Session
+is set, it keeps that one session in `<workspace>/sessions/<id>` as it keeps any other,
+lists it -- and no other -- whether or not a turn has run, and refuses every other id
+the same way. Session
 backends of your own are handed the same `cfg`, and a request naming no id runs under
 `cfg.session_id`: list it from `sessions(cfg)` if a first turn may name it, or that
 turn is refused as naming an id nobody issued.

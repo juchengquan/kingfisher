@@ -17,6 +17,31 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## Every session in a folder of its own, after #738
+
+- **`KINGFISHER_SESSION_ID` keeps its session in `sessions/<id>/`**, like any other,
+  where it was `sessions/` itself. It pins a process to one session rather than a
+  workspace: other processes, each serving its own, may keep theirs in the same
+  workspace, and each lists and reaps its own alone.
+- **A workspace laid out the old way is neither converted nor refused.** Its session's
+  folders sit directly in `sessions/` and nothing reads them. Clear `sessions/`, with
+  nothing running, before starting.
+- **Nothing is refused for having been run the other way.** A workspace that ran with
+  the setting starts without it, and its session is listed and reaped with the rest. A
+  changed id starts a session of its own beside the old one. `.harness/session-id` is
+  neither written nor read.
+- **Deleting the one session removes its folder**, where it emptied `sessions/`.
+- **`doctor`'s `sessions apart` warns with the setting on too**, on macOS and wherever
+  nothing confines the shell, and so does the warning an unconfined run prints: other
+  processes may share the workspace.
+- **The macOS profile is `.kingfisher/shell.<digest>.sb`**, named for its rules, where
+  it was `.kingfisher/shell.sb`, so processes configured differently that share a
+  workspace each have their own. `Confinement.profile` names the one a confinement
+  writes, and `profile_path(workspace, rules)` takes the rules. A `shell.sb` left from
+  before is read by nothing; delete it.
+- **In Python**, `check_sessions`, `record_session_id`, `SESSION_ID_RECORD` and
+  `LocalSessionDirs.empty` are gone. None was exported from `kingfisher`.
+
 ## Definitions in a folder of their own, after #734
 
 - **`KINGFISHER_DEFINITIONS_DIR` is required**, beside `KINGFISHER_WORKSPACE`. It holds
@@ -333,6 +358,8 @@ mount and each subagent's own skills -- with the folders kingfisher read.
 
 ## A lone session's id recorded, after #674
 
+*Undone after #738: see Every session in a folder of its own.*
+
 A workspace holding one session records the id it was laid out for, in
 `sessions/.harness/session-id`, and refuses to start under any other (#675). Changing
 `KINGFISHER_SESSION_ID` used to carry the old session's conversation, agent and memory
@@ -342,6 +369,8 @@ open. Unsetting the setting is refused as before, and the refusal now names the 
 set it back to.
 
 ## One session per workspace, after #671
+
+*Its layout and its refusals undone after #738: see Every session in a folder of its own.*
 
 A workspace can hold exactly one session (#672). Nothing changes unless you set
 `KINGFISHER_SESSION_ID`; set it, and the workspace holds that one session, laid out
@@ -719,9 +748,6 @@ backend* and *A tool's path is the backend's path*, explains why.
 | `… was laid out by kingfisher layout 2, and this is layout 3 …` | The workspace still holds sessions from before `data/` and `derived/` were renamed | Delete what the message lists, or use a new workspace; see *Session folders named for which way files go* |
 | `UnknownSessionError: no session '…'; omit session_id to start one`, from `files_for` | An id no turn issued, such as one made up to start a session, or one that is not a single path segment | Run the session's first turn without `files=`, then open the id its result carries; see *`files_for` opens only a session a turn issued* |
 | `HostPathError: '…' is a host path, and file tools take virtual paths rooted at the workspace — …` | A file tool given an absolute path under the workspace but outside this session, such as another session's file or `models.yaml` | Use a virtual path, or the shell for host paths; see *Host paths refused anywhere under the workspace* |
-| `… holds one session laid out directly in it -- .harness/ is there -- …` | `KINGFISHER_SESSION_ID` is unset on a workspace that was run with it | Set it to the id the message names, clear `sessions/`, or use another workspace; see *One session per workspace* |
-| `KINGFISHER_SESSION_ID is '…', and … holds the session laid out for '…'` | The setting was changed on a workspace already holding a session | Set it back to the id laid out, clear `sessions/` to start the new one afresh, or use another workspace; see *One session per workspace* |
-| `KINGFISHER_SESSION_ID is set, and … holds sessions of their own -- …` | The setting was turned on for a workspace that already holds sessions | Clear `sessions/`, unset it, or use another workspace; see *One session per workspace* |
 | `KINGFISHER_SESSION_STORE was removed: …` | The old store setting is still set | Unset it; see *Settings* |
 | `KINGFISHER_DEFINITIONS_DIR is required but not set` | A deployment from before the definitions had a folder of their own | Move them into one and set it; see *Definitions in a folder of their own* |
 | `KINGFISHER_SKILLS_DIR was removed: skills is read from KINGFISHER_DEFINITIONS_DIR now, …` (or any of its six siblings) | A setting that moved one kind is still set | Move what it named into the definitions folder and unset it; see *Definitions in a folder of their own* |

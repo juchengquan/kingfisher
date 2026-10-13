@@ -54,22 +54,6 @@ class LocalSessionDirs:
             return f"directory not removed ({exc.strerror})"
         return None
 
-    def empty(self, path: Path) -> str | None:
-        """Remove everything in `path` and leave `path` itself. Nothing there is not a failure."""
-        if not path.is_dir():
-            return None
-        for child in list(path.iterdir()):
-            if child.is_dir() and not child.is_symlink():
-                failure = self.remove_tree(child)
-                if failure:
-                    return failure
-                continue
-            try:
-                child.unlink()
-            except OSError as exc:
-                return f"{child.name} not removed ({exc.strerror})"
-        return None
-
 
 def ensure_session_layout(session_dir: Path) -> Path:
     """Every directory a session holds, and its memory scaffolded. Idempotent."""

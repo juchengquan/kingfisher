@@ -12,6 +12,7 @@ import asyncio
 import inspect
 import os
 import platform
+import re
 import shutil
 import tempfile
 import warnings
@@ -83,12 +84,14 @@ def test_auto_confines_and_says_nothing(cfg, tmp_path):
 
     assert chosen.confined
     assert chosen.warning == ""
-    assert confinement.profile_path(cfg.workspace).is_file(), "profile not written"
+    assert chosen.profile is not None
+    assert chosen.profile.is_file(), "profile not written"
 
 
 @macos
 def test_the_profile_has_one_place_it_can_be(cfg):
-    """`.kingfisher/shell.sb`, and no setting moves it.
+    """In the harness's folder, named for its rules, and no setting moves it -- so the
+    same rules are one file, however many turns write them.
 
     Two names ago this was `..._lives_in_harness_state_not_the_workspace`,
     docstringed *"a boundary the agent can edit is not a boundary"*, and read as
@@ -97,10 +100,32 @@ def test_the_profile_has_one_place_it_can_be(cfg):
     boundary is `test_the_shell_cannot_rewrite_the_profile_it_runs_under`; what
     this checks is that there is one answer to where it lives.
     """
-    confinement.resolve(confinement.AUTO, workspace=cfg.workspace)
+    first = confinement.resolve(confinement.AUTO, workspace=cfg.workspace)
+    again = confinement.resolve(confinement.AUTO, workspace=cfg.workspace)
 
-    assert confinement.profile_path(cfg.workspace).is_file()
-    assert [p.name for p in Path(cfg.workspace).rglob("shell.sb")] == ["shell.sb"]
+    assert first.profile == again.profile
+    assert first.profile is not None
+    assert first.profile.parent == cfg.workspace / ".kingfisher"
+    assert re.fullmatch(r"shell\.[0-9a-f]{16}\.sb", first.profile.name), first.profile.name
+    assert list(Path(cfg.workspace).rglob("shell.*.sb")) == [first.profile]
+
+
+@macos
+def test_processes_configured_apart_keep_their_profiles_apart(cfg):
+    """Catches two processes sharing a workspace -- several each serving one session --
+    writing their rules to one file, which left every turn bound by whichever process
+    wrote last, under rules its own configuration never asked for.
+    """
+    one = confinement.resolve(confinement.AUTO, workspace=cfg.workspace, extra=("/opt/one",))
+    other = confinement.resolve(
+        confinement.AUTO, workspace=cfg.workspace, extra=("/opt/other",)
+    )
+
+    assert one.profile is not None
+    assert other.profile is not None
+    assert one.profile != other.profile
+    assert "/opt/one" in one.profile.read_text(encoding="utf-8")
+    assert "/opt/one" not in other.profile.read_text(encoding="utf-8")
 
 
 # -- what the profile says ------------------------------------------------
@@ -895,8 +920,7 @@ def test_an_authored_file_is_denied_by_its_real_path(cfg, tmp_path):
     link = tmp_path / "linked-definitions"
     link.symlink_to(cfg.definitions)
 
-    confinement.shell_confinement(replace(cfg, definitions=link))
-    written = confinement.profile_path(cfg.workspace).read_text(encoding="utf-8")
+    written = _written(confinement.shell_confinement(replace(cfg, definitions=link)))
     real = cfg.definitions.resolve() / "source_ids.yaml"
 
     assert f'(deny file-write* (path "{real}"))' in written
@@ -911,10 +935,16 @@ def test_a_catalogue_read_from_elsewhere_is_denied_where_it_was_read(cfg, tmp_pa
     """
     elsewhere = tmp_path / "shared" / "models.yaml"
 
-    confinement.shell_confinement(replace(cfg, models=replace(cfg.models, source=elsewhere)))
-    written = confinement.profile_path(cfg.workspace).read_text(encoding="utf-8")
+    built = replace(cfg, models=replace(cfg.models, source=elsewhere))
+    written = _written(confinement.shell_confinement(built))
 
     assert f'(deny file-write* (path "{elsewhere.resolve()}"))' in written
+
+
+def _written(confined: confinement.Confinement) -> str:
+    """The rules a confinement runs commands under, as written."""
+    assert confined.profile is not None, "no profile written"
+    return confined.profile.read_text(encoding="utf-8")
 
 
 # -- the profile is not the agent's to edit either ------------------------
@@ -940,8 +970,8 @@ def test_the_shell_cannot_rewrite_the_profile_it_runs_under(cfg, session_dir):
             'rm -f "{profile}"',
             'printf x > "{beside}"; mv "{beside}" "{profile}"',
         ]:
-        profile = confinement.profile_path(cfg.workspace)
         backend = backend_at(cfg, session_dir)
+        profile = backend.default.confinement.profile
         before = profile.read_text(encoding="utf-8")
 
         backend.execute(how.format(profile=profile, beside=cfg.workspace / "beside.sb"))
@@ -959,7 +989,7 @@ def test_the_home_stays_denied_after_a_shell_tries_to_open_it(cfg, session_dir):
     secret.write_text("PRIVATE", encoding="utf-8")
     backend = backend_at(cfg, session_dir)
     try:
-        profile = confinement.profile_path(cfg.workspace)
+        profile = backend.default.confinement.profile
         backend.execute(f'printf "(version 1)\\n(allow default)\\n" > "{profile}"')
 
         result = backend.execute(f'cat "{secret}"')
@@ -998,10 +1028,10 @@ def test_a_profile_is_replaced_rather_than_truncated(tmp_path):
     """
     workspace = tmp_path / "ws"
     for _ in range(2):
-        confinement.resolve(confinement.AUTO, workspace=workspace)
+        chosen = confinement.resolve(confinement.AUTO, workspace=workspace)
 
-    beside = confinement.profile_path(workspace).parent
-    assert sorted(p.name for p in beside.iterdir()) == ["shell.sb"], (
+    assert chosen.profile is not None
+    assert list(chosen.profile.parent.iterdir()) == [chosen.profile], (
         "a temporary profile was left beside the real one"
     )
 
@@ -1027,8 +1057,8 @@ def test_no_turn_can_read_the_profile_half_written(tmp_path, monkeypatch):
     with `write_text` left all 2,390 tests green.
     """
     workspace = tmp_path / "ws"
-    confinement.resolve(confinement.AUTO, workspace=workspace)
-    path = confinement.profile_path(workspace)
+    path = confinement.resolve(confinement.AUTO, workspace=workspace).profile
+    assert path is not None
     whole = path.read_text(encoding="utf-8")
 
     seen: list[str] = []
@@ -1068,10 +1098,27 @@ def test_every_rule_reading_the_written_profile_is_marked_for_macos():
 
     def reads_the_written_profile(node: ast.FunctionDef) -> bool:
         drives = reads = False
+        # The callees, so `confinement.profile(...)` -- which builds the text and writes
+        # nothing -- is not taken for the field naming the written file.
+        called = {
+            id(inner.func) for inner in ast.walk(node) if isinstance(inner, ast.Call)
+        }
         for inner in ast.walk(node):
-            if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute):
-                drives = drives or inner.func.attr == "resolve"
-                reads = reads or inner.func.attr == "profile_path"
+            # `confinement.resolve` and no other: `Models.resolve` writes nothing.
+            if (
+                isinstance(inner, ast.Call)
+                and isinstance(inner.func, ast.Attribute)
+                and inner.func.attr == "resolve"
+                and isinstance(inner.func.value, ast.Name)
+                and inner.func.value.id == "confinement"
+            ):
+                drives = True
+            # The written profile is reached through the confinement `resolve` returns,
+            # whose `profile` names it, or by the function naming it from its rules.
+            if isinstance(inner, ast.Attribute) and id(inner) not in called:
+                reads = reads or inner.attr == "profile"
+            if isinstance(inner, ast.Attribute) and inner.attr == "profile_path":
+                reads = True
         return drives and reads
 
     files = sorted(Path(__file__).resolve().parents[1].rglob("test_*.py"))
@@ -1115,8 +1162,11 @@ def test_concurrent_writers_do_not_share_one_scratch_file(tmp_path):
     failed = [task.exception() for task in done if task.exception() is not None]
 
     assert not failed, f"{len(failed)} of {writers} concurrent writers failed: {failed[0]!r}"
-    beside = confinement.profile_path(workspace).parent
-    assert sorted(p.name for p in beside.iterdir()) == ["shell.sb"], (
+    profiles = {task.result().profile for task in done}
+    assert len(profiles) == 1, "the same rules were written under more than one name"
+    (profile,) = profiles
+    assert profile is not None
+    assert list(profile.parent.iterdir()) == [profile], (
         "a temporary profile was left beside the real one"
     )
 

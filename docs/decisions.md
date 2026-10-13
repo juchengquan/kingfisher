@@ -2682,6 +2682,18 @@ two concurrent turns would then race to write different bytes to the file each i
 bound by. On Linux, bubblewrap binds the directory read-only over the session it
 has already mounted. *(2026-09-08.)*
 
+**The profile is named for its rules, not fixed at `shell.sb`.** It is
+`.kingfisher/shell.<digest>.sb`, the digest taken over every rule but the one naming the
+file itself, which cannot be known before the name is. One fixed name was one file per
+workspace, which was right while every input to it came from one `Config`. Once
+processes each serving one session may share a workspace, two configured differently
+-- another keys file, other mounts -- would each rewrite it with their own rules, and
+every turn would be bound by whichever wrote last, with nothing to say so. The same
+rules are still one file, so the torn-read argument above holds per name.
+`Confinement.profile` carries the path, since nothing else can spell it. A profile left
+by a configuration no process holds any more is a few hundred bytes the harness's
+folder keeps. *(2026-10-13.)*
+
 **Measured and closed: a pattern held `.harness` by where it sat, and the path could
 move.** The macOS denial matches `.harness` by position under `sessions/`. The rest of
 the workspace is writable, and nothing denied the directories *above* a `.harness`, so
@@ -2851,6 +2863,10 @@ many sessions. The macOS profile is left as it is; separating people on one Mac 
 workspace each. The shipped `compose.yaml` stays `external`, for development testing
 and one person per container, and its comment says so. The system prompt no longer
 tells the agent another session's files are unreachable. *(2026-10-11.)*
+
+*No longer quiet for `KINGFISHER_SESSION_ID`*, and the unconfined warning no longer
+leaves it out: the setting pins a process to one session, not a workspace, and other
+processes may keep theirs beside it. *(2026-10-13.)*
 
 ## Sessions: what persists and where
 
@@ -3494,6 +3510,25 @@ backends as well, where nothing reads it. Carrying the id is also why the servic
 calls `check_sessions` itself, just before `ensure_layout`, which no longer takes a
 mode: a flag could not carry it, and the id would have needed a third value for
 seeding, which asks nothing and now simply does not call it. *(2026-10-07.)*
+
+**Reversed: the one session has a folder of its own, and the setting pins a process
+rather than a workspace.** `KINGFISHER_SESSION_ID` keeps its session in
+`sessions/<id>/`, as every other session is kept, and the request rules above stand: a
+request naming no id runs in it, any other id is refused as unissued, and it is listed
+before any turn and after a delete. What went is everything the missing level cost.
+`sessions/` being the session meant a delete had to empty rather than remove, the
+macOS profile needed patterns at another depth, the id needed a record because no
+folder carried it, and a workspace used both ways had to be refused at startup -- each
+a special case of its own.
+
+With the definitions in a folder of their own, the workspace is only what sessions
+make, and a service running one process per session can point them all at one
+workspace. Each lists and reaps its own, and none refuses the others' folders: they
+are sessions, not a mistake. So `check_sessions` and the record are gone. A changed id
+starts a session beside the old one instead of carrying on its conversation, an unset
+id makes the workspace one of many, and the macOS profile has one pattern for every
+session. Nothing checks for a workspace laid out the old way: its folders are read by
+nothing, and clearing them is the upgrade. *(2026-10-13.)*
 
 **deepagents' own files are kept in the scratchpad.** deepagents writes two kinds of
 file without being asked. A tool result over about 80,000 characters is saved to

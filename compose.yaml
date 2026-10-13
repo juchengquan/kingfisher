@@ -50,9 +50,8 @@ services:
       # the fence existed, tenant B read tenant A's `outputs/secret.txt` with
       # `cat ../<A>/...`, exit 0. `kingfisher doctor` says so as `sessions apart`.
       #
-      # Serving several people from one instance wants either a workspace each --
-      # KINGFISHER_SESSION_ID makes one hold a single session -- or `auto`, which
-      # confines each turn to its own session directory. `auto` needs a kernel
+      # Serving several people from one instance wants either a workspace each or
+      # `auto`, which confines each turn to its own session directory. `auto` needs a kernel
       # with Landlock ABI 6, 6.12 or later, which Docker Desktop's is not: the
       # image carries `sandlock` so `auto` has something to reach for, but the
       # kernel is the host's. `kingfisher doctor` names the mechanism it settled

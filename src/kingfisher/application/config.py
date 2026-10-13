@@ -110,11 +110,10 @@ class Environment:
         return raw or None
 
     def session_id(self) -> str | None:
-        """The one session this workspace holds, or `None` where it holds any number."""
+        """The one session this process serves, or `None` where it serves any number."""
         found = self.optional_text("KINGFISHER_SESSION_ID")
-        # Held to the rule every issued id meets, though this one is never joined onto a
-        # path -- `sessions/` is the session whatever it is called. A caller hands it on
-        # wherever it hands any other id.
+        # Held to the rule every issued id meets, and refused here, at startup, in words
+        # naming the setting: it names the session's folder under `sessions/`.
         if found is not None and not is_one_path_segment(found):
             msg = (
                 f"KINGFISHER_SESSION_ID is {found!r}, and a session id is one name: "

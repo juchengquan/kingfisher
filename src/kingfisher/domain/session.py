@@ -63,16 +63,15 @@ def is_one_path_segment(session_id: str) -> bool:
 
 
 def session_dir(workspace: Path | str, session_id: str, *, only: str | None = None) -> Path:
-    """Where a workspace keeps one session: a folder of its own under `sessions/`, or
-    `sessions/` itself in a workspace that holds `only` that one.
+    """Where a workspace keeps one session: a folder of its own under `sessions/`, named
+    for its id. `only` is the one id a process serving a single session knows, and any
+    other is refused as an id nobody issued.
     """
+    if only is not None and session_id != only:
+        raise unknown_session(session_id)
     # Here rather than at a door, because every path built from an id is built here --
     # `open` makes folders where it points and `delete` removes them. Joined as given,
     # `""` is every session, `..` the workspace, and an absolute id replaces the path.
-    if only is not None:
-        if session_id != only:
-            raise unknown_session(session_id)
-        return sessions_root(workspace)
     if not is_one_path_segment(session_id):
         raise unknown_session(session_id)
     return sessions_root(workspace) / session_id
