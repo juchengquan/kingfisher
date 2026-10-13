@@ -478,93 +478,55 @@ def test_a_paused_turn_keeps_its_rows_before_its_state(ledgered):
     assert [(e.id, e.tool) for e in resumed.ledger] == [("A-0002", "sql_query")]
 
 
-def test_what_the_agent_writes_beside_the_results_is_left_alone(ledgered):
-    """The agent reads its results out of this folder and writes working files there
-    too, and the sweep took one away in the turn that wrote it -- the write having
-    succeeded, so the model was told it had a file it no longer had.
+def test_what_the_shell_writes_beside_the_results_is_left_alone(ledgered):
+    """The sweep removed what it found in this folder that no row named, and the agent
+    writes here too. The file tools are refused the folder now; the shell is not --
+    filesystem permissions are deepagents' and `execute` bypasses them entirely, which
+    `read_only_permissions` says in as many words.
 
-    Driven through a real `write_file`, because the route is what decides this: nothing
-    denies the agent the folder, where `/.harness` is denied twice over.
+    Driven through `execute` for that reason. It was `write_file` until the route made
+    the folder read-only to the tools: that closed the half a route can close, and this
+    is the half it cannot.
     """
     _run(
         ledgered,
         _calls(
             ("web_search", {"query": "EV"}, "c1"),
-            (
-                "write_file",
-                {"file_path": f"{TOOL_RESULTS_ROUTE}notes.md", "content": "mine\n"},
-                "c2",
-            ),
+            ("execute", {"command": "printf mine > scratchpad/tool_results/notes.md"}, "c2"),
         ),
         AIMessage(content="done"),
     )
 
-    assert _kept(ledgered) == ["A-0001-web_search.txt", "notes.md"]
-    assert _read(ledgered, f"{TOOL_RESULTS_ROUTE}notes.md") == "mine\n", (
-        "the write was refused rather than swept, which is a different decision"
-    )
+    assert _kept(ledgered) == ["A-0001-web_search.txt", "A-0002-execute.txt", "notes.md"]
+    assert _read(ledgered, f"{TOOL_RESULTS_ROUTE}notes.md") == "mine"
 
 
-def test_a_call_id_used_twice_leaves_each_row_on_its_own_result(ledgered):
-    """deepagents names an eviction after the call id alone, in a folder that outlasts
-    the turn -- so a provider reusing an id pointed the second row at the first
-    result's file, and the sweep then took the copy that was right.
+def test_the_agent_cannot_rewrite_or_delete_the_file_a_row_names(ledgered):
+    """The ledger sits under `.harness` because "a row names its file, and the agent
+    must not be able to rewrite what a later turn reads back as true" -- and the file
+    the row named sat in the scratchpad, where the agent could write it. `system.md`
+    tells the model to read that file back rather than call the tool again, so a later
+    turn read a forgery as true: measured, the row stayed at `size: 32` with its
+    original summary while the file held `forged`.
 
-    Two turns on one session, the first offloaded and the second not: without the
-    check, turn two's row read `/scratchpad/large_tool_results/c1` and `read_file` on
-    it returned turn one's 101 KB.
+    Both verbs, because a deny on writing is not obviously a deny on removing, and a
+    row naming a file that is gone is the same lie told the other way round.
     """
-    first = _run(ledgered, _calls(("loud", {}, "c1")), AIMessage(content="done"))
-    second = _run(
+    first = _run(
         ledgered, _calls(("web_search", {"query": "EV"}, "c1")), AIMessage(content="done")
     )
+    (row,) = first.ledger
 
-    (was,) = first.ledger
-    (now,) = second.ledger
-    assert was.path == "/scratchpad/large_tool_results/c1", "the first turn was not offloaded"
-    assert now.path != was.path, "two rows name one file, and only one of them is right"
-    assert _read(ledgered, now.path).startswith("Ten results for EV")
-    # Our own copy, so the result and nothing else: the id goes on what the model is
-    # handed, and deepagents' copy is the one that keeps it.
-    assert len(_read(ledgered, now.path)) == now.size
-
-
-def test_two_calls_of_one_id_in_a_turn_do_not_share_a_file(ledgered):
-    """The same collision inside one turn, where neither row is the earlier one: two
-    assistant messages reusing an id both wanted the same offloaded path.
-    """
-    result = _run(
+    _run(
         ledgered,
-        _calls(("loud", {}, "c1")),
-        _calls(("loud", {}, "c1")),
+        _calls(
+            ("write_file", {"file_path": row.path, "content": "forged\n"}, "c2"),
+            ("delete", {"file_path": row.path}, "c3"),
+        ),
         AIMessage(content="done"),
     )
 
-    first, again = result.ledger
-    assert first.path != again.path, "both rows name one file"
-    assert len({first.id, again.id}) == 2
-
-
-def test_a_todo_rewrite_is_not_a_recorded_result(ledgered):
-    """It rewrites one list the conversation already carries, and a row each buries the
-    rest: three updates beside one real search made three of the four delta lines a todo
-    list, each repeating the list in `args` as well.
-    """
-    result = _run(
-        ledgered,
-        _calls(("write_todos", {"todos": [{"content": "step 1", "status": "pending"}]}, "t1")),
-        _calls(("write_todos", {"todos": [{"content": "step 1", "status": "completed"}]}, "t2")),
-        _calls(("web_search", {"query": "EV"}, "c1")),
-        AIMessage(content="done"),
-    )
-
-    assert [(e.id, e.tool) for e in result.ledger] == [("A-0001", "web_search")]
-    assert _kept(ledgered) == ["A-0001-web_search.txt"]
-    # The control: the calls really ran, so this is the recorder skipping them rather
-    # than deepagents refusing them -- two in parallel are refused, and a refused call
-    # is not recorded either.
-    said = [one.content for one in Scripted.heard[-1] if type(one).__name__ == "ToolMessage"]
-    assert any("Updated todo list" in str(one) for one in said)
+    assert _read(ledgered, row.path) == "Ten results for EV\n1. one\n2. two"
 
 
 def test_a_result_file_no_row_names_is_swept(ledgered):

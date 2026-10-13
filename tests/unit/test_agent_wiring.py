@@ -85,7 +85,12 @@ def test_planning_and_permissions_are_wired(cfg, session_dir):
         rule.paths[0] for rule in built.permissions
         if rule.mode == "deny" and "write" in rule.operations
     }
-    assert read_only == {"/.harness/**", "/inputs/**", "/skills/**"}
+    assert read_only == {
+        "/.harness/**",
+        "/inputs/**",
+        "/scratchpad/tool_results/**",
+        "/skills/**",
+    }
 
     assert built.system_prompt == system_prompt(cfg)
     # M2 capabilities are off by default, so neither is passed through. `is None`

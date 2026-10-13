@@ -2303,6 +2303,36 @@ as succeeding. Narrowing the sweep rather than refusing the write, because a dra
 under `/scratchpad` is something the tools guide offers a tool author in as many words.
 *(2026-10-13, from an architecture review.)*
 
+**The recorder's own folder is refused, and that is not the same decision.** The
+sentence above is about a draft under `/scratchpad`, which is still offered: the folder
+refused is the one #726 moved the recorder's files into, and nothing else under the
+scratchpad is touched. What forced it is the claim this record already makes about the
+ledger -- that it sits under `.harness` because a row names its file and the agent must
+not be able to rewrite what a later turn reads back as true. The file was in the
+scratchpad. Measured: the row stayed at `size: 32` with its original summary while the
+file held `forged`, and `system.md` is what tells the model to read that file back
+instead of calling the tool again, so a later turn read the forgery as true. `delete`
+goes with it -- a row naming a file that is gone is the same lie the other way round.
+
+Mounted only so the rule is expressible, which is why `.harness` is mounted too:
+deepagents refuses permissions on an executing backend unless every rule sits under a
+route, so an unrouted deny builds no graph at all. Readable, unlike `.harness`, since
+reading a result back is the point of keeping it.
+
+The recorder writes through the turn's backend rather than through the tools' rules, and
+that is a reversal: those rules used to cover it, on the reasoning that a result file
+should be held to what a tool's own save is held to. Under that reading this folder
+could not be denied at all -- the deny reached the recorder first. A deployment's own
+refusals still apply, since they live in the backend underneath rather than in these
+rules, and `_unkept` is what reports one.
+
+One half cannot be closed from here. Filesystem permissions are deepagents' and
+`execute` bypasses them, so the shell still writes in that folder -- measured, the file
+tool refused and the shell got in. The narrowed sweep above is what covers it: what a
+shell leaves there is not a name a recorder wrote, so it stays rather than being deleted
+in the turn that wrote it. The rule holding that drives `execute` now, for the same
+reason. *(2026-10-13, from an architecture review.)*
+
 **Access is recorded and not acted on, because the session is the boundary.** A row
 holds the audience its tool was granted under, and a `task` answer holds its run's
 audiences together, since an answer can repeat anything the run read. Nothing filters

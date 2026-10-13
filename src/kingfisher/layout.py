@@ -213,6 +213,18 @@ ROUTES: tuple[Route, ...] = (
     # it reaches the default backend along with everything else the session holds.
     Route(OUTPUTS_ROUTE, routed=False),
     Route(SCRATCH_ROUTE, routed=False),
+    # Read-only to the file tools, and routed only so that rule is expressible. A row
+    # names its file and `prompts/system.md` tells the model to read that file back
+    # rather than call the tool again -- so a turn that could write here could forge
+    # what a later turn reads as true, which is the reason the ledger itself sits under
+    # `.harness`. Measured before this: the row stayed at its original size and summary
+    # while the file held `forged`.
+    #
+    # The shell is not covered and cannot be from here: filesystem permissions are
+    # deepagents' and `execute` bypasses them. The sweep is what covers that half --
+    # it removes only what a recorder's own names match, so what a shell leaves here
+    # stays rather than being deleted in the turn that wrote it.
+    Route(TOOL_RESULTS_ROUTE, deny_write_under=f"{TOOL_RESULTS_ROUTE}**"),
     # The one route that exists to be refused. Denied both ways: a run able to
     # write here could rewrite the agent definition it is running under, or the
     # conversation the next turn is rebuilt from, halfway through the
