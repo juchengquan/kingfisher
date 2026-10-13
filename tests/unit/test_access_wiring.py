@@ -285,14 +285,23 @@ def test_the_report_reads_as_a_sentence(cfg):
 # -- what a caller is told --------------------------------------------------
 
 
-def reported(kf, source_ids, name: str):
-    """The withheld report a caller holding these source ids is handed for one turn."""
+def reported(kf, source_ids, name: str, *, asked_for: Capabilities | None = None):
+    """The withheld report a caller holding these source ids is handed for one turn.
+
+    `asked_for` is what the request itself declined, intersected as the service
+    intersects it. It matters more than it looks: `withheld_by_kind` skips an axis the
+    request left at its default, so without one every axis is skipped and the report is
+    empty -- which is how a rule asserting a name was absent from it asserted nothing.
+    """
     from kingfisher.application.reporting import withheld_by_kind
 
     session = session_at(kf, name)
     held_names = tuple(source_ids) if source_ids is not UNSCOPED else source_ids
     held = kf.held_for(held_names)
     request = Request(task="t", agent="surveyor")
+    allowed = kf._effective_grants(held_names)
+    if asked_for is not None:
+        allowed = allowed.intersect(asked_for)
     # Once, and handed to both, which is what a turn does: the build and the report
     # are the two readers of it, and resolving separately for each is what this
     # stopped doing.
@@ -306,7 +315,7 @@ def reported(kf, source_ids, name: str):
         files=drive(kf._files_for(session.name)),
     ).graph
     return withheld_by_kind(
-        kf._effective_grants(held_names),
+        allowed,
         kf.cfg,
         graph,
         kf.catalogue,
@@ -319,10 +328,21 @@ def test_a_caller_is_not_told_about_what_their_source_ids_took_away(policied):
     """This report names every offered thing a grant left out -- so measured against the
     unfiltered catalogue it would hand a caller the exact list of what their source ids
     denied them.
+
+    The request declines the tool, so that the tools axis is measured at all: left at
+    its default the axis is skipped, and this asserted a name was absent from an empty
+    report. The caller who does reach the tool is beside it and is told, which is what
+    says the axis can name it -- a filter that hid everything from everyone would pass
+    the first assertion on its own.
     """
     kf = Kingfisher(policied, backends=default_backends)
-    names = " ".join(n for _kind, withheld in reported(kf, ["B"], "w1") for n in withheld)
-    assert "line_count" not in names
+    declined = Capabilities(tools=())
+
+    reaches_it = reported(kf, ["A"], "w1", asked_for=declined)
+    does_not = reported(kf, ["B"], "w2", asked_for=declined)
+
+    assert reaches_it == (("tool", ("line_count",)),)
+    assert does_not == ()
 
 
 def test_the_report_still_names_a_builtin_the_request_declined(policied):

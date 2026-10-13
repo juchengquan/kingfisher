@@ -1048,10 +1048,13 @@ def test_every_rule_reading_the_written_profile_is_marked_for_macos():
 
     Matched over the syntax tree rather than the source text, so the predicate does not
     find its own description -- the first version of this rule named itself.
+
+    Over every test file and not `Path(__file__)`, which was the second version's
+    mistake: six files define a `macos` marker of their own, so the one file this rule
+    sits in was the only one it could see. The same test planted unmarked in
+    `test_harness_directory.py` left the suite green and this rule silent.
     """
     import ast
-
-    source = Path(__file__).read_text(encoding="utf-8")
 
     def reads_the_written_profile(node: ast.FunctionDef) -> bool:
         drives = reads = False
@@ -1061,9 +1064,16 @@ def test_every_rule_reading_the_written_profile_is_marked_for_macos():
                 reads = reads or inner.func.attr == "profile_path"
         return drives and reads
 
+    files = sorted(Path(__file__).resolve().parents[1].rglob("test_*.py"))
+    # The collection is the whole rule: pointed at nothing it reports success over
+    # nothing, which is what `test_no_rule_here_is_parametrized_over_nothing` exists for
+    # and what reading one file amounted to.
+    assert len(files) > 1, "this rule is reading one file again, or none"
+
     unmarked = [
-        node.name
-        for node in ast.parse(source).body
+        f"{path.relative_to(Path(__file__).resolve().parents[2]).as_posix()}::{node.name}"
+        for path in files
+        for node in ast.parse(path.read_text(encoding="utf-8")).body
         if isinstance(node, ast.FunctionDef)
         and node.name.startswith("test_")
         and reads_the_written_profile(node)

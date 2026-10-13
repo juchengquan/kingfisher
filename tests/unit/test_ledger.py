@@ -315,6 +315,29 @@ def test_a_tool_name_is_one_path_segment_in_the_results_folder(ledgered):
     assert _kept(ledgered) == ["A-0001-up_and_away.txt"]
 
 
+def test_a_tool_whose_name_is_all_punctuation_still_gets_a_named_file(ledgered):
+    """Stripping what a path segment cannot carry can leave nothing at all, and
+    `A-0001.txt` is not found by the `A-0042-*` glob `system.md` tells the model to use
+    -- which is the recipe `test_an_older_results_file_is_found_by_its_id_as_the_prompt_says`
+    drives.
+    """
+    (tools_dir(ledgered) / "odder.py").write_text(
+        "from langchain_core.tools import tool\n\n\n"
+        "@tool('***')\n"
+        "def odder() -> str:\n"
+        '    """Return something."""\n'
+        "    return 'nothing left'\n\n\n"
+        "TOOLS = [odder]\n",
+        encoding="utf-8",
+    )
+
+    result = _run(ledgered, _calls(("***", {}, "c1")), AIMessage(content="done"))
+
+    (entry,) = result.ledger
+    assert entry.path == "/scratchpad/results/A-0001-tool.txt"
+    assert _kept(ledgered) == ["A-0001-tool.txt"]
+
+
 # -- where the recorder sits ---------------------------------------------------
 
 
@@ -904,8 +927,12 @@ def test_a_command_is_stamped_in_a_copy_that_keeps_the_rest_of_it(ledgered):
     Driven on the recorder alone, because no real turn keeps what its tool returned
     for a test to look at afterwards.
     """
+    # Two, because the stamp has to follow the id and not the position: a `Command`
+    # carrying an earlier message of its own had the id put on that one instead, and
+    # the row then measured a result the model never saw under this call.
+    earlier = ToolMessage(content="passed up beside it", tool_call_id="t0", name="task")
     answer = ToolMessage(content="thin margins", tool_call_id="t1", name="task")
-    returned = Command(update={"messages": [answer], "todos": ["kept"]}, goto="model")
+    returned = Command(update={"messages": [earlier, answer], "todos": ["kept"]}, goto="model")
     recorder = Recorder(
         Ledger("turn", KeptLedger()), backend_at(ledgered, _session(ledgered)), None
     )
@@ -915,10 +942,13 @@ def test_a_command_is_stamped_in_a_copy_that_keeps_the_rest_of_it(ledgered):
         lambda _: returned,
     )
 
-    assert [one.content for one in handed.update["messages"]] == ["thin margins\n[A-0001]"]
+    assert [one.content for one in handed.update["messages"]] == [
+        "passed up beside it",
+        "thin margins\n[A-0001]",
+    ]
     assert (handed.update["todos"], handed.goto) == (["kept"], "model")
     assert answer.content == "thin margins"
-    assert returned.update["messages"] == [answer]
+    assert returned.update["messages"] == [earlier, answer]
 
 
 def test_the_id_outlasts_eviction_as_the_last_line_of_the_stub(ledgered):

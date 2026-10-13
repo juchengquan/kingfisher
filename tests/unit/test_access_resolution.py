@@ -8,9 +8,12 @@ from kingfisher.domain.access import (
     UNSCOPED,
     AccessError,
     SourceIds,
+    jointly,
+    listed,
     reaches,
     reaching,
     spell,
+    unlisted,
 )
 from kingfisher.domain.capabilities import ALL
 
@@ -263,3 +266,61 @@ def test_an_audience_is_written_the_way_the_listing_writes_it():
     assert spell(ALL) == ALL
     assert spell(("A", "B")) == "A, B"
     assert spell(("admin", frozenset({"B", "A"}))) == "admin, {A, B}"
+
+
+# -- who reaches all of several audiences at once --------------------------------
+
+# One case per decision `jointly` makes. Each was green with that decision removed:
+# the only fixture driving it wrote plain single names, where set-dedup collapses every
+# answer it can give, so four separate mutations changed nothing anybody could see.
+
+
+def test_reaching_one_audience_is_that_audience():
+    """A way of one name is unwrapped, so a row holds `["A"]` and not `[["A"]]`."""
+    assert jointly([("A",)]) == ("A",)
+
+
+def test_a_compound_stays_compound():
+    assert jointly([(frozenset({"A", "B"}),)]) == (frozenset({"A", "B"}),)
+
+
+def test_reaching_nothing_in_particular_is_everyone():
+    """An empty join is `ALL` rather than a way holding nothing, which reaches nobody."""
+    assert jointly([]) == ALL
+    assert jointly([ALL, ALL]) == ALL
+
+
+def test_everyone_drops_out_of_a_join():
+    """`ALL` is the string `"*"`, so a join that iterated it instead of skipping it would
+    require the character as though it were a source id.
+    """
+    assert jointly([ALL, ("A",)]) == ("A",)
+
+
+def test_a_way_no_other_needs_less_than_is_dropped():
+    """A+B is not worth listing beside A: anyone who has both has A. Kept, the row
+    offers a caller a longer route to what they already reach.
+    """
+    assert jointly([("A",), ("A", frozenset({"A", "B"}))]) == ("A",)
+
+
+def test_two_ways_that_need_different_things_are_both_kept():
+    assert jointly([("A", "B")]) == ("A", "B")
+
+
+# -- and the row it is written to ------------------------------------------------
+
+
+def test_a_compound_survives_a_row_and_comes_back_able_to_be_joined():
+    """`unlisted` has to give back the frozenset `listed` flattened, not the tuple it
+    wrote: `jointly` reads anything that is not a frozenset as one source id's name, so
+    handed a tuple it compares a tuple with a string and the turn dies where no
+    `except` is watching.
+    """
+    audience = ("A", frozenset({"B", "C"}))
+
+    row = listed(audience)
+
+    assert row == ("A", ("B", "C")), "a row has to be JSON, so the set is a sorted list"
+    assert unlisted(list(row)) == audience
+    assert jointly([unlisted(list(row)), ("A",)]) == ("A",)

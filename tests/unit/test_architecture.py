@@ -2712,7 +2712,7 @@ def test_only_one_workspace_module_changes_a_mode():
     """
     offenders = [
         f"{_module_id(path)}:{line}"
-        for path in _modules_in("infrastructure/workspace")
+        for path in _every(_modules_in("infrastructure/workspace"), "the workspace package")
         if path.name != "permissions.py"
         for line in _mode_changes(path)
     ]
