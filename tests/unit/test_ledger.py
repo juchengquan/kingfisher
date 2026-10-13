@@ -1265,13 +1265,17 @@ def test_the_system_prompt_is_the_same_whatever_the_ledger_holds(ledgered):
 
 # -- the index, once the conversation has been summarised --------------------------
 
-#: A model window, in tokens, that the turns below stay well inside and one long
-#: question goes past on its own. deepagents' trigger counts the system prompt and
-#: tools as well, so a window much narrower summarises every turn.
-WINDOW = 20_000
+#: A model window, in tokens, that the short turns below stay well inside.
+#: deepagents' trigger counts the system prompt and tools as well, so a window much
+#: narrower summarises every turn.
+WINDOW = 80_000
 
-#: Past that window by itself, at the four characters a token deepagents counts.
-LONG = "q" * 70_000
+#: Half that window, at the four characters a token deepagents counts. One stays under
+#: the trigger and two go past it -- and the second has to fit once the first is
+#: summarised, because deepagents refuses a request it cannot bring under 95% of the
+#: window less the output tokens, and a question longer than the window never can.
+#: Under the 50,000 tokens past which it keeps a question aside instead of sending it.
+HALF = "q" * 160_000
 
 
 def _windowed(cfg, window: int = WINDOW):
@@ -1312,12 +1316,12 @@ def test_a_turn_says_on_its_closing_line_whether_it_ended_summarised(ledgered):
     cfg = _windowed(ledgered)
     kf = Kingfisher(cfg, backends=default_backends)
 
-    short = _say(kf, "go", AIMessage(content="done"))
-    assert Scripted.summaries == 0, "the control: a short turn was summarised"
-    long = _say(kf, LONG, AIMessage(content="done"))
+    first = _say(kf, HALF, AIMessage(content="done"))
+    assert Scripted.summaries == 0, "the control: a turn under the trigger was summarised"
+    second = _say(kf, HALF, AIMessage(content="done"))
 
-    assert Scripted.summaries == 1, "the summariser never fired on the long turn"
-    assert _closing(cfg) == [{"turn": short.turn_id}, {"turn": long.turn_id, "summarised": True}]
+    assert Scripted.summaries == 1, "the summariser never fired on the second turn"
+    assert _closing(cfg) == [{"turn": first.turn_id}, {"turn": second.turn_id, "summarised": True}]
 
 
 def test_a_resume_of_a_summarised_turn_is_marked_summarised_too(ledgered):
@@ -1327,9 +1331,9 @@ def test_a_resume_of_a_summarised_turn_is_marked_summarised_too(ledgered):
     an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
     cfg = _windowed(ledgered)
     kf = Kingfisher(cfg, backends=default_backends)
-    # Something before the long question, which a summary needs to replace.
-    asked = _say(kf, "go", AIMessage(content="done"))
-    paused = _say(kf, LONG, _calls(("sql_query", {"query": "select 1"}, "c1")))
+    # Half before the paused turn, which its summary replaces.
+    asked = _say(kf, HALF, AIMessage(content="done"))
+    paused = _say(kf, HALF, _calls(("sql_query", {"query": "select 1"}, "c1")))
     assert paused.stop_reason == AWAITING, "the turn never stopped at the gate"
     assert Scripted.summaries == 1, "the summariser never fired on the paused turn"
 
@@ -1360,15 +1364,15 @@ def test_once_a_turn_summarised_the_next_message_carries_the_index_and_not_the_d
     """
     cfg = _windowed(ledgered)
     kf = Kingfisher(cfg, backends=default_backends)
-    _say(kf, "go", _calls(("web_search", {"query": "one"}, "c1")), AIMessage(content="done"))
-    _say(kf, LONG, _calls(("web_search", {"query": "two"}, "c2")), AIMessage(content="done"))
-    assert Scripted.summaries >= 1, "the summariser never fired on the long turn"
+    _say(kf, HALF, _calls(("web_search", {"query": "one"}, "c1")), AIMessage(content="done"))
+    _say(kf, HALF, _calls(("web_search", {"query": "two"}, "c2")), AIMessage(content="done"))
+    assert Scripted.summaries >= 1, "the summariser never fired on the second turn"
     _say(kf, "go", AIMessage(content="done"))
     _say(kf, "go", AIMessage(content="done"))
 
     # Two calls a turn for the first two, one for each after.
     assert len(Scripted.heard) == 6
-    assert _block_in(_asked(2), "ledger_delta") is not None, "the long turn had no delta"
+    assert _block_in(_asked(2), "ledger_delta") is not None, "the second turn had no delta"
     assert _block_in(_asked(2), "ledger_index") is None, "indexed before anything summarised"
     for after in (4, 5):
         assert _block_in(_asked(after), "ledger_delta") is None
@@ -1518,11 +1522,12 @@ def test_a_resume_is_rolled_up_with_the_turn_it_answered(ledgered):
             decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
         )
     )
+    _say(kf, HALF, AIMessage(content="done"))
     for n in range(3, 8):
         _say(kf, "go", _calls(("web_search", {"query": f"q{n}"}, f"c{n}")), AIMessage("done"))
-    assert Scripted.summaries == 0, "the control: summarised before the long turn"
-    _say(kf, LONG, AIMessage(content="done"))
-    assert Scripted.summaries >= 1, "the summariser never fired on the long turn"
+    assert Scripted.summaries == 0, "the control: summarised before the second half"
+    _say(kf, HALF, AIMessage(content="done"))
+    assert Scripted.summaries >= 1, "the summariser never fired on the second half"
 
     _say(kf, "go", AIMessage(content="done"))
 

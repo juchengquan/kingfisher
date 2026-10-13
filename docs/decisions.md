@@ -2049,9 +2049,9 @@ Neither takes `path`; both write through `ToolContext` under the turn's rules, s
 decision is untouched. *(2026-10-12.)*
 
 **A PDF is read as text a tool saves, not whole through `read_file`.** `read_file`
-hands a PDF over as one block whatever `offset` and `limit` say, and a large one can
-end the turn -- `findings.md` has how the summarizer counts it and why its retry
-never runs. `pdf_text` saves the text under a `--- page N ---` line per page, and the
+hands a PDF over as one block whatever `offset` and `limit` say, and a large one trips
+the summarizer, which has no good way out with it -- `findings.md` has how it counts
+one and what its overflow handling does to a PDF. `pdf_text` saves the text under a `--- page N ---` line per page, and the
 agent reads that a range of lines at a time and searches it with `grep`.
 
 **A tool, because a shell is not always there to run the library.** pdfplumber is in

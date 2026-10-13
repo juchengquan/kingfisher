@@ -162,6 +162,12 @@ REFUSED: Mapping[str, str] = MappingProxyType(
             "parent reads text either way and there is nothing for kingfisher to "
             "carry"
         ),
+        "mode": (
+            "deepagents' 'fork' hands a subagent its parent's whole conversation and "
+            "state, private keys included, where kingfisher builds each subagent from "
+            "what it was granted -- its own skills, tools and audience. Every subagent "
+            "here runs isolated, which is what leaving this out means"
+        ),
         "bundle": NO_BUNDLE_KEY,
     }
 )
@@ -295,6 +301,7 @@ NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
         "permissions": REFUSED["permissions"],
         "interrupt_on": REFUSED["interrupt_on"],
         "response_format": REFUSED["response_format"],
+        "mode": REFUSED["mode"],
         # Not `middlewares` misspelt, which is what a document writing it gets told: in
         # a `SubAgent` it holds the middleware objects themselves.
         "middleware": (

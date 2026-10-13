@@ -82,22 +82,26 @@ def collect_artifacts(backend: Any) -> Steps[tuple[str, ...]]:
     bypasses the file tools, and running a script is how most of `/outputs` gets
     produced.
     """
-    found: list[str] = []
+    found: set[str] = set()
     for name in ARTIFACT_DIRS:
-        result = yield reading(backend, "glob", "**", path=f"/{name}/")
-        if result.error or result.truncated:
-            # Reported rather than raised. The turn has already run, and failing it
-            # here would lose its answer over a listing of what it left behind.
-            _log.warning(
-                "artifacts under /%s/ may be incomplete: %s",
-                name,
-                result.error or "the listing was cut short",
+        # Two patterns, because deepagents' glob leaves a name starting with a dot out
+        # of `**` and matches it only where the pattern starts with one: `**` alone
+        # drops `/outputs/.env` from what the caller is handed, and says nothing.
+        for pattern in ("**", ".*"):
+            result = yield reading(backend, "glob", pattern, path=f"/{name}/")
+            if result.error or result.truncated:
+                # Reported rather than raised. The turn has already run, and failing it
+                # here would lose its answer over a listing of what it left behind.
+                _log.warning(
+                    "artifacts under /%s/ may be incomplete: %s",
+                    name,
+                    result.error or "the listing was cut short",
+                )
+            found.update(
+                match["path"].lstrip("/")
+                for match in result.matches or ()
+                if not match.get("is_dir")
             )
-        found.extend(
-            match["path"].lstrip("/")
-            for match in result.matches or ()
-            if not match.get("is_dir")
-        )
     return tuple(sorted(found))
 
 

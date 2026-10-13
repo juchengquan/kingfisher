@@ -335,6 +335,26 @@ def test_collecting_and_reading_agree_on_every_name(cfg, session_dir):
         drive(read_artifact(backend, name))
 
 
+def test_a_name_starting_with_a_dot_is_collected_at_any_depth(cfg, session_dir):
+    """deepagents' glob leaves a dotfile out of `**`, so a walk asking only for that
+    drops `/outputs/.env` from what the caller is handed, and says nothing. Inside a
+    dot-folder too, which `**/.*` would miss.
+    """
+    for name in ("plain.txt", ".env", "deep/.dot", ".cache/x.txt", ".cache/.y"):
+        (session_dir / "outputs" / name).parent.mkdir(parents=True, exist_ok=True)
+        (session_dir / "outputs" / name).write_text("x")
+
+    names = drive(collect_artifacts(backend_at(cfg, session_dir)))
+
+    assert {
+        "outputs/plain.txt",
+        "outputs/.env",
+        "outputs/deep/.dot",
+        "outputs/.cache/x.txt",
+        "outputs/.cache/.y",
+    } <= set(names)
+
+
 # -- the command -------------------------------------------------------------
 
 
