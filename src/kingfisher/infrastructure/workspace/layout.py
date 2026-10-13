@@ -8,13 +8,11 @@ from pathlib import Path
 from kingfisher.config import ConfigError, definition_roots_for
 from kingfisher.domain.session import sessions_root
 from kingfisher.layout import (
-    HARNESS,
     HARNESS_OWNED,
     LAYOUT_DIRS,
     LAYOUT_VERSION,
     MARKER,
     MARKER_TEXT,
-    SESSION_ID_RECORD,
 )
 
 #: Where the shipped templates sit, as an import path rather than a filesystem one -- an
@@ -116,86 +114,6 @@ def check_layout(workspace: Path) -> None:
         f"KINGFISHER_DEFINITIONS_DIR and do not have to move."
     )
     raise ConfigError(msg)
-
-
-#: How many sessions the mixed-mode refusal names before it counts the rest: enough to
-#: recognise a workspace by, and a shared one may hold thousands.
-SESSIONS_NAMED = 3
-
-
-def check_sessions(workspace: Path, *, only: str | None) -> None:
-    """Refuse a `sessions/` laid out for the other mode, or for a session other than
-    `only`: the id a workspace holding one session is configured with, or `None` where
-    it holds any number.
-
-    Read off `.harness/` and nothing else, because no agent can make or remove one where
-    this looks: a session's own is denied to its shell under every fence, and so is
-    `sessions/.harness` to a session inside it. A test of "anything but the session's own
-    folders" could be set off from inside: under bubblewrap and on macOS the shell may
-    make a folder at the session root, and that stray folder would lock the workspace.
-    """
-    sessions = sessions_root(workspace)
-    own = (sessions / HARNESS).is_dir()
-    one_session = only is not None
-    if not one_session and own:
-        recorded = _recorded_id(sessions)
-        # The record is the only place the id is still written down once the setting is
-        # gone, so a refusal that sends the operator to set it has to say what to.
-        to = "that session's id" if recorded is None else repr(recorded)
-        msg = (
-            f"{sessions} holds one session laid out directly in it -- {HARNESS}/ is there "
-            "-- which is how a workspace with KINGFISHER_SESSION_ID set keeps its session. "
-            "With it unset, every folder in there is listed as a session of its own, and "
-            f"reap deletes them. Set KINGFISHER_SESSION_ID to {to}, clear "
-            f"{sessions}, or point KINGFISHER_WORKSPACE at another workspace"
-        )
-        raise ConfigError(msg)
-    if one_session and own:
-        recorded = _recorded_id(sessions)
-        # Missing is let through rather than refused: a `sessions/` laid out before the
-        # id was recorded holds none, and `record_session_id` gives it one on its next
-        # open.
-        if recorded is not None and recorded != only:
-            msg = (
-                f"KINGFISHER_SESSION_ID is {only!r}, and {sessions} holds the session laid "
-                f"out for {recorded!r}. Opened under {only!r}, that conversation, its agent "
-                f"and its memory would carry on under the new id, and a caller holding "
-                f"{recorded!r} would be refused. Set KINGFISHER_SESSION_ID back to "
-                f"{recorded!r}, clear {sessions} to start {only!r} afresh, or point "
-                "KINGFISHER_WORKSPACE at another workspace"
-            )
-            raise ConfigError(msg)
-    # Only while there is no `.harness/` of its own. Once there is, `sessions/` is the
-    # one session and a folder in it is that session's, whatever the agent put inside
-    # it: a file tool writes `/outputs/.harness/notes.md` as readily as anything else.
-    if not one_session or own or not sessions.is_dir():
-        return
-    held = sorted(p.name for p in sessions.iterdir() if (p / HARNESS).is_dir())
-    if held:
-        shown, rest = held[:SESSIONS_NAMED], len(held) - SESSIONS_NAMED
-        named = ", ".join(shown) + (f" and {rest} more" if rest > 0 else "")
-        msg = (
-            f"KINGFISHER_SESSION_ID is set, and {sessions} holds sessions of their own -- "
-            f"{named} -- which is how a workspace without it keeps them. Laid "
-            "out over them, the one session's agent would read every one. Clear "
-            f"{sessions}, unset KINGFISHER_SESSION_ID, or point KINGFISHER_WORKSPACE at "
-            "another workspace"
-        )
-        raise ConfigError(msg)
-
-
-def _recorded_id(session: Path) -> str | None:
-    """The id this session was laid out for, or `None` where none was recorded."""
-    try:
-        return (session / HARNESS / SESSION_ID_RECORD).read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return None
-
-
-def record_session_id(session: Path, session_id: str) -> None:
-    """Record that `session` was laid out for `session_id`, unless something already is."""
-    if _recorded_id(session) is None:
-        (session / HARNESS / SESSION_ID_RECORD).write_text(session_id, encoding="utf-8")
 
 
 def ensure_layout(workspace: Path) -> Path:

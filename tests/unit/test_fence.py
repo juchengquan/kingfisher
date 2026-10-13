@@ -466,27 +466,29 @@ def _fenced_by(monkeypatch, mechanism: str) -> None:
 
 
 def test_bubblewrap_binds_the_one_session_s_harness_read_only(cfg, monkeypatch):
-    """With the session at `sessions/`, the session bind is writable over `.harness` too,
-    and only a read-only bind laid after it takes that back."""
+    """Catches the session a process serves alone being fenced unlike any other: its
+    folder bind is writable over `.harness` too, and only a read-only bind laid after it
+    takes that back."""
     _fenced_by(monkeypatch, confinement.BUBBLEWRAP)
     one = replace(cfg, session_id="the-one")
-    sessions = str(one.workspace.resolve() / "sessions")
-    harness = f"{sessions}/{HARNESS}"
+    session = str(one.workspace.resolve() / "sessions" / "the-one")
+    harness = f"{session}/{HARNESS}"
 
     argv = default_backends.open(one, "the-one").default.runner.argv
 
     bound = [(argv[i], argv[i + 1]) for i in range(len(argv) - 1)]
-    assert ("--bind", sessions) in bound
+    assert ("--bind", session) in bound
     assert ("--ro-bind", harness) in bound
-    assert bound.index(("--ro-bind", harness)) > bound.index(("--bind", sessions))
+    assert bound.index(("--ro-bind", harness)) > bound.index(("--bind", session))
 
 
 def test_landlock_grants_no_rule_above_the_one_session_s_harness(cfg, monkeypatch, sandlock):
-    """Landlock grants and never takes back, so a writable rule on `sessions/` -- the
-    session, here -- would re-open `.harness` beneath it."""
+    """Landlock grants and never takes back, so a writable rule on the session's folder
+    would re-open `.harness` beneath it -- for the session a process serves alone as for
+    any other."""
     _fenced_by(monkeypatch, confinement.LANDLOCK)
     one = replace(cfg, session_id="the-one")
-    harness = one.workspace.resolve() / "sessions" / HARNESS
+    harness = one.workspace.resolve() / "sessions" / "the-one" / HARNESS
 
     policy = default_backends.open(one, "the-one").default.runner.policy
 

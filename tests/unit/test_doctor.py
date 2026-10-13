@@ -352,9 +352,11 @@ def test_the_exit_code_separates_will_not_run_from_worth_knowing(cfg, monkeypatc
     monkeypatch.setattr("tests.integration.driver.config_from_env", lambda: cfg, raising=False)
     cfg = replace(cfg, assets=shipped)
 
-    # One session per workspace, so nothing is left to warn about on any host: on macOS
-    # the sandbox does not keep many sessions apart, and `sessions apart` says so.
-    ok = examine(replace(cfg, session_id="only"))
+    # Under a Linux fence, so nothing is left to warn about on any host: on macOS the
+    # sandbox does not keep sessions apart, and `sessions apart` says so.
+    with monkeypatch.context() as fenced:
+        _confined_as(fenced, mechanism="Landlock")
+        ok = examine(cfg)
     warned = examine(replace(cfg, shell_sandbox="off"))
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
@@ -1562,8 +1564,8 @@ def _confined_as(monkeypatch, **seen):
     ("seen", "says", "remedy"),
     [
         ({"warning": "unconfined"}, "nothing kingfisher runs confines", "sandbox on"),
-        ({"mechanism": "sandbox-exec"}, "macOS sandbox", "KINGFISHER_SESSION_ID"),
-        ({"elsewhere": True}, "'external'", "KINGFISHER_SESSION_ID"),
+        ({"mechanism": "sandbox-exec"}, "macOS sandbox", "workspace of their own"),
+        ({"elsewhere": True}, "'external'", "workspace of their own"),
     ],
     ids=["no-fence", "macos", "external"],
 )
@@ -1589,13 +1591,16 @@ def test_a_linux_fence_keeps_sessions_apart_and_is_not_warned_about(cfg, monkeyp
     assert _row(examine(cfg), "sessions apart") is None
 
 
-def test_one_session_per_workspace_is_never_warned_about(cfg, monkeypatch):
-    """With one session there is nobody else's files to reach, whatever confines the shell."""
+def test_a_process_serving_one_session_is_warned_too(cfg, monkeypatch):
+    """Catches `KINGFISHER_SESSION_ID` quieting the warning: it pins a process to one
+    session, and other processes may keep theirs in the same workspace.
+    """
     from dataclasses import replace
 
     _confined_as(monkeypatch, warning="unconfined")
 
-    assert _row(examine(replace(cfg, session_id="only")), "sessions apart") is None
+    check = _row(examine(replace(cfg, session_id="only")), "sessions apart")
+    assert check is not None and check.verdict == "warn"
 
 
 def test_session_backends_doctor_cannot_see_into_are_left_to_their_contract(cfg, monkeypatch):

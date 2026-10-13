@@ -31,8 +31,8 @@ LAYOUT_DIRS: tuple[str, ...] = (
     HARNESS_OWNED,
 )
 
-#: The sandbox profile, named so `protected_roots` and the profile writer agree on
-#: where it is without either spelling the path a second time.
+#: The sandbox profile's name, which `profile_path` puts a digest of its rules inside:
+#: `shell.<digest>.sb`.
 SANDBOX_PROFILE = "shell.sb"
 
 #: Where the shell's view of a catalogue with mounts is built, one directory per
@@ -108,10 +108,6 @@ PAUSED_STATE = "paused.state"
 #: is not: a checkpoint written by libraries that have since moved is exactly the
 #: case this answers, and answering it means reading this without reading that.
 PAUSED_MARK = "paused.json"
-#: Which id `sessions/` was laid out for, in a workspace holding one session. Without
-#: it a changed `KINGFISHER_SESSION_ID` maps onto the same folder, and the new id
-#: carries on the old one's conversation, agent and memory as its own.
-SESSION_ID_RECORD = "session-id"
 
 #: What a run produces and would lose. `/inputs` is read-only and came from the
 #: caller; `/scratchpad` is disposable and says so. These two are the ones the agent
