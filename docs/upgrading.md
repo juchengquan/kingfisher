@@ -17,6 +17,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## The shell's path rule is in `execute`'s description, after #731
+
+- **`execute`'s description is no longer deepagents' word for word.** Its "Use absolute
+  paths and avoid `cd`" line is replaced by kingfisher's rule: the shell starts in the
+  session root, and a file-tool path without its leading slash is the shell's. Every
+  graph kingfisher builds that holds the shell gets it, subagents included. Anything
+  comparing the tools a model is offered against deepagents' sees it change.
+- **A shell result that misses a session folder spelt the file tools' way** ends in a
+  line saying so and giving the shell's spelling, for example after
+  `cat /inputs/data.csv`. That line is part of what the model is handed, so a recorded
+  result keeps it too.
+
 ## Recorded results are kept under `/scratchpad/tool_results/`, after #724
 
 - **The folder is `/scratchpad/tool_results/`**, where it was `/scratchpad/results/`.

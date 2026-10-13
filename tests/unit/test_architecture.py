@@ -2252,6 +2252,7 @@ SDK_LOADING: frozenset[str] = frozenset({
     "kingfisher.infrastructure.harness.middlewares.large_pdf_guard",
     "kingfisher.infrastructure.harness.middlewares.narrowing",
     "kingfisher.infrastructure.harness.middlewares.recorder",
+    "kingfisher.infrastructure.harness.middlewares.shell_paths",
     "kingfisher.infrastructure.harness.middlewares.workspace_tools",
     # The collector a turn's recorders share, and keeping what they recorded, which
     # asks deepagents where it offloads a result and how it names the file.
