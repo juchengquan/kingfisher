@@ -229,9 +229,15 @@ def test_answering_clears_the_pause(cfg):
     assert drive(read_pause_mark(harness_of(cfg, paused.session_id))) is None
 
 
-def test_two_gated_calls_are_answered_one_each(cfg, session_dir):
+@pytest.mark.parametrize("rejection_first", [False, True], ids=["gate order", "rejection first"])
+def test_two_gated_calls_are_answered_one_each(cfg, session_dir, rejection_first):
     """One interrupt covers every gated call in a message, so a caller that could only
     answer the interrupt as a whole could not reject one write and approve another.
+
+    Driven in both orders the pair may be written in, because langgraph takes the
+    answers as a list positional against its own `action_requests` and never reads
+    the ids back off them: left in the caller's order, the approval is carried out on
+    the call the person rejected and the rejection on the one they approved.
     """
     kf = Kingfisher(
         cfg,
@@ -246,13 +252,14 @@ def test_two_gated_calls_are_answered_one_each(cfg, session_dir):
     assert len(paused.pending) == 2, "the two calls did not arrive as two decisions"
 
     by_file = {p.args["file_path"]: p.call_id for p in paused.pending}
+    answers = (
+        Decision(call_id=by_file["/outputs/yes.txt"], action="approve"),
+        Decision(call_id=by_file["/outputs/no.txt"], action="reject"),
+    )
     kf.run(
         Resume(
             session_id=paused.session_id,
-            decisions=(
-                Decision(call_id=by_file["/outputs/yes.txt"], action="approve"),
-                Decision(call_id=by_file["/outputs/no.txt"], action="reject"),
-            ),
+            decisions=answers[::-1] if rejection_first else answers,
         )
     )
 
@@ -284,6 +291,28 @@ def test_an_id_nothing_is_waiting_on_is_refused(cfg):
             Resume(
                 session_id=paused.session_id,
                 decisions=(Decision(call_id="invented", action="approve"),),
+            )
+        )
+
+
+def test_a_decision_the_gate_did_not_offer_is_refused(cfg):
+    """`edit` is the decision that lets the answering caller author a call rather than
+    judge the one proposed, and `DECISIONS` withholds it -- but leaving it out of what
+    a gate *reports* does not stop a caller sending it, and the translation forwards an
+    action it does not recognise verbatim.
+    """
+    kf = Kingfisher(
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+    )
+    paused = kf.run(Request("write it"))
+
+    with pytest.raises(DecisionError, match="takes approve, reject, respond -- not 'edit'"):
+        kf.run(
+            Resume(
+                session_id=paused.session_id,
+                decisions=(
+                    Decision(call_id=paused.pending[0].call_id, action="edit", message="mine"),
+                ),
             )
         )
 
