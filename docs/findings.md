@@ -238,12 +238,16 @@ for the next reader who reaches for one.*
   the fourth did, and held one. Nothing carries it into the next turn's graph, but once
   the replayed transcript is past the trigger every turn summarises again, because the
   messages kingfisher writes back are the whole conversation and never the summarised
-  view. It needs something before the last message to replace: a first turn of one
-  70,000-character question was past the trigger and made no event. And a last message
-  longer than `keep` is kept whole rather than summarised away. The ledger's
+  view. It needs something before the last message to replace, and a last message
+  longer than `keep` is kept whole rather than summarised away. From 0.7.22 what is
+  left has to fit, too: a request still over 95% of the window less the output tokens
+  once summarised is refused with `ContextOverflowError` before it is sent. One
+  70,000-character question in a 20,000-token window made no event at 0.7.6 and is
+  refused at 0.7.22, so the ledger's tests trip the summariser with two half-window
+  questions instead, the second fitting once the first is summarised. The ledger's
   `summarised` mark rests on this, and
   `test_a_turn_says_on_its_closing_line_whether_it_ended_summarised` holds it.
-  *(2026-10-12, deepagents 0.7.6.)*
+  *(2026-10-12, deepagents 0.7.6; the budget 2026-10-13, deepagents 0.7.22.)*
 - **A PDF reaches the model whole, and is counted at a quarter of its base64.**
   `read_file` returns a PDF as one `file` block whatever `offset` and `limit` say:
   `FilesystemBackend.read` base64-encodes the whole file for any extension in its
@@ -253,11 +257,14 @@ for the next reader who reaches for one.*
   a 2 MB one as 699,078. A model with no profile -- MiniMax-M3 through
   `ChatAnthropic` has none -- gets a flat 170,000-token trigger and a `keep` of six
   messages, so one such read trips the summarizer with the PDF as the newest
-  message, which it keeps. `ContextOverflowError` is caught only around the call
-  made when the summarizer does *not* fire, so the call carrying the summary and the
-  PDF has no retry; and where the catch does run, it cuts a `read_file` result to
-  its text blocks -- none, for a PDF -- and tells the model to page with `offset`
-  and `limit`. *(2026-10-13, deepagents 0.7.6, langchain-core 1.5.5.)*
+  message, which it keeps. At 0.7.6 `ContextOverflowError` was caught only around the
+  call made when the summarizer did *not* fire, so the call carrying the summary and
+  the PDF had no retry. From 0.7.22 every call goes through `_call_with_budget`: an
+  overflow, or a request over 95% of the window less the output tokens, clips the
+  trailing tool results and retries once. The clip cuts a `read_file` result to its
+  text blocks -- none, for a PDF -- and tells the model to page with `offset` and
+  `limit`, which `read_file` ignores for a PDF. *(2026-10-13, deepagents 0.7.6 and
+  0.7.22, langchain-core 1.5.5 and 1.6.10.)*
 - **A model's profile sizes the summarizer, and one passed in replaces langchain's.**
   `ChatAnthropic` built without `profile=` fills it from langchain's own table:
   `claude-sonnet-4-5` arrives with a full profile, `max_input_tokens` 1,000,000 among

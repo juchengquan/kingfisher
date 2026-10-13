@@ -11,7 +11,8 @@ from langchain_core.messages import ToolMessage
 #: The largest PDF a tool result may hand the model whole, in bytes. deepagents counts
 #: a PDF block at its base64 length over four, a third of the file, and a model with
 #: no profile summarizes at 170,000 tokens -- one PDF of about 500 KB, which the
-#: summarizer then keeps and sends with no retry on an overflow. Half of that.
+#: summarizer then keeps, and on an overflow cuts to its text: nothing, for a PDF.
+#: Half of that.
 MAX_PDF_BYTES = 256 * 1024
 
 #: The shipped tool that reads a PDF a range at a time.

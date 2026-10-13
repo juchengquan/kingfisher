@@ -937,6 +937,7 @@ types its subagent as deepagents' `SubAgent` TypedDict. Most of one loads as it 
 | `permissions` | refused: deepagents' rules replace the parent's rather than narrowing them |
 | `interrupt_on` | refused: a subagent inherits its caller's gates |
 | `response_format` | refused: the parent reads a subagent's result as text either way |
+| `mode` | refused: `fork` would hand a subagent its parent's whole conversation and state, where each is built from its own grant |
 
 A refused key stops the spec loading, with the reason in the message. So does
 `runnable`, deepagents' `CompiledSubAgent`: a graph built before this deployment
