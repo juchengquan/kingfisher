@@ -1,4 +1,4 @@
-"""`kingfisher seed`, `run` and `serve`, and the rule they are held to."""
+"""`kingfisher seed` and `run`, and the rule they are held to."""
 
 from __future__ import annotations
 
@@ -799,6 +799,32 @@ def test_reap_still_blames_the_age_when_the_age_is_what_decided(cfg, monkeypatch
     printed = capsys.readouterr().out
     assert "idle longer than 30m" in printed
     assert "busy" not in printed
+
+
+def test_the_idle_column_reads_straight_into_the_flag_it_claims_to(cfg, monkeypatch, capsys):
+    """`sessions --help` says the column is in the units `--older-than` takes, so a
+    listing reads into a sweep. Rounded, it did not: a session idle 1.6 days printed
+    `2d`, and `reap --older-than 2d` left it where it was -- the two commands
+    contradicting each other on one workspace, which is what the rule above exists to
+    keep them out of. 2.4 days printed `2d` as well, so one figure covered a session a
+    sweep would take and a session it would not.
+    """
+    import os
+    import time
+
+    _looking_at(monkeypatch, cfg)
+    start(cfg, "s-one")
+    old = time.time() - 1.6 * 86400
+    os.utime(cfg.workspace / "sessions" / "s-one", (old, old))
+
+    assert main(["sessions"]) == 0
+    printed = capsys.readouterr().out
+    assert "1d" in printed, f"the column rounded 1.6 days up: {printed!r}"
+
+    assert main(["reap", "--older-than", "1d"]) == 0
+    assert not (cfg.workspace / "sessions" / "s-one").exists(), (
+        "the column named an age the flag then declined to act on"
+    )
 
 
 def test_reaping_one_by_name_takes_it_whatever_its_age(cfg, monkeypatch, capsys):

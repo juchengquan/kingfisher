@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher import default_backends, seed
+from kingfisher.application.inventory import inventory
 from kingfisher.application.service import Kingfisher
 from kingfisher.presentation.cli import health
 from kingfisher.presentation.cli.__main__ import main
@@ -657,6 +658,70 @@ def test_a_definition_that_cannot_run_is_named(cfg, tmp_path):
     assert checks["definition 'far'"].verdict == "fail"
     assert "ELSEWHERE_KEY" in checks["definition 'far'"].detail
     assert checks["definition 'far'"].remedy
+
+
+def test_an_agent_that_cannot_run_is_named_too(cfg, tmp_path):
+    """The kind the check did not ask about.
+
+    It called `unrunnable_subagents` alone, so the row said "every definition resolves
+    to a model" and `doctor` exited 0 while `run --agent` refused with the very
+    configuration error the row had promised was absent -- and catching that is the one
+    thing this verb's `--help` claims for it.
+    """
+    half = _half_keyed(cfg, tmp_path)
+    agents = half.catalogue_roots["agents"]
+    agents.mkdir(parents=True, exist_ok=True)
+    (agents / "faraway.yaml").write_text(
+        "name: faraway\ndescription: Runs somewhere this machine cannot reach.\n"
+        "model: far-model\nsystem_prompt: |\n  Answer.\n",
+        encoding="utf-8",
+    )
+
+    checks = {check.name: check for check in examine(half)}
+
+    assert checks["definition 'faraway'"].verdict == "fail"
+    assert "ELSEWHERE_KEY" in checks["definition 'faraway'"].detail
+    assert "definitions run" not in checks, (
+        "the row claimed everything runs, beside the one that does not"
+    )
+
+
+def test_a_broken_agent_catalogue_does_not_take_the_definitions_check_with_it(cfg):
+    """The agent half of the guard above it: both catalogues are read here now, so an
+    agent file that will not load raises out of this check unless it is asked first.
+    """
+    agents = cfg.catalogue_roots["agents"]
+    agents.mkdir(parents=True, exist_ok=True)
+    (agents / "broken.yaml").write_text("name: [unclosed\n", encoding="utf-8")
+
+    checks = {check.name: check for check in examine(cfg)}
+
+    assert checks["definitions run"].verdict == "warn"
+    assert "agent catalogue did not load" in checks["definitions run"].detail
+
+
+def test_the_builtin_count_says_unknown_when_it_could_not_be_read(cfg):
+    """A middleware that will not import takes the probe the built-in set is read off
+    down with it, and `tools_error` is deliberately left alone -- the tool catalogue is
+    fine and the middlewares row carries the fault with the file to open.
+
+    So this row printed `0 built in` with an `ok` beside it over a deployment that has
+    ten, and `--json` handed a script `[]` with `tools_error: null`.
+    """
+    folder = cfg.catalogue_roots["middlewares"]
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "broken.py").write_text("import nonexistent_module_xyz\n", encoding="utf-8")
+
+    found = inventory(cfg)
+    checks = {check.name: check for check in examine(cfg, found)}
+
+    assert not found.builtin_tools_checked
+    assert "0 built in" not in checks["tools"].detail
+    assert "built-in set unknown" in checks["tools"].detail
+    # The control: the middlewares row is where the fault itself is reported, and the
+    # tools row must not claim the tool catalogue failed.
+    assert checks["middlewares"].verdict == "fail"
+    assert found.tools_error is None
 
 
 def test_definitions_that_all_run_say_so_once(cfg, tmp_path):
