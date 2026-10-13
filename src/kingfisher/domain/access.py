@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Final, Literal
 
@@ -125,6 +125,45 @@ def stated(spec: object) -> Stated:
             field: dict(entries) for field, entries in getattr(spec, "audiences", {}).items()
         },
     )
+
+
+def offers(
+    field: str,
+    held: frozenset[str] | None,
+    specs: Iterable[object],
+    *,
+    same: Callable[[str], str | None] = lambda name: name,
+) -> Callable[[str], bool]:
+    """Whether a caller reaches one entry of a catalogue that audiences nothing itself.
+
+    Neither a tool module nor a skill's own file has anywhere to write `source_ids:` --
+    an audience for one exists only inside the definition offering it -- so what can be
+    asked is whether any definition here offers it to this caller.
+
+    A definition leaving the field unset offers the whole catalogue at its own audience,
+    which is why one of those ends the walk rather than contributing to it: `ALL` is the
+    string `"*"`, and a union that read its entries would collect the character.
+
+    `same` is how two spellings of one entry are compared, and skills need it -- a grant
+    may write `audit` or `catalogue::audit`, and an audience written one way has to keep
+    the entry the registry names the other way.
+
+    Here rather than in the listing that first needed it, because the withheld run
+    report is the second reader and the two had different answers: the report measured
+    what a grant left out against the whole catalogue, so a caller narrowing their own
+    grant was handed the name of every tool and skill no definition they reach offers.
+    Two answers to what a caller reaches is how those come apart, and this is the one.
+    """
+    if held is None:
+        return lambda _name: True
+    reached: set[str | None] = set()
+    for spec in specs:
+        offered = narrowed_for(spec, held)[field]
+        if offered == ALL:
+            return lambda _name: True
+        reached |= {same(name) for name in offered or ()}
+    reached -= {None}
+    return lambda name: same(name) in reached
 
 
 def narrowed_for(spec: object, held: frozenset[str] | None) -> dict[str, Selection]:

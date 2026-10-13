@@ -9,7 +9,13 @@ from types import MappingProxyType
 from kingfisher.application import access
 from kingfisher.application.origins import Origin, Origins
 from kingfisher.config import Config
-from kingfisher.domain.access import AccessReport, SourceIds, Stated, narrowed_for, reaches
+from kingfisher.domain.access import (
+    AccessReport,
+    SourceIds,
+    Stated,
+    offers,
+    reaches,
+)
 from kingfisher.domain.capabilities import ALL, CapabilityError, Selection, unoffered
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.kinds.agents.spec import AgentError
@@ -547,39 +553,6 @@ def _reaching(
     return keep
 
 
-def _offers(
-    field: str,
-    held: frozenset[str] | None,
-    specs: Iterable[object],
-    *,
-    same: Callable[[str], str | None] = lambda name: name,
-) -> Callable[[str], bool]:
-    """Whether a caller reaches one entry of a catalogue that audiences nothing itself.
-
-    Neither a tool module nor a skill's own file has anywhere to write `source_ids:` --
-    an audience for one exists only inside the definition offering it -- so what can be
-    asked is whether any definition here offers it to this caller.
-
-    A definition leaving the field unset offers the whole catalogue at its own audience,
-    which is why one of those ends the walk rather than contributing to it: `ALL` is the
-    string `"*"`, and a union that read its entries would collect the character.
-
-    `same` is how two spellings of one entry are compared, and skills need it -- a grant
-    may write `audit` or `catalogue::audit`, and an audience written one way has to keep
-    the entry the registry names the other way.
-    """
-    if held is None:
-        return lambda _name: True
-    reached: set[str | None] = set()
-    for spec in specs:
-        offered = narrowed_for(spec, held)[field]
-        if offered == ALL:
-            return lambda _name: True
-        reached |= {same(name) for name in offered or ()}
-    reached -= {None}
-    return lambda name: same(name) in reached
-
-
 def _builtin_tools(
     cfg: Config, resolved: Definitions, found: Sequence[Found] | None
 ) -> tuple[str, ...] | None:
@@ -771,8 +744,8 @@ def inventory(
         *(spec for name, spec in defined_agents.items() if name in for_caller),
         *(spec for name, spec in specs.items() if name in for_caller_subagents),
     ]
-    offers_tool = _offers("tools", held, reached_definitions)
-    offers_skill = _offers("skills", held, reached_definitions, same=registry.identity)
+    offers_tool = offers("tools", held, reached_definitions)
+    offers_skill = offers("skills", held, reached_definitions, same=registry.identity)
 
     return Inventory(
         # The resolved catalogue, not `cfg` -- so a deployment that staged its

@@ -324,6 +324,95 @@ def reported(kf, source_ids, name: str, *, asked_for: Capabilities | None = None
     )
 
 
+#: A workspace tool no definition here declares at all. `surveyor` names `line_count`
+#: and nothing else, so nobody reaches this one through any agent.
+UNDECLARED_TOOL = '''
+from langchain_core.tools import tool
+
+
+@tool
+def secret_export(path: str) -> str:
+    """Exports."""
+    return "0"
+
+
+TOOLS = [secret_export]
+'''
+
+
+#: One a subagent offers and the agent does not. A caller who reaches that subagent
+#: reaches what it holds, through `task`, so the report has to count it.
+SUBAGENT_ONLY_TOOL = UNDECLARED_TOOL.replace("secret_export", "delegated_only").replace(
+    "Exports.", "Delegates."
+)
+
+HELPER = """name: helper
+description: A subagent.
+source_ids: [A, B]
+tools: [delegated_only]
+system_prompt: |
+  You help.
+"""
+
+
+@pytest.fixture
+def policied_with_a_stranger(policied):
+    """`policied`, plus a workspace tool no definition offers anyone, and one offered
+    only by a subagent in reach.
+    """
+    (tools_dir(policied) / "secret_export.py").write_text(UNDECLARED_TOOL, encoding="utf-8")
+    (tools_dir(policied) / "delegated_only.py").write_text(
+        SUBAGENT_ONLY_TOOL, encoding="utf-8"
+    )
+    helpers = subagents_dir(policied)
+    helpers.mkdir(parents=True, exist_ok=True)
+    (helpers / "helper.yaml").write_text(HELPER, encoding="utf-8")
+    return policied
+
+
+def test_a_caller_is_told_only_of_what_a_definition_they_reach_offers(policied_with_a_stranger):
+    """The report named every offered thing a grant left out, measured against the whole
+    catalogue -- so a caller who narrowed their own grant was handed the name of a tool
+    no definition they reach offers, which is the one thing filtering these out of
+    listings and refusals exists to prevent. The caller supplies `capabilities`, so
+    narrowing their own grant was the whole of what it took.
+
+    A tool has nowhere to write an audience of its own, so what can be asked of one is
+    whether a definition in reach offers it -- the question the listing asks, now
+    through the same function. The reachable tool is named beside it, because a filter
+    that emptied the report would pass the first assertion on its own.
+    """
+    kf = Kingfisher(policied_with_a_stranger, backends=default_backends)
+    declined = Capabilities(tools=())
+
+    told = reported(kf, ["A"], "w1", asked_for=declined)
+
+    (what, names) = told[0]
+    assert len(told) == 1 and what == "tool"
+    # `delegated_only` beside `line_count`: a caller reaching a subagent reaches what it
+    # holds, so the agent's own entries are not the whole of what a run can offer -- and
+    # with only the agent counted, nothing here noticed.
+    assert set(names) == {"line_count", "delegated_only"}, (
+        "the report named a tool nothing here offers, or stopped naming one that is"
+    )
+
+
+def test_a_run_under_no_policy_is_still_told_of_everything_it_declined(policied_with_a_stranger):
+    """`UNSCOPED`, and a run with no vocabulary, reach everything -- so there is nothing
+    to filter and the report says what it always said. The control for the rule above:
+    the filter answers a caller, not every reader.
+    """
+    kf = Kingfisher(policied_with_a_stranger, backends=default_backends)
+
+    told = reported(kf, UNSCOPED, "w2", asked_for=Capabilities(tools=()))
+
+    (what, names) = told[0]
+    assert (what, set(names)) == (
+        "tool",
+        {"line_count", "secret_export", "delegated_only"},
+    )
+
+
 def test_a_caller_is_not_told_about_what_their_source_ids_took_away(policied):
     """This report names every offered thing a grant left out -- so measured against the
     unfiltered catalogue it would hand a caller the exact list of what their source ids

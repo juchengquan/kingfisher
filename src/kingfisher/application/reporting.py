@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.domain.access import AUDIENCED
+from kingfisher.domain.access import AUDIENCED, offers
 from kingfisher.domain.capabilities import Capabilities, Selection, withheld
 from kingfisher.domain.result import RunEvent
 from kingfisher.infrastructure.catalogue import Definitions
@@ -109,6 +109,27 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
         defined = defined_subagents(cfg, catalogue=catalogue)
         return within_reach(defined, defined, held)
 
+    def reached() -> list[object]:
+        """The definitions this run can reach: the agent it opened, and the subagents
+        that agent can hand work to and this caller can open.
+
+        A tool or a skill has nowhere to write an audience of its own, so what can be
+        asked of one is whether a definition in reach offers it -- the question the
+        listing asks, through the same function. `subagents` above is the precedent:
+        it exists because `denied` sees the agent's line and nothing else.
+        """
+        if agent is None:
+            return []
+        reachable = set(subagents())
+        defined = defined_subagents(cfg, catalogue=catalogue)
+        return [agent, *(spec for name, spec in defined.items() if name in reachable)]
+
+    # Built once: `reached` reads the subagent catalogue, and a predicate per row
+    # would read it twice to give the same answer.
+    reached_definitions = reached()
+    offers_tool = offers("tools", held, reached_definitions)
+    offers_skill = offers("skills", held, reached_definitions, same=spelling["skills"])
+
     offered = (
         # Built-ins and workspace tools are granted apart, so they are reported
         # apart: "3 tool(s) not granted" meant nothing when it could have been
@@ -120,7 +141,14 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
         ("builtin tool", "builtin_tools", None, lambda: tuple(
             n for n in registered_tools(graph) or () if n not in set(workspace)
         )),
-        ("tool", "tools", "tools", lambda: workspace),
+        # Tools and skills are measured against what a definition in reach offers,
+        # not against the whole catalogue less what this agent's own line removed.
+        # `visible` was all they had, and it only ever subtracted the agent's
+        # narrowing -- so a caller who narrowed their own grant was told the name of
+        # every tool and skill no definition they reach offers them, which is the one
+        # thing filtering them out of listings and refusals exists to prevent. The
+        # subagent row below has had the same treatment since it was written.
+        ("tool", "tools", None, lambda: tuple(n for n in workspace if offers_tool(n))),
         # `cfg` as well as the request, which is where the two axes meet everywhere
         # else: with the switch off the agent is told about no skills at all, and a
         # report of one "not granted" says the others were. The third reader of this
@@ -129,8 +157,14 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
         (
             "skill",
             "skills",
-            "skills",
-            lambda: available_skills(cfg, catalogue=catalogue) if cfg.skills_enabled else (),
+            None,
+            lambda: tuple(
+                name
+                for name in (
+                    available_skills(cfg, catalogue=catalogue) if cfg.skills_enabled else ()
+                )
+                if offers_skill(name)
+            ),
         ),
         ("subagent", "subagents", "subagents", subagents),
     )
