@@ -18,9 +18,11 @@ from langchain_core.tools import tool
 from kingfisher import ToolContext
 
 #: Pages extracted in one call; the rest of what was asked for is named as left out.
-#: Each page is parsed here, in kingfisher's own process beside every other turn, so a
-#: long report is read in parts rather than at once. The docstring below names it too.
-MAX_PAGES = 50
+#: Large, because the text goes to a file the agent searches, not into its context --
+#: at fifty, an agent sampled a 300-page report and missed the page it was asked about.
+#: Bounded, because each page is parsed here, beside every other turn: about 50 ms a
+#: page on a dense report, so under half a minute. The docstring below names it too.
+MAX_PAGES = 500
 
 KB = 1024
 
@@ -84,14 +86,14 @@ def pdf_text(
 ) -> str:
     """Save a PDF's text as a text file, under a `--- page N ---` line per page, and say
     where it went. Use it to read or search a PDF instead of `read_file` on the PDF,
-    which hands over the whole document at once: the saved text can be read a range
-    of lines at a time with `read_file`, and searched with `grep`.
+    which hands over the whole document at once: search the saved text with `grep` to
+    find what you need, and read a range of its lines with `read_file`.
 
     `file_path` is the same virtual path the file tools take, such as
     `/inputs/report.pdf`. `pages` names the pages to extract, such as `1-20` or
-    `3-5,9`; at most 50 are extracted a call, and the answer says how many pages the
-    document has and which asked-for pages were left out. A page with no text is
-    usually a scan or a picture, and the answer names those too.
+    `3-5,9`; leave it out for the whole document, up to 500 pages a call. The answer
+    says how many pages the document has and which asked-for pages were left out. A
+    page with no text is usually a scan or a picture, and the answer names those too.
 
     `save_as` is where the text is saved, a full virtual path such as
     `/scratchpad/notes.txt`; leave it out for `/scratchpad/<name>.p<pages>.txt`, a file

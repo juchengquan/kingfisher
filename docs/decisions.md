@@ -2037,11 +2037,20 @@ material rather than something the caller asked for, and `/outputs/` is what the
 caller is handed back. The pages are in the default name, so a second range does
 not replace the first.
 
-**Text only, fifty pages a call.** The parse runs in kingfisher's own process, outside
-every sandbox and beside every other turn. pdfminer is Python; pdfplumber's
+**Text only, five hundred pages a call.** The parse runs in kingfisher's own process,
+outside every sandbox and beside every other turn. pdfminer is Python; pdfplumber's
 `repair=` would run Ghostscript and `.to_image()` native PDFium, so neither is used.
 The cap keeps one call bounded however long the report, and the answer names the
-pages it left out. *(2026-10-13.)*
+pages it left out.
+
+It was fifty, and a real turn showed what that costs. Asked for a figure on page 120
+of a 300-page report, MiniMax-M3 took pages 1-50, then sampled 51-60 and 280-300,
+and answered that the report held no such figure. The text goes to a file the agent
+searches rather than into its context, so the cap bounds only the parse: on the
+Federal Reserve's 222-page 2023 annual report, dense with tables, pdfplumber took
+11.1 seconds, 50 ms a page on average and 314 ms at worst, so five hundred pages is
+under half a minute. pypdf extracted the same report in 3.6 seconds, and a little
+less of its text. *(2026-10-13.)*
 
 **A PDF over 256 KB in a tool's result reaches the model as advice instead.**
 `LargePdfGuard`, in `tool_guards` on every graph kingfisher builds, swaps the block

@@ -237,6 +237,29 @@ def test_pages_past_the_cap_are_named_as_left_out(tools, handed, session_dir):
     assert f"--- page {cap + 1} ---" not in saved.decode()
 
 
+def test_left_to_its_default_the_whole_of_a_long_document_is_extracted(
+    tools, handed, session_dir
+):
+    """At fifty pages a call, an agent asked about a 300-page report sampled three
+    ranges, missed the figure on page 120, and answered that the report had none.
+    """
+    texts = ["filler"] * 119 + ["Third quarter revenue was 4.7 million euros."] + ["filler"] * 180
+    (session_dir / "inputs" / "long.pdf").write_bytes(a_pdf(*texts))
+
+    said = on_backend(tools["pdf_text"], handed, file_path="/inputs/long.pdf")
+
+    saved = _saved(handed, "/scratchpad/long.p1-300.txt")
+    assert saved is not None
+    assert "--- page 120 ---\nThird quarter revenue was 4.7 million euros." in saved.decode()
+    assert "pages 1-300 of 300" in said
+
+
+def test_the_docstring_names_the_cap_the_tool_applies(tools):
+    """The model learns the cap from the docstring alone, and plans its calls by it."""
+    cap = tools["pdf_text"].func.__globals__["MAX_PAGES"]
+
+    assert f"up to {cap} pages a call" in tools["pdf_text"].description
+
 def test_a_page_with_no_text_is_named(tools, handed):
     """A scanned page saved as an empty section is believed to say nothing."""
     said = on_backend(tools["pdf_text"], handed, file_path="/inputs/report.pdf")

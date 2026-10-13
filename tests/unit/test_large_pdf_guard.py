@@ -121,7 +121,7 @@ def test_the_advice_names_pdf_text_where_the_graph_holds_it_and_the_route_works(
     _run(cfg, session_dir, model)
 
     assert "Call pdf_text on it" in _answer(model, "c1").text
-    assert _answer(model, "c2").text.startswith("Saved big.p1-50.txt (text, ")
+    assert _answer(model, "c2").text.startswith("Saved big.p1-200.txt (text, ")
 
 
 def test_an_agent_not_granted_pdf_text_is_not_told_to_call_it(cfg, session_dir):
