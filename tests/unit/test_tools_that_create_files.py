@@ -18,7 +18,7 @@ import pytest
 from kingfisher import backend_at
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
-from tests.conftest import on_backend, repository_root
+from tests.conftest import a_pdf, on_backend, repository_root
 
 SALES = (
     "region,sales\n"
@@ -32,6 +32,9 @@ SALES = (
     "offshore,n/a\n"
 )
 
+#: Three pages, the second with no text on it, as a scanned page has none.
+REPORT = a_pdf("Revenue rose", "", "Costs fell")
+
 #: Each tool, the arguments of one ordinary call, where it saves when not told, and a
 #: `save_as` to tell it.
 CALLS = {
@@ -44,6 +47,11 @@ CALLS = {
         {"file_path": "/inputs/sales.csv", "column": "region", "value": "north"},
         "/outputs/filtered.csv",
         "/scratchpad/north.csv",
+    ),
+    "pdf_text": (
+        {"file_path": "/inputs/report.pdf"},
+        "/scratchpad/report.p1-3.txt",
+        "/scratchpad/try1.txt",
     ),
 }
 
@@ -60,8 +68,9 @@ def tools(shipped):
 
 @pytest.fixture
 def handed(cfg, session_dir, fake_model):
-    """The backend a turn hands its tools, with `SALES` in `/inputs` to work from."""
+    """The backend a turn hands its tools, with `SALES` and `REPORT` in `/inputs`."""
     (session_dir / "inputs" / "sales.csv").write_text(SALES, encoding="utf-8")
+    (session_dir / "inputs" / "report.pdf").write_bytes(REPORT)
     return build_agent(cfg, backend=backend_at(cfg, session_dir), model=fake_model).context.backend
 
 
@@ -111,6 +120,7 @@ def test_a_refused_target_is_a_failure_and_nothing_is_written(name, tools, hande
 @pytest.mark.parametrize(("name", "kind", "unit"), [
     ("bar_chart", "SVG image", "KB"),
     ("csv_filter", "CSV", "B"),
+    ("pdf_text", "text", "B"),
 ])
 def test_the_result_is_one_line_naming_the_file_its_kind_size_and_place(
     name, kind, unit, tools, handed
@@ -131,7 +141,7 @@ def test_the_result_is_one_line_naming_the_file_its_kind_size_and_place(
         kind,
         default,
     )
-    # Both units, one per tool: the chart is past a kilobyte and the filtered rows are not.
+    # Both units: the chart is past a kilobyte and the others are not.
     assert found["unit"] == unit
     shown = f"{len(data) / 1024:.1f}" if unit == "KB" else str(len(data))
     assert found["size"] == shown
@@ -186,6 +196,74 @@ def test_the_filter_keeps_exactly_the_rows_whose_cell_equals_the_value(tools, ha
     ]
     assert "2 of 6 rows" in said
 
+
+def test_the_text_holds_each_page_asked_for_under_its_own_number(tools, handed, session_dir):
+    """Counted from zero, each page's text sits under the number before it, and the
+    agent quotes page 4 as page 3.
+    """
+    (session_dir / "inputs" / "long.pdf").write_bytes(a_pdf("one", "two", "three", "four", "five"))
+
+    said = on_backend(tools["pdf_text"], handed, file_path="/inputs/long.pdf", pages="2-3,5")
+
+    assert _saved(handed, "/scratchpad/long.p2-3_5.txt") == (
+        b"--- page 2 ---\ntwo\n--- page 3 ---\nthree\n--- page 5 ---\nfive\n"
+    )
+    assert "pages 2-3, 5 of 5" in said
+
+
+def test_pages_past_the_cap_are_named_as_left_out(tools, handed, session_dir):
+    """A cut that says nothing reads as the end of the document."""
+    cap = tools["pdf_text"].func.__globals__["MAX_PAGES"]
+    texts = [f"p{n}" for n in range(1, cap + 4)]
+    (session_dir / "inputs" / "long.pdf").write_bytes(a_pdf(*texts))
+
+    said = on_backend(
+        tools["pdf_text"], handed, file_path="/inputs/long.pdf", pages=f"1-{cap + 3}"
+    )
+
+    left = f"at most {cap} a call, so {cap + 1}-{cap + 3} left out"
+    assert f"pages 1-{cap} of {cap + 3}; {left}" in said
+    saved = _saved(handed, f"/scratchpad/long.p1-{cap}.txt")
+    assert saved is not None
+    assert f"--- page {cap} ---" in saved.decode()
+    assert f"--- page {cap + 1} ---" not in saved.decode()
+
+
+def test_a_page_with_no_text_is_named(tools, handed):
+    """A scanned page saved as an empty section is believed to say nothing."""
+    said = on_backend(tools["pdf_text"], handed, file_path="/inputs/report.pdf")
+
+    assert said.endswith("— pages 1-3 of 3; no text on 2")
+
+
+@pytest.mark.parametrize(("pages", "says"), [
+    ("4-9", "has 3 page(s); pages '4-9' names none of them"),
+    ("0", "has 3 page(s); pages '0' names none of them"),
+    ("first", "pages 'first': write page numbers and ranges"),
+])
+def test_pages_that_name_no_page_of_the_document_are_a_failure(pages, says, tools, handed):
+    """Page 0 taken as the list's last page, or a range past the end saved as an empty
+    file, each answers "Saved" for text the document does not hold there.
+    """
+    with pytest.raises(ValueError, match=re.escape(says)):
+        on_backend(tools["pdf_text"], handed, file_path="/inputs/report.pdf", pages=pages)
+
+
+def test_a_file_that_is_not_a_pdf_is_a_failure_naming_it(tools, handed, session_dir):
+    """pdfminer's own words name neither the file nor what went wrong with it."""
+    (session_dir / "inputs" / "notes.pdf").write_text("plain text\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"^/inputs/notes\.pdf: not a PDF this tool can read"):
+        on_backend(tools["pdf_text"], handed, file_path="/inputs/notes.pdf")
+
+
+def test_two_ranges_left_to_the_default_land_in_two_files(tools, handed):
+    """One default name for every range would leave only the last range read."""
+    on_backend(tools["pdf_text"], handed, file_path="/inputs/report.pdf", pages="1")
+    on_backend(tools["pdf_text"], handed, file_path="/inputs/report.pdf", pages="3")
+
+    assert _saved(handed, "/scratchpad/report.p1.txt") == b"--- page 1 ---\nRevenue rose\n"
+    assert _saved(handed, "/scratchpad/report.p3.txt") == b"--- page 3 ---\nCosts fell\n"
 
 def test_a_file_already_at_the_target_is_replaced(tools, handed):
     """A tool that refused a taken default would fail every second call that left

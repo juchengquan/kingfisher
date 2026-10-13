@@ -244,6 +244,20 @@ for the next reader who reaches for one.*
   `summarised` mark rests on this, and
   `test_a_turn_says_on_its_closing_line_whether_it_ended_summarised` holds it.
   *(2026-10-12, deepagents 0.7.6.)*
+- **A PDF reaches the model whole, and is counted at a quarter of its base64.**
+  `read_file` returns a PDF as one `file` block whatever `offset` and `limit` say:
+  `FilesystemBackend.read` base64-encodes the whole file for any extension in its
+  media list, and the tool's description tells the model paging is text-only.
+  `count_tokens_approximately` scores an image block at a flat 85 tokens and any
+  other block at its `repr` over four, so a 0.5 MB PDF counts as 174,790 tokens and
+  a 2 MB one as 699,078. A model with no profile -- MiniMax-M3 through
+  `ChatAnthropic` has none -- gets a flat 170,000-token trigger and a `keep` of six
+  messages, so one such read trips the summarizer with the PDF as the newest
+  message, which it keeps. `ContextOverflowError` is caught only around the call
+  made when the summarizer does *not* fire, so the call carrying the summary and the
+  PDF has no retry; and where the catch does run, it cuts a `read_file` result to
+  its text blocks -- none, for a PDF -- and tells the model to page with `offset`
+  and `limit`. *(2026-10-13, deepagents 0.7.6, langchain-core 1.5.5.)*
 
 ## Skills and subagents
 

@@ -183,9 +183,20 @@ def test_every_preset_tool_loads(shipped):
         # And a class, which is the third. See below.
         "sql_explain",
         "web_search",
-        # The two that make a file and answer with where it went.
-        "bar_chart", "csv_filter",
+        # The three that make a file and answer with where it went.
+        "bar_chart", "csv_filter", "pdf_text",
     }
+
+
+def test_the_preset_tools_load_where_pdfplumber_is_not_installed(shipped, monkeypatch):
+    """The wheel does not carry pdfplumber, and one tool file that fails to import
+    refuses every tool in the workspace -- so `pdf_text` may import it only when called.
+    """
+    monkeypatch.setitem(sys.modules, "pdfplumber", None)
+
+    tools = LocalToolRepository(shipped / "tools").tools
+
+    assert "pdf_text" in {tool_name(t) for t in tools}
 
 
 def test_the_shipped_set_shows_all_three_tool_shapes(shipped):
@@ -1916,13 +1927,14 @@ def test_every_shipped_file_tool_works_on_a_backend_with_nothing_on_this_host(sh
     )
 
     from kingfisher.kinds.tools.catalogue import LocalToolRepository
-    from tests.conftest import on_backend
+    from tests.conftest import a_pdf, on_backend
 
     held = {
         "/inputs/rows.csv": b"region,sales\nnorth,10\nsouth,\n",
         "/inputs/app.log": b"2026-09-01T14:17:40 ERROR queue full\n",
         "/inputs/access.log": b'1.2.3.4 - - [x] "GET / HTTP/1.1" 503 17\n',
         "/inputs/config.ini": b"api_key = sk-live-123\n",
+        "/inputs/report.pdf": a_pdf("alpha", "beta"),
     }
 
     class Remote(BackendProtocol):
@@ -1952,6 +1964,7 @@ def test_every_shipped_file_tool_works_on_a_backend_with_nothing_on_this_host(sh
         "mask_secrets": {"file_path": "/inputs/config.ini"},
         "bar_chart": {"file_path": "/inputs/rows.csv"},
         "csv_filter": {"file_path": "/inputs/rows.csv", "column": "region", "value": "north"},
+        "pdf_text": {"file_path": "/inputs/report.pdf"},
     }
 
     answers = {name: on_backend(found[name], Remote(), **args) for name, args in asked.items()}
@@ -1963,3 +1976,6 @@ def test_every_shipped_file_tool_works_on_a_backend_with_nothing_on_this_host(sh
     assert "sk-live-123" not in answers["mask_secrets"]
     assert held["/outputs/chart.svg"].startswith(b"<svg ")
     assert held["/outputs/filtered.csv"] == b"region,sales\nnorth,10\n"
+    assert held["/scratchpad/report.p1-2.txt"] == (
+        b"--- page 1 ---\nalpha\n--- page 2 ---\nbeta\n"
+    )
