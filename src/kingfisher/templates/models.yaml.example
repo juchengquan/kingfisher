@@ -94,6 +94,15 @@ default: MiniMax-M3
 #   extra        forwarded as kwargs, for settings peculiar to one endpoint.
 #                Additive only -- it may not name any of the above.
 #
+#                `profile:` under it is what the model can take: its context
+#                window as `max_input_tokens`, and `pdf_inputs: false` for one
+#                that cannot read a PDF. deepagents' summarizer sizes itself
+#                from the window, and with none summarizes at 170,000 tokens
+#                keeping six messages, whatever the model can hold. langchain
+#                knows the profiles of the models it ships; a profile here
+#                replaces that one whole, so on such a model write every field
+#                you mean to keep.
+#
 # A key this format does not define is refused, not ignored. `max_token:`
 # singular would otherwise parse, be dropped, and hand back the default with no
 # error anywhere.
@@ -101,6 +110,10 @@ models:
   MiniMax-M3:
     endpoint: minimax
     max_tokens: 4096
+    # langchain has no profile for MiniMax, so this is the only word on its window.
+    extra:
+      profile:
+        max_input_tokens: 1000000
 
   # Several models behind one gateway is the ordinary case, and the reason
   # endpoints and models are separate tables: move the gateway and you edit one

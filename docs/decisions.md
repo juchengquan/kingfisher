@@ -1911,6 +1911,20 @@ is said rather than silent, so `seed` places `keys.yaml.example` beside
 it out. What every rule here leans on is measured in `guides/configuration.md`, under
 *What each fence hides*. *(2026-10-11, `where-the-command-line-keeps-its-keys.md`.)*
 
+**A model's window is declared under `extra: profile:`, not as a key of its own.**
+`profile` is a constructor argument of every langchain chat model, and `extra` is
+where a row hands its class what this format does not define, so it reached the
+model before anything here changed; a `max_input_tokens:` beside `max_tokens` would
+be a second spelling of one argument. The shipped template sets it on `MiniMax-M3`,
+which langchain has no profile for, and where deepagents' summarizer otherwise
+falls back to 170,000 tokens and six messages on a 1M window.
+
+A profile given there replaces the one langchain has for a model rather than adding
+to it, and the template says so where it explains `profile:`. Merging was the
+alternative: taking `profile` out of `extra` and setting it once the class has
+filled in its own -- a special case in `build_model` for a model no shipped row
+declares a profile on. *(2026-10-13.)*
+
 ## What a tool returns
 
 **A workspace tool's return type is langchain's rule, and kingfisher adds none.**
