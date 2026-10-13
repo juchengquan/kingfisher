@@ -32,9 +32,14 @@ _log = logging.getLogger(__name__)
 #: calls made together on -- measured, and recorded in `findings.md`.
 RUN: ContextVar[str | None] = ContextVar("kingfisher_ledger_run", default=None)
 
-#: deepagents' file tools. What they read or write is a file already, and a row for
-#: each would bury the rest. `execute` is not among them.
-UNRECORDED = frozenset({"ls", "glob", "grep", "read_file", "write_file", "edit_file", "delete"})
+#: What a row would bury the rest of the ledger to say. deepagents' file tools, whose
+#: reads and writes are a file already; and `write_todos`, which rewrites one list the
+#: conversation already carries -- three updates and one real search made three of the
+#: four delta lines a todo list, each repeating it in `args` as well. `execute` is not
+#: among them: what a command did is exactly what a later turn wants to read back.
+UNRECORDED = frozenset({
+    "ls", "glob", "grep", "read_file", "write_file", "edit_file", "delete", "write_todos",
+})
 
 #: How much of one argument, and of a result's first line, a row keeps.
 ARG_LIMIT = 60
