@@ -399,6 +399,9 @@ def resume_payload(answers: Iterable[Decision], pending: Iterable[PendingDecisio
         raise DecisionError(msg)
 
     grouped: dict[str, list[Any]] = {}
+    # Back into the order the gate asked in: langgraph matches `decisions` to its own
+    # `action_requests` by position and never reads an id off one, so answers left in
+    # the caller's order carry out the approval on the call they rejected.
     for call_id, answer in sorted(
         answered.items(), key=lambda pair: int(pair[0].rsplit(CALL_SEPARATOR, 1)[1])
     ):
