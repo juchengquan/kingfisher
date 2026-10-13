@@ -2007,6 +2007,33 @@ every sandbox and beside every other turn. pdfminer is Python; pdfplumber's
 The cap keeps one call bounded however long the report, and the answer names the
 pages it left out. *(2026-10-13.)*
 
+**A PDF over 256 KB in a tool's result reaches the model as advice instead.**
+`LargePdfGuard`, in `tool_guards` on every graph kingfisher builds, swaps the block
+for a line saying how large the PDF is and why it was not handed over, and marks the
+call an error when nothing else came back. 256 KB because one PDF of about 500 KB
+springs the summarizer's trap on a model with no profile, and half leaves room for
+the conversation around it. Bytes rather than pages: they are what the summarizer
+counts, and pages would mean parsing every PDF a tool returns, in kingfisher's
+process, to decide whether to pass it on.
+
+**Every tool's result, not `read_file`'s.** A workspace tool returning a PDF block
+would step around a guard on one tool's name, and the check is a size on a block,
+the same whoever returned it.
+
+**It names `pdf_text` only where the model is offered it.** `tool_guards` is handed
+every tool the workspace defines, granted or not, so advice read off those names
+told an agent granted none of them to call one it does not hold. The guard reads the
+tools off the model's own request instead, which is exact because a graph is built
+from its granted tools only. A call replayed on a resume follows no model call, and
+gets the advice with no tool named.
+
+**What it leaves.** A PDF small in bytes and long in pages still goes whole, and the
+provider counts it by the page. A subagent the workspace compiled itself is run as
+given, with no middleware of kingfisher's, so its own `read_file` is unguarded. A
+`Command` passes untouched; `read_file` returns one only for a video. And other
+blocks the summarizer counts by their base64 -- a `.pptx` `file` block, audio -- are
+left as they come, for whoever first meets a large one. *(2026-10-13.)*
+
 ## What a turn's tools returned
 
 **Every tool result the model is handed is recorded, kept as a file and given an id,

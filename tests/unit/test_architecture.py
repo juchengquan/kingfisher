@@ -2249,6 +2249,7 @@ SDK_LOADING: frozenset[str] = frozenset({
     # are what those are built on and name no runtime class, which is what keeps
     # `HostPathError` cheap for a backend author to import.
     "kingfisher.infrastructure.harness.middlewares.host_path_guard",
+    "kingfisher.infrastructure.harness.middlewares.large_pdf_guard",
     "kingfisher.infrastructure.harness.middlewares.narrowing",
     "kingfisher.infrastructure.harness.middlewares.recorder",
     "kingfisher.infrastructure.harness.middlewares.workspace_tools",

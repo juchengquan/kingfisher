@@ -535,7 +535,7 @@ def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session
     # It still carries the guards every graph holding workspace tools carries. This
     # asserted an empty list, which was the defect: deepagents hands this subagent the
     # agent's own tools, and it held them with nothing wrapped around them.
-    assert kinds == ["HostPathGuard"], kinds
+    assert kinds == ["HostPathGuard", "LargePdfGuard"], kinds
 
 
 # -- a tool name nothing offers -------------------------------------------
@@ -776,7 +776,7 @@ def test_every_graph_holding_the_workspace_tools_carries_the_same_guards(
     built = _audited_build(
         cfg, session_dir, subagents=("helper",), builtin_tools=("task",)
     )
-    guards = ["HostPathGuard", "WorkspaceToolErrors", "WorkspaceToolPaths"]
+    guards = ["HostPathGuard", "LargePdfGuard", "WorkspaceToolErrors", "WorkspaceToolPaths"]
 
     for where, stack in (
         ("the agent", built.middleware),
