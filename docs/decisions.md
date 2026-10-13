@@ -2144,12 +2144,15 @@ model's memory of it. Settled with the owner question by question and built in t
 slices; the owner's plan, *Artifact provenance for conversational agents*, is kept
 outside the repository and this is its first stage. *(2026-10-12.)*
 
-**What is recorded: every successful result but the file tools'.** `ls`, `glob`,
-`grep`, `read_file`, `write_file`, `edit_file` and `delete` touch what is a file
-already, and a row each would bury the rest; `execute`, `task`, workspace and MCP tools
-are recorded. A failed call has nothing worth finding again and the conversation shows
-it. A subagent's results are *working* entries under the parent's `task` call, nested
-helpers included, and its answer is a *main* one.
+**What is recorded: every successful result but the file tools' and `write_todos`.**
+`ls`, `glob`, `grep`, `read_file`, `write_file`, `edit_file` and `delete` touch what is
+a file already, and a row each would bury the rest. `write_todos` rewrites one list the
+conversation already carries, and sat in neither half of this sentence while being
+recorded: measured, three updates beside one real search made three of the four
+`<ledger_delta>` lines a todo list, each repeating the list in `args` as well.
+`execute`, `task`, workspace and MCP tools are recorded. A failed call has nothing worth
+finding again and the conversation shows it. A subagent's results are *working* entries
+under the parent's `task` call, nested helpers included, and its answer is a *main* one.
 
 **Middleware, not the stream.** The stream reaches further, to a compiled subagent's
 own calls, and needs no lock, but it can only watch, and the ledger changes the result:
@@ -2188,6 +2191,20 @@ and the call succeeds: failed, the model may make the call again and run the too
 outside the recorder, so at the end of the turn one `ls` of `large_tool_results/`
 repoints each entry whose call id is there, and kingfisher's copy goes in the sweep.
 deepagents' copy ends in the id. A nested helper has no eviction and keeps its own.
+
+**Never onto a path a row already names, though, and never twice in one turn.**
+deepagents names an eviction after the call id alone, with no turn in the name, and
+that folder outlasts the turn -- so an id a provider used twice pointed the second row
+at the first result's file, and the sweep then removed the copy that was right.
+Measured across two turns on one session: the row read `A-0002 web_search -> 32 B
+/scratchpad/large_tool_results/c1`, and reading it returned the previous turn's 101 KB.
+Every other call id here need only be unique within its turn -- a `PendingDecision` is
+answered by a `Resume` into the same paused turn -- and nothing asks a provider for
+more than that, so this is kingfisher's to detect rather than to require. A collision
+keeps our own copy, which is this call's whole result. What it cannot repair is the
+earlier row: where the second result is *also* evicted, deepagents has overwritten the
+file that row names, and only deepagents could have avoided that.
+*(2026-10-13, from an architecture review.)*
 
 **Result files, then the ledger, then the transcript, then a sweep.** In that order a
 row never names a missing file and a result the conversation shows always has a row;

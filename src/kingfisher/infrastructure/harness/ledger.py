@@ -86,7 +86,7 @@ def keep_ledger(
     row. The sweep comes after it, because a file it removes may be named by a row
     until the ledger is written.
     """
-    entries = yield from _repointed(files, ledger.entries)
+    entries = yield from _repointed(files, ledger.entries, ledger.earlier.paths)
     yield from write_ledger(
         harness,
         ledger.earlier,
@@ -109,12 +109,22 @@ def _offloaded_under(files: Any) -> str:
     return f"{root.rstrip('/')}/large_tool_results/"
 
 
-def _repointed(files: Any, entries: tuple[LedgerEntry, ...]) -> Steps[tuple[LedgerEntry, ...]]:
+def _repointed(
+    files: Any, entries: tuple[LedgerEntry, ...], claimed: frozenset[str] | set[str]
+) -> Steps[tuple[LedgerEntry, ...]]:
     """Each entry deepagents offloaded, pointed at its copy rather than ours.
 
     Asked here, once, because eviction runs outside the recorder and nothing it can
     see says whether a result will be. Our own copy is left to the sweep, which
     removes it once the ledger has stopped naming it.
+
+    Never onto a path a row already names, and never twice in one turn. deepagents
+    names an eviction `large_tool_results/<call id>` -- no turn in the name, and the
+    folder outlasts the turn -- so an id a provider used twice pointed the second row
+    at the first result's file, and the sweep then removed the copy that was right.
+    Every other call id here need only be unique within its turn, and nothing asks a
+    provider for more than that. A collision keeps our own copy instead, which is this
+    call's whole result rather than another call's.
     """
     if not entries:
         return entries
@@ -123,12 +133,16 @@ def _repointed(files: Any, entries: tuple[LedgerEntry, ...]) -> Steps[tuple[Ledg
     offloaded = {
         PurePosixPath(one["path"]).name for one in listing.entries or () if not one.get("is_dir")
     }
-    return tuple(
-        replace(entry, path=f"{under}{sanitize_tool_call_id(entry.call)}")
-        if sanitize_tool_call_id(entry.call) in offloaded
-        else entry
-        for entry in entries
-    )
+    taken = set(claimed)
+    pointed: list[LedgerEntry] = []
+    for entry in entries:
+        where = f"{under}{sanitize_tool_call_id(entry.call)}"
+        if sanitize_tool_call_id(entry.call) in offloaded and where not in taken:
+            taken.add(where)
+            pointed.append(replace(entry, path=where))
+        else:
+            pointed.append(entry)
+    return tuple(pointed)
 
 
 def _swept(files: Any, named: frozenset[str] | set[str]) -> Steps[None]:
