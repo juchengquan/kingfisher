@@ -110,12 +110,21 @@ def test_every_route_the_layout_declares_is_one_the_backend_mounts(cfg, session_
     )
 
 
-def test_the_deny_rules_are_the_two_the_layout_declares(cfg, session_dir):
+def test_the_deny_rules_are_the_ones_the_layout_declares(cfg, session_dir):
     """Pinned rather than derived twice."""
-    assert denied_scopes() == ("/.harness/**", "/inputs/**", "/skills/**")
+    assert denied_scopes() == (
+        "/.harness/**",
+        "/inputs/**",
+        "/scratchpad/tool_results/**",
+        "/skills/**",
+    )
     assert denied_read_scopes() == ("/.harness/**",)
     assert [p.paths for p in read_only_permissions()] == [
-        ["/.harness/**"], ["/inputs/**"], ["/skills/**"], ["/.harness/**"],
+        ["/.harness/**"],
+        ["/inputs/**"],
+        ["/scratchpad/tool_results/**"],
+        ["/skills/**"],
+        ["/.harness/**"],
     ]
     assert {p.mode for p in read_only_permissions()} == {"deny"}
     assert {tuple(p.operations) for p in read_only_permissions()} == {("write",), ("read",)}

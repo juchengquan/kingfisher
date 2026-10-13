@@ -386,14 +386,20 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     def recording(definition: object | None) -> Recorder | None:
         """A recorder for one graph, reading access off `definition`'s audiences.
 
-        One per graph, as every middleware here is, all into the turn's one ledger. It
-        saves through `under_rules`, so a result file is held to the rules a tool's own
-        save is.
+        One per graph, as every middleware here is, all into the turn's one ledger.
+
+        It saves through the turn's backend and not through `under_rules`, which is the
+        one place that distinction is wanted: the results folder is write-denied to the
+        file tools, and the recorder is what writes it. This said a result file was held
+        to the rules a tool's own save is, and under that reading the folder could not
+        be denied at all -- the deny reached the recorder first and no graph would
+        build. A deployment's own refusals still apply, since they live in the backend
+        underneath rather than in these rules, and `_unkept` is what reports one.
         """
         if ledger is None:
             return None
         audiences = Audiences.of(definition) if cfg.access is not None else None
-        return Recorder(ledger, under_rules, audiences)
+        return Recorder(ledger, backend, audiences)
 
     middleware: list[Any] = [TodoListMiddleware(), *tool_guards(guarded, paths, recording(agent))]
     extras: dict[str, Any] = {}

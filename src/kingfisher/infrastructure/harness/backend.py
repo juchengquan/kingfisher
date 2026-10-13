@@ -53,6 +53,8 @@ from kingfisher.layout import (
     SESSION_DIRS,
     SKILLS_ROUTE,
     SKILLS_VIEW,
+    TOOL_RESULTS,
+    TOOL_RESULTS_ROUTE,
     routed_paths,
 )
 
@@ -643,6 +645,13 @@ def backend_at(
         # the composite routes -- so the mount is what makes the refusal legal,
         # not a way in.
         HARNESS_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / HARNESS)),
+        # Mounted for the reason `.harness` is: a rule is only expressible against a
+        # path the composite routes, so the mount is what makes the refusal legal.
+        # Unlike `.harness` it is readable -- the agent is told to read a result back
+        # out of it -- and only writing is denied.
+        TOOL_RESULTS_ROUTE: lambda: FilesystemBackend(
+            root_dir=str(session_dir / SCRATCH / TOOL_RESULTS)
+        ),
     }
     missing = [path for path in routed_paths() if path not in backing]
     if missing:  # pragma: no cover -- a table edit, caught by its own test
