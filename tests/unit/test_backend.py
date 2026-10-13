@@ -11,7 +11,11 @@ from kingfisher.infrastructure.harness.backend import (
     backend_at,
     shell_env,
 )
-from kingfisher.infrastructure.harness.host_paths import HostPathError, reject_host_path
+from kingfisher.infrastructure.harness.host_paths import (
+    HOST_ROOTS,
+    HostPathError,
+    reject_host_path,
+)
 from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
@@ -205,15 +209,38 @@ def test_the_refusal_names_the_path_that_was_meant(cfg, session_dir):
         backend.write(f"{session_dir}/scratchpad/report.md", "content")
 
 
+#: The prefixes a file tool must refuse, written here as well as in `HOST_ROOTS`, and
+#: on purpose. The rule below drives whatever that tuple holds, so it covers an entry
+#: added later -- and for the same reason it cannot notice one *removed*: deleting four
+#: of the eight deleted four of its cases and left it green. A deny-list's contents are
+#: the claim worth pinning, so they are claimed twice and compared.
+REFUSED_PREFIXES = frozenset({
+    "/Users/", "/home/", "/tmp/", "/private/", "/etc/", "/var/", "/usr/", "/opt/",
+})
+
+
+def test_the_host_roots_are_the_prefixes_this_repository_says_they_are():
+    """So a prefix dropped from the tuple fails here rather than quietly removing the
+    case that would have caught it.
+    """
+    assert set(HOST_ROOTS) == REFUSED_PREFIXES
+    assert all(root.startswith("/") and root.endswith("/") for root in HOST_ROOTS)
+
+
 def test_other_host_roots_are_refused_too(cfg, session_dir):
     """`/tmp/scratch.py` is the example system.md warns about by name.
 
-    One backend for all four: every case refuses, so nothing is written and no
+    One backend for all of them: every case refuses, so nothing is written and no
     iteration can leave anything for the next.
+
+    Over `HOST_ROOTS` itself rather than a list written beside it. Four of the eight
+    were driven, and deleting the other four -- `/home/`, `/private/`, `/usr/` and
+    `/opt/` -- left the suite green, with `/usr/local/share/notes.md` then written into
+    a mirror of the host tree inside the session.
     """
     backend = backend_at(cfg, session_dir)
 
-    for host_path in ("/tmp/scratch.py", "/Users/someone/notes.md", "/etc/passwd", "/var/log/x"):
+    for host_path in [f"{root}probe.md" for root in HOST_ROOTS]:
         with pytest.raises(ValueError, match="is a host path") as refused:
             backend.write(host_path, "content")
 
