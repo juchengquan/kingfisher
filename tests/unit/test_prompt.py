@@ -11,7 +11,7 @@ from kingfisher.infrastructure.prompting import (
     system_prompt,
 )
 from kingfisher.infrastructure.session_store import entry_id
-from kingfisher.layout import INPUTS, OUTPUTS, RESULTS_ROUTE, SCRATCH
+from kingfisher.layout import INPUTS, OUTPUTS, SCRATCH, TOOL_RESULTS_ROUTE
 from tests.conftest import a_subagent
 
 
@@ -88,7 +88,7 @@ def test_the_prompt_names_a_recorded_result_as_the_ledger_does():
     """
     text = render_system_prompt()
 
-    assert f"`{RESULTS_ROUTE}`" in text
+    assert f"`{TOOL_RESULTS_ROUTE}`" in text
     assert f"`[{entry_id(42)}]`" in text
     for block in (ledger_delta(()), ledger_index(())):
         assert f"`{block.splitlines()[0]}`" in text

@@ -41,10 +41,10 @@ from kingfisher.layout import (
     HARNESS,
     LEDGER_FILE,
     PAUSED_STATE,
-    RESULTS,
-    RESULTS_ROUTE,
     SCRATCH,
     SCRATCH_ROUTE,
+    TOOL_RESULTS,
+    TOOL_RESULTS_ROUTE,
     TRANSCRIPT_FILE,
 )
 from tests.conftest import FakeToolCallingModel, an_agent, start, subagents_dir, tools_dir
@@ -145,8 +145,8 @@ def _rows(cfg) -> list[dict[str, Any]]:
 
 
 def _kept(cfg) -> list[str]:
-    """What the results folder holds, by name."""
-    folder = _session(cfg) / SCRATCH / RESULTS
+    """What the tool results folder holds, by name."""
+    folder = _session(cfg) / SCRATCH / TOOL_RESULTS
     return sorted(one.name for one in folder.iterdir()) if folder.exists() else []
 
 
@@ -174,7 +174,7 @@ def test_a_result_is_recorded_kept_and_handed_to_the_caller(ledgered):
     assert entry.turn == result.turn_id
     assert entry.args == "query='EV price war'"
     assert entry.summary == "web_search query='EV price war' -- Ten results for EV price war"
-    assert entry.path == "/scratchpad/results/A-0001-web_search.txt"
+    assert entry.path == "/scratchpad/tool_results/A-0001-web_search.txt"
     assert _read(ledgered, entry.path) == "Ten results for EV price war\n1. one\n2. two"
     assert entry.size == len(_read(ledgered, entry.path).encode("utf-8"))
     assert entry.access is None, "no source_ids.yaml is in force"
@@ -191,7 +191,7 @@ def test_a_result_that_is_json_is_kept_as_json(ledgered):
     )
 
     (entry,) = result.ledger
-    assert entry.path == "/scratchpad/results/A-0001-sql_query.json"
+    assert entry.path == "/scratchpad/tool_results/A-0001-sql_query.json"
     assert json.loads(_read(ledgered, entry.path)) == {"rows": [[1, "a"], [2, "b"]]}
 
 
@@ -294,7 +294,7 @@ def test_a_failed_call_is_not_recorded(ledgered):
     assert _kept(ledgered) == ["A-0001-web_search.txt"]
 
 
-def test_a_tool_name_is_one_path_segment_in_the_results_folder(ledgered):
+def test_a_tool_name_is_one_path_segment_in_the_tool_results_folder(ledgered):
     """A tool's name is somebody else's spelling, and one written with slashes would
     put its result outside the folder the sweep and the agent look in.
     """
@@ -311,7 +311,7 @@ def test_a_tool_name_is_one_path_segment_in_the_results_folder(ledgered):
     result = _run(ledgered, _calls(("../../up.and/away", {}, "c1")), AIMessage(content="done"))
 
     (entry,) = result.ledger
-    assert entry.path == "/scratchpad/results/A-0001-up_and_away.txt"
+    assert entry.path == "/scratchpad/tool_results/A-0001-up_and_away.txt"
     assert _kept(ledgered) == ["A-0001-up_and_away.txt"]
 
 
@@ -334,7 +334,7 @@ def test_a_tool_whose_name_is_all_punctuation_still_gets_a_named_file(ledgered):
     result = _run(ledgered, _calls(("***", {}, "c1")), AIMessage(content="done"))
 
     (entry,) = result.ledger
-    assert entry.path == "/scratchpad/results/A-0001-tool.txt"
+    assert entry.path == "/scratchpad/tool_results/A-0001-tool.txt"
     assert _kept(ledgered) == ["A-0001-tool.txt"]
 
 
@@ -490,13 +490,17 @@ def test_what_the_agent_writes_beside_the_results_is_left_alone(ledgered):
         ledgered,
         _calls(
             ("web_search", {"query": "EV"}, "c1"),
-            ("write_file", {"file_path": f"{RESULTS_ROUTE}notes.md", "content": "mine\n"}, "c2"),
+            (
+                "write_file",
+                {"file_path": f"{TOOL_RESULTS_ROUTE}notes.md", "content": "mine\n"},
+                "c2",
+            ),
         ),
         AIMessage(content="done"),
     )
 
     assert _kept(ledgered) == ["A-0001-web_search.txt", "notes.md"]
-    assert _read(ledgered, f"{RESULTS_ROUTE}notes.md") == "mine\n", (
+    assert _read(ledgered, f"{TOOL_RESULTS_ROUTE}notes.md") == "mine\n", (
         "the write was refused rather than swept, which is a different decision"
     )
 
@@ -505,7 +509,7 @@ def test_a_result_file_no_row_names_is_swept(ledgered):
     """A turn that died before writing its rows leaves its files behind, and nothing
     else would ever remove them.
     """
-    stray = _session(ledgered) / SCRATCH / RESULTS / "A-0007-web_search.txt"
+    stray = _session(ledgered) / SCRATCH / TOOL_RESULTS / "A-0007-web_search.txt"
     stray.parent.mkdir(parents=True)
     stray.write_text("from a turn that died", encoding="utf-8")
     _run(ledgered, _calls(("web_search", {"query": "EV"}, "c1")), AIMessage(content="done"))
@@ -519,14 +523,14 @@ def test_a_result_file_no_row_names_is_swept(ledgered):
 
 
 class _Refusing(DefaultBackends):
-    """Kingfisher's own backends, refusing every file under the results folder."""
+    """Kingfisher's own backends, refusing every file under the tool results folder."""
 
     def open(self, cfg, session_id, /, *, catalogue=None):
         opened = super().open(cfg, session_id, catalogue=catalogue)
         upload = opened.upload_files
 
         def refused(files):
-            if any(path.startswith(f"/{SCRATCH}/{RESULTS}/") for path, _ in files):
+            if any(path.startswith(f"/{SCRATCH}/{TOOL_RESULTS}/") for path, _ in files):
                 return [FileUploadResponse(path=p, error="permission_denied") for p, _ in files]
             return upload(files)
 
@@ -1040,7 +1044,7 @@ def _entry(  # noqa: PLR0913 -- one keyword for each field the delta reads
         args=args,
         access=None,
         size=size,
-        path=f"/scratchpad/results/{at}-{tool}.txt" if kept else None,
+        path=f"/scratchpad/tool_results/{at}-{tool}.txt" if kept else None,
         summary=tool,
     )
 
@@ -1071,12 +1075,12 @@ def test_a_subagents_entries_sit_under_its_answer_and_unanswered_ones_follow_the
 
     assert shown.splitlines() == [
         "<ledger_delta>",
-        "A-0001 search query='EV' -> 14 KB  /scratchpad/results/A-0001-search.txt",
-        "A-0005 task subagent_type='researcher' -> 2 KB  /scratchpad/results/A-0005-task.txt",
-        "  A-0002 fetch url='https://x' -> 30 KB  /scratchpad/results/A-0002-fetch.txt",
-        "  A-0004 sql query='select 1' -> 6 KB  /scratchpad/results/A-0004-sql.txt",
+        "A-0001 search query='EV' -> 14 KB  /scratchpad/tool_results/A-0001-search.txt",
+        "A-0005 task subagent_type='researcher' -> 2 KB  /scratchpad/tool_results/A-0005-task.txt",
+        "  A-0002 fetch url='https://x' -> 30 KB  /scratchpad/tool_results/A-0002-fetch.txt",
+        "  A-0004 sql query='select 1' -> 6 KB  /scratchpad/tool_results/A-0004-sql.txt",
         "A-0006 loud -> 99 KB  not kept",
-        "A-0003 search query='BYD' -> 100 B  /scratchpad/results/A-0003-search.txt"
+        "A-0003 search query='BYD' -> 100 B  /scratchpad/tool_results/A-0003-search.txt"
         "  (its task never answered)",
         "</ledger_delta>",
     ]
@@ -1101,7 +1105,7 @@ def test_a_size_is_shown_in_the_unit_it_has_reached(size, shown):
     """
     (line,) = ledger_delta([_entry(1, "search", size=size)]).splitlines()[1:-1]
 
-    assert line == f"A-0001 search -> {shown}  /scratchpad/results/A-0001-search.txt"
+    assert line == f"A-0001 search -> {shown}  /scratchpad/tool_results/A-0001-search.txt"
 
 
 def test_the_delta_follows_what_the_turn_message_already_said():
@@ -1114,7 +1118,7 @@ def test_the_delta_follows_what_the_turn_message_already_said():
         "go\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
         " New files in /inputs/: a.txt.\n\n"
         "<ledger_delta>\n"
-        "A-0001 search -> 100 B  /scratchpad/results/A-0001-search.txt\n"
+        "A-0001 search -> 100 B  /scratchpad/tool_results/A-0001-search.txt\n"
         "</ledger_delta>"
     )
 
@@ -1426,7 +1430,7 @@ def _one_each(*numbers: int) -> list[tuple[LedgerEntry, ...]]:
 def _full(*numbers: int) -> list[str]:
     """Those searches, each as the delta lists it."""
     return [
-        f"{entry_id(n)} search -> 100 B  /scratchpad/results/{entry_id(n)}-search.txt"
+        f"{entry_id(n)} search -> 100 B  /scratchpad/tool_results/{entry_id(n)}-search.txt"
         for n in numbers
     ]
 
@@ -1547,7 +1551,7 @@ def test_an_older_results_file_is_found_by_its_id_as_the_prompt_says(ledgered):
         AIMessage(content="done"),
     )
     kept, offloaded = (next(e for e in first.ledger if e.tool == t) for t in ("web_search", "loud"))
-    assert kept.path.startswith(RESULTS_ROUTE), "the control: the search was not kept"
+    assert kept.path.startswith(TOOL_RESULTS_ROUTE), "the control: the search was not kept"
     assert offloaded.path == f"{SCRATCH_ROUTE}large_tool_results/c2", "the control: not offloaded"
 
     example = entry_id(42)

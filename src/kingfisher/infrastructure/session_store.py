@@ -141,7 +141,7 @@ _RESULT_FILE = re.compile(_ENTRY_ID.pattern)
 
 
 def names_a_result(name: str) -> bool:
-    """Whether a file in the results folder is one a recorder wrote.
+    """Whether a file in the tool results folder is one a recorder wrote.
 
     The agent writes in that folder too -- it reads its own results back out of it and
     `prompts/system.md` sends it there -- so the sweep cannot treat everything it finds
