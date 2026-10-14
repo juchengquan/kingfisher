@@ -103,13 +103,20 @@ class NarrowedSkills(SkillsMiddleware):
     # parameter is not a `RunnableConfig`. Nothing here reads it -- deepagents'
     # own hooks carry the same unused argument -- but a warning per agent built
     # is a warning nobody reads by the tenth one.
+    # Asked as deepagents asks it, `is not None` rather than `in`: the channel is in
+    # the graph's input schema and `None` there *requests a reload*, which the library
+    # documents as the way to pick up a skill added since the last turn. Read as
+    # "already loaded", a reload request skipped the load and `modify_request`'s
+    # `state.get(...) or []` then handed a request that activated skills an empty
+    # index. Not reachable through `Kingfisher.run`, which builds its own input --
+    # reachable by a deployment driving the graph, which is what `graph=` is for.
     def before_agent(self, state: Any, runtime: Any, config: RunnableConfig) -> Any:  # noqa: ARG002
-        if "skills_metadata" in state:
+        if state.get("skills_metadata") is not None:
             return None
         return {"skills_metadata": self._qualified()}
 
     async def abefore_agent(self, state: Any, runtime: Any, config: RunnableConfig) -> Any:  # noqa: ARG002
-        if "skills_metadata" in state:
+        if state.get("skills_metadata") is not None:
             return None
         return {"skills_metadata": await self._aqualified()}
 

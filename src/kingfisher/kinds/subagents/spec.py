@@ -228,6 +228,17 @@ NOT_COMPILED: Mapping[str, str] = MappingProxyType(
             "one is already built, so naming middleware here would be a line "
             "that does nothing"
         ),
+        # The two `CompiledSubAgent` keys this format does not take. Both were refused
+        # as merely unknown until a rule read the live TypedDict and said so: `mode`
+        # arrived in deepagents 0.7.22 and was met for a portable declaration and not
+        # here, which is what asking only one of the two tables looks like.
+        "mode": REFUSED["mode"],
+        "runnable": (
+            "a compiled subagent's graph reaches kingfisher through `build`, which is "
+            "called with the model and the tools this request allows -- a `runnable` "
+            "is a graph assembled before any of that was known, so there would be "
+            "nothing to narrow it against"
+        ),
         "subagents": (
             "delegation reaches a subagent through the `task` tool its own "
             "middleware supplies, and a compiled graph is given no middleware. "

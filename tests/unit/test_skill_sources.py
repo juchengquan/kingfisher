@@ -185,6 +185,36 @@ def test_two_sources_that_both_load_are_reported_as_missing_nothing(cfg):
 # -- the two loaders, which do not delegate --------------------------------
 
 
+def test_a_reload_request_is_not_read_as_already_loaded(cfg, session_dir):
+    """deepagents puts `skills_metadata` in the graph's input schema and documents
+    `None` there as a request to load the skills again -- for a skill added since the
+    last turn. Asked with `in`, that reads as "already loaded", so the load is skipped
+    and `modify_request`'s `state.get(...) or []` hands a request that activated skills
+    an empty index.
+
+    Both spellings, and a loaded index beside them: every call site in this suite
+    passes `{}`, where the branch is not reached at all.
+    """
+    _two_parties(cfg)
+    backend = backend_at(replace(cfg, skills_enabled=True), session_dir)
+    middleware = NarrowedSkills(
+        allowed=("research::lookup",),
+        backend=backend,
+        sources=skills_sources(("research", "legal")),
+    )
+
+    first_load = middleware.before_agent({}, None, {})
+    asked_again = middleware.before_agent({"skills_metadata": None}, None, {})
+    asked_again_async = asyncio.run(middleware.abefore_agent({"skills_metadata": None}, None, {}))
+    already = middleware.before_agent({"skills_metadata": [{"name": "lookup"}]}, None, {})
+
+    assert first_load is not None and first_load["skills_metadata"], "nothing loaded at all"
+    for loaded in (asked_again, asked_again_async):
+        assert loaded is not None, "a reload request was read as already loaded"
+        assert loaded["skills_metadata"] == first_load["skills_metadata"]
+    assert already is None, "an index that is there was loaded a second time"
+
+
 def test_the_async_loader_agrees_with_the_sync_one(cfg, session_dir):
     """`before_agent` and `abefore_agent` each build their own dictionary -- neither
     calls the other -- so overriding one leaves the other collapsing.

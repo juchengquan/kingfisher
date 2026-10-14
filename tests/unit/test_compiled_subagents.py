@@ -9,7 +9,13 @@ from kingfisher import backend_at
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
-from kingfisher.kinds.subagents.spec import EXPORT, NOT_COMPILED, SubagentError, declared
+from kingfisher.kinds.subagents.spec import (
+    DECLARED,
+    EXPORT,
+    NOT_COMPILED,
+    SubagentError,
+    declared,
+)
 from tests.conftest import FakeToolCallingModel, declared_subagents
 
 COMPILED = '''"""A subagent the workspace assembled."""
@@ -187,6 +193,44 @@ def test_a_key_deepagents_would_ignore_is_refused_with_its_reason():
             declared(_entry(**{key: "x"}), "researcher.py")
 
         assert NOT_COMPILED[key] in str(raised.value)
+
+
+def test_every_key_deepagents_compiled_table_defines_is_taken_or_explained():
+    """Read off the live TypedDict, both directions.
+
+    The rule above walks `NOT_COMPILED` itself, so it cannot see a key that is *absent*
+    from the table -- and that is how `mode` was missed: deepagents 0.7.22 added it to
+    both of its TypedDicts, the portable table has an equality against them and met it,
+    this one had nothing and refused it as merely unknown. The two directions catch
+    different mistakes: a key an upgrade adds reaches a reader with the generic message,
+    and a reason for a key that is gone is one nobody can trigger.
+    """
+    from typing import get_type_hints
+
+    from deepagents import CompiledSubAgent
+
+    theirs = set(get_type_hints(CompiledSubAgent))
+
+    assert theirs, "deepagents' table is empty, so this rule is about nothing"
+    assert not theirs - DECLARED - set(NOT_COMPILED), (
+        f"{sorted(theirs - DECLARED - set(NOT_COMPILED))} are keys deepagents defines "
+        "that this format neither takes nor explains -- they reach a reader as merely "
+        "unknown"
+    )
+    stale = {k for k in NOT_COMPILED if k not in DECLARED and k not in theirs}
+    assert stale == _OURS, (
+        f"explained here but in neither table: {sorted(stale - _OURS)}; named here "
+        f"and no longer explained: {sorted(_OURS - stale)}"
+    )
+
+
+#: This format's own fields that a compiled declaration is refused, as against
+#: deepagents' keys. Written down rather than derived, because the rule above compares
+#: against the live TypedDict and these are not in it -- so a reason left behind for a
+#: key nobody can write has to fail against something, and the exact set is it.
+_OURS = frozenset({
+    "builtin_tools", "bundle", "middlewares", "skills", "subagents", "system_prompt",
+})
 
 
 def test_an_unknown_key_lists_what_the_format_takes():

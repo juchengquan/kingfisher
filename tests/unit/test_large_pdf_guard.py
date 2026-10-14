@@ -88,8 +88,13 @@ def _with_pdf_text(cfg) -> None:
 
 
 def test_a_large_pdf_read_whole_reaches_the_model_as_advice(cfg, session_dir):
-    """Handed over whole, one large PDF trips the summarizer, which keeps it and sends
-    it with no retry, and the turn ends on a context overflow.
+    """Handed over whole, one large PDF trips the summarizer, and what happens then is
+    worse than a refusal: 0.7.22 clips the overflow tail and calls again, and clipping a
+    PDF block to its text leaves nothing, so the model answers from an empty result
+    rather than saying it could not read the file.
+
+    This said the turn ended on a context overflow with no retry, which was true of
+    0.7.6 and was corrected in the guard itself by the upgrade -- and not here.
     """
     (session_dir / "inputs" / "big.pdf").write_bytes(LARGE)
     model = _calls(("read_file", {"file_path": "/inputs/big.pdf"}))
