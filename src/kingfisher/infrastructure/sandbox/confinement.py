@@ -30,7 +30,7 @@ from functools import partial
 from pathlib import Path
 
 from kingfisher.config import Config
-from kingfisher.layout import HARNESS, HARNESS_OWNED, SANDBOX_PROFILE
+from kingfisher.layout import HARNESS, HARNESS_OWNED, INPUTS, SANDBOX_PROFILE
 
 #: `landlock_create_ruleset`, which is 444 on every architecture that has it --
 #: the three Landlock calls were added to the syscall table in one go rather
@@ -396,7 +396,8 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     # contents, so the session's own work stays writable.
     lines.append(_sessions_denial(workspace))
     lines.append(f"(deny file-write* (path {_sb(itself)}))")
-    lines.append(_harness_denial(workspace))
+    for folder in (INPUTS, HARNESS):
+        lines.append(_session_folder_denial(workspace, folder))
     return "\n".join(lines) + "\n"
 
 
@@ -416,8 +417,8 @@ def _sessions_denial(workspace: Path) -> str:
 
 
 
-def _harness_denial(workspace: Path) -> str:
-    """Refuse every session's `.harness` at once: `sessions/*/.harness`.
+def _session_folder_denial(workspace: Path, folder: str) -> str:
+    """Refuse every session's `folder` at once: `sessions/*/<folder>`.
 
     A regex rather than one `subpath` per session, and that is what keeps the
     profile static. A profile naming the sessions that exist when it is written would
@@ -431,9 +432,15 @@ def _harness_denial(workspace: Path) -> str:
     `sessions/.harness` is matched too, by the optional segment, though no session's
     files are there: a shell that made it would leave a folder the listing reads as a
     session of its own.
+
+    Two folders ask for this. `.harness` is what kingfisher reads back and trusts, and
+    `inputs` is the caller's, which `layout.py` calls never re-derivable from the
+    workspace and which nothing versions. `inputs` had only its write bits dropped,
+    and the shell owns those files -- measured, `chmod u+w` then a write replaced the
+    caller's file, and `rm -rf inputs` took the folder.
     """
     root = re.escape(f"{Path(workspace).resolve()}/sessions/")
-    return f'(deny file-write* (regex #"^{root}([^/]+/)?{re.escape(HARNESS)}(/|$)"))'
+    return f'(deny file-write* (regex #"^{root}([^/]+/)?{re.escape(folder)}(/|$)"))'
 
 
 def _sb(path: Path) -> str:

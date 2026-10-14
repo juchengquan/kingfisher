@@ -16,8 +16,14 @@ from kingfisher.infrastructure.workspace import (
 
 
 def test_inputs_become_read_only_to_the_os(workspace):
-    """The layer the deny rule cannot provide: the kernel enforces this against
-    `execute` too, which tool-level permissions never covered.
+    """The mode bits, which is all this is: a write from a process holding no fence is
+    refused by the kernel.
+
+    It said the kernel enforces this against `execute` too. It does not, and this test
+    could not have shown either way -- it writes from the pytest process and never
+    calls `execute`. The shell runs as the uid that owns these files, so it lifts the
+    bits itself; what keeps `execute` out is a fence rule per mechanism, and
+    `test_the_shell_cannot_lift_the_bits_on_the_callers_inputs` is what drives that.
     """
     with writable_inputs(workspace) as inputs:
         (inputs / "input.csv").write_text("a,b\n1,2\n")

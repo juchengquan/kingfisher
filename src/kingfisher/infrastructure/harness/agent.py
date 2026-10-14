@@ -156,9 +156,15 @@ def read_only_permissions() -> list[FilesystemPermission]:
     `FilesystemMiddleware` at the tool level, so they cover `write_file`, `edit_file`
     and `delete` -- `FilesystemOperation` is read|write and delete maps to write --
     and `execute` bypasses them entirely. The other half of each rule is elsewhere
-    and neither half is sufficient: `infrastructure.workspace.permissions` drops the
-    write bits under `/inputs`, and `confinement.resolve` denies writes to the skills
-    directory in the sandbox profile, which is macOS-only and can be switched off.
+    and neither half is sufficient: `confinement.resolve` denies writes to the skills
+    directory in the sandbox profile, which is macOS-only and can be switched off, and
+    the three fences each refuse `/inputs` and `.harness` in their own terms.
+
+    `infrastructure.workspace.permissions` drops the write bits under `/inputs` as
+    well, and that is not the other half of this rule -- it is a layer below both. The
+    shell runs as the uid owning those files, so it lifts them: measured, `chmod u+w`
+    and the same write replaced the caller's file, and `rm -rf inputs` took the folder,
+    with this docstring naming the bits as what covered the case.
     """
     return [
         FilesystemPermission(operations=["write"], paths=[scope], mode="deny")

@@ -107,8 +107,15 @@ def test_the_shell_may_write_exactly_these_places_in_a_session(sandlock, tmp_pat
 
     assert set(policy.fs_writable) == {
         str(session / name)
-        for name in ("inputs", "outputs", "memory", "scratchpad")
+        for name in ("outputs", "memory", "scratchpad")
     }
+    # `inputs` is the caller's and is not among them. It was, with only its write bits
+    # between the shell and the file -- and the shell owns those, so `chmod u+w` then a
+    # write replaced the caller's file and `rm -rf inputs` took the folder.
+    assert str(session / "inputs") not in set(policy.fs_writable)
+    assert str(session / "inputs") in set(policy.fs_readable) or str(session) in set(
+        policy.fs_readable
+    ), "the caller's inputs have to stay readable"
 
 
 def test_the_session_stays_readable_even_though_it_is_not_writable(sandlock, tmp_path):

@@ -28,6 +28,7 @@ from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.sandbox.bubblewrap import BubblewrapRunner
 from kingfisher.infrastructure.sandbox.fence import LandlockRunner
 from kingfisher.infrastructure.workspace import ensure_layout, ensure_session_layout
+from kingfisher.layout import INPUTS_ROUTE
 
 macos = pytest.mark.skipif(
     platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
@@ -863,6 +864,33 @@ def test_the_shell_cannot_change_the_files_a_deployment_authors(cfg, session_dir
 
 
 @macos
+def test_the_shell_cannot_lift_the_bits_on_the_callers_inputs(cfg, session_dir):
+    """`/inputs` was kept from the shell by dropping its write bits, and the shell runs
+    as the uid that owns them -- so `chmod u+w` and the same write replaced the
+    caller's file, and `rm -rf inputs` took the folder. Measured before this.
+
+    The profile refuses the folder now, as it already refused `.harness`. Reads are
+    kept, because the agent is given the caller's files to read, and the rest of the
+    session stays writable -- both asserted, so a rule that refused everything would
+    not pass this.
+    """
+    backend = backend_at(cfg, session_dir)
+    backend.upload_files([(f"{INPUTS_ROUTE}given.txt", b"as written")])
+
+    lifted = backend.execute(
+        "chmod u+w inputs inputs/given.txt && printf FORGED > inputs/given.txt"
+    )
+    removed = backend.execute("rm -rf inputs")
+    (held,) = backend.download_files([f"{INPUTS_ROUTE}given.txt"])
+
+    assert lifted.exit_code != 0 and held.content == b"as written"
+    assert removed.exit_code != 0 and (session_dir / "inputs").is_dir()
+    # The controls: still readable, and the session's own work still writable.
+    assert backend.execute("cat inputs/given.txt").output.strip() == "as written"
+    assert backend.execute("printf ok > outputs/mine.txt").exit_code == 0
+
+
+@macos
 def test_the_shell_cannot_change_the_keys_file(cfg, session_dir):
     """A keys file was writable where `models.yaml` beside it was not, and on no
     argument: the reason `profile` gives for protecting an authored file is that a shell
@@ -1013,9 +1041,11 @@ def test_the_profile_refuses_itself_last(tmp_path):
         protected=(tmp_path / "ws" / "skills",),
     ).splitlines()
 
-    # Last but one: the harness denial that follows it is the same kind of rule
-    # and covers a different path, so both have to sit after the allows.
-    assert f'(deny file-write* (path "{written}"))' in lines[-2:]
+    # The session-folder denials that follow it are the same kind of rule over
+    # different paths, so all of them have to sit after the allows. One per folder
+    # refused that way, and the profile ends with them.
+    assert f'(deny file-write* (path "{written}"))' in lines[-3:]
+    assert all("deny file-write*" in line for line in lines[-3:]), lines[-3:]
     assert all(not line.startswith("(allow file-write*") for line in lines[-2:])
 
 

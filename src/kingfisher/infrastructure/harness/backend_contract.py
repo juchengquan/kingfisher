@@ -175,6 +175,14 @@ def shell_denied(make: Callable[[], Any]) -> None:
     Driven through `execute` rather than read off the backend's configuration, and
     both ways a shell writes: a new file, and over one kingfisher put there. The
     second is the one a pinned agent is rewritten by.
+
+    **With the mode bits lifted first**, which is what this missed. kingfisher's own
+    backend kept `/inputs` by dropping the write bits, and the shell runs as the uid
+    that owns those files -- so a plain write was refused, this passed, and
+    `chmod u+w` then the same write replaced the caller's file. A deployment author
+    was told the shell was refused a folder it could take in two commands. The `chmod`
+    is allowed to fail: on a backend that has none, or where something else refuses
+    it, what is asserted is still only the file afterwards.
     """
     backend = make()
     if not _executes(backend):
@@ -187,8 +195,12 @@ def shell_denied(make: Callable[[], Any]) -> None:
     ):
         kept, fresh = f"{route}{token}-kept", f"{route}{token}-fresh"
         backend.upload_files([(kept, b"as written")])
+        here = route.strip("/")
         for path in (kept, fresh):
-            backend.execute(f"printf %s {token} > {path.lstrip('/')}")
+            inside = path.lstrip("/")
+            backend.execute(
+                f"chmod u+w {here} {inside} 2>/dev/null; printf %s {token} > {inside}"
+            )
         after_kept, after_fresh = backend.download_files([kept, fresh])
         if after_kept.content != b"as written" or after_fresh.error is None:
             written.append(f"{route.rstrip('/')}, {what}")

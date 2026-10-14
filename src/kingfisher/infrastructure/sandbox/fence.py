@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.infrastructure.sandbox.linux import MAX_OUTPUT_BYTES, outcome, present
-from kingfisher.layout import SESSION_DIRS
+from kingfisher.layout import INPUTS, SESSION_DIRS
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -77,8 +77,13 @@ def _session_writable(session_dir: Path) -> list[Path]:
     The cost is that the shell cannot write into its own working directory, which
     is the session; `tests/linux/test_fence_escapes.py` holds it, so changing it
     back is a decision rather than an accident.
+
+    `inputs` is left out for the reason `.harness` is: it is the caller's, the agent is
+    promised it cannot change it, and a grant here is the only thing that would let it.
+    Readable still -- `fs_readable` takes the session whole -- and writable through no
+    path at all, where before it had its write bits dropped and the shell owns them.
     """
-    return [Path(session_dir) / name for name in SESSION_DIRS]
+    return [Path(session_dir) / name for name in SESSION_DIRS if name != INPUTS]
 
 
 def policy_for(

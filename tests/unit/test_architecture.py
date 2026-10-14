@@ -456,6 +456,73 @@ def test_the_shadowing_rule_leaves_a_deliberate_rebinding_alone(shape):
     assert _bound_twice_at_module_level(ast.parse(MEANT_IT[shape])) == {}
 
 
+def _decorated_twice(tree: ast.Module) -> dict[str, list[str]]:
+    """Definitions wearing one decorator more than once, and which one.
+
+    Every definition, not only the top level: what this catches is an insertion landing
+    between a decorator and the `def` under it, and a method is as reachable by that as
+    a function. Compared by source text, so `parametrize` twice with different tables
+    -- which is how a test takes the product of two -- is not a repeat.
+    """
+    worn: dict[str, list[str]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            continue
+        spelled = [ast.unparse(one) for one in node.decorator_list]
+        again = sorted({one for one in spelled if spelled.count(one) > 1})
+        if again:
+            worn[node.name] = again
+    return worn
+
+
+def test_no_definition_wears_one_decorator_twice():
+    """A decorator stack split by an insertion: the definition going in keeps a copy of
+    the marker above it, and the one below is left bare.
+
+    Found by doing it. `test_the_shell_cannot_lift_the_bits_on_the_callers_inputs` went
+    in between `@macos` and the `def` under it, so it wore `@macos` twice and
+    `test_the_shell_cannot_change_the_keys_file` wore none. Both still run on macOS
+    either way, so the suite was green here and the bare one failed on Linux, where it
+    drove a mechanism that is not there.
+    """
+    twice = [
+        f"{path.relative_to(REPO).as_posix()}: {name} wears {again}"
+        for path in _every(_every_module_here(), "the repository's modules")
+        for name, again in sorted(
+            _decorated_twice(ast.parse(path.read_text(encoding="utf-8"))).items()
+        )
+    ]
+
+    assert not twice, (
+        f"{twice} -- a stack that reads this way was split by an insertion, so look at "
+        "the definition under it for the marker it should have kept"
+    )
+
+
+#: A split stack, and the two shapes that repeat a decorator for a reason: a product of
+#: two tables, and one marker on a class and again on a method it holds.
+STACKS = {
+    "split": ("@macos\n@macos\ndef f():\n    pass\n", {"f": ["macos"]}),
+    "a product of two tables": ("@p('a', A)\n@p('b', B)\ndef f(a, b):\n    pass\n", {}),
+    "a class and its method": (
+        "@macos\nclass C:\n    @macos\n    def f(self):\n        pass\n",
+        {},
+    ),
+}
+
+
+@pytest.mark.parametrize("shape", sorted(STACKS), ids=sorted(STACKS))
+def test_the_decorator_rule_reads_a_stack_the_way_python_applies_it(shape):
+    """Both directions in one table. The rule above runs over a tree with no offenders,
+    so a predicate answering "no" to everything passes it for ever; and one answering
+    "yes" to everything would refuse the two stacks below, which are how a decorator is
+    repeated on purpose.
+    """
+    source, expected = STACKS[shape]
+
+    assert _decorated_twice(ast.parse(source)) == expected
+
+
 def _documents() -> list[Path]:
     """The prose that is only prose, and names modules for a living."""
     found = [*(REPO / "docs").rglob("*.md")] if (REPO / "docs").is_dir() else []
