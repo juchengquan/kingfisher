@@ -46,34 +46,49 @@ def sessions_root(workspace: Path | str) -> Path:
     return Path(workspace) / "sessions"
 
 
+#: The session a request naming none runs in. An ordinary id: naming it reaches the
+#: same session, and it is listed and reaped like any other.
+DEFAULT_SESSION = "default"
+
+
 def unknown_session(session_id: str) -> UnknownSessionError:
-    """The refusal for an id nobody issued, and for a session this caller may not touch.
-    One wording for both, so that holding a real id teaches nothing -- and for an id
-    that could not name a session, which nobody could have issued either.
+    """The refusal for a session that is not there, and for one this caller may not
+    touch. One wording for both, so that holding a real id teaches nothing.
     """
-    return UnknownSessionError(f"no session {session_id!r}; omit session_id to start one")
+    return UnknownSessionError(f"no session {session_id!r}")
 
 
-def is_one_path_segment(session_id: str) -> bool:
-    """Whether a session id names one entry in a directory, and nowhere else."""
-    # A POSIX file name, and nothing narrower: every folder under `sessions/` is listed
-    # as a session, and one whose name this refused could never be opened -- `reap`
-    # would stop at it and sweep nothing.
-    return session_id not in {"", ".", ".."} and "/" not in session_id and "\0" not in session_id
+def unnamable_session(session_id: str) -> UnknownSessionError:
+    """The refusal for an id that cannot name a session's folder."""
+    return UnknownSessionError(
+        f"{session_id!r} cannot name a session: a session id is one name, not starting "
+        "with '.', holding neither '/' nor NUL"
+    )
 
 
-def session_dir(workspace: Path | str, session_id: str, *, only: str | None = None) -> Path:
+def names_a_session(session_id: str) -> bool:
+    """Whether an id can name a session's folder: one visible entry in a directory."""
+    # One entry and nowhere else: joined as given, `""` is every session, `..` the
+    # workspace, and an absolute id replaces the path. Not hidden: `.harness` is the
+    # name the macOS profile guards in every session, so a session called that could
+    # not write its own files. The listing reads only what passes this, so nothing it
+    # lists is a session `open` would refuse and `reap` would stop at.
+    return (
+        bool(session_id)
+        and not session_id.startswith(".")
+        and "/" not in session_id
+        and "\0" not in session_id
+    )
+
+
+def session_dir(workspace: Path | str, session_id: str) -> Path:
     """Where a workspace keeps one session: a folder of its own under `sessions/`, named
-    for its id. `only` is the one id a process serving a single session knows, and any
-    other is refused as an id nobody issued.
+    for its id.
     """
-    if only is not None and session_id != only:
-        raise unknown_session(session_id)
     # Here rather than at a door, because every path built from an id is built here --
-    # `open` makes folders where it points and `delete` removes them. Joined as given,
-    # `""` is every session, `..` the workspace, and an absolute id replaces the path.
-    if not is_one_path_segment(session_id):
-        raise unknown_session(session_id)
+    # `open` makes folders where it points and `delete` removes them.
+    if not names_a_session(session_id):
+        raise unnamable_session(session_id)
     return sessions_root(workspace) / session_id
 
 

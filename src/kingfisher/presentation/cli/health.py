@@ -856,9 +856,7 @@ def _sessions_apart(cfg: Config) -> Iterator[Check]:
     one workspace serves. A report, never a refusal: kingfisher is mostly run as a
     package, and on many servers no fence can start. Quiet where it cannot happen -- a
     Linux fence handing each turn its own session -- and for session backends this
-    command cannot see into, whose contract asks it of them. Not for a process serving
-    one session: `KINGFISHER_SESSION_ID` pins a process, not a workspace, and others may
-    keep their sessions beside its own.
+    command cannot see into, whose contract asks it of them.
     """
     if cfg.session_backends_factory:
         return

@@ -3560,6 +3560,12 @@ id makes the workspace one of many, and the macOS profile has one pattern for ev
 session. Nothing checks for a workspace laid out the old way: its folders are read by
 nothing, and clearing them is the upgrade. *(2026-10-13.)*
 
+**Removed: the setting.** Once a request names its session and one naming none runs in
+`default`, `KINGFISHER_SESSION_ID` had nothing left to do. It is refused at startup if
+still set, as an entry in the table that already refused the store settings rather than
+a check of its own: ignored, a deployment's no-id requests would land in `default`
+instead of the session it chose. *(2026-10-14.)*
+
 **deepagents' own files are kept in the scratchpad.** deepagents writes two kinds of
 file without being asked. A tool result over about 80,000 characters is saved to
 `large_tool_results/<call id>` and the model is handed a stub naming the path; the
@@ -5187,6 +5193,26 @@ a test that it is total. *(2026-08-16, `http-surface.md`; 2026-08-17,
 
 **Session ids are issued, not accepted**, and the tenancy boundary is outside
 kingfisher with one guard inside. *(2026-08-16, `session-scoped-api.md`.)*
+
+**Reversed: a session is named by the request.** Any id names a session, the first
+turn naming one starts it, and a request naming none runs in `default`. The guard --
+a supplied id may resume a session but never create one, and minted ids are 128 bits
+-- protected one deployment: a service forwarding a user's input as a session id.
+Every other caller paid for it. One with ids of its own, a chat thread or a ticket,
+kept a table from its ids to kingfisher's, and the only way to choose an id at all was
+`KINGFISHER_SESSION_ID`, one process per session. So the boundary is outside kingfisher
+with no guard inside: a service derives the ids it sends and never forwards a user's,
+and the guides say so where `files_for` and the session backends are described.
+
+What still holds: the access policy refuses a caller at a session whose pinned agent it
+does not reach, in the words reading an absent session gets. Reading or deleting a
+session nobody has made answers "no session" and makes nothing, since a read that made
+one would be a write nobody asked for, and a resume has to find the session it answers.
+`files_for` does make one, because placing inputs before the first turn is what it is
+for. An id may not start with `.`: `.harness` is the name the macOS rule guards in every
+session, so a session called that could not write its own files, and the listing skips
+what no request could name. `default` is an ordinary id, listed and reaped like any
+other, so one continuing conversation needs no setting. *(2026-10-14.)*
 
 **A skill's `allowed-tools` is prompt text, not enforcement.** Worth knowing
 before trusting it for anything. *(2026-08-16, `session-scoped-api.md`.)*

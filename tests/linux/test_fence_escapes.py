@@ -216,19 +216,15 @@ def test_the_shell_cannot_write_the_sessions_own_harness(two_sessions):
 
 
 @needs_landlock
-def test_the_shell_cannot_write_the_harness_of_the_one_session_a_process_serves(cfg):
-    """Catches a process serving one session fencing it unlike any other -- driven
-    through `default_backends`, which decides where the session is, rather than handed
-    a path.
+def test_the_shell_cannot_write_the_harness_of_a_session_it_opened(cfg):
+    """Driven through `default_backends`, which decides where the session is, rather than
+    handed a path.
     """
-    from dataclasses import replace
-
     from kingfisher import default_backends
     from kingfisher.layout import HARNESS
 
-    one = replace(cfg, session_id="the-one")
-    shell = default_backends.open(one, "the-one")
-    harness = one.workspace / "sessions" / "the-one" / HARNESS
+    shell = default_backends.open(cfg, "the-one")
+    harness = cfg.workspace / "sessions" / "the-one" / HARNESS
     pinned = harness / "agent.yaml"
     pinned.write_text("name: pinned\n", encoding="utf-8")
 

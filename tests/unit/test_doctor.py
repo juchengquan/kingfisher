@@ -1591,18 +1591,6 @@ def test_a_linux_fence_keeps_sessions_apart_and_is_not_warned_about(cfg, monkeyp
     assert _row(examine(cfg), "sessions apart") is None
 
 
-def test_a_process_serving_one_session_is_warned_too(cfg, monkeypatch):
-    """Catches `KINGFISHER_SESSION_ID` quieting the warning: it pins a process to one
-    session, and other processes may keep theirs in the same workspace.
-    """
-    from dataclasses import replace
-
-    _confined_as(monkeypatch, warning="unconfined")
-
-    check = _row(examine(replace(cfg, session_id="only")), "sessions apart")
-    assert check is not None and check.verdict == "warn"
-
-
 def test_session_backends_doctor_cannot_see_into_are_left_to_their_contract(cfg, monkeypatch):
     """Whether they keep sessions apart is theirs to show, and `SESSION_BACKENDS_CONTRACT`
     asks them; a third "cannot see" line on every check of such a deployment is noise.

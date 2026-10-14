@@ -98,7 +98,7 @@ def test_two_sessions_keep_separate_conversations(cfg):
     """Structural, not enforced: they are different files."""
     kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends)
 
-    one, two = kf.run(Request("a")), kf.run(Request("b"))
+    one, two = kf.run(Request("a", session_id="one")), kf.run(Request("b", session_id="two"))
 
     assert one.session_id != two.session_id
     assert (_session_dir(cfg, one.session_id) / TRANSCRIPT) != (

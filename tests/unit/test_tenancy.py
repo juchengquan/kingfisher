@@ -15,7 +15,6 @@ from kingfisher.domain.capabilities import UNRESTRICTED, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import (
     SessionBusyError,
-    UnknownSessionError,
     known,
 )
 from kingfisher.layout import CLAIM
@@ -29,46 +28,42 @@ def service(cfg, **kwargs):
     )
 
 
-# -- T2: a session id is a bearer credential ------------------------------
+# -- a session is named by whoever makes the request ------------------------
 
 
-def test_a_request_cannot_create_a_session_by_naming_one(cfg):
-    """The whole of T2."""
+def test_a_request_naming_an_id_nobody_has_used_starts_that_session(cfg):
+    """Catches a caller's own id -- a chat thread, a ticket -- being refused, which left
+    a service keeping a table from its ids to kingfisher's.
+    """
     kf = service(cfg)
 
-    with pytest.raises(UnknownSessionError, match="no session 'someone-elses'"):
-        kf.run(Request("go", session_id="someone-elses"))
+    result = kf.run(Request("go", session_id="q3-report"))
+
+    assert result.session_id == "q3-report"
+    assert (cfg.workspace / "sessions" / "q3-report").is_dir()
 
 
-def test_a_request_with_no_id_starts_one_and_says_which(cfg):
+def test_a_request_with_no_id_runs_in_the_default_session_and_says_so(cfg):
+    """Catches a request naming no session minting one per run, which leaves a caller
+    who wanted one continuing conversation a new id to carry each time.
+    """
     kf = service(cfg)
 
     result = kf.run(Request("go"))
 
-    assert result.session_id
-    assert (cfg.workspace / "sessions" / result.session_id).is_dir()
+    assert result.session_id == "default"
+    assert (cfg.workspace / "sessions" / "default").is_dir()
 
 
 def test_the_id_it_hands_back_can_be_resumed(cfg):
-    """Holding an id is how a caller proves the session is theirs."""
+    """A later turn naming the id is the same session, whoever named it first."""
     kf = service(cfg)
-    first = kf.run(Request("go"))
+    first = kf.run(Request("go", session_id="mine"))
 
     second = kf.run(Request("again", session_id=first.session_id))
 
     assert second.session_id == first.session_id
     assert second.turn_id != first.turn_id
-
-
-def test_minted_ids_are_not_guessable(cfg):
-    """48 bits was enough to avoid collisions, which is all it was for, and far too few
-    for something that opens a conversation and its files.
-    """
-    kf = service(cfg)
-
-    minted = kf.run(Request("go")).session_id
-
-    assert len(minted) == 32  # uuid4().hex, 128 bits
 
 
 # -- T3: grants clamp, uploads do not need clamping -----------------------

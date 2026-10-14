@@ -616,9 +616,7 @@ def backend_at(
         # than the caller's, so the default filter says it once per process instead
         # of once per place that builds a backend.
         # What it means for the people one workspace serves, said where a program
-        # running kingfisher sees it: most never run `doctor`. Whatever
-        # `KINGFISHER_SESSION_ID` says, since it pins a process to one session and not
-        # a workspace: other processes may keep theirs beside it.
+        # running kingfisher sees it: most never run `doctor`.
         said = confined.warning + (
             " A workspace may hold many sessions, and each session's agent can then also "
             "read and change the other sessions' files."
@@ -675,7 +673,6 @@ def backend_at(
 class DefaultBackends(SessionBackends):
     """Kingfisher's own `SessionBackends`: each session a directory under
     `<workspace>/sessions`, named for its id, each backend `backend_at` that directory.
-    Where `cfg.session_id` is set, the one id it names is the only one these know.
 
     `default_backends` runs each session's commands here, under kingfisher's own
     fence. A deployment whose commands run somewhere else builds one with `runner=`,
@@ -722,15 +719,7 @@ class DefaultBackends(SessionBackends):
         return built
 
     def sessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
-        root = sessions_root(cfg.workspace)
-        if cfg.session_id is not None:
-            # Whether or not a turn has made it, and after a delete: it exists because
-            # the process is configured to serve it, so a first turn naming it is one
-            # naming an issued id. Nothing else, though `sessions/` may hold others:
-            # they are other processes' to list and to reap, and a listing is what
-            # `reap` deletes from.
-            return ((cfg.session_id, LocalSessionDirs().used_at(root / cfg.session_id)),)
-        return LocalSessionDirs().listing(root)
+        return LocalSessionDirs().listing(sessions_root(cfg.workspace))
 
     def mark_used(self, cfg: Config, session_id: str) -> None:
         LocalSessionDirs().mark_used(_where(cfg, session_id))
@@ -739,17 +728,12 @@ class DefaultBackends(SessionBackends):
         return session_bytes(_where(cfg, session_id))
 
     def delete(self, cfg: Config, session_id: str) -> str | None:
-        where = _where(cfg, session_id)
-        # Nothing there is deleted already, not a failure: a process serving one
-        # session lists its id before any turn has made the folder.
-        if not where.exists():
-            return None
-        return LocalSessionDirs().remove_tree(where)
+        return LocalSessionDirs().remove_tree(_where(cfg, session_id))
 
 
 def _where(cfg: Config, session_id: str) -> Path:
     """Where kingfisher's own backends keep one session of this workspace."""
-    return session_dir(cfg.workspace, session_id, only=cfg.session_id)
+    return session_dir(cfg.workspace, session_id)
 
 
 #: Kingfisher's own sessions, with their commands run on this host.

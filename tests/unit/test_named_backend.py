@@ -10,7 +10,7 @@ import pytest
 from kingfisher import default_backends
 from kingfisher.application.config import Environment
 from kingfisher.application.run import configured_backends
-from kingfisher.config import REMOVED_STORE_SETTINGS, RENAMED_SETTINGS, ConfigError
+from kingfisher.config import REMOVED_SETTINGS, RENAMED_SETTINGS, ConfigError
 from kingfisher.infrastructure.harness.backend import SessionBackends
 from kingfisher.infrastructure.wiring import store_named
 
@@ -160,15 +160,17 @@ def test_the_variable_reaches_the_config(tmp_path: Path):
 # -- the settings this replaced -----------------------------------------------
 
 
-@pytest.mark.parametrize("removed", REMOVED_STORE_SETTINGS)
-def test_a_removed_store_setting_is_refused_rather_than_ignored(tmp_path: Path, removed):
-    """Ignored, a deployment that relied on it for durable sessions would lose them on
-    upgrade with nothing said.
+@pytest.mark.parametrize(("removed", "instead"), REMOVED_SETTINGS.items())
+def test_a_removed_setting_is_refused_rather_than_ignored(tmp_path: Path, removed, instead):
+    """Ignored, what it did would change with nothing said: sessions a deployment kept
+    elsewhere lost on upgrade, or a request naming no session run in `default` rather
+    than the one the deployment chose.
     """
     read = Environment({"KINGFISHER_WORKSPACE": str(tmp_path), removed: "anything"})
 
-    with pytest.raises(ConfigError, match=rf"{removed} was removed.*{SETTING}"):
+    with pytest.raises(ConfigError, match=f"{removed} was removed") as refused:
         read.config()
+    assert instead in str(refused.value)
 
 
 @pytest.mark.parametrize(("old", "new"), RENAMED_SETTINGS.items())

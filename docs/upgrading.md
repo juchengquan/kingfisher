@@ -17,7 +17,36 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## The session is named in the request, after #739
+
+- **`KINGFISHER_SESSION_ID` is gone, and refused at startup if still set.** A request
+  names its session -- `kingfisher run --session ID`, `Request(session_id=...)` -- and
+  one naming none runs in `default`, at `sessions/default/`. Delete the line from
+  `.env`; a deployment that set it to keep one conversation gets the same from
+  `default`, or names its id on every request.
+- **A request naming an id nobody has used starts that session**, where it was refused
+  as one nobody issued. Kingfisher no longer issues ids, so a service must derive the
+  ids it sends and never forward a user's. The access policy still stops a caller at a
+  session whose pinned agent it does not reach.
+- **A request naming no session no longer starts a new one each time.** Every such
+  request carries on `default`. A caller that wanted a fresh session per call names a
+  fresh id.
+- **`files_for` makes a session no turn has made yet**, so inputs can be placed before
+  the first turn, and `files=` on a request naming none is accepted as `default`'s.
+- **Reading a session nobody has made still answers "no session" and makes nothing**:
+  `pending`, `artifact` and `decide`, and `delete_session` does nothing. The message is
+  `no session '<id>'`.
+- **An id may not start with `.`**. It is refused with `UnknownSessionError` ("cannot
+  name a session"), and a dot-named folder under `sessions/` is not listed.
+- **In Python**, `Config.session_id` is gone, `REMOVED_STORE_SETTINGS` is
+  `REMOVED_SETTINGS` (a mapping from each name to what replaces it),
+  `is_one_path_segment` is `names_a_session`, `session_dir` takes no `only=`, and
+  `LocalSessionDirs.used_at` is gone. `DEFAULT_SESSION` names the default.
+
 ## Every session in a folder of its own, after #738
+
+*The setting this section describes went after #739: see The session is named in the
+request.*
 
 - **`KINGFISHER_SESSION_ID` keeps its session in `sessions/<id>/`**, like any other,
   where it was `sessions/` itself. It pins a process to one session rather than a
@@ -749,6 +778,7 @@ backend* and *A tool's path is the backend's path*, explains why.
 | `UnknownSessionError: no session '…'; omit session_id to start one`, from `files_for` | An id no turn issued, such as one made up to start a session, or one that is not a single path segment | Run the session's first turn without `files=`, then open the id its result carries; see *`files_for` opens only a session a turn issued* |
 | `HostPathError: '…' is a host path, and file tools take virtual paths rooted at the workspace — …` | A file tool given an absolute path under the workspace but outside this session, such as another session's file or `models.yaml` | Use a virtual path, or the shell for host paths; see *Host paths refused anywhere under the workspace* |
 | `KINGFISHER_SESSION_STORE was removed: …` | The old store setting is still set | Unset it; see *Settings* |
+| `KINGFISHER_SESSION_ID was removed: name the session in each request instead; …` | The setting is still set | Delete it; see *The session is named in the request* |
 | `KINGFISHER_DEFINITIONS_DIR is required but not set` | A deployment from before the definitions had a folder of their own | Move them into one and set it; see *Definitions in a folder of their own* |
 | `KINGFISHER_SKILLS_DIR was removed: skills is read from KINGFISHER_DEFINITIONS_DIR now, …` (or any of its six siblings) | A setting that moved one kind is still set | Move what it named into the definitions folder and unset it; see *Definitions in a folder of their own* |
 | `KINGFISHER_DEFINITIONS_DIR is …, which is not a directory` | The folder is not there, or its mount failed | Run `kingfisher seed`, or fix the mount; a start never makes it |
