@@ -294,37 +294,89 @@ def _every_module_here() -> list[Path]:
 
 
 def _bound_twice_at_module_level(tree: ast.Module) -> dict[str, list[int]]:
-    """Names this module assigns twice at its top level, and the lines.
+    """Names this module binds twice at its top level, and the lines.
 
-    Top-level `Assign` statements only, and the narrowness is the point: a name rebound
-    inside `try`/`except ImportError`, inside an `if` on the platform, or by a `for` is
-    being rebound on purpose, and this walk never enters those statements.
+    Top-level statements only, and the narrowness is the point: a name rebound inside
+    `try`/`except ImportError`, inside an `if` on the platform, or by a `for` is being
+    rebound on purpose, and this walk never enters those statements.
+
+    Every way a module-level statement binds a name, which this read as `Assign` alone
+    until 2026-10-14 -- one of seven. A duplicated `def` is the sharpest case the rule's
+    own docstring describes, and was invisible; so was `AnnAssign`, which this
+    repository has 79 of at the top level, one of them introduced beside the rule.
     """
     where: dict[str, list[int]] = {}
+
+    def bind(name: str, line: int) -> None:
+        where.setdefault(name, []).append(line)
+
     for node in tree.body:
         if isinstance(node, ast.Assign):
             for target in node.targets:
                 if isinstance(target, ast.Name):
-                    where.setdefault(target.id, []).append(node.lineno)
+                    bind(target.id, node.lineno)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            # An annotated declaration with no value binds nothing at runtime, so it is
+            # not a second definition of anything.
+            if node.value is not None:
+                bind(node.target.id, node.lineno)
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            bind(node.name, node.lineno)
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                bind(alias.asname or alias.name, node.lineno)
+        elif isinstance(node, ast.Import):
+            # Only an alias, because `import a.b` and `import a.c` both bind `a` -- to
+            # the same module object, which is the ordinary way to reach two submodules
+            # and not a shadowing at all. `http_fetch.py` does it with `urllib`, and
+            # counting it was this rule's first false positive. A plain duplicate
+            # `import x` is ruff's F811, not this.
+            for alias in node.names:
+                if alias.asname:
+                    bind(alias.asname, node.lineno)
     return {name: lines for name, lines in where.items() if len(lines) > 1}
 
 
-def test_every_area_on_disk_reaches_the_module_collection():
+def test_every_module_on_disk_reaches_the_collection_the_rules_walk():
     """`_every` refuses a collection that is empty and cannot see one that is partial.
 
-    Measured: dropping `src`, `tests`, `evals` and `spikes` from the walk left the 22
-    files of `assets_examples` behind, and the rule below passed over them -- 240 of
-    262 modules gone, with `_every` satisfied the whole time. So the areas are checked
-    one by one, against the list both collectors read rather than a second copy of it.
+    Measured: dropping `src`, `tests`, `evals` and `spikes` from the walk left the
+    files of `assets_examples` behind, and the rule below passed over them -- with
+    `_every` satisfied the whole time.
+
+    Counted per area, not named per area, which is the second half of that lesson. The
+    first version of this compared the *set of area names*: one file from each area
+    satisfied it, so cutting the walk to five modules of several hundred passed here
+    too, and what noticed were two unrelated rules. The count comes from a glob of its
+    own rather than from the collector, so losing most of an area fails in the rule
+    written for it.
     """
-    want = {name for name in (*CODE_AREAS, EXAMPLES_AREA) if (REPO / name).is_dir()}
+    want = {
+        name: sorted(
+            p for p in (REPO / name).rglob("*.py") if "__pycache__" not in p.parts
+        )
+        for name in (*CODE_AREAS, EXAMPLES_AREA)
+        if (REPO / name).is_dir()
+    }
     assert want, "no area named here is on disk, so this rule is about nothing"
 
-    reached = {path.relative_to(REPO).parts[0] for path in _every_module_here()}
+    reached: dict[str, list[Path]] = {}
+    for path in _every_module_here():
+        reached.setdefault(path.relative_to(REPO).parts[0], []).append(path)
 
-    assert reached == want, (
-        f"{sorted(want - reached)} are on disk and reach no rule here, and "
-        f"{sorted(reached - want)} reach one without being named above"
+    missing = {
+        name: sorted(set(files) - set(reached.get(name, ())))
+        for name, files in want.items()
+        if set(files) - set(reached.get(name, ()))
+    }
+    assert not missing, (
+        "modules on disk that no rule here walks: "
+        + "; ".join(
+            f"{name} ({len(gone)} of {len(want[name])})" for name, gone in missing.items()
+        )
+    )
+    assert set(reached) <= set(want), (
+        f"{sorted(set(reached) - set(want))} reach a rule without being named above"
     )
 
 
@@ -352,26 +404,56 @@ def test_no_module_binds_one_name_twice_at_the_top_level():
     )
 
 
-def test_the_shadowing_rule_can_tell_a_deliberate_rebinding_from_a_collision(tmp_path):
-    """Both directions, because the rule above runs over a tree with no offenders: a
-    predicate answering "no" to everything passes it for ever, and one answering "yes"
-    to the three ways a name is rebound on purpose would have to be carved out until it
-    covered nothing.
-    """
-    deliberate = tmp_path / "meant.py"
-    deliberate.write_text(
-        "try:\n    import fast as engine\nexcept ImportError:\n    import slow as engine\n"
-        "if 1:\n    LIMIT = 1\nelse:\n    LIMIT = 2\n"
-        "for x in (1, 2):\n    SEEN = x\n",
-        encoding="utf-8",
-    )
-    collided = tmp_path / "twice.py"
-    collided.write_text("A = 1\nB = 2\nA = 3\n", encoding="utf-8")
+#: Every way a module-level statement binds a name, each written twice, with the line
+#: numbers the rule should report. One entry per shape, because the rule's own fixture
+#: held plain assignment alone -- so a predicate blind to the other seven passed both
+#: directions of the control below, and a duplicated `def` silenced a deny-list guard
+#: one file over with nothing red.
+COLLIDES = {
+    "assign": ("A = 1\nA = 2\n", {"A": [1, 2]}),
+    "annotated": ("A: int = 1\nA: int = 2\n", {"A": [1, 2]}),
+    "assign then annotated": ("A = 1\nA: int = 2\n", {"A": [1, 2]}),
+    "def": ("def f():\n    pass\n\n\ndef f():\n    pass\n", {"f": [1, 5]}),
+    "async def": (
+        "async def f():\n    pass\n\n\nasync def f():\n    pass\n", {"f": [1, 5]}
+    ),
+    "class": ("class C:\n    pass\n\n\nclass C:\n    pass\n", {"C": [1, 5]}),
+    "import alias": ("import os as x\nimport sys as x\n", {"x": [1, 2]}),
+    "from-import": ("from os import path\nfrom sys import path\n", {"path": [1, 2]}),
+}
 
-    assert _bound_twice_at_module_level(ast.parse(deliberate.read_text(encoding="utf-8"))) == {}
-    assert _bound_twice_at_module_level(ast.parse(collided.read_text(encoding="utf-8"))) == {
-        "A": [1, 3]
-    }
+#: And every way one is rebound on purpose, which this must leave alone. A bare
+#: annotation is here because it binds nothing at runtime: two of them are two
+#: declarations of one name, not two definitions.
+MEANT_IT = {
+    "fallback import": (
+        "try:\n    import fast as engine\nexcept ImportError:\n    import slow as engine\n"
+    ),
+    "platform branch": "if 1:\n    LIMIT = 1\nelse:\n    LIMIT = 2\n",
+    "loop variable": "for x in (1, 2):\n    SEEN = x\n",
+    "bare annotation": "A: int\nA: int\n",
+    "submodules of one root": "import urllib.error\nimport urllib.request\n",
+}
+
+
+@pytest.mark.parametrize("shape", sorted(COLLIDES), ids=sorted(COLLIDES))
+def test_the_shadowing_rule_sees_every_way_a_name_is_bound_twice(shape):
+    """One case per shape. The rule above runs over a tree with no offenders, so a
+    predicate answering "no" to everything passes it for ever -- and answering "no" to
+    all but one shape is what it did.
+    """
+    source, expected = COLLIDES[shape]
+
+    assert _bound_twice_at_module_level(ast.parse(source)) == expected
+
+
+@pytest.mark.parametrize("shape", sorted(MEANT_IT), ids=sorted(MEANT_IT))
+def test_the_shadowing_rule_leaves_a_deliberate_rebinding_alone(shape):
+    """The other direction: a predicate answering "yes" to everything would have to be
+    carved out until it covered nothing. `submodules of one root` is here because
+    counting it was this rule's first false positive, on a shipped tool.
+    """
+    assert _bound_twice_at_module_level(ast.parse(MEANT_IT[shape])) == {}
 
 
 def _documents() -> list[Path]:

@@ -9,7 +9,9 @@ from typing import Any
 import pytest
 
 from kingfisher import backend_at
+from kingfisher.infrastructure.harness.host_paths import HOST_ROOTS
 from kingfisher.infrastructure.harness.middlewares.workspace_tools import WorkspaceToolPaths
+from kingfisher.infrastructure.harness.session_paths import NOT_FOR_TOOLS
 from kingfisher.infrastructure.harness.tool_guards import guarded_tools
 from kingfisher.infrastructure.workspace import ensure_session_layout
 from tests.conftest import paths_in
@@ -142,6 +144,33 @@ def test_a_host_path_inside_a_list_is_refused_too(bridge):
 
     assert not seen
     assert answer.status == "error"
+
+
+#: What a tool argument is refused on top of the host roots the file tools refuse: the
+#: four a process reads its host and itself through. Written here as well as in
+#: `NOT_FOR_TOOLS`, and on purpose -- the rule below drives whatever that tuple holds,
+#: so it covers a prefix added later and for the same reason cannot notice one
+#: *removed*: deleting three of these deleted three of its cases and left the suite
+#: green. `HOST_ROOTS` is pinned the same way, in `test_backend.py`, for the same
+#: reason; this is the tuple built on top of it, which got none of that treatment.
+READS_THE_HOST = frozenset({"/root/", "/proc/", "/sys/", "/dev/"})
+
+
+def test_the_prefixes_a_tool_argument_is_refused_are_the_ones_named_here():
+    assert set(NOT_FOR_TOOLS) - set(HOST_ROOTS) == READS_THE_HOST
+    assert set(HOST_ROOTS) < set(NOT_FOR_TOOLS), "a tool argument takes the host roots too"
+
+
+@pytest.mark.parametrize("prefix", sorted(NOT_FOR_TOOLS), ids=lambda p: p.strip("/"))
+def test_every_prefix_not_for_a_tool_is_refused(bridge, prefix):
+    """Each one driven, rather than one literal standing for eight. `/proc/self/environ`
+    was the only case: deleting `/root/`, `/sys/` and `/dev/` from the tuple left the
+    whole suite passing.
+    """
+    answer = bridge.wrap_tool_call(a_call(input_file=f"{prefix}probe"), lambda r: None)
+
+    assert answer.status == "error", prefix
+    assert "host path" in answer.text or "not a file" in answer.text, answer.text
 
 
 def test_what_a_process_reads_itself_through_is_refused(bridge):
