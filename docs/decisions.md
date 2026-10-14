@@ -2367,11 +2367,21 @@ spending ten minutes inside one call spends them. There is no timeout to reach f
 thread cannot be interrupted mid-parse -- so the bound has to be set before the work
 starts.
 
-The cap is 32 MB, one number in all eight tools that read a file, named in the message a
-model gets back with the size it asked for. It is a per-module constant rather than a
-shared import because these are examples copied one file at a time, which is exactly why
-`test_a_tool_reads_a_file_one_way` compares the eight copies: that rule found the eighth,
-two directories deeper than the glob that found the other seven.
+The cap is 32 MB, one number in every shipped file that reads a file, named in the
+message a model gets back with the size it asked for. It is a per-module constant rather
+than a shared import because these are examples copied one file at a time, which is
+exactly why `test_a_tool_reads_a_file_one_way` compares the copies.
+
+**That rule walked the tool catalogue, and one of these files is not in it.** It said
+"eight tools" here and "seven copies" in its own docstring, against a tree that holds
+nine files -- and the ninth, `subagents/redactor/tools/mask_secrets.py`, is a subagent's
+own tool two directories further down, which shipped reading a file with no cap at all
+while all six rules passed. Three counts, no two alike, in the paragraph that exists to
+keep a copy from being missed. The walk reads every `.py` under the assets now, the set
+is pinned by path in `FETCHES_A_FILE` rather than counted, and the threshold that stood
+beside it -- `assert len(...) >= 2` against nine -- is gone: that is the shape the commit
+before had deleted from `test_shipped_assets.py` with the reason written out.
+*(2026-10-15, from an architecture review.)*
 
 **Bytes were the wrong bound for the PDF, and measuring showed it.** For a CSV they
 track the cost -- 32 MB of rows peaked at 358 MB of RSS, 188 MB at 1.8 GB, about nine
@@ -6264,6 +6274,35 @@ What the file already did instead is the thing worth repeating: `Models` exists
 because five fields on `Config` had invariants between them that siblings of
 `shell_sandbox` could not express. That split ran along a rule, not along a size,
 and it happened inside the file. *(Measured 2026-09-04.)*
+
+**Four guards from the last two weeks could not fail, and each failed the same way: the
+fixture could not tell the fix from the bug.** Found by mutating them, and worth
+recording as a set because the shape is now this repo's most frequent defect.
+
+  - **The skills half of the audience fix.** The fixture had the subagent declare the
+    skill its own agent already granted, so "a skill only a subagent declares" did not
+    exist in it: unioning the subagents back in added a name the test asserts is
+    *present*, and reverting the fix left the suite green on the listing *and* the
+    withheld report. One word in the fixture -- `spare` for `routine` -- is the whole
+    repair, and the report half needed a rule of its own, which it never had.
+  - **`ls` listing a route's own stand-in row.** The control drove `/outputs`, and
+    `/outputs` is not a route, so no stand-in row is ever added for it and the branch
+    the rule is about never ran. Driven on `/inputs` it bites.
+  - **A threshold where a pinned set belongs.** `assert len(_readers(shipped)) >= 2`
+    against nine, one commit after the same shape was deleted elsewhere with the reason
+    written out.
+  - **Four refusal branches on the async path.** `HostPathGuard`,
+    `WorkspaceToolPaths`, `GuardedTool._arun`'s artifact branch and
+    `PermittedBackend.aread` each had their behaviour held on the sync half alone --
+    each could be broken with the suite green, while the same break on the sync half
+    reddened between one and seventeen tests. The `way` fixture existed for exactly
+    this and was not reaching them; it does now, and `write`, `edit` and `delete` are
+    covered on both halves for the first time.
+
+The common tell is cheap to look for: **mutate the thing the guard guards, and if the
+suite stays green the fixture is the suspect, not the rule.** Every one of these four
+had a sibling that bit, which is what made them look covered. *(2026-10-15, from an
+architecture review.)*
 
 ## The architecture rules
 

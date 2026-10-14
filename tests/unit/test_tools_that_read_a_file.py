@@ -7,9 +7,7 @@ stream chunks. So whatever a tool is going to spend has to be bounded by the too
 
 from __future__ import annotations
 
-import inspect
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -84,38 +82,80 @@ def _asked(content: bytes) -> _Runtime:
     return _Runtime(context=type("_Ctx", (), {"backend": _Backend(content)})())
 
 
-def test_the_shipped_set_has_tools_that_read_a_file(shipped):
-    """So the rules below are about something. Asserted rather than assumed: a walk
-    that found none would pass every parametrized rule under it by having no cases.
+#: Every shipped file that asks a backend for a file, by its path under the assets.
+#: Named rather than counted: `assert len(...) >= 2` stood here against nine, so a walk
+#: that lost seven of them passed four rules -- the threshold shape the commit before
+#: deleted from `test_shipped_assets.py` with the reason written out, and then this one
+#: wrote again.
+#:
+#: Paths rather than tool names, and that is what reaches the ninth. The behavioural
+#: rules below load what `tools/` offers, and `mask_secrets` is a *subagent's own* tool,
+#: two directories further down: it shipped reading a file with no cap at all while all
+#: six rules here passed, because none of them walked where it lives.
+FETCHES_A_FILE = frozenset({
+    "subagents/redactor/tools/mask_secrets.py",
+    "tools/bar_chart.py",
+    "tools/csv_filter.py",
+    "tools/csv_profile/profile.py",
+    "tools/line_count.py",
+    "tools/logs/access/status_codes.py",
+    "tools/logs/log_levels.py",
+    "tools/pdf_pages.py",
+    "tools/pdf_text.py",
+})
+
+
+def _fetches_a_file(shipped) -> dict[str, str]:
+    """Every shipped `.py` whose source asks a backend for a file, by path and source.
+
+    The whole tree, not the tool catalogue: a bundled tool is a tool, and it reads a
+    file the same way.
     """
-    assert len(_readers(shipped)) >= 2
+    return {
+        path.relative_to(shipped).as_posix(): path.read_text(encoding="utf-8")
+        for path in sorted(shipped.rglob("*.py"))
+        if "download_files" in path.read_text(encoding="utf-8")
+    }
+
+
+def test_every_shipped_file_that_reads_one_is_named_here(shipped):
+    """Both directions, so neither a new reader nor a deleted one passes quietly. This
+    is the universe the rules below stand on, and it has been wrong twice: once as a
+    count, and once as a walk that did not reach a subagent's own folder.
+    """
+    walked = set(_fetches_a_file(shipped))
+
+    assert walked == FETCHES_A_FILE
+
+
+def _helper_in(body: str) -> str:
+    """The `_fetched` helper as one file spells it, with its cap above it."""
+    start = body.index("#: What one call reads.")
+    end = body.index("return got.content", start) + len("return got.content")
+    return body[start:end]
 
 
 def test_a_tool_reads_a_file_one_way(shipped):
-    """Every shipped tool that asks a backend for a file goes through `_fetched`, and
-    every copy of `_fetched` is the same text.
+    """Every shipped file that asks a backend for a file carries the same `_fetched`,
+    with the same cap above it.
 
-    Seven copies is the arrangement these examples are in on purpose -- each one is
-    read on its own -- and the hazard that comes with it is one copy drifting. The cap
-    is the thing worth not drifting: a tool reading a file some other way, or an older
-    `_fetched` pasted into a new tool, is one with no bound at all.
+    Nine copies is the arrangement these examples are in on purpose -- each one is read
+    on its own -- and the hazard that comes with it is one copy drifting. The cap is the
+    thing worth not drifting: a file reading one some other way, or an older `_fetched`
+    pasted into a new tool, is one with no bound at all. That is not hypothetical;
+    `mask_secrets` was exactly that, and the version of this rule that walked the tool
+    catalogue could not see it.
     """
     spellings: dict[str, list[str]] = {}
     unbounded = []
-    for one in LocalToolRepository(shipped / "tools").tools:
-        module = _module_of(one)
-        where = module.get("__file__")
-        body = "" if where is None else Path(where).read_text(encoding="utf-8")
-        if "download_files" not in body:
+    for where, body in sorted(_fetches_a_file(shipped).items()):
+        if "_fetched" not in body or "MAX_INPUT_BYTES" not in body:
+            unbounded.append(where)
             continue
-        if "_fetched" not in module:
-            unbounded.append(tool_name(one))
-            continue
-        spellings.setdefault(inspect.getsource(module["_fetched"]), []).append(tool_name(one))
+        spellings.setdefault(_helper_in(body), []).append(where)
 
-    assert not unbounded, f"{unbounded} read a file without going through `_fetched`"
+    assert not unbounded, f"{unbounded} read a file with no bound of their own"
     assert len(spellings) == 1, f"`_fetched` is written {len(spellings)} ways: {spellings}"
-    assert "MAX_INPUT_BYTES" in next(iter(spellings)), "the one way does not bound itself"
 
 
 def test_a_file_past_the_cap_is_refused(shipped):

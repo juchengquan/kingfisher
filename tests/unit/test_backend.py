@@ -308,9 +308,14 @@ def test_scratch_is_created_private(cfg, session_dir):
     assert (session_dir / "scratchpad").stat().st_mode & 0o077 == 0
 
 
-def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir):
+def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir, way):
     """The guard exists to correct the model mid-turn, and its message names the virtual
     path to use.
+
+    Both ways, because `HostPathGuard` catches in two hooks and only the sync one was
+    driven: making `awrap_tool_call` re-raise instead of correcting left the whole suite
+    green, while the same change to `wrap_tool_call` reddened this test and one more.
+    An async turn is the one a service runs.
     """
     from langchain_core.messages import AIMessage
 
@@ -332,8 +337,11 @@ def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir)
         cfg,
         backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=responses)).graph
-    out = agent.invoke(
-        {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
+    asked = {"messages": [{"role": "user", "content": "go"}]}
+    out = (
+        agent.invoke(asked, config={"recursion_limit": 12})
+        if way == "sync"
+        else asyncio.run(agent.ainvoke(asked, config={"recursion_limit": 12}))
     )
 
     transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
@@ -581,6 +589,27 @@ def test_a_directory_still_lists_what_it_actually_holds(cfg, session_dir, way):
     assert [one["path"] for one in _entries(_asked(backend, way, "ls", "/outputs/deep"))] == [
         "/outputs/deep/probe.txt"
     ]
+
+
+def test_a_route_does_not_list_itself_among_its_contents(cfg, session_dir, way):
+    """`_directly_under` excludes the directory asked about, and `/outputs` cannot show
+    that: it is not a route, so no stand-in row is ever added for it and the control
+    above passes whether that exclusion is there or not.
+
+    Driven on `/inputs`, which is a route. Without the exclusion the empty remainder
+    reads as a direct child of itself: measured, `ls /inputs` answered `['/inputs/']`
+    and `ls /memory` the folder and its file -- which is the failure
+    `_directly_under`'s own docstring cites as how it was found, held by nothing until
+    this.
+    """
+    backend = backend_at(cfg, session_dir)
+    where = session_dir / "inputs"
+    where.mkdir(parents=True, exist_ok=True)
+    (where / "given.txt").write_text("as written\n", encoding="utf-8")
+
+    listed = [one["path"] for one in _entries(_asked(backend, way, "ls", "/inputs"))]
+
+    assert listed == ["/inputs/given.txt"], "a route listed its own stand-in row"
 
 
 def test_a_file_matching_twice_still_reports_both(cfg, session_dir):

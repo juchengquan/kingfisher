@@ -1205,10 +1205,16 @@ system_prompt: |
 #: A subagent declaring a skill the agent that reaches it is not told about. The skills
 #: half of the same rule: `subagent_skills` narrows by what the run activated, so this
 #: one is inert, and a listing that counted it named a skill no path reaches.
+#:
+#: `spare`, and that is the whole of what makes the rule below able to fail. It named
+#: `routine` first -- the skill the agent already grants -- so "a skill only a subagent
+#: declares" did not exist in the fixture: unioning the subagents back in added a name
+#: the test asserts is *present*, and reverting the fix left the suite green on both
+#: readers. Found by mutating it.
 DECLARES_A_SKILL = """name: helper
 description: A subagent.
 source_ids: [A, B]
-skills: [routine]
+skills: [spare]
 system_prompt: |
   You do the part you are given.
 """
@@ -1221,8 +1227,10 @@ def test_a_skill_only_a_subagent_declares_is_not_offered_to_that_caller(
     """Measured: `askill` offered to a caller whose only agent was told about `bskill`,
     while the build handed that caller's subagent `skills: None`.
 
-    The agent names the subagent here for the reason the tools half above does: without
-    that, the declaration never reaches the walk and the rule passes either way.
+    Two things make this able to fail, and the first version had neither: the agent has
+    to *name* the subagent, or the declaration never reaches the walk; and the subagent
+    has to declare a skill the agent does not, or the union it rules out contributes a
+    name the rule already expects to see.
     """
     monkeypatch.setenv("KINGFISHER_SKILLS_ENABLED", "1")
     _workspace(cfg, SHARES_SKILL_AND_HANDS_WORK_ON, skills=("routine", "spare"))

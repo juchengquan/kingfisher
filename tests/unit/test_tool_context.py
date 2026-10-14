@@ -105,6 +105,74 @@ def test_a_denied_write_or_edit_leaves_the_file_as_it_was(backend, session_dir):
     assert (session_dir / "outputs" / "open.txt").read_text() == "needle: changed\n"
 
 
+class _Recording:
+    """An inner backend that records the spelling it was handed, and nothing else.
+
+    A stub rather than the real backend, and only for the calls that *change* a file:
+    the read below proves the same property end to end, by reaching the catalogue, and
+    there is no equivalent for a write the rules would refuse anyway.
+    """
+
+    def __init__(self) -> None:
+        self.asked: list[str] = []
+
+    def _record(self, file_path: str) -> None:
+        self.asked.append(file_path)
+
+    def write(self, file_path: str, content: str) -> Any:
+        self._record(file_path)
+
+    async def awrite(self, file_path: str, content: str) -> Any:
+        self._record(file_path)
+
+    def edit(
+        self, file_path: str, old_string: str, new_string: str, replace_all: bool = False
+    ) -> Any:
+        self._record(file_path)
+
+    async def aedit(
+        self, file_path: str, old_string: str, new_string: str, replace_all: bool = False
+    ) -> Any:
+        self._record(file_path)
+
+    def delete(self, file_path: str) -> Any:
+        self._record(file_path)
+
+    async def adelete(self, file_path: str) -> Any:
+        self._record(file_path)
+
+
+#: Every call that takes a path and changes a file, with what else it needs. One entry
+#: per method rather than one representative, because the spelling is handed on at each
+#: call site: the read below held its own sync half, and these six were held by nothing
+#: on either -- `awrite`, `aedit` and `adelete` are executed by no test at all.
+CHANGES_A_FILE = {
+    "write": {"content": "x"},
+    "edit": {"old_string": "a", "new_string": "b"},
+    "delete": {},
+}
+
+
+@pytest.mark.parametrize("call", sorted(CHANGES_A_FILE), ids=sorted(CHANGES_A_FILE))
+def test_a_call_that_changes_a_file_hands_on_the_spelling_the_rules_read(call, way):
+    """`_where` normalises a path, asks the rules about *that*, and the backend has to
+    be handed the same one: it routes on the leading slash, so `skills/x` handed on as
+    written is looked for under the session instead of in the catalogue -- "a different
+    file from the one the rules were asked about".
+    """
+    inner = _Recording()
+    # Not a `BackendProtocol`, and that is the test: it implements the six calls under
+    # test and records what each was handed.
+    handed = PermittedBackend(inner, [])  # ty: ignore[invalid-argument-type]
+    name = call if way == "sync" else f"a{call}"
+
+    asked = getattr(handed, name)("skills/x", **CHANGES_A_FILE[call])
+    if way == "async":
+        asyncio.run(asked)
+
+    assert inner.asked == ["/skills/x"], f"{name} handed on {inner.asked}"
+
+
 def test_a_listing_leaves_out_what_may_not_be_read(backend):
     """A refused `read` is little use if `ls`, `glob` and `grep` still say the file is
     there and quote it: `grep` returns the matching line.
@@ -272,18 +340,25 @@ def test_another_spelling_of_a_denied_path_is_the_same_path(backend, spelling):
     assert handed.read(spelling).error == f"permission denied for read on {KEY}"
 
 
-def test_the_backend_is_asked_for_the_spelling_the_rules_were(cfg, backend):
+def test_the_backend_is_asked_for_the_spelling_the_rules_were(cfg, backend, way):
     """`skills/x` written the shell's way passes the rules as `/skills/x` and, handed
     on as written, is looked for under the session instead of in the catalogue: the
     backend routes on the leading slash.
+
+    Both ways: the success line of `aread` was executed by no test, so handing the
+    written spelling on there left the suite green while the same change to `read`
+    reddened this.
     """
     skill = cfg.catalogue_roots["skills"] / "probe"
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text("in the catalogue\n")
     handed = PermittedBackend(backend, [PRIVATE])
+    asked = "skills/probe/SKILL.md"
 
-    assert backend.read("skills/probe/SKILL.md").error, "the two spellings are one file"
-    assert "in the catalogue" in handed.read("skills/probe/SKILL.md").file_data["content"]
+    assert backend.read(asked).error, "the two spellings are one file"
+    got = handed.read(asked) if way == "sync" else asyncio.run(handed.aread(asked))
+
+    assert "in the catalogue" in got.file_data["content"]
 
 
 def test_a_path_that_climbs_out_is_an_error_on_the_result(backend):

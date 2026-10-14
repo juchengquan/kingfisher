@@ -785,6 +785,53 @@ def test_a_skill_in_reach_is_still_reported_when_the_request_left_it_out(with_sk
     assert skills_withheld(kf, ("B",), ()) == ("review",)
 
 
+#: A third skill, declared by a subagent `skilled` hands work to and named by no agent.
+#: `subagent_skills` narrows a subagent's `skills:` by what the run activated, so this
+#: one is inert -- and the report, like the listing, must not name it.
+DECLARES_ITS_OWN = """name: helper
+description: A subagent.
+source_ids: [A, B]
+skills: [spare]
+system_prompt: |
+  You help.
+"""
+
+
+@pytest.fixture
+def with_a_subagents_own_skill(with_skills):
+    """`with_skills`, plus a skill only a reached subagent declares."""
+    folder = with_skills.skills_dir / "spare"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "SKILL.md").write_text(SKILL.format(name="spare"), encoding="utf-8")
+    directory = with_skills.catalogue_roots["agents"]
+    (directory / "skilled.yaml").write_text(SKILLED + "subagents: [helper]\n", encoding="utf-8")
+    helpers = subagents_dir(with_skills)
+    helpers.mkdir(parents=True, exist_ok=True)
+    (helpers / "helper.yaml").write_text(DECLARES_ITS_OWN, encoding="utf-8")
+    return with_skills
+
+
+def test_a_skill_only_a_subagent_declares_is_not_reported_as_withheld(
+    with_a_subagents_own_skill,
+):
+    """The skills half of what `offers` asks, on the report rather than the listing. A
+    subagent can only narrow what reached it, so a skill no reached agent is told about
+    is one this caller gets by no path -- and naming it in the withheld report says it
+    exists.
+
+    Unguarded on both readers until now, for one reason: the listing's fixture had the
+    subagent declare the skill its own agent already granted, so unioning the subagents
+    back in added nothing either rule would notice. `review` is asserted beside it, so a
+    filter that emptied the row would not pass.
+    """
+    kf = Kingfisher(with_a_subagents_own_skill, backends=default_backends)
+
+    told = skills_withheld(kf, ("B",), ())
+
+    assert "spare" not in told, "no agent B reaches is told about it"
+    assert told == ("review",), "and the one B does reach is still named"
+
+
 def test_a_skill_audience_written_qualified_hides_the_bare_name_too(with_skills):
     """The agent file may spell a skill `catalogue::audit` while the listing says `audit`.
     Compared as written, the audience would hide nothing.
