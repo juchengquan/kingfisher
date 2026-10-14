@@ -277,13 +277,22 @@ for the next reader who reaches for one.*
   0.7.22, langchain-core 1.5.5 and 1.6.10.)*
 - **A model's profile sizes the summarizer, and one passed in replaces langchain's.**
   `ChatAnthropic` built without `profile=` fills it from langchain's own table:
-  `claude-sonnet-4-5` arrives with a full profile, `max_input_tokens` 1,000,000 among
-  it, and `MiniMax-M3`, which the table lacks, with `None` -- so the summarizer takes
-  its fixed 170,000 tokens and six messages. Built with `profile=`, the class keeps
-  that dict as given: `{"max_input_tokens": 200000}` on `claude-sonnet-4-5` is the
-  whole profile, `pdf_inputs` and `tool_calling` gone with the rest. A row's `extra:`
-  reaches the constructor, so `extra: {profile: ...}` in `models.yaml` is this.
-  *(2026-10-13, langchain-anthropic 1.5.6.)*
+  `claude-sonnet-4-5` arrives with a full profile of 24 keys, `max_input_tokens`
+  200,000 among them, and `MiniMax-M3`, which the table lacks, with `None` -- so the
+  summarizer takes its fixed 170,000 tokens and six messages. Built with `profile=`,
+  the class keeps that dict as given: `{"max_input_tokens": 120000}` on
+  `claude-sonnet-4-5` is the whole profile, `pdf_inputs` and `tool_calling` gone with
+  the rest. A row's `extra:` reaches the constructor, so `extra: {profile: ...}` in
+  `models.yaml` is this.
+
+  **That number is the table's, not this model's, and the table moved.** This read
+  1,000,000 until 2026-10-14, measured against langchain-anthropic 1.5.6 and true
+  then; 1.7.6 says 200,000, and the upgrade that installed it is the same commit that
+  re-dated two entries above without re-measuring this one. It is the figure a
+  deployment sizes against -- the trigger for this model is 0.85 of it -- so a stale
+  copy here is a five-fold error in the one number anybody reads off the page. Nothing
+  kingfisher owns decides it, which is the reason to re-measure rather than record.
+  *(2026-10-14, langchain-anthropic 1.7.6; 1,000,000 at 1.5.6.)*
 
 ## Skills and subagents
 
