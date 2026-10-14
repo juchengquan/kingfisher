@@ -2131,6 +2131,38 @@ alternative: taking `profile` out of `extra` and setting it once the class has
 filled in its own -- a special case in `build_model` for a model no shipped row
 declares a profile on. *(2026-10-13.)*
 
+**A row that reserves the whole window for output is refused when the model is built.**
+`max_tokens` is the output ceiling and reads like the model's own limit, which is the
+mistake: deepagents takes it off the advertised input window before sizing a request, so
+`max_tokens: 190001` against a 200,000-token window leaves a budget of zero and every
+turn is refused before it is sent. Measured through `kingfisher run`: a
+`ContextOverflowError` whose message names no model, no row and no number, reaching the
+terminal as a traceback. It is a `ConfigError` from `build_model` now, beside the
+refusal for a value the chat class did not keep, and the command prints it as one line.
+
+Refused rather than warned, because no request of any size can be sent -- so it cannot
+be a decision anybody meant. The window comes from the provider package's profile for
+that model name, which moves: it moved from 1,000,000 to 200,000 under this project
+once. A row that started yesterday failing to start today is the right outcome when the
+alternative is every turn dying.
+
+**`doctor` still does not check it, and the reason is measured.** The pair is only
+knowable from a built model, and building one imports the provider package: ~700ms
+against 17ms for importing kingfisher itself, on both adapters. `test_nothing_here_calls
+_a_model` -- "the line that keeps this cheap enough to run before every deployment" --
+is right, and the first version of this change broke it along with two import-weight
+rules. The construction itself is 0.03-0.18ms; measuring that and not the import is how
+the wrong design got as far as green tests. So the pair is refused where a model is
+actually built, which is the first turn, and `doctor` is blind to it the way it is
+already blind to every other `build_model` refusal.
+
+A `ContextOverflowError` from an input that genuinely does not fit still reaches the
+terminal as a traceback. Catching it in the command would mean granting
+`presentation/cli` a langchain dependency, which `THIRD_PARTY` exists to make somebody
+argue for; translating provider failures at the harness boundary is the same change as
+the connection error that reaches the terminal the same way, and belongs with it.
+*(2026-10-14, from an architecture review.)*
+
 ## What a tool returns
 
 **A workspace tool's return type is langchain's rule, and kingfisher adds none.**

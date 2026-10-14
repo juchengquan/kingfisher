@@ -254,7 +254,12 @@ for the next reader who reaches for one.*
   once summarised is refused with `ContextOverflowError` before it is sent. One
   70,000-character question in a 20,000-token window made no event at 0.7.6 and is
   refused at 0.7.22, so the ledger's tests trip the summariser with two half-window
-  questions instead, the second fitting once the first is summarised. The ledger's
+  questions instead, the second fitting once the first is summarised. The budget is
+  `max(0, int(max_input_tokens * 0.95) - max_tokens)`, so the configured *output*
+  reservation comes off it: on a 200,000-token window, `max_tokens: 190001` leaves
+  zero and every turn is refused before it is sent. `build_model` refuses that pair
+  now, and `test_the_share_a_request_may_fill_is_the_one_deepagents_applies` drives
+  their own `_input_budget` so the mirrored 0.95 cannot go stale quietly. The ledger's
   `summarised` mark rests on this, and
   `test_a_turn_says_on_its_closing_line_whether_it_ended_summarised` holds it.
   *(2026-10-12, deepagents 0.7.6; the budget 2026-10-13, deepagents 0.7.22.)*

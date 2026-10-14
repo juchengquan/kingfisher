@@ -86,7 +86,12 @@ default: MiniMax-M3
 # exceptions have real defaults, because a missing token ceiling behaves
 # differently per vendor and a model timeout has nowhere else to fall back to:
 #
-#   max_tokens   default 4096
+#   max_tokens   default 4096. How much the model may *write*, not how much it
+#                may read. It is taken off the model's input window before a
+#                request is sized, so a window-sized one leaves nothing for the
+#                conversation and is refused when the model is built -- for a
+#                model whose window is known at all, which means one the provider
+#                package has a profile for, or one declaring its own below.
 #   timeout_s    default 120. Bounds silence, not total generation: kingfisher
 #                streams, and the read clock resets on every chunk.
 #   temperature  unset
