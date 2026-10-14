@@ -1096,7 +1096,7 @@ def test_every_rule_reading_the_written_profile_is_marked_for_macos():
     """
     import ast
 
-    def reads_the_written_profile(node: ast.FunctionDef) -> bool:
+    def reads_the_written_profile(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         drives = reads = False
         # The callees, so `confinement.profile(...)` -- which builds the text and writes
         # nothing -- is not taken for the field naming the written file.
@@ -1121,17 +1121,26 @@ def test_every_rule_reading_the_written_profile_is_marked_for_macos():
                 reads = True
         return drives and reads
 
-    files = sorted(Path(__file__).resolve().parents[1].rglob("test_*.py"))
+    tests_root = Path(__file__).resolve().parents[1]
+    files = sorted(tests_root.rglob("test_*.py"))
     # The collection is the whole rule: pointed at nothing it reports success over
     # nothing, which is what `test_no_rule_here_is_parametrized_over_nothing` exists for
-    # and what reading one file amounted to.
-    assert len(files) > 1, "this rule is reading one file again, or none"
+    # and what reading one file amounted to. Counted against the tree rather than
+    # against one, because `> 1` passed on two files of a hundred and more -- a
+    # threshold that is satisfied by almost nothing is the same mistake one step along.
+    on_disk = sum(1 for _ in tests_root.rglob("test_*.py"))
+    assert len(files) == on_disk and on_disk > 1, (
+        f"this rule walks {len(files)} of the {on_disk} test files on disk"
+    )
 
     unmarked = [
-        f"{path.relative_to(Path(__file__).resolve().parents[2]).as_posix()}::{node.name}"
+        f"{path.relative_to(tests_root.parent).as_posix()}::{node.name}"
         for path in files
-        for node in ast.parse(path.read_text(encoding="utf-8")).body
-        if isinstance(node, ast.FunctionDef)
+        # `walk`, not `body`: a rule written as a method of a `Test*` class binds the
+        # same mistake and was invisible here. None exists today, which is why only a
+        # planted one finds it.
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
         and node.name.startswith("test_")
         and reads_the_written_profile(node)
         and not any("macos" in ast.unparse(mark) for mark in node.decorator_list)

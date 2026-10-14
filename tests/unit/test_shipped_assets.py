@@ -740,6 +740,16 @@ def test_the_typed_presets_tool_reports_rather_than_repairs(shipped):
     assert unread.split() == ["'1.2'", repr("1.1\u0663.0")]
 
 
+#: The shipped tools that name a file, by function. A count stood here and read
+#: `>= 6` against nine -- a third of them could stop naming a file with nothing red,
+#: which is the same mistake as no threshold at all. Named rather than counted so that
+#: a tool added fails this and gets the check, and one that drops out fails it too.
+NAMES_A_FILE = frozenset({
+    "bar_chart", "csv_filter", "csv_profile", "csv_columns", "line_count",
+    "status_codes", "log_levels", "pdf_pages", "pdf_text", "mask_secrets",
+})
+
+
 def test_every_shipped_tool_naming_a_file_reads_it_through_the_backend(shipped):
     """The examples are what a tool author copies, so they teach the route that works
     on every backend: `file_path` and `runtime: ToolRuntime[ToolContext]`, never a
@@ -748,7 +758,7 @@ def test_every_shipped_tool_naming_a_file_reads_it_through_the_backend(shipped):
     """
     import ast
 
-    wrong, named = [], 0
+    wrong, named = [], set()
     for module in sorted(shipped.rglob("*.py")):
         if "__pycache__" in module.parts:
             continue
@@ -759,14 +769,18 @@ def test_every_shipped_tool_naming_a_file_reads_it_through_the_backend(shipped):
             arguments = {a.arg for a in node.args.args}
             if node.name.startswith("_") or not arguments & {"path", "file_path"}:
                 continue
-            named += 1
+            named.add(node.name)
             where = f"{module.relative_to(shipped)}:{node.name}"
             if "path" in arguments or "runtime" not in arguments:
                 wrong.append(f"{where} takes a host file rather than reading the backend")
             elif "virtual path" not in (ast.get_docstring(node) or ""):
                 wrong.append(f"{where} does not say `file_path` is a virtual path")
 
-    assert named >= 6, "no shipped tool names a file, so this checked nothing"
+    assert named == NAMES_A_FILE, (
+        f"the shipped tools naming a file are {sorted(named)}, and this rule is "
+        f"written against {sorted(NAMES_A_FILE)} -- add the new one here, or say why "
+        "one stopped naming a file"
+    )
     assert not wrong, wrong
 
 
