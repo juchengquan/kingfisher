@@ -1443,6 +1443,42 @@ def test_naming_a_source_id_that_does_not_exist_is_refused(policied, capsys):
     assert "unknown source id" in capsys.readouterr().err
 
 
+def test_naming_a_caller_on_a_workspace_with_no_vocabulary_is_refused(
+    cfg, at_the_command_line, capsys
+):
+    """The listing accepted any name where nothing narrows and printed the unscoped
+    answer: `list --as marketing` showed the whole catalogue and exited zero, which
+    reads as what marketing reaches. A turn naming the same caller was refused.
+
+    The refusal is one door now, so this and the turn share it -- `held_by`, which is
+    already the only place the shape of a caller's source ids is read.
+    """
+    from tests.conftest import an_agent
+
+    an_agent(cfg, "plain")
+
+    assert main(["list", "--as", "marketing"]) != 0
+
+    said = capsys.readouterr().err
+    assert "declares no source ids" in said
+    assert "marketing" in said, "and which name narrowed nothing"
+
+
+def test_the_operators_own_view_is_not_refused_with_it(
+    cfg, at_the_command_line, capsys
+):
+    """The control: a rule refusing every `--as` on a policy-free workspace would pass
+    the one above, and `UNSCOPED` is what somebody writes to mean exactly this.
+    """
+    from tests.conftest import an_agent
+
+    an_agent(cfg, "plain")
+
+    assert main(["list", "--as", "UNSCOPED"]) == 0
+    assert main(["list"]) == 0
+    assert "plain" in capsys.readouterr().out
+
+
 def test_no_vocabulary_means_no_access_section(cfg, at_the_command_line, capsys):
     from tests.conftest import an_agent
 

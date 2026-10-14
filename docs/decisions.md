@@ -1891,6 +1891,43 @@ bare name two definitions share, an agent's file naming both, and a loop through
 definitions the caller cannot reach. They are left as they were for the owner to word.
 *(2026-10-12.)*
 
+**Naming a caller where nothing narrows is refused, at one door.** A workspace with no
+`source_ids.yaml` declares no vocabulary, so any name expands to nobody and the answer
+is the unrestricted one. A turn was refused for it; a listing was not, so `kingfisher
+list --as marketing` printed the whole catalogue and exited zero on the deployment a
+turn could not run against -- which reads as what marketing reaches rather than as a
+workspace with no policy. It is the state the HTTP surface already refuses at startup,
+recorded there as "a server somebody believes is locked down and is not".
+
+The refusal is in `held_by` now, which is already the only place the shape of a
+caller's source ids is read, so every door shares it: the listing, a turn, the library
+and the service. `_effective_grants` had its own, and dropping it fixed a second thing
+-- it refused on `source_ids is not None`, and `UNSCOPED` is not `None`, so the one
+value that exists to mean *no caller* was refused by exactly the deployments that need
+it and `run --as UNSCOPED` could not run a workspace with no policy. `UNSCOPED` and an
+empty sequence pass; a name does not. *(2026-10-14, from an architecture review.)*
+
+**A bundle that will not import is told to every caller, and that is not a leak.** Ten
+definition-scoped faults are filtered to what a caller reaches, and `bundles_error` is
+not. A review read the asymmetry as the one that was missed. It is the other way round:
+`warm` reads every bundle and the service constructor calls it, so a bundle that will
+not import stops the deployment before any request has named a caller -- measured --
+and withholding it from a scoped view would hide the reason that caller's own run
+refuses to start. It is the shape of `subagents_error`, which is kept for the same
+reason and says so.
+
+What was actually wrong was the message and the comment above it. `doctor` gave "a
+reader has to be told which subagent to go and open" as the reason this fault has a row
+of its own, and the row said `probe.py: ModuleNotFoundError ...` -- a basename, in a
+folder it never named, and a workspace may hold one of those under every subagent. Each
+bundle is read on its own now, so the failure arrives named by whose folder it was in,
+every broken one is reported rather than the first, and the subagents that are fine
+still list what they hold. The traceback is carried over the re-raise on purpose:
+`test_a_defect_reaches_the_refusal_it_is_filed_under` keys a refusal by the deepest
+frame inside the package, and a plain re-raise filed two refusals in
+`kinds/tools/catalogue.py` under the wrapper. *(2026-10-14, from an architecture
+review.)*
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds

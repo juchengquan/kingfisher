@@ -9,7 +9,7 @@ import sys
 import time
 import uuid
 import warnings
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -183,19 +183,73 @@ def runs_locally(runner: Any) -> bool:
     return getattr(runner, "local", True)
 
 
-def _once(result: Any, *, key: Callable[[Any], Any]) -> Any:
-    """A result with its repeated matches dropped, first occurrence kept."""
-    if result.matches is None:
+def _once(result: Any, *, key: Callable[[Any], Any], field: str = "matches") -> Any:
+    """A result with its repeated rows dropped, first occurrence kept.
+
+    First and not last, which decides what a reader sees: the row a real directory
+    produced carries its modification time, and the route's own row is a stand-in with
+    an empty one.
+    """
+    rows = getattr(result, field)
+    if rows is None:
         return result
     seen: set[Any] = set()
     kept = []
-    for one in result.matches:
+    for one in rows:
         identity = key(one)
         if identity in seen:
             continue
         seen.add(identity)
         kept.append(one)
-    return replace(result, matches=kept)
+    return replace(result, **{field: kept})
+
+
+def _by_path(one: Mapping[str, Any]) -> Any:
+    """A match's identity: the file it names."""
+    return one.get("path")
+
+
+def _by_line(one: Mapping[str, Any]) -> Any:
+    """A grep match's identity, which is the line and not the file."""
+    return one.get("path"), one.get("line"), one.get("text")
+
+
+def _directly_under(path: str, here: str) -> bool:
+    """Whether `path` names something `here` holds, rather than itself or something
+    deeper.
+
+    The empty remainder is the directory asked about. Left in, a route listed its own
+    stand-in row among its contents -- `ls /inputs` answered `/inputs/` and the file
+    beside it -- which is how this was found.
+    """
+    if not path.startswith(here):
+        return False
+    rest = path[len(here) :].rstrip("/")
+    return bool(rest) and "/" not in rest
+
+
+def _listing(result: Any, path: str, routes: Iterable[tuple[str, Any]]) -> Any:
+    """One directory's own entries: what it holds, each named once.
+
+    `ls` is non-recursive by deepagents' own documentation, and at the root it appends
+    a stand-in row for every route -- so a route nested two deep arrived as a top-level
+    entry of `/`, next to the folder that holds it. The stand-in is kept and moved to
+    the directory it belongs under, rather than dropped: with nothing written there yet
+    the real folder does not exist, so that row is the only place the model hears the
+    route is reachable at all.
+    """
+    if result.entries is None:
+        return result
+    here = path if path.endswith("/") else f"{path}/"
+    kept = [one for one in result.entries if _directly_under(one.get("path", ""), here)]
+    named = {one.get("path", "") for one in kept}
+    kept += [
+        {"path": prefix, "is_dir": True, "size": 0, "modified_at": ""}
+        for prefix, _ in routes
+        if _directly_under(prefix, here) and prefix not in named
+    ]
+    kept.sort(key=lambda one: one.get("path", ""))
+    return _once(replace(result, entries=kept), key=lambda one: one.get("path"), field="entries")
 
 
 class SessionClaims:
@@ -252,16 +306,34 @@ class SessionClaims:
 class WorkspaceScopedBackend(SessionClaims, CompositeBackend):
     """A `CompositeBackend` that refuses host paths instead of re-rooting them.
 
-    `glob` and `grep` are deduplicated. They merge every backend's answer, and two
-    of the routes here point *inside* the default backend's own root -- `/inputs` and
-    `/memory` are real directories under the session -- so each saw the same file
-    twice: measured, one file supplied with `--input` came back as two matches with
-    one path between them, on every pattern.
+    `ls`, `glob` and `grep` are deduplicated, on both paths. They merge every
+    backend's answer, and two of the routes here point *inside* the default backend's
+    own root -- `/inputs` and `/memory` are real directories under the session -- so
+    each saw the same file twice: measured, one file supplied with `--input` came back
+    as two matches with one path between them, on every pattern.
+
+    Each override is written twice because deepagents offers each tool twice, and an
+    async turn goes through the second one. The sync three were deduplicated for a
+    release while `aglob`, `agrep` and `als` were not -- so the same session answered
+    one way through `run` and another through the async path, which no suite asking
+    only the sync half can see.
     """
+
+    def ls(self, path: str) -> Any:
+        """What this directory holds, each named once."""
+        return _listing(super().ls(path), path, self.sorted_routes)
+
+    async def als(self, path: str) -> Any:
+        """The same, for an async turn."""
+        return _listing(await super().als(path), path, self.sorted_routes)
 
     def glob(self, pattern: str, path: str | None = None) -> Any:
         """Every match, minus the ones a second backend already gave."""
-        return _once(super().glob(pattern, path), key=lambda one: one.get("path"))
+        return _once(super().glob(pattern, path), key=_by_path)
+
+    async def aglob(self, pattern: str, path: str | None = None) -> Any:
+        """The same, for an async turn."""
+        return _once(await super().aglob(pattern, path), key=_by_path)
 
     def grep(
         self,
@@ -272,9 +344,19 @@ class WorkspaceScopedBackend(SessionClaims, CompositeBackend):
         max_count: int | None = None,
     ) -> Any:
         """The same, keyed by the line rather than the file."""
+        return _once(super().grep(pattern, path, glob, max_count=max_count), key=_by_line)
+
+    async def agrep(
+        self,
+        pattern: str,
+        path: str | None = None,
+        glob: str | None = None,
+        *,
+        max_count: int | None = None,
+    ) -> Any:
+        """The same, for an async turn."""
         return _once(
-            super().grep(pattern, path, glob, max_count=max_count),
-            key=lambda one: (one.get("path"), one.get("line"), one.get("text")),
+            await super().agrep(pattern, path, glob, max_count=max_count), key=_by_line
         )
 
     def __init__(

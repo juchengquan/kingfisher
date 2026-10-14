@@ -25,7 +25,7 @@ from kingfisher.kinds.skills.registry import SkillRegistry
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.rules import refuse_miscounted
 from kingfisher.kinds.subagents.spec import SubagentError
-from kingfisher.kinds.tools.catalogue import LocalToolRepository
+from kingfisher.kinds.tools.catalogue import LocalToolRepository, ToolError
 from kingfisher.kinds.tools.spec import Offering
 from kingfisher.layout import RESERVED_SKILL_FOLDER
 
@@ -108,8 +108,8 @@ class Definitions:
         # happens to activate `surveyor` is the shape of the bug `list` exiting
         # zero over a broken agent catalogue already was. Encapsulation decides
         # who may *call* a tool, not whether it is allowed to be broken.
-        for repository in self.bundled_tools.values():
-            _ = repository.found
+        for name, repository in self.bundled_tools.items():
+            _ = bundled_tool_names(name, repository)
         # Skills are read here too, and the difference from tools is what
         # happens next rather than whether it happens: a skill that will not
         # load is reported by `unloadable` and never fatal, which is the rule
@@ -281,6 +281,31 @@ def _misplaced_in(directories: tuple[Path, ...]) -> tuple[str, ...]:
         for n, directory in enumerate(directories, start=1)
         for deep in LocalSkillRepository(directory, flat=True).misplaced
     )
+
+
+def bundled_tool_names(name: str, repository: ToolRepository) -> tuple[str, ...]:
+    """One subagent's own tool names, with a failure named by whose folder it was in.
+
+    `probe.py: ModuleNotFoundError ...` is a basename in somebody's folder, and which
+    somebody is the one thing a reader needs: `doctor` gives that as the reason this
+    fault has a row of its own -- "a reader has to be told which subagent to go and
+    open" -- and the row did not tell them. The skills half has said it since it was
+    written, in `_one_registry` below.
+
+    Here rather than in the listing, because both readers come through this: a
+    deployment that will not start refuses from `warm`, and that refusal is what an
+    operator sees.
+    """
+    try:
+        return tuple(sorted(one.name for one in repository.found))
+    except (ToolError, SubagentError) as exc:
+        msg = f"subagent {name!r}: {exc}"
+        # The original traceback, carried over: `test_a_defect_reaches_the_refusal_it
+        # _is_filed_under` keys a refusal by the deepest frame inside the package, and
+        # a plain re-raise files every failure under this function -- so two refusals
+        # in `kinds/tools/catalogue.py` would have read as reached while nothing
+        # reached them.
+        raise type(exc)(msg).with_traceback(exc.__traceback__) from exc
 
 
 def _one_registry(name: str, directories: tuple[Path, ...]) -> SkillRegistry:

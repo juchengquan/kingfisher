@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -19,8 +20,10 @@ from kingfisher.infrastructure.harness.host_paths import (
 from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
+    OFFLOADS_ROUTE,
     ROUTES,
     SCRATCH_ROUTE,
+    TOOL_RESULTS_ROUTE,
     denied_read_scopes,
     denied_scopes,
     routed_paths,
@@ -461,6 +464,25 @@ def _rows(result):
     return result.matches
 
 
+def _entries(result):
+    """The same for a directory listing, which answers in a different field."""
+    assert result.entries is not None, result.error
+    return result.entries
+
+
+def _asked(backend, way: str, name: str, *args, **kwargs):
+    """One file tool, through whichever of its twins `way` names.
+
+    Every test below goes through this, so a fix landing on one half is a test that
+    fails on the other. The three sync overrides were written and the three async ones
+    were not, for a release: `aglob` handed the model a file twice and `als` the
+    whole root twice, and a suite that only ever asked the sync half could not see it.
+    """
+    if way == "sync":
+        return getattr(backend, name)(*args, **kwargs)
+    return asyncio.run(getattr(backend, f"a{name}")(*args, **kwargs))
+
+
 #: Every readable route that lives under the session root, and so was doubled.
 INSIDE_THE_ROOT = {
     "/inputs": ("inputs",),
@@ -468,7 +490,7 @@ INSIDE_THE_ROOT = {
 }
 
 
-def test_a_routed_file_is_globbed_once(cfg, session_dir):
+def test_a_routed_file_is_globbed_once(cfg, session_dir, way):
     """Measured before this: `--input orders.csv` reached the model as
     `['/inputs/orders.csv', '/inputs/orders.csv']`, on every pattern tried.
     """
@@ -478,12 +500,14 @@ def test_a_routed_file_is_globbed_once(cfg, session_dir):
         where.mkdir(parents=True, exist_ok=True)
         (where / "probe.txt").write_text("needle\n", encoding="utf-8")
 
-        found = [one["path"] for one in _rows(backend.glob(f"{route}/probe.txt"))]
+        found = [
+            one["path"] for one in _rows(_asked(backend, way, "glob", f"{route}/probe.txt"))
+        ]
 
         assert found == [f"{route}/probe.txt"], route
 
 
-def test_a_routed_file_is_grepped_once(cfg, session_dir):
+def test_a_routed_file_is_grepped_once(cfg, session_dir, way):
     """From the root, which is where the two answers meet."""
     backend = backend_at(cfg, session_dir)
     for route, parts in INSIDE_THE_ROOT.items():
@@ -491,13 +515,72 @@ def test_a_routed_file_is_grepped_once(cfg, session_dir):
         where.mkdir(parents=True, exist_ok=True)
         (where / "probe.txt").write_text("needle\n", encoding="utf-8")
 
-        found = [one["path"] for one in _rows(backend.grep("needle", path="/"))]
+        found = [
+            one["path"] for one in _rows(_asked(backend, way, "grep", "needle", path="/"))
+        ]
 
         # Taken away again before the next route: this greps from the root, so a probe
         # left behind is a second match and the answer stops being about one route.
         (where / "probe.txt").unlink()
 
         assert found == [f"{route}/probe.txt"]
+
+
+def test_the_root_names_each_directory_it_holds_once(cfg, session_dir, way):
+    """`ls /` answered eleven rows for seven directories: three of the routes point at
+    real directories under the session, so each arrived once from the route and once
+    from the default backend walking past it, told apart only by an empty
+    `modified_at`. A model reading that has two `/inputs/` to choose between.
+    """
+    backend = backend_at(cfg, session_dir)
+
+    found = [one["path"] for one in _entries(_asked(backend, way, "ls", "/"))]
+
+    assert found == sorted(set(found)), "a directory named twice at the root"
+    assert "/inputs/" in found, "and the control: the routes are listed at all"
+
+
+def test_the_root_holds_no_path_that_is_not_in_it(cfg, session_dir, way):
+    """deepagents adds a row for every route at the root, nested ones included, while
+    its own `ls` is non-recursive -- so `/scratchpad/tool_results/` was a top-level
+    entry of `/`, beside the folder that holds it.
+    """
+    backend = backend_at(cfg, session_dir)
+
+    found = [one["path"] for one in _entries(_asked(backend, way, "ls", "/"))]
+
+    deeper = [one for one in found if one.strip("/").count("/")]
+    assert not deeper, f"{deeper} are not in `/`, and `ls` does not recurse"
+
+
+def test_a_route_below_another_is_listed_under_the_one_above_it(cfg, session_dir, way):
+    """The other half, and the reason the rows above are moved rather than dropped:
+    nothing has written there yet, so the folder does not exist and that row is the
+    only place the model hears the route is reachable.
+    """
+    backend = backend_at(cfg, session_dir)
+
+    found = [one["path"] for one in _entries(_asked(backend, way, "ls", SCRATCH_ROUTE))]
+
+    assert TOOL_RESULTS_ROUTE in found
+    assert OFFLOADS_ROUTE in found
+
+
+def test_a_directory_still_lists_what_it_actually_holds(cfg, session_dir, way):
+    """The control the two rules above need: a filter keeping only direct children
+    passes both of them by answering nothing at all.
+    """
+    backend = backend_at(cfg, session_dir)
+    inside = session_dir / "outputs" / "deep"
+    inside.mkdir(parents=True, exist_ok=True)
+    (inside / "probe.txt").write_text("needle\n", encoding="utf-8")
+
+    assert [one["path"] for one in _entries(_asked(backend, way, "ls", "/outputs"))] == [
+        "/outputs/deep/"
+    ]
+    assert [one["path"] for one in _entries(_asked(backend, way, "ls", "/outputs/deep"))] == [
+        "/outputs/deep/probe.txt"
+    ]
 
 
 def test_a_file_matching_twice_still_reports_both(cfg, session_dir):

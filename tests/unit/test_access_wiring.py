@@ -134,9 +134,19 @@ def test_an_unknown_source_id_is_refused(policied):
 def test_naming_source_ids_where_there_is_no_vocabulary_is_refused(cfg):
     """A caller naming source ids against a deployment that declares none is confused, and
     silently ignoring them is how they stay confused.
+
+    Asked of `held_for` rather than of `_effective_grants`, because the refusal moved
+    into the door both of them share: a turn came through here and the listing did not,
+    so `kingfisher list --as marketing` printed the whole catalogue and exited zero on
+    the deployment a turn was refused against. It is the state `decisions.md` describes
+    over HTTP -- "a server somebody believes is locked down and is not" -- refused there
+    at startup since 2026-09-01.
     """
     kf = Kingfisher(cfg, backends=default_backends)
-    with pytest.raises(AccessError, match="no access policy"):
+    with pytest.raises(AccessError, match="declares no source ids"):
+        kf.held_for(("A",))
+    # And still refused at the door a turn comes through, which is what moved.
+    with pytest.raises(AccessError, match="declares no source ids"):
         kf._effective_grants(("A",))
 
 
@@ -156,6 +166,50 @@ def test_a_bare_string_of_source_ids_is_refused_rather_than_spelled_out(policied
 
     with pytest.raises(AccessError, match="not a string"):
         kf.held_for("A")
+
+
+def test_the_refusal_names_what_was_asked_for_and_what_to_do(cfg):
+    """A refusal somebody has to go and research is one this file keeps refusing to
+    ship: it names the ids that narrow nothing, the file that would declare them, and
+    the value that means no caller.
+    """
+    kf = Kingfisher(cfg, backends=default_backends)
+
+    with pytest.raises(AccessError) as caught:
+        kf.held_for(["marketing", "sales"])
+
+    said = str(caught.value)
+    assert "marketing, sales" in said
+    assert "source_ids.yaml" in said and "UNSCOPED" in said
+
+
+def test_meaning_no_caller_is_still_how_you_say_it(cfg):
+    """`UNSCOPED` is the one value that says the absence is meant, and a deployment with
+    no policy is where saying it is most ordinary -- so it was the one that refused it.
+
+    `_effective_grants` refused on `source_ids is not None`, and `UNSCOPED` is not
+    `None`: `kingfisher run --as UNSCOPED` could not run a workspace with no
+    `source_ids.yaml`, which is every workspace that has not adopted a policy. Driven
+    through the turn's own door, because that is the one that refused.
+    """
+    kf = Kingfisher(cfg, backends=default_backends)
+
+    assert kf.held_for(UNSCOPED) is None
+    assert kf.held_for(None) is None
+    # An empty sequence too: it names no caller to be wrong about, which is a
+    # different thing from naming one the deployment cannot honour.
+    assert kf.held_for([]) is None
+    assert kf._effective_grants(UNSCOPED) is not None
+    assert kf._effective_grants(None) is not None
+
+
+def test_a_declared_caller_is_still_expanded(cfg):
+    """The other direction: a rule refusing on the names rather than on the absence of
+    a vocabulary would pass every test above and break every policied deployment.
+    """
+    kf = Kingfisher(replace(cfg, access=vocabulary()), backends=default_backends)
+
+    assert kf.held_for(["A"]) is not None
 
 
 def test_one_function_reads_what_shape_a_caller_s_source_ids_are_in():
