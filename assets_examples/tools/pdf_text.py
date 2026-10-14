@@ -24,6 +24,15 @@ from kingfisher import ToolContext
 #: page on a dense report, so under half a minute. The docstring below names it too.
 MAX_PAGES = 500
 
+#: What `pages` means when the caller leaves it out. A span stood here -- `1-500`, the
+#: cap written into the default -- and a span is clipped to the document before the cap
+#: is applied, so on a 503-page report the last three pages were dropped and the answer
+#: said nothing was left out, while the same call naming `1-503` named them. The
+#: docstring recommends leaving it out, so the recipe it recommends was the one that
+#: reported least. A word rather than a span, because what the caller asked for is
+#: every page there is.
+EVERYTHING = "all"
+
 KB = 1024
 
 
@@ -81,7 +90,7 @@ def _size(count: int) -> str:
 def pdf_text(
     file_path: str,
     runtime: ToolRuntime[ToolContext],
-    pages: str = f"1-{MAX_PAGES}",
+    pages: str = EVERYTHING,
     save_as: str | None = None,
 ) -> str:
     """Save a PDF's text as a text file, under a `--- page N ---` line per page, and say
@@ -91,8 +100,9 @@ def pdf_text(
 
     `file_path` is the same virtual path the file tools take, such as
     `/inputs/report.pdf`. `pages` names the pages to extract, such as `1-20` or
-    `3-5,9`; leave it out for the whole document, up to 500 pages a call. The answer
-    says how many pages the document has and which asked-for pages were left out. A
+    `3-5,9`; leave it out, or pass `all`, for the whole document, up to 500 pages a
+    call. The answer says how many pages the document has and which asked-for pages
+    were left out — including the pages past the cap when you asked for all of them. A
     page with no text is usually a scan or a picture, and the answer names those too.
 
     `save_as` is where the text is saved, a full virtual path such as
@@ -107,7 +117,10 @@ def pdf_text(
         PdfminerException,
     )
 
-    asked = _asked(pages)
+    # Parsed before the file is fetched, so a `pages` nobody can read costs nothing to
+    # find out about. `all` is the one value that cannot be read yet: it means every
+    # page, and how many that is comes from the document below.
+    asked = None if pages.strip().lower() == EVERYTHING else _asked(pages)
     data = _fetched(runtime, file_path)
     try:
         # Opened from the bytes in memory: a temporary file would be on kingfisher's
@@ -116,7 +129,7 @@ def pdf_text(
         # is pdfminer, which is Python.
         with pdfplumber.open(io.BytesIO(data)) as pdf:
             total = len(pdf.pages)
-            present = _present(asked, total)
+            present = _present(asked if asked is not None else [(1, total)], total)
             if not present:
                 msg = f"{file_path} has {total} page(s); pages {pages!r} names none of them"
                 raise ValueError(msg)
