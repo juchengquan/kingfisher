@@ -975,6 +975,61 @@ def test_a_broken_private_tool_makes_the_listing_non_zero(cfg):
     assert failed(found)
 
 
+def test_a_broken_bundle_is_reported_by_the_subagent_whose_folder_it_is_in(cfg):
+    """`probe.py: ModuleNotFoundError ...` is a basename, and a workspace may hold one
+    of those under every subagent -- so the reader `doctor` says this row exists for,
+    the one who "has to be told which subagent to go and open", was told a filename.
+    """
+    workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
+    bundle = cfg.definitions / "subagents" / "surveyor" / "tools"
+    (bundle / "probe.py").write_text(BROKEN, encoding="utf-8")
+
+    found = inventory(cfg)
+
+    assert found.bundles_error is not None
+    assert "surveyor" in found.bundles_error
+    assert "probe.py" in found.bundles_error, "and still the file to open"
+
+
+def test_the_refusal_at_startup_names_the_subagent_too(cfg):
+    """The same gap at the more important door: an operator whose deployment will not
+    start was told a basename, because `warm` iterated the repositories and not the
+    names it has them under.
+    """
+    workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
+    bundle = cfg.definitions / "subagents" / "surveyor" / "tools"
+    (bundle / "probe.py").write_text(BROKEN, encoding="utf-8")
+
+    with pytest.raises(ToolError, match="surveyor"):
+        Definitions.from_config(cfg).warm()
+
+
+def test_every_broken_bundle_is_named_and_the_sound_ones_still_answer(cfg):
+    """One `try` around the whole walk gave up at the first bundle, so a workspace with
+    two broken ones reported whichever came first and emptied every subagent's section
+    to do it -- including the sections of the subagents that were fine.
+    """
+    workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
+    subagents = cfg.definitions / "subagents"
+    for name in ("auditor", "surveyor"):
+        folder = subagents / name
+        (folder / "tools").mkdir(parents=True, exist_ok=True)
+        (folder / f"{name}.yaml").write_text(OWN_TOOL_ONLY.replace("surveyor", name))
+        (folder / "tools" / "probe.py").write_text(BROKEN, encoding="utf-8")
+    sound = subagents / "scribe"
+    (sound / "tools").mkdir(parents=True, exist_ok=True)
+    (sound / "scribe.yaml").write_text(OWN_TOOL_ONLY.replace("surveyor", "scribe"))
+    (sound / "tools" / "pen.py").write_text(
+        TOOL.format(name="pen", answer="ok"), encoding="utf-8"
+    )
+
+    found = inventory(cfg)
+
+    assert found.bundles_error is not None
+    assert "auditor" in found.bundles_error and "surveyor" in found.bundles_error
+    assert found.bundled_tools.get("scribe") == ("pen",), "the sound one still answers"
+
+
 def test_a_broken_bundle_does_not_hide_the_rest_of_the_listing(cfg):
     """The other half of the same bug: one bad tool printed one section of four."""
     workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)

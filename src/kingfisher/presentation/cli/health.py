@@ -531,11 +531,17 @@ def _subagent_tools(found: Inventory) -> Iterator[Check]:
     budget. The seam was already there: above is one check per directory a deployment
     authors, and this is what one subagent carries inside its own folder.
     """
-    # A subagent's private tools are Python like any other, and a bundle that will
-    # not import stops the request that activates that subagent rather than the
-    # deployment. Its own check rather than folded into `tools`, for the reason
-    # `bundles_error` is its own field: a reader has to be told which subagent to
-    # go and open.
+    # A subagent's private tools are Python like any other, and a bundle that will not
+    # import stops the whole deployment: `warm` reads every bundle and the service
+    # constructor calls it, before any request has named a caller. This said it stopped
+    # "the request that activates that subagent rather than the deployment", which is
+    # the shape `warm` was written to prevent -- and a reader believing it would then
+    # read the error reaching a scoped caller as a leak and filter it away, taking with
+    # it the reason that caller's own run refuses to start.
+    #
+    # Its own check rather than folded into `tools`, for the reason `bundles_error` is
+    # its own field: a reader has to be told which subagent to go and open. That is
+    # what the message says now; it used to be a bare `probe.py`.
     if found.bundles_error is not None:
         yield Check(
             "subagent tools", "fail", found.bundles_error, "fix or remove the module it names"

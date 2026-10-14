@@ -30,12 +30,31 @@ def held_by(
     it looks like, because a list is the obvious thing to write; a bare string is a
     sequence too, and is refused rather than read a letter at a time.
     """
-    if vocabulary is None or source_ids is None or isinstance(source_ids, _Unscoped):
+    if source_ids is None or isinstance(source_ids, _Unscoped):
         return None
     if isinstance(source_ids, str):
         msg = f"source ids is a sequence of names, not a string -- write [{source_ids!r}]"
         raise AccessError(msg)
-    return vocabulary.expand(tuple(source_ids))
+    named = tuple(source_ids)
+    if vocabulary is None:
+        # A name where nothing narrows expanded to nobody and went through
+        # unrestricted, so `list --as marketing` printed the whole catalogue and
+        # exited zero -- the state the HTTP surface refuses at startup as "a server
+        # somebody believes is locked down and is not".
+        #
+        # Here rather than at each door, so the listing is covered: it bypasses
+        # `caller_holds` deliberately, being read-only, and the refusal it is exempt
+        # from is the one for naming *nobody*. An empty sequence passes, naming no
+        # caller to be wrong about, and `UNSCOPED` is how the absence is meant.
+        if named:
+            msg = (
+                f"this deployment declares no source ids, so {', '.join(sorted(named))} "
+                f"narrows nothing and the answer would be the unrestricted one. Declare "
+                f"them in source_ids.yaml, or pass UNSCOPED to mean no caller"
+            )
+            raise AccessError(msg)
+        return None
+    return vocabulary.expand(named)
 
 
 def caller_holds(

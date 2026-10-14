@@ -17,7 +17,7 @@ from kingfisher.domain.access import (
     reaches,
 )
 from kingfisher.domain.capabilities import ALL, CapabilityError, Selection, unoffered
-from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
+from kingfisher.infrastructure.catalogue import Definitions, bundled_tool_names, resolve_definitions
 from kingfisher.kinds.agents.spec import AgentError
 from kingfisher.kinds.importing import defined_in_a_workspace
 from kingfisher.kinds.middlewares.catalogue import MiddlewareError
@@ -333,16 +333,22 @@ def _bundled(
     error: str | None = None
     orphans: tuple[str, ...] = ()
     carried: tuple[str, ...] = ()
+    reasons: list[str] = []
     try:
         # Imported here for the reason `tools` is: a listing is where someone
         # goes *because* something is broken, so the error is carried and
         # printed over the rest of the output rather than raised through it.
-        tools = MappingProxyType(
-            {
-                name: tuple(sorted(one.name for one in repository.found))
-                for name, repository in resolved.bundled_tools.items()
-            }
-        )
+        #
+        # One subagent at a time, so a failure arrives named by whose folder it was in
+        # and the others still answer. A comprehension over the whole walk gave up at
+        # the first one, which emptied every subagent's section to report one of them.
+        own: dict[str, tuple[str, ...]] = {}
+        for name, repository in resolved.bundled_tools.items():
+            try:
+                own[name] = bundled_tool_names(name, repository)
+            except (ToolError, SubagentError) as exc:
+                reasons.append(str(exc))
+        tools = MappingProxyType(own)
         # Its own `try`, and the whole reason this one is narrow: reading the
         # *workspace* catalogue here put a `tools/` failure into `bundles_error`, so
         # one unparseable module was reported twice -- once as `tools` and once as
@@ -377,9 +383,12 @@ def _bundled(
         # there. Uncaught it escaped `inventory` and took `doctor` down with it --
         # the same shape as a workspace tool wearing a built-in's name, found the
         # same way, by a rule that drove the refusal rather than reading about it.
-        error = str(exc)
+        # With whatever the walk above already named, so a broken bundle beside a
+        # folder holding two definitions reports both rather than the second alone.
+        error = "; ".join([*reasons, str(exc)])
         return tools, skills, shadowed, error, orphans, carried
 
+    error = "; ".join(reasons) or None
     orphans = tuple(resolved.subagents.orphaned_assets)
     # Read off the same bundles, and asked of the backing rather than of the file
     # extension: a `.py` under `subagents/` may own a folder like any document, so

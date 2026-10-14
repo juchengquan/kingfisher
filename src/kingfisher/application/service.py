@@ -52,7 +52,6 @@ from kingfisher.application.turn import (
 )
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.access import (
-    AccessError,
     AccessReport,
     Held,
     SourceIds,
@@ -384,20 +383,17 @@ class Kingfisher(Sessions, Disposal):
 
     def _effective_grants(self, source_ids: Held | None) -> Capabilities:
         """The ceiling for one call: this deployment's, narrowed by the caller's."""
-        if self.access is None:
-            if source_ids is not None:
-                msg = (
-                    "this deployment has no access policy, so naming source ids means "
-                    "nothing here -- write source_ids.yaml in KINGFISHER_DEFINITIONS_DIR"
-                )
-                raise AccessError(msg)
-            return self.grants
         # Nothing central left to intersect with: the narrowing that source ids
         # imply is per definition, and happens in `AgentSpec.declares` where
         # the spec is known. What this still does is ask `caller_holds` for the
-        # refusal every door shares, and validate the names -- a caller naming a
+        # refusals every door shares, and validate the names -- a caller naming a
         # source id this deployment does not declare is refused here rather than
         # quietly reaching nothing.
+        #
+        # One call and no branch of its own. A branch here refused on `source_ids is
+        # not None` where there was no policy, and `UNSCOPED` is not `None` -- so the
+        # one value that means *no caller* was refused by the deployments that need it,
+        # and `run --as UNSCOPED` could not run a workspace with no `source_ids.yaml`.
         access.caller_holds(self.access, source_ids)
         return self.grants
 
