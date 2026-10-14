@@ -87,14 +87,36 @@ def test_a_paused_turn_cut_short_is_refused_with_a_reason(cfg):
 
 
 def test_the_kit_catches_a_shell_that_can_write_the_harness(cfg, session_dir):
-    """Run against the default with the sandbox off: `/inputs` is still refused by its
-    permission bits, and `/.harness` is not refused by anything.
+    """Run against the default with the sandbox off, where nothing refuses the shell
+    either folder -- and the kit has to name both.
+
+    This asserted `/inputs` was absent, on the belief that its permission bits held
+    without a fence. They do not: the shell runs as the uid that owns those files, so
+    `chmod u+w` and the same write replaces the caller's file. The kit lifts the bits
+    before writing now, which is what turned that assertion from true-looking into
+    false, and a deployment author reading it was being told a folder was safe that
+    two commands take.
     """
     unfenced = replace(cfg, shell_sandbox="off")
 
-    with pytest.raises(AssertionError, match=r"under /\.harness") as caught:
+    with pytest.raises(AssertionError) as caught:
         shell_denied(lambda: backend_at(unfenced, session_dir))
-    assert "/inputs" not in str(caught.value), "the permission bits stopped holding /inputs"
+
+    said = str(caught.value)
+    assert "/.harness" in said and "/inputs" in said, said
+
+
+def test_the_kit_passes_where_a_fence_holds_both_folders(cfg, session_dir):
+    """The other direction, and the one that makes the rule above mean something: with
+    the fence this host offers, the kit finds nothing. Without this, a kit that raised
+    for every backend would pass that rule too.
+    """
+    from kingfisher.infrastructure.sandbox import confinement
+
+    if confinement.shell_confinement(cfg).mechanism != confinement.SANDBOX_EXEC:
+        pytest.skip("no fence here to hold them")
+
+    shell_denied(lambda: backend_at(cfg, session_dir))
 
 
 @pytest.mark.parametrize(

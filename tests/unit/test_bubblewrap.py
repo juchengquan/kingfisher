@@ -9,7 +9,7 @@ import pytest
 from kingfisher.infrastructure.sandbox.bubblewrap import SYSTEM_PATHS, BubblewrapRunner, argv_for
 from kingfisher.infrastructure.sandbox.linux import present
 from kingfisher.infrastructure.workspace import ensure_session_layout
-from kingfisher.layout import HARNESS
+from kingfisher.layout import HARNESS, INPUTS
 
 
 @pytest.fixture
@@ -77,10 +77,13 @@ def test_the_harness_is_read_only_and_lands_over_the_session(session):
     again" -- each left the whole suite green.
     """
     argv = argv_for(session)
-    harness = str(session / HARNESS)
+    harness, inputs = str(session / HARNESS), str(session / INPUTS)
 
-    assert chosen(argv) == {(harness, harness)}
-    assert index_of(argv, "--ro-bind", harness) > index_of(argv, "--bind", str(session))
+    # Both folders the shell may read and not write, as an exact set: one of them
+    # arriving without the other is the shape this is written against.
+    assert chosen(argv) == {(harness, harness), (inputs, inputs)}
+    for path in (harness, inputs):
+        assert index_of(argv, "--ro-bind", path) > index_of(argv, "--bind", str(session))
 
 
 def test_no_system_path_bound_here_holds_a_session(session):

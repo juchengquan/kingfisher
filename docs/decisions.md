@@ -2377,6 +2377,33 @@ in the four places this deny set is pinned. What would close it properly is
 `LAYOUT_VERSION`, which has not moved across three layout changes -- an open question
 recorded elsewhere, not one to settle here. *(2026-10-14, from an architecture review.)*
 
+**The caller's inputs are refused the shell by each fence, not by their mode bits.**
+`/inputs` is read-only to the file tools by a deny rule and was read-only to the shell
+by nothing but dropped write bits -- and the shell runs as the uid that owns those
+files. Measured through a real `execute`: a plain write is refused by the kernel, `chmod
+u+w` and the same write replaces the caller's file, and `rm -rf inputs` takes the
+folder. What that folder holds is what `layout.py` calls never re-derivable from the
+workspace, versioned by nothing.
+
+So each fence refuses it the way it already refuses `.harness`: one regex in the macOS
+profile, written once now and called for both folders; a read-only bind in bubblewrap,
+after the session's own and for the reason that order exists; and, on Landlock, by
+leaving `inputs` out of what the session grants, because a read-only grant under a
+writable parent is stepped over there. Reads are kept in all three -- the agent is given
+the caller's files to read -- and the rest of the session stays writable, which the rule
+asserts beside the refusal so that a fence refusing everything would not pass it.
+
+**And the shipped contract kit said this held when it did not.** `shell_denied` wrote
+directly and never lifted the bits, so it passed against a folder two commands take, and
+a deployment author running the kit was told the shell was refused it. It lifts them
+first now, and the `chmod` is allowed to fail: on a backend without one, the write is
+still what is asserted. The kit's own control asserted `/inputs` was *absent* from the
+failure it raises on an unfenced shell -- that assertion was the belief, stated as a
+test -- and it names both folders now, with a case beside it where the fence holds them
+so that a kit raising for everything would not pass either. The docstring on
+`read_only_permissions` named the bits as the other half of its rule; they are a layer
+below both halves, and it says so. *(2026-10-14, from an architecture review.)*
+
 **Access is recorded and not acted on, because the session is the boundary.** A row
 holds the audience its tool was granted under, and a `task` answer holds its run's
 audiences together, since an answer can repeat anything the run read. Nothing filters

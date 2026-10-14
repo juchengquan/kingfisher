@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kingfisher.infrastructure.sandbox.linux import MAX_OUTPUT_BYTES, outcome, present
-from kingfisher.layout import HARNESS
+from kingfisher.layout import HARNESS, INPUTS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -96,7 +96,10 @@ def argv_for(
     # the writable one underneath it. Before it, the session bind would cover
     # this again. `present` drops it if it is absent, which is why
     # `ensure_session_layout` makes it before a fence is built.
-    for path in present([Path(session_dir) / HARNESS]):
+    # `inputs` beside it, and for the same reason: it is the caller's and the agent is
+    # promised it cannot change it. Dropping its write bits was not enough, since the
+    # shell owns those files and can lift them.
+    for path in present([Path(session_dir) / HARNESS, Path(session_dir) / INPUTS]):
         argv += ["--ro-bind", str(path), str(path)]
     argv += [
         # A fresh minimal /dev rather than the container's.
