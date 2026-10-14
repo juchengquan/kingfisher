@@ -36,12 +36,24 @@ TOP = 36
 KB = 1024
 
 
+#: What one call reads. A backend hands a file back whole, into kingfisher's own
+#: process, and nothing else bounds it: `docs/guides/tools.md` has the reason under
+#: *A tool that reads a file*.
+MAX_INPUT_BYTES = 32 * 1024 * 1024
+
+
 def _fetched(runtime: ToolRuntime[ToolContext], file_path: str) -> bytes:
     """The file's bytes, through the session's backend -- wherever that keeps them."""
     (got,) = runtime.context.backend.download_files([file_path])
     if got.error or got.content is None:
         msg = f"{file_path}: {got.error or 'no content'}"
         raise FileNotFoundError(msg)
+    if len(got.content) > MAX_INPUT_BYTES:
+        msg = (
+            f"{file_path} is {len(got.content)} bytes, past the {MAX_INPUT_BYTES} this "
+            f"tool reads in one call -- ask for a smaller file, or a part of this one"
+        )
+        raise ValueError(msg)
     return got.content
 
 
