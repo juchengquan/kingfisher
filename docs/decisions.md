@@ -1518,11 +1518,12 @@ be a no-op. Measured through the real command, a caller holding one source id wa
 the tool the one agent they reach narrows away from them, the tool and the skill only an
 agent they cannot open offers, and the file each tool lives in.
 
-What a listing can ask is whether **any definition this caller reaches offers it to
-them**, which is what `_offers` does -- over the reachable agents and the reachable
-subagents alike, because a caller who reaches a subagent reaches what it holds. Three
-things about that walk are load-bearing and each was a silent mutation until a rule was
-written for it:
+What a listing can ask is whether **any agent this caller reaches offers it to them**,
+which is what `offers` does. It walked the reachable subagents as well, on the argument
+that a caller who reaches a subagent reaches what it holds -- false, and corrected on
+2026-10-14 in the entry below: a subagent can only narrow what reached it. Three things
+about that walk are load-bearing and each was a silent mutation until a rule was written
+for it:
 
   - **Reachable definitions, not all of them.** An entry may be written `["*"]`, which
     means anyone who reaches *that definition*; at run time the `and` with the
@@ -1927,6 +1928,44 @@ still list what they hold. The traceback is carried over the re-raise on purpose
 frame inside the package, and a plain re-raise filed two refusals in
 `kinds/tools/catalogue.py` under the wrapper. *(2026-10-14, from an architecture
 review.)*
+
+**A caller is told only what some path reaches, and a declaration is not a path.** The
+rule implemented in 2026-10-13 was "no definition they reach declares it"; the promise
+in `formats.md` is "an asset a caller's source ids do not reach". Three things sat in
+the gap between those sentences, each measured through the real command against the real
+build:
+
+  - **A tool a reached subagent declares, and no reached agent grants.** `ceiling`
+    narrows a subagent's tools by what the agent holds, so the subagent got nothing --
+    while the listing and the withheld report both handed the name over. `offers` is
+    asked of the reached *agents* now. A subagent is never a widener; its own
+    declaration can only subtract.
+  - **The same for skills**, where `subagent_skills` narrows by what the run activated.
+    The subagent was handed `skills: None` and the name was offered anyway.
+  - **A subagent whose own line admits the caller and which no reached agent names.**
+    Filtered by that line alone it was listed; a request naming it wired nothing,
+    because `Capabilities.subagents` may only narrow what an agent declares. Both
+    conditions are asked together now, in `handed_work_by`, which the listing and the
+    report share -- a listing and a report asking this separately is how they came
+    apart before.
+
+`handed_work_by`, `within_reach` and `activated` sit in `domain/access.py` rather than
+beside the build. The first home was `activation.py`, and it cost `kingfisher list` a
+provider SDK: `test_a_light_export_stays_light` is what said so, immediately.
+
+The refusals are listings too. A definition's typo listed every workspace tool and its
+file to a scoped caller -- three names and three paths where the agent they reach grants
+one -- while the subagent refusals beside it were already filtered. What a refusal
+*judges* is deliberately not narrowed: a file naming a tool nothing offers is the file's
+fault whoever is asking, and a definition naming a real tool out of one caller's reach
+is not an error at all, which is the case
+`test_a_definition_naming_a_real_tool_out_of_reach_is_not_refused` holds. Narrowing the
+judgement would refuse one file for some callers and not others, which is what
+`refuse_misnamed_by` exists to prevent.
+
+Unscoped, every one of these answers exactly what it answered before: an operator's view
+is everything, including the subagent nobody activates, which is the thing they are
+reading a listing to find. *(2026-10-14, from an architecture review.)*
 
 ## Models and endpoints
 

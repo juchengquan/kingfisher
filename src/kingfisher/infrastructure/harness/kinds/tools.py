@@ -161,7 +161,8 @@ def _tool_objects(graph: Any) -> Mapping[str, Any]:
     return {name: tool for name, tool in by_name.items() if name not in left_out}
 
 
-def _resolve_tools(
+def _resolve_tools(  # noqa: PLR0913 -- the sixth is who is asking, which nothing
+    # here can derive and the composition root already knows.
     # Separate parameters rather than one bundle: folding them up would hide
     # what each one is for.
     where: str,
@@ -174,6 +175,9 @@ def _resolve_tools(
     assemble: Callable[[tuple[Any, ...]], Any],
     *,
     names_needed: bool = False,
+    #: What a refusal may list, where there is a caller to narrow it for. Passed in
+    #: rather than worked out here: who is asking is the composition root's to know.
+    in_reach: Callable[[str], bool] | None = None,
 ) -> _ToolSurface:
     """What this request may call, and what this agent offers at all.
 
@@ -195,7 +199,10 @@ def _resolve_tools(
     _refuse_shadowed(workspace_tools, builtin=builtin, where=where)
     offering = Offering.of(workspace_tools, builtin=builtin)
     offering.refuse_unknown(
-        capabilities.builtin_tools, capabilities.tools, subject="this request"
+        capabilities.builtin_tools,
+        capabilities.tools,
+        subject="this request",
+        in_reach=in_reach,
     )
     return _ToolSurface(
         offering=offering,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.domain.access import AUDIENCED, offers
+from kingfisher.domain.access import AUDIENCED, handed_work_by, offers
 from kingfisher.domain.capabilities import Capabilities, Selection, withheld
 from kingfisher.domain.result import RunEvent
 from kingfisher.infrastructure.catalogue import Definitions
@@ -12,7 +12,6 @@ from kingfisher.infrastructure.harness.activation import (
     activatable_skills,
     available_skills,
     defined_subagents,
-    within_reach,
 )
 from kingfisher.infrastructure.harness.kinds.tools import (
     registered_tools,
@@ -101,34 +100,29 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
         return tuple(name for name in names if same(name) not in gone)
 
     def subagents() -> tuple[str, ...]:
-        """Every subagent, less each one whose own `source_ids:` misses this caller.
+        """Every subagent this run could have been handed work by, for this caller.
 
-        `denied` cannot see those: it is what the agent's line removed, and a subagent's
-        own line is read off the subagent.
+        Two conditions: the subagent's own `source_ids:` has to admit them, and the
+        agent this run opened has to name it. `denied` can see neither -- it is what
+        the agent's own line removed from a name it does name -- and asking only the
+        first left a subagent nothing activates reported as withheld, which says it
+        exists. `handed_work_by` is the one answer the listing asks too.
         """
         defined = defined_subagents(cfg, catalogue=catalogue)
-        return within_reach(defined, defined, held)
+        # No branch on `held` of its own: with no vocabulary `handed_work_by` answers
+        # every subagent, which is what this said before and what an unscoped reader is
+        # owed. A scoped run with no spec to ask -- an injected graph, which resolves
+        # none -- reaches nothing that can be shown reachable, and kingfisher did not
+        # wire that graph's subagents either.
+        return handed_work_by([agent] if agent is not None else [], defined, held)
 
-    def reached() -> list[object]:
-        """The definitions this run can reach: the agent it opened, and the subagents
-        that agent can hand work to and this caller can open.
-
-        A tool or a skill has nowhere to write an audience of its own, so what can be
-        asked of one is whether a definition in reach offers it -- the question the
-        listing asks, through the same function. `subagents` above is the precedent:
-        it exists because `denied` sees the agent's line and nothing else.
-        """
-        if agent is None:
-            return []
-        reachable = set(subagents())
-        defined = defined_subagents(cfg, catalogue=catalogue)
-        return [agent, *(spec for name, spec in defined.items() if name in reachable)]
-
-    # Built once: `reached` reads the subagent catalogue, and a predicate per row
-    # would read it twice to give the same answer.
-    reached_definitions = reached()
-    offers_tool = offers("tools", held, reached_definitions)
-    offers_skill = offers("skills", held, reached_definitions, same=spelling["skills"])
+    # The agent this run opened, and not the subagents it reaches: a subagent can only
+    # narrow what reached it, so one declaring a tool the agent was not granted
+    # contributes a name this caller gets by no path. `offers` says what the ceiling
+    # does with it. Built once, because a predicate per row would ask twice.
+    reached_agents = [] if agent is None else [agent]
+    offers_tool = offers("tools", held, reached_agents)
+    offers_skill = offers("skills", held, reached_agents, same=spelling["skills"])
 
     offered = (
         # Built-ins and workspace tools are granted apart, so they are reported

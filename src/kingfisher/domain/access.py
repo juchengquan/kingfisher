@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Final, Literal
+from typing import Any, Final, Literal
 
 from kingfisher.domain import fields
 from kingfisher.domain.capabilities import ALL, Selection
@@ -148,6 +148,15 @@ def offers(
     may write `audit` or `catalogue::audit`, and an audience written one way has to keep
     the entry the registry names the other way.
 
+    **`specs` is the agents a caller reaches, not every definition.** A subagent is
+    never a widener -- `ceiling` narrows its tools by what the agent holds and
+    `subagent_skills` by what the run activated -- so a subagent declaring a name no
+    reachable agent grants contributes one the caller gets by no path. Asked of
+    subagents too, this offered `atool` to a caller whose only agent granted `btool`,
+    and the build then handed its subagent nothing: measured. The promise is "an asset
+    a caller's source ids do not reach", and unioning over declarations answers a
+    different sentence -- "no definition they reach declares it".
+
     Here rather than in the listing that first needed it, because the withheld run
     report is the second reader and the two had different answers: the report measured
     what a grant left out against the whole catalogue, so a caller narrowing their own
@@ -164,6 +173,65 @@ def offers(
         reached |= {same(name) for name in offered or ()}
     reached -= {None}
     return lambda name: same(name) in reached
+
+
+def activated(named: Selection, defined: Mapping[str, Any]) -> tuple[str, ...]:
+    """The subagents an agent activates: the ones it names, with `"*"` expanded.
+
+    Its subagents' own `subagents:` are deliberately not walked. A helper reaches a
+    run only where the agent names it too -- `subagent_helpers` narrows one by what
+    the agent declared -- so walking the chain here printed a subagent the build
+    would drop, which is worse than printing nothing: a listing is read to find out
+    what an agent ends up with.
+    """
+    if named is None:
+        return ()
+    return tuple(sorted(defined if named == ALL else set(named) & set(defined)))
+
+
+def within_reach(
+    names: Iterable[str], defined: Mapping[str, Any], held: frozenset[str] | None
+) -> tuple[str, ...]:
+    """`names`, less each subagent whose own `source_ids:` does not reach this caller.
+
+    The build drops those, so whatever tells a caller about subagents drops them too:
+    out of reach reads as not offered, and a report naming one says it exists.
+    """
+    if held is None:
+        return tuple(names)
+    return tuple(name for name in names if reaches(stated(defined[name]).source_ids, held))
+
+
+def handed_work_by(
+    # Loosely typed for the reason `offers` is: a listing asks this of records read
+    # off a catalogue that may have failed to load, so what arrives is whatever the
+    # inventory managed to read rather than a settled `AgentSpec`.
+    agents: Iterable[Any],
+    defined: Mapping[str, Any],
+    held: frozenset[str] | None,
+) -> tuple[str, ...]:
+    """Every subagent one of these agents can hand work to, for this caller.
+
+    Two conditions, and a subagent needs both: its own `source_ids:` has to admit the
+    caller, and some agent the caller can open has to name it. `within_reach` above
+    asks the first alone, which left a subagent nothing activates reachable by no path
+    and listed anyway -- measured, a definition admitting `B` that no agent names was
+    offered to `B`, and a request naming it wired nothing.
+
+    One function for both readers, because a listing and a run report asking this
+    separately is how they came to disagree before: see `offers` above, written for the
+    same reason. Here in the domain rather than beside the build, because the listing
+    asks it and `kingfisher list` may not load a provider SDK to find out --
+    `test_a_light_export_stays_light` is what says so.
+    """
+    if held is None:
+        return tuple(defined)
+    reachable = {
+        name
+        for spec in agents
+        for name in activated(spec.declares(held).subagents, defined)
+    }
+    return within_reach(sorted(reachable), defined, held)
 
 
 def narrowed_for(spec: object, held: frozenset[str] | None) -> dict[str, Selection]:

@@ -18,6 +18,7 @@ from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.config import Config
+from kingfisher.domain.access import offers
 from kingfisher.domain.capabilities import (
     ALL,
     Capabilities,
@@ -515,6 +516,10 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # reaches, and a typo behind an entry audience would be refused to some callers only.
     refuse_misnamed_by(cfg, agent, asked, held=held, catalogue=roots)
     defined, activated = _activated_subagents(cfg, capabilities, catalogue=roots, held=held)
+    # What a refusal below may list, which is not what it judges. `None` where there is
+    # nobody to narrow for, and where the agent is unknown: a build handed its own graph
+    # resolves no spec, and an empty `offered:` list is worse than a wide one.
+    in_reach = None if held is None or agent is None else offers("tools", held, [agent])
     surface = _resolve_tools(
         str(roots.tools.root) if roots.tools.root is not None else "the catalogue",
         capabilities,
@@ -536,6 +541,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             or defined[n].subagents is not None
             for n in activated
         ),
+        in_reach=in_reach,
     )
     # After the probe, because what a workspace offers is only knowable from an
     # assembled graph -- `builtin_tool_names` builds one to answer it, so asking it
@@ -578,7 +584,10 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         for name in activated:
             subject = f"subagent {name!r}"
             surface.offers.refuse_unknown(
-                defined[name].builtin_tools, defined[name].tools, subject=subject
+                defined[name].builtin_tools,
+                defined[name].tools,
+                subject=subject,
+                in_reach=in_reach,
             )
             # After the unknown-name check, so a definition naming `csv_column`
             # hears that the name is wrong rather than that it has moved.

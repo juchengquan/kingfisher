@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from deepagents import FilesystemPermission
 
 from kingfisher.config import ConfigError
-from kingfisher.domain.access import reaches
+from kingfisher.domain.access import within_reach
 from kingfisher.domain.capabilities import (
     ALL,
     Capabilities,
@@ -97,19 +97,6 @@ def for_the_caller(
     what the request asked for.
     """
     return agent.declares(held).intersect(asked) if agent is not None else asked
-
-
-def within_reach(
-    names: Iterable[str], defined: Mapping[str, SubagentSpec], held: frozenset[str] | None
-) -> tuple[str, ...]:
-    """`names`, less each subagent whose own `source_ids:` does not reach this caller.
-
-    The build drops those, so whatever tells a caller about subagents drops them too:
-    out of reach reads as not offered, and a report naming one says it exists.
-    """
-    if held is None:
-        return tuple(names)
-    return tuple(name for name in names if reaches(defined[name].source_ids, held))
 
 
 def offered_to(defined: Mapping[str, SubagentSpec], held: frozenset[str] | None) -> str:

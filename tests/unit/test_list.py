@@ -1064,10 +1064,25 @@ def test_an_agent_naming_no_tools_offers_the_whole_catalogue(
     assert "secret_export" in printed, "the unset field offers this one too"
 
 
-#: A subagent this caller reaches, offering a tool no agent mentions. A subagent carries
-#: its own `source_ids:`, so it is reachable on its own terms -- and a caller who reaches
-#: it reaches what it holds, through whichever agent delegates to it.
-REACHABLE_SUBAGENT = """name: helper
+#: An agent that grants one tool to both callers and hands work to `helper`. Both
+#: halves are load-bearing: the grant makes the answer non-empty, and naming the
+#: subagent is what puts its declarations in front of the walk at all.
+WIDE_AND_HANDS_WORK_ON = """name: wide
+description: An agent.
+source_ids: [A, B]
+tools:
+  - name: line_count
+    source_ids: [A, B]
+subagents: [helper]
+system_prompt: |
+  You do the task.
+"""
+
+
+#: A subagent whose own line admits this caller, declaring a tool no agent they reach
+#: grants. Its own `source_ids:` makes it reachable on its own terms and that is not
+#: enough: a subagent is never a widener, so the name is one the caller gets by no path.
+DECLARES_MORE_THAN_IT_CAN_HOLD = """name: helper
 description: A subagent.
 source_ids: [A, B]
 tools:
@@ -1079,24 +1094,146 @@ system_prompt: |
 
 
 @pytest.mark.parametrize("form", ["text", "json"])
-def test_a_subagent_in_reach_offers_its_tools_to_that_caller(
+def test_a_tool_only_a_subagent_declares_is_not_offered_to_that_caller(
     form, cfg, at_the_command_line, capsys
 ):
-    """A tool only a subagent holds is shown to a caller who reaches the subagent.
+    """`ceiling` narrows a subagent's tools by what the agent that reached it holds, so
+    a workspace tool no reachable agent grants is one no path reaches.
 
-    Dropping the subagents from the walk leaves the whole suite green otherwise: every
-    other tool here is named by an agent as well, so nothing measures the half of the
-    catalogue a caller reaches only by delegation.
+    This read the other way round for a release, and said so: the walk unioned what
+    every reached definition *declared*, and offered `secret_export` to `B` while a run
+    as `B` handed its subagent nothing -- measured, through the real build. The promise
+    is "an asset a caller's source ids do not reach"; declarations answer a different
+    sentence. `line_count` is asserted beside it because the agent grants that one to
+    `B`, so a filter that offered nothing would pass the first line alone.
+
+    The agent has to *name* the subagent, which the first version of this fixture
+    forgot: unnamed, the subagent is out of reach for a different reason, the union
+    this rules out contributes nothing either way, and unioning the subagents back in
+    left the test green. Found by mutating it.
     """
-    _workspace(cfg, NARROW)
+    _workspace(cfg, WIDE_AND_HANDS_WORK_ON)
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
-    (subagents_dir(cfg) / "helper.yaml").write_text(REACHABLE_SUBAGENT, encoding="utf-8")
+    (subagents_dir(cfg) / "helper.yaml").write_text(
+        DECLARES_MORE_THAN_IT_CAN_HOLD, encoding="utf-8"
+    )
 
     assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
 
     printed = capsys.readouterr().out
-    assert "secret_export" in printed, "the subagent they reach holds it"
-    assert "line_count" not in printed, "and `narrow` still narrows this one away"
+    assert "secret_export" not in printed, "no agent B reaches grants it"
+    assert "line_count" in printed, "and `wide` does, so this is not an empty answer"
+
+
+#: An agent that hands work to one subagent, and the two it could have named. Both
+#: lines admit both callers; only `helper` is named. Nothing names `kept_apart`, so no request
+#: can wire it -- a request may narrow what an agent declares and never add to it, which
+#: `Capabilities.subagents` says in as many words.
+NAMES_ONE_SUBAGENT = """name: boss
+description: An agent.
+source_ids: [A, B]
+subagents: [helper]
+system_prompt: |
+  You do the task.
+"""
+
+PLAIN_SUBAGENT = """name: {name}
+description: A subagent.
+source_ids: [A, B]
+system_prompt: |
+  You do the part you are given.
+"""
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_a_subagent_no_agent_in_reach_activates_is_not_listed(
+    form, cfg, at_the_command_line, capsys
+):
+    """A subagent reaches a run only where an agent names it, which `activated` records
+    -- so its own `source_ids:` admitting a caller is necessary and not sufficient.
+
+    Filtered by that line alone, `kept_apart` was listed to `B` while a request naming
+    it wired nothing: measured through the real build, both directions. `helper` is
+    asserted beside it, because a filter answering nothing would pass the first line.
+    """
+    _workspace(cfg, NAMES_ONE_SUBAGENT)
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    for name in ("helper", "kept_apart"):
+        (subagents_dir(cfg) / f"{name}.yaml").write_text(
+            PLAIN_SUBAGENT.format(name=name), encoding="utf-8"
+        )
+
+    assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
+
+    printed = capsys.readouterr().out
+    assert "kept_apart" not in printed, "no agent B reaches hands it work"
+    assert "helper" in printed, "and `boss` names this one, so this is not an empty answer"
+
+
+def test_the_operator_is_still_shown_the_subagent_nobody_activates(
+    cfg, at_the_command_line, capsys
+):
+    """The other half of the rule above, and the reason it reads `held`: an unscoped
+    listing is the operator's, and a definition no agent names is exactly what they
+    are looking at a listing to find.
+    """
+    _workspace(cfg, NAMES_ONE_SUBAGENT)
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    for name in ("helper", "kept_apart"):
+        (subagents_dir(cfg) / f"{name}.yaml").write_text(
+            PLAIN_SUBAGENT.format(name=name), encoding="utf-8"
+        )
+
+    assert main(["list"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "kept_apart" in printed and "helper" in printed
+
+
+#: The same agent for the skills half: told about one skill, and naming the subagent
+#: whose own `skills:` names another.
+SHARES_SKILL_AND_HANDS_WORK_ON = """name: sharer
+description: An agent.
+source_ids: [A, B]
+skills: [routine]
+subagents: [helper]
+system_prompt: |
+  You do the task.
+"""
+
+
+#: A subagent declaring a skill the agent that reaches it is not told about. The skills
+#: half of the same rule: `subagent_skills` narrows by what the run activated, so this
+#: one is inert, and a listing that counted it named a skill no path reaches.
+DECLARES_A_SKILL = """name: helper
+description: A subagent.
+source_ids: [A, B]
+skills: [routine]
+system_prompt: |
+  You do the part you are given.
+"""
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_a_skill_only_a_subagent_declares_is_not_offered_to_that_caller(
+    form, cfg, at_the_command_line, capsys, monkeypatch
+):
+    """Measured: `askill` offered to a caller whose only agent was told about `bskill`,
+    while the build handed that caller's subagent `skills: None`.
+
+    The agent names the subagent here for the reason the tools half above does: without
+    that, the declaration never reaches the walk and the rule passes either way.
+    """
+    monkeypatch.setenv("KINGFISHER_SKILLS_ENABLED", "1")
+    _workspace(cfg, SHARES_SKILL_AND_HANDS_WORK_ON, skills=("routine", "spare"))
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "helper.yaml").write_text(DECLARES_A_SKILL, encoding="utf-8")
+
+    assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
+
+    printed = capsys.readouterr().out
+    assert "routine" in printed, "`sharer` is told about this one, and B reaches `sharer`"
+    assert "spare" not in printed, "and nothing a caller reaches is told about this one"
 
 
 #: A skill an agent shares with both callers, and one only an agent out of B's reach is
