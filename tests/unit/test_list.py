@@ -1664,6 +1664,7 @@ def test_the_listing_is_clean_when_every_source_id_is_declared(cfg, at_the_comma
 #: `middlewares_error` came to be computed and read by nothing for a release.
 ERRORS_OUTSIDE_THE_KINDS = {
     "bundles_error": "a bundle is one subagent's own folder, not a catalogue",
+    "build_error": "a graph is built from every kind at once, so no one kind owns it",
 }
 
 

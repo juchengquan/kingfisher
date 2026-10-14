@@ -8,8 +8,9 @@ import time
 
 import pytest
 
-from kingfisher import Kingfisher, Request, UnknownSessionError, default_backends
+from kingfisher import Kingfisher, Request, UnknownSessionError, backend_at, default_backends
 from kingfisher.domain.request import Decision, Resume
+from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.layout import HARNESS, PINNED_AGENT, SESSION_DIRS
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import StubCheckpointer
@@ -185,6 +186,72 @@ def test_the_shell_cannot_write_or_remove_its_session_s_harness(cfg):
 
     assert harness.is_dir()
     assert pinned.read_text(encoding="utf-8") == "name: pinned\n"
+
+
+#: Session ids the fence names a folder of its own. `.harness` is refused by
+#: `names_a_session`; `inputs` is not, and the profile guards both -- so one of the two
+#: was a legal id for a session the fence then denied entirely.
+GUARDED_NAMES = ("inputs", ".harness")
+
+
+@macos
+def test_a_session_named_for_a_guarded_folder_still_writes_its_own_files(cfg):
+    """`inputs` is a legal session id -- `names_a_session` refuses only a dot-name --
+    and the macOS profile denied `sessions/<anything>/inputs` *and*
+    `sessions/inputs/...` through one optional segment. Measured: every command in a
+    session called `inputs` failed with `Operation not permitted`, including writing
+    its own `outputs/`, and nothing said why.
+
+    The session segment is required now. What the optional one was for -- stopping a
+    shell leaving a `sessions/inputs` the listing would read as a session -- is
+    `_sessions_denial`'s, and the test below drives that.
+    """
+    session = cfg.workspace / "sessions" / "inputs"
+    session.mkdir(parents=True, exist_ok=True)
+    ensure_session_layout(session)
+    backend = backend_at(cfg, session)
+
+    assert backend.execute("printf ok > outputs/mine.txt").exit_code == 0
+    assert (session / "outputs" / "mine.txt").read_text(encoding="utf-8") == "ok"
+
+
+@macos
+def test_the_guarantee_holds_inside_a_session_named_for_a_guarded_folder(cfg):
+    """The control the rule above needs: requiring the session segment must not stop
+    `inputs` being refused *within* a session, whatever that session is called.
+    """
+    session = cfg.workspace / "sessions" / "inputs"
+    session.mkdir(parents=True, exist_ok=True)
+    ensure_session_layout(session)
+    (session / "inputs" / "given.txt").write_text("as written", encoding="utf-8")
+    backend = backend_at(cfg, session)
+
+    lifted = backend.execute(
+        "chmod u+w inputs inputs/given.txt 2>/dev/null; printf FORGED > inputs/given.txt"
+    )
+    removed = backend.execute("rm -rf inputs")
+
+    assert lifted.exit_code != 0 and removed.exit_code != 0
+    assert (session / "inputs" / "given.txt").read_text(encoding="utf-8") == "as written"
+
+
+@macos
+@pytest.mark.parametrize("name", [*GUARDED_NAMES, "madeup"])
+def test_the_shell_cannot_leave_a_folder_the_listing_would_read_as_a_session(name, cfg):
+    """What the optional segment was doing, and why dropping it costs nothing: making
+    or renaming anything directly under `sessions/` is a write against that node, which
+    `_sessions_denial` refuses for every name at once -- not just the two the folder
+    rules happen to guard.
+    """
+    session = cfg.workspace / "sessions" / DEFAULT
+    session.mkdir(parents=True, exist_ok=True)
+    ensure_session_layout(session)
+    backend = backend_at(cfg, session)
+
+    made = backend.execute(f"mkdir ../{name}")
+
+    assert made.exit_code != 0
+    assert not (cfg.workspace / "sessions" / name).exists()
 
 
 @macos

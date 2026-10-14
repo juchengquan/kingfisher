@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator, AsyncIterator, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from time import monotonic
@@ -288,7 +288,19 @@ class Kingfisher(Sessions, Disposal):
         # cost where it lands is one compiled graph: about 10ms, once, against a
         # turn of 1.5-1.9s.
         if self.catalogue.tools.found:
-            builtin_tool_names(self.cfg, self.catalogue)
+            # Suppressed, and only this type. The probe asks one question -- does a
+            # workspace tool wear a built-in's name -- and answers it with
+            # `CapabilityError`, which still refuses here.
+            # A `ConfigError` is not an answer: it means the deployment could not be
+            # assembled at all, by a `models.yaml` row or a backend, and the probe
+            # never got to look. Raised here it made that fault the probe's, and
+            # `kingfisher sessions` and `kingfisher reap` -- which need no model and
+            # no graph -- exited 2 with no output over one bad row. The turn that
+            # needs a model raises it, naming the row; `doctor` reports it on its own
+            # line. What is lost is the shadow answer for a deployment that cannot
+            # build, which `doctor` also says: the built-in count reads "not checked".
+            with suppress(ConfigError):
+                builtin_tool_names(self.cfg, self.catalogue)
 
         # Session backends and not a backend: one backend is rooted at one session,
         # so a single instance shared by every session would be one filesystem for

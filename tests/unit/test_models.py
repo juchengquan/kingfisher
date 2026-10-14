@@ -296,6 +296,132 @@ models:
 """
 
 
+TOOL = """
+from langchain_core.tools import tool
+
+@tool
+def shout() -> str:
+    \"\"\"Shout.\"\"\"
+    return "ok"
+
+TOOLS = [shout]
+"""
+
+
+def _dead_row(cfg) -> None:
+    """A deployment whose one model row cannot start a turn, with a workspace tool --
+    which is what brings the startup probe into it, and is the ordinary shape.
+    """
+    from tests.conftest import an_agent, tools_dir
+
+    an_agent(cfg, "only")
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "shout.py").write_text(TOOL, encoding="utf-8")
+    (cfg.definitions / "models.yaml").write_text(WINDOW_FOR_OUTPUT, encoding="utf-8")
+
+
+#: Each verb that reads the catalogue, with the exit code it owes. `sessions` and
+#: `reap` need no model at all; the other four report the fault and say so.
+ASKED = {
+    "doctor": (["doctor"], 1),
+    "doctor-json": (["doctor", "--json"], 1),
+    "list": (["list"], 1),
+    "list-json": (["list", "--json"], 1),
+    "sessions": (["sessions"], 0),
+    "reap": (["reap"], 0),
+}
+
+
+@pytest.mark.parametrize("verb", sorted(ASKED), ids=sorted(ASKED))
+def test_a_dead_model_row_still_leaves_every_other_verb_answering(
+    verb, cfg, at_the_command_line, capsys, monkeypatch
+):
+    """The refusal escaped `inventory` and took the diagnostics with it: all four of
+    these exited 2 with *no output*, so the two commands an operator would reach for to
+    find the bad row were the first thing it broke -- and `sessions` and `reap`, which
+    need no model at all, went with them.
+
+    `inventory`'s own comment records this shape as the reason `CapabilityError` is in
+    its catch set; this is the same fault one exception type over.
+    """
+    from kingfisher.presentation.cli.__main__ import main
+
+    argv, code = ASKED[verb]
+    monkeypatch.setenv("GATEWAY_API_KEY", "sk-not-real")
+    _dead_row(cfg)
+
+    assert main(argv) == code
+    assert capsys.readouterr().out, f"{argv} answered nothing"
+
+
+def test_the_listing_and_doctor_both_name_the_row(cfg, at_the_command_line, capsys, monkeypatch):
+    """A non-zero exit tells a script something is wrong; only the text tells the person
+    what, and these two are where they look.
+    """
+    import json
+
+    from kingfisher.presentation.cli.__main__ import main
+
+    monkeypatch.setenv("GATEWAY_API_KEY", "sk-not-real")
+    _dead_row(cfg)
+
+    main(["list"])
+    listed = capsys.readouterr().out
+    main(["doctor"])
+    doctored = capsys.readouterr().out
+    main(["doctor", "--json"])
+    document = json.loads(capsys.readouterr().out)
+
+    assert "cannot build an agent: model 'claude-sonnet-4-5' reserves" in listed
+    assert "agent build" in doctored and "FAIL" in doctored
+    named = [one for one in document["checks"] if one["name"] == "agent build"]
+    assert named and named[0]["verdict"] == "fail"
+
+
+def test_a_turn_still_refuses_the_row_it_cannot_run(cfg, at_the_command_line, capsys, monkeypatch):
+    """What the startup probe stopped raising. Deferring it would be hiding the fault if
+    nothing else refused -- the turn does, naming the row, which is the whole of what
+    #747 was for.
+    """
+    from kingfisher.presentation.cli.__main__ import main
+
+    monkeypatch.setenv("GATEWAY_API_KEY", "sk-not-real")
+    _dead_row(cfg)
+
+    assert main(["run", "say hi", "--agent", "only"]) == 2
+
+    assert "configuration error: model 'claude-sonnet-4-5' reserves" in capsys.readouterr().err
+
+
+SHADOWING_TOOL = """
+from langchain_core.tools import tool
+
+@tool
+def read_file() -> str:
+    \"\"\"Shadow a built-in.\"\"\"
+    return "ok"
+
+TOOLS = [read_file]
+"""
+
+
+def test_the_startup_probe_still_refuses_the_question_it_exists_to_ask(cfg, monkeypatch):
+    """The load-bearing half of deferring. The probe asks one thing -- does a workspace
+    tool wear a built-in's name -- and answers it with `CapabilityError`. Only
+    `ConfigError` is suppressed, so the answer it exists for still stops the service.
+    """
+    from kingfisher import Kingfisher, default_backends
+    from kingfisher.domain.capabilities import CapabilityError
+    from tests.conftest import tools_dir
+
+    monkeypatch.setenv("GATEWAY_API_KEY", "sk-not-real")
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "shadow.py").write_text(SHADOWING_TOOL, encoding="utf-8")
+
+    with pytest.raises(CapabilityError, match="read_file"):
+        Kingfisher(cfg, backends=default_backends)
+
+
 def test_the_command_says_it_in_one_line_rather_than_a_traceback(
     cfg, at_the_command_line, capsys, monkeypatch
 ):
