@@ -542,6 +542,110 @@ def policied_with_a_typo(policied_with_a_stranger):
     return policied_with_a_stranger
 
 
+SURVEYOR_NAMING_A_GHOST = AGENT + "subagents: [helper, ghost]\n"
+
+#: An agent this caller cannot open, which is the only thing naming `theirs`. So
+#: `theirs` is reachable by somebody and not by them, and a listing of what some agent
+#: can hand work to has to leave it out. What holds that is `narrowed_for` reading a
+#: definition's own `source_ids:` as the default audience for its entries, one level
+#: below the listing -- an audience filter at the call site changed no answer here.
+HIDDEN_AGENT = """name: hidden
+description: An agent for B alone.
+source_ids: [B]
+subagents: [theirs]
+system_prompt: |
+  You do the task.
+"""
+
+#: Where the name nothing defines is written. Both are a *file's* mistake, refused
+#: whoever is asking, and both list through `offered_to` -- from two different call
+#: sites, which is why they are driven apart: the helper one was reached by no test.
+A_GHOST_IS_NAMED_BY = {
+    "the agent": ("surveyor", "helper"),
+    "the subagent": ("helper", "surveyor"),
+}
+
+
+def _subagents_offered(cfg, source_ids) -> set[str]:
+    """What one real build's refusal of `ghost` offers this caller instead."""
+    kf = Kingfisher(cfg, backends=default_backends)
+    session = session_at(kf, "ghosted")
+    with pytest.raises(CapabilityError, match=r"unknown subagent\(s\): ghost;") as refused:
+        build_agent(
+            kf.cfg,
+            agent=kf.agent_named("surveyor", source_ids=source_ids),
+            held=kf.held_for(source_ids),
+            backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
+            capabilities=kf._effective_grants(source_ids),
+            catalogue=kf.catalogue,
+            checkpointer=None,
+        )
+    return set(ast.literal_eval(str(refused.value).split("; offered: ", 1)[1]))
+
+
+@pytest.fixture
+def policied_naming_a_ghost(request, policied_with_one_helper):
+    """`policied_with_one_helper`, with a name nothing defines written where this case
+    says, an agent `A` cannot open, and the subagent only that agent names.
+
+    No agent here declares `"*"`, which is what makes `kept_apart` reachable by no path
+    at all -- in a deployment with one, every definition is activated and there is no
+    such case to make.
+    """
+    names, _plain = A_GHOST_IS_NAMED_BY[request.param]
+    cfg = policied_with_one_helper
+    agents = cfg.catalogue_roots["agents"]
+    helpers = subagents_dir(cfg)
+    (agents / "hidden.yaml").write_text(HIDDEN_AGENT, encoding="utf-8")
+    (helpers / "theirs.yaml").write_text(A_PLAIN_SUBAGENT.format(name="theirs"), encoding="utf-8")
+    if names == "surveyor":
+        (agents / "surveyor.yaml").write_text(SURVEYOR_NAMING_A_GHOST, encoding="utf-8")
+    else:
+        (agents / "surveyor.yaml").write_text(AGENT + "subagents: [helper]\n", encoding="utf-8")
+        (helpers / "helper.yaml").write_text(
+            A_PLAIN_SUBAGENT.format(name="helper") + "subagents: [ghost]\n", encoding="utf-8"
+        )
+    return cfg
+
+
+@pytest.mark.parametrize(
+    "policied_naming_a_ghost", sorted(A_GHOST_IS_NAMED_BY), indirect=True,
+    ids=sorted(A_GHOST_IS_NAMED_BY),
+)
+def test_a_refusal_lists_no_subagent_no_agent_can_hand_work_to(policied_naming_a_ghost):
+    """`kept_apart`'s own line admits this caller and no agent names it, so no request
+    can wire it: `Capabilities.subagents` may only narrow what an agent declares.
+    Naming it beside a refusal says it exists.
+
+    The listing and the withheld report took both conditions together; the three
+    refusals that list through `offered_to` were left asking the subagent's own line
+    alone, which is the half that cannot see this. `helper` is asserted beside it,
+    because a listing narrowed to nothing would pass the first line.
+    """
+    offered = _subagents_offered(policied_naming_a_ghost, ("A",))
+
+    assert "kept_apart" not in offered, "no agent hands it work"
+    assert "theirs" not in offered, "only an agent `A` cannot open hands it work"
+    assert offered == {"helper"}
+
+
+@pytest.mark.parametrize(
+    "policied_naming_a_ghost", ["the agent"], indirect=True, ids=["the agent"]
+)
+def test_the_operator_is_still_offered_the_subagent_nobody_activates(
+    policied_naming_a_ghost,
+):
+    """`UNSCOPED` reaches everything and there is nobody to narrow for, so the refusal
+    says what it always said -- a definition no agent uses is exactly what an operator
+    reads a refusal to find out about.
+    """
+    assert _subagents_offered(policied_naming_a_ghost, UNSCOPED) == {
+        "helper",
+        "kept_apart",
+        "theirs",
+    }
+
+
 def test_a_refusal_lists_no_tool_out_of_the_callers_reach(policied_with_a_typo):
     """The subagent refusals were scoped and this one was not: a caller holding `A` was
     handed every workspace tool and its file -- measured, three names and three paths
@@ -598,6 +702,30 @@ def test_the_operator_is_still_told_every_tool_the_workspace_has(policied_with_a
         "secret_export",
         "delegated_only",
     }
+
+
+LONGHAND = """name: surveyor
+description: An agent granting its tool the long way.
+source_ids: [A, B]
+tools: [line_count.py::line_count]
+system_prompt: |
+  You do the task.
+"""
+
+
+def test_the_report_reads_a_grant_written_the_long_way(policied):
+    """The report asks `offers` the same question the listing does, and had the same
+    blindness: `formats.md` documents `where::what`, the catalogue spells a uniquely
+    named tool short, and comparing the two as written matched nothing -- so a caller
+    whose agent granted the long form was told a run withheld nothing from them.
+    """
+    directory = policied.catalogue_roots["agents"]
+    (directory / "surveyor.yaml").write_text(LONGHAND, encoding="utf-8")
+    kf = Kingfisher(replace(policied, access=vocabulary()), backends=default_backends)
+
+    told = dict(reported(kf, ["A"], "longhand", asked_for=Capabilities(tools=())))
+
+    assert told["tool"] == ("line_count",)
 
 
 def test_a_run_under_no_policy_is_still_told_of_everything_it_declined(policied_with_a_stranger):

@@ -17,7 +17,7 @@ from kingfisher.domain.capabilities import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Mapping, Sequence
 
 # `SEPARATOR` is imported above rather than defined here, where it started:
 # skills spell a source the same way, and one separator both kinds import
@@ -121,12 +121,25 @@ def select(granted: Selection, found: Sequence[Found]) -> tuple[Found, ...]:
     return tuple(one for one in found if written_form(one, among=among) in wanted)
 
 
-def _placed(entry: str, offered: set[str]) -> str:
-    """One written entry as the offering spells it, or unchanged if it cannot."""
-    if entry in offered:
+def placed(entry: str, offered: Iterable[str]) -> str:
+    """One written entry as the offering spells it, or unchanged if it cannot.
+
+    Public because two readers compare a written grant against the catalogue's own
+    names: `spelt` below, over a whole selection on its way into a build, and `offers`
+    in the domain, one name at a time. `offers` compared them unspelt, so the long form
+    `formats.md` documents -- `csv_profile::csv_profile`, which the shipped `surveyor`
+    is written with -- matched nothing, and a scoped caller was told they reached no
+    tools at all while the build handed them one.
+
+    A name two sources offer is spelt long by the offering itself, so a written short
+    form stays short and matches neither: ambiguous is not a thing a caller is told
+    they hold.
+    """
+    kept = set(offered)
+    if entry in kept:
         return entry
     name = split_reference(entry)[1]
-    return name if name in offered else entry
+    return name if name in kept else entry
 
 
 @dataclass(frozen=True)
@@ -167,7 +180,7 @@ class Offering:
         if selection in (ALL, None):
             return selection
         offered = set(self.workspace)
-        return tuple(_placed(one, offered) for one in selection)
+        return tuple(placed(one, offered) for one in selection)
 
     def refuse_unknown(
         self,

@@ -18,7 +18,7 @@ from kingfisher.domain.access import (
     offers,
     reaches,
 )
-from kingfisher.domain.capabilities import ALL, CapabilityError, unoffered
+from kingfisher.domain.capabilities import CapabilityError, unoffered
 from kingfisher.infrastructure.catalogue import Definitions, bundled_tool_names, resolve_definitions
 from kingfisher.kinds.agents.spec import AgentError
 from kingfisher.kinds.importing import defined_in_a_workspace
@@ -26,7 +26,7 @@ from kingfisher.kinds.middlewares.catalogue import MiddlewareError
 from kingfisher.kinds.subagents.rules import miscounted, refuse_cycles
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.kinds.tools.catalogue import ToolError
-from kingfisher.kinds.tools.spec import Found, Offering
+from kingfisher.kinds.tools.spec import Found, Offering, placed, split_reference
 
 #: An empty mapping that cannot be written to, so a default is shared safely.
 _NOTHING: Mapping[str, str] = MappingProxyType({})
@@ -404,7 +404,34 @@ def _kept[V](by_name: Mapping[str, V], reached: Container[str]) -> Mapping[str, 
     return MappingProxyType({name: one for name, one in by_name.items() if name in reached})
 
 
-def _moved_tools(resolved: Definitions) -> Mapping[str, tuple[str, ...]] | None:
+def _claimed_by(spec: object, held: frozenset[str] | None) -> Mapping[str, str]:
+    """The `source:` each entry claims, of the entries this caller reaches.
+
+    The two readers below were the only ones here that read a spec as written rather
+    than through `declares(held)`, and it showed in their values: the keys were kept to
+    the caller's reach and the names inside were not, so a listing that correctly
+    withheld `secret_export` from `tools` named it three sections down -- and exited 1
+    over a row that caller cannot act on. `decisions.md` logs that shape twice: the
+    field that leaked is the one whose filter was somewhere else.
+
+    A field that is not a list of entries cannot have narrowed, so there is nothing to
+    narrow by and the claims stand as they are.
+    """
+    claimed = spec.tool_sources  # ty: ignore[unresolved-attribute]
+    reached = spec.declares(held).tools  # ty: ignore[unresolved-attribute]
+    if not isinstance(reached, tuple):
+        return claimed
+    # By the bare name, which is what `claimed_sources` keys on while the selection
+    # holds the reference as written -- `moved/elsewhere.py::probe_one` against
+    # `probe_one`. Compared as written this matched nothing and emptied the field for
+    # every caller, scoped or not; four rules caught it.
+    named = {split_reference(one)[1] for one in reached}
+    return {one: where for one, where in claimed.items() if one in named}
+
+
+def _moved_tools(
+    resolved: Definitions, held: frozenset[str] | None
+) -> Mapping[str, tuple[str, ...]] | None:
     """Definitions naming a tool by a path it no longer lives at, or `None` when that
     could not be asked.
 
@@ -422,13 +449,15 @@ def _moved_tools(resolved: Definitions) -> Mapping[str, tuple[str, ...]] | None:
                 ("subagent", resolved.subagents.specs),
             )
             for name, spec in specs.items()
-            if (moved := offers.moved(spec.tool_sources))
+            if (moved := offers.moved(_claimed_by(spec, held)))
         })
     except (ToolError, AgentError, SubagentError):
         return None
 
 
-def _unresolved_subagents(resolved: Definitions) -> Mapping[str, tuple[str, ...]] | None:
+def _unresolved_subagents(
+    resolved: Definitions, held: frozenset[str] | None
+) -> Mapping[str, tuple[str, ...]] | None:
     """Definitions naming a subagent the catalogue has no key for, or `None` when
     that could not be asked, for the reason `_moved_tools` gives.
     """
@@ -438,9 +467,11 @@ def _unresolved_subagents(resolved: Definitions) -> Mapping[str, tuple[str, ...]
             _subject(kind, name): missing
             for kind, specs in (("agent", resolved.agents.specs), ("subagent", defined))
             for name, spec in specs.items()
+            # As this caller reaches them, for the reason `_claimed_by` gives: a
+            # name an entry audience keeps from them is not theirs to be told about.
             # `*` is every key, so it cannot name one that is not.
-            if spec.subagents not in (None, ALL)
-            and (missing := unoffered(spec.subagents, offered=defined))
+            if isinstance(written := spec.declares(held).subagents, tuple)
+            and (missing := unoffered(written, offered=defined))
         })
     except (AgentError, SubagentError):
         return None
@@ -656,8 +687,8 @@ def inventory(
     held = access.held_by(cfg.access, source_ids)
 
     middlewares, middlewares_error = _middlewares(resolved)
-    moved_tools = _moved_tools(resolved)
-    unresolved_subagents = _unresolved_subagents(resolved)
+    moved_tools = _moved_tools(resolved, held)
+    unresolved_subagents = _unresolved_subagents(resolved, held)
     miscounted_bundles = _miscounted_bundles(resolved)
 
     builtin, workspace_tools, sources, tools_error, builtin_checked, build_error = _tools(
@@ -777,7 +808,13 @@ def inventory(
     # it, so one declaring a tool no reachable agent grants contributes a name this
     # caller gets by no path. `offers` says what the ceiling does with it.
     reached_agents = [spec for name, spec in defined_agents.items() if name in for_caller]
-    offers_tool = offers("tools", held, reached_agents)
+    # `same` on both axes, and for one reason: a definition writes a grant and the
+    # catalogue has its own name for the same thing. Skills have two legal spellings
+    # and so have always had one; tools have two as well -- `formats.md` documents
+    # `where::what`, and the shipped `surveyor` is written that way -- and had none, so
+    # a caller whose agent granted the long form was told they reached no tools.
+    spelt = set(workspace_tools)
+    offers_tool = offers("tools", held, reached_agents, same=lambda one: placed(one, spelt))
     offers_skill = offers("skills", held, reached_agents, same=registry.identity)
 
     return Inventory(
