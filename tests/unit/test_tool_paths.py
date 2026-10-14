@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -88,12 +89,28 @@ def test_another_session_cannot_be_named_at_all(bridge, session):
     assert "sessions/other" not in str(Path(args["path"]).relative_to(session).parts[0])
 
 
-def test_climbing_out_is_refused_with_the_rule(bridge):
+def _refused(bridge, way: str, request) -> Any:
+    """The refusal this middleware answers with, through whichever hook `way` names.
+
+    Both hooks catch and both call `_refusal`, and the async one was reached by no test:
+    making it re-raise instead of correcting left the suite green, while the same change
+    to the sync hook reddened seventeen.
+    """
+    if way == "sync":
+        return bridge.wrap_tool_call(request, lambda r: None)
+
+    async def nothing(_: Any) -> None:
+        return None
+
+    return asyncio.run(bridge.awrap_tool_call(request, nothing))
+
+
+def test_climbing_out_is_refused_with_the_rule(bridge, way):
     """`..` cannot be resolved into something safe, so it is refused rather than
     silently rebased -- and the error names what to use instead, because a model that
     is told the rule can correct itself mid-turn.
     """
-    answer = bridge.wrap_tool_call(a_call(path="../other/secret.txt"), lambda r: None)
+    answer = _refused(bridge, way, a_call(path="../other/secret.txt"))
 
     assert answer.status == "error"
     assert "/inputs/<name>" in answer.content
@@ -438,9 +455,17 @@ def guarded(one, paths):
     return guarded_tools([one], paths)[0]
 
 
-def answered(wrapped, **args):
-    """What the graph gets back: the call form, which is the one carrying status."""
-    return wrapped.invoke({"type": "tool_call", "id": "c1", "name": wrapped.name, "args": args})
+def answered(wrapped, way: str = "sync", /, **args):
+    """What the graph gets back: the call form, which is the one carrying status.
+
+    `way` because a guarded tool is two methods, `_run` and `_arun`, and an async turn
+    goes through the second: the artifact branch below was written on both and driven on
+    one, so dropping it from `_arun` left the suite green.
+    """
+    call = {"type": "tool_call", "id": "c1", "name": wrapped.name, "args": args}
+    if way == "sync":
+        return wrapped.invoke(call)
+    return asyncio.run(wrapped.ainvoke(call))
 
 
 def test_a_compiled_subagents_tool_is_handed_a_real_path(paths, session):
@@ -555,10 +580,14 @@ def test_a_plain_function_arrives_as_the_tool_the_graph_would_have_made(paths, s
     assert wrapped.args == direct.args
 
 
-def test_an_artifact_survives_the_wrapping(paths, session):
+def test_an_artifact_survives_the_wrapping(paths, session, way):
     """A tool declaring `content_and_artifact` returns the pair through a
     `ToolMessage`, so a wrapper invoking the plain way would drop every artifact it
     passed on -- silently, since the content still arrives.
+
+    Both ways, because the wrapper is two methods and the reasoning above is written
+    over both: driven on the sync one alone, deleting the branch from `_arun` left the
+    whole suite green.
     """
     from langchain_core.tools import tool
 
@@ -567,7 +596,7 @@ def test_an_artifact_survives_the_wrapping(paths, session):
         """Return both."""
         return "counted", {"read": path}
 
-    answer = answered(guarded(paired, paths), path="/inputs/x")
+    answer = answered(guarded(paired, paths), way, path="/inputs/x")
 
     assert answer.artifact == {"read": str(session / "inputs" / "x")}
 
