@@ -11,7 +11,7 @@ import pytest
 from deepagents.middleware.summarization import compute_summarization_defaults
 
 from kingfisher.config import Adapter, ConfigError, Endpoint, ModelProfile
-from kingfisher.infrastructure.harness.models import ADAPTERS, build_model
+from kingfisher.infrastructure.harness.models import ADAPTERS, FILLABLE, build_model
 from kingfisher.infrastructure.model_catalogue import load
 from tests.conftest import repository_root
 
@@ -161,6 +161,164 @@ def test_a_refusal_never_quotes_the_key_it_found(cfg, monkeypatch):
     ):
         _build_with(row, cfg.models.models["fake-model"])
     assert ambient not in str(refused.value)
+
+
+#: The gateway shape `models.yaml.example` recommends, on the adapter most rows use.
+ANTHROPIC = Endpoint(
+    "anthropic",
+    "https://example.invalid/anthropic",
+    "sk-not-real",
+    adapter=ADAPTERS["anthropic"],
+)
+
+
+def _row(model: str, **fields: Any) -> ModelProfile:
+    """One `models.yaml` row, as the loader would hand it over."""
+    return ModelProfile(model=model, endpoint="gateway", **fields)
+
+
+def test_a_row_reserving_the_whole_window_for_output_is_refused():
+    """`max_tokens` is how much the model may write, and a window-sized one reads like
+    its own limit -- the mistake this refuses. The reservation comes off the window
+    before a request is sized, so every turn was refused before it was sent, with
+    deepagents' own message naming no model, no row and no number. Measured through
+    `kingfisher run`: `ContextOverflowError` reached the terminal as a traceback.
+    """
+    with pytest.raises(ConfigError, match="leaving nothing for the conversation"):
+        build_model(_row("claude-sonnet-4-5", max_tokens=190_001), ANTHROPIC)
+
+
+def test_the_refusal_names_the_row_the_window_and_what_to_change():
+    """A refusal nobody can act on sends somebody to a file where everything looks
+    right -- the same argument `key_env` is kept for.
+    """
+    with pytest.raises(ConfigError) as refused:
+        build_model(_row("claude-sonnet-4-5", max_tokens=190_001), ANTHROPIC)
+
+    said = str(refused.value)
+    assert "'claude-sonnet-4-5'" in said
+    assert "190001" in said and "200000" in said
+    assert "models.yaml" in said
+
+
+def test_a_row_the_window_leaves_room_for_still_builds():
+    """The control, and the ordinary case: this model's real output cap is 64,000, so
+    the shape a deployment would actually write has to pass.
+    """
+    model = build_model(_row("claude-sonnet-4-5", max_tokens=64_000), ANTHROPIC)
+
+    assert model.max_tokens == 64_000
+
+
+def test_a_model_the_table_never_heard_of_is_left_alone():
+    """Every gateway row naming its own model name, which is the commonest row there
+    is: no profile, so no window, so no arithmetic to do. Refusing on a number nobody
+    declared would refuse the shape `models.yaml.example` recommends.
+    """
+    model = build_model(_row("a-gateway-model", max_tokens=190_001), ANTHROPIC)
+
+    assert model.max_tokens == 190_001
+    # `None` rather than an empty profile, which is the shape the guard has to survive.
+    assert model.profile is None
+
+
+def test_a_window_the_row_declares_itself_is_the_one_checked():
+    """`extra: {profile: ...}` reaches the constructor and replaces the whole profile,
+    which `findings.md` measured -- so a deployment that declares a smaller window is
+    checked against the one it declared, not against the table's.
+    """
+    row = _row(
+        "a-gateway-model",
+        max_tokens=19_500,
+        extra={"profile": {"max_input_tokens": 20_000}},
+    )
+
+    with pytest.raises(ConfigError, match="advertised 20000-token"):
+        build_model(row, ANTHROPIC)
+
+
+def test_the_share_a_request_may_fill_is_the_one_deepagents_applies():
+    """`FILLABLE` mirrors a constant inside `SummarizationMiddleware._input_budget`,
+    and a mirror nobody drives goes stale quietly -- the refusal above would then reject
+    a row that works, or pass one that cannot.
+
+    Driven through their function rather than read off their source, so the shape is
+    pinned with the number: the budget is that share of the window *less the output
+    reservation*, not the share alone.
+    """
+    from deepagents.middleware.summarization import SummarizationMiddleware
+    from langchain_anthropic import ChatAnthropic
+
+    @dataclass
+    class _Asked:
+        """The two things `_input_budget` reads off a request."""
+
+        model: Any
+        model_settings: dict[str, Any]
+
+    for window, output in ((200_000, 4_096), (200_000, 190_001), (20_000, 1_000)):
+        # Built here rather than through `build_model`, because one of these rows is the
+        # one `build_model` now refuses and this test is about their arithmetic.
+        model = ChatAnthropic(
+            model="a-gateway-model",
+            api_key="sk-not-real",
+            max_tokens=output,
+            profile={"max_input_tokens": window},
+        )
+        # Neither argument is the type they annotate, and that is the point: this
+        # drives one function of theirs, and a real backend and a real `ModelRequest`
+        # would be a turn.
+        middleware = SummarizationMiddleware(
+            model=model,
+            backend=None,  # ty: ignore[invalid-argument-type]
+        )
+        asked = _Asked(model=model, model_settings={})
+
+        theirs = middleware._input_budget(asked)  # ty: ignore[invalid-argument-type]
+
+        assert theirs == max(0, int(window * FILLABLE) - output), (window, output)
+
+
+#: A catalogue whose one model is the mistake, written the way a deployment writes one.
+WINDOW_FOR_OUTPUT = """
+endpoints:
+  gateway:
+    api: anthropic
+    base_url: https://example.invalid/anthropic
+    key_env: GATEWAY_API_KEY
+
+default: claude-sonnet-4-5
+
+models:
+  claude-sonnet-4-5:
+    endpoint: gateway
+    max_tokens: 190001
+"""
+
+
+def test_the_command_says_it_in_one_line_rather_than_a_traceback(
+    cfg, at_the_command_line, capsys, monkeypatch
+):
+    """Measured before this: `kingfisher run` on that catalogue raised
+    `ContextOverflowError` out of `main` -- a traceback over a config somebody wrote,
+    with deepagents' message naming no model and no number.
+
+    Driven through the command rather than through `build_model`, because the traceback
+    is what a person met and `ConfigError` reaching `main` is what replaces it.
+    """
+    from kingfisher.presentation.cli.__main__ import main
+    from tests.conftest import an_agent
+
+    monkeypatch.setenv("GATEWAY_API_KEY", "sk-not-real")
+    an_agent(cfg, "only")
+    (cfg.definitions / "models.yaml").write_text(WINDOW_FOR_OUTPUT, encoding="utf-8")
+
+    code = main(["run", "say hi", "--agent", "only"])
+
+    said = capsys.readouterr().err
+    assert code == 2
+    assert said.startswith("configuration error: model 'claude-sonnet-4-5' reserves")
+    assert "Traceback" not in said
 
 
 def _build_with(row: Adapter, profile: ModelProfile) -> Any:

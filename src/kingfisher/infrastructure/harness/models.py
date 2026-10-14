@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -9,8 +10,6 @@ from kingfisher.config import Adapter, ConfigError, Landing
 from kingfisher.domain.capabilities import ALL, Selection, refuse_ungranted_endpoint
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from langchain_core.language_models import BaseChatModel
 
     from kingfisher.config import Config, Endpoint, ModelProfile
@@ -57,6 +56,16 @@ ADAPTERS: Mapping[str, Adapter] = {
 }
 
 
+#: The share of a model's advertised input window a request may fill, from deepagents'
+#: `SummarizationMiddleware._input_budget`: it reserves the configured output tokens and
+#: five per cent of headroom, then refuses anything over what is left. Mirrored here
+#: because a row reserving more than this can send nothing at all, and this is the only
+#: place that can say so before a turn starts.
+#: `test_the_share_a_request_may_fill_is_the_one_deepagents_applies` drives their own
+#: function with it, so this going stale is a red test rather than a wrong refusal.
+FILLABLE = 0.95
+
+
 def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
     """Build a chat model from `profile`, pointed at `endpoint`."""
     adapter = endpoint.adapter
@@ -69,7 +78,59 @@ def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
         **adapter.extra,
     )
     _refuse_what_did_not_land(model, adapter, profile, endpoint)
+    _refuse_an_output_reservation_that_fills_the_window(model, profile)
     return model
+
+
+def _advertised_window(model: BaseChatModel) -> int | None:
+    """What this model says its input window is, or `None` where it says nothing.
+
+    Read off the built model rather than from a table of our own: the number comes
+    from the provider package's profile for this model name, a row's `extra: {profile:
+    ...}` replaces that whole dict, and a model the table has never heard of -- which
+    is every gateway row naming its own name -- carries no window and is left alone.
+    """
+    advertised = getattr(model, "profile", None)
+    if not isinstance(advertised, Mapping):
+        return None
+    window = advertised.get("max_input_tokens")
+    if isinstance(window, bool) or not isinstance(window, int) or window <= 0:
+        return None
+    return window
+
+
+def _refuse_an_output_reservation_that_fills_the_window(
+    model: BaseChatModel, profile: ModelProfile
+) -> None:
+    """Refuse a row whose `max_tokens` leaves no room for the conversation.
+
+    `max_tokens` is the *output* reservation, and a window-sized one reads like the
+    model's own limit -- which is the mistake: the reservation is subtracted from the
+    window before a request is sized, so every turn is refused before it is sent, with
+    a message naming no model, no row and no number. Measured through the real command:
+    `max_tokens: 190001` on a 200,000-token window answered
+    `ContextOverflowError: Context remains above the input budget after compaction`,
+    and nothing had said anything at startup.
+
+    Refused rather than warned because no request of any size can be sent, so it is not
+    a decision anybody could have meant. The window moves when the provider's table
+    does -- it moved from 1,000,000 to 200,000 under this project once -- and a row that
+    started yesterday failing to start today is the right outcome when every turn would
+    otherwise die.
+    """
+    window = _advertised_window(model)
+    if window is None or int(window * FILLABLE) - profile.max_tokens > 0:
+        return
+    fills = int(window * FILLABLE)
+    msg = (
+        f"model {profile.model!r} reserves max_tokens: {profile.max_tokens} of an "
+        f"advertised {window}-token input window, leaving nothing for the conversation: "
+        f"at most {fills} of that window is filled, and the output reservation comes off "
+        f"it first, so every turn would be refused before it was sent. Lower max_tokens "
+        f"in models.yaml -- it is how much the model may *write*, not how much it may "
+        f"read, and the window is this model's own, from the table its class ships with"
+    )
+    raise ConfigError(msg)
 
 
 def _refuse_what_did_not_land(
