@@ -202,15 +202,15 @@ answers the questions
 only something that sees every session can: `sessions(cfg)` lists them with when
 each was last used, `mark_used`, `size` and `delete` do what they say. `reap`,
 `kingfisher sessions` and the session quota are answered by it. `default_backends`
-keeps each session as a directory under `<workspace>/sessions`, and refuses an id
-that is not one name in it — empty, `.`, `..`, or holding `/` or NUL — with
-the `UnknownSessionError` an id nobody issued gets. Where `KINGFISHER_SESSION_ID`
-is set, it keeps that one session in `<workspace>/sessions/<id>` as it keeps any other,
-lists it -- and no other -- whether or not a turn has run, and refuses every other id
-the same way. Session
-backends of your own are handed the same `cfg`, and a request naming no id runs under
-`cfg.session_id`: list it from `sessions(cfg)` if a first turn may name it, or that
-turn is refused as naming an id nobody issued.
+keeps each session as a directory under `<workspace>/sessions`, named for its id, and
+refuses with `UnknownSessionError` an id that cannot name one there — empty, starting
+with `.`, or holding `/` or NUL. Which session a turn runs in is the request's to say:
+any id names a session, the first turn naming one starts it, and a request naming
+none runs in `default`. So `open` is handed ids nobody has used before, and makes
+them; your own session backends are too. That is why a service must derive the ids
+it sends itself and never forward a user's: an id is no longer something kingfisher
+handed out, and naming one is reaching it, unless the access policy stops the
+caller at the session's pinned agent.
 
 **Try a mount before replacing it.** Sessions that must outlive the machine, or
 never touch its disk, get durable or memory-backed storage mounted at
@@ -321,14 +321,11 @@ builds a session's backend the way a turn does, through your session backends,
 and `run`, `stream`, `arun` and `astream` take it back
 as `files=` and run the turn on it rather than opening another. Where each `open`
 is a sandbox, that is one sandbox rather than two. `afiles_for` is the same for a
-caller on an event loop, opening it with `aopen`. The request has to name the
-session it was opened for: one naming none is refused, because it would start a
-new session and run in another's files. And the session has to exist already: an
-id your `sessions` does not list is refused with `UnknownSessionError`, as a turn
-naming it is, and nothing is opened. So a new session's first turn runs without
-`files=`, and its result carries the id to open. `files_for` does not ask who you
-are acting for, so hand what it returns only to code entitled to that session; the
-turn still checks the caller it is given.
+caller on an event loop, opening it with `aopen`. The request has to run in the
+session they were opened for -- a request naming none runs in `default`. A session no
+turn has made yet is made, so a caller can place its inputs before the first turn.
+`files_for` does not ask who you are acting for, so hand what it returns only to code
+entitled to that session; the turn still checks the caller it is given.
 
 **And what it keeps about the session, under `/.harness`.** The agent the session is
 pinned to, its conversation, and a turn paused at an approval gate are all written

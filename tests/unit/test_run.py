@@ -219,7 +219,8 @@ def test_the_framework_never_asks_for_files_of_its_own(cfg):
 
     asked = StubAgent("ok")
     run(
-        Request("Analyse it and write findings.csv"),
+        # A session of its own, or this turn's first message is the one above's.
+        Request("Analyse it and write findings.csv", session_id="asked"),
         cfg=cfg,
         graph=asked,
         backends=default_backends,

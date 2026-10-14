@@ -8,8 +8,8 @@ import pytest
 
 from kingfisher.domain.session import Session, UnknownSessionError, session_dir
 
-#: One of each form of id that is not one path segment.
-NOT_ONE_SEGMENT = ("", ".", "..", "../../escaped", "/etc", "a/b", "a\x00b")
+#: One of each form of id that cannot name a session's folder: not one visible entry.
+UNNAMABLE = ("", ".", "..", ".hidden", ".harness", "../../escaped", "/etc", "a/b", "a\x00b")
 
 
 def test_a_callers_own_turn_id_wins():
@@ -43,21 +43,21 @@ def test_a_session_directory_is_the_default_backends_root(workspace):
     assert session_dir(workspace, "s1") == workspace / "sessions" / "s1"
 
 
-@pytest.mark.parametrize("session_id", NOT_ONE_SEGMENT)
-def test_an_id_that_is_not_one_path_segment_names_no_session(workspace, session_id):
+@pytest.mark.parametrize("session_id", UNNAMABLE)
+def test_an_id_that_cannot_name_a_folder_names_no_session(workspace, session_id):
     """Joined as given, `""` named every session -- `DefaultBackends.delete(cfg, "")`
     removed them all and reported success -- and `..` or an absolute id named somewhere
-    outside them.
+    outside them. A hidden name is refused too: `.harness` is the folder the macOS rule
+    guards in every session, so a session called that could not write its own files.
     """
-    with pytest.raises(UnknownSessionError, match="omit session_id to start one"):
+    with pytest.raises(UnknownSessionError, match="cannot name a session"):
         session_dir(workspace, session_id)
 
 
-def test_an_id_kingfisher_issues_is_one_path_segment(workspace):
+@pytest.mark.parametrize("session_id", [uuid4().hex, "default", "q3-report", "Alice Smith"])
+def test_an_id_a_person_or_kingfisher_would_write_names_a_session(workspace, session_id):
     """The control beside the refusals: a rule refusing every id would pass all of them."""
-    issued = uuid4().hex
-
-    assert session_dir(workspace, issued) == workspace / "sessions" / issued
+    assert session_dir(workspace, session_id) == workspace / "sessions" / session_id
 
 
 def test_the_turn_message_names_both_forms_of_the_scratch_path(workspace):

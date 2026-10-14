@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 import types
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -465,16 +465,15 @@ def _fenced_by(monkeypatch, mechanism: str) -> None:
     )
 
 
-def test_bubblewrap_binds_the_one_session_s_harness_read_only(cfg, monkeypatch):
-    """Catches the session a process serves alone being fenced unlike any other: its
-    folder bind is writable over `.harness` too, and only a read-only bind laid after it
-    takes that back."""
+def test_bubblewrap_binds_an_opened_session_s_harness_read_only(cfg, monkeypatch):
+    """Driven through `default_backends`, which decides where a session is: its folder
+    bind is writable over `.harness` too, and only a read-only bind laid after it takes
+    that back."""
     _fenced_by(monkeypatch, confinement.BUBBLEWRAP)
-    one = replace(cfg, session_id="the-one")
-    session = str(one.workspace.resolve() / "sessions" / "the-one")
+    session = str(cfg.workspace.resolve() / "sessions" / "the-one")
     harness = f"{session}/{HARNESS}"
 
-    argv = default_backends.open(one, "the-one").default.runner.argv
+    argv = default_backends.open(cfg, "the-one").default.runner.argv
 
     bound = [(argv[i], argv[i + 1]) for i in range(len(argv) - 1)]
     assert ("--bind", session) in bound
@@ -482,15 +481,14 @@ def test_bubblewrap_binds_the_one_session_s_harness_read_only(cfg, monkeypatch):
     assert bound.index(("--ro-bind", harness)) > bound.index(("--bind", session))
 
 
-def test_landlock_grants_no_rule_above_the_one_session_s_harness(cfg, monkeypatch, sandlock):
+def test_landlock_grants_no_rule_above_an_opened_session_s_harness(cfg, monkeypatch, sandlock):
     """Landlock grants and never takes back, so a writable rule on the session's folder
-    would re-open `.harness` beneath it -- for the session a process serves alone as for
-    any other."""
+    would re-open `.harness` beneath it -- driven through `default_backends`, which
+    decides where that folder is."""
     _fenced_by(monkeypatch, confinement.LANDLOCK)
-    one = replace(cfg, session_id="the-one")
-    harness = one.workspace.resolve() / "sessions" / "the-one" / HARNESS
+    harness = cfg.workspace.resolve() / "sessions" / "the-one" / HARNESS
 
-    policy = default_backends.open(one, "the-one").default.runner.policy
+    policy = default_backends.open(cfg, "the-one").default.runner.policy
 
     assert policy.fs_writable, "nothing granted -- this checks nothing"
     for granted in policy.fs_writable:

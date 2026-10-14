@@ -15,7 +15,7 @@ from kingfisher.infrastructure.harness.backend import DefaultBackends
 from tests.conftest import StubCheckpointer, Through, an_agent, start
 from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
-from tests.unit.test_session import NOT_ONE_SEGMENT
+from tests.unit.test_session import UNNAMABLE
 from tests.unit.test_session_files import Elsewhere, _calls
 
 DOORS = ("stream", "astream", "run", "arun")
@@ -95,12 +95,12 @@ def test_files_for_opens_the_session_with_the_deployments_runner(cfg, way):
     assert built == [(session_dir(cfg.workspace, "s"), files.default.runner)]
 
 
-@pytest.mark.parametrize("session_id", NOT_ONE_SEGMENT)
-def test_files_for_an_id_that_is_not_one_path_segment_lays_nothing_out(
+@pytest.mark.parametrize("session_id", UNNAMABLE)
+def test_files_for_an_id_that_cannot_name_a_folder_lays_nothing_out(
     cfg, tmp_path, way, session_id
 ):
     """`files_for("..")` laid a session out in the workspace's own folder, and an
-    absolute id one wherever it pointed, where `pending` refused both as ids nobody issued.
+    absolute id one wherever it pointed.
     """
     # Under `tmp_path`, so an escape lands where this test looks rather than in `/etc`.
     if session_id.startswith("/"):
@@ -108,13 +108,10 @@ def test_files_for_an_id_that_is_not_one_path_segment_lays_nothing_out(
     kf = Kingfisher(cfg, backends=DefaultBackends())
     before = sorted(tmp_path.rglob("*"))
 
-    with pytest.raises(UnknownSessionError) as refused:
+    with pytest.raises(UnknownSessionError, match="cannot name a session"):
         Through(kf, way).files_for(session_id)
-    with pytest.raises(UnknownSessionError) as unissued:
-        Through(kf, way).pending(session_id)
 
     assert sorted(tmp_path.rglob("*")) == before
-    assert str(refused.value) == str(unissued.value)
 
 
 @pytest.mark.parametrize("door", DOORS)
@@ -170,41 +167,40 @@ def test_the_callers_backend_is_the_one_the_agent_works_in(scripted, tmp_path):
 
 
 @pytest.mark.parametrize("door", DOORS)
-def test_files_for_a_request_that_names_no_session_are_refused(cfg, door):
-    """The turn would mint a session and run in the files of the one they were opened
-    for, reporting an id whose session holds nothing the turn did.
+def test_files_for_the_default_session_serve_a_request_naming_none(cfg, monkeypatch, door):
+    """Catches a request naming no session refusing the files a caller opened for
+    `default`, which is the session naming none names -- or opening another beside them.
     """
+    monkeypatch.setattr(service_module, "build_agent", lambda *a, **kw: StubAgent("ok"))
     named = an_agent(cfg)
     counting = Counting()
     kf = Kingfisher(cfg, backends=counting, threads=StubCheckpointer())
-    start(cfg, "s")
-    files = kf.files_for("s")
+    files = kf.files_for("default")
 
-    with pytest.raises(ValueError, match="names no session"):
-        _turn(kf, door, Request("go", agent=named), files=files)
+    result = _turn(kf, door, Request("go", agent=named), files=files)
 
-    assert counting.asked == ["s"]
-    assert [s.id for s in kf.sessions()] == ["s"]
+    assert result.session_id == "default"
+    assert counting.asked == ["default"]
 
 
-def test_files_for_an_id_nobody_issued_is_refused_and_makes_nothing(cfg, way):
-    """Opening an id nobody issued made its session, so a caller could start one under a
-    name of its choosing and a turn naming it was accepted.
+def test_files_for_a_session_no_turn_has_made_makes_it(cfg, way):
+    """Catches `files_for` refusing a session no turn has made yet, which left a caller
+    no way to place its inputs before the first turn.
     """
     counting = Counting()
-    kf = Kingfisher(cfg, backends=counting)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=counting, threads=StubCheckpointer())
 
-    with pytest.raises(UnknownSessionError, match="no session 'invented'"):
-        Through(kf, way).files_for("invented")
+    files = Through(kf, way).files_for("q3-report")
+    files.upload_files([("/outputs/placed.txt", b"placed")])
 
-    assert counting.asked == []
-    assert kf.sessions() == ()
-    assert not session_dir(cfg.workspace, "invented").exists()
+    assert [s.id for s in kf.sessions()] == ["q3-report"]
+    assert (session_dir(cfg.workspace, "q3-report") / "outputs" / "placed.txt").is_file()
+    assert kf.run(Request("go", session_id="q3-report")).session_id == "q3-report"
 
 
-def test_files_for_an_id_a_turn_issued_opens_it(cfg, way):
-    """The control: a refusal that caught an issued id too would leave `files=` nothing
-    it could be opened for.
+def test_files_for_a_session_a_turn_made_opens_it(cfg, way):
+    """Catches `files_for` opening some other session than the one a turn ran in, which
+    would leave `files=` holding files the turn never sees.
     """
     counting = Counting()
     kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=counting, threads=StubCheckpointer())

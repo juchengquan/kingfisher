@@ -10,13 +10,12 @@ from pathlib import Path
 from kingfisher.config import (
     DEFAULT_THREAD_POOL_SIZE,
     FOLDED_SETTINGS,
-    REMOVED_STORE_SETTINGS,
+    REMOVED_SETTINGS,
     RENAMED_SETTINGS,
     Config,
     ConfigError,
     WorkspacePaths,
 )
-from kingfisher.domain.session import is_one_path_segment
 from kingfisher.infrastructure import access_policy, model_catalogue
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
@@ -109,19 +108,6 @@ class Environment:
         raw = (self.values.get(key) or "").strip()
         return raw or None
 
-    def session_id(self) -> str | None:
-        """The one session this process serves, or `None` where it serves any number."""
-        found = self.optional_text("KINGFISHER_SESSION_ID")
-        # Held to the rule every issued id meets, and refused here, at startup, in words
-        # naming the setting: it names the session's folder under `sessions/`.
-        if found is not None and not is_one_path_segment(found):
-            msg = (
-                f"KINGFISHER_SESSION_ID is {found!r}, and a session id is one name: "
-                "not '.' or '..', and holding neither '/' nor NUL"
-            )
-            raise ConfigError(msg)
-        return found
-
     def paths(self) -> WorkspacePaths:
         """Where this deployment keeps things, without reading the model catalogue.
 
@@ -149,15 +135,9 @@ class Environment:
 
     def config(self) -> Config:
         """Build a `Config` from environment variables."""
-        # Refused rather than ignored. A deployment that relied on either for durable
-        # sessions would otherwise lose them on upgrade with nothing said.
-        for removed in REMOVED_STORE_SETTINGS:
+        for removed, instead in REMOVED_SETTINGS.items():
             if self.optional_text(removed):
-                msg = (
-                    f"{removed} was removed: a session's backend keeps it now. Mount "
-                    "durable storage at <workspace>/sessions, or set "
-                    "KINGFISHER_SESSION_BACKENDS_FACTORY to session backends that keep them"
-                )
+                msg = f"{removed} was removed: {instead}"
                 raise ConfigError(msg)
         for old, new in RENAMED_SETTINGS.items():
             if self.optional_text(old):
@@ -217,7 +197,6 @@ class Environment:
             shell_sandbox=self.values.get("KINGFISHER_SHELL_SANDBOX", "auto"),
             skills_mounts=paths.skills_mounts,
             assets=paths.assets,
-            session_id=self.session_id(),
             session_backends_factory=self.optional_text("KINGFISHER_SESSION_BACKENDS_FACTORY"),
             skills_enabled=self.flag("KINGFISHER_SKILLS_ENABLED"),
             memory_enabled=self.flag("KINGFISHER_MEMORY_ENABLED"),

@@ -545,16 +545,11 @@ def test_a_hard_failure_is_passed_through_rather_than_emptied(cfg, session_dir):
 
 def test_an_unconfined_shell_says_what_it_means_for_the_other_sessions(cfg, session_dir):
     """Most programs running kingfisher never run `doctor`; this warning is what they see.
-    It named what the host was exposed to and not that each session could reach the rest
-    -- and a process serving one session is told too, since others may share its
-    workspace.
+    It named what the host was exposed to and not that each session could reach the rest.
     """
     from dataclasses import replace
 
     from kingfisher.infrastructure.harness.backend import backend_at
 
-    many, one = replace(cfg, shell_sandbox="off"), replace(cfg, shell_sandbox="off", session_id="s")
-
-    for each in (many, one):
-        with pytest.warns(UserWarning, match="read and change the other sessions' files"):
-            backend_at(each, session_dir)
+    with pytest.warns(UserWarning, match="read and change the other sessions' files"):
+        backend_at(replace(cfg, shell_sandbox="off"), session_dir)

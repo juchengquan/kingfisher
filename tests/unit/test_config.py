@@ -12,7 +12,6 @@ from kingfisher.config import DEFAULT_THREAD_POOL_SIZE, FOLDED_SETTINGS, ConfigE
 from kingfisher.domain.access import AccessError
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from tests.conftest import FAKE_CATALOGUE, subagents_dir
-from tests.unit.test_session import NOT_ONE_SEGMENT
 
 CATALOGUE = """
 endpoints:
@@ -359,13 +358,13 @@ def test_no_message_names_a_variable_nothing_reads():
     # anywhere, `health.py` included, still fails.
     # And a name refused where the environment is read, for the same reason from the
     # other side: the refusal names it so that whoever set it knows what went.
-    from kingfisher.config import REMOVED_STORE_SETTINGS, RENAMED_SETTINGS
+    from kingfisher.config import REMOVED_SETTINGS, RENAMED_SETTINGS
 
     allowed = (
         read
         | set(health.RETIRED)
         | set(health.RETIRED_PREFIXES)
-        | set(REMOVED_STORE_SETTINGS)
+        | set(REMOVED_SETTINGS)
         | set(RENAMED_SETTINGS)
         | set(FOLDED_SETTINGS)
     )
@@ -613,18 +612,13 @@ def test_the_two_forms_of_the_test_catalogue_agree(tmp_path):
     }
 
 
-# -- a workspace holding one session ---------------------------------------
+# -- the session is the request's to name ------------------------------------
 
 
-@pytest.mark.parametrize("session_id", [bad for bad in NOT_ONE_SEGMENT if bad])
-def test_a_session_id_that_is_not_one_name_is_refused_at_startup(env, session_id):
-    """A value that is not one path segment started the workspace, where every other way
-    an id arrives refuses it."""
-    with pytest.raises(ConfigError, match="KINGFISHER_SESSION_ID"):
-        config_from_env({**env, "KINGFISHER_SESSION_ID": session_id})
-
-
-def test_a_session_id_that_is_one_name_is_read(env):
-    """The control beside the refusals: a rule refusing every value passes all of them."""
-    assert config_from_env({**env, "KINGFISHER_SESSION_ID": "the-one"}).session_id == "the-one"
-    assert config_from_env(env).session_id is None
+def test_the_session_id_setting_is_refused_rather_than_ignored(env):
+    """Named rather than read off the table of removed settings, which a test
+    parametrized over it would pass with the entry gone. Ignored, a deployment's
+    requests naming no session would run in `default` rather than the one it chose.
+    """
+    with pytest.raises(ConfigError, match="KINGFISHER_SESSION_ID was removed: name the session"):
+        config_from_env({**env, "KINGFISHER_SESSION_ID": "xxx"})

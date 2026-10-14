@@ -140,18 +140,20 @@ def test_a_later_turn_in_a_session_out_of_reach_is_refused(two_agents):
         _first_event(kf, Request(task="again", session_id=session_id), ("B",))
 
 
-def test_that_refusal_is_word_for_word_an_id_nobody_issued(two_agents):
-    """Anything more specific confirms the id is real, which is what a leaked one is worth."""
+def test_that_refusal_is_word_for_word_a_session_that_is_not_there(two_agents):
+    """Anything more specific than what reading an absent session answers would say, of
+    a session out of reach, more than that it cannot be had.
+    """
     kf = Kingfisher(two_agents, backends=default_backends)
     session_id = _pinned_by_a(kf)
-    invented = "0" * 32
+    invented = "never-made"
 
     with pytest.raises(UnknownSessionError) as refused:
         _first_event(kf, Request(task="again", session_id=session_id), ("B",))
-    with pytest.raises(UnknownSessionError) as unissued:
-        _first_event(kf, Request(task="again", session_id=invented), ("B",))
+    with pytest.raises(UnknownSessionError) as absent:
+        kf.pending(invented, source_ids=("B",))
 
-    assert str(refused.value) == str(unissued.value).replace(invented, session_id)
+    assert str(refused.value) == str(absent.value).replace(invented, session_id)
 
 
 def test_a_later_turn_in_a_session_in_reach_goes_ahead(two_agents):

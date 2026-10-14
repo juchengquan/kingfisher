@@ -155,7 +155,11 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="which agent runs this (`kingfisher list` shows them, and where they are read from)",
     )
-    doing.add_argument("--session", metavar="ID", help="continue an existing session")
+    doing.add_argument(
+        "--session",
+        metavar="ID",
+        help="the session to run in, started if no turn has named it; without one, 'default'",
+    )
     # A turn has no directory of its own, so every caller-supplied file lives the
     # length of the session and a name sent twice replaces the first, which
     # `place_inputs` reports.

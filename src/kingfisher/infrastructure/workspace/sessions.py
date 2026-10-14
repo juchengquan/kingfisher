@@ -6,6 +6,7 @@ import shutil
 from contextlib import suppress
 from pathlib import Path
 
+from kingfisher.domain.session import names_a_session
 from kingfisher.infrastructure.workspace.permissions import keep_tmp_private, unlock_and_retry
 from kingfisher.layout import (
     AGENTS_SCAFFOLD,
@@ -37,14 +38,11 @@ class LocalSessionDirs:
     def listing(self, path: Path) -> tuple[tuple[str, float], ...]:
         if not path.is_dir():
             return ()
-        return tuple((p.name, p.stat().st_mtime) for p in path.iterdir() if p.is_dir())
-
-    def used_at(self, path: Path) -> float:
-        """The timestamp `mark_used` moves, for one session directory: `0` for one not made."""
-        try:
-            return path.stat().st_mtime
-        except FileNotFoundError:
-            return 0.0
+        return tuple(
+            (p.name, p.stat().st_mtime)
+            for p in path.iterdir()
+            if p.is_dir() and names_a_session(p.name)
+        )
 
     def remove_tree(self, path: Path) -> str | None:
         try:

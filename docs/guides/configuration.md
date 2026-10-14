@@ -29,7 +29,6 @@ the definitions folder, since that is all it writes.
 | `KINGFISHER_ADAPTERS_FACTORY` | `module:name` naming something callable with no arguments that returns wire formats of your own, for an endpoint's `api` to name. See [below](#a-wire-format-kingfisher-does-not-ship). | none — `anthropic` and `openai_responses` only |
 | `KINGFISHER_SKILLS_MOUNTS` | Further skills directories, as `label=path` pairs separated by `:`. Each is offered at `/skills/<label>/` and granted as `<label>::<name>`, for a party that cannot write into the catalogue. Skills sit directly in each one, and nothing creates or seeds it. The shell reaches a mount's scripts as `$KINGFISHER_SKILLS/<label>/...`, through a view of links kingfisher keeps in `<workspace>/.kingfisher/`. | none |
 | `KINGFISHER_SESSION_BACKENDS_FACTORY` | `module:name` naming something callable with no arguments that returns a `SessionBackends`, for the `kingfisher` command. Only the command reads it — `Kingfisher` takes its session backends as `backends=` — and it is how `sessions`, `reap` and `artifact` see sessions yours keep elsewhere. `KINGFISHER_SESSION_STORE` and `KINGFISHER_SESSION_STORE_FACTORY`, which configured the store this replaced, are refused if still set, and so is `KINGFISHER_BACKEND_FACTORY`, this setting's old name. | `default_backends` |
-| `KINGFISHER_SESSION_ID` | Pins this process to one session, under this id, kept in `<workspace>/sessions/<id>` like any other. A request naming no session runs in it, a request naming any other id is refused as one nobody issued, and the process lists and reaps that id and nothing else — so several processes, each serving its own, can share one workspace. Deleting it removes its folder, and the next turn starts a fresh conversation under the same id. Must be one name — not `.` or `..`, holding neither `/` nor NUL. Unset, every session in the workspace is listed and reaped, whichever process made it. | unset — any number of sessions |
 | *(none)* | Where session directories are, while a turn runs. No setting moves them; mount `<workspace>/sessions` on whatever device you want them on. | `<workspace>/sessions` |
 
 **The last row is in the table rather than left out of it.** A reader asking how
@@ -156,9 +155,8 @@ fences' code -- and for the definitions folder on 2026-10-13, the same way:
 not one session from another, so each session's agent can read and change the others'
 files -- measured on 2026-10-11 with the workspace both inside the home folder and
 outside it. Keep people apart on one Mac by giving each a workspace of their own.
-`KINGFISHER_SESSION_ID` does not do it on its own: it pins a process to one session,
-and other processes may share its workspace. `doctor` says it as `sessions apart`, and
-so does the warning a run prints when nothing confines the shell.
+`doctor` says it as `sessions apart`, and so does the warning a run prints when nothing
+confines the shell.
 
 "No fence" is `off`, `external` with nothing outside actually confining the shell,
 and a Linux host where neither fence could start, which warns and runs.

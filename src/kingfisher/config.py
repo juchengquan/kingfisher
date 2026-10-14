@@ -195,7 +195,22 @@ class ConfigError(RuntimeError):
 #: smaller pool would queue.
 DEFAULT_THREAD_POOL_SIZE = 16
 
-REMOVED_STORE_SETTINGS = ("KINGFISHER_SESSION_STORE", "KINGFISHER_SESSION_STORE_FACTORY")
+#: Settings that went, refused where the environment is read rather than ignored, each
+#: by what replaces it. Refused because what each did would change without a word:
+#: sessions kept somewhere else would be lost on upgrade, and a request naming no
+#: session would run in `default` rather than the one the deployment chose.
+_STORE = (
+    "a session's backend keeps it now. Mount durable storage at <workspace>/sessions, or "
+    "set KINGFISHER_SESSION_BACKENDS_FACTORY to session backends that keep them"
+)
+REMOVED_SETTINGS: Mapping[str, str] = MappingProxyType({
+    "KINGFISHER_SESSION_STORE": _STORE,
+    "KINGFISHER_SESSION_STORE_FACTORY": _STORE,
+    "KINGFISHER_SESSION_ID": (
+        "name the session in each request instead; a request naming none runs in "
+        "'default'"
+    ),
+})
 
 #: Settings that changed name, refused under the old one. A renamed setting still set
 #: is one the deployment wanted, so carrying on with the default is never what it
@@ -383,13 +398,6 @@ class Config:
     # inheriting a folder inside the workspace. One folder rather than one per kind:
     # several deployments point at it, and one path is what they agree on.
     definitions: Path = field(kw_only=True)
-    # The one session this process serves, or `None` for a process serving any number.
-    # Set, kingfisher's own backends know no other id and a request naming none runs
-    # in it; the session is kept in `sessions/<id>/` like any other, so processes
-    # each serving one can share a workspace. A setting rather than an argument to
-    # `DefaultBackends`, because `default_backends` is one object serving every
-    # workspace and is handed this `Config` on every call.
-    session_id: str | None = None
     # The session backends the command line runs on, named rather than built here:
     # `module:name` for something callable with no arguments that returns a
     # `SessionBackends`. Only the command line reads it -- `Kingfisher` takes them as

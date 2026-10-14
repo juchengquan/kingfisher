@@ -482,22 +482,14 @@ class Kingfisher(Sessions, Disposal):
         which on a remote backend is a second sandbox. Nothing here asks who the
         caller is acting for -- the turn still does, through the backend it is handed.
 
-        An id no turn issued is refused with `UnknownSessionError`, as a turn naming
-        it is.
+        A session no turn has made yet is made, as a turn naming it would make it, so
+        a caller can place files before the first turn.
         """
-        return drive(self._issued_files_for(session_id))
+        return drive(self._files_for(session_id))
 
     async def afiles_for(self, session_id: str) -> Any:
         """`files_for`, for a caller on an event loop."""
-        return await adrive(self._issued_files_for(session_id))
-
-    def _issued_files_for(self, session_id: str) -> Steps[Any]:
-        # `open` makes a session it is asked for, and a turn accepts any id the listing
-        # holds, so opening an unlisted id would start a session under a name the
-        # caller chose. Checked here and not in `_files_for`, because a turn opens the
-        # session it has just minted, which no listing holds yet.
-        yield from self._refuse_if_unissued(session_id)
-        return (yield from self._files_for(session_id))
+        return await adrive(self._files_for(session_id))
 
     def pending(
         self, session_id: str, *, source_ids: Held | None = None
@@ -650,19 +642,11 @@ class Kingfisher(Sessions, Disposal):
         the agent -- which is `_built_turn`, the one piece of it done on this host.
         """
         cfg = self.cfg
-        # Without an id this turn would mint a new session and run it in another's files.
-        # A workspace holding one session mints nothing, and its no-id turn is that one.
-        if files is not None and request.session_id is None and cfg.session_id is None:
-            msg = (
-                "files= is one session's backend and this request names no session: "
-                "pass the session_id the backend was opened for"
-            )
-            raise ValueError(msg)
         session = yield from self._session_for(request)
         # Who is calling, before the session is marked, claimed or written to. Any
         # later and a refused caller's files are already in the `/inputs` of a session
         # that was never theirs; after the claim, and a turn running in it would
-        # answer "busy" where an id nobody issued answers "no session". The grant
+        # answer "busy" where a session out of reach answers "no session". The grant
         # is asked for here only for its refusals, and again below for itself.
         self._effective_grants(source_ids)
         # Opened here, before anything else reads the session: who may touch it is

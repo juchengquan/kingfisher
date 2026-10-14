@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
 
 from kingfisher.application.access import caller_holds
 from kingfisher.domain.access import reaches
 from kingfisher.domain.request import Request, Resume
 from kingfisher.domain.session import (
+    DEFAULT_SESSION,
     QuotaExceededError,
     Session,
     SessionInfo,
@@ -40,19 +40,20 @@ class Sessions:
     _files_for: Callable[..., Steps[Any]]
 
     def _session_for(self, request: Request | Resume) -> Steps[Session]:
-        """This turn's session: a new id, or one that already names a session. Its
-        backend makes it, the first time it is asked for it.
-        """
-        if request.session_id is None:
-            # From the setting and not from the backends, because minting is this
-            # layer's job and the setting replaces it: a workspace that holds one session
-            # has nowhere to put a second, and asking the backends would be a port
-            # method every deployment's own had to grow for one `Config` field.
-            return Session(id=self.cfg.session_id or uuid4().hex)
-        yield from self._refuse_if_unissued(request.session_id)
-        return Session(id=request.session_id)
+        """This turn's session: the one it names, or `DEFAULT_SESSION` where it names
+        none. Its backend makes it, the first time it is asked for it.
 
-    def _refuse_if_unissued(self, session_id: str) -> Steps[None]:
+        Not checked against the listing: any id names a session, and a request naming
+        one nobody has used starts it. Who may touch one that exists is its pinned
+        agent's to decide, which the turn asks next. A resume is the exception: it
+        answers a turn that stopped, so the session it names has to be there, and
+        opening one to find nothing waiting would make it.
+        """
+        if isinstance(request, Resume):
+            yield from self._refuse_if_absent(request.session_id)
+        return Session(id=request.session_id or DEFAULT_SESSION)
+
+    def _refuse_if_absent(self, session_id: str) -> Steps[None]:
         """Refuse an id the session backends do not list, before anything opens it."""
         if session_id not in (yield from self._known_steps()):
             raise unknown_session(session_id)
