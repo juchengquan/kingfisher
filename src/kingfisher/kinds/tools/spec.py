@@ -17,7 +17,7 @@ from kingfisher.domain.capabilities import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
 # `SEPARATOR` is imported above rather than defined here, where it started:
 # skills spell a source the same way, and one separator both kinds import
@@ -170,9 +170,22 @@ class Offering:
         return tuple(_placed(one, offered) for one in selection)
 
     def refuse_unknown(
-        self, builtin: Selection, tools: Selection, *, subject: str
+        self,
+        builtin: Selection,
+        tools: Selection,
+        *,
+        subject: str,
+        in_reach: Callable[[str], bool] | None = None,
     ) -> None:
-        """A name on the wrong axis, or on neither. Raises, or says nothing."""
+        """A name on the wrong axis, or on neither. Raises, or says nothing.
+
+        `in_reach` narrows what the refusal *lists*, never what it judges: a file
+        naming a tool nothing offers is the file's fault whoever is asking, and a name
+        out of one caller's reach is still a real name. Unnarrowed, the listing handed
+        a caller holding one source id every workspace tool and its file -- measured,
+        three names and three paths where the agent they reach granted one. Only the
+        workspace axis takes it; a built-in is the same set for everybody.
+        """
         for asked, own, other, here, there in (
             # Spelt before checking, not after: a definition may write either
             # form and only one of them is what the offering holds.
@@ -187,12 +200,15 @@ class Offering:
                     f"but {belongs_in(misplaced, field=there)}"
                 )
                 raise CapabilityError(msg)
+            shown = own
+            if in_reach is not None and here == "tools":
+                shown = tuple(name for name in own if in_reach(name))
             refuse_unoffered(
                 asked,
                 offered=own,
                 kind=here[:-1],
                 subject=subject,
-                listing=f"\n{offered(self.sources, own)}",
+                listing=f"\n{offered(self.sources, shown)}",
             )
 
     def moved(self, claims: Mapping[str, str]) -> tuple[tuple[str, str, str], ...]:

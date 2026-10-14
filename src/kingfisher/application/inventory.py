@@ -13,16 +13,18 @@ from kingfisher.domain.access import (
     AccessReport,
     SourceIds,
     Stated,
+    activated,
+    handed_work_by,
     offers,
     reaches,
 )
-from kingfisher.domain.capabilities import ALL, CapabilityError, Selection, unoffered
+from kingfisher.domain.capabilities import ALL, CapabilityError, unoffered
 from kingfisher.infrastructure.catalogue import Definitions, bundled_tool_names, resolve_definitions
 from kingfisher.kinds.agents.spec import AgentError
 from kingfisher.kinds.importing import defined_in_a_workspace
 from kingfisher.kinds.middlewares.catalogue import MiddlewareError
 from kingfisher.kinds.subagents.rules import miscounted, refuse_cycles
-from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
+from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.kinds.tools.catalogue import ToolError
 from kingfisher.kinds.tools.spec import Found, Offering
 
@@ -295,20 +297,6 @@ class Inventory:
             "skills": tuple(self.skills),
             "subagents": tuple(self.subagents),
         }
-
-
-def activated(named: Selection, defined: Mapping[str, SubagentSpec]) -> tuple[str, ...]:
-    """The subagents an agent activates: the ones it names, with `"*"` expanded.
-
-    Its subagents' own `subagents:` are deliberately not walked. A helper reaches a
-    run only where the agent names it too -- `subagent_helpers` narrows one by what
-    the agent declared -- so walking the chain here printed a subagent the build
-    would drop, which is worse than printing nothing: a listing is read to find out
-    what an agent ends up with.
-    """
-    if named is None:
-        return ()
-    return tuple(sorted(defined if named == ALL else set(named) & set(defined)))
 
 
 def _bundled(
@@ -733,7 +721,20 @@ def inventory(
     # each asking again: the field that leaked is the one whose filter was somewhere
     # else, and two answers to what a caller reaches is how they came apart.
     for_caller = reaching("agents", agents)
-    for_caller_subagents = reaching("subagents", subagents)
+    # Both conditions, and a subagent needs both: its own line has to admit this
+    # caller, and an agent they can open has to name it. Filtered by the first alone,
+    # a subagent nothing activates was listed to a caller who could reach it by no
+    # path -- measured, and a request naming it wires nothing.
+    reachable = handed_work_by(
+        (spec for name, spec in defined_agents.items() if name in for_caller),
+        specs,
+        held,
+    )
+    for_caller_subagents = {
+        name: description
+        for name, description in reaching("subagents", subagents).items()
+        if name in reachable
+    }
     # Every field naming a subagent is kept to the same answer. One left whole names a
     # subagent this caller cannot open, in `--json` and in the text form alike.
     reached_subjects = {
@@ -749,12 +750,13 @@ def inventory(
     # entry may be written `["*"]`, meaning anyone who reaches *this definition*, and at
     # run time the `and` with the definition's own line is held by the caller never
     # opening it. A listing has no such gate, so this is where that `and` is.
-    reached_definitions = [
-        *(spec for name, spec in defined_agents.items() if name in for_caller),
-        *(spec for name, spec in specs.items() if name in for_caller_subagents),
-    ]
-    offers_tool = offers("tools", held, reached_definitions)
-    offers_skill = offers("skills", held, reached_definitions, same=registry.identity)
+    #
+    # Agents, and not the subagents they reach: a subagent can only narrow what reached
+    # it, so one declaring a tool no reachable agent grants contributes a name this
+    # caller gets by no path. `offers` says what the ceiling does with it.
+    reached_agents = [spec for name, spec in defined_agents.items() if name in for_caller]
+    offers_tool = offers("tools", held, reached_agents)
+    offers_skill = offers("skills", held, reached_agents, same=registry.identity)
 
     return Inventory(
         # The resolved catalogue, not `cfg` -- so a deployment that staged its
@@ -810,7 +812,11 @@ def inventory(
             (where, name) for where, name in registry.misfiled if offers_skill(name)
         ),
         subagents=MappingProxyType(dict(for_caller_subagents)),
-        subagent_sources=reaching("subagents", subagent_sources),
+        # Keyed off the names above and not off `reaching` again, which is what the
+        # chains below already do and for the same reason: a second walk answers a
+        # second question, and this one kept naming a subagent no agent in reach hands
+        # work to -- in `--json`, where the text form had already dropped it.
+        subagent_sources=_kept(subagent_sources, for_caller_subagents),
         subagents_error=subagents_error or (None if scoped else broken.get("subagents")),
         middlewares=middlewares,
         middlewares_error=middlewares_error,

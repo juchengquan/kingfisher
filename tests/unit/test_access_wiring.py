@@ -394,8 +394,10 @@ TOOLS = [secret_export]
 '''
 
 
-#: One a subagent offers and the agent does not. A caller who reaches that subagent
-#: reaches what it holds, through `task`, so the report has to count it.
+#: One a subagent declares and no agent grants. `ceiling` narrows a subagent's tools by
+#: what reached it, so this is a name no path reaches -- and there is no such thing as a
+#: *workspace* tool only a subagent can hold. A tool of its own, in its own folder, is
+#: the shape that exists for that, and it is listed as a private tool.
 SUBAGENT_ONLY_TOOL = UNDECLARED_TOOL.replace("secret_export", "delegated_only").replace(
     "Exports.", "Delegates."
 )
@@ -432,9 +434,9 @@ def test_a_caller_is_told_only_of_what_a_definition_they_reach_offers(policied_w
     narrowing their own grant was the whole of what it took.
 
     A tool has nowhere to write an audience of its own, so what can be asked of one is
-    whether a definition in reach offers it -- the question the listing asks, now
-    through the same function. The reachable tool is named beside it, because a filter
-    that emptied the report would pass the first assertion on its own.
+    whether an agent in reach offers it -- the question the listing asks, now through
+    the same function. The reachable tool is named beside it, because a filter that
+    emptied the report would pass the first assertion on its own.
     """
     kf = Kingfisher(policied_with_a_stranger, backends=default_backends)
     declined = Capabilities(tools=())
@@ -443,12 +445,159 @@ def test_a_caller_is_told_only_of_what_a_definition_they_reach_offers(policied_w
 
     (what, names) = told[0]
     assert len(told) == 1 and what == "tool"
-    # `delegated_only` beside `line_count`: a caller reaching a subagent reaches what it
-    # holds, so the agent's own entries are not the whole of what a run can offer -- and
-    # with only the agent counted, nothing here noticed.
-    assert set(names) == {"line_count", "delegated_only"}, (
+    # `delegated_only` is *not* here, and that is the fix rather than an omission: a
+    # subagent can only narrow what reached it, so a tool it declares and no agent
+    # grants is one this caller gets by no path. Counting it named an asset out of
+    # reach, which is the one thing this report exists not to do.
+    assert set(names) == {"line_count"}, (
         "the report named a tool nothing here offers, or stopped naming one that is"
     )
+
+
+A_PLAIN_SUBAGENT = """name: {name}
+description: A subagent.
+source_ids: [A, B]
+system_prompt: |
+  You help.
+"""
+
+
+@pytest.fixture
+def policied_with_one_helper(policied):
+    """`policied`, where `surveyor` hands work to `helper` and nothing names the other.
+
+    Both subagents' own lines admit this caller, which is the state that matters: the
+    difference between them is only whether an agent in reach names them.
+    """
+    directory = policied.catalogue_roots["agents"]
+    (directory / "surveyor.yaml").write_text(AGENT + "subagents: [helper]\n", encoding="utf-8")
+    helpers = subagents_dir(policied)
+    helpers.mkdir(parents=True, exist_ok=True)
+    for name in ("helper", "kept_apart"):
+        (helpers / f"{name}.yaml").write_text(
+            A_PLAIN_SUBAGENT.format(name=name), encoding="utf-8"
+        )
+    return policied
+
+
+def test_a_subagent_no_agent_in_reach_activates_is_not_reported_as_withheld(
+    policied_with_one_helper,
+):
+    """Naming one says it exists, which is what this report is filtered for -- and its
+    own `source_ids:` admitting the caller is not the same question as whether any
+    agent they can open hands it work. `activated` records that a subagent reaches a
+    run only where the agent names it.
+
+    `helper` is asserted beside it, so a filter that emptied the row would not pass.
+    """
+    kf = Kingfisher(policied_with_one_helper, backends=default_backends)
+
+    told = dict(reported(kf, ["A"], "w2", asked_for=Capabilities(subagents=())))
+
+    assert set(told["subagent"]) == {"helper"}
+
+
+#: A subagent `surveyor` hands work to, naming a tool by a name nothing offers. The
+#: typo is the file's fault whoever is asking -- which is why the refusal still fires
+#: for every caller -- and what it *lists* is the question here.
+A_TYPO_IN_A_SUBAGENT = """name: helper
+description: A subagent.
+source_ids: [A, B]
+tools: [line_counts]
+system_prompt: |
+  You help.
+"""
+
+
+def _refused_listing(cfg, source_ids):
+    """What one real build's refusal of `line_counts` lists to this caller."""
+    kf = Kingfisher(cfg, backends=default_backends)
+    session = session_at(kf, "w-refused")
+    with pytest.raises(CapabilityError, match=r"unknown tool\(s\): line_counts;") as refused:
+        build_agent(
+            kf.cfg,
+            agent=kf.agent_named("surveyor", source_ids=source_ids),
+            held=kf.held_for(source_ids),
+            backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
+            capabilities=kf._effective_grants(source_ids),
+            catalogue=kf.catalogue,
+            checkpointer=None,
+        )
+    listing = str(refused.value).split("; offered: ", 1)[1]
+    # One name a line, with its file beside it: the first word of each line that has
+    # one. Stripped before splitting, or the indent is what comes back.
+    return {one.strip().split()[0] for one in listing.splitlines() if one.strip()}
+
+
+@pytest.fixture
+def policied_with_a_typo(policied_with_a_stranger):
+    """`policied_with_a_stranger`, where `surveyor` hands work to a subagent whose
+    `tools:` holds a typo. Three tools exist; the caller reaches one.
+    """
+    directory = policied_with_a_stranger.catalogue_roots["agents"]
+    (directory / "surveyor.yaml").write_text(AGENT + "subagents: [helper]\n", encoding="utf-8")
+    (subagents_dir(policied_with_a_stranger) / "helper.yaml").write_text(
+        A_TYPO_IN_A_SUBAGENT, encoding="utf-8"
+    )
+    return policied_with_a_stranger
+
+
+def test_a_refusal_lists_no_tool_out_of_the_callers_reach(policied_with_a_typo):
+    """The subagent refusals were scoped and this one was not: a caller holding `A` was
+    handed every workspace tool and its file -- measured, three names and three paths
+    where the agent they reach grants one. A refusal is read by whoever triggered it,
+    so it is as much a listing as the listing is.
+    """
+    assert _refused_listing(policied_with_a_typo, ("A",)) == {"line_count"}
+
+
+def test_a_definition_naming_a_real_tool_out_of_reach_is_not_refused(
+    policied_with_a_stranger,
+):
+    """What the refusal *judges* stays the whole catalogue, and this is the case that
+    says so: `secret_export` exists, so a subagent naming it has made no mistake, and
+    the ceiling drops it for a caller whose agent was not granted it -- quietly, which
+    is the documented behaviour.
+
+    Narrow the judgement to the caller's reach and this file would be refused for some
+    callers and not others, which is exactly what `refuse_misnamed_by` was written to
+    stop. Found by mutating the listing fix: with the typo alone, the two sets agree
+    and nothing here could tell them apart.
+    """
+    directory = policied_with_a_stranger.catalogue_roots["agents"]
+    (directory / "surveyor.yaml").write_text(AGENT + "subagents: [helper]\n", encoding="utf-8")
+    (subagents_dir(policied_with_a_stranger) / "helper.yaml").write_text(
+        A_TYPO_IN_A_SUBAGENT.replace("line_counts", "secret_export"), encoding="utf-8"
+    )
+    kf = Kingfisher(policied_with_a_stranger, backends=default_backends)
+    session = session_at(kf, "w-in-reach")
+
+    built = build_agent(
+        kf.cfg,
+        agent=kf.agent_named("surveyor", source_ids=("A",)),
+        held=kf.held_for(("A",)),
+        backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
+        capabilities=kf._effective_grants(("A",)),
+        catalogue=kf.catalogue,
+        checkpointer=None,
+    )
+
+    helper = subagent_of(built, "helper")
+    assert "secret_export" not in {
+        getattr(one, "name", "") for one in helper.get("tools") or ()
+    }, "the ceiling drops it, which is why naming it is not an error"
+
+
+def test_the_operator_is_still_told_every_tool_the_workspace_has(policied_with_a_typo):
+    """`UNSCOPED` reaches everything, so nothing is narrowed and the refusal says what
+    it always said. The control: a listing narrowed to nothing would pass the rule
+    above, and a refusal naming no alternative is one somebody has to go and research.
+    """
+    assert _refused_listing(policied_with_a_typo, UNSCOPED) == {
+        "line_count",
+        "secret_export",
+        "delegated_only",
+    }
 
 
 def test_a_run_under_no_policy_is_still_told_of_everything_it_declined(policied_with_a_stranger):
