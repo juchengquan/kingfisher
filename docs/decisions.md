@@ -2345,6 +2345,37 @@ needs nothing drawn here -- and drawing a page is PDFium, native code in kingfis
 process outside every sandbox, which is what `pdf_text` was built to avoid. pypdf
 copies pages and is Python. *(2026-10-13.)*
 
+**A tool that reads a file caps what it reads, and `pdf_text` releases each page as it
+goes.** Three facts meet in a file-reading tool and none is visible from inside one: a
+backend hands a file back whole, so the bytes are in this process before the tool sees
+them; the parse runs on the turn's thread, in the kingfisher process, outside every
+fence; and `KINGFISHER_TURN_TIMEOUT_S` is read *between* stream chunks, so a tool
+spending ten minutes inside one call spends them. There is no timeout to reach for -- a
+thread cannot be interrupted mid-parse -- so the bound has to be set before the work
+starts.
+
+The cap is 32 MB, one number in all eight tools that read a file, named in the message a
+model gets back with the size it asked for. It is a per-module constant rather than a
+shared import because these are examples copied one file at a time, which is exactly why
+`test_a_tool_reads_a_file_one_way` compares the eight copies: that rule found the eighth,
+two directories deeper than the glob that found the other seven.
+
+**Bytes were the wrong bound for the PDF, and measuring showed it.** For a CSV they
+track the cost -- 32 MB of rows peaked at 358 MB of RSS, 188 MB at 1.8 GB, about nine
+times the file. For a PDF they do not: 1.6 MB of dense pages peaked at **1,655 MB**,
+about a thousand times the file, because pdfplumber keeps each page's objects and its
+text map until the document closes and `pdf_text` reads up to five hundred pages. The
+review asked for a byte cap and a timeout; a byte cap would have left that untouched.
+
+What fixed it was releasing each page once its text was out: `flush_cache()` and
+`get_textmap.cache_clear()`, both, which took the same work from 1,655 MB to **93 MB**
+and about a quarter faster. Either alone leaves most of it -- 1,020 MB and 1,626 MB
+measured -- which is why the rule asserts both. Driven end to end afterwards, the tool
+grew the process by 12 MB on 500 dense pages. So `MAX_PAGES` did not have to move: the
+entry above justified 500 on time, said nothing about memory, and memory was the larger
+cost. pypdf, which `pdf_pages` uses, needed nothing: 2,000 pages copied in 0.16s and 109
+MB, measured before changing anything. *(2026-10-14, from an architecture review.)*
+
 ## What a turn's tools returned
 
 **Every tool result the model is handed is recorded, kept as a file and given an id,

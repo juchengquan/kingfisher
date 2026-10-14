@@ -493,6 +493,34 @@ tool can reach it; the only agent that could write one is an agent already holdi
 `execute`, which can run anything on the host regardless. Treat this directory the
 way you treat the rest of your source: it is yours, not the agent's.
 
+## A tool that reads a file
+
+Say how much it will read, and refuse more. Every shipped tool that reads one does,
+through the same `_fetched` helper and the same `MAX_INPUT_BYTES` beside it, and a file
+past the cap comes back as a failed call naming both sizes -- which the model can act
+on, by asking for a smaller file or a part of this one.
+
+Three things add up to needing that bound, and none of them is obvious on its own:
+
+  - **A backend hands a file back whole.** `download_files` is the interface; a backend
+    keeping the session elsewhere has no local file to stream from, so the bytes are in
+    this process before your tool sees them.
+  - **The parse is on the turn's thread**, in the kingfisher process, outside every
+    fence the shell has -- the section above says why. Nothing is watching it.
+  - **The turn deadline cannot stop it.** `KINGFISHER_TURN_TIMEOUT_S` is read *between*
+    stream chunks, so a tool that spends ten minutes inside one call spends them; the
+    deadline is noticed when it returns. There is no timeout to reach for, and a thread
+    cannot be interrupted mid-parse in Python, so the only bound available is the one
+    the tool sets before it starts.
+
+**Bytes are not always the cost.** For a CSV they track it: 32 MB of rows peaked at 358
+MB of resident memory, and 188 MB at 1.8 GB -- about nine times the file. For a PDF they
+do not: 1.6 MB of dense pages peaked at 1,655 MB, a thousand times the file, because the
+cost is per *page* and the library held every page it had read. `pdf_text` caps pages for
+that reason, and releases each page's caches as it goes -- `flush_cache()` and
+`get_textmap.cache_clear()`, both, which took the same work to 93 MB. So cap the bytes,
+and then measure the thing your tool actually spends.
+
 ## Where the directory lives
 
 It is `tools/` in `KINGFISHER_DEFINITIONS_DIR`, beside every other kind, so a

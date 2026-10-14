@@ -22,6 +22,8 @@ from kingfisher import ToolContext
 #: at fifty, an agent sampled a 300-page report and missed the page it was asked about.
 #: Bounded, because each page is parsed here, beside every other turn: about 50 ms a
 #: page on a dense report, so under half a minute. The docstring below names it too.
+#: What that covers is time, and memory was the larger cost at this number -- the loop
+#: below is what bounds it, and did not need this one to move.
 MAX_PAGES = 500
 
 #: What `pages` means when the caller leaves it out. A span stood here -- `1-500`, the
@@ -36,12 +38,24 @@ EVERYTHING = "all"
 KB = 1024
 
 
+#: What one call reads. A backend hands a file back whole, into kingfisher's own
+#: process, and nothing else bounds it: `docs/guides/tools.md` has the reason under
+#: *A tool that reads a file*.
+MAX_INPUT_BYTES = 32 * 1024 * 1024
+
+
 def _fetched(runtime: ToolRuntime[ToolContext], file_path: str) -> bytes:
     """The file's bytes, through the session's backend -- wherever that keeps them."""
     (got,) = runtime.context.backend.download_files([file_path])
     if got.error or got.content is None:
         msg = f"{file_path}: {got.error or 'no content'}"
         raise FileNotFoundError(msg)
+    if len(got.content) > MAX_INPUT_BYTES:
+        msg = (
+            f"{file_path} is {len(got.content)} bytes, past the {MAX_INPUT_BYTES} this "
+            f"tool reads in one call -- ask for a smaller file, or a part of this one"
+        )
+        raise ValueError(msg)
     return got.content
 
 
@@ -133,8 +147,19 @@ def pdf_text(
             if not present:
                 msg = f"{file_path} has {total} page(s); pages {pages!r} names none of them"
                 raise ValueError(msg)
-            # Page numbers count from one and the list from zero.
-            texts = [(n, pdf.pages[n - 1].extract_text()) for n in present[:MAX_PAGES]]
+            # Page numbers count from one and the list from zero. Each page is released
+            # as soon as its text is out: pdfplumber holds a page's objects and its text
+            # map until the document closes, so at 500 pages the whole document's worth
+            # was alive at once, in kingfisher's own process. Both calls are needed, and
+            # that is the half a comprehension here would lose: measured on 500 dense
+            # pages, 1,655 MB of peak RSS with neither, 1,020 and 1,626 with one, 93 with
+            # both -- and a quarter faster.
+            texts = []
+            for n in present[:MAX_PAGES]:
+                page = pdf.pages[n - 1]
+                texts.append((n, page.extract_text()))
+                page.flush_cache()
+                page.get_textmap.cache_clear()
     except (PdfminerException, MalformedPDFException) as exc:
         msg = f"{file_path}: not a PDF this tool can read ({exc})"
         raise ValueError(msg) from exc
