@@ -219,15 +219,23 @@ def test_the_text_holds_each_page_asked_for_under_its_own_number(tools, handed, 
     assert "pages 2-3, 5 of 5" in said
 
 
-def test_pages_past_the_cap_are_named_as_left_out(tools, handed, session_dir):
+#: How a caller says "the whole document": by naming a span that covers it, and by
+#: leaving `pages` out. Both ways in one test, because the cap was reported for the
+#: first and not the second -- a span is clipped to the document before the cap is
+#: applied, so the default span `1-500` had nothing past it to name on a 503-page
+#: report, and the docstring recommends leaving it out.
+WHOLE = {"the span named": False, "left to its default": True}
+
+
+@pytest.mark.parametrize("way", sorted(WHOLE), ids=sorted(WHOLE))
+def test_pages_past_the_cap_are_named_as_left_out(way, tools, handed, session_dir):
     """A cut that says nothing reads as the end of the document."""
     cap = tools["pdf_text"].func.__globals__["MAX_PAGES"]
     texts = [f"p{n}" for n in range(1, cap + 4)]
     (session_dir / "inputs" / "long.pdf").write_bytes(a_pdf(*texts))
+    asked = {} if WHOLE[way] else {"pages": f"1-{cap + 3}"}
 
-    said = on_backend(
-        tools["pdf_text"], handed, file_path="/inputs/long.pdf", pages=f"1-{cap + 3}"
-    )
+    said = on_backend(tools["pdf_text"], handed, file_path="/inputs/long.pdf", **asked)
 
     left = f"at most {cap} a call, so {cap + 1}-{cap + 3} left out"
     assert f"pages 1-{cap} of {cap + 3}; {left}" in said
@@ -235,6 +243,22 @@ def test_pages_past_the_cap_are_named_as_left_out(tools, handed, session_dir):
     assert saved is not None
     assert f"--- page {cap} ---" in saved.decode()
     assert f"--- page {cap + 1} ---" not in saved.decode()
+
+
+def test_a_span_the_document_satisfies_is_not_reported_as_cut_short(tools, handed, session_dir):
+    """The other direction, and the one that keeps the rule above honest: the note
+    names what the *caller* asked for and did not get, so a span this document has
+    every page of must not carry it, however many pages are past the span.
+    """
+    cap = tools["pdf_text"].func.__globals__["MAX_PAGES"]
+    (session_dir / "inputs" / "long.pdf").write_bytes(
+        a_pdf(*[f"p{n}" for n in range(1, cap + 4)])
+    )
+
+    said = on_backend(tools["pdf_text"], handed, file_path="/inputs/long.pdf", pages="1-20")
+
+    assert f"pages 1-20 of {cap + 3}" in said
+    assert "left out" not in said
 
 
 def test_left_to_its_default_the_whole_of_a_long_document_is_extracted(
@@ -254,11 +278,34 @@ def test_left_to_its_default_the_whole_of_a_long_document_is_extracted(
     assert "pages 1-300 of 300" in said
 
 
+def _reads(tool) -> str:
+    """A tool's description as one line, which is how a model reads it.
+
+    Line breaks taken out before matching: a docstring wraps where the column ran out,
+    so `up to 500 pages a call` is `a\n    call` in the source and a plain `in` test
+    sees neither. The sentence moved one word and the pin below went green on the
+    wrap -- found by writing it.
+    """
+    return " ".join(tool.description.split())
+
+
 def test_the_docstring_names_the_cap_the_tool_applies(tools):
     """The model learns the cap from the docstring alone, and plans its calls by it."""
     cap = tools["pdf_text"].func.__globals__["MAX_PAGES"]
 
-    assert f"up to {cap} pages a call" in tools["pdf_text"].description
+    assert f"up to {cap} pages a call" in _reads(tools["pdf_text"])
+
+
+def test_the_slice_docstring_names_the_size_the_tool_refuses_past(tools):
+    """The same rule for the neighbour, which had the constant held against the real
+    guard one line away and the sentence the model reads held by nothing -- so a guard
+    that moved would leave `pdf_pages` advising a size it no longer applies, and the
+    model deciding how many pages to ask for by it.
+    """
+    globals_ = tools["pdf_pages"].func.__globals__
+    cap = globals_["MAX_SLICE_BYTES"]
+
+    assert f"{cap // globals_['KB']} KB" in _reads(tools["pdf_pages"])
 
 def test_a_page_with_no_text_is_named(tools, handed):
     """A scanned page saved as an empty section is believed to say nothing."""

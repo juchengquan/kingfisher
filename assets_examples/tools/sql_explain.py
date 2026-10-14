@@ -25,6 +25,7 @@ file about something else.
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from langchain_core.tools import BaseTool
@@ -85,8 +86,10 @@ class SqlExplain(BaseTool):
 
         try:
             # Read-only, like its neighbour: a plan is a read, and a URI
-            # connection is what makes that true rather than assumed.
-            with sqlite3.connect(f"file:{DATABASE}?mode=ro", uri=True) as db:
+            # connection is what makes that true rather than assumed. `closing` for
+            # the other half of that neighbour's rule -- `with` on a connection
+            # commits and does not close, so the bare idiom leaks one a call.
+            with closing(sqlite3.connect(f"file:{DATABASE}?mode=ro", uri=True)) as db:
                 rows = db.execute(f"EXPLAIN QUERY PLAN {statement}").fetchmany(MAX_ROWS)
         except sqlite3.Error as exc:
             # A returned string rather than a raise. The failure guard would

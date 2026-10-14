@@ -2197,6 +2197,34 @@ Federal Reserve's 222-page 2023 annual report, dense with tables, pdfplumber too
 under half a minute. pypdf extracted the same report in 3.6 seconds, and a little
 less of its text. *(2026-10-13.)*
 
+**`pdf_text`'s `pages` defaults to the word `all`, not to the span `1-500`.** The cap
+written into the default read as the more informative thing to show a model, and it
+made the cap unreportable: a span is clipped to the document before the cap applies, so
+on a 503-page report the default extracted 1-500 and said `pages 1-500 of 503` with
+nothing left out, while the same call naming `1-503` named the three pages it dropped.
+The docstring recommends leaving `pages` out, so the recipe it recommends was the one
+that reported least -- measured both ways. `all` means every page there is, which is
+what a caller leaving it out asked for, and the cap then has something to name. An
+explicit span is still parsed before the file is fetched, so an unreadable `pages`
+costs nothing to find out about. *(2026-10-14, from an architecture review.)*
+
+**A shipped tool that promises CSV is written by `csv`.** `sql_query` built its answer
+with `",".join(...)`, and its docstring said CSV: a value holding a comma, a quote or a
+newline came back as different data with nothing to say so -- measured, three rows
+arrived as four lines, a two-column header got a three-field row, and a newline inside
+a value ended the record there. It writes through `csv.writer` now, as `csv_filter`
+beside it already did, and the row cap is said in a trailing `--` line that the
+docstring names so a reader parsing the rows knows where they stop.
+
+Nothing had ever called that file. Six of the shipped tools were covered by "does it
+import" and "is the name in the set", which is the coverage that let this ship; the
+three that open a database are driven now, in
+`tests/unit/test_tools_that_read_a_database.py`. The same tests hold the connections
+closed: `with sqlite3.connect(...)` commits and does *not* close, so every call leaked
+one, in both modules. `closing` is what a read wants, and it is spelled the same way in
+both -- their shared connection rule is the stated reason they are written as they are.
+*(2026-10-14, from an architecture review.)*
+
 **A PDF over 256 KB in a tool's result reaches the model as advice instead.**
 `LargePdfGuard`, in `tool_guards` on every graph kingfisher builds, swaps the block
 for a line saying how large the PDF is and why it was not handed over, and marks the

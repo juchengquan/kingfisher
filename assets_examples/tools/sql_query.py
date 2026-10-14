@@ -15,7 +15,11 @@ if they lived apart.
 
 from __future__ import annotations
 
+import csv
+import io
 import sqlite3
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 from langchain_core.tools import tool
@@ -31,9 +35,15 @@ DATABASE = Path("~/kingfisher-example.db").expanduser()
 MAX_ROWS = 200
 
 
-def _connect() -> sqlite3.Connection:
-    """Open read-only, so a SELECT typo cannot become a DELETE."""
-    return sqlite3.connect(f"file:{DATABASE}?mode=ro", uri=True)
+@contextmanager
+def _connect() -> Iterator[sqlite3.Connection]:
+    """Open read-only, so a SELECT typo cannot become a DELETE, and close after.
+
+    `closing`, because `with` on a connection commits and does not close it -- so the
+    bare idiom reads as handled and leaks one a call. A read needs no commit.
+    """
+    with closing(sqlite3.connect(f"file:{DATABASE}?mode=ro", uri=True)) as connection:
+        yield connection
 
 
 @tool
@@ -53,11 +63,12 @@ def sql_tables() -> str:
 
 @tool
 def sql_query(statement: str) -> str:
-    """Run one read-only SQL SELECT and return the rows as CSV.
+    """Run one read-only SQL SELECT and return the rows as CSV, header first.
 
     Use for aggregate questions over the database — counts, sums, group-bys —
     rather than reading rows and adding them up yourself. Returns at most 200
-    rows. Only SELECT is permitted.
+    rows, and says so in a last line starting `--` when it had to stop there.
+    Only SELECT is permitted.
     """
     if not statement.lstrip().lower().startswith("select"):
         return "refused: only SELECT statements are permitted"
@@ -76,11 +87,19 @@ def sql_query(statement: str) -> str:
         # status, which reports the call as a success.
         return f"sql error: {exc}"
 
-    lines = [",".join(headers)]
-    lines += [",".join("" if v is None else str(v) for v in row) for row in rows]
+    # Through `csv`, as `csv_filter` writes its file. Joining the values with commas
+    # is the shorter line and answers a different question: a value holding a comma, a
+    # quote or a newline re-parses as other data, and nothing in the answer says so.
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\n")
+    writer.writerow(headers)
+    writer.writerows(["" if v is None else str(v) for v in row] for row in rows)
+    said = out.getvalue()
     if len(rows) == MAX_ROWS:
-        lines.append(f"-- truncated at {MAX_ROWS} rows; add LIMIT or aggregate")
-    return "\n".join(lines)
+        # Outside the CSV and marked, which the docstring promises, so a reader
+        # parsing the rows knows to stop at it rather than read it as one.
+        said += f"-- truncated at {MAX_ROWS} rows; add LIMIT or aggregate\n"
+    return said.rstrip("\n")
 
 
 TOOLS = [sql_tables, sql_query]
