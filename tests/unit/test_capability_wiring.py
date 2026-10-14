@@ -162,7 +162,11 @@ def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, session_dir):
     # The unconditional routes and nothing skill-specific: a request that
     # granted no skills adds no per-skill denials.
     assert {r.paths[0] for r in built.permissions} == {
-        "/.harness/**", "/inputs/**", "/scratchpad/tool_results/**", "/skills/**",
+        "/.harness/**",
+        "/inputs/**",
+        "/scratchpad/large_tool_results/**",
+        "/scratchpad/tool_results/**",
+        "/skills/**",
     }
 
 

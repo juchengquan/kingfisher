@@ -115,6 +115,7 @@ def test_the_deny_rules_are_the_ones_the_layout_declares(cfg, session_dir):
     assert denied_scopes() == (
         "/.harness/**",
         "/inputs/**",
+        "/scratchpad/large_tool_results/**",
         "/scratchpad/tool_results/**",
         "/skills/**",
     )
@@ -122,6 +123,7 @@ def test_the_deny_rules_are_the_ones_the_layout_declares(cfg, session_dir):
     assert [p.paths for p in read_only_permissions()] == [
         ["/.harness/**"],
         ["/inputs/**"],
+        ["/scratchpad/large_tool_results/**"],
         ["/scratchpad/tool_results/**"],
         ["/skills/**"],
         ["/.harness/**"],

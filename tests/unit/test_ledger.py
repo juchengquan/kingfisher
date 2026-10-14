@@ -529,6 +529,103 @@ def test_the_agent_cannot_rewrite_or_delete_the_file_a_row_names(ledgered):
     assert _read(ledgered, row.path) == "Ten results for EV\n1. one\n2. two"
 
 
+def test_a_call_id_used_twice_leaves_each_row_on_its_own_result(ledgered):
+    """deepagents names an eviction after the call id alone, in a folder that outlasts
+    the turn -- so a provider reusing an id pointed the second row at the first
+    result's file, and the sweep then took the copy that was right.
+
+    Two turns on one session, the first offloaded and the second not: without the
+    check, turn two's row read `/scratchpad/large_tool_results/c1` and `read_file` on
+    it returned turn one's 101 KB.
+    """
+    first = _run(ledgered, _calls(("loud", {}, "c1")), AIMessage(content="done"))
+    second = _run(
+        ledgered, _calls(("web_search", {"query": "EV"}, "c1")), AIMessage(content="done")
+    )
+
+    (was,) = first.ledger
+    (now,) = second.ledger
+    assert was.path == "/scratchpad/large_tool_results/c1", "the first turn was not offloaded"
+    assert now.path != was.path, "two rows name one file, and only one of them is right"
+    assert _read(ledgered, now.path).startswith("Ten results for EV")
+    # Our own copy, so the result and nothing else: the id goes on what the model is
+    # handed, and deepagents' copy is the one that keeps it.
+    assert len(_read(ledgered, now.path)) == now.size
+
+
+def test_two_calls_of_one_id_in_a_turn_do_not_share_a_file(ledgered):
+    """The same collision inside one turn, where neither row is the earlier one: two
+    assistant messages reusing an id both wanted the same offloaded path.
+    """
+    result = _run(
+        ledgered,
+        _calls(("loud", {}, "c1")),
+        _calls(("loud", {}, "c1")),
+        AIMessage(content="done"),
+    )
+
+    first, again = result.ledger
+    assert first.path != again.path, "both rows name one file"
+    assert len({first.id, again.id}) == 2
+    # And each file is its own result. Asserting only that the paths differ left the
+    # shape this rule is named for in place: two `loud` calls are the same length, so
+    # the size that tells an eviction apart cannot, and only one of the two rows can
+    # have deepagents' copy -- the other has to keep ours, whole.
+    for entry in (first, again):
+        assert len(_read(ledgered, entry.path)) in (
+            entry.size,
+            entry.size + len(f"\n[{entry.id}]"),
+        ), entry.id
+
+
+def test_a_todo_rewrite_is_not_a_recorded_result(ledgered):
+    """It rewrites one list the conversation already carries, and a row each buries the
+    rest: three updates beside one real search made three of the four delta lines a todo
+    list, each repeating the list in `args` as well.
+    """
+    result = _run(
+        ledgered,
+        _calls(("write_todos", {"todos": [{"content": "step 1", "status": "pending"}]}, "t1")),
+        _calls(("write_todos", {"todos": [{"content": "step 1", "status": "completed"}]}, "t2")),
+        _calls(("web_search", {"query": "EV"}, "c1")),
+        AIMessage(content="done"),
+    )
+
+    assert [(e.id, e.tool) for e in result.ledger] == [("A-0001", "web_search")]
+    assert _kept(ledgered) == ["A-0001-web_search.txt"]
+    # The control: the calls really ran, so this is the recorder skipping them rather
+    # than deepagents refusing them -- two in parallel are refused, and a refused call
+    # is not recorded either.
+    said = [one.content for one in Scripted.heard[-1] if type(one).__name__ == "ToolMessage"]
+    assert any("Updated todo list" in str(one) for one in said)
+
+
+def test_a_row_is_never_pointed_at_another_graphs_result_of_the_same_id(ledgered):
+    """A turn holding an agent and a subagent holds two conversations, and a provider
+    numbering calls per response gives each a `c1` -- so this needs no provider
+    misbehaving and no crash.
+
+    The size is what tells the two apart, and the subagent's small result must keep our
+    own copy rather than take the agent's evicted one.
+    """
+    result = _run(
+        ledgered,
+        _task("c1"),
+        _calls(("web_search", {"query": "EV"}, "c1")),
+        AIMessage(content="margins are thin"),
+        _calls(("loud", {}, "c1")),
+        AIMessage(content="done"),
+    )
+
+    by_tool = {e.tool: e for e in result.ledger}
+    assert set(by_tool) == {"web_search", "task", "loud"}, [e.tool for e in result.ledger]
+    inner = by_tool["web_search"]
+    assert inner.path.startswith(TOOL_RESULTS_ROUTE), (
+        f"the subagent's row took the agent's offloaded file: {inner.path}"
+    )
+    assert _read(ledgered, inner.path).startswith("Ten results for EV")
+
+
 def test_a_result_file_no_row_names_is_swept(ledgered):
     """A turn that died before writing its rows leaves its files behind, and nothing
     else would ever remove them.
