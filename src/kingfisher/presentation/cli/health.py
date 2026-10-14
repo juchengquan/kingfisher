@@ -924,6 +924,27 @@ def _retired(environ: Mapping[str, str] | None = None) -> Iterator[Check]:
     )
 
 
+def _buildable(found: Inventory) -> Iterator[Check]:
+    """Whether a graph could be assembled at all, and why not.
+
+    A row only on failure, like `subagent tools`: the things a reader needs listed
+    every time are what the deployment *has*, and this is the absence of all of it.
+
+    It exists because the refusal used to escape `inventory` instead. One
+    `models.yaml` row that leaves no room for a conversation took `doctor`, `list`,
+    `sessions` and `reap` down together -- exit 2 with no output from any of them --
+    so the deployment's own diagnostics were the first thing it broke.
+    """
+    if found.build_error is None:
+        return
+    yield Check(
+        "agent build",
+        "fail",
+        found.build_error,
+        "fix what it names -- a models.yaml row, a backend, or a mount",
+    )
+
+
 def examine(
     cfg: Config, found: Inventory | None = None, *, from_dotenv: frozenset[str] | None = None
 ) -> tuple[Check, ...]:
@@ -944,6 +965,9 @@ def examine(
         checks += _at_rest(cfg)
         if found is None:
             found = inventory(cfg)
+        # Before the catalogues, because it explains their shape: without a graph the
+        # built-in set is unknown rather than empty, and the row below says so.
+        checks += _buildable(found)
         checks += _catalogues(found)
         checks += _tool_references(found)
         checks += _subagent_references(found)

@@ -65,6 +65,7 @@ def render(found: Inventory) -> Iterator[str]:
     yield from _subagents(found)
     yield from _middlewares(found)
     yield from _bundles(found)
+    yield from _build(found)
     yield from _misnamed_tools(found)
     yield from _unresolved_subagents(found)
     yield from _access(found)
@@ -127,6 +128,21 @@ def _bundles(found: Inventory) -> Iterator[str]:
         return
     yield "\nbundles"
     yield f"  cannot load: {found.bundles_error}"
+
+
+def _build(found: Inventory) -> Iterator[str]:
+    """Why no graph could be assembled, which is a fault no directory owns.
+
+    Printed rather than left to the exit status, like every other error here: a
+    non-zero exit tells a script something is wrong and only the text tells the
+    person what. This one is the reason the rest of the listing is thinner than it
+    should be -- the built-in set is unknown without a graph -- so it is said where a
+    reader meets that gap.
+    """
+    if found.build_error is None:
+        return
+    yield "\nthe build"
+    yield f"  cannot build an agent: {found.build_error}"
 
 
 def _misnamed_tools(found: Inventory) -> Iterator[str]:
@@ -375,6 +391,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "tools": list(found.tools),
         "tool_sources": dict(found.tool_sources),
         "tools_error": found.tools_error,
+        "build_error": found.build_error,
         "skills": dict(found.skills),
         "skills_unloadable": list(found.skills_unloadable),
         "skills_misplaced": list(found.skills_misplaced),
@@ -451,6 +468,10 @@ def failed(found: Inventory) -> bool:
     for loads, and every run reaching that name is refused.
     """
     if found.moved_tools or found.miscounted_bundles or found.unresolved_subagents:
+        return True
+    # Not a kind either, and the most fundamental of these: without a graph nothing
+    # runs at all, whatever the catalogues say.
+    if found.build_error is not None:
         return True
     if any(kind.error is not None for kind in found.by_kind()):
         return True

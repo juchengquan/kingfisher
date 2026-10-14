@@ -8,7 +8,7 @@ from types import MappingProxyType
 
 from kingfisher.application import access
 from kingfisher.application.origins import Origin, Origins
-from kingfisher.config import Config
+from kingfisher.config import Config, ConfigError
 from kingfisher.domain.access import (
     AccessReport,
     SourceIds,
@@ -115,6 +115,14 @@ class Inventory:
     #: Tool name -> the module or package that defined it.
     tool_sources: Mapping[str, str] = _NOTHING
     tools_error: str | None = None
+    #: Why a graph could not be assembled at all: a `models.yaml` row that cannot
+    #: start a turn, a backend that refuses to be made, a mount that cannot be
+    #: mounted. Not a kind's error, so it is not in `by_kind` -- the probe is a built
+    #: graph rather than a catalogue -- and carried rather than raised for the reason
+    #: every other error here is. Left to escape, one bad row took `doctor`, `list`,
+    #: `sessions` and `reap` down together, over a deployment whose only fault was in
+    #: a file those three verbs are how you find.
+    build_error: str | None = None
 
     #: Skill name -> its description, which is what the model is shown. From
     #: the registry rather than the directory listing: a directory that looks
@@ -561,9 +569,9 @@ def _builtin_tools(
 
 def _tools(
     cfg: Config, resolved: Definitions
-) -> tuple[tuple[str, ...], tuple[str, ...], Mapping[str, str], str | None, bool]:
-    """The built-in set, what the workspace adds, where each one lives, why not, and
-    whether the built-in set was read at all.
+) -> tuple[tuple[str, ...], tuple[str, ...], Mapping[str, str], str | None, bool, str | None]:
+    """The built-in set, what the workspace adds, where each one lives, why not,
+    whether the built-in set was read at all, and why no graph could be built.
 
     Lifted out of `inventory` for the reason `_bundled` and `_middlewares` are: one
     kind read, its failure carried rather than raised, and the answers handed back
@@ -588,7 +596,17 @@ def _tools(
         # built-in set, which is only knowable from an assembled graph -- and a
         # tool module is Python, so fetching them apart ran every one twice.
         #
-        introspected = _builtin_tools(cfg, resolved, found)
+        try:
+            introspected = _builtin_tools(cfg, resolved, found)
+        except ConfigError as exc:
+            # Its own `try` around the probe, and the narrowest one here. Assembling a
+            # graph builds this deployment's default model and its backend, and either
+            # may refuse the deployment -- a `max_tokens` that leaves no room for the
+            # conversation, a session that cannot be made. That is not a fact about
+            # `tools/`, so it is not `tools_error`, and `middlewares_error` is the
+            # precedent for saying it apart rather than blaming the directory a reader
+            # would then go and open.
+            return (), workspace_tools, sources, tools_error, False, str(exc)
         if introspected is None:
             # The graph compiled and then could not be read, which means the
             # built-in set is unknown rather than empty. Carried as an error for
@@ -623,7 +641,9 @@ def _tools(
         # `doctor` print `0 built in` with an `ok` beside it over a deployment with
         # ten of them, and `--json` hand a script `[]` with `tools_error: null`.
         checked = False
-    return builtin, workspace_tools, sources, tools_error, checked
+    # `None` for the build: the only way out with one is the early return above, where
+    # there is no graph and so nothing else to report either.
+    return builtin, workspace_tools, sources, tools_error, checked, None
 
 
 def inventory(
@@ -640,7 +660,9 @@ def inventory(
     unresolved_subagents = _unresolved_subagents(resolved)
     miscounted_bundles = _miscounted_bundles(resolved)
 
-    builtin, workspace_tools, sources, tools_error, builtin_checked = _tools(cfg, resolved)
+    builtin, workspace_tools, sources, tools_error, builtin_checked, build_error = _tools(
+        cfg, resolved
+    )
 
     registry = resolved.registry
     subagents: Mapping[str, str] = _NOTHING
@@ -797,6 +819,7 @@ def inventory(
             {name: where for name, where in sources.items() if offers_tool(name)}
         ),
         tools_error=tools_error,
+        build_error=build_error,
         skills={
             name: registry.description(name) for name in registry.names if offers_skill(name)
         },

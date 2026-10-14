@@ -2146,15 +2146,28 @@ that model name, which moves: it moved from 1,000,000 to 200,000 under this proj
 once. A row that started yesterday failing to start today is the right outcome when the
 alternative is every turn dying.
 
-**`doctor` still does not check it, and the reason is measured.** The pair is only
-knowable from a built model, and building one imports the provider package: ~700ms
-against 17ms for importing kingfisher itself, on both adapters. `test_nothing_here_calls
-_a_model` -- "the line that keeps this cheap enough to run before every deployment" --
-is right, and the first version of this change broke it along with two import-weight
-rules. The construction itself is 0.03-0.18ms; measuring that and not the import is how
-the wrong design got as far as green tests. So the pair is refused where a model is
-actually built, which is the first turn, and `doctor` is blind to it the way it is
-already blind to every other `build_model` refusal.
+**`doctor` does check it, and the reason I said it could not was measured wrongly.**
+The paragraph here said the pair is only knowable from a built model, that building one
+imports a provider package at ~700ms against 17ms for kingfisher itself, and that
+`test_nothing_here_calls_a_model` -- "the line that keeps this cheap enough to run before
+every deployment" -- was right. The import figure is real and irrelevant: `deepagents`
+imports `langchain_anthropic` and `langchain_openai` itself, so by the time `health`
+reaches `unrunnable_agents` both are in `sys.modules` and the marginal cost of building a
+model is nil. And `doctor` *already built the default model*, every time, through
+`inventory` -> `_builtin_tools` -> `build_agent`. The rule that said otherwise patched
+`models.build_model` while `agent.py` holds a direct `from ... import build_model`, so it
+never bit; it is deleted rather than repaired, because what it forbade is what `doctor`
+needs to do to answer this. The construction itself is 0.03-0.18ms.
+
+So the pair is reported by `doctor`, on a row of its own, and `inventory` carries it as
+`build_error` rather than letting it escape -- which is the other half of this
+correction. One bad row used to exit 2 with no output from `doctor`, `list`, `sessions`
+and `reap` at once, so the deployment's own diagnostics were the first thing it broke.
+`sessions` and `reap` need no model and no graph, and the startup probe is what dragged
+them in: it asks whether a workspace tool wears a built-in's name, answers with
+`CapabilityError`, and a `ConfigError` is not its answer -- so only that type is
+suppressed there, and the turn that needs a model still refuses, naming the row.
+*(2026-10-15, from an architecture review.)*
 
 A `ContextOverflowError` from an input that genuinely does not fit still reaches the
 terminal as a traceback. Catching it in the command would mean granting
@@ -3737,9 +3750,22 @@ only `/.harness/` is denied them -- so "a folder holding its own `.harness/`" co
 set off from inside too. A workspace of one therefore refuses folders holding
 `.harness/` only while `sessions/.harness` does not exist; once it does, `sessions/` is
 the one session and its folders are that session's. A workspace of many refuses
-`sessions/.harness`, and the macOS profile now denies a shell in any session the making
-of it -- that is the optional segment above, since without it the shell could stop a
-shared workspace starting with one `mkdir ../.harness`.
+`sessions/.harness`, and the macOS profile denies a shell in any session the making of
+it -- so one `mkdir ../.harness` cannot stop a shared workspace starting.
+
+**That is `_sessions_denial`'s node deny, not the folder rule's optional segment.** The
+folder rule matched `sessions/<folder>` as well as `sessions/*/<folder>`, through an
+optional session segment, and the segment was redundant: creating or renaming anything
+directly under `sessions/` is a write against that node, which the neighbour refuses for
+every name at once rather than for the two the folder rules happen to guard. What it
+added was a collision. `inputs` is a legal session id -- `names_a_session` refuses only a
+dot-name, and says so because `.harness` is one of these folders -- so a session called
+`inputs` had its whole tree denied and every command in it failed with `Operation not
+permitted`, saying nothing. Measured, and the session id comes from the request. The
+segment is required now, and
+`test_the_shell_cannot_leave_a_folder_the_listing_would_read_as_a_session` drives the
+node deny over `inputs`, `.harness` and a name no rule mentions, so the half that
+remains is held by what actually holds it. *(2026-10-15, from an architecture review.)*
 
 It runs where `ensure_layout` runs for a service, and in `DefaultBackends.open` and
 `sessions` as well, because a deployment may drive those without a `Kingfisher` to have

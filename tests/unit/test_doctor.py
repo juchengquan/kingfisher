@@ -367,18 +367,28 @@ def test_the_exit_code_separates_will_not_run_from_worth_knowing(cfg, monkeypatc
     assert worst(failed) == "fail"
 
 
-def test_nothing_here_calls_a_model(cfg, monkeypatch):
-    """The line that keeps this cheap enough to run before every deployment."""
-    from kingfisher.infrastructure.harness import models
+def test_doctor_builds_the_model_it_needs_to_answer(cfg, monkeypatch):
+    """It builds the default model, and that is deliberate: a `models.yaml` row that
+    cannot start a turn is reported on its own row, and nothing but a built model knows.
 
-    reached = "doctor built a model"
+    This replaces `test_nothing_here_calls_a_model`, which patched
+    `models.build_model` while `agent.py` holds a direct `from ... import build_model`
+    -- so it never bit, and the cost it was protecting is already paid: `deepagents`
+    imports both provider packages itself.
+    """
+    from kingfisher.infrastructure.harness import agent as agent_module
 
-    def _refuse(*args, **kwargs):
-        raise AssertionError(reached)
+    built: list[str] = []
+    real = agent_module.build_model
 
-    monkeypatch.setattr(models, "build_model", _refuse)
+    def spy(profile, endpoint):
+        built.append(profile.model)
+        return real(profile, endpoint)
 
-    assert examine(cfg)  # it still answered
+    monkeypatch.setattr(agent_module, "build_model", spy)
+
+    assert examine(cfg)
+    assert built, "doctor answered without building a model, so it cannot see a dead row"
 
 
 def test_the_command_prints_a_remedy_for_what_it_can_fix(cfg, at_the_command_line, capsys):
