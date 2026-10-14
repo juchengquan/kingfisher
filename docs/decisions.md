@@ -2278,10 +2278,29 @@ Measured across two turns on one session: the row read `A-0002 web_search -> 32 
 Every other call id here need only be unique within its turn -- a `PendingDecision` is
 answered by a `Resume` into the same paused turn -- and nothing asks a provider for
 more than that, so this is kingfisher's to detect rather than to require. A collision
-keeps our own copy, which is this call's whole result. What it cannot repair is the
-earlier row: where the second result is *also* evicted, deepagents has overwritten the
-file that row names, and only deepagents could have avoided that.
+keeps our own copy, which is this call's whole result.
 *(2026-10-13, from an architecture review.)*
+
+**A name is not an identity, and the size is what settles it.** The paragraph above
+checked that no two rows claimed one path, which was not the same as checking that the
+path held *this* result. Three shapes went through it: a crash, which takes
+`earlier.paths` with the row it cut while the eviction file outlives the turn; one id
+twice in a turn with both results evicted; and -- needing no provider misbehaving at
+all -- an agent and a subagent, which are two conversations in one turn, where a
+provider numbering calls per response gives each a `c1`. That last one is also why the
+sentence above about an id being unique within its turn was too comfortable: a turn is
+not one conversation. deepagents keeps the result with the id line this recorder put on
+the end, so the file is exactly that long and the `ls` already carries the number; a
+row is repointed only onto a file of that length, and a backend reporting no size reads
+as no match, which keeps our own copy. The no-two-rows check stays, because two results
+of one length under one id -- the same tool twice -- would each match the size. The
+check on paths *earlier* rows named went with the change: a row from a previous turn
+and one from this turn cannot both be the length of a single file unless they are the
+same length, and then deepagents has overwritten it, so this turn's row is the one
+that is right. Keeping it left a guard no mutation could fail -- the shape three
+reviews have been about -- and left the rule for the cross-turn case passing by a
+disjunction no test could tell apart. Two guards now, each red under its own
+mutation.
 
 **Result files, then the ledger, then the transcript, then a sweep.** In that order a
 row never names a missing file and a result the conversation shows always has a row;
@@ -2326,12 +2345,37 @@ could not be denied at all -- the deny reached the recorder first. A deployment'
 refusals still apply, since they live in the backend underneath rather than in these
 rules, and `_unkept` is what reports one.
 
-One half cannot be closed from here. Filesystem permissions are deepagents' and
+One half is not closed by this rule. Filesystem permissions are deepagents' and
 `execute` bypasses them, so the shell still writes in that folder -- measured, the file
-tool refused and the shell got in. The narrowed sweep above is what covers it: what a
-shell leaves there is not a name a recorder wrote, so it stays rather than being deleted
-in the turn that wrote it. The rule holding that drives `execute` now, for the same
-reason. *(2026-10-13, from an architecture review.)*
+tool refused and the shell got in. *(2026-10-13, from an architecture review.)*
+
+**Two sentences above were wrong, and the folder next door was missed.** The first said
+the narrowed sweep covered the shell's half: it does not and cannot, since the sweep
+skips every path a row names and so cannot see an overwrite at all. What the narrowing
+earns is that a draft a shell left in the folder is not deleted in the turn that wrote
+it -- a different property, told as if it were this one. Measured: the shell overwrote a
+row's file, a later turn's sweep ran, and the file still held `forged`. The second said
+the half could not be closed from here. `sandbox-exec` and bubblewrap can each refuse
+this folder the way they already refuse `.harness`, measured on the first; Landlock
+cannot while the folder sits inside a scratchpad it grants whole, because a read-only
+grant under a writable parent is stepped over, which `_session_writable` has recorded
+since it was written. Two fences of three is not a boundary, so nothing claims one --
+but "cannot" was the wrong word and the fences are where that half belongs.
+
+**And the deny reached one of the two folders a row can name.** `_repointed` moves an
+evicted row's path to deepagents' `large_tool_results/`, which was unrouted -- so no
+rule was expressible against it, and a plain `write_file` forged exactly what the rule
+above exists to prevent, with the row still naming the original size. It is routed and
+write-denied now, mounted for the reason `.harness` is. Eviction still writes there,
+which was the thing to check: deepagents' own write is not subject to these rules.
+
+One folder a row can name is still unprotected, and left so deliberately: a session
+opened before the results moved to `tool_results/` has rows naming `results/`, and
+nothing denies that. A deny there would protect only rows written by a version that did
+not have this property at all, at the cost of a third permanent route and a fifth entry
+in the four places this deny set is pinned. What would close it properly is
+`LAYOUT_VERSION`, which has not moved across three layout changes -- an open question
+recorded elsewhere, not one to settle here. *(2026-10-14, from an architecture review.)*
 
 **Access is recorded and not acted on, because the session is the boundary.** A row
 holds the audience its tool was granted under, and a `task` answer holds its run's

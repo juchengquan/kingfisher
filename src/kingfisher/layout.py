@@ -72,6 +72,12 @@ SESSION_DIRS: tuple[str, ...] = (INPUTS, OUTPUTS, MEMORY, SCRATCH)
 #: read as one pair.
 TOOL_RESULTS = "tool_results"
 
+#: deepagents' own, beside it: where a result too long to show the model whole is
+#: offloaded, and the path a row names once `_repointed` has moved it there. Spelled
+#: here because deepagents builds it as a private attribute, in two places, from the
+#: artifacts root -- there is no constant to read it off.
+OFFLOADS = "large_tool_results"
+
 #: Where skills live.
 SKILLS = "skills"
 
@@ -142,6 +148,7 @@ BUNDLED_SKILLS_ROUTE = _route(SKILLS, RESERVED_SKILL_FOLDER)
 OUTPUTS_ROUTE = _route(OUTPUTS)
 SCRATCH_ROUTE = _route(SCRATCH)
 TOOL_RESULTS_ROUTE = _route(SCRATCH, TOOL_RESULTS)
+OFFLOADS_ROUTE = _route(SCRATCH, OFFLOADS)
 
 #: A route the agent may not read or write, which is the only reason it is one:
 #: `FilesystemMiddleware` refuses `permissions=` outright unless every rule path
@@ -216,11 +223,22 @@ ROUTES: tuple[Route, ...] = (
     # `.harness`. Measured before this: the row stayed at its original size and summary
     # while the file held `forged`.
     #
-    # The shell is not covered and cannot be from here: filesystem permissions are
-    # deepagents' and `execute` bypasses them. The sweep is what covers that half --
-    # it removes only what a recorder's own names match, so what a shell leaves here
-    # stays rather than being deleted in the turn that wrote it.
+    # The shell is not covered by this rule: filesystem permissions are deepagents'
+    # and `execute` bypasses them. **Nor is it covered by the sweep**, which this said
+    # for a while -- the sweep skips every path a row names, so it cannot see an
+    # overwrite at all. What the narrowing above it earns is that a draft a shell left
+    # here is not deleted in the turn that wrote it, which is a different property.
+    #
+    # Closing the shell's half belongs to the fences and is not done: `sandbox-exec`
+    # and bubblewrap can each refuse this folder the way they already refuse
+    # `.harness` -- measured -- while Landlock cannot while the folder sits inside a
+    # scratchpad it grants whole, since a read-only grant under a writable parent is
+    # stepped over. Two of three is not a boundary, so nothing here claims one.
     Route(TOOL_RESULTS_ROUTE, deny_write_under=f"{TOOL_RESULTS_ROUTE}**"),
+    # The same rule for the folder a row names once the result was too long to show
+    # whole. Denying one and not the other refused the file tools a 32-byte result and
+    # handed them a 101 KB one -- measured, with the row still naming its size.
+    Route(OFFLOADS_ROUTE, deny_write_under=f"{OFFLOADS_ROUTE}**"),
     # The one route that exists to be refused. Denied both ways: a run able to
     # write here could rewrite the agent definition it is running under, or the
     # conversation the next turn is rebuilt from, halfway through the

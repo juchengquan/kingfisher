@@ -86,7 +86,7 @@ def keep_ledger(
     row. The sweep comes after it, because a file it removes may be named by a row
     until the ledger is written.
     """
-    entries = yield from _repointed(files, ledger.entries, ledger.earlier.paths)
+    entries = yield from _repointed(files, ledger.entries)
     yield from write_ledger(
         harness,
         ledger.earlier,
@@ -109,35 +109,54 @@ def _offloaded_under(files: Any) -> str:
     return f"{root.rstrip('/')}/large_tool_results/"
 
 
-def _repointed(
-    files: Any, entries: tuple[LedgerEntry, ...], claimed: frozenset[str] | set[str]
-) -> Steps[tuple[LedgerEntry, ...]]:
+def _repointed(files: Any, entries: tuple[LedgerEntry, ...]) -> Steps[tuple[LedgerEntry, ...]]:
     """Each entry deepagents offloaded, pointed at its copy rather than ours.
 
     Asked here, once, because eviction runs outside the recorder and nothing it can
     see says whether a result will be. Our own copy is left to the sweep, which
     removes it once the ledger has stopped naming it.
 
-    Never onto a path a row already names, and never twice in one turn. deepagents
-    names an eviction `large_tool_results/<call id>` -- no turn in the name, and the
-    folder outlasts the turn -- so an id a provider used twice pointed the second row
-    at the first result's file, and the sweep then removed the copy that was right.
-    Every other call id here need only be unique within its turn, and nothing asks a
-    provider for more than that. A collision keeps our own copy instead, which is this
-    call's whole result rather than another call's.
+    **Only onto a file that is this result.** deepagents names an eviction
+    `large_tool_results/<call id>` -- no turn in the name, and the folder outlasts the
+    turn -- so a name is not an identity, and asking only whether a file of that name
+    existed pointed a row at another call's result while the sweep removed the copy
+    that was right. An id need only be unique within its turn for everything else
+    here, and nothing asks a provider for more than that; a turn holding an agent and
+    a subagent holds two conversations, and a provider numbering calls per response
+    collides there by construction.
+
+    The size is what tells them apart: deepagents keeps the result with the id line
+    this recorder put on the end, so the file is exactly that long and the listing
+    already carries the number. A backend that reports no size is read as no match,
+    which keeps our own copy -- the safe direction, since our copy is this call's whole
+    result either way.
+
+    Still never twice onto one path, which the size alone does not settle: two results
+    of one length under one id -- the same tool called twice -- would each match.
+
+    It took the paths earlier rows named as well, until the size made that redundant:
+    a row from a previous turn and a row from this one cannot both match a file one of
+    them is the length of, unless they are the same length -- and then deepagents has
+    overwritten the file, so this turn's row pointing at it is right and the earlier
+    one was already stale. Two guards, each held by a rule of its own; a third that
+    nothing could fail is how a guard stops being read.
     """
     if not entries:
         return entries
     under = _offloaded_under(files)
     listing = yield reading(files, "ls", under)
     offloaded = {
-        PurePosixPath(one["path"]).name for one in listing.entries or () if not one.get("is_dir")
+        PurePosixPath(one["path"]).name: one.get("size")
+        for one in listing.entries or ()
+        if not one.get("is_dir")
     }
-    taken = set(claimed)
+    taken: set[str] = set()
     pointed: list[LedgerEntry] = []
     for entry in entries:
-        where = f"{under}{sanitize_tool_call_id(entry.call)}"
-        if sanitize_tool_call_id(entry.call) in offloaded and where not in taken:
+        name = sanitize_tool_call_id(entry.call)
+        where = f"{under}{name}"
+        kept_whole = entry.size + len(f"\n[{entry.id}]")
+        if offloaded.get(name) == kept_whole and where not in taken:
             taken.add(where)
             pointed.append(replace(entry, path=where))
         else:
@@ -153,10 +172,11 @@ def _swept(files: Any, named: frozenset[str] | set[str]) -> Steps[None]:
     one a turn still running is about to name.
 
     A recorder's own names rather than whatever the folder holds, because the agent is
-    a writer here too: `layout.py` puts the results inside the scratchpad so it can
-    read and grep them, and nothing refuses it the folder. Sweeping everything deleted
-    the agent's file in the turn that wrote it, after the tool had told it the write
-    succeeded.
+    a writer here too. Its *file tools* are refused this folder now, so what the
+    narrowing earns is the shell: `execute` bypasses filesystem permissions, and
+    sweeping everything deleted what a shell left here in the turn that wrote it. It
+    said "nothing refuses it the folder", which stopped being true the day the route
+    gained its deny rule.
     """
     listing = yield reading(files, "ls", TOOL_RESULTS_ROUTE)
     for one in listing.entries or ():

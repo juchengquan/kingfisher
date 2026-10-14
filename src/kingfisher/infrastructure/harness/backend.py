@@ -46,6 +46,8 @@ from kingfisher.layout import (
     INPUTS_ROUTE,
     MEMORY,
     MEMORY_ROUTE,
+    OFFLOADS,
+    OFFLOADS_ROUTE,
     RESERVED_SKILL_FOLDER,
     SCRATCH,
     SCRATCH_ROUTE,
@@ -648,6 +650,9 @@ def backend_at(
         # out of it -- and only writing is denied.
         TOOL_RESULTS_ROUTE: lambda: FilesystemBackend(
             root_dir=str(session_dir / SCRATCH / TOOL_RESULTS)
+        ),
+        OFFLOADS_ROUTE: lambda: FilesystemBackend(
+            root_dir=str(session_dir / SCRATCH / OFFLOADS)
         ),
     }
     missing = [path for path in routed_paths() if path not in backing]
