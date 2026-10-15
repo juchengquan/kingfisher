@@ -17,6 +17,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## deepagents' host paths only where they are this host's, after #760
+
+- **deepagents' "Shell paths vs. virtual paths" section is removed where the shell does
+  not run on this host**: for a runner whose `local` is false, and for a sandbox of your
+  own running `execute`. It listed each routed folder's path on this machine. Say what
+  your shell sees in its `ShellPrompt`; nothing else now speaks for it.
+- **`tool_guards` takes the turn's backend** in place of `shell=`, and reads what it
+  needs off it.
+
 ## The shell describes itself, after #759
 
 - **A shell kingfisher does not run is described neutrally.** The prompt and

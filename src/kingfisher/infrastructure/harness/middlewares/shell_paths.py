@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
 from kingfisher.infrastructure.prompting import ShellPrompt, execute_line, kingfishers_shell
@@ -23,6 +23,12 @@ ABSOLUTE = (
     "- Use absolute paths and avoid `cd` so the working directory stays stable; use the "
     "optional timeout to override the default."
 )
+
+
+#: How deepagents opens the section it appends to the system prompt on every model call
+#: where the backend executes, giving each routed folder's path on this host. It is a
+#: block of the system message of its own, which is what lets it be taken out whole.
+MAPPINGS = "## Shell paths vs. virtual paths"
 
 
 def _virtual(session_dirs: tuple[str, ...]) -> re.Pattern[str]:
@@ -93,17 +99,48 @@ def _ruled(description: str, rule: str) -> str:
     return f"{description}\n\n{rule}"
 
 
-class ShellPaths(AgentMiddleware):
-    """Put the shell's own line in `execute`'s description, and on kingfisher's own shell
-    say how a missed path is spelt there.
+def _is_mappings(block: Any) -> bool:
+    return block.get("type") == "text" and str(block.get("text", "")).lstrip().startswith(MAPPINGS)
 
-    In the description rather than the system prompt because a subagent is built with
-    its own prompt and none of `system.md`, and the description reaches every graph
-    holding the shell.
+
+def _unmapped(request: Any) -> Any:
+    """`request` without deepagents' section of host paths.
+
+    By block and not by cutting text, so a section deepagents has merged into other
+    prose is left whole rather than half-cut, and
+    `test_deepagents_host_paths_reach_only_a_shell_on_this_host` fails on it instead.
+    """
+    system = request.system_message
+    if system is None:
+        return request
+    blocks = list(system.content_blocks)
+    kept = [block for block in blocks if not _is_mappings(block)]
+    if len(kept) == len(blocks):
+        return request
+    return request.override(system_message=SystemMessage(content_blocks=kept))
+
+
+class ShellPaths(AgentMiddleware):
+    """Put the shell's own line in `execute`'s description, on kingfisher's own shell say
+    how a missed path is spelt there, and keep deepagents' host paths from a shell that
+    is not on this host.
+
+    The line goes in the description rather than the system prompt because a subagent is
+    built with its own prompt and none of `system.md`, and the description reaches every
+    graph holding the shell.
     """
 
-    def __init__(self, layout: Layout = DEFAULT_LAYOUT, shell: ShellPrompt | None = None) -> None:
+    def __init__(
+        self,
+        layout: Layout = DEFAULT_LAYOUT,
+        shell: ShellPrompt | None = None,
+        *,
+        here: bool = True,
+    ) -> None:
         super().__init__()
+        # Whether the shell runs on this host. Where it does not, deepagents' section
+        # names paths it does not have, and `shell` is the only word on the subject.
+        self._here = here
         # From the layout, so the line names the configured inputs leaf and the
         # miss-matcher recognises the configured session folders.
         self._rule = execute_line(shell, layout)
@@ -113,12 +150,11 @@ class ShellPaths(AgentMiddleware):
         self._virtual = _virtual(layout.session_dirs)
 
     def _told(self, request: Any) -> Any:
-        if self._rule is None:
-            return request
-        tools = [_described(tool, self._rule) for tool in request.tools]
-        if all(new is old for new, old in zip(tools, request.tools, strict=True)):
-            return request
-        return request.override(tools=tools)
+        if self._rule is not None:
+            tools = [_described(tool, self._rule) for tool in request.tools]
+            if not all(new is old for new, old in zip(tools, request.tools, strict=True)):
+                request = request.override(tools=tools)
+        return request if self._here else _unmapped(request)
 
     def _corrected(self, request: Any, result: Any) -> Any:
         if not self._corrects:

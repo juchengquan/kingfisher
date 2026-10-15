@@ -177,6 +177,11 @@ Things to know:
 - **A miss is corrected only on kingfisher's own shell.** A command that fails on a
   file-tool path there is answered with the path's spelling in the shell, worked out
   from the session root it starts in; no other shell is known to start there.
+- **deepagents' list of this host's paths is kept only for a shell on this host.**
+  deepagents adds a "Shell paths vs. virtual paths" section giving each routed folder's
+  path here. It stays for kingfisher's own shell and for a runner whose `local` is
+  true, and is removed for a runner that runs elsewhere and for a shell of your own,
+  so your `ShellPrompt` is the only thing the agent is told about where files are.
 
 ## `RunEvents` — where each turn's record goes
 

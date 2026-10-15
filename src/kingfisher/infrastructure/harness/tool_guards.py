@@ -11,6 +11,7 @@ from langchain_core.tools import BaseTool, StructuredTool, ToolException
 
 from kingfisher.config import DEFAULT_LAYOUT
 from kingfisher.domain.references import UnsafeReferenceError
+from kingfisher.infrastructure.harness.backend import shell_prompt_of, shell_runs_here
 from kingfisher.infrastructure.harness.host_paths import HostPathError
 from kingfisher.infrastructure.harness.middlewares.host_path_guard import HostPathGuard
 from kingfisher.infrastructure.harness.middlewares.large_pdf_guard import LargePdfGuard
@@ -21,7 +22,6 @@ from kingfisher.infrastructure.harness.middlewares.workspace_tools import (
     WorkspaceToolPaths,
 )
 from kingfisher.infrastructure.harness.session_paths import SessionPaths, refusal_text
-from kingfisher.infrastructure.prompting import ShellPrompt
 from kingfisher.layout import Layout
 
 
@@ -30,7 +30,7 @@ def tool_guards(
     paths: SessionPaths | None,
     recorder: Recorder | None = None,
     layout: Layout = DEFAULT_LAYOUT,
-    shell: ShellPrompt | None = None,
+    backend: Any = None,
 ) -> list[AgentMiddleware]:
     """What every graph holding workspace tools gets wrapped in, built once.
 
@@ -51,15 +51,15 @@ def tool_guards(
     same one of.
 
     `recorder` is the turn's, made for the definition this graph was built from, or
-    `None` where no turn will keep what is recorded. `shell` is what the backend's shell
-    says of itself, which is what `ShellPaths` tells the model.
+    `None` where no turn will keep what is recorded. `backend` is the turn's, whose shell
+    says what `ShellPaths` tells the model about it, and is asked whether it runs here.
     """
     # First, so it records what the model is handed and the arguments the model
     # wrote: everything after it may rewrite one or the other.
     guards: list[AgentMiddleware] = [] if recorder is None else [recorder]
     guards.append(HostPathGuard())
     guards.append(LargePdfGuard())
-    guards.append(ShellPaths(layout, shell))
+    guards.append(ShellPaths(layout, shell_prompt_of(backend), here=shell_runs_here(backend)))
     if names:
         # Beside each other and in this order, which the subagent's stack is pinned to:
         # both are about a workspace tool call, and the translation rewrites the

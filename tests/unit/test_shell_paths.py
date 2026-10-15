@@ -6,10 +6,17 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
+from deepagents.backends import LocalShellBackend
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 
 from kingfisher import DefaultBackends, Kingfisher, Request, ShellPrompt, default_backends
-from kingfisher.infrastructure.harness.middlewares.shell_paths import ABSOLUTE, hint, missed
+from kingfisher.infrastructure.harness.backend import WorkspaceScopedBackend
+from kingfisher.infrastructure.harness.middlewares.shell_paths import (
+    ABSOLUTE,
+    MAPPINGS,
+    hint,
+    missed,
+)
 from kingfisher.infrastructure.prompting import execute_line, kingfishers_shell
 from kingfisher.layout import Layout
 from tests.conftest import an_agent, start, subagents_dir
@@ -204,3 +211,68 @@ def test_a_subagent_is_told_the_inputs_folder_the_layout_names(shelled):
     assert len(offered) == 3
     for tools in offered:
         assert "`/in/data.csv` is `in/data.csv`" in _execute(tools)
+
+
+class Here(Plain):
+    """A runner a deployment supplies that runs its commands on this host."""
+
+    @property
+    def local(self) -> bool:
+        return True
+
+
+class Theirs(LocalShellBackend):
+    """A deployment's own shell, of deepagents' local class, which deepagents gives this
+    host's paths to whatever the shell is.
+    """
+
+
+class Sandboxed(DefaultBackends):
+    """The adjustment `ports.md` shows: kingfisher's routes, over a shell of its own."""
+
+    def open(self, cfg_, session_id, /, *, catalogue=None):
+        mine = super().open(cfg_, session_id, catalogue=catalogue)
+        return WorkspaceScopedBackend(
+            Theirs(root_dir=mine.default.cwd, virtual_mode=True),
+            mine.routes,
+            session_dir=mine._session_dir,
+            workspace=mine.workspace,
+        )
+
+
+def _systems() -> list[str]:
+    """The system prompt each model call was sent, in order."""
+    return [
+        message.text
+        for heard in Scripted.heard
+        for message in heard
+        if isinstance(message, SystemMessage)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("backends", "here"),
+    [
+        (default_backends, True),
+        (DefaultBackends(runner=lambda _where: Here()), True),
+        (DefaultBackends(runner=lambda _where: Plain()), False),
+        (Sandboxed(), False),
+    ],
+    ids=["kingfishers-own", "local-runner", "remote-runner", "their-own-shell"],
+)
+def test_deepagents_host_paths_reach_only_a_shell_on_this_host(shelled, backends, here):
+    """deepagents gives each routed folder's path on this host to any shell of its local
+    class, and kingfisher's is that class whatever its runner: an agent whose commands
+    ran on another machine was told to use paths only this one has. Driven through the
+    agent and a subagent, because each is sent the section by a middleware of its own.
+    """
+    cfg, _ = shelled
+    _run(cfg, *_consulting("checker"), backends=backends)
+
+    systems = _systems()
+    assert len(systems) == 3
+    for system in systems:
+        assert (MAPPINGS in system) is here
+    # Only the section goes: the rest of what each was told is still there.
+    assert "You are kingfisher" in systems[0]
+    assert "You check." in systems[1]

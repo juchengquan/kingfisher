@@ -21,7 +21,6 @@ from kingfisher.domain.capabilities import (
     narrowed,
     refuse_unoffered,
 )
-from kingfisher.infrastructure.harness.backend import shell_prompt_of
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.session_paths import SessionPaths
@@ -389,8 +388,8 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
             paths,
             recorder,
             cfg.layout,
-            # The parent's shell, which is the one this subagent's `execute` runs on.
-            shell_prompt_of(backend),
+            # The parent's, whose shell is the one this subagent's `execute` runs on.
+            backend,
         )
     )
     if allowed != ALL:
