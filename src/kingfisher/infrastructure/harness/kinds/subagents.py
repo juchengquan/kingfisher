@@ -25,7 +25,7 @@ from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkil
 from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.session_paths import SessionPaths
 from kingfisher.infrastructure.harness.tool_guards import guarded_tools, tool_guards
-from kingfisher.infrastructure.prompting import with_user_prompt
+from kingfisher.infrastructure.prompting import behind_deployment, with_user_prompt
 from kingfisher.kinds.agents.spec import AgentSpec
 from kingfisher.kinds.subagents.rules import resolved_model
 from kingfisher.kinds.subagents.spec import RunOn, SubagentError, SubagentSpec
@@ -335,7 +335,9 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         # Its own procedure, then the workspace's own instructions. A house
         # rule written in `PROMPT.md` reached the main agent and nothing it
         # delegated to, so delegated work quietly escaped it.
-        "system_prompt": with_user_prompt(spec.system_prompt, cfg.workspace),
+        "system_prompt": behind_deployment(
+            with_user_prompt(spec.system_prompt, cfg.workspace), cfg
+        ),
     }
     middleware: list[Any] = []
     # The definition's own restriction, narrowed by the request's -- by the

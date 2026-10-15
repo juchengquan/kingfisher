@@ -423,6 +423,12 @@ class Config:
     # reads one answer. Measured: with it on, a two-turn workspace carries a ~0.4MB
     # database it never reads back.
     conversation_enabled: bool = True
+    # Deployment-wide prompt text, appended after the harness prompt for every agent
+    # and subagent (ahead of a workspace's PROMPT.md and an agent's own line). House
+    # rules a library integrator sets in code: tone, a standing instruction, a policy.
+    # Set once at startup, so it stays part of the cached prompt prefix rather than
+    # moving per request. It adds to the harness prompt; it does not replace it.
+    deployment_prompt: str = ""
 
     @property
     def claim_stale_after(self) -> float:
