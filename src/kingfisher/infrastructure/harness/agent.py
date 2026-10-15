@@ -17,7 +17,7 @@ from deepagents import FilesystemPermission, MemoryMiddleware, create_deep_agent
 from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 from langchain.agents.middleware import TodoListMiddleware
 
-from kingfisher.config import Config
+from kingfisher.config import DEFAULT_LAYOUT, Config
 from kingfisher.domain.access import offers
 from kingfisher.domain.capabilities import (
     ALL,
@@ -39,8 +39,8 @@ from kingfisher.infrastructure.harness.activation import (
     refuse_misnamed_by,
 )
 from kingfisher.infrastructure.harness.backend import (
-    MEMORY_SOURCES,
     backend_at,
+    memory_sources,
     skills_sources,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
@@ -79,7 +79,7 @@ from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.kinds.agents.spec import AgentError, AgentSpec
 from kingfisher.kinds.subagents.spec import RunOn
 from kingfisher.kinds.tools.spec import Found
-from kingfisher.layout import denied_read_scopes, denied_scopes
+from kingfisher.layout import Layout
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -138,16 +138,21 @@ class Assembled:
     subagents: list[Any] | None = None
 
 
-#: For a request that declined memory a deployment did wire. Reads are denied
-#: rather than the prompt rewritten: the prompt is the cached prefix.
-MEMORY_IS_DENIED = FilesystemPermission(
-    operations=["read"],
-    paths=["/memory/**"],
-    mode="deny",
-)
+def memory_is_denied(layout: Layout = DEFAULT_LAYOUT) -> FilesystemPermission:
+    """For a request that declined memory a deployment did wire.
+
+    Reads are denied rather than the prompt rewritten: the prompt is the cached
+    prefix. The scope is this layout's `/memory/`, so a renamed memory folder is the
+    one the declined request is kept out of.
+    """
+    return FilesystemPermission(
+        operations=["read"],
+        paths=[f"{layout.memory_route}**"],
+        mode="deny",
+    )
 
 
-def read_only_permissions() -> list[FilesystemPermission]:
+def read_only_permissions(layout: Layout = DEFAULT_LAYOUT) -> list[FilesystemPermission]:
     """A deny rule for every scope the layout refuses writes under.
 
     Deduplicated there, so `/skills/**` is one rule covering the catalogue and every
@@ -170,10 +175,10 @@ def read_only_permissions() -> list[FilesystemPermission]:
     """
     return [
         FilesystemPermission(operations=["write"], paths=[scope], mode="deny")
-        for scope in denied_scopes()
+        for scope in layout.denied_scopes()
     ] + [
         FilesystemPermission(operations=["read"], paths=[scope], mode="deny")
-        for scope in denied_read_scopes()
+        for scope in layout.denied_read_scopes()
     ]
 
 
@@ -327,7 +332,13 @@ def builtin_tool_names(
             build_agent(
                 probing,
                 backend=backend_at(
-                    probing, ensure_session_layout(Path(scratch)), catalogue=catalogue
+                    probing,
+                    ensure_session_layout(
+                        Path(scratch),
+                        probing.layout.session_dirs,
+                        memory=probing.layout.memory,
+                    ),
+                    catalogue=catalogue,
                 ),
                 catalogue=catalogue,
                 workspace_tools=workspace_tools,
@@ -373,7 +384,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     roots = catalogue or Definitions.from_config(cfg)
     # Every backend, and that is the point: a check only some builds ran would be a
     # check nothing here exercises.
-    refuse_unusable_backend(backend)
+    refuse_unusable_backend(
+        backend, (*cfg.layout.denied_scopes(), *cfg.layout.denied_read_scopes())
+    )
     # The catalogue walked these when the deployment was wired; a caller that
     # has already walked them itself -- `--list` -- still wins. Walked before the
     # stack rather than beside the tools below, because `tool_guards` needs the
@@ -383,13 +396,13 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # them cannot reach one, and narrowing this to the grant would mean building
     # the guard from a set that is computed after it.
     guarded = frozenset(entry.name for entry in walked)
-    permissions = read_only_permissions()
+    permissions = read_only_permissions(cfg.layout)
     # The turn's backend under the turn's rules, and one of it: what a tool is handed as
     # `runtime.context.backend`, and what a tool's `path` is resolved through. Built
     # before the rules are finished, and it reads them when it checks, so what is added
     # below -- memory declined, skills narrowed -- applies to both.
     under_rules = PermittedBackend(backend, permissions)
-    paths = SessionPaths(under_rules, sessions_root(cfg.workspace))
+    paths = SessionPaths(under_rules, sessions_root(cfg.workspace), cfg.layout)
 
     def recording(definition: object | None) -> Recorder | None:
         """A recorder for one graph, reading access off `definition`'s audiences.
@@ -407,9 +420,12 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         if ledger is None:
             return None
         audiences = Audiences.of(definition) if cfg.access is not None else None
-        return Recorder(ledger, backend, audiences)
+        return Recorder(ledger, backend, audiences, cfg.layout.tool_results_route)
 
-    middleware: list[Any] = [TodoListMiddleware(), *tool_guards(guarded, paths, recording(agent))]
+    middleware: list[Any] = [
+        TodoListMiddleware(),
+        *tool_guards(guarded, paths, recording(agent), cfg.layout),
+    ]
     extras: dict[str, Any] = {}
 
     # One answer to "are skills on", for this agent and for every subagent it
@@ -423,7 +439,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # request says what it wants of that. Narrowing can only subtract --
     # `memory=True` against a deployment that wired none stays off.
     if cfg.memory_enabled and capabilities.memory is not False:
-        extras["memory"] = MEMORY_SOURCES
+        memory_files = memory_sources(cfg.layout)
+        extras["memory"] = memory_files
         # Built here for its `system_prompt`: the one deepagents builds tells the
         # agent memory lasts into "future conversations". Beside `memory=`, not
         # instead of it: deepagents merges middleware by name, so this takes the
@@ -433,7 +450,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         middleware.append(
             MemoryMiddleware(
                 backend=backend,
-                sources=MEMORY_SOURCES,
+                sources=memory_files,
                 # What deepagents gives the one this replaces: the memory block's
                 # own breakpoint.
                 add_cache_control=True,
@@ -445,7 +462,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         # the cached prefix and must not vary per request; this stops the file
         # being read anyway. deepagents puts memory behind its own cache
         # breakpoint, so dropping the block leaves the prefix cached.
-        permissions.append(MEMORY_IS_DENIED)
+        permissions.append(memory_is_denied(cfg.layout))
 
     if skills_on:
         registry = activatable_skills(cfg, catalogue=roots)
@@ -756,7 +773,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             "middleware": (
                 # The agent's recorder too: these are the agent's tools, offered under
                 # the agent's audiences.
-                tool_guards(guarded, paths, recording(agent))
+                tool_guards(guarded, paths, recording(agent), cfg.layout)
                 + ([ToolAllowlist(permitted)] if permitted is not None else [])
                 + _deployment_middleware(
                     agent, registry, capabilities.middlewares, provisions=agent_provisions

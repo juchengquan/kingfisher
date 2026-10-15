@@ -63,7 +63,12 @@ SYSTEM_PATHS: tuple[str, ...] = (
 )
 
 
-def _session_writable(session_dir: Path) -> list[Path]:
+def _session_writable(
+    session_dir: Path,
+    *,
+    session_dirs: tuple[str, ...] = SESSION_DIRS,
+    inputs: str = INPUTS,
+) -> list[Path]:
     """Everywhere inside one session the shell may write: its directories, one by one.
 
     **Never the session directory itself, and that is the whole of why this is a
@@ -83,7 +88,7 @@ def _session_writable(session_dir: Path) -> list[Path]:
     Readable still -- `fs_readable` takes the session whole -- and writable through no
     path at all, where before it had its write bits dropped and the shell owns them.
     """
-    return [Path(session_dir) / name for name in SESSION_DIRS if name != INPUTS]
+    return [Path(session_dir) / name for name in session_dirs if name != inputs]
 
 
 def policy_for(
@@ -91,6 +96,8 @@ def policy_for(
     *,
     readable: Iterable[Path | str] = (),
     writable: Iterable[Path | str] = (),
+    session_dirs: tuple[str, ...] = SESSION_DIRS,
+    inputs: str = INPUTS,
 ) -> Any:
     """The `Sandbox` one session's commands run under, generated from it.
 
@@ -115,7 +122,10 @@ def policy_for(
         # all. Writable is narrower than readable here, and `_session_writable`
         # says why it has to be.
         fs_readable=present([*SYSTEM_PATHS, *readable, session_dir]),
-        fs_writable=present([*_session_writable(session_dir), *writable]),
+        fs_writable=present([
+            *_session_writable(session_dir, session_dirs=session_dirs, inputs=inputs),
+            *writable,
+        ]),
     )
 
 

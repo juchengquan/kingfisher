@@ -479,7 +479,9 @@ class Kingfisher(Sessions, Disposal):
         # Here and not only where an agent is built: beside a pre-built graph none is,
         # and without one a turn reads the session through this backend before the
         # build would look at it.
-        refuse_unusable_backend(files)
+        refuse_unusable_backend(
+            files, (*self.cfg.layout.denied_scopes(), *self.cfg.layout.denied_read_scopes())
+        )
         return files
 
     def files_for(self, session_id: str) -> Any:
@@ -993,7 +995,9 @@ class Kingfisher(Sessions, Disposal):
             # A resume adds no message: it continues a superstep that already has
             # everything it needs, and a new user turn appended there would be one
             # the model never saw asked.
-            message=turn_message(asked, placement.placed, earlier) if asked else "",
+            message=turn_message(asked, placement.placed, earlier, layout=self.cfg.layout)
+            if asked
+            else "",
             session=session,
             turn=turn,
             logger=logger,
@@ -1101,6 +1105,7 @@ class Kingfisher(Sessions, Disposal):
                 prepared.harness,
                 prepared.ledger,
                 summarised=runtime.summarised_in(snapshot),
+                tool_results_route=self.cfg.layout.tool_results_route,
             )
         )
 

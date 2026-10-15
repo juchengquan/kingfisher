@@ -164,7 +164,7 @@ def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
     start(cfg, "s")
     monkeypatch.setattr(
         "kingfisher.infrastructure.harness.backend.protect_inputs",
-        lambda _dir: ("theirs.pdf: Operation not permitted",),
+        lambda _dir, _inputs=None: ("theirs.pdf: Operation not permitted",),
     )
     service = Kingfisher(
         cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()

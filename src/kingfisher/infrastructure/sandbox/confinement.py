@@ -268,6 +268,9 @@ def shell_confinement(cfg: Config, *, skills: tuple[Path, ...] | None = None) ->
         # writable and this list is what carves exceptions out of it, while both Linux
         # fences grant the session and nothing above it.
         authored=(*cfg.authored_files.values(), *_keys_file(cfg)),
+        # The one renamable leaf this profile names: `sessions/*/<inputs>` is denied
+        # writes, so a renamed inputs folder is the one the kernel protects.
+        session_inputs=cfg.layout.inputs,
     )
 
 
@@ -298,6 +301,7 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     itself: Path,
     protected: tuple[Path, ...] = (),
     protected_files: tuple[Path, ...] = (),
+    session_inputs: str = INPUTS,
 ) -> str:
     """A `sandbox-exec` profile denying the operator's home, minus what runs code.
 
@@ -397,7 +401,7 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     # contents, so the session's own work stays writable.
     lines.append(_sessions_denial(workspace))
     lines.append(f"(deny file-write* (path {_sb(itself)}))")
-    for folder in (INPUTS, HARNESS):
+    for folder in (session_inputs, HARNESS):
         lines.append(_session_folder_denial(workspace, folder))
     return "\n".join(lines) + "\n"
 
@@ -659,6 +663,7 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
     extra: tuple[str, ...] = (), skills: tuple[Path, ...] = (),
     definitions: tuple[Path, ...] = (),
     authored: tuple[Path, ...] = (),
+    session_inputs: str = INPUTS,
 ) -> Confinement:
     """Choose a confinement for this deployment, writing any profile it needs."""
     if mode == BUBBLEWRAP:
@@ -708,6 +713,7 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
         # `/tmp` or `/var` is really under `/private`. A file that does not exist
         # yet is named anyway: the shell must not be the one to create it.
         protected_files=tuple(dict.fromkeys(Path(p).resolve() for p in authored)),
+        session_inputs=session_inputs,
     )
     # Named for every rule but the one naming the file itself, which cannot be known
     # before the name is; the profile then refuses writes to itself, so the rules

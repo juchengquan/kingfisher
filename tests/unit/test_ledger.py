@@ -37,6 +37,7 @@ from kingfisher.infrastructure.harness.middlewares.recorder import Recorder
 from kingfisher.infrastructure.prompting import render_system_prompt
 from kingfisher.infrastructure.sandbox.confinement import EXTERNAL
 from kingfisher.infrastructure.session_store import KeptLedger, entry_id
+from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.layout import (
     HARNESS,
     LEDGER_FILE,
@@ -46,6 +47,7 @@ from kingfisher.layout import (
     TOOL_RESULTS,
     TOOL_RESULTS_ROUTE,
     TRANSCRIPT_FILE,
+    Layout,
 )
 from tests.conftest import FakeToolCallingModel, an_agent, start, subagents_dir, tools_dir
 from tests.unit.scripted import Scripted
@@ -189,6 +191,41 @@ def test_a_result_is_recorded_kept_and_handed_to_the_caller(ledgered):
     sent = json.loads(json.dumps(asdict(result)))
     assert sent["ledger"] == _rows(ledgered)[:1]
     assert _rows(ledgered)[1:] == [{"turn": result.turn_id}]
+
+
+def test_a_renamed_layout_records_under_its_own_scratchpad(ledgered):
+    """The recorder, the row, and the sweep all follow a renamed layout.
+
+    A result lands under the configured `tool_results` folder, the row names it there,
+    and the default spelling is written nowhere -- the one end-to-end proof that the
+    leaf names reach all the way from `Config.layout` to a file on disk and back.
+    """
+    moved = replace(
+        ledgered,
+        layout=Layout(
+            inputs="in", outputs="out", memory="mem", scratchpad="scratch", tool_results="results"
+        ),
+    )
+    session = ensure_session_layout(
+        moved.workspace / "sessions" / "s2",
+        moved.layout.session_dirs,
+        memory=moved.layout.memory,
+        scratchpad=moved.layout.scratchpad,
+    )
+    Scripted.script.extend(
+        [_calls(("web_search", {"query": "EV price war"}, "c1")), AIMessage(content="done")]
+    )
+    service = Kingfisher(moved, backends=default_backends)
+    result = service.run(Request("go", agent="only", session_id="s2"))
+
+    (entry,) = result.ledger
+    assert entry.path == "/scratch/results/A-0001-web_search.txt"
+    kept = session / "scratch" / "results" / "A-0001-web_search.txt"
+    assert kept.read_text(encoding="utf-8") == "Ten results for EV price war\n1. one\n2. two"
+    # The default spellings are written nowhere: the whole path moved, not a copy of it.
+    assert not (session / "scratchpad").exists()
+    assert (session / "mem" / "AGENTS.md").exists()
+    assert not (session / "memory").exists()
 
 
 def test_a_result_that_is_json_is_kept_as_json(ledgered):

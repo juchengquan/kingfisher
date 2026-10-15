@@ -30,7 +30,9 @@ class HostPathError(ValueError):
     """A host path reached a file tool."""
 
 
-def reject_host_path(key: str, workspace: Path, *, session_dir: Path) -> None:
+def reject_host_path(
+    key: str, workspace: Path, *, session_dir: Path, scratch_route: str = SCRATCH_ROUTE
+) -> None:
     """Refuse a host path handed to a file tool.
 
     Two prefixes, because they can be answered differently. A path inside *this*
@@ -60,7 +62,7 @@ def reject_host_path(key: str, workspace: Path, *, session_dir: Path) -> None:
             f"{key!r} is a host path, and file tools take virtual paths rooted at the "
             f"workspace — it would have been created inside the workspace, not where "
             f"you meant. Use the shell for host paths, or a virtual path such as "
-            f"{SCRATCH_ROUTE}<name> for files that belong to this task."
+            f"{scratch_route}<name> for files that belong to this task."
         )
         raise HostPathError(msg)
 

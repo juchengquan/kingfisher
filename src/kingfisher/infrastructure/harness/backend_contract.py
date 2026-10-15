@@ -69,18 +69,25 @@ def execution_support(make: Callable[[], Any]) -> None:
         raise AssertionError(msg)
 
 
-def route_coverage(make: Callable[[], Any]) -> None:
+def route_coverage(
+    make: Callable[[], Any], scopes: tuple[str, ...] | None = None
+) -> None:
     """Otherwise the graph will not build, with a message that never says kingfisher.
 
     `FilesystemMiddleware` refuses `permissions=` outright on a backend that executes
     unless every rule path sits under one of its routes -- so a read-only rule is only
     a legal sentence about a path something routes. Caught here, where the scopes can
     be named, rather than at the first `create_deep_agent` call.
+
+    `scopes` default to the module's, which is the layout the kit's own contract runs
+    against; the runtime passes the configured layout's, so a renamed backend is
+    checked against the rules it will actually be given rather than the default names.
     """
     backend = make()
     if not _executes(backend):
         return  # the check above owns that failure; this one would only repeat it
-    scopes = (*denied_scopes(), *denied_read_scopes())
+    if scopes is None:
+        scopes = (*denied_scopes(), *denied_read_scopes())
     routes = tuple(backend.routes) if isinstance(backend, CompositeBackend) else ()
     uncovered = [
         scope for scope in scopes if not any(scope.startswith(route) for route in routes)
@@ -254,8 +261,13 @@ BACKEND_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (
 )
 
 
-def refuse_unusable_backend(backend: Any) -> None:
+def refuse_unusable_backend(
+    backend: Any, scopes: tuple[str, ...] | None = None
+) -> None:
     """Two of the contract's checks, run on every backend the harness resolves.
+
+    `scopes` are the deny rules the backend will be given -- the configured layout's
+    at runtime, the module default when a caller leaves them out.
 
     These two only *look*: an isinstance and a scan of the routes, no I/O and no
     turn's worth of work, so running them costs nothing and the default pays the
@@ -281,7 +293,7 @@ def refuse_unusable_backend(backend: Any) -> None:
     """
     try:
         execution_support(lambda: backend)
-        route_coverage(lambda: backend)
+        route_coverage(lambda: backend, scopes)
     except AssertionError as unusable:
         raise ConfigError(str(unusable)) from unusable
 

@@ -33,7 +33,7 @@ def _unreachable(path: Path, error: OSError) -> str:
     return f"{path.name}: {error.strerror or error}"
 
 
-def keep_tmp_private(session_dir: Path) -> None:
+def keep_tmp_private(session_dir: Path, *, scratchpad: str = SCRATCH) -> None:
     """Give the session's `TMPDIR` the mode the shared scratch directory had.
 
     Here rather than in `sessions`, which creates the directory, because this
@@ -56,20 +56,20 @@ def keep_tmp_private(session_dir: Path) -> None:
     running with the mode the provider chose.
     """
     with suppress(OSError):
-        (Path(session_dir) / SCRATCH).chmod(0o700)
+        (Path(session_dir) / scratchpad).chmod(0o700)
 
 
-def protect_inputs(session_dir: Path) -> tuple[str, ...]:
+def protect_inputs(session_dir: Path, inputs: str = INPUTS) -> tuple[str, ...]:
     """Make `inputs/` read-only at the OS level. Idempotent."""
     # The layout's name and not a spelling of it: `InputsBackend` uploads under the
-    # constant, and a folder named here instead is one the upload never reaches.
-    inputs = Path(session_dir) / INPUTS
-    if not inputs.is_dir():
+    # same leaf, and a folder named here instead is one the upload never reaches.
+    inputs_dir = Path(session_dir) / inputs
+    if not inputs_dir.is_dir():
         return ()
 
     # Children first, then the directory itself.
     failures = []
-    for path in (*sorted(inputs.rglob("*"), reverse=True), inputs):
+    for path in (*sorted(inputs_dir.rglob("*"), reverse=True), inputs_dir):
         try:
             _drop_write_bits(path)
         except OSError as exc:
@@ -78,15 +78,15 @@ def protect_inputs(session_dir: Path) -> tuple[str, ...]:
 
 
 @contextmanager
-def writable_inputs(session_dir: Path) -> Iterator[Path]:
+def writable_inputs(session_dir: Path, inputs: str = INPUTS) -> Iterator[Path]:
     """Temporarily make `inputs/` writable, for loading inputs."""
-    inputs = Path(session_dir) / INPUTS
-    inputs.mkdir(parents=True, exist_ok=True)
-    _add_write_bits(inputs)
-    for path in inputs.rglob("*"):
+    inputs_dir = Path(session_dir) / inputs
+    inputs_dir.mkdir(parents=True, exist_ok=True)
+    _add_write_bits(inputs_dir)
+    for path in inputs_dir.rglob("*"):
         with suppress(OSError):
             _add_write_bits(path)
     try:
-        yield inputs
+        yield inputs_dir
     finally:
-        protect_inputs(session_dir)
+        protect_inputs(session_dir, inputs)

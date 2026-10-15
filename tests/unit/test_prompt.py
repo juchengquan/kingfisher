@@ -11,7 +11,7 @@ from kingfisher.infrastructure.prompting import (
     system_prompt,
 )
 from kingfisher.infrastructure.session_store import entry_id
-from kingfisher.layout import INPUTS, OUTPUTS, SCRATCH, TOOL_RESULTS_ROUTE
+from kingfisher.layout import INPUTS, OUTPUTS, SCRATCH, TOOL_RESULTS_ROUTE, Layout
 from tests.conftest import a_subagent
 
 
@@ -61,6 +61,32 @@ def test_the_prompt_s_path_table_spells_the_directories_the_session_has():
 
     for name in (INPUTS, OUTPUTS, SCRATCH):
         assert f"| `/{name}/<name>` | `{name}/<name>` |" in text, name
+
+
+def test_a_renamed_layout_reaches_every_path_in_the_prompt():
+    """The prompt is the one thing the model reads about where its files are. A renamed
+    layout that does not reach it leaves the agent told to read and write the default
+    names the backend no longer routes -- so every templated path must move together.
+    """
+    moved = Layout(
+        inputs="in", outputs="out", memory="mem", scratchpad="scratch", tool_results="results"
+    )
+    text = render_system_prompt(skills_enabled=True, memory_enabled=True, layout=moved)
+
+    # The renamed leaves, spelled where the default names used to be.
+    assert "| `/in/<name>` | `in/<name>` |" in text
+    assert "| `/out/<name>` | `out/<name>` |" in text
+    assert "| `/scratch/<name>` | `scratch/<name>` |" in text
+    assert "/scratch/results/" in text
+    # The fixed sub-leaves stay fixed, under the renamed scratchpad.
+    assert "/scratch/large_tool_results/" in text
+    assert "/scratch/conversation_history/" in text
+    # The memory capability section names the renamed memory leaf.
+    assert "/mem" in text
+
+    # And none of the default spellings the rename replaced.
+    for gone in ("/inputs", "/outputs", "/scratchpad", "/memory", "/tool_results"):
+        assert gone not in text, gone
 
 
 def test_the_prompt_names_the_folders_deepagents_writes_on_its_own(cfg, session_dir):

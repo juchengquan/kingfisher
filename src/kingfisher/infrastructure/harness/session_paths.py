@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from kingfisher.infrastructure.harness.host_paths import HOST_ROOTS, HostPathError
-from kingfisher.layout import INPUTS_ROUTE, OUTPUTS_ROUTE
+from kingfisher.layout import DEFAULT_LAYOUT, INPUTS_ROUTE, OUTPUTS_ROUTE, Layout
 
 #: Which arguments name a file. The convention this repository already keeps --
 #: `test_every_shipped_tool_naming_a_file_reads_it_through_the_backend` walks the shipped
@@ -54,8 +54,12 @@ class SessionPaths:
     nothing.
     """
 
-    def __init__(self, permitted: Any, sessions: Path) -> None:
+    def __init__(self, permitted: Any, sessions: Path, layout: Layout = DEFAULT_LAYOUT) -> None:
         self._permitted = permitted
+        #: The two example routes `refusal_text` offers, named from this layout so a
+        #: refusal points at the paths a renamed session actually has.
+        self.inputs_route = layout.inputs_route
+        self.outputs_route = layout.outputs_route
         # Where every session is, spelled both ways. In a container the workspace is
         # `/workspace`, which no host root names, and another session is one
         # directory over from this one.
@@ -89,15 +93,20 @@ class SessionPaths:
         return str(self._permitted.on_this_host(value))
 
 
-def refusal_text(escaped: ValueError) -> str:
+def refusal_text(escaped: ValueError, paths: SessionPaths | None = None) -> str:
     """What the model is told when a path is refused, in one place.
 
     Both refusing paths say it: the middleware returns it as a failed result, and
     `GuardedTool` raises it as one. A model that is told the rule can correct itself
     mid-turn, and it can only do that if the rule reads the same either way.
+
+    `paths` names the example routes for the layout in force; without one -- a guard
+    with no session to translate against -- the default spellings are used.
     """
+    inputs_route = paths.inputs_route if paths is not None else INPUTS_ROUTE
+    outputs_route = paths.outputs_route if paths is not None else OUTPUTS_ROUTE
     return (
         f"Error: {escaped}. Tool paths are the same virtual paths the file "
-        f"tools take, rooted at this session -- `{INPUTS_ROUTE}<name>`, "
-        f"`{OUTPUTS_ROUTE}<name>` -- and cannot climb out of it."
+        f"tools take, rooted at this session -- `{inputs_route}<name>`, "
+        f"`{outputs_route}<name>` -- and cannot climb out of it."
     )
