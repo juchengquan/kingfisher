@@ -1,4 +1,5 @@
-"""Telling whoever holds the shell how a file-tool path is spelled there."""
+"""Telling whoever holds the shell how a file-tool path is spelled there, in the words
+the shell gives of itself."""
 
 from __future__ import annotations
 
@@ -10,32 +11,18 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool
 
-from kingfisher.layout import DEFAULT_LAYOUT, INPUTS, SESSION_DIRS, Layout
+from kingfisher.infrastructure.prompting import ShellPrompt, execute_line, kingfishers_shell
+from kingfisher.layout import DEFAULT_LAYOUT, SESSION_DIRS, Layout
 
 EXECUTE = "execute"
 
-#: deepagents' advice in `execute`'s description, wrong here: the only absolute paths a
-#: model knows are the file tools', and the shell reads `/inputs` from the host's root.
+#: deepagents' advice in `execute`'s description, wrong on kingfisher's own shell: the
+#: only absolute paths a model knows are the file tools', and that shell reads `/inputs`
+#: from the host's root.
 ABSOLUTE = (
     "- Use absolute paths and avoid `cd` so the working directory stays stable; use the "
     "optional timeout to override the default."
 )
-
-
-def _rule(inputs: str) -> str:
-    """deepagents' `ABSOLUTE` line, replaced, naming this layout's inputs leaf.
-
-    In the description rather than the system prompt because a subagent is built with
-    its own prompt and none of `system.md`, and the description reaches every graph
-    holding the shell.
-    """
-    return (
-        "- The shell starts in the session root, the directory the file tools call `/`. A "
-        "file-tool path is a shell path without its leading slash -- "
-        f"`/{inputs}/data.csv` is `{inputs}/data.csv` -- on the command line and inside "
-        "any script the command runs. Avoid `cd`, so that stays true; use the optional "
-        "timeout to override the default."
-    )
 
 
 def _virtual(session_dirs: tuple[str, ...]) -> re.Pattern[str]:
@@ -49,9 +36,8 @@ def _virtual(session_dirs: tuple[str, ...]) -> re.Pattern[str]:
     )
 
 
-#: The default-layout rule and matcher, which is what the module exports and what a test
-#: importing `RULE` or `missed` reads; a renamed layout builds its own on the instance.
-RULE = _rule(INPUTS)
+#: The default-layout matcher, which a test importing `missed` reads; a renamed layout
+#: builds its own on the instance.
 _VIRTUAL = _virtual(SESSION_DIRS)
 
 #: What a shell, `python` and the usual tools say of a path they could not use. A
@@ -90,7 +76,7 @@ def hint(path: str) -> str:
     )
 
 
-def _described(tool: Any, rule: str = RULE) -> Any:
+def _described(tool: Any, rule: str) -> Any:
     if isinstance(tool, BaseTool) and tool.name == EXECUTE:
         return tool.model_copy(update={"description": _ruled(tool.description, rule)})
     if isinstance(tool, dict) and tool.get("name") == EXECUTE:
@@ -98,7 +84,7 @@ def _described(tool: Any, rule: str = RULE) -> Any:
     return tool
 
 
-def _ruled(description: str, rule: str = RULE) -> str:
+def _ruled(description: str, rule: str) -> str:
     # Appended when deepagents has reworded its line, so the rule still arrives;
     # `test_every_graph_holding_the_shell_is_told_its_paths_rather_than_absolute_ones`
     # then fails on the advice left beside it, which is the signal to look.
@@ -108,23 +94,35 @@ def _ruled(description: str, rule: str = RULE) -> str:
 
 
 class ShellPaths(AgentMiddleware):
-    """State the shell's path rule in `execute`'s description, and again on a miss."""
+    """Put the shell's own line in `execute`'s description, and on kingfisher's own shell
+    say how a missed path is spelt there.
 
-    def __init__(self, layout: Layout = DEFAULT_LAYOUT) -> None:
+    In the description rather than the system prompt because a subagent is built with
+    its own prompt and none of `system.md`, and the description reaches every graph
+    holding the shell.
+    """
+
+    def __init__(self, layout: Layout = DEFAULT_LAYOUT, shell: ShellPrompt | None = None) -> None:
         super().__init__()
-        # Built from the layout so the rule names the configured inputs leaf and the
-        # miss-matcher recognises the configured session folders. The default is the
-        # module's, so a graph built without a layout reads exactly as it always did.
-        self._rule = _rule(layout.inputs)
+        # From the layout, so the line names the configured inputs leaf and the
+        # miss-matcher recognises the configured session folders.
+        self._rule = execute_line(shell, layout)
+        # Kingfisher's own shell only. The correction spells the path the way a shell
+        # starting in the session root reads it, and no other shell is known to.
+        self._corrects = shell is kingfishers_shell()
         self._virtual = _virtual(layout.session_dirs)
 
     def _told(self, request: Any) -> Any:
+        if self._rule is None:
+            return request
         tools = [_described(tool, self._rule) for tool in request.tools]
         if all(new is old for new, old in zip(tools, request.tools, strict=True)):
             return request
         return request.override(tools=tools)
 
     def _corrected(self, request: Any, result: Any) -> Any:
+        if not self._corrects:
+            return result
         if request.tool_call.get("name") != EXECUTE or not isinstance(result, ToolMessage):
             return result
         if not isinstance(result.content, str):

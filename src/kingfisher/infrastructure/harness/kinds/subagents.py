@@ -21,6 +21,7 @@ from kingfisher.domain.capabilities import (
     narrowed,
     refuse_unoffered,
 )
+from kingfisher.infrastructure.harness.backend import shell_prompt_of
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.session_paths import SessionPaths
@@ -383,7 +384,14 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # carry the attribute this once guessed from, and without it a subagent's tools
     # lost translation and the host-path refusal with nothing said.
     middleware.extend(
-        tool_guards(frozenset(entry.name for entry in (*catalogue, *private)), paths, recorder)
+        tool_guards(
+            frozenset(entry.name for entry in (*catalogue, *private)),
+            paths,
+            recorder,
+            cfg.layout,
+            # The parent's shell, which is the one this subagent's `execute` runs on.
+            shell_prompt_of(backend),
+        )
     )
     if allowed != ALL:
         # `None` is a subagent permitted nothing, which is an empty allowlist rather

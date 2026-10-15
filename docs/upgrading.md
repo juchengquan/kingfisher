@@ -17,6 +17,23 @@ only the first two items of the checklist, and the sections titled *after #667* 
 **If you are already on #617 or later**, only the sections whose titles say *after
 #617* or later apply to you.
 
+## The shell describes itself, after #759
+
+- **A shell kingfisher does not run is described neutrally.** The prompt and
+  `execute`'s description told every agent that the shell runs on the host in the
+  session root, with `$TMPDIR` the scratchpad and `$KINGFISHER_SKILLS` the catalogue.
+  That is told now only of kingfisher's own shell, which `default_backends` builds. A
+  deployment with `DefaultBackends(runner=...)`, or with a sandbox of its own running
+  `execute`, gets wording that claims none of it, and no correction when a command
+  misses a file-tool path.
+- **Say what yours sees with a `ShellPrompt`**, from `kingfisher`: beside the runner as
+  `DefaultBackends(runner=..., shell_prompt=...)`, or as a `shell_prompt` attribute on
+  your sandbox. `ports.md` has its three parts and who reads each. Passing one without
+  a runner is refused.
+- **`render_system_prompt` and `system_prompt` take `shell=`**, and without it describe a
+  shell that said nothing. `shell_paths.RULE` is gone; `execute_line(kingfishers_shell())`
+  in `kingfisher.infrastructure.prompting` is the same line.
+
 ## The session is named in the request, after #739
 
 - **`KINGFISHER_SESSION_ID` is gone, and refused at startup if still set.** A request

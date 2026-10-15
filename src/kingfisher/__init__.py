@@ -69,6 +69,11 @@ _EXPORTS = {
     # What a deployment subclasses to build on the default: its housekeeping, with its
     # own `open`. `ports.md` shows it, and the refusal of a plain function names it.
     "DefaultBackends": "kingfisher.infrastructure.harness.backend",
+    # What a deployment's shell says of itself, which only the deployment knows: a
+    # runner is handed the command and nothing else, so the agent is told neutrally
+    # about any shell but kingfisher's own unless this says otherwise. Constructed by
+    # the deployment, so it has to be sayable from here.
+    "ShellPrompt": "kingfisher.infrastructure.prompting",
     # The seventh name a consumer has forced public, and the plainest: a
     # `CommandRunner` returns one of these, so a deployment writing a runner
     # cannot write one without it. `docs/guides/ports.md` documents the port and
@@ -161,6 +166,7 @@ __all__ = [
     "Seeded",
     "SessionBusyError",
     "SessionInfo",
+    "ShellPrompt",
     "SubagentError",
     "ToolContext",
     "UnknownSessionError",
@@ -234,6 +240,7 @@ if TYPE_CHECKING:
     )
     from kingfisher.infrastructure.harness.host_paths import HostPathError as HostPathError
     from kingfisher.infrastructure.harness.tool_context import ToolContext as ToolContext
+    from kingfisher.infrastructure.prompting import ShellPrompt as ShellPrompt
     from kingfisher.infrastructure.workspace import Seeded as Seeded
     from kingfisher.infrastructure.workspace import (
         definitions_source as definitions_source,

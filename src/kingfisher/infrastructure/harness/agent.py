@@ -41,6 +41,7 @@ from kingfisher.infrastructure.harness.activation import (
 from kingfisher.infrastructure.harness.backend import (
     backend_at,
     memory_sources,
+    shell_prompt_of,
     skills_sources,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
@@ -387,6 +388,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     refuse_unusable_backend(
         backend, (*cfg.layout.denied_scopes(), *cfg.layout.denied_read_scopes())
     )
+    # Asked of the backend because only it knows what its shell sees: the prompt and
+    # the `execute` line both say it, and from the same answer.
+    shell = shell_prompt_of(backend)
     # The catalogue walked these when the deployment was wired; a caller that
     # has already walked them itself -- `--list` -- still wins. Walked before the
     # stack rather than beside the tools below, because `tool_guards` needs the
@@ -424,7 +428,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
 
     middleware: list[Any] = [
         TodoListMiddleware(),
-        *tool_guards(guarded, paths, recording(agent), cfg.layout),
+        *tool_guards(guarded, paths, recording(agent), cfg.layout, shell),
     ]
     extras: dict[str, Any] = {}
 
@@ -516,7 +520,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         attached: dict[str, Any] = {
             "model": running,
             "backend": backend,
-            "system_prompt": system_prompt(cfg, agent.system_prompt if agent else ""),
+            "system_prompt": system_prompt(cfg, agent.system_prompt if agent else "", shell),
             "middleware": middleware,
             "permissions": permissions,
             "checkpointer": checkpointer,
@@ -773,7 +777,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             "middleware": (
                 # The agent's recorder too: these are the agent's tools, offered under
                 # the agent's audiences.
-                tool_guards(guarded, paths, recording(agent), cfg.layout)
+                tool_guards(guarded, paths, recording(agent), cfg.layout, shell)
                 + ([ToolAllowlist(permitted)] if permitted is not None else [])
                 + _deployment_middleware(
                     agent, registry, capabilities.middlewares, provisions=agent_provisions

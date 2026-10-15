@@ -93,6 +93,13 @@ Things to know:
 - **Setting `local = False` when you are local loses the fence**, silently. The
   default is True so that forgetting the flag yields more confinement than
   needed, never less.
+- **A runner is handed the command and nothing else** — no working directory and no
+  environment, local or not. Its shell starts wherever the runner starts it, and
+  `$TMPDIR` and `$KINGFISHER_SKILLS` are whatever they are there. So the agent is not
+  told what kingfisher tells it about its own shell, which says all three; it is
+  told, neutrally, that the shell may not see the session's files. Say what yours
+  sees with `shell_prompt=` beside the runner: see
+  [`ShellPrompt`](#shellprompt--what-the-agent-is-told-about-your-shell).
 - **A subclass of `DefaultBackends` keeps the runner.** `super().open(...)` builds
   the backend with the runner the instance was given, so an `open` that adjusts what
   it built still runs its commands where you chose. See
@@ -112,6 +119,64 @@ with `None` but guess.
 Only *running* the command is delegated. File access is not, and deliberately:
 the shell backend is also the filesystem for every unrouted path, so handing over
 "the shell" would hand over `/outputs` with it.
+
+## `ShellPrompt` — what the agent is told about your shell
+
+Kingfisher can say how a shell sees the session's files only of the shell it runs
+itself: started in the session root, so `/inputs/data.csv` is `inputs/data.csv`
+there, with `$TMPDIR` the scratchpad and `$KINGFISHER_SKILLS` the catalogue. Any
+other shell is described neutrally — it may not see a file-tool path under that name
+or any other, so check before relying on one — until it says what is true of it:
+
+```python
+from kingfisher import DefaultBackends, ShellPrompt
+
+SANDBOX = ShellPrompt(
+    prompt="""## The shell
+
+The shell (`execute`) runs in a sandbox holding this session at `/workspace`, so
+`/{{inputs}}/<name>` is `/workspace/{{inputs}}/<name>` there.""",
+    execute=(
+        "- The shell holds this session at `/workspace`: `/{{inputs}}/data.csv` is "
+        "`/workspace/{{inputs}}/data.csv`. Use the optional timeout to override the default."
+    ),
+)
+
+backends = DefaultBackends(runner=lambda session_dir: MyRunner(session_dir), shell_prompt=SANDBOX)
+```
+
+A shell of your own carries it instead — the object your backend runs `execute` on,
+which is the composite's `default` where you return a `CompositeBackend`:
+
+```python
+class MySandbox(BaseSandbox):
+    shell_prompt = SANDBOX
+```
+
+Things to know:
+
+- **Three parts, because three readers see different ones.** `prompt` is the agent's
+  section on the shell, in place of kingfisher's. `skills` follows the skills section,
+  so it is shown only where skills are on. `execute` replaces deepagents' "Use absolute
+  paths…" line in the tool's description, and is the only part a subagent sees: a
+  subagent is built without the system prompt. Kingfisher's own are
+  `src/kingfisher/prompts/shell_here.md`, `shell_here_skills.md` and
+  `shell_here_execute.md`.
+- **A part left `None` is said the neutral way**, claiming only what holds wherever a
+  shell runs — for `execute`, deepagents' own line stays — and `""` says nothing there.
+- **`{{inputs}}`, `{{outputs}}`, `{{memory}}`, `{{scratchpad}}` and `{{tool_results}}`
+  are filled from `Config.layout`**, as kingfisher's own wording is, so renaming a
+  folder cannot leave your sentence naming the old one. Any other `{{name}}` is refused
+  when the `ShellPrompt` is made.
+- **It is read off the shell, not off your `DefaultBackends` subclass.** A subclass
+  inherits everything the class has, so one that swapped in a sandbox would have
+  inherited kingfisher's wording and its agents been told of a shell they do not have.
+  A sandbox that says nothing is described neutrally.
+- **Kingfisher's own shell describes itself**, so `shell_prompt=` without a runner is
+  refused. Standing instructions for every agent go in `Config.deployment_prompt`.
+- **A miss is corrected only on kingfisher's own shell.** A command that fails on a
+  file-tool path there is answered with the path's spelling in the shell, worked out
+  from the session root it starts in; no other shell is known to start there.
 
 ## `RunEvents` — where each turn's record goes
 
@@ -424,11 +489,13 @@ from anywhere else and it is either granted and missing, or readable however a r
 narrowed, and nothing at runtime says which. `a_session_serves_the_skills_kingfisher_read`
 lists each through one session and compares names and paths.
 
-**The shell and the file tools have to be two views of one filesystem**, and this
-is the one left that reports nothing on its own. A virtual path becomes a shell
-path by dropping its leading slash; the prompt says so in a table the model reads
-every turn. Route a path somewhere the shell cannot follow and the agent can read
-its inputs and run nothing over them, with a confused model as the only symptom.
+**What the agent is told about your shell has to be true of it**, and this is the
+one left that reports nothing on its own. Your shell is described neutrally unless it
+carries a [`ShellPrompt`](#shellprompt--what-the-agent-is-told-about-your-shell), and
+whatever that says is taken at its word. Say a virtual path becomes a shell path by
+dropping its leading slash, and route one somewhere the shell cannot follow, and the
+agent can read its inputs and run nothing over them, with a confused model as the
+only symptom.
 
 **deepagents' own files have to land under `/scratchpad/`.** A tool result too
 long for a message is saved to a file and the model handed a stub naming it, and

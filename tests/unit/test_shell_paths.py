@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import pytest
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 
-from kingfisher import Kingfisher, Request, default_backends
-from kingfisher.infrastructure.harness.middlewares.shell_paths import (
-    ABSOLUTE,
-    RULE,
-    hint,
-    missed,
-)
+from kingfisher import DefaultBackends, Kingfisher, Request, ShellPrompt, default_backends
+from kingfisher.infrastructure.harness.middlewares.shell_paths import ABSOLUTE, hint, missed
+from kingfisher.infrastructure.prompting import execute_line, kingfishers_shell
+from kingfisher.layout import Layout
 from tests.conftest import an_agent, start, subagents_dir
 from tests.unit.scripted import Scripted
+from tests.unit.test_shell_prompt import Plain
 
 CHECKER = """name: checker
 description: Checks.
@@ -44,9 +43,20 @@ def shelled(scripted, monkeypatch):
     return scripted, offered
 
 
-def _run(cfg, *script: AIMessage) -> None:
+def _run(cfg, *script: AIMessage, backends: Any = default_backends, session: str = "s") -> None:
     Scripted.script.extend(script)
-    Kingfisher(cfg, backends=default_backends).run(Request("go", agent="only", session_id="s"))
+    Kingfisher(cfg, backends=backends).run(Request("go", agent="only", session_id=session))
+
+
+def _consulting(subagent: str) -> tuple[AIMessage, ...]:
+    """The agent asking `subagent`, which answers, and the agent finishing: three model
+    calls, so the subagent's is one of them rather than assumed.
+    """
+    return (
+        _calls(("task", {"description": "check", "subagent_type": subagent}, "t1")),
+        AIMessage(content="checked"),
+        AIMessage(content="done"),
+    )
 
 
 def _calls(*made: tuple[str, dict[str, Any], str]) -> AIMessage:
@@ -69,20 +79,15 @@ def test_every_graph_holding_the_shell_is_told_its_paths_rather_than_absolute_on
     never shown `system.md`, ran `open('/inputs/cars.csv')` in the shell and failed.
     """
     cfg, offered = shelled
-    _run(
-        cfg,
-        _calls(("task", {"description": "check", "subagent_type": subagent}, "t1")),
-        AIMessage(content="checked"),
-        AIMessage(content="done"),
-    )
-    # The agent, the subagent, and the agent again: all three model calls, so the
-    # subagent's is one of them rather than assumed.
+    rule = execute_line(kingfishers_shell())
+    assert rule is not None
+    _run(cfg, *_consulting(subagent))
     assert len(offered) == 3
     for tools in offered:
         described = _execute(tools)
         assert ABSOLUTE not in described
         assert "absolute paths" not in described, "deepagents reworded its advice"
-        assert RULE in described
+        assert rule in described
 
 
 def test_a_shell_call_missing_a_file_tool_path_is_told_the_shell_spelling(shelled):
@@ -134,3 +139,68 @@ def test_a_miss_is_read_off_the_line_naming_the_path(output, path):
     correct command was told to drop a slash it never had.
     """
     assert missed(output) == path
+
+
+THEIRS = ShellPrompt(execute="- The shell holds this session at `/workspace/{{inputs}}`.")
+
+
+@pytest.mark.parametrize("subagent", ["checker", "general-purpose"])
+def test_a_shell_that_says_nothing_keeps_deepagents_line_in_every_graph(shelled, subagent):
+    """Kingfisher's line says the shell starts in the session root, which a runner's
+    shell is not known to: told it, every graph holding that shell was told something
+    nobody knew to be true.
+    """
+    cfg, offered = shelled
+    _run(cfg, *_consulting(subagent), backends=DefaultBackends(runner=lambda _where: Plain()))
+
+    assert len(offered) == 3
+    for tools in offered:
+        assert ABSOLUTE in _execute(tools)
+    (system,) = [m for m in Scripted.heard[0] if isinstance(m, SystemMessage)]
+    assert "check what the shell sees" in " ".join(system.text.split())
+    assert "$TMPDIR" not in system.text
+
+
+@pytest.mark.parametrize("subagent", ["checker", "general-purpose"])
+def test_a_shell_s_own_line_reaches_every_graph_holding_it(shelled, subagent):
+    """A subagent sees nothing of the system prompt, so the description is the one place
+    a deployment's shell can tell it how paths are spelt there.
+    """
+    cfg, offered = shelled
+    backends = DefaultBackends(runner=lambda _where: Plain(), shell_prompt=THEIRS)
+    _run(cfg, *_consulting(subagent), backends=backends)
+
+    assert len(offered) == 3
+    for tools in offered:
+        described = _execute(tools)
+        assert "- The shell holds this session at `/workspace/inputs`." in described
+        assert ABSOLUTE not in described
+
+
+def test_a_miss_on_a_shell_kingfisher_does_not_run_is_left_as_it_was(shelled):
+    """The correction says the shell starts in the session root and spells the path
+    from there, which holds of kingfisher's own shell and of no other it knows.
+    """
+    cfg, _ = shelled
+    _run(
+        cfg,
+        _calls(("execute", {"command": "cat /inputs/cars.csv"}, "c1")),
+        AIMessage(content="done"),
+        backends=DefaultBackends(runner=lambda _where: Plain()),
+    )
+    (answer,) = [m.text for m in Scripted.heard[-1] if isinstance(m, ToolMessage)]
+
+    assert "No such file" in answer
+    assert "file-tool path" not in answer
+
+
+def test_a_subagent_is_told_the_inputs_folder_the_layout_names(shelled):
+    """A subagent's guards were built without the layout, so under a renamed one its
+    `execute` line went on saying `/inputs` while the session held `/in`.
+    """
+    cfg, offered = shelled
+    _run(replace(cfg, layout=Layout(inputs="in")), *_consulting("checker"), session="moved")
+
+    assert len(offered) == 3
+    for tools in offered:
+        assert "`/in/data.csv` is `in/data.csv`" in _execute(tools)

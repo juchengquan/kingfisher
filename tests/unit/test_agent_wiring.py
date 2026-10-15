@@ -15,7 +15,7 @@ from kingfisher.infrastructure.harness.kinds.declared_middleware import (
     _deepagents_middleware_names,
     declared_middleware,
 )
-from kingfisher.infrastructure.prompting import system_prompt
+from kingfisher.infrastructure.prompting import kingfishers_shell, system_prompt
 from kingfisher.kinds.agents.spec import AgentSpec
 from tests.conftest import (
     FakeToolCallingModel,
@@ -93,7 +93,8 @@ def test_planning_and_permissions_are_wired(cfg, session_dir):
         "/skills/**",
     }
 
-    assert built.system_prompt == system_prompt(cfg)
+    # Kingfisher's own backend, so its own shell's wording.
+    assert built.system_prompt == system_prompt(cfg, shell=kingfishers_shell())
     # M2 capabilities are off by default, so neither is passed through. `is None`
     # rather than a key check: the record declares every keyword, so "not passed"
     # is the default value rather than an absent entry.

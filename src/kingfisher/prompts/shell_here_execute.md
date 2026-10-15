@@ -1,0 +1,1 @@
+- The shell starts in the session root, the directory the file tools call `/`. A file-tool path is a shell path without its leading slash -- `/{{inputs}}/data.csv` is `{{inputs}}/data.csv` -- on the command line and inside any script the command runs. Avoid `cd`, so that stays true; use the optional timeout to override the default.

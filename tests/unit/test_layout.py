@@ -151,13 +151,10 @@ def test_the_shell_path_rule_and_matcher_follow_a_renamed_layout():
     """`ShellPaths` states the shell rule in `execute`'s description and spots a missed
     file-tool path in its output. Both name session folders, so both move with them.
     """
-    from kingfisher.infrastructure.harness.middlewares.shell_paths import (
-        _rule,
-        _virtual,
-        missed,
-    )
+    from kingfisher.infrastructure.harness.middlewares.shell_paths import _virtual, missed
+    from kingfisher.infrastructure.prompting import execute_line, kingfishers_shell
 
-    assert "`/in/data.csv` is `in/data.csv`" in _rule(MOVED.inputs)
+    assert "`/in/data.csv` is `in/data.csv`" in (execute_line(kingfishers_shell(), MOVED) or "")
     virtual = _virtual(MOVED.session_dirs)
     assert missed("python: can't open file '/in/x.py'", virtual) == "/in/x.py"
     # The default leaf is no longer one it reads as a file-tool path.
