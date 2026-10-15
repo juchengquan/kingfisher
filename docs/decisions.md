@@ -2575,6 +2575,33 @@ reviews have been about -- and left the rule for the cross-turn case passing by 
 disjunction no test could tell apart. Two guards now, each red under its own
 mutation.
 
+**On a tie, neither row takes it.** "No two rows claim one path" stopped the second row
+from claiming it and said nothing about whether the first row should have. Measured:
+two calls of one id in a turn, results of equal length and different content, left the
+row recording `subject='one'` pointed at the bytes of `subject='two'` -- and the `one`
+result swept out of the session altogether, under a row still carrying its own size and
+its own summary. Nothing in the session held it. `system.md` tells the model to read
+that file back rather than call the tool again, so what it reads is another call's
+answer with nothing to say so, which is the lie that rule set out to prevent, told by
+the row that passed the check instead of the row that failed it.
+
+Nothing can tell those two apart: the `ls` carries a name and a length, and both rows
+have both. What is true today is that deepagents overwrites `large_tool_results/<id>`
+per eviction, so the *last* of the tied calls is the one in the file -- measured -- and
+pointing the last row at it would be right for the wrong reason: a write order neither
+the listing nor deepagents' documentation promises, holding a claim about which
+caller's result a file is. So neither row takes it, which is the direction the no-size
+case beside it already takes and for the same reason: our own copy is this call's whole
+result either way. The cost is one extra copy of a long result, in the turn where a
+provider reused an id, where there were two copies before and one of them was wrong.
+
+The rule that should have caught this was written with two `loud` calls, whose results
+are identical -- so the assertion that each row's file was "its own result" could not
+fail, whichever row held which. It is driven with results that differ in content and
+not in length now, and a second rule keeps the bound: a tie is a tie in *length*, not
+in id, and where the lengths differ the matching row still takes deepagents' copy.
+*(2026-10-15, from an architecture review.)*
+
 **Result files, then the ledger, then the transcript, then a sweep.** In that order a
 row never names a missing file and a result the conversation shows always has a row;
 the other way round, a crash leaves the next turn reading an id the ledger never gave

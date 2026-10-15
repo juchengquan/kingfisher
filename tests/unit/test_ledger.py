@@ -77,7 +77,14 @@ def line_count(path: str) -> str:
         return str(sum(1 for _ in handle))
 
 
-TOOLS = [web_search, sql_query, broken, loud, line_count]
+def loud_about(subject: str) -> str:
+    """As `loud`, naming its subject on every row. For telling two long results apart
+    when they are the same length, which is the one thing `loud` twice cannot do.
+    """
+    return "\\n".join(f"{subject} {n:05d} " + "x" * 90 for n in range(1_000))
+
+
+TOOLS = [web_search, sql_query, broken, loud, line_count, loud_about]
 '''
 
 RESEARCHER = """name: researcher
@@ -553,29 +560,54 @@ def test_a_call_id_used_twice_leaves_each_row_on_its_own_result(ledgered):
     assert len(_read(ledgered, now.path)) == now.size
 
 
-def test_two_calls_of_one_id_in_a_turn_do_not_share_a_file(ledgered):
+def test_two_calls_of_one_id_in_a_turn_each_keep_their_own_result(ledgered):
     """The same collision inside one turn, where neither row is the earlier one: two
     assistant messages reusing an id both wanted the same offloaded path.
+
+    Driven with results that differ in content and not in length, because that is the
+    whole of the difficulty -- the listing carries a name and a length, and both rows
+    have both. Written with two `loud` calls, whose results are identical, this rule
+    passed while the first row pointed at the second call's bytes and the first call's
+    result was swept out of the session altogether: measured, a row recording
+    `subject='one'` read `two 00000 ...`, and nothing in the session held `one` at all.
     """
     result = _run(
         ledgered,
-        _calls(("loud", {}, "c1")),
-        _calls(("loud", {}, "c1")),
+        _calls(("loud_about", {"subject": "one"}, "c1")),
+        _calls(("loud_about", {"subject": "two"}, "c1")),
         AIMessage(content="done"),
     )
 
     first, again = result.ledger
     assert first.path != again.path, "both rows name one file"
     assert len({first.id, again.id}) == 2
-    # And each file is its own result. Asserting only that the paths differ left the
-    # shape this rule is named for in place: two `loud` calls are the same length, so
-    # the size that tells an eviction apart cannot, and only one of the two rows can
-    # have deepagents' copy -- the other has to keep ours, whole.
+    assert _read(ledgered, first.path).startswith("one 00000 "), "it reads another call's result"
+    assert _read(ledgered, again.path).startswith("two 00000 ")
+    # Our own copies, so the result and nothing else: on a tie neither row takes
+    # deepagents', and its copy carries the id line this recorder put on the end.
     for entry in (first, again):
-        assert len(_read(ledgered, entry.path)) in (
-            entry.size,
-            entry.size + len(f"\n[{entry.id}]"),
-        ), entry.id
+        assert len(_read(ledgered, entry.path)) == entry.size, entry.id
+
+
+def test_two_calls_of_one_id_are_still_told_apart_when_their_lengths_differ(ledgered):
+    """The bound on the rule above: a tie is a tie in *length*, not in id. Where the
+    lengths differ the listing does tell them apart, and the row deepagents' copy
+    belongs to still takes it -- keeping ours whenever an id repeats would leave a
+    second copy of every long result in the session, which is the thing repointing
+    exists to avoid.
+    """
+    result = _run(
+        ledgered,
+        _calls(("loud_about", {"subject": "one"}, "c1")),
+        _calls(("web_search", {"query": "EV"}, "c1")),
+        AIMessage(content="done"),
+    )
+
+    long_one, short = result.ledger
+    assert long_one.path == f"{SCRATCH_ROUTE}large_tool_results/c1"
+    assert _read(ledgered, long_one.path).startswith("one 00000 ")
+    assert short.path.startswith(TOOL_RESULTS_ROUTE), "the short result is ours to keep"
+    assert _read(ledgered, short.path).startswith("Ten results for EV")
 
 
 def test_a_todo_rewrite_is_not_a_recorded_result(ledgered):
