@@ -28,7 +28,7 @@ from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.sandbox.bubblewrap import BubblewrapRunner
 from kingfisher.infrastructure.sandbox.fence import LandlockRunner
 from kingfisher.infrastructure.workspace import ensure_layout, ensure_session_layout
-from kingfisher.layout import INPUTS_ROUTE
+from kingfisher.layout import HARNESS, INPUTS_ROUTE
 
 macos = pytest.mark.skipif(
     platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
@@ -936,6 +936,122 @@ def test_the_shell_cannot_change_the_keys_file(cfg, session_dir):
     # The control, as for the files above: the same commands against a file beside it,
     # so a pass here is the profile refusing rather than the commands never running.
     assert beside.read_text(encoding="utf-8") == "z"
+
+
+#: Directory names a macOS filesystem accepts and `re.escape` leaves untouched. The
+#: `"` is the one that mattered -- it is what ends an sbpl string literal -- and the
+#: rest are beside it because a rule written for one character passes against that
+#: character alone.
+AWKWARD_NAMES = ['my "work" stuff', "back\\slash", "a'quote", "paren(s)", "star*", "plus+sign"]
+
+
+def _as_sbpl_reads_it(line: str) -> tuple[str, str]:
+    """The pattern sbpl finds in one `(regex #"...")` line, and whatever followed it.
+
+    Raw: the literal ends at the first `"` and a backslash is not an escape here --
+    measured, which is why `\\"` cannot put a quote in and why doubling the backslashes
+    `re.escape` writes broke every path holding a `-`.
+
+    What followed is the half that matters. A `"` inside ends the literal there and
+    sbpl reads the rest of the line as code, which is how a directory name became
+    `unbound variable: work"`.
+    """
+    rest = line[line.index("(regex ") + len("(regex ") :].removeprefix('#"')
+    pattern, _, after = rest.partition('"')
+    return pattern, after
+
+
+
+@pytest.mark.parametrize("name", AWKWARD_NAMES)
+def test_every_pattern_in_the_profile_still_means_the_path_it_is_about(name, tmp_path):
+    """Two layers, and `re.escape` is only the inner one: sbpl reads `#"..."` as a
+    string -- a `"` ends it, a backslash escapes -- and compiles what it finds. So this
+    decodes each literal the way sbpl would and matches the result against the real
+    paths, which is the only way to see both layers at once. Measured before it: a
+    workspace called `my "work" stuff` ended the literal early, the profile did not
+    parse, and every command in the deployment came back exit 65 with `sandbox-exec:
+    unbound variable: work"` -- reads included.
+
+    Platform-independent, because the text is generated the same everywhere and this is
+    about the text. A Mac is what reads it, and the rule below drives one.
+    """
+    workspace = ensure_layout(tmp_path / name)
+    sessions = (workspace / "sessions").resolve()
+
+    text = confinement.profile(
+        home=tmp_path / "home",
+        workspace=workspace,
+        readable=(),
+        writable=(workspace,),
+        itself=workspace / ".kingfisher" / "shell.sb",
+    )
+
+    read = [_as_sbpl_reads_it(line) for line in text.splitlines() if "(regex " in line]
+    assert len(read) == 3, f"three rules are written as patterns; this found {len(read)}"
+    for _, after in read:
+        assert after == "))", f"the literal ends early, and sbpl reads {after!r} as code"
+    denied = [re.compile(pattern) for pattern, _ in read]
+    for path in (sessions, sessions / "s1" / "inputs" / "given.txt", sessions / "s1" / HARNESS):
+        assert any(one.match(str(path)) for one in denied), f"{path} is denied by nothing"
+    own = sessions / "s1" / "outputs" / "mine.txt"
+    assert not any(one.match(str(own)) for one in denied), "the session's own work is denied"
+
+
+def test_what_stands_in_for_a_quote_cannot_reach_across_a_directory(tmp_path):
+    """`.` matches a quote as well and is the shorter answer, and it also matches `/` --
+    so a workspace called `a"b` would deny `sessions/*/inputs` under a *directory*
+    called `a` holding one called `b`, which is a tree this profile was never asked
+    about. The stand-in is a class excluding the separator for that reason, and this
+    rule is what makes the choice between them visible.
+    """
+    workspace = ensure_layout(tmp_path / 'a"b')
+
+    text = confinement.profile(
+        home=tmp_path / "home",
+        workspace=workspace,
+        readable=(),
+        writable=(workspace,),
+        itself=workspace / ".kingfisher" / "shell.sb",
+    )
+
+    denied = [
+        re.compile(_as_sbpl_reads_it(line)[0])
+        for line in text.splitlines()
+        if "(regex " in line
+    ]
+    elsewhere = tmp_path.resolve() / "a" / "b" / "sessions" / "s1" / "inputs" / "given.txt"
+    assert any(one.match(str((workspace / "sessions").resolve())) for one in denied), (
+        "the workspace this profile is for is denied by nothing, so the rule proves nothing"
+    )
+    assert not any(one.match(str(elsewhere)) for one in denied), f"{elsewhere} is denied"
+
+
+@macos
+def test_the_fence_holds_for_a_workspace_whose_name_holds_a_quote(tmp_path, cfg):
+    """The rule above read as sbpl reads; this hands the file to sbpl. A quote is legal
+    in a macOS directory name and `re.escape` leaves it alone, so the profile did not
+    parse at all -- and a profile that does not parse takes the deployment with it, not
+    just the fence.
+
+    The mode bits are lifted first, because `inputs` has its write bits dropped as well
+    and a refusal from those satisfies an `exit_code != 0` on its own, with a different
+    errno. That is the trap a review found in the rule this one is modelled on.
+    """
+    workspace = ensure_layout(tmp_path / 'my "work" stuff')
+    session = ensure_session_layout(workspace / "sessions" / "s1")
+    (session / "inputs" / "given.txt").write_text("as written", encoding="utf-8")
+    shell = backend_at(replace(cfg, workspace=workspace), session)
+
+    own = shell.execute("printf ok > outputs/mine.txt")
+    lifted = shell.execute("chmod -R u+w inputs 2>/dev/null; printf FORGED > inputs/given.txt")
+    harnessed = shell.execute(f"chmod -R u+w {HARNESS} 2>/dev/null; printf x > {HARNESS}/forged")
+    sibling = shell.execute("mkdir ../fabricated")
+
+    assert own.exit_code == 0, f"the deployment is dead, not fenced: {own.output}"
+    assert (session / "outputs" / "mine.txt").read_text(encoding="utf-8") == "ok"
+    assert lifted.exit_code != 0 and harnessed.exit_code != 0 and sibling.exit_code != 0
+    assert (session / "inputs" / "given.txt").read_text(encoding="utf-8") == "as written"
+    assert not (session / HARNESS / "forged").exists()
 
 
 def test_an_authored_file_is_denied_by_its_exact_path(tmp_path):
