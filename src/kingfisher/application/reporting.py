@@ -17,7 +17,7 @@ from kingfisher.infrastructure.harness.kinds.tools import (
     registered_tools,
     workspace_tool_names,
 )
-from kingfisher.kinds.tools.spec import Offering
+from kingfisher.kinds.tools.spec import Offering, placed
 
 if TYPE_CHECKING:
     from kingfisher.config import Config
@@ -121,7 +121,11 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
     # contributes a name this caller gets by no path. `offers` says what the ceiling
     # does with it. Built once, because a predicate per row would ask twice.
     reached_agents = [] if agent is None else [agent]
-    offers_tool = offers("tools", held, reached_agents)
+    # `same` on both axes, for the reason the listing gives: a grant may write the
+    # long form a tool's own catalogue spells short, and comparing them unspelt named
+    # nothing.
+    spelt = set(workspace)
+    offers_tool = offers("tools", held, reached_agents, same=lambda one: placed(one, spelt))
     offers_skill = offers("skills", held, reached_agents, same=spelling["skills"])
 
     offered = (

@@ -1064,6 +1064,38 @@ def test_an_agent_naming_no_tools_offers_the_whole_catalogue(
     assert "secret_export" in printed, "the unset field offers this one too"
 
 
+#: The long form `formats.md` documents, `where::what`, which the shipped `surveyor` is
+#: written with. The catalogue spells a uniquely-named tool short, so the two have to be
+#: compared through the offering's own spelling -- and were compared as written.
+LONG_FORM = """name: longhand
+description: An agent.
+source_ids: [A, B]
+tools: [kit.py::line_count]
+system_prompt: |
+  You do the task.
+"""
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_a_grant_written_the_long_way_still_reaches_its_caller(
+    form, cfg, at_the_command_line, capsys
+):
+    """Measured: an agent granting `kit.py::line_count` left a caller holding `A` with
+    `tools: []` and a refusal reading `offered: (none)`, while the build handed them the
+    tool. The whole catalogue was theirs to see unscoped, so only a scoped caller met it.
+
+    `secret_export` beside it, because a comparison that matched everything would pass
+    the first line.
+    """
+    _workspace(cfg, LONG_FORM)
+
+    assert main(["list", "--as", "A"] + (["--json"] if form == "json" else [])) == 0
+
+    printed = capsys.readouterr().out
+    assert "line_count" in printed, "the long form names a tool this caller reaches"
+    assert "secret_export" not in printed, "and not the one no definition offers them"
+
+
 #: An agent that grants one tool to both callers and hands work to `helper`. Both
 #: halves are load-bearing: the grant makes the answer non-empty, and naming the
 #: subagent is what puts its declarations in front of the walk at all.
@@ -1242,6 +1274,95 @@ def test_a_skill_only_a_subagent_declares_is_not_offered_to_that_caller(
     printed = capsys.readouterr().out
     assert "routine" in printed, "`sharer` is told about this one, and B reaches `sharer`"
     assert "spare" not in printed, "and nothing a caller reaches is told about this one"
+
+
+#: An agent open to everyone, whose one entry is for `A` alone and names its tool by a
+#: path it has moved from. Two faults in one line, which is what makes it useful: the
+#: tool is withheld from `B` and the *fault* was reported to them anyway.
+MOVED_BEHIND_AN_AUDIENCE = """name: boss
+description: An agent.
+source_ids: [A, B]
+tools:
+  - name: moved/elsewhere.py::secret_export
+    source_ids: [A]
+system_prompt: |
+  You do the task.
+"""
+
+
+#: The same shape on the other raw reader: an entry for `A` alone naming a subagent the
+#: catalogue has no key for. `_unresolved_subagents` read `spec.subagents` as written,
+#: so the fault was reported to `B` as well -- about a name their own audience hides.
+UNRESOLVED_BEHIND_AN_AUDIENCE = """name: boss
+description: An agent.
+source_ids: [A, B]
+subagents:
+  - name: ghost
+    source_ids: [A]
+system_prompt: |
+  You do the task.
+"""
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_an_unresolved_name_out_of_reach_is_not_reported_to_that_caller(
+    form, cfg, at_the_command_line, capsys
+):
+    """The second of the two readers that read a spec as written. Both leaked the same
+    way, and only one of them was guarded when the first was fixed.
+    """
+    _workspace(cfg, UNRESOLVED_BEHIND_AN_AUDIENCE)
+
+    code = main(["list", "--as", "B"] + (["--json"] if form == "json" else []))
+
+    assert "ghost" not in capsys.readouterr().out
+    assert code == 0, "and the exit status follows the view"
+
+
+def test_the_operator_is_still_told_which_definition_names_nothing(
+    cfg, at_the_command_line, capsys
+):
+    """The control: the fault is real and the unscoped listing is where it is fixed."""
+    _workspace(cfg, UNRESOLVED_BEHIND_AN_AUDIENCE)
+
+    assert main(["list"]) == 1
+
+    printed = capsys.readouterr().out
+    assert "ghost" in printed
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_a_fault_on_an_entry_out_of_reach_is_not_reported_to_that_caller(
+    form, cfg, at_the_command_line, capsys
+):
+    """`_moved_tools` read the spec as written: its keys were kept to the caller's
+    reach and the names inside were not, so a listing that correctly withheld
+    `secret_export` from `tools` named it three sections down -- and exited 1 over a row
+    that caller cannot act on.
+
+    `decisions.md` logs that shape twice already: the field that leaked is the one whose
+    filter was somewhere else.
+    """
+    _workspace(cfg, MOVED_BEHIND_AN_AUDIENCE)
+
+    code = main(["list", "--as", "B"] + (["--json"] if form == "json" else []))
+
+    printed = capsys.readouterr().out
+    assert "secret_export" not in printed
+    assert code == 0, "and the exit status follows the view"
+
+
+def test_the_operator_is_still_told_which_definition_moved_it(cfg, at_the_command_line, capsys):
+    """The control, and the half that matters most: the fault is real, and the unscoped
+    listing is where somebody goes to fix it.
+    """
+    _workspace(cfg, MOVED_BEHIND_AN_AUDIENCE)
+
+    assert main(["list"]) == 1
+
+    printed = capsys.readouterr().out
+    assert "tools named by a path they have moved from" in printed
+    assert "secret_export" in printed
 
 
 #: A skill an agent shares with both callers, and one only an agent out of B's reach is

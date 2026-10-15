@@ -1967,6 +1967,40 @@ Unscoped, every one of these answers exactly what it answered before: an operato
 is everything, including the subagent nobody activates, which is the thing they are
 reading a listing to find. *(2026-10-14, from an architecture review.)*
 
+**What a caller reaches is read from the catalogue's own spelling, and asked of every
+agent they can open.** The three rules of 2026-10-14 left four gaps, each found by
+mutating the thing a rule guards rather than by reading:
+
+  - **A grant written the long way reached nobody.** `offers` compared a written entry
+    against the catalogue unspelt, so `csv_profile::csv_profile` -- the form
+    `formats.md` documents, and the form the shipped `surveyor` is written with --
+    matched nothing, and a scoped caller was told they reached no tools at all while
+    the build handed them one. `placed` was private to the selection reader; it is
+    public now and both readers pass it as `same=`.
+  - **Two readers asked a spec raw.** `moved_tools` read `tool_sources` and the
+    unresolved-subagent row read `spec.subagents`, both unnarrowed, so a scoped caller
+    was handed a moved tool's path and a name out of their reach. Both read
+    `declares(held)` now. `tool_sources` is keyed by the bare name while a selection
+    holds the reference as written, so the comparison is on the bare name --
+    comparing them as written emptied the field for every caller, scoped or not.
+  - **A refusal about a file listed only what the agent being built names.** Which
+    agents may be asked depends on what the refusal is about, and the two are not the
+    same question: a *file* naming a subagent wrong is fixed by editing that file, so
+    what it could name instead is everything this caller reaches through any agent
+    they can open; a *request* naming one is bound by the agent it opened, because
+    `Capabilities.subagents` may only narrow what that agent declares. `offered_to`
+    takes `by=` for the first and the one agent for the second.
+
+The fourth was a guard over nothing, twice. `agents_to_ask` first filtered its agents
+by the caller's reach, and first short-circuited an unscoped caller to `()`; mutating
+either away left the suite green, because `narrowed_for` reads a definition's own
+`source_ids:` as the default audience for its entries -- so an agent the caller cannot
+open narrows every subagent it names away -- and `handed_work_by` answers an unscoped
+caller itself. A condition restated one level up from the place that holds it is the
+same defect as a rule that cannot fail: nothing can tell whether it is right. Both are
+gone, and the ten mutations of this slice all bite. *(2026-10-15, from an architecture
+review.)*
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds

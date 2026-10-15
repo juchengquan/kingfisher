@@ -33,6 +33,7 @@ from kingfisher.infrastructure.harness.activation import (
     _private_skills,
     _skill_denials,
     activatable_skills,
+    agents_to_ask,
     for_the_caller,
     offered_to,
     refuse_misnamed_by,
@@ -515,7 +516,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # `asked`, not `capabilities`: combined, the agent's names are the ones this caller
     # reaches, and a typo behind an entry audience would be refused to some callers only.
     refuse_misnamed_by(cfg, agent, asked, held=held, catalogue=roots)
-    defined, activated = _activated_subagents(cfg, capabilities, catalogue=roots, held=held)
+    defined, activated = _activated_subagents(
+        cfg, capabilities, catalogue=roots, held=held, agent=agent
+    )
     # What a refusal below may list, which is not what it judges. `None` where there is
     # nobody to narrow for, and where the agent is unknown: a build handed its own graph
     # resolves no spec, and an empty `offered:` list is worse than a wide one.
@@ -663,7 +666,10 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         # once each, the same catalogue is twenty.
         compiled: dict[tuple[str, bool, int], Any] = {}
 
-        listing = offered_to(defined, held)
+        # Every agent this caller can open, not the one being built: what a
+        # *subagent's* file could name instead is bounded by the catalogue, and a file
+        # is what this refusal is about. `offered_to` has the distinction.
+        listing = offered_to(defined, held, by=agents_to_ask(cfg, catalogue=roots))
 
         # What the main agent itself runs, as an object a helper can be handed.
         # A top-level subagent needs none of this -- deepagents gives it the

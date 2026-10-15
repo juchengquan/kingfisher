@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from deepagents import FilesystemPermission
 
 from kingfisher.config import ConfigError
-from kingfisher.domain.access import within_reach
+from kingfisher.domain.access import handed_work_by, within_reach
 from kingfisher.domain.capabilities import (
     ALL,
     Capabilities,
@@ -31,7 +31,7 @@ from kingfisher.kinds.subagents.spec import RunOn, SubagentSpec
 from kingfisher.layout import SKILLS_ROUTE
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, Sequence
 
     from kingfisher.config import Config
     from kingfisher.kinds.agents.spec import AgentSpec
@@ -99,9 +99,54 @@ def for_the_caller(
     return agent.declares(held).intersect(asked) if agent is not None else asked
 
 
-def offered_to(defined: Mapping[str, SubagentSpec], held: frozenset[str] | None) -> str:
-    """The subagents a refusal of an unknown one lists to this caller."""
-    return f"{tuple(sorted(within_reach(defined, defined, held)))}"
+def offered_to(
+    defined: Mapping[str, SubagentSpec],
+    held: frozenset[str] | None,
+    *,
+    by: Sequence[Any] = (),
+) -> str:
+    """The subagents a refusal of an unknown one lists to this caller.
+
+    `by` is the agents they reach -- one, at a build. A subagent needs two things to be
+    nameable: its own `source_ids:` has to admit the caller, and an agent they can open
+    has to name it. This asked the first alone, so three of the four refusals listing
+    through here named a definition nothing activates -- a name reachable by no path,
+    which `formats.md` says a listing, a refusal and the withheld report all withhold.
+    The listing and the report moved to `handed_work_by`; these are the rest.
+
+    Which agents depends on what the refusal is about, and the two sites differ for a
+    reason. A *file* naming a subagent wrong is fixed by editing that file, so what it
+    could name instead is everything this caller reaches through any agent they can
+    open -- `agents_to_ask` below. A *request* naming one is bound by the agent it
+    opened, because `Capabilities.subagents` may only narrow what that agent declares,
+    so there `by` is that agent alone.
+
+    Empty `by` is a caller with no agent resolved to ask about, and their own line is
+    then the whole of what can be asked. `settled_request` stays there and needs nothing
+    more: it returns early unless the ceiling is `"*"`, and an agent declaring `"*"`
+    activates every definition the caller reaches, so the two answers are one set.
+    """
+    reachable = handed_work_by(by, defined, held) if by else within_reach(defined, defined, held)
+    return f"{tuple(sorted(reachable))}"
+
+
+def agents_to_ask(cfg: Config, *, catalogue: Definitions | None = None) -> tuple[Any, ...]:
+    """The agents whose activations decide what this caller can be handed work by.
+
+    Read on a refusal path only, so the catalogue read costs nothing anyone waits on.
+    What it is for is the listing beside a refusal about a *file*: the subagents that
+    file could name instead are the ones some agent in this deployment can hand work
+    to, not only the ones the agent being built happens to name.
+
+    Every agent, and no narrowing here of any kind, because both the narrowings this
+    first had changed no answer: `narrowed_for` reads a definition's own `source_ids:`
+    as the default audience for its entries, so an agent the caller cannot open
+    narrows every subagent it names away; and `handed_work_by` answers an unscoped
+    caller itself. Mutating either away left the suite green -- a guard over nothing
+    is the same defect as a rule that cannot fail, one level down, so the condition
+    belongs where it can be read once and not restated here.
+    """
+    return tuple((catalogue or Definitions.from_config(cfg)).agents.specs.values())
 
 
 def settled_request(
@@ -169,7 +214,7 @@ def refuse_misnamed_by(
         offered=defined,
         kind="subagent",
         subject=subject,
-        listing=offered_to(defined, held),
+        listing=offered_to(defined, held, by=agents_to_ask(cfg, catalogue=catalogue)),
     )
     refuse_two_of_a_name(written, subject=subject)
 
@@ -279,6 +324,10 @@ def _activated_subagents(
     *,
     catalogue: Definitions | None = None,
     held: frozenset[str] | None = None,
+    #: The agent this build opened, for the refusal's listing alone -- what it judges
+    #: is every definition, because a name nothing defines is the file's mistake
+    #: whoever is asking. `None` where a build resolved no spec.
+    agent: AgentSpec | None = None,
 ) -> tuple[Mapping[str, Any], tuple[str, ...]]:
     """Which subagents this request wired, and every definition available."""
     if capabilities.subagents is None:
@@ -307,7 +356,7 @@ def _activated_subagents(
         offered=defined,
         kind="subagent",
         subject="this request",
-        listing=offered_to(defined, held),
+        listing=offered_to(defined, held, by=() if agent is None else (agent,)),
     )
     # After the unknown-name check, not before: naming one that does not exist
     # and naming two that do are different mistakes, and the first would
