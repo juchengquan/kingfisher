@@ -75,7 +75,12 @@ class Ledger:
 
 
 def keep_ledger(
-    files: Any, harness: Any, ledger: Ledger, *, summarised: bool
+    files: Any,
+    harness: Any,
+    ledger: Ledger,
+    *,
+    summarised: bool,
+    tool_results_route: str = TOOL_RESULTS_ROUTE,
 ) -> Steps[tuple[LedgerEntry, ...]]:
     """Keep this turn's entries, and say where each result is now.
 
@@ -96,7 +101,11 @@ def keep_ledger(
         resumed=ledger.resumed,
         summarised=summarised,
     )
-    yield from _swept(files, ledger.earlier.paths | {e.path for e in entries if e.path})
+    yield from _swept(
+        files,
+        ledger.earlier.paths | {e.path for e in entries if e.path},
+        tool_results_route=tool_results_route,
+    )
     return entries
 
 
@@ -176,7 +185,12 @@ def _repointed(files: Any, entries: tuple[LedgerEntry, ...]) -> Steps[tuple[Ledg
     )
 
 
-def _swept(files: Any, named: frozenset[str] | set[str]) -> Steps[None]:
+def _swept(
+    files: Any,
+    named: frozenset[str] | set[str],
+    *,
+    tool_results_route: str = TOOL_RESULTS_ROUTE,
+) -> Steps[None]:
     """Remove every result file a recorder wrote that no row names.
 
     Only a turn that died before writing its rows leaves one, beside the copies of
@@ -190,7 +204,7 @@ def _swept(files: Any, named: frozenset[str] | set[str]) -> Steps[None]:
     said "nothing refuses it the folder", which stopped being true the day the route
     gained its deny rule.
     """
-    listing = yield reading(files, "ls", TOOL_RESULTS_ROUTE)
+    listing = yield reading(files, "ls", tool_results_route)
     for one in listing.entries or ():
         if one.get("is_dir") or one["path"] in named:
             continue

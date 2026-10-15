@@ -82,6 +82,7 @@ def argv_for(
     *,
     readable: Iterable[Path | str] = (),
     writable: Iterable[Path | str] = (),
+    inputs: str = INPUTS,
 ) -> list[str]:
     """The sandbox one session's commands run in, generated from it."""
     argv = ["bwrap"]
@@ -99,7 +100,7 @@ def argv_for(
     # `inputs` beside it, and for the same reason: it is the caller's and the agent is
     # promised it cannot change it. Dropping its write bits was not enough, since the
     # shell owns those files and can lift them.
-    for path in present([Path(session_dir) / HARNESS, Path(session_dir) / INPUTS]):
+    for path in present([Path(session_dir) / HARNESS, Path(session_dir) / inputs]):
         argv += ["--ro-bind", str(path), str(path)]
     argv += [
         # A fresh minimal /dev rather than the container's.

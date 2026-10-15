@@ -997,6 +997,39 @@ def test_every_pattern_in_the_profile_still_means_the_path_it_is_about(name, tmp
     assert not any(one.match(str(own)) for one in denied), "the session's own work is denied"
 
 
+def test_a_renamed_inputs_leaf_is_the_one_the_profile_denies(tmp_path):
+    """A layout that renames `inputs` moves the macOS deny with it.
+
+    The kernel rule is keyed on the leaf's name, so the one the profile writes has to
+    be the configured one and not the default spelling -- otherwise a renamed inputs
+    folder is writable to the shell and the default name, which no session has, is
+    guarded instead.
+    """
+    workspace = ensure_layout(tmp_path / "ws")
+    sessions = (workspace / "sessions").resolve()
+
+    text = confinement.profile(
+        home=tmp_path / "home",
+        workspace=workspace,
+        readable=(),
+        writable=(workspace,),
+        itself=workspace / ".kingfisher" / "shell.sb",
+        session_inputs="vault",
+    )
+
+    denied = [
+        re.compile(_as_sbpl_reads_it(line)[0])
+        for line in text.splitlines()
+        if "(regex " in line
+    ]
+    assert any(one.match(str(sessions / "s1" / "vault" / "given.txt")) for one in denied), (
+        "the renamed inputs leaf is denied by nothing"
+    )
+    assert not any(one.match(str(sessions / "s1" / "inputs" / "given.txt")) for one in denied), (
+        "the default name is denied though no session has it, and the renamed one is not"
+    )
+
+
 def test_what_stands_in_for_a_quote_cannot_reach_across_a_directory(tmp_path):
     """`.` matches a quote as well and is the shorter answer, and it also matches `/` --
     so a workspace called `a"b` would deny `sessions/*/inputs` under a *directory*

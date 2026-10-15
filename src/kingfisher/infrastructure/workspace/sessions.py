@@ -12,6 +12,7 @@ from kingfisher.layout import (
     AGENTS_SCAFFOLD,
     HARNESS,
     MEMORY,
+    SCRATCH,
     SESSION_DIRS,
 )
 
@@ -53,27 +54,40 @@ class LocalSessionDirs:
         return None
 
 
-def ensure_session_layout(session_dir: Path) -> Path:
-    """Every directory a session holds, and its memory scaffolded. Idempotent."""
+def ensure_session_layout(
+    session_dir: Path,
+    session_dirs: tuple[str, ...] = SESSION_DIRS,
+    *,
+    memory: str = MEMORY,
+    scratchpad: str = SCRATCH,
+) -> Path:
+    """Every directory a session holds, and its memory scaffolded. Idempotent.
+
+    The leaves default to the module constants, so the call with no layout lays out
+    the names kingfisher has always used; `backend_at` passes the configured layout's
+    leaves so a renamed session is made under its own names. `memory` and `scratchpad`
+    are passed on their own as well as in `session_dirs` because the two steps below
+    name one directory each and cannot pick it out of the tuple.
+    """
     session_dir = Path(session_dir).expanduser().resolve()
-    for name in (*SESSION_DIRS, HARNESS):
+    for name in (*session_dirs, HARNESS):
         (session_dir / name).mkdir(parents=True, exist_ok=True)
 
     # Asked for rather than done here: `permissions` is the one module in this
     # package that changes a mode, and it says why this one is set at all.
-    keep_tmp_private(session_dir)
+    keep_tmp_private(session_dir, scratchpad=scratchpad)
     # Last, so a session's own memory beats the scaffold rather than losing to it.
-    scaffold_memory(session_dir)
+    scaffold_memory(session_dir, memory=memory)
     return session_dir
 
 
-def scaffold_memory(session_dir: Path) -> None:
+def scaffold_memory(session_dir: Path, *, memory: str = MEMORY) -> None:
     """Give `/memory/AGENTS.md` something for an edit to anchor against.
 
     Scaffolded rather than empty: the memory prompt directs the agent to save
     knowledge with `edit_file`, which replaces existing text.
     """
-    agents_md = Path(session_dir) / MEMORY / "AGENTS.md"
+    agents_md = Path(session_dir) / memory / "AGENTS.md"
     if not agents_md.exists() or not agents_md.read_text(encoding="utf-8").strip():
         agents_md.write_text(AGENTS_SCAFFOLD, encoding="utf-8")
 

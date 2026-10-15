@@ -384,11 +384,14 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
     from kingfisher.infrastructure.sandbox import bubblewrap, fence
     from kingfisher.infrastructure.sandbox.confinement import _unwrapped
 
-    seen: dict[str, tuple[Path, list[Path], list[Path]]] = {}
+    seen: dict[str, tuple[Path, list[Path], list[Path], str | None]] = {}
 
     def recorder(mechanism, result):
-        def fake(session_dir, *, readable=(), writable=()):
-            seen[mechanism] = (session_dir, list(readable), list(writable))
+        # `inputs` reaches both fences and must be identical, so it is compared;
+        # `session_dirs` is Landlock's alone -- bubblewrap binds the session whole
+        # and overlays the inputs leaf, so it is accepted here and left uncompared.
+        def fake(session_dir, *, readable=(), writable=(), inputs=None, session_dirs=None):
+            seen[mechanism] = (session_dir, list(readable), list(writable), inputs)
             return result
 
         return fake
@@ -412,7 +415,7 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
         f"differently depending on the host: {seen}"
     )
     # And that the paths are the ones meant, so agreeing on nothing would fail.
-    _, readable, writable = seen["Landlock"]
+    _, readable, writable, _inputs = seen["Landlock"]
     assert skills in readable, "the shared catalogue is what a skill's scripts are read from"
     assert writable == [], (
         "$TMPDIR is inside the session both fences already grant, so naming it again "
@@ -429,7 +432,7 @@ def test_every_directory_on_the_agent_s_path_is_reachable(cfg, tmp_path, monkeyp
     seen: dict[str, tuple[list[Path], list[Path]]] = {}
 
     def recorder(mechanism, result):
-        def fake(session_dir, *, readable=(), writable=()):
+        def fake(session_dir, *, readable=(), writable=(), inputs=None, session_dirs=None):
             seen[mechanism] = ([Path(p) for p in readable], [Path(p) for p in writable])
             return result
 

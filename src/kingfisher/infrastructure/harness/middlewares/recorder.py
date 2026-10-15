@@ -96,13 +96,22 @@ class Recorder(AgentMiddleware):
     records what that middleware left, which is what the model reads.
     """
 
-    def __init__(self, ledger: Ledger, backend: Any, audiences: Audiences | None) -> None:
+    def __init__(
+        self,
+        ledger: Ledger,
+        backend: Any,
+        audiences: Audiences | None,
+        tool_results_route: str = TOOL_RESULTS_ROUTE,
+    ) -> None:
         super().__init__()
         self._ledger = ledger
         #: The turn's backend under the turn's rules, as a tool's own save goes through.
         self._backend = backend
         #: `None` where no `source_ids.yaml` is in force.
         self._audiences = audiences
+        #: Where a result is written: this layout's `/scratchpad/tool_results/`, which
+        #: the backend routes under the same name. The default is the module's.
+        self._tool_results_route = tool_results_route
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         with _running(request.tool_call):
@@ -161,7 +170,7 @@ class Recorder(AgentMiddleware):
                 args=args,
                 access=access,
                 size=len(content),
-                path=f"{TOOL_RESULTS_ROUTE}{number}-{_segment(tool)}{_suffix(text)}",
+                path=f"{self._tool_results_route}{number}-{_segment(tool)}{_suffix(text)}",
                 summary=_summary(tool, args, text),
             )
         )

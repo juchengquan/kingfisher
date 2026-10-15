@@ -17,7 +17,7 @@ from typing import Any, Protocol, runtime_checkable
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
 from deepagents.backends.protocol import ExecuteResponse
 
-from kingfisher.config import Config, ConfigError
+from kingfisher.config import DEFAULT_LAYOUT, Config, ConfigError
 from kingfisher.domain.ports import CommandRunner, SkillRepository
 from kingfisher.domain.session import session_dir, sessions_root, still_held
 from kingfisher.infrastructure.catalogue import Definitions, refuse_unmountable
@@ -43,20 +43,13 @@ from kingfisher.layout import (
     HARNESS_OWNED,
     HARNESS_ROUTE,
     INPUTS,
-    INPUTS_ROUTE,
-    MEMORY,
-    MEMORY_ROUTE,
     OFFLOADS,
-    OFFLOADS_ROUTE,
     RESERVED_SKILL_FOLDER,
-    SCRATCH,
     SCRATCH_ROUTE,
     SESSION_DIRS,
     SKILLS_ROUTE,
     SKILLS_VIEW,
-    TOOL_RESULTS,
-    TOOL_RESULTS_ROUTE,
-    routed_paths,
+    Layout,
 )
 
 _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
@@ -78,10 +71,10 @@ def shell_env(
         # Inside the session, so `reap` sweeps what tools cache under `~` and
         # `session_bytes` counts it; above the session such caches reached 59MB
         # in one workspace with nothing sweeping them.
-        "HOME": str(session_dir / SCRATCH),
+        "HOME": str(session_dir / cfg.layout.scratchpad),
         "LANG": "en_US.UTF-8",
         "LC_ALL": "en_US.UTF-8",
-        "TMPDIR": str(session_dir / SCRATCH),
+        "TMPDIR": str(session_dir / cfg.layout.scratchpad),
     }
     skills = (catalogue or Definitions.from_config(cfg)).skills
     env["KINGFISHER_SKILLS"] = str(skills_view(skills, cfg.workspace))
@@ -366,6 +359,7 @@ class WorkspaceScopedBackend(SessionClaims, CompositeBackend):
         *,
         session_dir: Path,
         workspace: Path,
+        artifacts_root: str = SCRATCH_ROUTE,
     ) -> None:
         # Where deepagents writes on its own -- a tool result too long to send, the
         # history its summarizer keeps. They are the agent's working material: returned
@@ -374,8 +368,9 @@ class WorkspaceScopedBackend(SessionClaims, CompositeBackend):
         # `/`, puts both folders at the session root, in none the layout names. Under
         # Landlock the shell can rewrite them here, and may: nothing kingfisher reads
         # back trusts them. deepagents reads this only off a `CompositeBackend`, so it
-        # is set here, and a subclass calling this `__init__` keeps it.
-        super().__init__(default=default, routes=routes, artifacts_root=SCRATCH_ROUTE)
+        # is set here, and a subclass calling this `__init__` keeps it. The default is
+        # the module's scratch route; `backend_at` passes the configured layout's.
+        super().__init__(default=default, routes=routes, artifacts_root=artifacts_root)
         #: The deployment's workspace, which is what a host path is refused against.
         #: Separate from the session below, and they were one value: see
         #: `reject_host_path`, where the session is what the suggestion needs.
@@ -400,12 +395,13 @@ class InputsBackend(FilesystemBackend):
     permission bits to lift, and meets the same promise its own way.
     """
 
-    def __init__(self, session_dir: Path) -> None:
-        super().__init__(root_dir=str(Path(session_dir) / INPUTS))
+    def __init__(self, session_dir: Path, inputs: str = INPUTS) -> None:
+        super().__init__(root_dir=str(Path(session_dir) / inputs))
         self._session_dir = Path(session_dir)
+        self._inputs = inputs
 
     def upload_files(self, files: list[tuple[str, bytes]]) -> Any:
-        with writable_inputs(self._session_dir):
+        with writable_inputs(self._session_dir, self._inputs):
             return super().upload_files(files)
 
 
@@ -487,9 +483,13 @@ def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
     ]
 
 
-#: The one memory file the agent is told to read. `/memory/` is a route so a
-#: request that declined memory can be given a deny rule for it.
-MEMORY_SOURCES = [f"{MEMORY_ROUTE}AGENTS.md"]
+def memory_sources(layout: Layout = DEFAULT_LAYOUT) -> list[str]:
+    """The one memory file the agent is told to read, under this layout's `/memory/`.
+
+    `/memory/` is a route so a request that declined memory can be given a deny rule
+    for it. The default reproduces the route kingfisher has always used.
+    """
+    return [f"{layout.memory_route}AGENTS.md"]
 
 
 def _fence_for(
@@ -529,7 +529,9 @@ def _fence_for(
         )
 
         return BubblewrapRunner(
-            argv_for(session_dir, readable=readable, writable=writable),
+            argv_for(
+                session_dir, readable=readable, writable=writable, inputs=cfg.layout.inputs
+            ),
             env=env,
         )
 
@@ -539,17 +541,25 @@ def _fence_for(
     from kingfisher.infrastructure.sandbox.fence import LandlockRunner, policy_for  # noqa: PLC0415
 
     return LandlockRunner(
-        policy_for(session_dir, readable=readable, writable=writable),
+        policy_for(
+            session_dir,
+            readable=readable,
+            writable=writable,
+            session_dirs=cfg.layout.session_dirs,
+            inputs=cfg.layout.inputs,
+        ),
         cwd=session_dir,
         env=env,
     )
 
 
-def _require_layout(session_dir: Path) -> None:
+def _require_layout(
+    session_dir: Path, session_dirs: tuple[str, ...] = SESSION_DIRS
+) -> None:
     """Refuse a session directory that has not been made yet."""
     missing = [
         name
-        for name in (*SESSION_DIRS, HARNESS)
+        for name in (*session_dirs, HARNESS)
         if not (session_dir / name).is_dir()
     ]
     if missing:
@@ -671,7 +681,7 @@ def backend_at(
     # one would otherwise reach the composite as a path.
     refuse_unmountable(skills_dir, skills.mounts)
 
-    _require_layout(session_dir)
+    _require_layout(session_dir, cfg.layout.session_dirs)
     # Not created where it is missing: it is in the definitions folder, which a
     # start only reads, and a missing one means no skills. Both Linux fences grant
     # only the paths that exist, and the route below answers a read with "not
@@ -717,10 +727,13 @@ def backend_at(
     # so that a route declared in `kingfisher.layout` and forgotten here raises when
     # the backend is built, instead of reaching a turn as a path that resolves
     # to the default backend and quietly ignores its own deny rule.
+    layout = cfg.layout
     backing = {
-        INPUTS_ROUTE: lambda: InputsBackend(session_dir),
+        layout.inputs_route: lambda: InputsBackend(session_dir, layout.inputs),
         SKILLS_ROUTE: lambda: FilesystemBackend(root_dir=str(skills_dir)),
-        MEMORY_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / MEMORY)),
+        layout.memory_route: lambda: FilesystemBackend(
+            root_dir=str(session_dir / layout.memory)
+        ),
         # Mounted so it can be refused. Every operation through it is denied by
         # `read_only_permissions`, and a rule is only expressible against a path
         # the composite routes -- so the mount is what makes the refusal legal,
@@ -730,19 +743,19 @@ def backend_at(
         # path the composite routes, so the mount is what makes the refusal legal.
         # Unlike `.harness` it is readable -- the agent is told to read a result back
         # out of it -- and only writing is denied.
-        TOOL_RESULTS_ROUTE: lambda: FilesystemBackend(
-            root_dir=str(session_dir / SCRATCH / TOOL_RESULTS)
+        layout.tool_results_route: lambda: FilesystemBackend(
+            root_dir=str(session_dir / layout.scratchpad / layout.tool_results)
         ),
-        OFFLOADS_ROUTE: lambda: FilesystemBackend(
-            root_dir=str(session_dir / SCRATCH / OFFLOADS)
+        layout.offloads_route: lambda: FilesystemBackend(
+            root_dir=str(session_dir / layout.scratchpad / OFFLOADS)
         ),
     }
-    missing = [path for path in routed_paths() if path not in backing]
+    missing = [path for path in layout.routed_paths() if path not in backing]
     if missing:  # pragma: no cover -- a table edit, caught by its own test
         msg = f"routes declared in kingfisher.layout with nothing to back them: {missing}"
         raise ConfigError(msg)
 
-    routes: dict[str, Any] = {path: backing[path]() for path in routed_paths()}
+    routes: dict[str, Any] = {path: backing[path]() for path in layout.routed_paths()}
     # One per bundle and per mount, so a subagent's own skills and a mounted party's
     # are readable by the file tools that read every other skill. Generated rather
     # than declared: the names are not known until a catalogue is read, which is
@@ -753,7 +766,11 @@ def backend_at(
     })
 
     return WorkspaceScopedBackend(
-        default=shell, routes=routes, session_dir=session_dir, workspace=cfg.workspace
+        default=shell,
+        routes=routes,
+        session_dir=session_dir,
+        workspace=cfg.workspace,
+        artifacts_root=layout.scratch_route,
     )
 
 
@@ -795,11 +812,13 @@ class DefaultBackends(SessionBackends):
         *,
         catalogue: Definitions | None = None,
     ) -> WorkspaceScopedBackend:
-        directory = ensure_session_layout(_where(cfg, session_id))
+        directory = ensure_session_layout(
+            _where(cfg, session_id), cfg.layout.session_dirs, memory=cfg.layout.memory
+        )
         # Kernel-level, because the deny rule covers only the file tools. What it
         # could not harden is reported by the turn rather than raised: raising here
         # used to make one file owned by another user a session unusable for good.
-        unprotected = protect_inputs(directory)
+        unprotected = protect_inputs(directory, cfg.layout.inputs)
         runner = self._runner(directory) if self._runner is not None else None
         built = backend_at(cfg, directory, catalogue=catalogue, runner=runner)
         built.unprotected = unprotected

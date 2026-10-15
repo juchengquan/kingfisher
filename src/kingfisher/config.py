@@ -10,6 +10,7 @@ from types import MappingProxyType
 from typing import Any
 
 from kingfisher.domain.access import SourceIds
+from kingfisher.layout import Layout
 
 #: The frozen default for an `extra` mapping. Shared with `Adapter.extra`
 #: rather than written twice: both spread into one `build_model` call and carry
@@ -18,6 +19,10 @@ from kingfisher.domain.access import SourceIds
 #: reason alone: an empty mapping cannot drift, so this buys visibility of the
 #: pairing rather than safety.
 NO_EXTRA: Mapping[str, Any] = MappingProxyType({})
+
+#: The session folder names a deployment did not rename -- the names kingfisher has
+#: always used. One shared frozen instance, for `NO_EXTRA`'s reason.
+DEFAULT_LAYOUT = Layout()
 
 #: A deployment's skills mounts when it names none: frozen, for `NO_EXTRA`'s reason.
 NO_MOUNTS: Mapping[str, Path] = MappingProxyType({})
@@ -429,6 +434,11 @@ class Config:
     # Set once at startup, so it stays part of the cached prompt prefix rather than
     # moving per request. It adds to the harness prompt; it does not replace it.
     deployment_prompt: str = ""
+    # The per-session folder names the agent addresses. Defaulted to kingfisher's own;
+    # a deployment renames the leaves by passing a `Layout`. Set once at startup, so the
+    # routes, the sandbox rules and the prompt that derive from it are stable per
+    # deployment rather than per request.
+    layout: Layout = DEFAULT_LAYOUT
 
     @property
     def claim_stale_after(self) -> float:

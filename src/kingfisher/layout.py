@@ -7,6 +7,7 @@ from the 200MB of sessions for that reason among others.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 #: The harness's own directory in a workspace: not a session's, and not the
@@ -275,6 +276,123 @@ def denied_read_scopes() -> tuple[str, ...]:
 def routed_paths() -> tuple[str, ...]:
     """The paths the composite mounts itself, families excluded."""
     return tuple(r.path for r in ROUTES if r.routed and not r.family)
+
+
+#: A name a deployment may not give a per-session leaf: `inputs`, `outputs`, `memory`,
+#: `scratchpad` and `tool_results` share a session with the harness and sit beside (or
+#: under) deepagents' own folders, so colliding with one of these would overwrite it.
+_RESERVED_LEAF_NAMES = frozenset(
+    {HARNESS, "sessions", SKILLS, OFFLOADS, "conversation_history", "blobs"}
+)
+_LEAF = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+@dataclass(frozen=True)
+class Layout:
+    """The per-session folder names the agent addresses, which a deployment may rename.
+
+    The fields are `inputs`, `outputs`, `memory`, `scratchpad` and `tool_results`: the
+    leaves a client renames at startup, through `Config(layout=...)`. Everything derived
+    -- the directories a session is laid out with, the routes the backend mounts, the
+    deny scopes the file tools get, and through those the sandbox rules and the prompt --
+    comes off an instance, so a renamed leaf moves all of them together rather than
+    leaving a prompt or a deny rule still spelling the old name.
+
+    Fixed, and not here: the `sessions` root (the agent never addresses it, and
+    `domain.session` derives session paths without being able to import this module);
+    `.harness` and `skills`; and deepagents' own leaves under the scratchpad
+    (`large_tool_results`, `conversation_history`, `blobs`), which deepagents builds from
+    the scratchpad's name -- only the parent moves.
+
+    The defaults are the names kingfisher has always used, so `Layout()` reproduces the
+    module-level constants exactly; `test_the_default_layout_is_the_module_constants`
+    pins that, so the two cannot drift.
+    """
+
+    inputs: str = INPUTS
+    outputs: str = OUTPUTS
+    memory: str = MEMORY
+    scratchpad: str = SCRATCH
+    tool_results: str = TOOL_RESULTS
+
+    def __post_init__(self) -> None:
+        named = {
+            "inputs": self.inputs, "outputs": self.outputs, "memory": self.memory,
+            "scratchpad": self.scratchpad, "tool_results": self.tool_results,
+        }
+        for field_name, value in named.items():
+            if not _LEAF.match(value):
+                msg = (f"layout {field_name}={value!r} is not a bare folder name; it must "
+                       f"match {_LEAF.pattern} -- no slash, no leading dot, not empty")
+                raise ValueError(msg)
+            if value in _RESERVED_LEAF_NAMES:
+                msg = (f"layout {field_name}={value!r} is a name kingfisher or deepagents "
+                       f"already uses for a session folder; choose another")
+                raise ValueError(msg)
+        if len(set(named.values())) != len(named):
+            msg = f"layout names collide: {named}; each session folder needs its own name"
+            raise ValueError(msg)
+
+    @property
+    def session_dirs(self) -> tuple[str, ...]:
+        """The directories a session is laid out with, which the agent addresses."""
+        return (self.inputs, self.outputs, self.memory, self.scratchpad)
+
+    @property
+    def artifact_dirs(self) -> tuple[str, ...]:
+        """What a reaped session hands back: produced, not given or disposable."""
+        return (self.outputs, self.memory)
+
+    @property
+    def inputs_route(self) -> str:
+        return _route(self.inputs)
+
+    @property
+    def memory_route(self) -> str:
+        return _route(self.memory)
+
+    @property
+    def outputs_route(self) -> str:
+        return _route(self.outputs)
+
+    @property
+    def scratch_route(self) -> str:
+        return _route(self.scratchpad)
+
+    @property
+    def tool_results_route(self) -> str:
+        return _route(self.scratchpad, self.tool_results)
+
+    @property
+    def offloads_route(self) -> str:
+        """deepagents' own, under this layout's scratchpad: the leaf is fixed, the parent moves."""
+        return _route(self.scratchpad, OFFLOADS)
+
+    @property
+    def routes(self) -> tuple[Route, ...]:
+        """The route table for this layout: the renamable leaves spelled from the
+        instance, the fixed skills and harness routes unchanged."""
+        return (
+            Route(self.inputs_route, deny_write_under=f"{self.inputs_route}**"),
+            Route(self.memory_route),
+            Route(SKILLS_ROUTE, deny_write_under=f"{SKILLS_ROUTE}**"),
+            Route(BUNDLED_SKILLS_ROUTE, deny_write_under=f"{SKILLS_ROUTE}**", family=True),
+            Route(self.outputs_route, routed=False),
+            Route(self.scratch_route, routed=False),
+            Route(self.tool_results_route, deny_write_under=f"{self.tool_results_route}**"),
+            Route(self.offloads_route, deny_write_under=f"{self.offloads_route}**"),
+            Route(HARNESS_ROUTE, deny_write_under=f"{HARNESS_ROUTE}**",
+                  deny_read_under=f"{HARNESS_ROUTE}**"),
+        )
+
+    def denied_scopes(self) -> tuple[str, ...]:
+        return tuple(sorted({r.deny_write_under for r in self.routes if r.deny_write_under}))
+
+    def denied_read_scopes(self) -> tuple[str, ...]:
+        return tuple(sorted({r.deny_read_under for r in self.routes if r.deny_read_under}))
+
+    def routed_paths(self) -> tuple[str, ...]:
+        return tuple(r.path for r in self.routes if r.routed and not r.family)
 
 
 MARKER = f"{HARNESS_OWNED}/WORKSPACE"
