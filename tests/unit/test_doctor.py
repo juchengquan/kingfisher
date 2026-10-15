@@ -1499,6 +1499,91 @@ def test_session_backends_doctor_cannot_see_into_are_said_so(cfg, tmp_path, monk
     assert "KINGFISHER_SESSION_BACKENDS_FACTORY" in check.detail
 
 
+def test_a_session_reached_through_a_link_of_its_own_is_named(cfg, tmp_path, monkeypatch):
+    """A static profile cannot bind it -- it is written per workspace, before the
+    session exists -- so the session is unusable and every command in it fails at `cd`
+    with a message about the shell. This row is the only thing that says why.
+    """
+    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+
+    _fenced_by(monkeypatch, SANDBOX_EXEC)
+    far = tmp_path / "far"
+    far.mkdir()
+    (cfg.workspace / "sessions" / "strayed").symlink_to(far)
+
+    check = _row(examine(cfg), "session paths")
+
+    assert check is not None and check.verdict == "warn"
+    assert "strayed" in check.detail
+    assert "sessions" in check.remedy
+
+
+def test_a_session_inside_the_sessions_directory_is_not_named(cfg, tmp_path, monkeypatch):
+    """The control: a row on every workspace tells an operator to go and look at an
+    arrangement that is the ordinary one.
+    """
+    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+
+    _fenced_by(monkeypatch, SANDBOX_EXEC)
+    (cfg.workspace / "sessions" / "ordinary").mkdir(parents=True)
+
+    assert _row(examine(cfg), "session paths") is None
+
+
+def test_sessions_moved_all_at_once_are_not_named(cfg, tmp_path, monkeypatch):
+    """The other control, and the one that matters: moving every session with one link
+    on `sessions` is the arrangement the profile now follows, so warning about it would
+    send an operator to undo a thing that works.
+    """
+    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+
+    _fenced_by(monkeypatch, SANDBOX_EXEC)
+    far = tmp_path / "far"
+    far.mkdir()
+    (far / "ordinary").mkdir()
+    (cfg.workspace / "sessions").rmdir()
+    (cfg.workspace / "sessions").symlink_to(far)
+
+    assert _row(examine(cfg), "session paths") is None
+
+
+def test_a_linked_session_is_not_named_where_the_fence_grants_it_by_path(
+    cfg, tmp_path, monkeypatch
+):
+    """Quiet under a Linux fence, and that is not tidiness: `policy_for` is built from
+    the session directory itself, so the link is followed when it is opened and the
+    rules land on the real directory. A row there would send an operator to undo an
+    arrangement that works.
+    """
+    from kingfisher.infrastructure.sandbox.confinement import LANDLOCK
+
+    _fenced_by(monkeypatch, LANDLOCK)
+    far = tmp_path / "far"
+    far.mkdir()
+    (cfg.workspace / "sessions" / "strayed").symlink_to(far)
+
+    assert _row(examine(cfg), "session paths") is None
+
+
+def test_a_linked_session_is_not_named_for_backends_doctor_cannot_see_into(
+    cfg, tmp_path, monkeypatch
+):
+    """The sessions directory on this host is not theirs, so what is in it says nothing
+    about where their sessions are -- the answer `session files` already gives them.
+    """
+    from dataclasses import replace
+
+    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+
+    _fenced_by(monkeypatch, SANDBOX_EXEC)
+    far = tmp_path / "far"
+    far.mkdir()
+    (cfg.workspace / "sessions" / "strayed").symlink_to(far)
+    theirs = replace(cfg, session_backends_factory="deployment:Remote")
+
+    assert _row(examine(theirs), "session paths") is None
+
+
 def test_a_keys_file_other_users_can_read_is_warned_about(cfg, tmp_path):
     """Other people on the machine, not the agent -- the expectation ssh holds its keys to."""
     path = tmp_path / "keys.yaml"

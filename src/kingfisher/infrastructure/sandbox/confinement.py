@@ -30,6 +30,7 @@ from functools import partial
 from pathlib import Path
 
 from kingfisher.config import Config
+from kingfisher.domain.session import sessions_root
 from kingfisher.layout import HARNESS, HARNESS_OWNED, INPUTS, SANDBOX_PROFILE
 
 #: `landlock_create_ruleset`, which is 444 on every architecture that has it --
@@ -401,6 +402,32 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     return "\n".join(lines) + "\n"
 
 
+def fenced_sessions(workspace: Path) -> Path:
+    """Where this profile's rules say the sessions are: the real path.
+
+    Four rules name it -- two that allow and two that deny -- and they have to name
+    the same path, which is why they ask here rather than each spelling it. The
+    profile matches real paths, and resolving the workspace does not resolve a
+    `sessions` *under* it: an operator moving sessions onto another volume with one
+    symlink put every session outside every rule. Measured, with the workspace where
+    one normally lives, under the home folder the profile denies: every command in the
+    session failed at `cd`, `shell-init: error retrieving current directory`, so the
+    agent could not read its own files, let alone write them.
+
+    Both halves or neither, and that is the reason for one function. Granting the real
+    path without denying under it is worse than the break it fixes: measured, with the
+    allows resolved and these two patterns left on the unresolved path, `inputs` was
+    writable, `rm -rf inputs` took the caller's folder, and `.harness` -- the pinned
+    agent, the conversation, a paused turn -- was writable too, all exit 0.
+
+    One link deep is as far as a static profile reaches. A single session that is
+    itself a link still lands outside these rules, and `doctor`'s `session paths` row
+    is what says so, because a profile naming the sessions that exist when it is
+    written is the thing `_session_folder_denial` explains this design avoids.
+    """
+    return sessions_root(workspace).resolve()
+
+
 def _sessions_denial(workspace: Path) -> str:
     """Deny writes to the directories a `.harness` is guarded by the position of.
 
@@ -412,7 +439,7 @@ def _sessions_denial(workspace: Path) -> str:
     are, a `file-write*` against the name -- and `$` stops it reaching their contents, so
     a session's own folders stay writable.
     """
-    root = re.escape(f"{Path(workspace).resolve()}/sessions")
+    root = re.escape(str(fenced_sessions(workspace)))
     return f'(deny file-write* (regex #"^{root}(/[^/]+)?$"))'
 
 
@@ -445,7 +472,7 @@ def _session_folder_denial(workspace: Path, folder: str) -> str:
     and the shell owns those files -- measured, `chmod u+w` then a write replaced the
     caller's file, and `rm -rf inputs` took the folder.
     """
-    root = re.escape(f"{Path(workspace).resolve()}/sessions/")
+    root = re.escape(f"{fenced_sessions(workspace)}/")
     return f'(deny file-write* (regex #"^{root}[^/]+/{re.escape(folder)}(/|$)"))'
 
 
@@ -477,8 +504,14 @@ def toolchain_roots(extra: tuple[str, ...] = ()) -> tuple[Path, ...]:
 
 def readable_roots(workspace: Path, extra: tuple[str, ...] = (),
                    skills: tuple[Path, ...] = ()) -> tuple[Path, ...]:
-    """What has to stay readable for the shell to remain useful."""
-    roots = [Path(workspace), *toolchain_roots(extra), *map(Path, skills)]
+    """What has to stay readable for the shell to remain useful.
+
+    The sessions root among them, for the reason `fenced_sessions` gives: reached
+    through a link it is not under the workspace, and under the home folder a shell
+    that cannot read its own session cannot even start in it.
+    """
+    roots = [Path(workspace), fenced_sessions(workspace), *toolchain_roots(extra),
+             *map(Path, skills)]
     return tuple(dict.fromkeys(p.resolve() for p in roots if str(p)))
 
 
@@ -526,12 +559,16 @@ def shell_reads(
 def writable_roots(workspace: Path) -> tuple[Path, ...]:
     """Everywhere the shell is allowed to write.
 
-    One root now. `TMPDIR` used to be named beside it, because
-    `KINGFISHER_SCRATCH_DIR` could move it out of the workspace; it lives inside
-    the session instead, which is inside the workspace, so naming it again would
-    be naming a subpath of what this already returns.
+    The workspace, and the sessions root where that is somewhere else. `TMPDIR` used
+    to be named beside it, because `KINGFISHER_SCRATCH_DIR` could move it out of the
+    workspace; it lives inside the session instead, so naming it again would be naming
+    a subpath of the first root -- which is why the second is named only when it is not
+    one. `fenced_sessions` says what makes it possible for a session to be elsewhere,
+    and why granting it is half a change.
     """
-    return (Path(workspace).resolve(),)
+    root = Path(workspace).resolve()
+    sessions = fenced_sessions(workspace)
+    return (root,) if sessions.is_relative_to(root) else (root, sessions)
 
 
 def profile_path(workspace: Path, rules: str) -> Path:

@@ -216,6 +216,16 @@ caller at the session's pinned agent.
 never touch its disk, get durable or memory-backed storage mounted at
 `<workspace>/sessions`, and cost you none of the four jobs above.
 
+A symlink on `<workspace>/sessions` is the same move, lighter, and the macOS profile
+follows it: its rules are built from the real path that link resolves to, so a session
+on another volume is writable and its `/inputs` and `/.harness` are still refused. One
+link deep is as far as that reaches. A *single* session that is itself a link lands
+where the profile names nothing -- it is one static text per workspace, written before
+any session exists -- and that session is then unusable, every command in it failing at
+`cd` with a message about the shell. `kingfisher doctor` names one when it sees it, and
+the Linux fences are unaffected either way, being built from the session directory
+itself.
+
 **Replace it when your callers may not share storage.** That is the case a mount
 does not cover, and the reason this seam is open. A mount is established once,
 outside the process, before any session exists — so a session created at runtime

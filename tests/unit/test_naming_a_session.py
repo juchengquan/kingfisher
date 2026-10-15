@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import platform
 import time
+from pathlib import Path
 
 import pytest
 
@@ -232,6 +233,90 @@ def test_the_guarantee_holds_inside_a_session_named_for_a_guarded_folder(cfg):
     removed = backend.execute("rm -rf inputs")
 
     assert lifted.exit_code != 0 and removed.exit_code != 0
+    assert (session / "inputs" / "given.txt").read_text(encoding="utf-8") == "as written"
+
+
+@pytest.fixture
+def sessions_elsewhere(cfg, tmp_path, monkeypatch):
+    """`cfg`, with its sessions moved somewhere else by one symlink.
+
+    What an operator reaches for to put sessions on a bigger volume. The link replaces
+    the directory the layout made, which holds nothing until a session arrives --
+    asserted, because a fixture that quietly dropped a session's files would make the
+    rules below pass against an empty tree.
+
+    Under the home folder, because that is where a workspace lives and because the
+    home folder is the only thing the macOS profile denies wholesale: outside it a
+    session the rules do not name is merely unwritable, and the readable half of this
+    cannot fail. Measured there, it is unreachable -- `cd` itself failed.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    far = tmp_path / "far"
+    far.mkdir()
+    here = cfg.workspace / "sessions"
+    assert not any(here.iterdir()), "the layout left something here; move it, do not drop it"
+    here.rmdir()
+    here.symlink_to(far)
+    assert Path(cfg.workspace).resolve().is_relative_to(Path.home().resolve()), (
+        "the workspace is outside the home folder, so the profile denies nothing here"
+    )
+    return cfg
+
+
+@macos
+def test_sessions_reached_through_a_link_are_writable_and_still_fenced(sessions_elsewhere):
+    """The profile matches real paths, and resolving the workspace does not resolve a
+    `sessions` *under* it -- so one symlink put every session outside every rule.
+    Measured with the workspace under the home folder, where one normally lives: every
+    command in the session failed at `cd`, `shell-init: error retrieving current
+    directory`, which names no fence and sends the reader to their shell.
+
+    All four rules in one test on purpose, because resolving the two that allow without
+    the two that deny is worse than the break it fixes: measured, with the allows
+    resolved alone, `inputs` was writable, `rm -rf inputs` took the caller's folder, and
+    `.harness` -- the pinned agent, the conversation, a paused turn -- was writable too,
+    all exit 0. Either half alone reddens this.
+    """
+    cfg = sessions_elsewhere
+    session = ensure_session_layout(cfg.workspace / "sessions" / DEFAULT)
+    (session / "inputs" / "given.txt").write_text("as written", encoding="utf-8")
+    backend = backend_at(cfg, session)
+
+    read = backend.execute("cat inputs/given.txt")
+    own = backend.execute("printf ok > outputs/mine.txt")
+    lifted = backend.execute(
+        "chmod u+w inputs inputs/given.txt 2>/dev/null; printf FORGED > inputs/given.txt"
+    )
+    removed = backend.execute("rm -rf inputs")
+    harnessed = backend.execute(f"printf x > {HARNESS}/forged")
+    sibling = backend.execute("mkdir ../fabricated")
+
+    assert read.exit_code == 0, "the agent cannot read its own session"
+    assert own.exit_code == 0, "the agent cannot write its own session"
+    assert (session / "outputs" / "mine.txt").read_text(encoding="utf-8") == "ok"
+    assert lifted.exit_code != 0 and removed.exit_code != 0 and harnessed.exit_code != 0
+    assert sibling.exit_code != 0, "the node every session sits under is writable"
+    assert (session / "inputs" / "given.txt").read_text(encoding="utf-8") == "as written"
+    assert not (session / HARNESS / "forged").exists()
+    assert not (cfg.workspace / "sessions" / "fabricated").exists()
+
+
+@macos
+def test_a_session_reached_through_a_link_of_its_own_is_still_refused_its_inputs(cfg, tmp_path):
+    """One link deep is as far as a static profile reaches, and this is the bound on
+    the rule above: the profile is written per workspace, before any session exists,
+    so a single session that is itself a link lands where no rule names it. It is the
+    safe direction -- the session is unusable rather than unfenced -- and `doctor`'s
+    `session paths` row is what says so instead of leaving `cd` to.
+    """
+    far = tmp_path / "far"
+    far.mkdir()
+    (cfg.workspace / "sessions" / "strayed").symlink_to(far)
+    session = ensure_session_layout(cfg.workspace / "sessions" / "strayed")
+    (session / "inputs" / "given.txt").write_text("as written", encoding="utf-8")
+    backend = backend_at(cfg, session)
+
+    assert backend.execute("rm -rf inputs").exit_code != 0
     assert (session / "inputs" / "given.txt").read_text(encoding="utf-8") == "as written"
 
 

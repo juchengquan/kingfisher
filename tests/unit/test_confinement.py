@@ -144,6 +144,24 @@ def test_the_interpreter_stays_readable_or_python_stops_working(cfg, tmp_path):
     assert Path(cfg.workspace).resolve() in roots
 
 
+def test_the_sessions_root_is_named_twice_only_where_it_is_somewhere_else(cfg, tmp_path):
+    """Inside the workspace it is a subpath of the root already returned, and naming it
+    again would read as though it added something. Reached through a link it is not
+    under the workspace at all, and then it is the whole point.
+    """
+    inside = confinement.writable_roots(cfg.workspace)
+
+    far = tmp_path / "far"
+    far.mkdir()
+    (cfg.workspace / "sessions").rmdir()
+    (cfg.workspace / "sessions").symlink_to(far)
+    elsewhere = confinement.writable_roots(cfg.workspace)
+
+    assert inside == (Path(cfg.workspace).resolve(),)
+    assert elsewhere == (Path(cfg.workspace).resolve(), far.resolve())
+    assert far.resolve() in confinement.readable_roots(cfg.workspace)
+
+
 def test_paths_a_deployment_put_on_path_stay_readable(cfg, tmp_path):
     """`shell_path_extra` is a deployment saying "the agent may run these"."""
     roots = confinement.readable_roots(cfg.workspace, ("/opt/homebrew/bin",))
