@@ -176,6 +176,70 @@ def test_the_chart_is_an_svg_a_viewer_can_open(tools, handed):
     assert "2 row(s) with no number left out" in said
 
 
+#: Every spelling that gets through `float()` with no length to draw. `Infinity` is
+#: how Python also writes one, and `1e400` is a number that looks finite and overflows
+#: to `inf` on the way in -- which is why the guard reads the number, not the text.
+NO_LENGTH = ["inf", "nan", "Infinity", "-nan", "1e400"]
+
+
+@pytest.mark.parametrize("written", NO_LENGTH)
+def test_a_number_a_bar_cannot_be_as_long_as_is_refused(written, tools, handed, session_dir):
+    """Every bar is drawn as a share of the longest, so one with no finite length takes
+    every other bar's length away with it: measured, one `inf` row wrote `width="nan"`
+    for itself, scaled every other bar to zero, and the answer said it had drawn them
+    both. Refused like a negative one, which has nowhere to go for the same reason.
+    """
+    (session_dir / "inputs" / "odd.csv").write_text(
+        f"name,n\nalpha,5\nbeta,{written}\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ValueError, match="finite length"):
+        on_backend(tools["bar_chart"], handed, file_path="/inputs/odd.csv")
+
+    assert _saved(handed, "/outputs/chart.svg") is None, "refused, so nothing was written"
+
+
+@pytest.mark.parametrize("control", ["\x00", "\x0b", "\x1f"])
+def test_a_cell_holding_what_xml_forbids_is_drawn_without_it(control, tools, handed, session_dir):
+    """XML 1.0 admits a tab, a newline and a carriage return below a space and nothing
+    else at all -- not escaped, not as a character reference -- so a label holding one
+    of the others left a file no viewer can open, `not well-formed (invalid token)`,
+    while the answer said `Saved chart.svg (SVG image, 335 B)`. `escape` does not touch
+    them: it handles the markup characters and no more.
+    """
+    (session_dir / "inputs" / "odd.csv").write_text(
+        f"name,n\nal{control}pha,5\n", encoding="utf-8"
+    )
+
+    said = on_backend(tools["bar_chart"], handed, file_path="/inputs/odd.csv")
+
+    data = _saved(handed, "/outputs/chart.svg")
+    assert data is not None
+    root = ElementTree.fromstring(data)  # noqa: S314 -- our own tool's output
+    assert "alpha" in [one.text for one in root.iter("{http://www.w3.org/2000/svg}text")]
+    assert "1 cell(s) drawn without a character an SVG cannot carry" in said
+
+
+def test_a_cell_holding_a_character_xml_admits_keeps_it(tools, handed, session_dir):
+    """The other half, and the reason the three are named rather than the range: a rule
+    stripping every control character would pass the one above and quietly rewrite a
+    label a file is entitled to hold.
+    """
+    (session_dir / "inputs" / "odd.csv").write_text(
+        "name,n\nal\tpha,5\n", encoding="utf-8"
+    )
+
+    said = on_backend(tools["bar_chart"], handed, file_path="/inputs/odd.csv")
+
+    data = _saved(handed, "/outputs/chart.svg")
+    assert data is not None
+    labels = [one.text for one in ElementTree.fromstring(data).iter(  # noqa: S314
+        "{http://www.w3.org/2000/svg}text"
+    )]
+    assert "al\tpha" in labels
+    assert "cannot carry" not in said
+
+
 def test_the_filter_keeps_exactly_the_rows_whose_cell_equals_the_value(tools, handed, session_dir):
     """A match by prefix or by case keeps a row nobody asked for, a short row read past
     its end stops the export, and an export is believed without being read.

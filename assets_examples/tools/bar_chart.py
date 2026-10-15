@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import csv
 import io
+import math
+from dataclasses import dataclass
 from html import escape
 from pathlib import PurePosixPath
 
@@ -34,6 +36,13 @@ LONGEST = 400
 TOP = 36
 
 KB = 1024
+
+#: What XML 1.0 admits below a space, and it is only these three. Everything else in
+#: that range cannot appear in a well-formed document at all -- not escaped, not as a
+#: character reference -- so a cell carrying one has to lose it before anything is
+#: written. `escape` does not: it handles the markup characters and no more.
+ALLOWED_CONTROLS = (0x09, 0x0A, 0x0D)
+UNDRAWABLE = dict.fromkeys(c for c in range(0x20) if c not in ALLOWED_CONTROLS)
 
 
 #: What one call reads. A backend hands a file back whole, into kingfisher's own
@@ -66,15 +75,35 @@ def _size(count: int) -> str:
     return f"{count / KB / KB:.1f} MB"
 
 
-def _bars(file_path: str, text: str) -> tuple[str, list[tuple[str, str, float]], int]:
-    """The chart's title, each bar as `(label, number as written, number)`, and how
-    many rows had no number to draw.
-    """
+@dataclass(frozen=True)
+class _Chart:
+    """What the drawing needs, read off the file."""
+
+    title: str
+    #: Each bar as `(label, number as written, number)`.
+    bars: list[tuple[str, str, float]]
+    #: Rows that had no number in their second column.
+    skipped: int
+    #: Cells that lost a character an SVG cannot carry.
+    scrubbed: int
+
+
+def _bars(file_path: str, text: str) -> _Chart:
+    """Read the file into a title, the bars, and what could not be drawn as written."""
     rows = [row for row in csv.reader(io.StringIO(text, newline="")) if row]
     if not rows or len(rows[0]) < 2:  # noqa: PLR2004 -- a label and a number
         msg = f"{file_path}: needs a header row naming two columns, a label and a number"
         raise ValueError(msg)
     header, *body = rows
+    scrubbed = 0
+
+    def drawable(cell: str) -> str:
+        nonlocal scrubbed
+        kept = cell.strip().translate(UNDRAWABLE)
+        scrubbed += kept != cell.strip()
+        return kept
+
+    title = f"{drawable(header[1])} by {drawable(header[0])}"
     bars: list[tuple[str, str, float]] = []
     skipped = 0
     for row in body:
@@ -89,11 +118,23 @@ def _bars(file_path: str, text: str) -> tuple[str, list[tuple[str, str, float]],
         if number < 0:
             msg = f"{file_path}: {row[0]!r} is {written}, and a bar chart draws from zero"
             raise ValueError(msg)
-        bars.append((row[0].strip(), written, number))
+        # A bar's length is its number over the longest, so one that is not finite has
+        # no length of its own and takes every other bar's away with it: measured, one
+        # `inf` row wrote `width="nan"` for itself and scaled every other bar to zero,
+        # over an answer saying it had drawn them. `nan` passes the test above, and
+        # `1e400` arrives here as `inf`, which is why this reads the number and not
+        # the spelling.
+        if not math.isfinite(number):
+            msg = (
+                f"{file_path}: {row[0]!r} is {written}, and a bar needs a finite length "
+                f"-- every other bar is drawn as a share of the longest"
+            )
+            raise ValueError(msg)
+        bars.append((drawable(row[0]), written, number))
     if not bars:
         msg = f"{file_path}: no row has a number in its second column, so there is nothing to draw"
         raise ValueError(msg)
-    return f"{header[1].strip()} by {header[0].strip()}", bars, skipped
+    return _Chart(title, bars, skipped, scrubbed)
 
 
 def _svg(title: str, bars: list[tuple[str, str, float]]) -> str:
@@ -137,20 +178,22 @@ def bar_chart(
     `save_as` is where the chart is saved, a full virtual path such as
     `/scratchpad/try1.svg`; leave it out for `/outputs/chart.svg`.
     """
-    title, bars, skipped = _bars(file_path, _fetched(runtime, file_path).decode("utf-8-sig"))
-    drawn = bars[:MAX_BARS]
-    data = _svg(title, drawn).encode("utf-8")
+    chart = _bars(file_path, _fetched(runtime, file_path).decode("utf-8-sig"))
+    drawn = chart.bars[:MAX_BARS]
+    data = _svg(chart.title, drawn).encode("utf-8")
 
     (sent,) = runtime.context.backend.upload_files([(save_as, data)])
     if sent.error:
         msg = f"not saved to {save_as}: {sent.error}"
         raise OSError(msg)
 
-    note = f"bar chart of {title}, {len(drawn)} bars"
-    if len(bars) > MAX_BARS:
-        note += f", the first {MAX_BARS} of {len(bars)}"
-    if skipped:
-        note += f", {skipped} row(s) with no number left out"
+    note = f"bar chart of {chart.title}, {len(drawn)} bars"
+    if len(chart.bars) > MAX_BARS:
+        note += f", the first {MAX_BARS} of {len(chart.bars)}"
+    if chart.skipped:
+        note += f", {chart.skipped} row(s) with no number left out"
+    if chart.scrubbed:
+        note += f", {chart.scrubbed} cell(s) drawn without a character an SVG cannot carry"
     name = PurePosixPath(save_as).name
     return f"Saved {name} (SVG image, {_size(len(data))}) to {save_as} — {note}"
 

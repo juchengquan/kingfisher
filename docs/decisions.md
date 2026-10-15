@@ -2433,6 +2433,55 @@ entry above justified 500 on time, said nothing about memory, and memory was the
 cost. pypdf, which `pdf_pages` uses, needed nothing: 2,000 pages copied in 0.16s and 109
 MB, measured before changing anything. *(2026-10-14, from an architecture review.)*
 
+**Three shipped tools answered wrongly about a file a real deployment holds, and the
+bound was never the one the row count suggested.** Each was found by handing the tool
+the input, not by reading it.
+
+**`csv_profile` merged two columns that share a name.** Its cells were gathered into a
+dict keyed by the header's names, so `region,sales,region` appended both columns into
+one list: two rows reported four filled cells and four distinct values, a column half
+empty reported a quarter missing, and the line was printed once per spelling with
+nothing to tell the two apart -- while `csv_columns`, reading the same header, listed
+all three. Gathered by position now, and a repeated name carries the column number the
+file gave it, because the file is the only place that distinction lives. The same loop
+counts the rows that are not the header's width: a row with a cell past it lost that
+cell in silence, under an answer saying the file was rectangular.
+
+**`bar_chart` wrote files no viewer can open, and said it had saved a chart.** Two
+ways. `inf` passed the negative check, so it became the longest bar and every other
+bar's length was `n/inf` -- `width="nan"` for itself and `0.0` for all the rest, over
+an answer reporting two bars drawn. `nan` and `1e400` arrive the same way, which is why
+the guard reads the number rather than its spelling, and refuses it exactly as a
+negative one is refused: a bar is a share of the longest, and neither has a length. The
+other way was `escape`, which handles markup and nothing else: a NUL or a vertical tab
+in a cell went into the SVG untouched, and XML 1.0 admits only tab, newline and
+carriage return below a space -- so the saved file was not well-formed and the answer
+said `Saved chart.svg (SVG image, 335 B)`. Those characters are dropped before anything
+is written, and the answer counts the cells that lost one.
+
+**`sql_query` bounded rows and nothing else.** `MAX_ROWS` is 200, and that is a bound
+on rows: `SELECT b.a FROM big b, t LIMIT 200` against a 20 MB database obeyed it and
+returned a 4,000,000,200-character answer -- 30 seconds and 3.3 GB of resident memory.
+It also had no bound at all on time, and a tool runs on the turn's thread: a three-way
+join over a 1,000-row table takes 49 seconds, and a fourth table about 14 hours that
+nothing can interrupt. Both are held now, and `docs/guides/tools.md` has the reasoning
+under *A tool that runs a query*. The time bound is SQLite's progress handler, which is
+the one thing here that can stop work already under way -- free, measured, and reported
+in words naming the bound, because `OperationalError: interrupted` names neither it nor
+the fix. The width bound is one number used twice: rows stop when the answer reaches it
+and say so in a marked `--` line, and a single value past it is refused by column name
+with `substr` suggested, since the model can ask for that column narrower. Read per
+value before the conversion, and a row at a time rather than `fetchmany`, because that
+is where the memory went.
+
+**Not changed: `WITH` is still refused.** The guard admits a statement starting
+`select`, so a common table expression -- read-only, and a SELECT in every practical
+sense -- comes back as "only SELECT statements are permitted". That is why the
+unbounded-time case above had to be a plain join; a recursive CTE never reached the
+database. The time bound would make admitting `WITH` safe, but it widens what the tool
+grants and that is its own decision, not a thing to ride along with a fix.
+*(2026-10-15, from an architecture review.)*
+
 ## What a turn's tools returned
 
 **Every tool result the model is handed is recorded, kept as a file and given an id,
