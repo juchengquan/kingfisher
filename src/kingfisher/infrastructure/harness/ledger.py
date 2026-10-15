@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from collections import Counter
 from dataclasses import replace
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
@@ -131,8 +132,16 @@ def _repointed(files: Any, entries: tuple[LedgerEntry, ...]) -> Steps[tuple[Ledg
     which keeps our own copy -- the safe direction, since our copy is this call's whole
     result either way.
 
-    Still never twice onto one path, which the size alone does not settle: two results
-    of one length under one id -- the same tool called twice -- would each match.
+    **On a tie, neither.** The size does not settle two results of one length under one
+    id -- the same tool called twice -- and nothing here can: the listing carries a
+    name and a length, and both rows have both. Taking the first was measured pointing
+    a row that records `subject='one'` at the bytes of `subject='two'`, with the `one`
+    result then swept and gone from the session altogether, under a row still carrying
+    its size and its summary. `system.md` tells the model to read that file back rather
+    than call the tool again, so what it reads is another call's answer with nothing
+    saying so. Neither row claiming it keeps both results, each whole, in our own
+    copies -- the direction the no-size case above already takes, and for the same
+    reason: our copy is this call's whole result either way.
 
     It took the paths earlier rows named as well, until the size made that redundant:
     a row from a previous turn and a row from this one cannot both match a file one of
@@ -150,18 +159,21 @@ def _repointed(files: Any, entries: tuple[LedgerEntry, ...]) -> Steps[tuple[Ledg
         for one in listing.entries or ()
         if not one.get("is_dir")
     }
-    taken: set[str] = set()
-    pointed: list[LedgerEntry] = []
-    for entry in entries:
+    def claimed(entry: LedgerEntry) -> str | None:
+        """The offloaded file this row is the length of, or `None` for no match."""
         name = sanitize_tool_call_id(entry.call)
-        where = f"{under}{name}"
-        kept_whole = entry.size + len(f"\n[{entry.id}]")
-        if offloaded.get(name) == kept_whole and where not in taken:
-            taken.add(where)
-            pointed.append(replace(entry, path=where))
-        else:
-            pointed.append(entry)
-    return tuple(pointed)
+        whole = entry.size + len(f"\n[{entry.id}]")
+        return f"{under}{name}" if offloaded.get(name) == whole else None
+
+    # Counted over the whole turn before any row is pointed, because the tie is the
+    # question "how many rows could this be" and a row cannot answer it alone.
+    claims = Counter(where for entry in entries if (where := claimed(entry)) is not None)
+    return tuple(
+        replace(entry, path=where)
+        if (where := claimed(entry)) is not None and claims[where] == 1
+        else entry
+        for entry in entries
+    )
 
 
 def _swept(files: Any, named: frozenset[str] | set[str]) -> Steps[None]:
