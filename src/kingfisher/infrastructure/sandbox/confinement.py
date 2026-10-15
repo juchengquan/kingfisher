@@ -272,7 +272,7 @@ def shell_confinement(cfg: Config, *, skills: tuple[Path, ...] | None = None) ->
 
 
 #: The mechanisms that keep the shell out of `.harness` on kingfisher's own authority:
-#: `_harness_denial` in the macOS profile, the read-only bind in `bubblewrap.py`, and
+#: `_session_folder_denial` in the macOS profile, the read-only bind in `bubblewrap.py`, and
 #: Landlock granting each session directory but never the session itself.
 FENCES_HARNESS = (SANDBOX_EXEC, BUBBLEWRAP, LANDLOCK)
 
@@ -388,7 +388,7 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     # rename-over are all `file-write*` against this name, and rename-over is
     # the one a `subpath` deny on the parent directory would have been reached
     # for to catch.
-    # Before the `itself` and `_harness_denial` denies, so those stay the last matching
+    # Before the `itself` and `_session_folder_denial` denies, so those stay the last matching
     # rules for their own paths. This denies writes to the `sessions/` directory node,
     # and each session's folder node -- the directories above a `.harness` that the
     # regex guards it by position. Without it the shell could rename an enclosing
@@ -431,7 +431,7 @@ def fenced_sessions(workspace: Path) -> Path:
 def _sessions_denial(workspace: Path) -> str:
     """Deny writes to the directories a `.harness` is guarded by the position of.
 
-    `_harness_denial` matches `.harness` by where it sits under `sessions/`, so an
+    `_session_folder_denial` matches `.harness` by where it sits under `sessions/`, so an
     enclosing directory that moves takes `.harness` to a path the pattern no longer
     reaches. The folders between the workspace and a `.harness` are `sessions/` and each
     `sessions/<id>/`; the workspace root itself cannot be renamed, its parent being
@@ -693,7 +693,7 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
         profile,
         home=home,
         # Named separately from the writable roots it is usually the first
-        # of: `_harness_denial` builds a pattern under it, which needs the
+        # of: `_session_folder_denial` builds a pattern under it, which needs the
         # workspace itself rather than whatever happens to be writable.
         workspace=workspace,
         readable=readable_roots(workspace, extra, skills),

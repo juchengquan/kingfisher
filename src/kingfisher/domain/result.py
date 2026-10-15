@@ -135,7 +135,7 @@ class RunResult:
     deletion_failure: str | None = None
     #: What this turn stopped to ask, empty for every turn that stopped for another
     #: reason. Non-empty exactly when `stop_reason` is `awaiting_decision`, and the
-    #: session is still there to resume into -- `_drained` declines to delete a turn
+    #: session is still there to resume into -- `_drained_steps` declines to delete a turn
     #: that did not complete, so `delete_session=True` already keeps it.
     pending: tuple[PendingDecision, ...] = ()
     #: A gate that stopped being a gate: the tools an unanswered turn was waiting on

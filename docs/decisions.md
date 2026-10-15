@@ -239,9 +239,13 @@ kind existed, under a comment promising each root "separately relocatable by its
 own environment variable", and no caller ever passed it -- no variable read, no
 field on `WorkspacePaths` or `Config`, and neither call site forwarding. Nothing
 went red, because nothing ran from the kinds to the settings that move them.
-`KINGFISHER_MIDDLEWARES_DIR` closes it, and
-`test_every_definition_kind_relocates_by_its_own_variable` drives all five so a
-sixth kind cannot arrive the same way.
+`KINGFISHER_MIDDLEWARES_DIR` closed it, and a rule drove all five so a sixth kind
+could not arrive the same way. Both went a fortnight later, with the settings
+themselves -- see *Definitions have a folder of their own, apart from the workspace*
+below, where every kind lives in one folder and the five per-kind variables are
+refused. What this entry is still about is the other half: a kind the settings could
+not reach was a kind nothing moved, and nothing ran from the kinds to the settings to
+say so.
 
 **The name comes from the class**, the way a tool's comes from the tool.
 `AgentMiddleware.name` is a *property* answering the class's own name, so
@@ -344,12 +348,13 @@ folder an earlier start left behind is kept, empty or not: the layout runs on ev
 start, and deleting an operator's directory is not its call. No version bump here
 either, for the same reason as before.
 
-`test_the_layout_names_every_kind_a_catalogue_reads` drives the layout rather than
-reading the tuple, which no longer has a kind in it to check, and holds
-`LAYOUT_DIRS` to the directories that are not kinds.
-`test_the_layout_and_the_first_read_make_the_same_folders` moves every kind and
-asserts the first read makes nothing the layout did not. *(2026-09-24, from an
-architecture review; each kind where its setting points, 2026-10-07.)*
+Two rules held it: one drove the layout rather than reading the tuple, which no longer
+had a kind in it to check, and held `LAYOUT_DIRS` to the directories that are not
+kinds; the other moved every kind and asserted the first read made nothing the layout
+did not. Both went with the per-kind settings they moved -- *Definitions have a folder
+of their own, apart from the workspace* below -- and `LAYOUT_DIRS` naming no kind is
+the part that survived them. *(2026-09-24, from an architecture review; each kind where
+its setting points, 2026-10-07; the settings themselves removed 2026-10-13.)*
 
 **The mass noun stays wherever it is still a mass noun.** `middlewares` names the
 kind -- a directory, a field, a key, a table row. `MiddlewareRepository`,
@@ -860,7 +865,7 @@ than reasoned about, because both answers agreed and nothing was ever wrong --
 measured at two calls, two snapshot reads and two parses per turn under a policy,
 one of each without.
 
-`_admitted` resolves it and hands it to both readers, so `_graph_for` takes the spec
+`_claimed` resolves it and hands it to both readers, so `_graph_for` takes the spec
 rather than deriving it, along with the source ids it was also resolving a second
 time. Both are required keywords: this method has one caller in `src/`, and a
 default meaning "work it out yourself" would have been a branch alive only in tests.
@@ -1208,7 +1213,7 @@ middleware name got no such exemption because it selects code the deployment wro
 *(2026-08-18, `agents-as-definitions.md`, and the middleware work of 2026-08-31.)*
 Uploads were removed on 2026-09-16, and nothing widens now.
 
-**And a turn is built inside the ceiling, which nothing checked.** `_admitted`
+**And a turn is built inside the ceiling, which nothing checked.** `_claimed`
 narrows the deployment's grants by what the request asked for and hands the result
 to the build. Handing the request's own capabilities instead -- one line -- let a
 caller reach a workspace tool the deployment never granted, and the whole suite
@@ -2417,6 +2422,14 @@ beside it -- `assert len(...) >= 2` against nine -- is gone: that is the shape t
 before had deleted from `test_shipped_assets.py` with the reason written out.
 *(2026-10-15, from an architecture review.)*
 
+**And the CSV ratio was true of one row shape, said as though it held generally.**
+"About nine times the file" is what 32 MB of two-column rows cost. The ratio is to the
+*cells* the sample gathers, not to the bytes: the same 32 MB over 4,000 columns peaks at
+**998 MB**, thirty times the file -- 16.8 million Python strings at about 50 bytes of
+object before the first character, so a one-character cell costs fifty times its own
+size. A cap in bytes is still worth having, a gigabyte being survivable where unbounded
+is not; it is not a prediction. *(2026-10-15, from an architecture review.)*
+
 **Bytes were the wrong bound for the PDF, and measuring showed it.** For a CSV they
 track the cost -- 32 MB of rows peaked at 358 MB of RSS, 188 MB at 1.8 GB, about nine
 times the file. For a PDF they do not: 1.6 MB of dense pages peaked at **1,655 MB**,
@@ -3110,7 +3123,7 @@ are a `file-write*` against the name, the same reading the profile's own rule re
 and `$` ends the pattern at the node so the session's own folders stay writable --
 measured, the session still makes, renames and removes its own directories, and a new
 session is the harness's to lay down, unconfined, not the shell's. The depth differs by
-layout as `_harness_denial`'s does: with one session the session is `sessions/` and its
+layout as `_session_folder_denial`'s does: with one session the session is `sessions/` and its
 work sits at `sessions/<dir>`, so only `sessions` is named; with many, a session is
 `sessions/<id>` and its work a level deeper, so both are.
 
@@ -3465,7 +3478,7 @@ resumes into a checklist it does not remember writing.
 
 What that file is, is a consequence of where it lives. `.harness` is refused to
 the file tools, but `execute` bypasses those entirely and what refuses the shell
-is `confinement._harness_denial` -- a macOS profile, on one platform, that a
+is `confinement._session_folder_denial` -- a macOS profile, on one platform, that a
 deployment can switch off. So the checkpoint is msgpack through langgraph's own
 serialiser, which neither writes nor reads a pickle. That is also why it is not
 `InMemorySaver(factory=PersistentDict)`, the persistence seam langgraph ships
@@ -3490,7 +3503,7 @@ said *"which agent this turn's graph was built from"* all along; it was filled f
 request.
 
 The rule that was supposed to hold this passed throughout, and the reason is worth
-keeping: it ran on an injected graph under no policy, where `_admitted` resolves no
+keeping: it ran on an injected graph under no policy, where `_claimed` resolves no
 agent at all. With nothing recorded, "a resume naming a *different* agent" was refused
 the same way every name was -- so the rule passed for the correct name too. It is driven
 on a session with a pinned agent now, and the accepting half it never had sits beside it.
@@ -6026,7 +6039,7 @@ trailing slash. Written once and shared, a change for one kind would have to be
 argued past the other two. *(Subagents have since taken the tools' `split_reference`,
 so two ways remain.)* The duplication is the price of each kind changing on
 its own, and it is the point rather than an oversight. What stays shared is the
-vocabulary of *grants* -- `SEPARATOR` and `_bare` in `domain.capabilities` --
+vocabulary of *grants* -- `SEPARATOR` and `bare_name` in `domain.capabilities` --
 because a grant is spelled the same way whatever it names.
 
 **Reversed to get there: "the domain imports only the standard library and
@@ -6681,6 +6694,35 @@ see this change at all: deleting every line of prose in the repository passes
 `ruff`, `ty` and `pytest`. The floor is the keep-test applied while editing, not
 a check afterwards.
 
+**Sixteen citations repaired on 2026-10-15, and the rule for them declined a second
+time.** What the sweep three days earlier left: `_harness_denial` was named from five
+comments and two entries after the function became `_session_folder_denial` -- four of
+those five comments are in the module that renamed it, which is the worst version of
+this, a reader sent nowhere by the file they are reading. `_bare` outlived its rename to
+`bare_name`; `_admitted` outlived its split into `_claimed` and `_built_turn` in four
+places; `_drained` outlived its rename to `_drained_steps`; and three layout rules were
+still cited as holding something, having gone with the per-kind settings they moved --
+those entries now point at *Definitions have a folder of their own* and say what
+survived them. `test_tools_that_read_a_file.py` said "the seven" in one docstring and
+"Nine copies" in another, against nine; the count is gone rather than corrected, which
+is what `FETCHES_A_FILE` beside it is for.
+
+A rule was built for this and dropped, which is the second time the argument has been
+measured and the first time against *definition* names rather than module paths. The
+numbers are better and still not better enough. 307 citations of a `test_*` or a
+`_private` name, 211 distinct: 275 resolve here, 16 resolve upstream in the two places
+whose subject is upstream -- `findings.md` and `src/` comments, which name
+`_tool_error` and `_compile_spec` because deepagents' shape is why this code has the
+shape it has -- and 16 are the record deliberately naming something gone, since an
+entry about a deletion has to say what was deleted. Sixteen true against sixteen that
+need pinning by hand, where the module-path rule measured two against ten. Against it:
+the pinned set grows every time an entry records a removal, so the rule taxes the
+writing it is meant to protect; and resolving the names costs a walk of
+`site-packages`, which took one test file from 0.8s to 6.3s. What settles it is the
+same thing that settled the first attempt -- these sixteen are now correct, and a rule
+whose whole yield is a list of things already fixed is a rule bought at the price of
+every future entry about a deletion. The discipline stays the guard.
+
 ## The size of the test suite
 
 **Rejected: cutting the suite substantially. There is nothing redundant in it to
@@ -7224,7 +7266,7 @@ them would not weaken the tests, it would delete them. So a build kingfisher mad
 comes back as `Assembled` and a graph the deployment supplied comes back as itself.
 Returning the record for both would mean inventing one with every field empty -- a
 record asserting a build that never ran, and one that would then be asserted on.
-`_admitted` is the only caller in `src/` and unwraps with `isinstance`, not
+`_built_turn` is the only caller in `src/` and unwraps with `isinstance`, not
 `getattr(x, "graph", x)`: a duck test there would accept anything carrying a `graph`
 attribute, which is how the backend seam lost its shell once already.
 

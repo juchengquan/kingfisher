@@ -26,7 +26,7 @@ def build_session_checkpointer() -> BaseCheckpointSaver:
 #: Which is why this is not `InMemorySaver(factory=PersistentDict)`, the persistence
 #: seam langgraph ships and the obvious thing to reach for -- it is unconditionally
 #: pickle. `.harness` is denied to the file tools, but `execute` bypasses those
-#: entirely, and what refuses the shell is `confinement._harness_denial`: a macOS
+#: entirely, and what refuses the shell is `confinement._session_folder_denial`: a macOS
 #: profile, on one platform, that a deployment can switch off. A tampered msgpack
 #: checkpoint is bad graph state. A tampered pickle is arbitrary code at resume.
 _SERDE = JsonPlusSerializer()
