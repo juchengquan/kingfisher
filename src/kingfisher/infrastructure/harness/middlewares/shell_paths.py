@@ -10,7 +10,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool
 
-from kingfisher.layout import INPUTS, SESSION_DIRS
+from kingfisher.layout import DEFAULT_LAYOUT, INPUTS, SESSION_DIRS, Layout
 
 EXECUTE = "execute"
 
@@ -21,23 +21,38 @@ ABSOLUTE = (
     "optional timeout to override the default."
 )
 
-#: What replaces it. In the description rather than the system prompt because a
-#: subagent is built with its own prompt and none of `system.md`, and the description
-#: reaches every graph holding the shell.
-RULE = (
-    "- The shell starts in the session root, the directory the file tools call `/`. A "
-    "file-tool path is a shell path without its leading slash -- "
-    f"`/{INPUTS}/data.csv` is `{INPUTS}/data.csv` -- on the command line and inside "
-    "any script the command runs. Avoid `cd`, so that stays true; use the optional "
-    "timeout to override the default."
-)
 
-#: A session folder spelt as the file tools spell it, and not as the tail of a longer
-#: path: `/inputs` in `/Users/me/sessions/s/inputs` is a host path, and a right one.
-_VIRTUAL = re.compile(
-    rf"(?<![\w.~/-])/(?:{'|'.join(map(re.escape, SESSION_DIRS))})(?=[/\s'\"`:,;)]|$)"
-    r"[^\s'\"`:,;)]*"
-)
+def _rule(inputs: str) -> str:
+    """deepagents' `ABSOLUTE` line, replaced, naming this layout's inputs leaf.
+
+    In the description rather than the system prompt because a subagent is built with
+    its own prompt and none of `system.md`, and the description reaches every graph
+    holding the shell.
+    """
+    return (
+        "- The shell starts in the session root, the directory the file tools call `/`. A "
+        "file-tool path is a shell path without its leading slash -- "
+        f"`/{inputs}/data.csv` is `{inputs}/data.csv` -- on the command line and inside "
+        "any script the command runs. Avoid `cd`, so that stays true; use the optional "
+        "timeout to override the default."
+    )
+
+
+def _virtual(session_dirs: tuple[str, ...]) -> re.Pattern[str]:
+    """A regex matching one of this layout's session folders spelt as the file tools
+    spell it, and not as the tail of a longer path: `/inputs` in
+    `/Users/me/sessions/s/inputs` is a host path, and a right one.
+    """
+    return re.compile(
+        rf"(?<![\w.~/-])/(?:{'|'.join(map(re.escape, session_dirs))})(?=[/\s'\"`:,;)]|$)"
+        r"[^\s'\"`:,;)]*"
+    )
+
+
+#: The default-layout rule and matcher, which is what the module exports and what a test
+#: importing `RULE` or `missed` reads; a renamed layout builds its own on the instance.
+RULE = _rule(INPUTS)
+_VIRTUAL = _virtual(SESSION_DIRS)
 
 #: What a shell, `python` and the usual tools say of a path they could not use. A
 #: refusal counts as a miss: a file-tool path the fence stops is still the wrong path.
@@ -53,14 +68,15 @@ _MISSING = (
 )
 
 
-def missed(output: str) -> str | None:
+def missed(output: str, virtual: re.Pattern[str] = _VIRTUAL) -> str | None:
     """The first file-tool path the shell reported missing in `output`, if any.
 
     Both on one line, so a path the command printed and an unrelated miss elsewhere in
-    its output are not read as one.
+    its output are not read as one. `virtual` defaults to the default layout's matcher;
+    `ShellPaths` passes the configured layout's.
     """
     for line in output.splitlines():
-        if any(said in line for said in _MISSING) and (found := _VIRTUAL.search(line)):
+        if any(said in line for said in _MISSING) and (found := virtual.search(line)):
             return found.group()
     return None
 
@@ -74,28 +90,36 @@ def hint(path: str) -> str:
     )
 
 
-def _described(tool: Any) -> Any:
+def _described(tool: Any, rule: str = RULE) -> Any:
     if isinstance(tool, BaseTool) and tool.name == EXECUTE:
-        return tool.model_copy(update={"description": _ruled(tool.description)})
+        return tool.model_copy(update={"description": _ruled(tool.description, rule)})
     if isinstance(tool, dict) and tool.get("name") == EXECUTE:
-        return {**tool, "description": _ruled(tool.get("description") or "")}
+        return {**tool, "description": _ruled(tool.get("description") or "", rule)}
     return tool
 
 
-def _ruled(description: str) -> str:
+def _ruled(description: str, rule: str = RULE) -> str:
     # Appended when deepagents has reworded its line, so the rule still arrives;
     # `test_every_graph_holding_the_shell_is_told_its_paths_rather_than_absolute_ones`
     # then fails on the advice left beside it, which is the signal to look.
     if ABSOLUTE in description:
-        return description.replace(ABSOLUTE, RULE)
-    return f"{description}\n\n{RULE}"
+        return description.replace(ABSOLUTE, rule)
+    return f"{description}\n\n{rule}"
 
 
 class ShellPaths(AgentMiddleware):
     """State the shell's path rule in `execute`'s description, and again on a miss."""
 
+    def __init__(self, layout: Layout = DEFAULT_LAYOUT) -> None:
+        super().__init__()
+        # Built from the layout so the rule names the configured inputs leaf and the
+        # miss-matcher recognises the configured session folders. The default is the
+        # module's, so a graph built without a layout reads exactly as it always did.
+        self._rule = _rule(layout.inputs)
+        self._virtual = _virtual(layout.session_dirs)
+
     def _told(self, request: Any) -> Any:
-        tools = [_described(tool) for tool in request.tools]
+        tools = [_described(tool, self._rule) for tool in request.tools]
         if all(new is old for new, old in zip(tools, request.tools, strict=True)):
             return request
         return request.override(tools=tools)
@@ -103,7 +127,9 @@ class ShellPaths(AgentMiddleware):
     def _corrected(self, request: Any, result: Any) -> Any:
         if request.tool_call.get("name") != EXECUTE or not isinstance(result, ToolMessage):
             return result
-        if not isinstance(result.content, str) or (path := missed(result.content)) is None:
+        if not isinstance(result.content, str):
+            return result
+        if (path := missed(result.content, self._virtual)) is None:
             return result
         return result.model_copy(update={"content": f"{result.content}\n\n{hint(path)}"})
 

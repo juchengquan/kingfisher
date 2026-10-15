@@ -9,6 +9,7 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.tools import BaseTool, StructuredTool, ToolException
 
+from kingfisher.config import DEFAULT_LAYOUT
 from kingfisher.domain.references import UnsafeReferenceError
 from kingfisher.infrastructure.harness.host_paths import HostPathError
 from kingfisher.infrastructure.harness.middlewares.host_path_guard import HostPathGuard
@@ -20,12 +21,14 @@ from kingfisher.infrastructure.harness.middlewares.workspace_tools import (
     WorkspaceToolPaths,
 )
 from kingfisher.infrastructure.harness.session_paths import SessionPaths, refusal_text
+from kingfisher.layout import Layout
 
 
 def tool_guards(
     names: frozenset[str],
     paths: SessionPaths | None,
     recorder: Recorder | None = None,
+    layout: Layout = DEFAULT_LAYOUT,
 ) -> list[AgentMiddleware]:
     """What every graph holding workspace tools gets wrapped in, built once.
 
@@ -53,7 +56,7 @@ def tool_guards(
     guards: list[AgentMiddleware] = [] if recorder is None else [recorder]
     guards.append(HostPathGuard())
     guards.append(LargePdfGuard())
-    guards.append(ShellPaths())
+    guards.append(ShellPaths(layout))
     if names:
         # Beside each other and in this order, which the subagent's stack is pinned to:
         # both are about a workspace tool call, and the translation rewrites the
@@ -98,7 +101,7 @@ class GuardedTool(BaseTool):
         try:
             return self.paths.translated(kwargs)
         except (UnsafeReferenceError, HostPathError) as escaped:
-            raise ToolException(refusal_text(escaped)) from escaped
+            raise ToolException(refusal_text(escaped, self.paths)) from escaped
 
     def _as_tool_call(self, args: dict[str, Any]) -> dict[str, Any]:
         """The call form, which is the only one that carries an artifact back.

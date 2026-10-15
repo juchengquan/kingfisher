@@ -64,7 +64,7 @@ class WorkspaceToolPaths(AgentMiddleware):
         """A path that climbs out, reported the way `reject_host_path` reports one."""
         call = request.tool_call
         return ToolMessage(
-            content=refusal_text(escaped),
+            content=refusal_text(escaped, self.paths),
             tool_call_id=call.get("id", ""),
             name=call.get("name"),
             status="error",

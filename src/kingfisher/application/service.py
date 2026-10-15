@@ -995,7 +995,9 @@ class Kingfisher(Sessions, Disposal):
             # A resume adds no message: it continues a superstep that already has
             # everything it needs, and a new user turn appended there would be one
             # the model never saw asked.
-            message=turn_message(asked, placement.placed, earlier) if asked else "",
+            message=turn_message(asked, placement.placed, earlier, layout=self.cfg.layout)
+            if asked
+            else "",
             session=session,
             turn=turn,
             logger=logger,

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.result import LedgerEntry, PendingDecision, RunEvent
 from kingfisher.infrastructure.harness import runtime
-from kingfisher.layout import INPUTS_ROUTE, SCRATCH, SCRATCH_ROUTE
+from kingfisher.layout import DEFAULT_LAYOUT, Layout
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -88,17 +88,22 @@ class Prepared:
 
 
 def turn_message(
-    task: str, placed: tuple[str, ...], earlier: KeptLedger | None = None
+    task: str,
+    placed: tuple[str, ...],
+    earlier: KeptLedger | None = None,
+    *,
+    layout: Layout = DEFAULT_LAYOUT,
 ) -> str:
     """The task, plus this turn's facts and nothing more.
 
     `earlier` is the ledger as the turn found it, or `None` for a graph the deployment
     supplied, which records nothing and need not have kingfisher's prompt to explain it.
+    `layout` names the session folders for this deployment; the service passes its own.
     """
     # Named because `/inputs` changed under a session the agent may already have
     # looked at. It is also where a caller's files for *this* request land now --
     # they used to have a turn directory of their own, and this line said where.
-    arrived = f" New files in {INPUTS_ROUTE}: {', '.join(placed)}." if placed else ""
+    arrived = f" New files in {layout.inputs_route}: {', '.join(placed)}." if placed else ""
     # Here and never in the system prompt, which is the cached prefix: a line that
     # changes every turn there would miss the cache on every call.
     shown = ledger_shown(earlier) if earlier is not None else ""
@@ -115,7 +120,7 @@ def turn_message(
     # about which directory it was being handed.
     return (
         f"{task}\n\n"
-        f"{SCRATCH_ROUTE} is yours to work in (from the shell, {SCRATCH})."
+        f"{layout.scratch_route} is yours to work in (from the shell, {layout.scratchpad})."
         f"{arrived}"
         f"{ledger}"
     )

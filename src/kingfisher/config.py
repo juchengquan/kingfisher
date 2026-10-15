@@ -10,7 +10,7 @@ from types import MappingProxyType
 from typing import Any
 
 from kingfisher.domain.access import SourceIds
-from kingfisher.layout import Layout
+from kingfisher.layout import DEFAULT_LAYOUT, Layout
 
 #: The frozen default for an `extra` mapping. Shared with `Adapter.extra`
 #: rather than written twice: both spread into one `build_model` call and carry
@@ -19,10 +19,6 @@ from kingfisher.layout import Layout
 #: reason alone: an empty mapping cannot drift, so this buys visibility of the
 #: pairing rather than safety.
 NO_EXTRA: Mapping[str, Any] = MappingProxyType({})
-
-#: The session folder names a deployment did not rename -- the names kingfisher has
-#: always used. One shared frozen instance, for `NO_EXTRA`'s reason.
-DEFAULT_LAYOUT = Layout()
 
 #: A deployment's skills mounts when it names none: frozen, for `NO_EXTRA`'s reason.
 NO_MOUNTS: Mapping[str, Path] = MappingProxyType({})

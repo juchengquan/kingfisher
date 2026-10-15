@@ -402,7 +402,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # before the rules are finished, and it reads them when it checks, so what is added
     # below -- memory declined, skills narrowed -- applies to both.
     under_rules = PermittedBackend(backend, permissions)
-    paths = SessionPaths(under_rules, sessions_root(cfg.workspace))
+    paths = SessionPaths(under_rules, sessions_root(cfg.workspace), cfg.layout)
 
     def recording(definition: object | None) -> Recorder | None:
         """A recorder for one graph, reading access off `definition`'s audiences.
@@ -422,7 +422,10 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         audiences = Audiences.of(definition) if cfg.access is not None else None
         return Recorder(ledger, backend, audiences, cfg.layout.tool_results_route)
 
-    middleware: list[Any] = [TodoListMiddleware(), *tool_guards(guarded, paths, recording(agent))]
+    middleware: list[Any] = [
+        TodoListMiddleware(),
+        *tool_guards(guarded, paths, recording(agent), cfg.layout),
+    ]
     extras: dict[str, Any] = {}
 
     # One answer to "are skills on", for this agent and for every subagent it
@@ -770,7 +773,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             "middleware": (
                 # The agent's recorder too: these are the agent's tools, offered under
                 # the agent's audiences.
-                tool_guards(guarded, paths, recording(agent))
+                tool_guards(guarded, paths, recording(agent), cfg.layout)
                 + ([ToolAllowlist(permitted)] if permitted is not None else [])
                 + _deployment_middleware(
                     agent, registry, capabilities.middlewares, provisions=agent_provisions

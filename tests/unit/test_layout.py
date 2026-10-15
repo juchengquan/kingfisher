@@ -144,6 +144,50 @@ def test_the_memory_helpers_name_the_renamed_folder():
 # -- the backend mounts the renamed routes -------------------------------------
 
 
+# -- the correction fragments the model reads on a misstep follow the layout ---
+
+
+def test_the_shell_path_rule_and_matcher_follow_a_renamed_layout():
+    """`ShellPaths` states the shell rule in `execute`'s description and spots a missed
+    file-tool path in its output. Both name session folders, so both move with them.
+    """
+    from kingfisher.infrastructure.harness.middlewares.shell_paths import (
+        _rule,
+        _virtual,
+        missed,
+    )
+
+    assert "`/in/data.csv` is `in/data.csv`" in _rule(MOVED.inputs)
+    virtual = _virtual(MOVED.session_dirs)
+    assert missed("python: can't open file '/in/x.py'", virtual) == "/in/x.py"
+    # The default leaf is no longer one it reads as a file-tool path.
+    assert missed("cat: /inputs/x: No such file or directory", virtual) is None
+
+
+def test_a_refused_tool_path_points_at_the_renamed_routes():
+    from kingfisher.infrastructure.harness.session_paths import SessionPaths, refusal_text
+
+    paths = SessionPaths(None, Path("/w/sessions"), MOVED)
+    text = refusal_text(ValueError("nope"), paths)
+    assert "`/in/<name>`" in text
+    assert "`/out/<name>`" in text
+    assert "/inputs/" not in text
+
+
+def test_a_refused_host_path_suggests_the_renamed_scratch(tmp_path):
+    from kingfisher.infrastructure.harness.host_paths import HostPathError, reject_host_path
+
+    workspace = tmp_path
+    session = tmp_path / "sessions" / "s"
+    with pytest.raises(HostPathError, match=r"/scratch/<name>"):
+        reject_host_path(
+            str(workspace / "models.yaml"),
+            workspace,
+            session_dir=session,
+            scratch_route="/scratch/",
+        )
+
+
 def test_backend_at_mounts_and_lays_out_the_renamed_leaves(cfg):
     moved = replace(cfg, layout=MOVED)
     session = _laid_out(moved, MOVED)

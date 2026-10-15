@@ -380,7 +380,9 @@ class WorkspaceScopedBackend(SessionClaims, CompositeBackend):
         self.unprotected: tuple[str, ...] = ()
 
     def _get_backend_and_key(self, key: str) -> tuple[Any, str]:
-        reject_host_path(key, self.workspace, session_dir=self._session_dir)
+        reject_host_path(
+            key, self.workspace, session_dir=self._session_dir, scratch_route=self.artifacts_root
+        )
         return super()._get_backend_and_key(key)
 
 

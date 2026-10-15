@@ -20,10 +20,23 @@ from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from kingfisher.layout import DEFAULT_LAYOUT, Layout
+
 if TYPE_CHECKING:
     from kingfisher.config import Config
 
 BASE_PROMPT = "system.md"
+
+#: `kingfisher.layout` and nothing heavier: the module stays clear of deepagents and the
+#: provider SDKs its docstring is about, and `Layout` carries only strings.
+
+#: A `{{leaf}}` placeholder in the shipped markdown, filled with the layout's name for
+#: that leaf. The prompt is prose with paths woven through it, so a renamed layout is
+#: spliced in by name here rather than by replacing one default path string with
+#: another -- `/scratchpad` is a prefix of `/scratchpad/tool_results`, and a blind
+#: replace would reach the wrong one. The fixed sub-leaves (`large_tool_results`,
+#: `conversation_history`) stay literal: only their parent scratchpad moves.
+_PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
 
 #: Where optional capability sections are spliced in. An HTML comment, so
 #: `system.md` stays a plain Markdown document that renders and edits normally.
@@ -49,6 +62,30 @@ def _prompt_text(name: str) -> str:
     return resources.files("kingfisher.prompts").joinpath(name).read_text(encoding="utf-8")
 
 
+def _filled(name: str, layout: Layout) -> str:
+    """One shipped prompt, with every `{{leaf}}` replaced by the layout's name for it.
+
+    An unknown placeholder is an edit naming a leaf the layout does not have, caught
+    here rather than reaching the model as `{{typo}}`.
+    """
+    names = {
+        "inputs": layout.inputs,
+        "outputs": layout.outputs,
+        "memory": layout.memory,
+        "scratchpad": layout.scratchpad,
+        "tool_results": layout.tool_results,
+    }
+
+    def _one(match: re.Match[str]) -> str:
+        leaf = match.group(1)
+        if leaf not in names:  # pragma: no cover -- guards a bad edit to the markdown
+            msg = f"{name} names an unknown layout leaf {{{{{leaf}}}}}; expected one of {names}"
+            raise ValueError(msg)
+        return names[leaf]
+
+    return _PLACEHOLDER.sub(_one, _prompt_text(name))
+
+
 def memory_guidelines() -> str:
     """The template `MemoryMiddleware` puts the memory file into, `{agent_memory}` and all."""
     return _prompt_text(MEMORY_GUIDELINES)
@@ -57,16 +94,19 @@ def memory_guidelines() -> str:
 #: Enough for a fleet of agents rather than for one deployment. The cache is
 #: keyed on the assembled `extra`, which used to be one workspace's `PROMPT.md`
 #: and is now that plus whichever agent is running -- so the number of distinct
-#: keys is the number of agents a process serves, not one.
+#: keys is the number of agents a process serves, not one. `layout` joins the key
+#: because the paths woven through the prompt are its names: a fleet serving two
+#: layouts must not be handed one layout's prompt for the other's agent.
 @lru_cache(maxsize=32)
 def render_system_prompt(
     *,
     skills_enabled: bool = False,
     memory_enabled: bool = False,
     extra: str = "",
+    layout: Layout = DEFAULT_LAYOUT,
 ) -> str:
     """Assemble the prompt for the capabilities that are actually wired."""
-    base = _prompt_text(BASE_PROMPT)
+    base = _filled(BASE_PROMPT, layout)
     if CAPABILITY_MARKER not in base:  # pragma: no cover -- guards a silent edit
         msg = f"{BASE_PROMPT} is missing the {CAPABILITY_MARKER} marker"
         raise ValueError(msg)
@@ -76,7 +116,7 @@ def render_system_prompt(
         for name, on in (("skills", skills_enabled), ("memory", memory_enabled))
         if on
     ]
-    sections = "\n\n".join(_prompt_text(CAPABILITY_FILES[name]).strip() for name in enabled)
+    sections = "\n\n".join(_filled(CAPABILITY_FILES[name], layout).strip() for name in enabled)
 
     assembled = _joined(base.replace(CAPABILITY_MARKER, sections), extra)
     # Removing the marker leaves a run of blank lines behind; collapse them so
@@ -122,4 +162,5 @@ def system_prompt(cfg: Config | None = None, agent: str = "") -> str:
         skills_enabled=bool(cfg and cfg.skills_enabled),
         memory_enabled=bool(cfg and cfg.memory_enabled),
         extra=behind_deployment(_joined(user_prompt(cfg.workspace if cfg else None), agent), cfg),
+        layout=cfg.layout if cfg else DEFAULT_LAYOUT,
     )

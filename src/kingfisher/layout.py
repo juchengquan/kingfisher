@@ -395,6 +395,14 @@ class Layout:
         return tuple(r.path for r in self.routes if r.routed and not r.family)
 
 
+#: The session folder names a deployment did not rename -- the names kingfisher has
+#: always used. One shared frozen instance, so the many defaults that fall back to it
+#: share one object rather than each constructing a `Layout()` in an argument default,
+#: which the linter refuses. `config` re-exports it for callers that reach layout
+#: through `Config`.
+DEFAULT_LAYOUT = Layout()
+
+
 MARKER = f"{HARNESS_OWNED}/WORKSPACE"
 
 #: What the marker says. Nothing reads its contents -- `is_new_workspace` asks only
