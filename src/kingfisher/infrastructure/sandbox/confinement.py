@@ -440,7 +440,7 @@ def _sessions_denial(workspace: Path) -> str:
     a session's own folders stay writable.
     """
     root = re.escape(str(fenced_sessions(workspace)))
-    return f'(deny file-write* (regex #"^{root}(/[^/]+)?$"))'
+    return f"(deny file-write* (regex {_sb_regex(f'^{root}(/[^/]+)?$')}))"
 
 
 
@@ -473,12 +473,45 @@ def _session_folder_denial(workspace: Path, folder: str) -> str:
     caller's file, and `rm -rf inputs` took the folder.
     """
     root = re.escape(f"{fenced_sessions(workspace)}/")
-    return f'(deny file-write* (regex #"^{root}[^/]+/{re.escape(folder)}(/|$)"))'
+    written = f"^{root}[^/]+/{re.escape(folder)}(/|$)"
+    return f"(deny file-write* (regex {_sb_regex(written)}))"
 
 
 def _sb(path: Path) -> str:
     """A path as a sandbox-profile string literal."""
     return '"' + str(path).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+#: What a `"` in a path has to become inside a `#"..."` literal, because it cannot be
+#: written there by any spelling. Measured against sandbox-exec: bare, it ends the
+#: literal -- `Error reading string`, exit 65 -- and so does `\\"`; `\\x22`, `\\042` and
+#: `\\u0022` all parse and then match nothing, as does `.{1}`, so what compiles these is
+#: a small dialect and not PCRE. `.`, `[[:punct:]]` and this one match it. This one,
+#: because `.` would also match a `/` and let one pattern reach across a directory.
+QUOTE_IN_A_PATTERN = "[^/]"
+
+
+def _sb_regex(pattern: str) -> str:
+    """A regex as a sandbox-profile literal: `#"..."`.
+
+    Raw, which is the difference from the string literal `_sb` writes: a backslash
+    reaches the regex engine as a backslash. So `re.escape`'s output goes in untouched,
+    and doubling it for the literal -- the obvious reading, tried first -- broke every
+    ordinary path, since `pytest-of-...` holds a `-` that `re.escape` escapes.
+
+    A `"` is legal in a macOS directory name, and left bare it did not cost the fence,
+    it cost the deployment: measured, a workspace called `my "work" stuff` made
+    sandbox-exec exit 65 on every command, reads included, saying `unbound variable:
+    work"` -- a fragment of the operator's own directory name and nothing about a
+    profile.
+
+    What the substitution gives up is exactness in one character position: the pattern
+    also matches a sibling path spelt with some other character there. It can only deny
+    more, never less, and what it reaches is another workspace's `sessions/*/inputs` or
+    `.harness`, which these rules would deny if they were asked about it.
+    """
+    return '#"' + pattern.replace('"', QUOTE_IN_A_PATTERN) + '"'
+
 
 
 def traversable(home: Path, readable: tuple[Path, ...]) -> tuple[Path, ...]:

@@ -3275,6 +3275,41 @@ quiet for session backends it cannot see into, whose own sessions are not in tha
 directory. It sees only the sessions that exist when it runs. *(2026-10-15, from an
 architecture review.)*
 
+**A `"` in the workspace path cost the deployment, and what a profile's regex literal
+accepts is a small dialect.** `_sb` has always escaped a quote for the profile's string
+literals, so the `subpath` and `path` rules were right. The three `regex` rules were
+built from `re.escape` alone, which leaves a quote bare -- and a quote is legal in a
+macOS directory name. Measured, with a workspace called `my "work" stuff`: the literal
+ended early, the profile did not parse, and every command came back exit 65 saying
+`sandbox-exec: unbound variable: work"`. Not a fence that stopped holding -- reads
+failed too. The message names a fragment of the operator's own directory and nothing
+about a profile.
+
+The obvious fix is wrong, and the suite said so immediately. `#"..."` is *raw*: a
+backslash reaches the regex engine as a backslash, so `re.escape`'s output belongs in
+it untouched, and escaping it for the literal -- doubling the backslashes -- broke every
+path holding a character `re.escape` escapes, `pytest-of-...` among them. Worse, `\"`
+does not put a quote in either: measured, it ends the literal exactly as a bare one
+does.
+
+So the quote is not escaped, it is matched. What that literal's engine accepts was
+measured against sandbox-exec one spelling at a time, because none of it is documented:
+`.`, `[[:punct:]]` and `[^/]` match a quote; `\x22`, `\042`, `\u0022` and even `.{1}`
+all parse and then match nothing. It is not PCRE, and the patterns these rules already
+use -- `[^/]+`, `(/|$)` -- are about the whole of what it understands. `[^/]` is the
+stand-in, over `.`, because `.` matches a separator: for a workspace called `a"b` it
+would deny `sessions/*/inputs` under a *directory* `a` holding a directory `b`, a tree
+this profile was never asked about. What `[^/]` gives up is exactness in one character
+position, which can only ever deny more, and what it reaches is another workspace's
+`inputs` or `.harness`.
+
+Two rules, and the text one is the reason both exist. It decodes each literal the way
+sbpl does -- raw, ending at the first quote -- and matches the result against the real
+paths, so it holds on every platform and would have caught the wrong escaping on CI's
+Linux job. The driven one hands the file to sandbox-exec, because a pattern Python
+compiles is not a pattern that engine compiles, which `.{1}` is the proof of.
+*(2026-10-15, from an architecture review.)*
+
 ## Sessions: what persists and where
 
 These began as decisions in *Nothing at rest on this machine* and were built
