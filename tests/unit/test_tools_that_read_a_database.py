@@ -12,6 +12,7 @@ from __future__ import annotations
 import csv
 import io
 import sqlite3
+import time
 from typing import Any
 
 import pytest
@@ -137,6 +138,113 @@ def test_every_connection_a_call_opens_is_closed_again(tools, database, monkeypa
     for connection in opened:
         with pytest.raises(sqlite3.ProgrammingError, match="closed"):
             connection.execute("SELECT 1")
+
+
+#: A three-way join, which is work SQLite cannot shortcut: it has to visit every
+#: combination to answer. Measured over a 1,000-row table it takes 49 seconds, and a
+#: fourth table is a thousand times that -- about 14 hours. 400 rows is about three
+#: seconds, so the bound these rules patch is a small fraction of real work.
+SLOW = "SELECT count(*) FROM many a, many b, many c WHERE a.n < b.n || c.n"
+
+
+@pytest.fixture
+def many_rows(database):
+    """Enough rows in the database above that `SLOW` is not over before it starts."""
+    with sqlite3.connect(database) as writing:
+        writing.execute("CREATE TABLE many (n TEXT)")
+        writing.executemany("INSERT INTO many VALUES (?)", [("x" * 50,)] * 400)
+    writing.close()
+    return database
+
+
+@pytest.fixture
+def one_wide_value(database):
+    """A single value longer than the answer cap the rules below patch down to."""
+    with sqlite3.connect(database) as writing:
+        writing.execute("CREATE TABLE wide (note TEXT)")
+        writing.execute("INSERT INTO wide VALUES (?)", ("y" * 500,))
+    writing.close()
+    return database
+
+
+def test_a_statement_past_the_time_it_may_run_is_stopped_and_told_so(
+    tools, many_rows, monkeypatch
+):
+    """A tool runs on the turn's thread and `KINGFISHER_TURN_TIMEOUT_S` is read between
+    stream chunks, so nothing outside this statement was going to stop it -- one
+    mistyped join wedges the deployment for hours. SQLite calls a progress handler from
+    inside its own loop, which is the only thing here that can stop work already under
+    way, and the elapsed time is asserted because a handler that was never armed reads
+    exactly like one that was.
+    """
+    monkeypatch.setitem(_globals(tools["sql_query"]), "MAX_SECONDS", 0.05)
+
+    started = time.monotonic()
+    said = tools["sql_query"].invoke({"statement": SLOW})
+    took = time.monotonic() - started
+
+    assert took < 1.0, f"it ran {took:.1f}s, so the bound is not what ended it"
+    assert said.startswith("sql error: stopped after 0.05s")
+    assert "narrow it" in said
+    # SQLite's own word for an aborted statement is `interrupted`, which names neither
+    # the bound nor anything to do about it, and is the same word for any other abort.
+    assert "interrupted" not in said
+
+
+def test_a_statement_inside_that_time_still_answers(tools, many_rows):
+    """The other half. Every rule above is a control for a bound that refused
+    everything, but not for one armed with a deadline already past -- which would
+    refuse the first statement of every call and pass them all.
+    """
+    said = tools["sql_query"].invoke({"statement": "SELECT count(*) FROM many"})
+
+    assert _rows(said) == [["count(*)"], ["400"]]
+
+
+def test_one_value_wider_than_the_whole_answer_is_refused_by_its_column(
+    tools, one_wide_value, monkeypatch
+):
+    """`MAX_ROWS` bounds rows and says nothing about their width. Measured, 200 rows of
+    one 20 MB value obeyed the row cap and came back as a 4,000,000,200-character
+    answer -- 30 seconds and 3.3 GB of resident memory, from a 20 MB database, and then
+    the model's whole context. Refused by name rather than cut short, because the model
+    can ask for the same column narrower and this is where it learns how.
+    """
+    monkeypatch.setitem(_globals(tools["sql_query"]), "MAX_ANSWER_CHARS", 100)
+
+    said = tools["sql_query"].invoke({"statement": "SELECT note FROM wide"})
+
+    assert said.startswith("refused: note holds 500 characters in one value")
+    assert "substr(note, 1, 1000)" in said
+
+
+def test_the_rows_stop_at_the_characters_the_answer_carries(tools, database, monkeypatch):
+    """The second half of the same number: 200 rows each just inside the per-value
+    limit is still 200 times it. Marked `--` outside the rows like the row cap beside
+    it, and at least one row always comes back -- a header alone answers nothing.
+    """
+    monkeypatch.setitem(_globals(tools["sql_query"]), "MAX_ANSWER_CHARS", 30)
+
+    said = tools["sql_query"].invoke({"statement": "SELECT region, note FROM sales"})
+
+    lines = said.splitlines()
+    assert lines[-1].startswith("-- truncated at 1 rows, past the 30 characters")
+    assert len(_rows("\n".join(lines[:-1]))) == 2, "a header and the one row that fitted"
+
+
+def test_the_docstring_names_every_bound_the_tool_applies(tools):
+    """The model plans its next statement by these three numbers and reads them here
+    and nowhere else, so a bound that moved without the sentence would leave it asking
+    for an answer this tool will not give. Whitespace-normalised: the sentences wrap
+    where the column ran out, and an `in` against the source sees a line break the
+    model never does.
+    """
+    globals_ = _globals(tools["sql_query"])
+    reads = " ".join(tools["sql_query"].description.split())
+
+    assert f"at most {globals_['MAX_ROWS']} rows" in reads
+    assert f"{globals_['MAX_ANSWER_CHARS']} characters" in reads
+    assert f"at most {globals_['MAX_SECONDS']:g} seconds" in reads
 
 
 def test_the_tables_are_listed_one_per_line(tools, database):

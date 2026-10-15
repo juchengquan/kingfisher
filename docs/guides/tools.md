@@ -521,6 +521,36 @@ that reason, and releases each page's caches as it goes -- `flush_cache()` and
 `get_textmap.cache_clear()`, both, which took the same work to 93 MB. So cap the bytes,
 and then measure the thing your tool actually spends.
 
+## A tool that runs a query
+
+The section above ends in the right place for a file and the wrong one for a database,
+because there is no file to cap. What a query spends is time inside the engine and the
+width of what it hands back, and a row count bounds neither. `sql_query` holds both,
+and the numbers are the argument:
+
+  - **Rows are not characters.** Its `MAX_ROWS` is 200, and two hundred rows of one
+    20 MB value obeyed it: a 4,000,000,200-character answer, 30 seconds, 3.3 GB of
+    resident memory -- from a 20 MB database, and then the model's whole context. So
+    the second cap is on what the answer carries, read per value *before* the
+    conversion, because `str()` on that value is where the memory goes. A row at a
+    time rather than `fetchmany`, for the same reason: it has every row in this
+    process before anything could measure one.
+  - **Time is the cost nothing else bounds.** A three-way join over a 1,000-row table
+    takes 49 seconds, and a fourth table is a thousand times that -- about 14 hours
+    inside one call, which the turn deadline notices when it returns.
+
+A database is also the exception to what the section above says about threads. A parse
+in Python cannot be interrupted, but SQLite calls `set_progress_handler` from inside
+its own loop, so a statement already running *can* be stopped: returning non-zero
+aborts it with `OperationalError: interrupted`. Measured at 100, 1,000, 10,000 and
+100,000 instructions between checks, a million-row join took 0.04 seconds every time --
+and 0.04 with no handler at all, so the bound is free. Nothing in that exception says
+who asked for it, which is why the handler records that it was the one, and the tool
+answers in words naming the bound and what to do instead.
+
+Whatever your tool talks to, the shape is the same: find what it actually spends, and
+then ask whether the library it spends it in gives you a way to stop.
+
 ## Where the directory lives
 
 It is `tools/` in `KINGFISHER_DEFINITIONS_DIR`, beside every other kind, so a

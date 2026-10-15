@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import csv
 import io
+from collections import Counter
+from dataclasses import dataclass
 
 from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
@@ -51,27 +53,62 @@ def _fetched(runtime: ToolRuntime[ToolContext], file_path: str) -> bytes:
     return got.content
 
 
-def _read(
-    runtime: ToolRuntime[ToolContext], file_path: str
-) -> tuple[list[str], dict[str, list[str]], int]:
-    """Header, columns and how many rows were actually looked at."""
+@dataclass(frozen=True)
+class _Read:
+    """One file as a profile saw it."""
+
+    header: list[str]
+    #: One list of cells per column, in the file's own order.
+    columns: list[list[str]]
+    rows: int
+    #: Rows whose cell count was not the header's, whichever way.
+    ragged: int
+
+
+def _report_names(header: list[str]) -> list[str]:
+    """Each column's name for the report, carrying its position where a name repeats.
+
+    A reader handed `region` twice cannot tell which column is which, and the file is
+    the only place that distinction lives -- so the repeated ones say which column of
+    the file they are. Unique names are left exactly as the file wrote them.
+    """
+    seen = Counter(header)
+    return [
+        f"{name} (column {at + 1})" if seen[name] > 1 else name
+        for at, name in enumerate(header)
+    ]
+
+
+def _read(runtime: ToolRuntime[ToolContext], file_path: str) -> _Read:
+    """Gather the sampled cells, by column position.
+
+    By position because a name may appear twice and two columns called `region` are
+    two columns. Keyed by name they merged into one list holding both their cells:
+    two rows reported four filled, a column half empty reported a quarter missing,
+    and the same line was printed once per spelling with no way to tell them apart.
+    """
     text = _fetched(runtime, file_path).decode("utf-8-sig")
     with io.StringIO(text, newline="") as handle:
         reader = csv.reader(handle)
         try:
             header = next(reader)
         except StopIteration:
-            return [], {}, 0
+            return _Read([], [], 0, 0)
 
-        gathered: dict[str, list[str]] = {name: [] for name in header}
-        seen = 0
+        gathered: list[list[str]] = [[] for _ in header]
+        seen = ragged = 0
         for row in reader:
-            for name, value in zip(header, row, strict=False):
-                gathered[name].append(value)
+            if len(row) != len(header):
+                ragged += 1
+            # Truncated to the header, which is what a column profile can speak about:
+            # the cells past it belong to no column and were silently dropped before,
+            # so the count above is what says the file is not rectangular.
+            for at, value in enumerate(row[: len(header)]):
+                gathered[at].append(value)
             seen += 1
             if seen >= SAMPLE_ROWS:
                 break
-    return header, gathered, seen
+    return _Read(header, gathered, seen, ragged)
 
 
 @tool
@@ -84,13 +121,21 @@ def csv_profile(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     `file_path` is the same virtual path the file tools take -- `/inputs/<name>` --
     rooted at this session, read through the session's backend.
     """
-    header, gathered, seen = _read(runtime, file_path)
-    if not header:
+    read = _read(runtime, file_path)
+    if not read.header:
         return f"{file_path}: empty"
 
-    lines = [profile_column(name, gathered[name]).line() for name in header]
-    note = f" (first {seen} rows)" if seen >= SAMPLE_ROWS else ""
-    return f"{len(header)} columns, {seen} rows{note}\n" + "\n".join(lines)
+    lines = [
+        profile_column(name, cells).line()
+        for name, cells in zip(_report_names(read.header), read.columns, strict=True)
+    ]
+    said = []
+    if read.rows >= SAMPLE_ROWS:
+        said.append(f"first {read.rows} rows")
+    if read.ragged:
+        said.append(f"{read.ragged} row(s) not {len(read.header)} cells wide")
+    note = f" ({', '.join(said)})" if said else ""
+    return f"{len(read.header)} columns, {read.rows} rows{note}\n" + "\n".join(lines)
 
 
 @tool
@@ -103,5 +148,5 @@ def csv_columns(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     `file_path` is the same virtual path the file tools take -- `/inputs/<name>` --
     rooted at this session, read through the session's backend.
     """
-    header, _, _ = _read(runtime, file_path)
+    header = _read(runtime, file_path).header
     return "\n".join(header) if header else f"{file_path}: empty"
