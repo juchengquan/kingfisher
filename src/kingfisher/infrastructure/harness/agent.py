@@ -338,6 +338,7 @@ def builtin_tool_names(
                         Path(scratch),
                         probing.layout.session_dirs,
                         memory=probing.layout.memory,
+                        scratchpad=probing.layout.scratchpad,
                     ),
                     catalogue=catalogue,
                 ),

@@ -15,7 +15,12 @@ from typing import Any
 
 from kingfisher.domain.result import ArtifactError
 from kingfisher.infrastructure.steps import Steps, changing, on_host, reading
-from kingfisher.layout import ARTIFACT_DIRS, INPUTS_ROUTE
+from kingfisher.layout import Layout
+
+# Deliberately not importing `ARTIFACT_DIRS` or `INPUTS_ROUTE`: both edges here are a
+# caller's, and a deployment renaming a session folder renames them. Reading the module
+# constants is what this did, and it made the feature a trap -- so the names are not
+# reachable from this file at all, and the layout arrives as an argument.
 
 _log = logging.getLogger(__name__)
 
@@ -51,16 +56,25 @@ class InputsPlacement:
     replaced: tuple[str, ...] = ()
 
 
-def place_inputs(sources: tuple[Path, ...], backend: Any) -> Steps[InputsPlacement]:
-    """Copy caller-supplied files into a session's `/inputs`, through its backend."""
+def place_inputs(
+    sources: tuple[Path, ...], backend: Any, layout: Layout
+) -> Steps[InputsPlacement]:
+    """Copy caller-supplied files into a session's inputs folder, through its backend.
+
+    The folder this deployment named, which is not always `/inputs`. Spelt as the
+    constant, the files landed at `/inputs/` whatever the layout said: under a renamed
+    one that route does not exist, so the write fell through to the session root and
+    made a folder nothing had routed, hardened or fenced. Measured -- the agent's file
+    tools saw an empty folder, and its shell rewrote the caller's own file with exit 0.
+    """
     if not sources:
         return InputsPlacement()
     # Before anything is read or sent: a request naming a file that is not there
     # must fail without having placed the ones that were.
     seen = yield on_host(checked, sources)
-    listing = yield reading(backend, "ls", INPUTS_ROUTE)
+    listing = yield reading(backend, "ls", layout.inputs_route)
     existing = {PurePosixPath(entry["path"]).name for entry in listing.entries or ()}
-    contents = yield on_host(_contents_of, seen)
+    contents = yield on_host(_contents_of, seen, layout.inputs_route)
     answers = yield changing(backend, "upload_files", contents)
     if refused := [f"{answer.path}: {answer.error}" for answer in answers if answer.error]:
         msg = f"the session's backend refused {', '.join(refused)}"
@@ -71,19 +85,23 @@ def place_inputs(sources: tuple[Path, ...], backend: Any) -> Steps[InputsPlaceme
     )
 
 
-def _contents_of(seen: dict[str, Path]) -> list[tuple[str, bytes]]:
-    return [(f"{INPUTS_ROUTE}{name}", source.read_bytes()) for name, source in seen.items()]
+def _contents_of(seen: dict[str, Path], route: str) -> list[tuple[str, bytes]]:
+    return [(f"{route}{name}", source.read_bytes()) for name, source in seen.items()]
 
 
-def collect_artifacts(backend: Any) -> Steps[tuple[str, ...]]:
+def collect_artifacts(backend: Any, layout: Layout) -> Steps[tuple[str, ...]]:
     """What this session holds that is worth keeping, relative to the session.
 
     A walk of what is there rather than a record of tool calls: `execute`
     bypasses the file tools, and running a script is how most of `/outputs` gets
     produced.
+
+    The folders this deployment named. Spelt as the constant, a renamed layout handed
+    the caller `()` -- measured, with the turn's own report sitting in the session and
+    the session reapable, so anything not named here is lost.
     """
     found: set[str] = set()
-    for name in ARTIFACT_DIRS:
+    for name in layout.artifact_dirs:
         # Two patterns, because deepagents' glob leaves a name starting with a dot out
         # of `**` and matches it only where the pattern starts with one: `**` alone
         # drops `/outputs/.env` from what the caller is handed, and says nothing.
@@ -105,21 +123,23 @@ def collect_artifacts(backend: Any) -> Steps[tuple[str, ...]]:
     return tuple(sorted(found))
 
 
-def read_artifact(backend: Any, name: str) -> Steps[bytes]:
+def read_artifact(backend: Any, name: str, layout: Layout) -> Steps[bytes]:
     """One file a turn produced, as bytes, by the name `collect_artifacts` gave it.
 
-    Only under `ARTIFACT_DIRS`. The same backend reaches `/.harness` and `/inputs`,
-    and a caller who may read what a turn produced may not read what kingfisher
-    keeps about the session through the same door.
+    Only under the folders `collect_artifacts` walks. The same backend reaches the
+    harness directory and the caller's own inputs, and a caller who may read what a
+    turn produced may not read what kingfisher keeps about the session through the
+    same door.
     """
+    artifacts = layout.artifact_dirs
     path = PurePosixPath(name)
     if (
         path.is_absolute()
         or ".." in path.parts
         or not path.parent.parts
-        or path.parts[0] not in ARTIFACT_DIRS
+        or path.parts[0] not in artifacts
     ):
-        msg = f"{name!r} is not an artifact: name a file under {', '.join(ARTIFACT_DIRS)}"
+        msg = f"{name!r} is not an artifact: name a file under {', '.join(artifacts)}"
         raise ArtifactError(msg)
     (answer,) = yield reading(backend, "download_files", [f"/{path}"])
     if answer.error or answer.content is None:

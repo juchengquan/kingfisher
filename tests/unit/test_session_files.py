@@ -33,7 +33,14 @@ from kingfisher.infrastructure.session_files import (
     read_artifact,
 )
 from kingfisher.infrastructure.steps import drive
-from kingfisher.layout import HARNESS, INPUTS, SESSION_DIRS, SKILLS_ROUTE, routed_paths
+from kingfisher.layout import (
+    HARNESS,
+    INPUTS,
+    SESSION_DIRS,
+    SKILLS_ROUTE,
+    Layout,
+    routed_paths,
+)
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import Through, an_agent, pin, start
 from tests.unit.scripted import Scripted
@@ -187,7 +194,7 @@ def test_a_refused_name_never_reaches_the_backend(name):
             return []
 
     with pytest.raises(ArtifactError):
-        drive(read_artifact(Spy(), name))
+        drive(read_artifact(Spy(), name, Layout()))
     assert asked == []
 
 
@@ -288,7 +295,7 @@ def test_inputs_placed_through_the_default_backend_land_read_only(cfg, session_d
     source.write_text("x")
     backend = backend_at(cfg, session_dir)
 
-    placement = drive(place_inputs((source,), backend))
+    placement = drive(place_inputs((source,), backend, cfg.layout))
 
     assert placement.placed == ("in.csv",)
     assert (session_dir / INPUTS / "in.csv").read_text() == "x"
@@ -316,7 +323,7 @@ def test_a_refused_upload_is_an_inputs_error_naming_the_file(session_dir, tmp_pa
     )
 
     with pytest.raises(ValueError, match=r"/inputs/in\.csv: permission_denied"):
-        drive(place_inputs((source,), backend))
+        drive(place_inputs((source,), backend, Layout()))
 
 
 def test_collecting_and_reading_agree_on_every_name(cfg, session_dir):
@@ -328,11 +335,11 @@ def test_collecting_and_reading_agree_on_every_name(cfg, session_dir):
     (session_dir / "outputs" / ".hidden").write_text("h")
     backend = backend_at(cfg, session_dir)
 
-    names = drive(collect_artifacts(backend))
+    names = drive(collect_artifacts(backend, cfg.layout))
 
     assert {"outputs/deep/er/x.bin", "outputs/.hidden"} <= set(names)
     for name in names:
-        drive(read_artifact(backend, name))
+        drive(read_artifact(backend, name, cfg.layout))
 
 
 def test_a_name_starting_with_a_dot_is_collected_at_any_depth(cfg, session_dir):
@@ -344,7 +351,7 @@ def test_a_name_starting_with_a_dot_is_collected_at_any_depth(cfg, session_dir):
         (session_dir / "outputs" / name).parent.mkdir(parents=True, exist_ok=True)
         (session_dir / "outputs" / name).write_text("x")
 
-    names = drive(collect_artifacts(backend_at(cfg, session_dir)))
+    names = drive(collect_artifacts(backend_at(cfg, session_dir), cfg.layout))
 
     assert {
         "outputs/plain.txt",
