@@ -80,6 +80,29 @@ def _present(spans: list[tuple[int, int]], total: int) -> list[int]:
     return sorted({n for a, b in spans for n in range(max(a, 1), min(b, total) + 1)})
 
 
+def _beyond(spans: list[tuple[int, int]] | None, total: int) -> list[str]:
+    """The parts of each asked-for span the document does not have, as runs.
+
+    `_present` clips a span to the document, which is what keeps `1-99999999` from
+    being expanded, and said nothing about what it clipped: `3-5,9` on a three-page
+    report answered `pages 3 of 3`, so a model that asked for nine pages and got one
+    read that as having got them. The docstring promises the answer names the
+    asked-for pages left out, and this is the half of them the cap does not cover.
+
+    Kept as spans rather than page numbers, for the same reason the clip exists: a
+    typo's worth of pages is a number, not a list. Nothing is said about the low end,
+    where there is nothing to name -- no document has a page 0, and a span naming only
+    pages below one is already refused for naming no page of the document.
+
+    `None` is a caller who named no spans at all, which is every page there is, and
+    every page there is cannot name one there is not. Answered here rather than
+    branched on at the call site, so the caller has one condition and not two saying
+    the same thing.
+    """
+    return [f"{a}-{b}" if a != b else f"{a}" for a, b in
+            ((max(a, total + 1), b) for a, b in (spans or ()) if b > total)]
+
+
 def _ranges(numbers: list[int]) -> list[str]:
     """Sorted page numbers as runs: `[1, 2, 3, 5]` is `['1-3', '5']`."""
     runs: list[list[int]] = []
@@ -182,6 +205,8 @@ def pdf_text(
     note = f"pages {', '.join(_ranges(done))} of {total}"
     if left := present[MAX_PAGES:]:
         note += f"; at most {MAX_PAGES} a call, so {', '.join(_ranges(left))} left out"
+    if beyond := _beyond(asked, total):
+        note += f"; asked for {', '.join(beyond)}, which this document does not have"
     if empty := [n for n, text in texts if not text.strip()]:
         note += f"; no text on {', '.join(_ranges(empty))}"
     name = PurePosixPath(target).name

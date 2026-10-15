@@ -2331,6 +2331,30 @@ what a caller leaving it out asked for, and the cap then has something to name. 
 explicit span is still parsed before the file is fetched, so an unreadable `pages`
 costs nothing to find out about. *(2026-10-14, from an architecture review.)*
 
+**And the pages the document does not have are named too, which the clip was
+swallowing.** The same clip, in the other direction. `_present` narrows a span to the
+document before expanding it -- which is what keeps `1-99999999` from being a hundred
+million page numbers -- and said nothing about what it narrowed away: measured,
+`pages="3-5,9"` on a three-page report answered `pages 3 of 3`, and `2-9` answered
+`pages 2-3 of 3`. A model that asked for nine pages and got one was told nothing had
+been left out, against a docstring promising the answer names which asked-for pages
+were. The cap's note covered only the pages past five hundred, so the half of that
+promise a caller is most likely to need was the half nothing kept.
+
+Named as spans rather than page numbers, for the reason the clip exists in the first
+place: a typo's worth of pages is a number, not a list. Nothing is said about the low
+end, where there is nothing to name -- no document has a page 0, and a span naming only
+pages below one is already refused for naming no page of the document. The call site
+has one condition and not two: a caller who named no spans asked for every page there
+is, which cannot name a page there is not, and `_beyond` answers that itself rather
+than being guarded against it.
+
+*The word `all` was held by nothing, either.* Changing `EVERYTHING` to `"whole"` left
+the suite green, after which every call the docstring recommends failed -- nothing
+passed anything but a span, so neither the word, nor the case-folding, nor the strip
+around it was reached. The rule reads the word off the constant and sends it four ways
+a model might write it. *(2026-10-15, from an architecture review.)*
+
 **A shipped tool that promises CSV is written by `csv`.** `sql_query` built its answer
 with `",".join(...)`, and its docstring said CSV: a value holding a comma, a quote or a
 newline came back as different data with nothing to say so -- measured, three rows

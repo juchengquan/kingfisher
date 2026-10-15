@@ -325,6 +325,81 @@ def test_a_span_the_document_satisfies_is_not_reported_as_cut_short(tools, hande
     assert "left out" not in said
 
 
+#: A span the document only partly has, and the part of it that is missing. Two
+#: shapes, because a span cut at the end and a span naming a page far past it are the
+#: same silence spelt differently.
+PAST_THE_END = {"3-5,9": "4-5, 9", "2-9": "4-9"}
+
+
+@pytest.mark.parametrize("pages", sorted(PAST_THE_END), ids=sorted(PAST_THE_END))
+def test_pages_the_document_does_not_have_are_named_as_asked_for(
+    pages, tools, handed, session_dir
+):
+    """The other half of what the rule above calls "what the caller asked for and did
+    not get". A span is clipped to the document before it is expanded -- which is what
+    keeps `1-99999999` cheap -- and the clip was silent: `3-5,9` on a three-page report
+    answered `pages 3 of 3`, so a model that asked for nine pages and got one was told
+    nothing had been left out, against a docstring promising it names them.
+
+    The pages that *are* there are asserted too, since a note beside a missing page is
+    no use if the extraction stopped at it.
+    """
+    (session_dir / "inputs" / "three.pdf").write_bytes(a_pdf("one", "two", "three"))
+
+    said = on_backend(tools["pdf_text"], handed, file_path="/inputs/three.pdf", pages=pages)
+
+    assert f"asked for {PAST_THE_END[pages]}, which this document does not have" in said
+    saved = _saved(handed, f"/scratchpad/three.p{'3' if pages == '3-5,9' else '2-3'}.txt")
+    assert saved is not None and "three" in saved.decode()
+
+
+def test_a_span_the_document_has_every_page_of_is_not_told_it_is_missing_any(
+    tools, handed, session_dir
+):
+    """The control this one needs of its own: the rule above is satisfied by a note on
+    every answer, and the cap's control next door asserts on the word `left out`,
+    which this note does not use.
+    """
+    (session_dir / "inputs" / "three.pdf").write_bytes(a_pdf("one", "two", "three"))
+
+    said = on_backend(tools["pdf_text"], handed, file_path="/inputs/three.pdf", pages="1-3")
+
+    assert "pages 1-3 of 3" in said
+    assert "does not have" not in said
+
+
+#: How a model might write the one word `pages` takes that is not a span. The tool
+#: case-folds before comparing, and a model writing `All` at the start of a sentence
+#: is the reason -- held here, because nothing else passed anything but the constant.
+def _spellings(word: str) -> list[str]:
+    return [word, word.upper(), word.capitalize(), f" {word} "]
+
+
+def test_the_word_for_every_page_is_the_one_the_docstring_tells_the_model_to_pass(
+    tools, handed, session_dir
+):
+    """`pages` takes one word that is not a span, and the model learns it here and
+    nowhere else. Read off the constant and passed, rather than written out: spelt
+    `all` in the test, the word could be changed in the tool and this would still
+    pass, while every call the docstring recommends began failing.
+
+    Every spelling a model might send, because the tool strips and case-folds before
+    comparing and nothing held either -- spelt one way, both could go and the suite
+    stayed green.
+    """
+    everything = tools["pdf_text"].func.__globals__["EVERYTHING"]
+    (session_dir / "inputs" / "three.pdf").write_bytes(a_pdf("one", "two", "three"))
+
+    assert f"pass `{everything}`" in _reads(tools["pdf_text"])
+    for written in _spellings(everything):
+        said = on_backend(
+            tools["pdf_text"], handed, file_path="/inputs/three.pdf", pages=written
+        )
+
+        assert "pages 1-3 of 3" in said, written
+        assert "does not have" not in said, "every page there is cannot name one there is not"
+
+
 def test_left_to_its_default_the_whole_of_a_long_document_is_extracted(
     tools, handed, session_dir
 ):
