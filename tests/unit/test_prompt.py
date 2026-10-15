@@ -288,3 +288,43 @@ def test_the_prompt_does_not_promise_other_sessions_are_out_of_reach():
         for memory in (False, True):
             text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
             assert "another session's files" not in text
+
+
+# -- a deployment's own house-rules prompt -----------------------------------
+
+
+def test_the_deployment_prompt_is_appended_after_the_harness(cfg):
+    """A library integrator's standing instruction reaches the main agent, behind the
+    harness prompt rather than in place of it.
+    """
+    with_it = system_prompt(replace(cfg, deployment_prompt="House rule: cite every figure."))
+
+    assert "House rule: cite every figure." in with_it
+    assert with_it.index("You are kingfisher") < with_it.index("House rule:")
+    # The structural contract is still there -- the addition did not replace it.
+    assert f"/{INPUTS}" in with_it
+
+
+def test_the_deployment_prompt_reaches_a_subagent_too(cfg):
+    """A subagent does not get the harness prompt, but it does get the house rules."""
+    prompt = _subagent_prompt(replace(cfg, deployment_prompt="House rule: cite every figure."))
+
+    assert "House rule: cite every figure." in prompt
+    assert "You are kingfisher" not in prompt, "still not the harness prompt"
+
+
+def test_no_deployment_prompt_changes_nothing(cfg):
+    """The default is empty, and an empty one is byte-for-byte the prompt without it."""
+    assert system_prompt(cfg) == system_prompt(replace(cfg, deployment_prompt=""))
+    assert _subagent_prompt(cfg) == "You review analyses for arithmetic errors."
+
+
+def test_the_deployment_prompt_leads_the_workspace_and_agent_additions(cfg):
+    """Order: harness, then the deployment's house rules, then the workspace, then the
+    agent -- most general to most specific.
+    """
+    (cfg.workspace / USER_PROMPT_FILE).write_text("Workspace note.", encoding="utf-8")
+    prompt = system_prompt(replace(cfg, deployment_prompt="House rule."), "Agent note.")
+
+    assert prompt.index("House rule.") < prompt.index("Workspace note.")
+    assert prompt.index("Workspace note.") < prompt.index("Agent note.")

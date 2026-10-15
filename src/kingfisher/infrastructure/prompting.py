@@ -104,10 +104,22 @@ def with_user_prompt(prompt: str, workspace: Path | None) -> str:
     return _joined(prompt, user_prompt(workspace))
 
 
+def behind_deployment(prompt: str, cfg: Config | None) -> str:
+    """`prompt`, behind this deployment's house-rules prompt if it set one.
+
+    First, because it is the most general of the additions -- a standing instruction
+    for every agent -- and the agent's own line and the workspace's `PROMPT.md` are the
+    more specific ones that follow it. Empty when none is set, which leaves `prompt`
+    exactly as it was: `_joined` collapses an empty *trailing* part, and this one leads.
+    """
+    deployment = cfg.deployment_prompt if cfg else ""
+    return _joined(deployment, prompt) if deployment.strip() else prompt
+
+
 def system_prompt(cfg: Config | None = None, agent: str = "") -> str:
-    """The assembled prompt: the harness, then this workspace, then this agent."""
+    """The assembled prompt: the harness, then this deployment, this workspace, this agent."""
     return render_system_prompt(
         skills_enabled=bool(cfg and cfg.skills_enabled),
         memory_enabled=bool(cfg and cfg.memory_enabled),
-        extra=_joined(user_prompt(cfg.workspace if cfg else None), agent),
+        extra=behind_deployment(_joined(user_prompt(cfg.workspace if cfg else None), agent), cfg),
     )
