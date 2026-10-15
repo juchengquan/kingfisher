@@ -14,54 +14,30 @@ same thing in every session and on every machine:
   called.
 - `/{{scratchpad}}` — working files: intermediates, downloads, anything you need while you
   think. Nothing here is reported back and old sessions are swept, so anything you
-  want kept belongs in `/{{outputs}}` instead. It is also where the shell's `TMPDIR`
-  points, so both halves of your toolkit write the same place. A tool result too long
+  want kept belongs in `/{{outputs}}` instead. A tool result too long
   to show you whole is saved under `/{{scratchpad}}/large_tool_results/`, and conversation
   summarized away under `/{{scratchpad}}/conversation_history/`: search there when you
   need one back and nothing names its path.
 
-## Two filesystems, one set of files
+## The file tools
 
 The file tools (`ls`, `read_file`, `write_file`, `edit_file`, `delete`, `glob`, `grep`)
 take virtual paths rooted at the workspace, so an input file is `/{{inputs}}/<name>`.
-
-The shell (`execute`) runs on the host, starting in the session root — the same
-directory virtual `/` names. So a virtual path becomes a shell path by dropping the
-leading slash, and nothing in the workspace is out of the shell's reach:
-
-| virtual | from the shell |
-| --- | --- |
-| `/{{inputs}}/<name>` | `{{inputs}}/<name>` |
-| `/{{outputs}}/<name>` | `{{outputs}}/<name>` |
-| `/{{scratchpad}}/<name>` | `{{scratchpad}}/<name>` |
-
-These already exist when a turn starts, so do not go searching for them — `find`
-will not locate one any faster than dropping the slash will.
-
 Tools this workspace defines take these same virtual paths.
 
-The two views do not mix, in either direction:
-
-- A virtual path is not a shell path. Passing `/{{inputs}}/<name>` to `execute`, or
-  writing it into a script the shell runs, addresses the host's root directory, not
-  the workspace.
-- A host path is not a file-tool path. Passing an absolute host path such as
-  `/tmp/scratch.py` to `write_file` is refused, and the error names the virtual path
-  to use instead. Left unguarded the leading `/` reads as the workspace root, so the
-  whole path is recreated *inside* the workspace: the write reports success and the
-  file is not where you think it is.
-
-Where these instructions give host path mappings for particular mounts, use those with
-the shell when you need an absolute path.
+A host path is not a file-tool path. Passing an absolute host path such as
+`/tmp/scratch.py` to `write_file` is refused, and the error names the virtual path
+to use instead. Left unguarded the leading `/` reads as the workspace root, so the
+whole path is recreated *inside* the workspace: the write reports success and the
+file is not where you think it is.
 
 What you write while working goes in one of two places, and never anywhere else:
 
 - Anything you want to survive the turn — a script you want reviewed, an intermediate
   table worth keeping — goes in `/{{outputs}}`.
-- Anything genuinely throwaway goes in the working-files directory above, which the
-  shell also exports as `$TMPDIR`. Write `"$TMPDIR/name.py"`, never a literal
-  `/tmp/name.py`: `$TMPDIR` is set per session, so a hardcoded `/tmp` scatters files
-  somewhere nothing will clean up and nothing will find.
+- Anything genuinely throwaway goes in `/{{scratchpad}}`.
+
+<!-- shell -->
 
 ## What your tools returned
 

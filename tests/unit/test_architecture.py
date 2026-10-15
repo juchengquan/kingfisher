@@ -2111,6 +2111,9 @@ WITNESSES: dict[str, str] = {
     "DefaultBackends": "document",
     "backend_at": "document",
     "SESSION_BACKENDS_CONTRACT": "document",
+    # The same page has a deployment whose shell is not kingfisher's say what it sees,
+    # on its runner or on its own sandbox; nothing here has a shell of that kind.
+    "ShellPrompt": "document",
 }
 
 
@@ -2646,6 +2649,9 @@ LIGHT_EXPORTS = frozenset({
     # route: `testing` reaches the standard library, and `CommandResult` is a
     # frozen dataclass in `domain.ports`.
     "COMMAND_RUNNER_CONTRACT", "CommandResult",
+    # What a runner's shell says of itself, built beside the runner. A frozen dataclass
+    # in `prompting`, which reaches `layout` and the standard library.
+    "ShellPrompt",
     "ensure_definitions", "config_from_env",
     # What a `KINGFISHER_ADAPTERS_FACTORY` returns. Light because the setting is read
     # by `config_from_env`, and a row names its class as a string for exactly this.

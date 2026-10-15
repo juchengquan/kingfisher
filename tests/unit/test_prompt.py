@@ -7,6 +7,7 @@ from kingfisher.application.turn import ledger_delta, ledger_index
 from kingfisher.infrastructure.harness.kinds.subagents import as_subagent
 from kingfisher.infrastructure.prompting import (
     USER_PROMPT_FILE,
+    kingfishers_shell,
     render_system_prompt,
     system_prompt,
 )
@@ -57,7 +58,7 @@ def test_the_prompt_s_path_table_spells_the_directories_the_session_has():
     The names come from `layout` rather than being written out here, since a literal
     copy would be renamed along with the prompt, or not at all, and pass either way.
     """
-    text = render_system_prompt()
+    text = render_system_prompt(shell=kingfishers_shell())
 
     for name in (INPUTS, OUTPUTS, SCRATCH):
         assert f"| `/{name}/<name>` | `{name}/<name>` |" in text, name
@@ -71,7 +72,9 @@ def test_a_renamed_layout_reaches_every_path_in_the_prompt():
     moved = Layout(
         inputs="in", outputs="out", memory="mem", scratchpad="scratch", tool_results="results"
     )
-    text = render_system_prompt(skills_enabled=True, memory_enabled=True, layout=moved)
+    text = render_system_prompt(
+        skills_enabled=True, memory_enabled=True, layout=moved, shell=kingfishers_shell()
+    )
 
     # The renamed leaves, spelled where the default names used to be.
     assert "| `/in/<name>` | `in/<name>` |" in text
@@ -181,7 +184,7 @@ def test_shell_section_does_not_contradict_the_injected_host_mappings():
     used, and instructs the agent to substitute them in shell commands.
     """
     # Collapse wrapping: the prompt is hard-wrapped, so phrases span newlines.
-    text = " ".join(render_system_prompt().lower().split())
+    text = " ".join(render_system_prompt(shell=kingfishers_shell()).lower().split())
     assert "do not use host absolute paths" not in text
     # And it must not repeat the middleware's misleading implication that
     # unmapped mounts are unreachable from the shell.

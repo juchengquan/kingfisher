@@ -3450,6 +3450,51 @@ looking for the file with `ls`; after, each of the four was right on its next ca
 spelling moved too, from 7 host-absolute paths and 6 relative ones in 29 shell calls to
 2 and 9 in 27. *(2026-10-13.)*
 
+**What the agent is told about the shell is said by the shell.** `system.md`,
+`capability_skills.md` and `ShellPaths` told every deployment's agent four things true
+only of kingfisher's own shell: it runs on the host in the session root, `TMPDIR` is the
+scratchpad, `KINGFISHER_SKILLS` is the catalogue, and every session folder is in reach by
+dropping the slash. A deployment whose shell runs elsewhere reported it. The prompt was
+built from `Config` alone, so nothing about the backend could reach it.
+
+`runs_locally` cannot choose the wording. Measured on 2026-10-15 with the plainest runner
+a deployment writes, driven through `DefaultBackends(runner=...)`: local or not, it
+started in the process's directory, with the system's `TMPDIR`, no `KINGFISHER_SKILLS`
+and no `inputs/` in reach, because a runner is handed the command and nothing else.
+`local` says whether the fence goes in front of the command, not what the shell sees.
+The only shell kingfisher can vouch for is the one `backend_at` builds without a runner
+-- on Linux, kingfisher's own fence, which is handed the session directory and the
+environment.
+
+So the shell carries a `ShellPrompt`: a section for the agent's prompt, a paragraph after
+the skills section, and the line in `execute`'s description. Three parts, because three
+readers see different ones: a single string could not know whether skills are on, and
+would never reach a subagent, which is told only the description. Kingfisher's own shell
+carries its wording, moved into `shell_here*.md` with every sentence kept bar the two about
+`TMPDIR`, which are one now; a runner's is handed in beside the runner; a deployment's
+sandbox sets the attribute. A shell saying nothing is described
+neutrally -- only what holds wherever a shell runs, and deepagents' own `execute` line --
+rather than refused: the neutral wording misleads nobody, and a refusal would stop a
+deployment until it wrote prose. A part left `None` is neutral, and `""` says nothing.
+
+**On the shell, not on the session backends.** The session backends are what a deployment
+subclasses, and the subclass `ports.md` shows swaps in a sandbox of its own. On the class,
+the wording would be inherited, and that sandbox's agents told it was kingfisher's. On the
+shell, a sandbox is neutral until it says something, and what it says sits beside the code
+deciding what it sees. Its blanks are filled from the layout as kingfisher's are, and one
+no layout has is refused when the `ShellPrompt` is made rather than on the first turn.
+`shell_prompt=` without a runner is refused: kingfisher's own shell describes itself, and
+`deployment_prompt` is where standing instructions go.
+
+The correction on a missed path stays kingfisher's own, since it spells the path from the
+session root and no other shell is known to start there; `ShellPaths` knows that shell by
+the identity of its `ShellPrompt`. Building this found a subagent's guards made without
+the layout, so a renamed `inputs` reached a subagent's `execute` line as `/inputs`; they
+are handed it now. Left for a change of its own: deepagents still lists host paths for the
+routed mounts on a runner's shell, because `ConfinedLocalShellBackend` is a
+`LocalShellBackend` whichever runner it holds, and those paths are this host's.
+*(2026-10-15.)*
+
 **`HOME` is `scratch` too, and `.home` is gone.** The shell's `HOME` had a
 directory of its own so that whatever a tool caches under `~` would land in the
 session that caused it, be swept by `reap` and be counted by `session_bytes`.

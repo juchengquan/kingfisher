@@ -28,6 +28,7 @@ from kingfisher.infrastructure.harness.host_paths import (
     HostPathError as HostPathError,  # noqa: PLC0414 -- the re-export above
 )
 from kingfisher.infrastructure.harness.host_paths import reject_host_path
+from kingfisher.infrastructure.prompting import ShellPrompt, kingfishers_shell
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.threads import off_loop, thread_pool
 from kingfisher.infrastructure.workspace.permissions import protect_inputs, writable_inputs
@@ -130,10 +131,14 @@ class ConfinedLocalShellBackend(LocalShellBackend):
         confined: confinement.Confinement,
         *,
         runner: CommandRunner | None = None,
+        shell_prompt: ShellPrompt | None = None,
         **kwargs: Any,
     ) -> None:
         self.confinement = confined
         self.runner = runner
+        #: What this shell says of itself, which `shell_prompt_of` reads. Set by
+        #: `backend_at`, which knows whether the runner is kingfisher's own.
+        self.shell_prompt = shell_prompt
         super().__init__(**kwargs)
 
     def execute(self, command: str, *, timeout: int | None = None) -> Any:
@@ -153,6 +158,36 @@ class ConfinedLocalShellBackend(LocalShellBackend):
             exit_code=outcome.exit_code,
             truncated=outcome.truncated,
         )
+
+
+def shell_prompt_of(backend: Any) -> ShellPrompt | None:
+    """What the shell `backend` runs `execute` on says of itself, or `None` for nothing.
+
+    Read off the shell rather than off the session backends that made it. A
+    `DefaultBackends` subclass that swaps in a sandbox of its own would inherit
+    kingfisher's wording from the class, and its agents be told about a shell they do not
+    have; on the shell, a sandbox that says nothing is described neutrally until it does.
+    """
+    shell = backend.default if isinstance(backend, CompositeBackend) else backend
+    said = getattr(shell, "shell_prompt", None)
+    if said is not None and not isinstance(said, ShellPrompt):
+        msg = (
+            f"{type(shell).__name__}.shell_prompt is a {type(said).__name__}; it has to be "
+            "a kingfisher.ShellPrompt, whose parts say where each piece of wording goes"
+        )
+        raise TypeError(msg)
+    return said
+
+
+def _refuse_wording_without_runner(runner: Any, shell_prompt: ShellPrompt | None) -> None:
+    """Kingfisher's own shell says what it is, and wording for it could only be wrong."""
+    if runner is None and shell_prompt is not None:
+        msg = (
+            "shell_prompt describes the shell a runner provides, and none was given: "
+            "kingfisher's own shell describes itself. House rules for every agent go in "
+            "Config.deployment_prompt"
+        )
+        raise TypeError(msg)
 
 
 def runs_locally(runner: Any) -> bool:
@@ -667,16 +702,20 @@ def backend_at(
     *,
     catalogue: Definitions | None = None,
     runner: CommandRunner | None = None,
+    shell_prompt: ShellPrompt | None = None,
 ) -> WorkspaceScopedBackend:
     """Kingfisher's own backend, rooted at one session directory on this host.
 
     What `default_backends` builds for a session id, and what a deployment building
-    on the default calls to get it for a directory of its choosing.
+    on the default calls to get it for a directory of its choosing. `shell_prompt` is
+    what the agent is told about the shell `runner` provides, and is refused without
+    one.
 
     Typed to the class rather than to deepagents' protocol because a deployment
     adjusting what this built reads `default` and `routes` off it, and the protocol
     carries neither.
     """
+    _refuse_wording_without_runner(runner, shell_prompt)
     skills = (catalogue or Definitions.from_config(cfg)).skills
     skills_dir = skills.root
     # Before anything is mounted: a label becomes a route segment below, and a bad
@@ -721,6 +760,10 @@ def backend_at(
     shell = ConfinedLocalShellBackend(
         confined,
         runner=chosen,
+        # The deployment's runner and not `chosen`, which is kingfisher's own fence on
+        # Linux: that one is handed `env` and the session directory, and the
+        # deployment's is handed the command and nothing else.
+        shell_prompt=kingfishers_shell() if runner is None else shell_prompt,
         root_dir=str(session_dir),
         env=env,
         timeout=cfg.execution_timeout_s,
@@ -790,8 +833,14 @@ class DefaultBackends(SessionBackends):
     #: On the class as well as set in `__init__`, so a subclass that writes its own
     #: `__init__` without calling this one still opens sessions.
     _runner: Callable[[Path], CommandRunner] | None = None
+    _shell_prompt: ShellPrompt | None = None
 
-    def __init__(self, *, runner: Callable[[Path], CommandRunner] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        runner: Callable[[Path], CommandRunner] | None = None,
+        shell_prompt: ShellPrompt | None = None,
+    ) -> None:
         # A callable, and only a callable. A runner is built for one session --
         # kingfisher's own Landlock fence is, because its policy is generated from
         # the session -- and a shared instance could not know which session it was
@@ -804,7 +853,11 @@ class DefaultBackends(SessionBackends):
                 "`lambda session_dir: your_runner` if you have one to share"
             )
             raise TypeError(msg)
+        # Here as well as in `backend_at`, so a deployment hears it at startup rather
+        # than on its first turn.
+        _refuse_wording_without_runner(runner, shell_prompt)
         self._runner = runner
+        self._shell_prompt = shell_prompt
 
     def open(
         self,
@@ -822,7 +875,9 @@ class DefaultBackends(SessionBackends):
         # used to make one file owned by another user a session unusable for good.
         unprotected = protect_inputs(directory, cfg.layout.inputs)
         runner = self._runner(directory) if self._runner is not None else None
-        built = backend_at(cfg, directory, catalogue=catalogue, runner=runner)
+        built = backend_at(
+            cfg, directory, catalogue=catalogue, runner=runner, shell_prompt=self._shell_prompt
+        )
         built.unprotected = unprotected
         return built
 
