@@ -2470,6 +2470,44 @@ entry above justified 500 on time, said nothing about memory, and memory was the
 cost. pypdf, which `pdf_pages` uses, needed nothing: 2,000 pages copied in 0.16s and 109
 MB, measured before changing anything. *(2026-10-14, from an architecture review.)*
 
+**`http_fetch` bounded nothing, guarded the wrong URL, and read every page as UTF-8.**
+The last of the shipped tools nothing had ever called. Three faults, each driven against
+a server written for the purpose on the loopback:
+
+  - **`timeout=` is a socket timeout.** It bounds one operation, not the call, and a
+    server sending one byte every two seconds was still being read after ninety --
+    every byte reset the clock. A tool runs on the turn's thread, where
+    `KINGFISHER_TURN_TIMEOUT_S` is read between stream chunks, so nothing outside the
+    call was going to end it; and unlike `sql_query`'s join, the party deciding how
+    long this takes is whoever the URL points at. There is a deadline over the whole
+    call now, and the socket timeout stays beside it, because a connection that answers
+    *nothing* is the socket's to end and the deadline is only checked between reads.
+    The first fix was wrong and measured so: reading in pieces with `read` left it
+    unbounded, because `read` blocks until it has every byte asked for, so the check
+    between pieces never ran. `read1` returns what has arrived.
+  - **The scheme check guarded the URL the model wrote.** urllib's redirect handler
+    permits `ftp:` beside http and https, so a 302 took the fetch out of the scheme the
+    tool promises: measured against the real internet, `ftp://ftp.gnu.org/welcome.msg`
+    came back as that file's contents. An opener with a redirect handler of its own
+    refuses it now. `file:` was already refused upstream, and so is a redirect loop.
+  - **The body was decoded as UTF-8 whatever the server said.** A page declaring
+    `ISO-8859-15` came back as `caf? costs 5??` and one declaring `utf-16` as its bytes
+    with a NUL between every character. The declared charset is read now, and a charset
+    this machine does not have falls back rather than raising `LookupError` -- which
+    would leave the server deciding whether the tool fails.
+
+*A rule about a bound cannot be written to assert the elapsed time afterwards.* A call
+with no bound does not return, so such a rule hangs rather than fails, and a hang tells
+a reader of CI less than one red line. Both time rules drive the fetch on a thread and
+fail if it has not answered, which also has to tell a *raise* from a hang: reporting one
+as the other sent me to the bound when the answer was in the traceback.
+
+*What this leaves.* The tool will still fetch `http://169.254.169.254/` or anything else
+inside the network it runs in, which no scheme check addresses and which a deployment
+exposing this tool has to decide for itself. Its docstring says a public web page; it is
+an example of a narrow grant, not of a safe one. *(2026-10-15, from an architecture
+review.)*
+
 **Three shipped tools answered wrongly about a file a real deployment holds, and the
 bound was never the one the row count suggested.** Each was found by handing the tool
 the input, not by reading it.
