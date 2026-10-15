@@ -11,21 +11,18 @@ workspace -- the shell could reach them anyway.
 from __future__ import annotations
 
 import platform
-import re
-import shutil
 from pathlib import Path
 
 import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import default_backends
-from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import backend_at
-from kingfisher.infrastructure.workspace import ensure_layout, is_new_workspace
-from kingfisher.layout import CLAIM, HARNESS, LAYOUT_VERSION, MARKER, PINNED_AGENT
+from kingfisher.infrastructure.workspace import ensure_layout
+from kingfisher.layout import CLAIM, HARNESS, PINNED_AGENT
 from tests.conftest import FakeToolCallingModel, pin, start
 
 macos = pytest.mark.skipif(
@@ -193,85 +190,6 @@ def test_the_harness_owned_directory_is_protected_too(cfg):
     assert (cfg.workspace / HARNESS_OWNED).resolve() in protected
 
 
-#: What layout 1 left under `.kingfisher`, written out rather than read from
-#: `OLD_STATE`: cases built from the constant shrink with it, so a name dropped from
-#: what is looked for would take its own case with it and pass.
-LAYOUT_1_STATE = (".kingfisher/agents", ".kingfisher/runs", ".kingfisher/claims", ".kingfisher/tmp")
-
-
-def _laid_out_by(layout, workspace, *left):
-    """A workspace an older version made, with `left` still where it wrote it."""
-    (workspace / ".kingfisher").mkdir(parents=True)
-    # Layout 1's marker carried no number, which is how it is told apart.
-    number = "" if layout == 1 else f"layout {layout}\n"
-    (workspace / MARKER).write_text(f"kingfisher workspace\n{number}", encoding="utf-8")
-    for one in left:
-        (workspace / one).mkdir(parents=True)
-    return workspace
-
-
-@pytest.mark.parametrize(
-    ("layout", "left"),
-    [(1, "sessions/abc"), *((1, one) for one in LAYOUT_1_STATE), (2, "sessions/abc")],
-)
-def test_an_older_workspace_is_refused_rather_than_silently_relaid(tmp_path, layout, left):
-    """Silence is the danger, not breakage. Code looking for a session's files where
-    this layout keeps them does not error -- it finds no pin and re-pins, finds no
-    transcript and starts again, finds no inputs and says nothing.
-    """
-    workspace = _laid_out_by(layout, tmp_path / "old", left)
-
-    with pytest.raises(ConfigError, match=f"layout {layout}"):
-        ensure_layout(workspace)
-
-
-@pytest.mark.parametrize(
-    ("layout", "left"),
-    [
-        (1, ("sessions/abc", *LAYOUT_1_STATE)),
-        (1, (".kingfisher/runs",)),
-        (2, ("sessions/abc",)),
-    ],
-)
-def test_doing_what_the_refusal_says_clears_it(tmp_path, layout, left):
-    """It refused on the marker's number alone, so deleting everything the message
-    listed left it refusing still, and the way out it did not name -- deleting the
-    marker -- makes the workspace read as new, which the integration driver seeds
-    over. It also listed layout 1's leftovers to a workspace that had none of them.
-    The paths deleted here are read out of the message, so one it leaves out keeps
-    the refusal and one that is not there fails to delete.
-    """
-    workspace = _laid_out_by(layout, tmp_path / "old", *left)
-    with pytest.raises(ConfigError) as refused:
-        ensure_layout(workspace)
-    listed = re.search(r"left from layout \d+ -- (.*?) -- ", str(refused.value))
-    assert listed is not None, f"the message no longer lists what to delete: {refused.value}"
-
-    for one in listed.group(1).split(", "):
-        target = workspace / one.removeprefix("everything in ")
-        # An empty name is the workspace itself, and deleting that passes: what is
-        # left reads as new.
-        assert workspace in target.parents, f"{one!r} is not a path in the workspace"
-        if one.startswith("everything in "):
-            for child in target.iterdir():
-                shutil.rmtree(child)
-        else:
-            shutil.rmtree(target)
-
-    assert ensure_layout(workspace) == workspace.resolve()
-    assert f"layout {LAYOUT_VERSION}" in (workspace / MARKER).read_text(encoding="utf-8")
-    assert not is_new_workspace(workspace)
-
-
-def test_a_workspace_this_version_laid_out_is_accepted(tmp_path):
-    """So the refusal above is not passing because every workspace is refused."""
-    workspace = ensure_layout(tmp_path / "new")
-
-    assert f"layout {LAYOUT_VERSION}" in (workspace / MARKER).read_text(encoding="utf-8")
-    assert ensure_layout(workspace) == workspace
-
-
-def test_an_empty_directory_is_not_an_old_workspace(tmp_path):
-    """A path with no marker has no version to disagree with, and `is_new_workspace`
-    already treats it as never used."""
+def test_an_empty_directory_is_laid_out_fresh(tmp_path):
+    """A path with no marker reads as never used, and `ensure_layout` lays it out."""
     assert ensure_layout(tmp_path / "fresh").is_dir()

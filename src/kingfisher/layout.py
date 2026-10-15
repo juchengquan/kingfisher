@@ -279,21 +279,15 @@ def routed_paths() -> tuple[str, ...]:
 
 MARKER = f"{HARNESS_OWNED}/WORKSPACE"
 
-#: What the marker says, and the whole of the compatibility story. The file has
-#: always held `kingfisher workspace\n` and nothing has ever read its contents --
-#: `is_new_workspace` asks only whether it exists -- so it is where a version can
-#: go without costing anything.
-#:
-#: It is here because the alternative was worse. When per-session state moved
-#: into the session, a workspace laid out the old way did not *break*: it went
-#: quiet and wrong. A pin the new code cannot find means the session silently
-#: re-pins and may change agent mid-conversation; a transcript read from the new
-#: path means the conversation comes back empty. Fallback readers would paper
-#: over both and have nothing to make anyone remove them -- the day the old paths
-#: are gone, nothing says so. A refusal is loud, and the next layout change
-#: inherits this rather than needing its own.
-LAYOUT_VERSION = 3
-MARKER_TEXT = f"kingfisher workspace\nlayout {LAYOUT_VERSION}\n"
+#: What the marker says. Nothing reads its contents -- `is_new_workspace` asks only
+#: whether the file exists -- so it is a bare identity line. It once carried a
+#: `layout N` number and `ensure_layout` refused a workspace laid out by an older one,
+#: because moving per-session state into the session made an old workspace go quiet and
+#: wrong rather than break. That refusal is gone while the layout is still being
+#: reshaped week to week and sessions are disposable; the version would ratchet on
+#: every change for a compatibility nobody wants yet. When workspaces outlive config
+#: churn, a fingerprint of the configurable names belongs here and a mismatch refused.
+MARKER_TEXT = "kingfisher workspace\n"
 
 AGENTS_SCAFFOLD = """\
 # Project memory
