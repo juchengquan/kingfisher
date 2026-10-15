@@ -556,6 +556,19 @@ and 0.04 with no handler at all, so the bound is free. Nothing in that exception
 who asked for it, which is why the handler records that it was the one, and the tool
 answers in words naming the bound and what to do instead.
 
+**And a library that offers you a bound may be bounding something else.** `http_fetch`
+passes `timeout=` to `urlopen`, which reads as a bound on the call and is a bound on one
+socket operation. Measured: a server sending one byte every two seconds was still being
+read after ninety, because every byte reset the clock, and the party choosing how slowly
+to answer is whoever the URL points at. What was missing is a deadline over the whole
+call, checked while the body arrives -- and checking it needs `read1` rather than
+`read`, because `read` blocks until it has every byte asked for, so a deadline between
+`read` calls never runs. Reading in pieces with `read` measured as no bound at all,
+which is the kind of fix that looks right and is not. So two numbers: how long to wait
+for the next byte, and how long the whole call may take. The first is also why the
+second is not enough on its own -- a connection that answers nothing is the socket
+timeout's to end.
+
 Whatever your tool talks to, the shape is the same: find what it actually spends, and
 then ask whether the library it spends it in gives you a way to stop.
 
