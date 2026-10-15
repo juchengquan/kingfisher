@@ -28,6 +28,7 @@ from kingfisher.infrastructure.sandbox.confinement import (
     LINUX_FENCES,
     SANDBOX_EXEC,
     Confinement,
+    fenced_sessions,
     harness_unfenced,
     shell_confinement,
 )
@@ -855,6 +856,50 @@ def _session_files(cfg: Config) -> Iterator[Check]:
         )
 
 
+def _linked_sessions(cfg: Config) -> Iterator[Check]:
+    """Sessions reached through a link, which a static profile cannot bind.
+
+    `fenced_sessions` resolves the sessions root, so moving all of them with one
+    symlink works and the fence follows. A single session that is itself a link lands
+    where no rule names it, and no rule can: the profile is written per workspace,
+    before the session exists, for the reason `_session_folder_denial` gives. What
+    that costs is not a hole but a session nothing can use -- measured, every command
+    in it failed at `cd` with `shell-init: error retrieving current directory`, which
+    mentions no fence and sends the reader to their shell.
+
+    A warning, like the rows around it, because the deployment runs: the other
+    sessions in that workspace are untouched. Quiet where there is nothing to say.
+    Only the sessions that exist when this runs -- one made later breaks the same way
+    and is not here to be seen -- and only under the macOS mechanism, since the Linux
+    fences are built from the session directory itself, so a link is followed when it
+    is opened and the rules land on the real one.
+    """
+    if cfg.session_backends_factory:
+        return
+    if shell_confinement(cfg).mechanism != SANDBOX_EXEC:
+        return
+    root = fenced_sessions(cfg.workspace)
+    if not root.is_dir():
+        return
+    strayed = sorted(
+        one.name
+        for one in root.iterdir()
+        if one.is_dir() and not one.resolve().is_relative_to(root)
+    )
+    if not strayed:
+        return
+    yield Check(
+        "session paths",
+        "warn",
+        f"{', '.join(strayed)} {'is' if len(strayed) == 1 else 'are'} reached through a "
+        f"link out of {root}, and the macOS profile matches real paths -- so every "
+        f"command in {'it' if len(strayed) == 1 else 'them'} is refused, down to "
+        "reading the session's own files",
+        "keep each session inside the sessions directory -- or move all of them at "
+        "once by making `sessions` itself the link, which the profile follows",
+    )
+
+
 def _sessions_apart(cfg: Config) -> Iterator[Check]:
     """Whether one session's agent can read and change another session's files.
 
@@ -979,6 +1024,7 @@ def examine(
         checks += _definitions(cfg, found)
         checks += _shell(cfg)
         checks += _session_files(cfg)
+        checks += _linked_sessions(cfg)
         checks += _sessions_apart(cfg)
     except ConfigError as exc:  # pragma: no cover -- belt and braces
         checks.append(Check("configuration", "fail", str(exc)))

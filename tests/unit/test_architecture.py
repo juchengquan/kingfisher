@@ -2727,6 +2727,10 @@ LIGHT_EXPORTS = frozenset({
     # The mechanisms `doctor` tells apart when it says whether the shell can read the
     # keys file or a process's starting environment. Constants, so nothing to load.
     "LINUX_FENCES", "SANDBOX_EXEC",
+    # Where the profile's rules say the sessions are, which `doctor` asks so its
+    # `session paths` row names the same root the rules do rather than a second
+    # spelling of it. `sessions_root` over `pathlib` and nothing else.
+    "fenced_sessions",
     # Light only while `host_paths` names no runtime class. `HostPathGuard` is the
     # langchain half of that mechanism and lives with the rest of the middleware;
     # defined beside the error it catches, it made raising the error cost 250ms and

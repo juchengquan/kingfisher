@@ -3242,6 +3242,39 @@ tells the agent another session's files are unreachable. *(2026-10-11.)*
 leaves it out: the setting pins a process to one session, not a workspace, and other
 processes may keep theirs beside it. *(2026-10-13.)*
 
+**The profile's rules follow one link on `sessions`, and the two halves of that move
+together.** Every session rule in the macOS profile was built from
+`f"{Path(workspace).resolve()}/sessions"`: the workspace resolved, and the `sessions`
+component under it not. The profile matches real paths, so an operator who moves
+sessions onto another volume with one symlink -- which `ports.md` recommends as a mount
+at that same path -- put every session outside every rule. Measured with the workspace
+under the home folder, which is both where one lives and the only thing this profile
+denies wholesale: every command in the session failed at `cd`, `shell-init: error
+retrieving current directory`. Not a write refused -- the agent could not reach its own
+files at all, and the message names no fence. A symlinked *workspace* works, and is the
+control: resolution already happens at that level and stopped there.
+
+Four rules name that root, two allowing and two denying, and they now ask one function
+for it. The reason it is one function rather than four spellings is that the obvious
+half-fix is worse than the fault: with the allows resolved and the deny patterns left on
+the written path, `inputs` was writable, `rm -rf inputs` took the caller's folder, and
+`.harness` -- the pinned agent, the conversation, a paused turn -- was writable too, all
+exit 0. A break became the complete loss of the fence. The driven rule asserts both
+directions at once so neither half can be resolved alone.
+
+**One link deep is as far as a static profile reaches, and `doctor` says so.** A single
+session that is itself a link still lands where no rule names it, and no rule can: the
+profile is one text per workspace written before any session exists, which is the design
+`_session_folder_denial` already gives the reason for. That failure is the safe
+direction -- the session is unusable, not unfenced -- but it is unusable in the same
+unexplained way, so `doctor` gained a `session paths` row naming it, warning rather than
+failing because the workspace's other sessions are untouched. Quiet where the sessions
+moved all at once, which now works; quiet under a Linux fence, where `policy_for` is
+built from the session directory itself so the link is followed when it is opened; and
+quiet for session backends it cannot see into, whose own sessions are not in that
+directory. It sees only the sessions that exist when it runs. *(2026-10-15, from an
+architecture review.)*
+
 ## Sessions: what persists and where
 
 These began as decisions in *Nothing at rest on this machine* and were built
