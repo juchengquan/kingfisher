@@ -164,7 +164,12 @@ for the next reader who reaches for one.*
   is out of the shell's reach. Unrouted folders get no line at all, so `/outputs` and
   `/scratchpad` read as unreachable although the shell starts in the session root and
   reaches both. Every subagent holding `execute` gets both, and none of `system.md`.
-  *(2026-10-13, deepagents 0.7.6.)*
+  *(2026-10-13, deepagents 0.7.6.)* The section is appended on every model call where
+  the backend executes, as a system-message block of its own, and nothing turns it off:
+  `system_prompt=` is prose added before it, not a replacement. Whether a mount gets a
+  host path is decided by `isinstance(backend.default, LocalShellBackend)` alone, so a
+  `LocalShellBackend` subclass whose commands run on another machine is still given
+  this host's paths. *(2026-10-15, deepagents 0.7.22.)*
 - **`create_deep_agent` merges middleware by name, replacing in place.**
   `_apply_custom_middleware` matches on `.name`, which defaults to the class name,
   so a deployment's class named like one of deepagents' own removes it from the

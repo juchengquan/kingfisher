@@ -3490,10 +3490,30 @@ The correction on a missed path stays kingfisher's own, since it spells the path
 session root and no other shell is known to start there; `ShellPaths` knows that shell by
 the identity of its `ShellPrompt`. Building this found a subagent's guards made without
 the layout, so a renamed `inputs` reached a subagent's `execute` line as `/inputs`; they
-are handed it now. Left for a change of its own: deepagents still lists host paths for the
-routed mounts on a runner's shell, because `ConfinedLocalShellBackend` is a
-`LocalShellBackend` whichever runner it holds, and those paths are this host's.
-*(2026-10-15.)*
+are handed it now. deepagents' own host paths were left for a change of their own, the
+next entry. *(2026-10-15.)*
+
+**deepagents' host paths reach only a shell on this host.** deepagents appends a section
+giving each routed folder's path on this host to any shell of its local class, and
+kingfisher's shell is that class whatever runner it holds -- so an agent whose commands
+ran on another machine was told to use paths only this one has, right beside a
+`ShellPrompt` telling it to check. `ShellPaths` takes the section out where the shell is
+not kingfisher's own on this host: a runner whose `local` is false, or a shell of a
+deployment's own. A local runner keeps it, since its paths are real there.
+
+Removed rather than corrected. Making a remote runner's shell a class deepagents reads
+as remote would have it say instead that those folders are out of the shell's reach,
+which is as much a guess, and would contradict a deployment whose `ShellPrompt` says its
+sandbox mirrors them -- with no way for that deployment to turn it off. Removed, the
+shell's own wording is the one thing the agent hears about it, which is the rule the
+entry above set. A deployment's own shell loses deepagents' section too, for the same
+reason: deepagents cannot know what that shell sees, and its `ShellPrompt` can.
+
+Taken out by block, matched on deepagents' heading, because the section arrives as a
+system-message block of its own; one that deepagents merged into other text would be
+left whole, and `test_deepagents_host_paths_reach_only_a_shell_on_this_host` would fail
+on it. `tool_guards` is handed the turn's backend rather than what was read off it, so
+the `execute` line and this section are asked of the same shell. *(2026-10-15.)*
 
 **`HOME` is `scratch` too, and `.home` is gone.** The shell's `HOME` had a
 directory of its own so that whatever a tool caches under `~` would land in the

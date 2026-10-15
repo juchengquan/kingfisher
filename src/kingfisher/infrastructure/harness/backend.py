@@ -160,6 +160,11 @@ class ConfinedLocalShellBackend(LocalShellBackend):
         )
 
 
+def _shell_of(backend: Any) -> Any:
+    """The object `backend` runs `execute` on."""
+    return backend.default if isinstance(backend, CompositeBackend) else backend
+
+
 def shell_prompt_of(backend: Any) -> ShellPrompt | None:
     """What the shell `backend` runs `execute` on says of itself, or `None` for nothing.
 
@@ -168,7 +173,7 @@ def shell_prompt_of(backend: Any) -> ShellPrompt | None:
     kingfisher's wording from the class, and its agents be told about a shell they do not
     have; on the shell, a sandbox that says nothing is described neutrally until it does.
     """
-    shell = backend.default if isinstance(backend, CompositeBackend) else backend
+    shell = _shell_of(backend)
     said = getattr(shell, "shell_prompt", None)
     if said is not None and not isinstance(said, ShellPrompt):
         msg = (
@@ -177,6 +182,20 @@ def shell_prompt_of(backend: Any) -> ShellPrompt | None:
         )
         raise TypeError(msg)
     return said
+
+
+def shell_runs_here(backend: Any) -> bool:
+    """Whether `backend` runs `execute` on kingfisher's shell, on this host.
+
+    The one shell whose paths on this host deepagents gives rightly: it decides by the
+    shell's class, and kingfisher's is the same class whatever its runner, so a runner
+    shipping commands elsewhere was handed paths that machine does not have. A shell of a
+    deployment's own is not known to run here, and says what it sees for itself.
+    """
+    shell = _shell_of(backend)
+    return isinstance(shell, ConfinedLocalShellBackend) and (
+        shell.runner is None or runs_locally(shell.runner)
+    )
 
 
 def _refuse_wording_without_runner(runner: Any, shell_prompt: ShellPrompt | None) -> None:

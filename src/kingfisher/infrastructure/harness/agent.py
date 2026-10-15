@@ -388,8 +388,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     refuse_unusable_backend(
         backend, (*cfg.layout.denied_scopes(), *cfg.layout.denied_read_scopes())
     )
-    # Asked of the backend because only it knows what its shell sees: the prompt and
-    # the `execute` line both say it, and from the same answer.
+    # Asked of the backend because only it knows what its shell sees. `tool_guards` asks
+    # it the same, for the `execute` line.
     shell = shell_prompt_of(backend)
     # The catalogue walked these when the deployment was wired; a caller that
     # has already walked them itself -- `--list` -- still wins. Walked before the
@@ -428,7 +428,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
 
     middleware: list[Any] = [
         TodoListMiddleware(),
-        *tool_guards(guarded, paths, recording(agent), cfg.layout, shell),
+        *tool_guards(guarded, paths, recording(agent), cfg.layout, backend),
     ]
     extras: dict[str, Any] = {}
 
@@ -777,7 +777,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             "middleware": (
                 # The agent's recorder too: these are the agent's tools, offered under
                 # the agent's audiences.
-                tool_guards(guarded, paths, recording(agent), cfg.layout, shell)
+                tool_guards(guarded, paths, recording(agent), cfg.layout, backend)
                 + ([ToolAllowlist(permitted)] if permitted is not None else [])
                 + _deployment_middleware(
                     agent, registry, capabilities.middlewares, provisions=agent_provisions
