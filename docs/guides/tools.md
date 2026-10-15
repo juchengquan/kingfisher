@@ -513,9 +513,17 @@ Three things add up to needing that bound, and none of them is obvious on its ow
     cannot be interrupted mid-parse in Python, so the only bound available is the one
     the tool sets before it starts.
 
-**Bytes are not always the cost.** For a CSV they track it: 32 MB of rows peaked at 358
-MB of resident memory, and 188 MB at 1.8 GB -- about nine times the file. For a PDF they
-do not: 1.6 MB of dense pages peaked at 1,655 MB, a thousand times the file, because the
+**Bytes are not always the cost.** For a CSV they bound it and do not predict it. 32 MB
+of rows peaked at 358 MB of resident memory and 188 MB at 1.8 GB, about nine times the
+file -- for *that* row shape, which is the part this said as though it held generally.
+The ratio is to the *cells* the sample holds, not to the bytes: the same 32 MB spread
+over 4,000 columns peaks at **998 MB**, thirty times the file, measured through
+`csv_profile`. The arithmetic is the whole explanation -- 4,000 columns over 4,191 rows
+is 16.8 million Python strings, and a `str` costs about 50 bytes before its first
+character, so a one-character cell is fifty times its own size in the dictionary that
+gathers it. A cap in bytes is worth having, since a gigabyte is survivable where
+unbounded is not; what it is not is a prediction of what the tool will spend. For a PDF
+the bytes do not even bound it: 1.6 MB of dense pages peaked at 1,655 MB, a thousand times the file, because the
 cost is per *page* and the library held every page it had read. `pdf_text` caps pages for
 that reason, and releases each page's caches as it goes -- `flush_cache()` and
 `get_textmap.cache_clear()`, both, which took the same work to 93 MB. So cap the bytes,

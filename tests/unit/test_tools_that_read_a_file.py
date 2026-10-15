@@ -188,8 +188,10 @@ def test_every_reader_names_the_same_cap(shipped):
     """One number, so a model told a size by one tool is not refused by the next.
 
     It is a constant per module rather than a shared import on purpose -- these are
-    examples a deployment copies one file at a time -- and that is exactly why the
-    seven have to be compared somewhere.
+    examples a deployment copies one file at a time -- and that is exactly why every
+    copy has to be compared against the others somewhere. No count here: this file
+    said "seven" beside a docstring saying nine, against a tree holding nine, which is
+    the drift `FETCHES_A_FILE` above is pinned by path to keep out.
     """
     caps = {name: module["MAX_INPUT_BYTES"] for name, module in _readers(shipped).items()}
 
