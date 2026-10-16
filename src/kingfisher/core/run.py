@@ -9,8 +9,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from kingfisher.core.agent.backend import Sessions
 from kingfisher.core.config import Config
+from kingfisher.core.interfaces import Sessions
 from kingfisher.core.request import Request
 from kingfisher.core.result import RunEvent, RunResult, normalize_answer
 from kingfisher.core.service import Kingfisher
