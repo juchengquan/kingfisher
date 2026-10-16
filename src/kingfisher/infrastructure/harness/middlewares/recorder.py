@@ -98,12 +98,20 @@ class Recorder(AgentMiddleware):
     """Record each successful tool result, keep it as a file in the session, and end
     what the model is handed with the result's id.
 
-    First in what `tool_guards` returns, and each of the three things that position
-    gives is needed. It is inside deepagents' eviction, so it sees a long result
-    whole, and the stub eviction leaves shows the id in its tail. It is ahead of
+    First in what `tool_guards` returns, for one thing: it is ahead of
     `WorkspaceToolPaths`, so it records the arguments the model wrote rather than the
-    host paths they become. And it is ahead of a deployment's middleware, so it
-    records what that middleware left, which is what the model reads.
+    host paths they become. Moved last,
+    `test_the_arguments_recorded_are_the_ones_the_model_wrote` is the only test in the
+    suite that notices.
+
+    Two properties read like further reasons for this position and are not. Being
+    inside deepagents' eviction -- so a long result is seen whole, and the stub the
+    eviction leaves shows the id in its tail -- comes from being custom middleware at
+    all: deepagents lands every custom entry after the last of its own core ones, and
+    the eviction is `FilesystemMiddleware`'s. Recording what a deployment's middleware
+    left comes from that middleware being appended after everything here, which
+    `test_what_a_deployments_middleware_left_is_recorded` holds. Both would survive
+    this moving.
     """
 
     def __init__(

@@ -106,9 +106,14 @@ def _is_mappings(block: Any) -> bool:
 def _unmapped(request: Any) -> Any:
     """`request` without deepagents' section of host paths.
 
-    By block and not by cutting text, so a section deepagents has merged into other
-    prose is left whole rather than half-cut, and
-    `test_deepagents_host_paths_reach_only_a_shell_on_this_host` fails on it instead.
+    By block and not by cutting text: a merged section is then left whole, host paths
+    and all, rather than the prose around it losing its tail with nothing to show for
+    it. The parts cannot merge today -- deepagents appends this section with
+    `append_to_system_message`, and builds `FilesystemMiddleware` with no system prompt
+    of its own -- so the distinction is held by
+    `test_a_mappings_section_merged_into_other_prose_is_left_whole` and not by
+    `test_deepagents_host_paths_reach_only_a_shell_on_this_host`, which passes whichever
+    way the section goes.
     """
     system = request.system_message
     if system is None:

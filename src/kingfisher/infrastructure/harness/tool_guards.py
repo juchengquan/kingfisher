@@ -54,8 +54,9 @@ def tool_guards(
     `None` where no turn will keep what is recorded. `backend` is the turn's, whose shell
     says what `ShellPaths` tells the model about it, and is asked whether it runs here.
     """
-    # First, so it records what the model is handed and the arguments the model
-    # wrote: everything after it may rewrite one or the other.
+    # First, so it records the arguments the model wrote: `WorkspaceToolPaths` below
+    # rewrites them to host paths. That it also records what the model is handed is a
+    # different question, answered by a deployment's middleware coming after all of this.
     guards: list[AgentMiddleware] = [] if recorder is None else [recorder]
     guards.append(HostPathGuard())
     guards.append(LargePdfGuard())

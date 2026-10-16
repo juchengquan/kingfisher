@@ -7,13 +7,16 @@ from typing import Any
 
 import pytest
 from deepagents.backends import LocalShellBackend
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
+from langchain.agents.middleware.types import ModelRequest
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from kingfisher import DefaultBackends, Kingfisher, Request, ShellPrompt, default_backends
 from kingfisher.infrastructure.harness.backend import WorkspaceScopedBackend
 from kingfisher.infrastructure.harness.middlewares.shell_paths import (
     ABSOLUTE,
     MAPPINGS,
+    ShellPaths,
     hint,
     missed,
 )
@@ -276,3 +279,47 @@ def test_deepagents_host_paths_reach_only_a_shell_on_this_host(shelled, backends
     # Only the section goes: the rest of what each was told is still there.
     assert "You are kingfisher" in systems[0]
     assert "You check." in systems[1]
+
+def _handed_on(system: SystemMessage) -> SystemMessage:
+    """The system message `ShellPaths` passes to a shell that is not on this host.
+
+    Driven through the hook rather than the helper under it, because `here=False` is
+    the whole of what the parametrized rule above covers and the branch is reached
+    from nowhere else.
+    """
+    asked: list[Any] = []
+    ShellPaths(Layout(), kingfishers_shell(), here=False).wrap_model_call(
+        ModelRequest(
+            model=GenericFakeChatModel(messages=iter([])),
+            messages=[HumanMessage("go")],
+            system_message=system,
+        ),
+        asked.append,
+    )
+    return asked[0].system_message
+
+
+def test_a_mappings_section_merged_into_other_prose_is_left_whole():
+    """Cutting the text instead of dropping the block leaves nothing red: the section
+    goes either way, so the rule above passes, while the prose deepagents merged it into
+    silently loses its tail. The first half is the control -- without it, a middleware
+    that handed every request on untouched would pass the second.
+    """
+    section = f"{MAPPINGS}\n- /inputs -> /host/in\n"
+
+    on_its_own = _handed_on(
+        SystemMessage(
+            content_blocks=[
+                {"type": "text", "text": "You work."},
+                {"type": "text", "text": section},
+            ]
+        )
+    )
+    assert list(on_its_own.content_blocks) == [{"type": "text", "text": "You work."}]
+
+    merged = _handed_on(
+        SystemMessage(content_blocks=[{"type": "text", "text": f"You work.\n\n{section}"}])
+    )
+    assert list(merged.content_blocks) == [
+        {"type": "text", "text": f"You work.\n\n{section}"}
+    ]
