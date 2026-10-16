@@ -216,17 +216,20 @@ def _size(size: int) -> str:
     return f"{size / (_KB * _KB):.1f} MB"
 
 
-def consume(
+def consume(  # noqa: PLR0913 -- the chunk, the answer so far, and two things the
+    # stream has taught the turn: which subagent is which, and which messages it holds.
     namespace: Any,
     mode: str,
     chunk: Any,
     answer: str,
     subagent_names: runtime.SubagentNames,
+    *,
+    seen: runtime.SeenMessages | None = None,
 ) -> tuple[str, tuple[RunEvent, ...]]:
     """One stream chunk into (answer so far, events to emit)."""
     if (text := runtime.answer_in(namespace, mode, chunk)) is not None:
         answer = text
-    return answer, tuple(runtime.events_in(namespace, mode, chunk, subagent_names))
+    return answer, tuple(runtime.events_in(namespace, mode, chunk, subagent_names, seen=seen))
 
 
 def decision_needed(waiting: tuple[PendingDecision, ...]) -> RunEvent:

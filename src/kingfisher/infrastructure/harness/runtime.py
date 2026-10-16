@@ -206,6 +206,35 @@ class SubagentNames:
         return self._names.get(key)
 
 
+class SeenMessages:
+    """Which messages each graph's conversation already held, read off `values` chunks.
+
+    A node can write back a message it did not make: clearing swaps an older result for
+    its handle under the same id, and deepagents' summariser does the same when it clips
+    a result that overflowed. Such an update reads exactly like a new result or a new
+    model call -- one carrying the old reply's usage, too -- and measured, every pass
+    re-announced each message it cleared. The id is what tells them apart: the
+    conversation had it before this step. `values` arrives after each step's writes and
+    `updates` before, so what is held here is the conversation as the step found it.
+    """
+
+    def __init__(self) -> None:
+        self._ids: dict[tuple[str, ...], frozenset[str]] = {}
+
+    def held(self, namespace: Any, state: Any) -> None:
+        """Note what one graph's conversation holds, from a `values` chunk."""
+        if not isinstance(state, Mapping):
+            return
+        self._ids[tuple(namespace or ())] = frozenset(
+            one.id for one in messages_in(state) if getattr(one, "id", None) is not None
+        )
+
+    def rewritten(self, namespace: Any, message: Any) -> bool:
+        """Whether an update's message is one this graph's conversation already held."""
+        known = self._ids.get(tuple(namespace or ()), frozenset())
+        return getattr(message, "id", None) in known
+
+
 def _token_event(chunk: Any) -> RunEvent | None:
     """One `messages` chunk into a token event, or nothing."""
     if not isinstance(chunk, tuple) or len(chunk) != TOKEN_CHUNK_PARTS:
@@ -225,10 +254,18 @@ def _token_event(chunk: Any) -> RunEvent | None:
 
 
 def events_in(
-    namespace: Any, mode: str, chunk: Any, subagent_names: SubagentNames | None = None
+    namespace: Any,
+    mode: str,
+    chunk: Any,
+    subagent_names: SubagentNames | None = None,
+    seen: SeenMessages | None = None,
 ) -> Iterator[RunEvent]:
     """Translate one stream chunk into domain events."""
     named = subagent_names.name(namespace) if subagent_names is not None else None
+    if mode == "values":
+        if seen is not None:
+            seen.held(namespace, chunk)
+        return
     if mode == "messages":
         if (
             subagent_names is not None
@@ -245,6 +282,8 @@ def events_in(
         return
     for update in (chunk or {}).values():
         for message in messages_in(update):
+            if seen is not None and seen.rewritten(namespace, message):
+                continue
             if (event := _event_for(message)) is not None:
                 yield replace(event, agent=named)
 
