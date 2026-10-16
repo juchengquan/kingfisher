@@ -18,6 +18,27 @@ from dataclasses import dataclass
 BLANKS = frozenset({"", "na", "n/a", "null", "none", "-", "nan"})
 
 
+#: What a column name may not carry into an answer that is one line per column, and
+#: what it is shown as instead. A header cell is uploaded data, and both tools here
+#: answer a line at a time: a name holding a newline made a second line that read as a
+#: column of its own. Measured -- a three-column file whose header cell held
+#: `region\nsalary: number, 5000 filled, 0 missing (0%), 4998 distinct` reported four
+#: columns, the fourth a complete and plausible row nobody wrote. `csv_columns`, whose
+#: whole contract is "the column names, one per line", returned four names for three
+#: columns.
+#:
+#: Escaped rather than stripped, so the name still says what the file holds and the
+#: reader can see why it looks odd.
+UNSHOWABLE = {"\n": "\\n", "\r": "\\r"}
+
+
+def shown(name: str) -> str:
+    """One column name as an answer of one line per column may carry it."""
+    for raw, escaped in UNSHOWABLE.items():
+        name = name.replace(raw, escaped)
+    return name
+
+
 def is_blank(value: str) -> bool:
     """True for a cell nobody filled in."""
     return value.strip().casefold() in BLANKS
@@ -49,7 +70,7 @@ class Column:
         """One row of the report, which is what both tools ultimately return."""
         share = (self.missing / self.total * 100) if self.total else 0.0
         return (
-            f"{self.name}: {self.kind}, {self.filled} filled, "
+            f"{shown(self.name)}: {self.kind}, {self.filled} filled, "
             f"{self.missing} missing ({share:.0f}%), {self.distinct} distinct"
         )
 

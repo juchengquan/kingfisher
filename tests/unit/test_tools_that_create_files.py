@@ -271,6 +271,30 @@ def test_a_cell_holding_a_character_xml_admits_keeps_it(control, tools, handed, 
     assert "cannot carry" not in said
 
 
+@pytest.mark.parametrize("name", ["bar_chart", "csv_filter"])
+def test_a_cell_the_csv_reader_will_not_parse_is_said_rather_than_raised(
+    name, tools, handed, session_dir
+):
+    """These two read a CSV the way the profile tools do and died the same way: one
+    cell of 200,000 characters -- 0.6% of their own 32 MB cap -- and the model was
+    handed `Error: Error: field larger than field limit (131072)`, naming no file, no
+    column and no remedy.
+
+    Both, because the sentence is written out in each file for the reason `_fetched` is:
+    these are examples a deployment copies one at a time.
+    """
+    (session_dir / "inputs" / "wide.csv").write_text(
+        'a,b\n1,"' + "y" * 200_000 + '"\n', encoding="utf-8"
+    )
+    asked = {"column": "a", "value": "1"} if name == "csv_filter" else {}
+
+    with pytest.raises(ValueError, match="longer than the 131072 characters") as refused:
+        on_backend(tools[name], handed, file_path="/inputs/wide.csv", **asked)
+
+    assert "/inputs/wide.csv" in str(refused.value)
+    assert "read it with `read_file`" in str(refused.value)
+
+
 def test_the_filter_keeps_exactly_the_rows_whose_cell_equals_the_value(tools, handed, session_dir):
     """A match by prefix or by case keeps a row nobody asked for, a short row read past
     its end stops the export, and an export is believed without being read.

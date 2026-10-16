@@ -13,6 +13,7 @@ from __future__ import annotations
 import csv
 import io
 from pathlib import PurePosixPath
+from typing import Any
 
 from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
@@ -41,6 +42,29 @@ def _fetched(runtime: ToolRuntime[ToolContext], file_path: str) -> bytes:
         )
         raise ValueError(msg)
     return got.content
+
+
+#: What the `csv` module refuses to parse: one field longer than this raises
+#: `_csv.Error`, and `csv.field_size_limit()` is 131,072 by default. A tool that reads
+#: 32 MB therefore dies on a cell that is 0.6% of its own cap -- measured, all four
+#: shipped CSV tools did, and through the failure guard the model was handed `Error:
+#: Error: field larger than field limit (131072)`: no file, no column, no remedy, and
+#: a type name reading `Error`. Raised deliberately rather than by widening the limit,
+#: which is process-wide state an example tool has no business setting.
+MAX_FIELD_BYTES = csv.field_size_limit()
+
+
+def _parsed(file_path: str, rows: Any) -> list[list[str]]:
+    """Every row, turning the one failure `csv` has into an answer a model can act on."""
+    try:
+        return [row for row in rows if row]
+    except csv.Error as exc:
+        msg = (
+            f"{file_path}: one cell is longer than the {MAX_FIELD_BYTES} characters "
+            f"the CSV reader parses ({exc}) -- ask for a file whose cells are smaller, "
+            f"or read it with `read_file`"
+        )
+        raise ValueError(msg) from exc
 
 
 def _size(count: int) -> str:
@@ -73,7 +97,7 @@ def csv_filter(
     `/scratchpad/north.csv`; leave it out for `/outputs/filtered.csv`.
     """
     text = _fetched(runtime, file_path).decode("utf-8-sig")
-    rows = [row for row in csv.reader(io.StringIO(text, newline="")) if row]
+    rows = _parsed(file_path, csv.reader(io.StringIO(text, newline="")))
     header, *body = rows or [[]]
     names = [name.strip() for name in header]
     if column.strip() not in names:
