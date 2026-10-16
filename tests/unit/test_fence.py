@@ -364,25 +364,25 @@ def test_the_fence_follows_the_confinement_rather_than_deciding_again(sandlock, 
     Both directions, on every platform: a test that only checked the unfenced branch
     would pass on this machine and prove nothing about the one the fence is for.
     """
-    from kingfisher.plugins.sessions.backend import _fence_for
     from kingfisher.plugins.sessions.sandbox.confinement import _unwrapped
+    from kingfisher.plugins.sessions.shell import fence_for
 
     session = tmp_path / "sessions" / "s1"
     ensure_session_layout(session)
     unfenced = Confinement(wrap=_unwrapped, warning="nothing here")
-    assert _fence_for(cfg, session, unfenced, (), {}) is None
+    assert fence_for(cfg, session, unfenced, (), {}) is None
 
     fenced = Confinement(wrap=_unwrapped, mechanism="Landlock")
-    runner = _fence_for(cfg, session, fenced, (), {})
+    runner = fence_for(cfg, session, fenced, (), {})
     assert isinstance(runner, LandlockRunner)
     assert str(session / OUTPUTS) in runner.policy.fs_writable
 
 
 def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
     """The two mechanisms must fence the same shell the same way."""
-    from kingfisher.plugins.sessions.backend import _fence_for
     from kingfisher.plugins.sessions.sandbox import bubblewrap, fence
     from kingfisher.plugins.sessions.sandbox.confinement import _unwrapped
+    from kingfisher.plugins.sessions.shell import fence_for
 
     seen: dict[str, tuple[Path, list[Path], list[Path], str | None]] = {}
     saved: dict[str, object] = {}
@@ -410,7 +410,7 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
     skills.mkdir()
 
     for mechanism in ("bubblewrap", "Landlock"):
-        _fence_for(
+        fence_for(
             cfg, session, Confinement(wrap=_unwrapped, mechanism=mechanism), (skills,), {}
         )
 
@@ -434,9 +434,9 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
 
 def test_every_directory_on_the_agent_s_path_is_reachable(cfg, tmp_path, monkeypatch):
     """The rule the fence exists to keep, stated the way it actually breaks."""
-    from kingfisher.plugins.sessions.backend import _fence_for, shell_env
     from kingfisher.plugins.sessions.sandbox import bubblewrap, fence
     from kingfisher.plugins.sessions.sandbox.confinement import _unwrapped
+    from kingfisher.plugins.sessions.shell import fence_for, shell_env
 
     seen: dict[str, tuple[list[Path], list[Path]]] = {}
 
@@ -454,7 +454,7 @@ def test_every_directory_on_the_agent_s_path_is_reachable(cfg, tmp_path, monkeyp
     session.mkdir(parents=True)
     env = shell_env(cfg, session)
 
-    _fence_for(cfg, session, Confinement(wrap=_unwrapped, mechanism="Landlock"), (), env)
+    fence_for(cfg, session, Confinement(wrap=_unwrapped, mechanism="Landlock"), (), env)
     readable, writable = seen["Landlock"]
     granted = [Path(p) for p in SYSTEM_PATHS] + readable + writable + [session]
 

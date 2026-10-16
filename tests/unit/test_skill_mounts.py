@@ -17,7 +17,8 @@ from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skills import registry as skill_registry
 from kingfisher.core.environment import paths_from_env
-from kingfisher.plugins.sessions.backend import backend_at, shell_env, skills_view
+from kingfisher.plugins.sessions.backend import backend_at
+from kingfisher.plugins.sessions.shell import shell_env, skills_view
 from tests.conftest import FakeToolCallingModel
 
 macos = pytest.mark.skipif(
@@ -359,7 +360,7 @@ def test_the_linux_fence_is_granted_the_view(mounted, session_dir, monkeypatch):
 
     handed = []
     monkeypatch.setattr(
-        backend, "_fence_for", lambda cfg, session, confined, skills, env: handed.append(skills)
+        backend, "fence_for", lambda cfg, session, confined, skills, env: handed.append(skills)
     )
     backend_at(mounted, session_dir)
 

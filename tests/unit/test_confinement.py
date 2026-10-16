@@ -634,8 +634,8 @@ def test_nothing_configured_is_not_confined_elsewhere(cfg, tmp_path):
 
 # -- what is doing the confining, by name -------------------------------------
 
-#: Why a mechanism is not one `_fence_for` builds a runner for. A mechanism that is
-#: in neither this table nor `LINUX_FENCES` is one `_fence_for` answers `None` for:
+#: Why a mechanism is not one `fence_for` builds a runner for. A mechanism that is
+#: in neither this table nor `LINUX_FENCES` is one `fence_for` answers `None` for:
 #: the shell then runs unfenced while the `Confinement` beside it says confined.
 NOT_A_LINUX_FENCE = {
     "sandbox-exec": "confines by wrapping the command string, not the process",
@@ -657,7 +657,7 @@ def _mechanisms_in(module) -> list[ast.keyword]:
 def test_every_mechanism_is_named_and_accounted_for():
     """The vocabulary is closed, and a fourth mechanism has to say which half it is in.
 
-    `_fence_for` builds a runner for the names in `LINUX_FENCES` and nothing else, so
+    `fence_for` builds a runner for the names in `LINUX_FENCES` and nothing else, so
     one added here and not there is a shell running unfenced while `doctor` reports a
     fence. Nothing connected the two until they were named -- three files outside
     `confinement` branched on the spellings.
@@ -668,7 +668,7 @@ def test_every_mechanism_is_named_and_accounted_for():
     literal = [word for word in written if not isinstance(word.value, ast.Name)]
     assert not literal, (
         "a mechanism is handed over by name, never as a literal -- a spelling written "
-        "out here is one `_fence_for` and `doctor` cannot be renamed along with"
+        "out here is one `fence_for` and `doctor` cannot be renamed along with"
     )
     produced = {getattr(confinement, word.value.id) for word in written}
 
