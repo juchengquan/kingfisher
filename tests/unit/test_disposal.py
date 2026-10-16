@@ -6,10 +6,11 @@ import asyncio
 
 import pytest
 
-from kingfisher import Kingfisher, LocalSessions
+from kingfisher import Kingfisher
 from kingfisher.core.request import Request
 from kingfisher.core.session import retention
 from kingfisher.core.session.model import still_held
+from kingfisher.plugins import LocalSessions
 from tests.conftest import StubCheckpointer, Through, start
 from tests.unit.test_run import StubAgent
 

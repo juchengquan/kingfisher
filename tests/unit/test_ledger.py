@@ -24,7 +24,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.types import Command
 
 from assets.middlewares.tool_note import ToolNote
-from kingfisher import Kingfisher, LocalSessions, Request
+from kingfisher import Kingfisher, Request
 from kingfisher.core.access.source_ids import parse
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.recorder import Recorder
@@ -46,6 +46,7 @@ from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger, entry_id
 from kingfisher.core.session.transcript import from_json
 from kingfisher.core.session.turn import ledger_delta, ledger_index, turn_message
+from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.sandbox.confinement import EXTERNAL

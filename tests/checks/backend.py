@@ -180,7 +180,7 @@ def host_path_refusal(make: Callable[[], Any]) -> None:
             f"reading a host path was refused with {type(refused).__name__}, which "
             "HostPathGuard does not catch -- it catches HostPathError and turns it "
             "into a correction the model can act on. Raise "
-            "kingfisher.HostPathError, or do not "
+            "kingfisher.plugins.HostPathError, or do not "
             f"refuse. Got: {refused}"
         )
         raise AssertionError(msg) from refused

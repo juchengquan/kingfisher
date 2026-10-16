@@ -6,7 +6,7 @@ import pytest
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
-from kingfisher import Kingfisher, LocalSessions, backend_at
+from kingfisher import Kingfisher
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.backend import skills_sources
@@ -17,6 +17,7 @@ from kingfisher.core.agent.kinds.declared_middleware import (
 )
 from kingfisher.core.agent.prompting import kingfishers_shell, system_prompt
 from kingfisher.core.definitions.agents.spec import AgentSpec
+from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import (
     FakeToolCallingModel,
     declared_subagents,

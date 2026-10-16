@@ -12,10 +12,11 @@ from pathlib import Path
 import pytest
 from deepagents.backends import FilesystemBackend
 
-from kingfisher import Kingfisher, LocalSessions
+from kingfisher import Kingfisher
 from kingfisher.cli.__main__ import main
 from kingfisher.core.agent.backend import bundled_skills_route
 from kingfisher.core.layout import SKILLS_ROUTE
+from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from tests.checks.sessions import CONTRACT_SESSIONS, SESSIONS_CHECKS
 from tests.conftest import StubCheckpointer

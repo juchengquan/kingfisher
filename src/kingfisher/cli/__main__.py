@@ -61,7 +61,7 @@ if TYPE_CHECKING:
     from typing import TextIO
 
     from kingfisher import Config, Kingfisher, RunResult
-    from kingfisher.plugins.events import JsonlRunEvents
+    from kingfisher.plugins import JsonlRunEvents
 
 #: Read from the working directory and nowhere else. A bare `load_dotenv()`
 #: walks up looking for one, which is the behaviour this deliberately does not
@@ -583,7 +583,7 @@ def _kept_in(log: Path | None) -> JsonlRunEvents | None:
     """
     if log is None:
         return None
-    from kingfisher.plugins.events import JsonlRunEvents  # noqa: PLC0415
+    from kingfisher.plugins import JsonlRunEvents  # noqa: PLC0415
 
     return JsonlRunEvents(log.expanduser())
 

@@ -7,7 +7,7 @@ import logging
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 
-from kingfisher import Kingfisher, LocalSessions
+from kingfisher import Kingfisher
 from kingfisher.core.interfaces import RunEvents
 from kingfisher.core.request import Request
 from kingfisher.core.session.runlog import (
@@ -16,6 +16,7 @@ from kingfisher.core.session.runlog import (
     RunLogger,
     usage_of,
 )
+from kingfisher.plugins import LocalSessions
 from tests.conftest import RecordedEvents, StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 

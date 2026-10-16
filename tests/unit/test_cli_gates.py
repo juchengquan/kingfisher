@@ -16,12 +16,13 @@ from typing import Any
 import pytest
 
 import kingfisher
-from kingfisher import LocalSessions
+import kingfisher.plugins
 from kingfisher.cli import __main__ as cli
 from kingfisher.core.plugins import Plugins
 from kingfisher.core.result import AWAITING, RunResult
 from kingfisher.core.result import PendingDecision as Pending
 from kingfisher.core.session.steps import drive
+from kingfisher.plugins import LocalSessions
 from tests.conftest import RecordedEvents, Through
 
 PAUSED = RunResult(
@@ -322,7 +323,8 @@ def test_the_whole_loop_runs_through_the_command(cfg, session_dir, monkeypatch, 
     from langchain_core.messages import AIMessage
     from langgraph.checkpoint.memory import InMemorySaver
 
-    from kingfisher import Kingfisher, Request, backend_at
+    from kingfisher import Kingfisher, Request
+    from kingfisher.plugins import backend_at
     from tests.conftest import FakeToolCallingModel
 
     graph = create_deep_agent(
@@ -376,7 +378,7 @@ def _a_paused_session_only_a_reaches(cfg):
 
     an_agent(cfg, "only_a", source_ids="[A]")
     policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
-    kf = kingfisher.Kingfisher(policied, sessions=kingfisher.LocalSessions())
+    kf = kingfisher.Kingfisher(policied, sessions=kingfisher.plugins.LocalSessions())
     start(policied, "s-1")
     pin(kf, "s-1", "only_a")
     mark = {"pending": pending_as_mark([PAUSED.pending[0]])}

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher import backend_at
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
+from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, subagents_dir
 
 SPEC = """

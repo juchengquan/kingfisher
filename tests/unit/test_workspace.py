@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 
-from kingfisher import LocalSessions, WorkspacePaths
+from kingfisher import WorkspacePaths
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.layout import (
     HARNESS,
@@ -11,6 +11,7 @@ from kingfisher.core.layout import (
     SESSION_DIRS,
 )
 from kingfisher.core.workspace import EXAMPLE, EXAMPLES, ensure_definitions, ensure_layout
+from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.folders import LocalSessionDirs, ensure_session_layout
 from tests.conftest import StubCheckpointer
 

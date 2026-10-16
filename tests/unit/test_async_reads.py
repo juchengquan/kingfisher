@@ -9,9 +9,10 @@ import pytest
 import yaml
 from deepagents.backends import CompositeBackend, FilesystemBackend
 
-from kingfisher import Kingfisher, LocalSessions
+from kingfisher import Kingfisher
 from kingfisher.core.access.source_ids import parse
 from kingfisher.core.request import Request
+from kingfisher.plugins import LocalSessions
 from tests.conftest import StubCheckpointer, an_agent, pin, start
 from tests.unit.test_run import StubAgent
 

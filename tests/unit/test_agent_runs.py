@@ -5,13 +5,13 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import LocalSessions, backend_at
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.prompting import system_prompt
 from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
 from kingfisher.core.session.steps import drive
+from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import FakeToolCallingModel, harness_in
 
 NARROW = """name: narrow

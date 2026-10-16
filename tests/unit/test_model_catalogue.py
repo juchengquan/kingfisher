@@ -11,7 +11,6 @@ import os
 
 import pytest
 
-from kingfisher import LocalSessions
 from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.config import (
     Config,
@@ -22,6 +21,7 @@ from kingfisher.core.config import (
     Models,
 )
 from kingfisher.core.model_catalogue import load
+from kingfisher.plugins import LocalSessions
 
 GOOD = """
 endpoints:

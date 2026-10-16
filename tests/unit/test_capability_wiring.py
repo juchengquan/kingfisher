@@ -15,7 +15,6 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import Field
 from typing_extensions import TypedDict
 
-from kingfisher import LocalSessions
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.activation import available_skills
 from kingfisher.core.agent.assembly import (
@@ -26,6 +25,7 @@ from kingfisher.core.agent.backend import skills_sources
 from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.core.agent.prompting import memory_guidelines
 from kingfisher.core.layout import MEMORY
+from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import (
     FakeToolCallingModel,
@@ -699,9 +699,9 @@ def test_a_turn_is_built_inside_the_deployments_ceiling(cfg, monkeypatch):
     withheld tool reached the graph and the whole suite stayed green, because every
     other fixture here leaves the deployment unrestricted, where the two are equal.
     """
-    from kingfisher import LocalSessions
     from kingfisher.core.request import Request
     from kingfisher.core.service import Kingfisher
+    from kingfisher.plugins import LocalSessions
     from tests.conftest import an_agent
 
     an_agent(cfg, "only")

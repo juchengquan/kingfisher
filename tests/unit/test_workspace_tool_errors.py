@@ -12,8 +12,8 @@ import asyncio
 import pytest
 from langchain_core.messages import ToolMessage
 
-from kingfisher import backend_at
 from kingfisher.core.agent.middlewares.workspace_tools import WorkspaceToolErrors
+from kingfisher.plugins import backend_at
 
 
 class _Request:

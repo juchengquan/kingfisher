@@ -6,10 +6,10 @@ from dataclasses import replace
 
 import pytest
 
-from kingfisher import LocalSessions
 from kingfisher.core.config import ConfigError
 from kingfisher.core.service import Kingfisher
 from kingfisher.core.session import threads
+from kingfisher.plugins import LocalSessions
 from tests.conftest import StubCheckpointer
 from tests.unit.test_run import StubAgent
 

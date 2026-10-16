@@ -8,7 +8,6 @@ import pytest
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
-from kingfisher import backend_at
 from kingfisher.core.access.capabilities import (
     ALL,
     Capabilities,
@@ -22,6 +21,7 @@ from kingfisher.core.agent.middlewares.narrowing import ToolAllowlist
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.skills.registry import Listed, SkillRegistry
 from kingfisher.core.definitions.subagents.spec import SubagentError
+from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, a_subagent, subagents_dir
 
 HELPER = """name: helper

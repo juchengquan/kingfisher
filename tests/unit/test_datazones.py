@@ -9,7 +9,6 @@ import pytest
 import yaml
 
 import kingfisher
-from kingfisher import LocalSessions, backend_at
 from kingfisher.cli.__main__ import main
 from kingfisher.core.access.source_ids import (
     UNSCOPED,
@@ -26,6 +25,7 @@ from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, Too
 from kingfisher.core.definitions.tools.spec import tool_name
 from kingfisher.core.inventory import inventory
 from kingfisher.core.service import Kingfisher
+from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import subagents_dir, tools_dir
 

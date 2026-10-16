@@ -220,8 +220,8 @@ def test_the_shell_cannot_write_the_harness_of_a_session_it_opened(cfg):
     """Driven through `LocalSessions`, which decides where the session is, rather than
     handed a path.
     """
-    from kingfisher import LocalSessions
     from kingfisher.core.layout import HARNESS
+    from kingfisher.plugins import LocalSessions
 
     shell = LocalSessions().open(cfg, "the-one")
     harness = cfg.workspace / "sessions" / "the-one" / HARNESS

@@ -7,12 +7,12 @@ import functools
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
-from kingfisher import backend_at
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.kinds.tools import registered_tools
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, ToolError
 from kingfisher.core.definitions.tools.spec import named, tool_name
+from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, tools_dir
 
 BARE = '''

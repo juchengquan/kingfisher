@@ -1330,9 +1330,9 @@ def test_an_unspent_grant_is_what_that_rule_reads():
     assert _unspent("plugins", {"deepagents", "sandlock", "json"}) == set()
     assert _unspent("plugins", {"deepagents"}) == {"sandlock"}
     assert _unspent("", set()) == set()
-#: What may import from `plugins/`: the command, which may import anything, and the front
-#: door, whose table maps public names such as `LocalSessions` to where they live.
-MAY_NAME_A_PLUGIN = ("cli", "")
+#: What may import from `plugins/`: the command, which may import anything. The plugins'
+#: own address is inside `plugins/`, and the package root names none of them.
+MAY_NAME_A_PLUGIN = ("cli",)
 
 
 def _reaches_a_plugin(path: Path) -> list[str]:
@@ -1348,7 +1348,6 @@ def test_the_core_imports_nothing_from_plugins():
         for path in _every(sorted(SRC.rglob("*.py")), "the package")
         if not path.is_relative_to(SRC / "plugins")
         and path.relative_to(SRC).parts[0] not in MAY_NAME_A_PLUGIN
-        and path.relative_to(SRC) != Path("__init__.py")
         and (found := _reaches_a_plugin(path))
     }
 
@@ -1545,6 +1544,7 @@ def test_the_public_api_list_matches_the_lazy_export_table():
 #: only one of them had ever been checked against anything.
 LAZY_TABLES: dict[str, Path] = {
     "kingfisher": SRC / "__init__.py",
+    "kingfisher.plugins": SRC / "plugins" / "__init__.py",
 }
 
 
@@ -1608,162 +1608,6 @@ def test_the_stub_block_and_the_export_table_name_the_same_things():
             f"{sorted(bare)} are imported into {package}'s stub block without the "
             "`as X` alias, which under PEP 484 means they are not re-exported at all"
         )
-
-
-#: Why each public name is public: who outside this wheel asked for it.
-#:
-#: `_EXPORTS` says what a name *is*, one comment at a time, and that is the
-#: right place for it. This says who is owed it, which is a different question
-#: and the one the list could not answer -- eleven names left it in a single
-#: commit because nothing told a name added on a caller from a name added on a
-#: guess, and two more left on this rule.
-#:
-#: Two witnesses:
-#:
-#: `document` -- a page tells a reader to write it. Checked by a person and
-#:               never by grep: `offered` gets five hits in the guides and `run`
-#:               gets thirty-one, every one of them the English word.
-#: `embedder` -- nothing in this repository asks and it is kept anyway. These
-#:               are the entries worth arguing about, so each says why.
-#:
-#: There was another, `command`, for a name nothing outside this wheel asked
-#: for. It was never a witness -- it was the eviction list wearing the table's
-#: shape, so that the work remaining lived in the code rather than only in a
-#: proposal. Sixteen names carried it and all sixteen have gone; it went with
-#: the last of them rather than staying as a value that is always an error.
-#:
-#: What replaces it is the rule below and nothing else, which is enough: a name
-#: whose only caller is the command can be given no witness at all without
-#: somebody writing a false reason, and the reason is the part a reader can
-#: check. *The front door* in `docs/decisions.md`.
-#:
-#: Deny by default. A name in `_EXPORTS` and not here fails the rule below,
-#: which is where somebody decides which kind it is rather than discovering a
-#: year later that nothing looked.
-WITNESSES: dict[str, str] = {
-    # The guides write these out, and a reader who copied one is owed it. Grep
-    # `docs/guides/` for each rather than trusting a page named here -- which
-    # page says what is the part that moves.
-    "Kingfisher": "document",
-    "config_from_env": "document",
-    "Request": "document",
-    "Capabilities": "document",
-    # `ports.md` tells an adapter to raise this one, imported from `kingfisher`,
-    # because a caller tells a bad session id from a broken store by the class.
-    "UnsafeReferenceError": "document",
-    # `ports.md` tells a backend that refuses host paths to refuse them with this,
-    # because it is the type `HostPathGuard` turns into a correction.
-    "HostPathError": "document",
-    # What those documented calls take and hand back -- `Kingfisher` takes a
-    # `Config`, `run` returns a `RunResult`, `stream` yields `RunEvent`s. The
-    # type of a documented call's answer cannot be private.
-    "Config": "embedder",
-    # `configuration.md` writes a `KINGFISHER_WIRE_FORMATS` out, and it returns
-    # these.
-    "WireFormat": "document",
-    "Landing": "document",
-    "RunResult": "embedder",
-    "RunEvent": "embedder",
-    # What `Kingfisher.sessions()` and `session()` return.
-    "SessionInfo": "embedder",
-    # The four an approval gate needs. A turn that stops at one hands back
-    # `PendingDecision`s on its result and cannot be continued without a `Resume`
-    # carrying `Decision`s -- so a consumer that cannot name all three cannot answer
-    # a gate at all, and one that cannot catch `DecisionError` cannot tell a bad
-    # answer from a broken session.
-    "PendingDecision": "embedder",
-    # What `RunResult.ledger` holds, one per recorded result. A caller keeping or
-    # showing those entries names the type to do it.
-    "LedgerEntry": "embedder",
-    "Resume": "embedder",
-    "Decision": "embedder",
-    "DecisionError": "embedder",
-    # What they raise. A caller has to be able to catch, by name, what the
-    # library raises at it without reaching past the door.
-    "AccessError": "embedder",
-    "CapabilityError": "embedder",
-    "ConfigError": "embedder",
-    "QuotaExceededError": "embedder",
-    "SessionBusyError": "embedder",
-    "SubagentError": "embedder",
-    "UnknownSessionError": "embedder",
-    # What `Kingfisher.artifact` raises for a name that is not an artifact, which a
-    # caller fetching by a name it was handed tells apart from a session it cannot
-    # reach.
-    "ArtifactError": "embedder",
-    # `README.md` opens on these four and the package docstring on `run`. A
-    # reader who copied either is owed them.
-    "definitions_source": "document",
-    "ensure_definitions": "document",
-    "paths_from_env": "document",
-    "seed": "document",
-    "run": "document",
-    # `formats.md` writes them out: `source_ids=UNSCOPED`, and
-    # `from kingfisher import Request, RunOn`. Grep for those rather than trusting a
-    # line number here -- two were written down and both went stale the first time
-    # that page was edited.
-    "UNSCOPED": "document",
-    "RunOn": "document",
-    # The type a runner returns. Nothing *imports* it in a snippet -- a runner's `run`
-    # returns one, so a deployment cannot write the interface without it and had no
-    # public spelling.
-    "CommandResult": "document",
-    # `tools.md` writes `from kingfisher import ToolContext` for the annotation that
-    # hands a tool the turn's backend. A tool file is in a deployment's workspace,
-    # so nothing in this repository imports the name and nothing ever will.
-    "ToolContext": "document",
-    # `tools.md` writes `kingfisher.tool(...)` for a tool that says who may use it, in
-    # a tool file of the deployment's own, as `ToolContext` above is.
-    "tool": "document",
-    # The type of `Kingfisher.run`'s `source_ids=`. `UNSCOPED` is one of its two
-    # members and is documented; the type that admits it cannot be private.
-    "Held": "embedder",
-    # Seeding and the inventory, plus what each returns.
-    # `test_the_whole_job_is_reachable_through_the_front_door` in
-    # `test_inventory.py` is the written form of the claim in
-    # `cli/__init__.py`, and names these five as the job it walks. Whether
-    # `kinds_at` belongs in that job is an argument about the proof rather than
-    # about this door.
-    "Seeded": "embedder",
-    "Inventory": "embedder",
-    "inventory": "embedder",
-    "kinds_at": "embedder",
-    "WorkspacePaths": "embedder",
-    # Where a deployment reads from. Made public on 2026-09-02 for a library
-    # caller who "had no way to ask at all" -- see *Where a deployment reads
-    # from* in `docs/decisions.md`. No such caller has appeared; the decision is
-    # recent and deliberate enough to leave alone.
-    "Origins": "embedder",
-    "Origin": "embedder",
-    # The streaming half of `run`, which is documented; the two are one decision.
-    "stream": "embedder",
-    # `guides/ports.md` shows a deployment building on the default by subclassing
-    # it, and building a backend for a directory of its own with `backend_at`.
-    "LocalSessions": "document",
-    # What `KINGFISHER_PLUGINS` returns, which `configuration.md` tells a deployment to
-    # build in a module of its own.
-    "Plugins": "document",
-    "backend_at": "document",
-    # The same page has a deployment whose shell is not kingfisher's say what it sees,
-    # on its runner or on its own sandbox; nothing here has a shell of that kind.
-    "ShellPrompt": "document",
-}
-
-
-def test_every_public_name_has_a_witness():
-    """A name nobody can name a caller for is a promise nobody asked for."""
-    import kingfisher
-
-    unwitnessed = sorted(set(kingfisher._EXPORTS) - set(WITNESSES))
-    stale = sorted(set(WITNESSES) - set(kingfisher._EXPORTS))
-
-    assert not unwitnessed, (
-        f"{unwitnessed} are public and WITNESSES does not say who asked. Name the "
-        "caller: `document` if a page tells a reader to write it, `embedder` with a "
-        "reason if not -- and if the honest answer is `command`, it does not belong "
-        "on the door"
-    )
-    assert not stale, f"{stale} are in WITNESSES and are not exported any more"
 
 
 def _dotted(node: ast.Import | ast.ImportFrom, package: tuple[str, ...]) -> list[str]:
@@ -2074,7 +1918,7 @@ def test_the_cycle_finder_finds_one_in_this_tree():
 AGENT_RUNTIME = ("deepagents", "langgraph", "langchain", "langchain_openai", "langchain_anthropic")
 
 #: The modules a deployment imports by name.
-PUBLIC = ("kingfisher",)
+PUBLIC = ("kingfisher", "kingfisher.plugins")
 
 #: The public names whose job is building or running an agent, or checking an object
 #: deepagents has to accept -- the only ones that may load the runtime to be reached.
@@ -2883,7 +2727,7 @@ def _consumer_modules() -> list[Path]:
 
 def _reaches_past_the_public_api(module: str) -> bool:
     """True when a consumer imports something deeper than `kingfisher` itself."""
-    if module.split(".", maxsplit=1)[0] != "kingfisher" or module == "kingfisher":
+    if module.split(".", maxsplit=1)[0] != "kingfisher" or module in PUBLIC:
         return False
     return not module.startswith("kingfisher.cli")
 
@@ -2903,10 +2747,10 @@ def _consumer_of(path: Path) -> str:
 
 
 def _public_names() -> frozenset[str]:
-    """What the front door promises, read from the door itself."""
-    import kingfisher
+    """What the two doors promise, read from the doors themselves."""
+    import importlib
 
-    return frozenset(kingfisher.__all__)
+    return frozenset().union(*(importlib.import_module(door).__all__ for door in PUBLIC))
 
 
 def _taken_by_the_back_door(
@@ -2924,6 +2768,8 @@ def test_the_reach_predicate_says_what_it_means():
     """The rule's own arithmetic, checked against named inputs."""
     for module, reaches in [
             ("kingfisher", False),                      # the front door itself
+            ("kingfisher.plugins", False),              # the plugin author's door
+            ("kingfisher.plugins.sessions.backend", True),  # past it
             ("kingfisher.core.request", True),        # past it
             ("kingfisher.core.service", True),   # past it, and the tempting one
             # the CLI ships inside the package

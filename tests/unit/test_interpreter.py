@@ -9,12 +9,13 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from kingfisher import Kingfisher, LocalSessions, backend_at
+from kingfisher import Kingfisher
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.interpreter import release_interpreter
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.request import Request
+from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import (
     FakeToolCallingModel,
     an_agent,

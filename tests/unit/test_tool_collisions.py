@@ -8,10 +8,10 @@ import pytest
 from langchain_core.messages import AIMessage
 from langgraph.prebuilt.tool_node import ToolNode
 
-from kingfisher import backend_at
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError, all_but
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
+from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
 from tests.unit.test_delegation_ceiling import _subagent_graphs
 

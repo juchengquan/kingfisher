@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 from deepagents.backends import CompositeBackend, LocalShellBackend
 
-from kingfisher import CommandResult, LocalSessions, ShellPrompt, backend_at
 from kingfisher.core.agent.backend import shell_prompt_of
 from kingfisher.core.agent.prompting import kingfishers_shell, render_system_prompt
 from kingfisher.core.layout import Layout
+from kingfisher.plugins import CommandResult, LocalSessions, ShellPrompt, backend_at
 
 #: What a command can see of the claims kingfisher's own wording makes.
 PROBE = 'echo "pwd=$(pwd)"; echo "tmp=$TMPDIR"; echo "skills=$KINGFISHER_SKILLS"'

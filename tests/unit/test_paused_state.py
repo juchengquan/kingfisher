@@ -167,7 +167,8 @@ def test_a_turn_that_neither_paused_nor_resumed_deletes_nothing_at_its_end(cfg, 
     """
     from deepagents.backends import CompositeBackend
 
-    from kingfisher import Kingfisher, LocalSessions, Request
+    from kingfisher import Kingfisher, Request
+    from kingfisher.plugins import LocalSessions
     from tests.conftest import StubCheckpointer
     from tests.unit.test_run import StubAgent
 

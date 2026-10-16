@@ -29,12 +29,13 @@ The core-and-plugins work renamed what a deployment names and moved two things o
 | `backends=` on `Kingfisher`, `run()` and `stream()` | `sessions=`, required on all three, with a graph or without |
 | `claim(name, ...)`, `release(name)`, `held(name, ...)` on the backend `open` returns | `claim(cfg, session_id, ...)`, `release(cfg, session_id)`, `held(cfg, session_id, ...)` on your `Sessions`, one lock per session |
 | `KINGFISHER_SESSION_BACKENDS_FACTORY` | `KINGFISHER_SESSIONS` |
-| No way to hand the command its run events, conversation store or middleware | `KINGFISHER_PLUGINS`, naming something that returns a `kingfisher.Plugins` |
+| No way to hand the command its run events, conversation store or middleware | `KINGFISHER_PLUGINS`, naming something that returns a `kingfisher.plugins.Plugins` |
 | `Adapter`, `ADAPTERS`, `Endpoint.adapter`, `KINGFISHER_ADAPTERS_FACTORY` | `WireFormat`, `WIRE_FORMATS`, `Endpoint.wire_format`, `KINGFISHER_WIRE_FORMATS` |
 | `Config.deployment_prompt`, and `PROMPT.md` in the workspace | `INSTRUCTIONS.md` beside the definitions, or `instructions=` on `Kingfisher`: an object with `text(cfg) -> str` |
 | The repository Protocols in `core/interfaces.py` | Gone. Definitions are read from a directory; stage yours into one |
 | `catalogue=` and `grants=` on `Kingfisher` | `Config.definitions`, pointed at the folder you staged, and `Config.grants` |
 | `COMMAND_RUNNER_CONTRACT`, `BACKEND_CONTRACT`, `SESSION_BACKENDS_CONTRACT` from `kingfisher` | Gone from the package. The same checks are in this repository's `tests/checks/`, to copy; the promises they hold are on each interface's docstring |
+| `LocalSessions`, `backend_at`, `Plugins`, `ShellPrompt`, `CommandResult`, `HostPathError` and `WireFormat` from `kingfisher` | From `kingfisher.plugins`, the address for writing a plugin. `Sessions`, `RunEvents`, `Instructions`, `CommandRunner`, `JsonlRunEvents`, `InstructionsFile` and `WIRE_FORMATS` are public there too, where they were not public anywhere |
 
 ## deepagents' host paths only where they are this host's, after #760
 

@@ -497,7 +497,8 @@ def test_a_workspace_with_no_agents_is_told_how_to_write_one(cfg):
     """`--from DIR` needs a DIR, and an installed kingfisher has none -- the hint is
     correct and terminal.
     """
-    from kingfisher import Kingfisher, LocalSessions
+    from kingfisher import Kingfisher
+    from kingfisher.plugins import LocalSessions
 
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
@@ -516,7 +517,8 @@ def test_the_starter_names_where_agents_are_read_from(cfg, tmp_path):
     """
     from dataclasses import replace
 
-    from kingfisher import Kingfisher, LocalSessions
+    from kingfisher import Kingfisher
+    from kingfisher.plugins import LocalSessions
 
     (tmp_path / "catalogue").mkdir()
     elsewhere = tmp_path / "catalogue" / "agents"
@@ -532,7 +534,8 @@ def test_the_starter_names_where_agents_are_read_from(cfg, tmp_path):
 
 def test_a_workspace_that_has_agents_is_not_lectured(cfg):
     """The starter is for an empty workspace."""
-    from kingfisher import Kingfisher, LocalSessions
+    from kingfisher import Kingfisher
+    from kingfisher.plugins import LocalSessions
     from tests.conftest import an_agent
 
     an_agent(cfg, "only")

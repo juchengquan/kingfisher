@@ -11,9 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import Kingfisher, LocalSessions, Origin
+from kingfisher import Kingfisher, Origin
 from kingfisher.cli.__main__ import build_parser, main
 from kingfisher.core.definitions.skills.catalogue import reachable
+from kingfisher.plugins import LocalSessions
 from tests.conftest import repository_root, start, verbs
 
 
@@ -407,7 +408,7 @@ def test_a_warning_of_kingfishers_own_is_one_plain_line(cfg, session_dir, monkey
     """
     from dataclasses import replace
 
-    from kingfisher import backend_at
+    from kingfisher.plugins import backend_at
 
     def turn():
         backend_at(replace(cfg, shell_sandbox="off"), session_dir)

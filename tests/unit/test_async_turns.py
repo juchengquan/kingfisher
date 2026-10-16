@@ -13,11 +13,11 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import LocalSessions
 from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
 from kingfisher.core.session import runtime
 from kingfisher.core.session.model import SessionBusyError
+from kingfisher.plugins import LocalSessions
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 
@@ -194,7 +194,7 @@ def test_disposing_of_a_session_does_not_happen_on_the_event_loop(cfg, monkeypat
     """
     import threading
 
-    from kingfisher import LocalSessions
+    from kingfisher.plugins import LocalSessions
 
     on_main: dict[str, bool] = {}
 

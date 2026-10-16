@@ -7,9 +7,9 @@ the core never does.
 
 from __future__ import annotations
 
-from kingfisher import Config, LocalSessions, Plugins
-from kingfisher.core.interfaces import Sessions
+from kingfisher import Config
 from kingfisher.core.wiring import store_named
+from kingfisher.plugins import LocalSessions, Plugins, Sessions
 
 
 def configured_sessions(cfg: Config) -> Sessions:
