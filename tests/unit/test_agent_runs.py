@@ -102,11 +102,11 @@ def test_a_request_narrows_the_agent_and_cannot_widen_it(cfg, session_dir):
     assert "execute" not in held, "a request reached past what the agent declared"
 
 
-def test_the_agents_prompt_is_added_after_the_harness_and_the_workspace(cfg):
+def test_the_agents_prompt_is_added_after_the_harness_and_the_instructions(cfg):
     """Three parts, most specific last."""
-    (cfg.workspace / "PROMPT.md").write_text("House rule: be terse.", encoding="utf-8")
-
-    assembled = system_prompt(cfg, "You read files and say what is in them.")
+    assembled = system_prompt(
+        cfg, "You read files and say what is in them.", instructions="House rule: be terse."
+    )
 
     harness = assembled.index("/inputs")
     house = assembled.index("House rule")

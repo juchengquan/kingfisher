@@ -102,11 +102,11 @@ def test_a_runner_s_own_wording_is_what_the_agent_is_told(cfg):
 def test_wording_without_a_runner_is_refused(cfg, session_dir):
     """Kingfisher's own shell is described by what holds of it, so wording handed in for
     it could only be wrong -- and a deployment wanting to add to every prompt has
-    `deployment_prompt`, which the refusal names.
+    the instructions, which the refusal names.
     """
-    with pytest.raises(TypeError, match="deployment_prompt"):
+    with pytest.raises(TypeError, match=r"INSTRUCTIONS\.md"):
         LocalSessions(shell_prompt=THEIRS)
-    with pytest.raises(TypeError, match="deployment_prompt"):
+    with pytest.raises(TypeError, match=r"INSTRUCTIONS\.md"):
         backend_at(cfg, session_dir, shell_prompt=THEIRS)
 
 

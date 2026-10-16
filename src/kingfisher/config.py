@@ -124,10 +124,11 @@ def definition_roots_for(definitions: Path) -> dict[str, Path]:
 
 
 def authored_files_for(definitions: Path) -> dict[str, Path]:
-    """The two files a deployment writes itself, beside its definitions."""
+    """The files a deployment writes itself, beside its definitions."""
     return {
         "models.yaml": definitions / "models.yaml",
         "source_ids.yaml": definitions / "source_ids.yaml",
+        "INSTRUCTIONS.md": definitions / "INSTRUCTIONS.md",
     }
 
 
@@ -434,12 +435,6 @@ class Config:
     # reads one answer. Measured: with it on, a two-turn workspace carries a ~0.4MB
     # database it never reads back.
     conversation_enabled: bool = True
-    # Deployment-wide prompt text, appended after the harness prompt for every agent
-    # and subagent (ahead of a workspace's PROMPT.md and an agent's own line). House
-    # rules a library integrator sets in code: tone, a standing instruction, a policy.
-    # Set once at startup, so it stays part of the cached prompt prefix rather than
-    # moving per request. It adds to the harness prompt; it does not replace it.
-    deployment_prompt: str = ""
     # The per-session folder names the agent addresses. Defaulted to kingfisher's own;
     # a deployment renames the leaves by passing a `Layout`. Set once at startup, so the
     # routes, the sandbox rules and the prompt that derive from it are stable per
@@ -481,12 +476,13 @@ class Config:
 
     @property
     def authored_files(self) -> dict[str, Path]:
-        """Where `models.yaml` and `source_ids.yaml` are read from, found or not."""
+        """Where the files a deployment writes are read from, found or not."""
         # Where they were actually read, ahead of where the folder says. A `Config` built
         # in code may load either from anywhere, and the macOS profile denies the shell
         # this list: the one it must not edit is the one the next start reads.
         beside = authored_files_for(self.definitions)
         return {
+            **beside,
             "models.yaml": self.models.source or beside["models.yaml"],
             "source_ids.yaml": self.access_source or beside["source_ids.yaml"],
         }

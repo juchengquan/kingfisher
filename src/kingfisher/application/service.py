@@ -108,6 +108,11 @@ from kingfisher.infrastructure.harness.kinds.declared_middleware import (
 )
 from kingfisher.infrastructure.harness.ledger import Ledger, keep_ledger
 from kingfisher.infrastructure.harness.runlog import LoggedRunEvents, RunLogger
+from kingfisher.infrastructure.prompting import (
+    Instructions,
+    InstructionsFile,
+    refuse_a_workspace_prompt,
+)
 from kingfisher.infrastructure.session_files import (
     collect_artifacts,
     place_inputs,
@@ -258,8 +263,12 @@ class Kingfisher(SessionMethods, Disposal):
         middlewares: Mapping[str, MiddlewareFactory] | None = None,
         graph: Any | None = None,
         run_events: RunEvents | None = None,
+        # Left out, `INSTRUCTIONS.md` beside the definitions. Asked once per agent built,
+        # so a change reaches the next turn.
+        instructions: Instructions | None = None,
     ) -> None:
         self.cfg = cfg or config_module.config_from_env()
+        refuse_a_workspace_prompt(self.cfg)
         config_module.enforce_local_only_tracing()
         # Asked for here rather than at the first async turn, so a second size in
         # one process is refused where the service is built.
@@ -346,6 +355,7 @@ class Kingfisher(SessionMethods, Disposal):
         # middleware is. Registering is not the same as permitting: `grants`
         # still clamps which registered names a request may reach.
         self.middlewares: Mapping[str, MiddlewareFactory] = middlewares or {}
+        self.instructions: Instructions = instructions or InstructionsFile()
         # Walked here rather than when a definition names one. An entry nothing
         # can build is a fact about this deployment's own code, true before any
         # request arrives and true of entries no definition names yet -- so the
@@ -468,6 +478,7 @@ class Kingfisher(SessionMethods, Disposal):
             capabilities=capabilities,
             run_on=request.run_on,
             middleware_registry=self.middlewares,
+            instructions=self.instructions.text(self.cfg),
             checkpointer=self.threads if checkpointer is _UNSET else checkpointer,
             catalogue=self.catalogue,
             ledger=ledger,

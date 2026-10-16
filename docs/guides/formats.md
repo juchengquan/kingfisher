@@ -119,13 +119,18 @@ same agent again; naming a different one is refused.
 ### The prompt is added to, not replaced
 
 `system_prompt` is the same word a subagent file uses, doing a different job. A
-subagent's *is* the whole prompt. An agent's is the last of three parts:
+subagent's is the whole of its prompt but for the deployment's instructions ahead of
+it. An agent's is the last of three parts:
 
     prompts/system.md    what the harness is — /inputs is read-only, /skills is
                          loadable, where memory lives. Ships with kingfisher
-    PROMPT.md            what this workspace is about. Yours, optional, and it
-                         reaches your subagents too
+    INSTRUCTIONS.md      what this deployment asks of every agent. Yours, optional,
+                         beside the definitions, and it reaches your subagents too
     system_prompt        what this agent is. Yours, and required
+
+The middle part can come from code instead: `instructions=` on `Kingfisher` takes any
+object with `text(cfg) -> str`, asked once per agent built, so a change reaches the
+next turn.
 
 There is no way to replace the first. An agent without it is not leaner — it is
 one holding tools nobody told it about, discovering its permissions by being
