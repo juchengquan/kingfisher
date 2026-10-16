@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib import resources
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
 from kingfisher.core.config import ConfigError
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
@@ -245,20 +245,6 @@ def _joined(prompt: str, extra: str) -> str:
     if not extra.strip():
         return prompt
     return f"{prompt.strip()}\n\n---\n\n{extra.strip()}"
-
-
-class Instructions(Protocol):
-    """A deployment's standing text for every agent and subagent it runs.
-
-    Asked once per agent built, so a change reaches the next turn without a restart,
-    and read after kingfisher's own prompt and before the agent's: it is the most
-    general of the additions, and the agent's own line the most specific. Empty for
-    none. What kingfisher tells every agent is not here and not replaceable.
-    """
-
-    def text(self, cfg: Config) -> str:
-        """The instructions, or an empty string for none."""
-        ...
 
 
 class InstructionsFile:

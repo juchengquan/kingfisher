@@ -22,10 +22,8 @@ from kingfisher import (
 )
 from kingfisher.cli.__main__ import main
 from kingfisher.core.access.source_ids import parse
-from kingfisher.core.agent.backend import (
-    Sessions,
-)
 from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.interfaces import Sessions
 from kingfisher.core.layout import (
     HARNESS,
     INPUTS,

@@ -1,10 +1,10 @@
-"""What the core asks of any session's backend: the `Sessions` interface, and how a
-backend's shell and skills are read without naming whose backend it is."""
+"""How the core reads a session's backend without naming whose it is: the shell it
+runs, and the skills it serves."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any
 
 from deepagents.backends import CompositeBackend
 
@@ -14,7 +14,7 @@ from kingfisher.core.agent.host_paths import (
     HostPathError as HostPathError,  # noqa: PLC0414 -- the re-export above
 )
 from kingfisher.core.agent.prompting import ShellPrompt
-from kingfisher.core.config import DEFAULT_LAYOUT, Config, ConfigError
+from kingfisher.core.config import DEFAULT_LAYOUT, ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.core.layout import (
@@ -23,7 +23,6 @@ from kingfisher.core.layout import (
     SKILLS_ROUTE,
     Layout,
 )
-from kingfisher.core.session.threads import off_loop, thread_pool
 
 
 def _shell_of(backend: Any) -> Any:
@@ -148,146 +147,3 @@ def memory_sources(layout: Layout = DEFAULT_LAYOUT) -> list[str]:
     return [f"{layout.memory_route}AGENTS.md"]
 
 
-@runtime_checkable
-class Sessions(Protocol):
-    """How a deployment says where its sessions are, and what each one runs on.
-
-    Asked per turn to `open` the session it is for, and asked the questions only
-    something that sees every session can answer: which there are, how big, and
-    when each was last used. Keyed by session id rather than by a directory,
-    because a backend that runs elsewhere has no directory here to be handed.
-
-    `open` is typed against its call and not its return, which is the asymmetry
-    worth knowing. deepagents decides what a backend *is* with `isinstance` against its
-    own abstract base class, so a protocol describing the return would describe the
-    requirement wrongly -- an object satisfying it exactly would still be handed no
-    shell. `refuse_unusable_backend` asks that question at the only time it can be
-    answered, which is once there is an object to ask about.
-
-    Each takes the `Config` because the default is one object serving every
-    workspace, and the workspace is where it keeps them. A deployment's own may
-    ignore it.
-
-    What one has to keep, each held by a check in this repository's
-    `tests/checks/sessions.py`:
-
-    - two session ids never share storage;
-    - what one turn's backend wrote, the next `open` of that session finds;
-    - a session asked for is listed, and one deleted is gone;
-    - a claim is exclusive and one session's: a second claim on a held session fails,
-      and a claim on another does not;
-    - a host path a backend names for a file is that session's file;
-    - a session serves under `/skills/` the skills kingfisher read;
-    - every async twin answers as its sync one does.
-
-    What else kingfisher reads, it reads where an implementation declares it, by name:
-    `where(cfg)` here, the folder these sessions are kept in on this host, for the
-    origins line; `host_path`, `shell_prompt` and `unprotected` on a backend `open`
-    returns; and `runs_here` on its shell.
-
-    And what `open` returns, held by `tests/checks/backend.py`: deepagents recognises it
-    as running commands and it routes every path kingfisher denies -- both refused at
-    startup by `refuse_unusable_backend` -- and it reads back what it was given, keeps
-    deepagents' offloads in the scratchpad, keeps the shell out of `/.harness` and
-    `/inputs`, and refuses a host path.
-    """
-
-    def open(
-        self,
-        cfg: Config,
-        session_id: str,
-        # Positional-only, or this would be dictating parameter *names*: a protocol
-        # matches those, so without the slash a deployment whose `open` reads
-        # `(config, which)` fails to satisfy it for no reason anybody could act on.
-        /,
-        *,
-        catalogue: Definitions | None = None,
-    ) -> Any:
-        """This session's backend, making the session if it is new."""
-        ...
-
-    def sessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
-        """`(session_id, last_used)` for every session there is."""
-        ...
-
-    def mark_used(self, cfg: Config, session_id: str) -> None:
-        """Record that a turn is running in this session now.
-
-        A port because retention depends on it. A turn writes *inside* a session, and
-        on an ordinary filesystem that leaves the session's own timestamp alone --
-        measured, a session was still 10,000s idle by that clock immediately after a
-        turn completed in it.
-        """
-        ...
-
-    def size(self, cfg: Config, session_id: str) -> int:
-        """How many bytes this session holds."""
-        ...
-
-    def delete(self, cfg: Config, session_id: str) -> str | None:
-        """Remove this session and everything in it. A reason on failure, or `None`."""
-        ...
-
-    def claim(
-        self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
-    ) -> bool:
-        """Take this session's turn lock, or answer False because a live turn holds it.
-
-        Two turns in one session share a conversation and the last write wins, so this
-        is what refuses the second. A claim older than `stale_after` seconds belongs to
-        a turn that died, and is taken over; `now` is the clock that is judged by.
-        """
-        ...
-
-    def release(self, cfg: Config, session_id: str, /) -> None:
-        """Give the lock back. Safe where it was never taken."""
-        ...
-
-    def held(
-        self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
-    ) -> bool:
-        """Whether a claim on this session is young enough that its turn may be running."""
-        ...
-
-    # The async twins. Written out here, so that a class subclassing this protocol has
-    # them as `open` and `sessions` on kingfisher's pool, and overrides one only where
-    # its own is a round trip it can await.
-
-    async def aopen(
-        self,
-        cfg: Config,
-        session_id: str,
-        /,
-        *,
-        catalogue: Definitions | None = None,
-    ) -> Any:
-        """`open`, for the async path."""
-        return await off_loop(thread_pool(), self.open, cfg, session_id, catalogue=catalogue)
-
-    async def asessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
-        """`sessions`, for the async path."""
-        return await off_loop(thread_pool(), self.sessions, cfg)
-
-    async def adelete(self, cfg: Config, session_id: str) -> str | None:
-        """`delete`, for the async path."""
-        return await off_loop(thread_pool(), self.delete, cfg, session_id)
-
-    async def amark_used(self, cfg: Config, session_id: str) -> None:
-        """`mark_used`, for the async path."""
-        return await off_loop(thread_pool(), self.mark_used, cfg, session_id)
-
-    async def asize(self, cfg: Config, session_id: str) -> int:
-        """`size`, for the async path."""
-        return await off_loop(thread_pool(), self.size, cfg, session_id)
-
-    async def aclaim(
-        self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
-    ) -> bool:
-        """`claim`, for the async path."""
-        return await off_loop(
-            thread_pool(), self.claim, cfg, session_id, stale_after=stale_after, now=now
-        )
-
-    async def arelease(self, cfg: Config, session_id: str, /) -> None:
-        """`release`, for the async path."""
-        return await off_loop(thread_pool(), self.release, cfg, session_id)

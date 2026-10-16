@@ -51,25 +51,19 @@ from kingfisher.core.agent.assembly import (
     build_agent,
     builtin_tool_names,
 )
-from kingfisher.core.agent.backend import (
-    Sessions,
-)
 from kingfisher.core.agent.interpreter import release_interpreter
 from kingfisher.core.agent.kinds.declared_middleware import (
     MiddlewareFactory,
     refuse_unbuildable_middleware,
 )
-from kingfisher.core.agent.prompting import (
-    Instructions,
-    InstructionsFile,
-    refuse_a_workspace_prompt,
-)
+from kingfisher.core.agent.prompting import InstructionsFile, refuse_a_workspace_prompt
 from kingfisher.core.agent.usable_backend import refuse_unusable_backend
 from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions, resolve_definitions
 from kingfisher.core.definitions.seeding import SEED_HINT, starter_agent
+from kingfisher.core.interfaces import Instructions, Sessions
 from kingfisher.core.layout import PAUSED_STATE
 from kingfisher.core.origins import Origins
 from kingfisher.core.reporting import (
