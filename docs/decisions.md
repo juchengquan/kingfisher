@@ -4686,7 +4686,7 @@ out of the shell's reach"* -- leaving the agent able to read its inputs and unab
 to run anything over them. Object storage reaches a session as a mount
 (`SessionRoot`) or by being copied in and out, and both work today.
 
-**What the agent addresses is a table in `kingfisher.layout`.** One entry per path,
+**What the agent addresses is a table in `kingfisher.core.layout`.** One entry per path,
 saying whether the composite mounts it, which scope denies writes under it, and
 whether its members are generated per catalogue. `core.agent.backend`
 turns the entries into mounts and `core.agent.assembly` turns the scopes
@@ -6426,7 +6426,7 @@ asks deepagents which skills an agent has, and `kinds/middlewares`, which refuse
 class that is not an `AgentMiddleware` -- *The cost is the swap boundary*, below.
 
 **The layout is not domain vocabulary, and moved to the package root.**
-`kingfisher.layout` was `domain/layout.py`, and it left for the reason `Config`
+`kingfisher.core.layout` was `domain/layout.py`, and it left for the reason `Config`
 left before it: **no domain rule reads it.** Every reader was in
 `infrastructure/`, `skills/`, `tools/` or `subagents/` -- now `infrastructure/`
 and `application/disposal.py`, for the claim's filename -- and it sat in the
@@ -6627,7 +6627,7 @@ the tools and subagents halves moved into `harness/`.)*
 **Three things were in the wrong place and only the move said so.** Each had
 lived quietly because the two halves shared a directory and nothing had to
 choose: `SKILLS` and `UPLOADED_SKILL_DIR` were declared by the skill format and
-used by `kingfisher.layout`, which *is* the layout; `ceiling` sat in the tool module
+used by `kingfisher.core.layout`, which *is* the layout; `ceiling` sat in the tool module
 and touches no registry, so it went to `core.access.capabilities` with the rest of
 that arithmetic; and `wanted_model` was in the subagent format while
 `core.definitions.agents.spec` imported it to read its own `model:` line, so it went to
@@ -6982,7 +6982,7 @@ not have.
 
 **And the move found a comment that had been lying.** Two `#:` lines above
 `class LocalSessionDirs` described "what a catalogue is made of ... the three",
-an orphan left by a constant that went to `kingfisher.layout`. It had been read past
+an orphan left by a constant that went to `kingfisher.core.layout`. It had been read past
 for as long as it had been there, which is what a comment attached to the wrong
 definition does; deciding which of six files it belonged in is what finally
 asked the question.
@@ -7006,7 +7006,7 @@ The costs are on top of a benefit that was not there. `ConfigError` is raised by
 `Models` and imported by twelve modules across every layer, `domain/` included:
 it is this package's *configuration is wrong*, not a model error, so it cannot
 travel with the records. That forces a `config/` package rather than a sibling
-module, and a package has to re-export to keep `from kingfisher.config import
+module, and a package has to re-export to keep `from kingfisher.core.config import
 Config` working in the 40 files that write it. No subpackage here re-exported --
 the root `__init__` has a table, and that is there to defer an import cost, not
 to spare callers a module name. (`application/__init__` has one since, for the

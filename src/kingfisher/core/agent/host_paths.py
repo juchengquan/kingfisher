@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from kingfisher.layout import SCRATCH_ROUTE
+from kingfisher.core.layout import SCRATCH_ROUTE
 
 #: Absolute prefixes that can never name a workspace directory, so a file-tool
 #: path starting with one is a host path that was passed to the wrong kind of

@@ -11,7 +11,7 @@ from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence
 
-    from kingfisher.config import Config
+    from kingfisher.core.config import Config
 
 
 #: The one warning kingfisher asks for and does not want to hear. Matched on

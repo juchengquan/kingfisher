@@ -72,14 +72,14 @@ _EXPORTS = {
     # `tools/`, for the reason `ToolContext` is imported there.
     "tool": "kingfisher.core.agent.audienced_tool",
     "UnknownSessionError": "kingfisher.core.session.model",
-    "Config": "kingfisher.config",
-    "WorkspacePaths": "kingfisher.config",
+    "Config": "kingfisher.core.config",
+    "WorkspacePaths": "kingfisher.core.config",
     # What a `KINGFISHER_WIRE_FORMATS` returns rows of, so a deployment adding
     # a wire format cannot write one without both.
-    "WireFormat": "kingfisher.config",
-    "Landing": "kingfisher.config",
+    "WireFormat": "kingfisher.core.config",
+    "Landing": "kingfisher.core.config",
     "Kingfisher": "kingfisher.core.service",
-    "ConfigError": "kingfisher.config",
+    "ConfigError": "kingfisher.core.config",
     "Request": "kingfisher.core.request",
     # The four a caller needs to answer a gated call: what it was asked, how
     # to answer, the answer itself, and the refusal for an answer that does
@@ -95,11 +95,11 @@ _EXPORTS = {
     "RunEvent": "kingfisher.core.result",
     "RunResult": "kingfisher.core.result",
     "SessionInfo": "kingfisher.core.session.model",
-    "definitions_source": "kingfisher.infrastructure.workspace",
-    "ensure_definitions": "kingfisher.infrastructure.workspace",
-    "kinds_at": "kingfisher.infrastructure.workspace",
-    "seed": "kingfisher.infrastructure.workspace",
-    "Seeded": "kingfisher.infrastructure.workspace",
+    "definitions_source": "kingfisher.core.definitions.seeding",
+    "ensure_definitions": "kingfisher.core.workspace",
+    "kinds_at": "kingfisher.core.definitions.seeding",
+    "seed": "kingfisher.core.definitions.seeding",
+    "Seeded": "kingfisher.core.definitions.seeding",
     "inventory": "kingfisher.core.inventory",
     "Inventory": "kingfisher.core.inventory",
     # Where this deployment reads from, as against what it offers. Public
@@ -172,11 +172,6 @@ if TYPE_CHECKING:
     # So type checkers and IDEs see the real symbols rather than `Any`.
     # Redundant aliases mark these as re-exports; `__all__` is computed, so a
     # checker cannot otherwise tell they are public.
-    from kingfisher.config import Config as Config
-    from kingfisher.config import ConfigError as ConfigError
-    from kingfisher.config import Landing as Landing
-    from kingfisher.config import WireFormat as WireFormat
-    from kingfisher.config import WorkspacePaths as WorkspacePaths
     from kingfisher.core.access.capabilities import Capabilities as Capabilities
     from kingfisher.core.access.capabilities import CapabilityError as CapabilityError
     from kingfisher.core.access.source_ids import UNSCOPED as UNSCOPED
@@ -187,6 +182,15 @@ if TYPE_CHECKING:
     from kingfisher.core.agent.prompting import ShellPrompt as ShellPrompt
     from kingfisher.core.agent.references import UnsafeReferenceError as UnsafeReferenceError
     from kingfisher.core.agent.tool_context import ToolContext as ToolContext
+    from kingfisher.core.config import Config as Config
+    from kingfisher.core.config import ConfigError as ConfigError
+    from kingfisher.core.config import Landing as Landing
+    from kingfisher.core.config import WireFormat as WireFormat
+    from kingfisher.core.config import WorkspacePaths as WorkspacePaths
+    from kingfisher.core.definitions.seeding import Seeded as Seeded
+    from kingfisher.core.definitions.seeding import definitions_source as definitions_source
+    from kingfisher.core.definitions.seeding import kinds_at as kinds_at
+    from kingfisher.core.definitions.seeding import seed as seed
     from kingfisher.core.definitions.subagents.spec import RunOn as RunOn
     from kingfisher.core.definitions.subagents.spec import SubagentError as SubagentError
     from kingfisher.core.environment import config_from_env as config_from_env
@@ -213,13 +217,7 @@ if TYPE_CHECKING:
     from kingfisher.core.session.model import SessionBusyError as SessionBusyError
     from kingfisher.core.session.model import SessionInfo as SessionInfo
     from kingfisher.core.session.model import UnknownSessionError as UnknownSessionError
-    from kingfisher.infrastructure.workspace import Seeded as Seeded
-    from kingfisher.infrastructure.workspace import (
-        definitions_source as definitions_source,
-    )
-    from kingfisher.infrastructure.workspace import ensure_definitions as ensure_definitions
-    from kingfisher.infrastructure.workspace import kinds_at as kinds_at
-    from kingfisher.infrastructure.workspace import seed as seed
+    from kingfisher.core.workspace import ensure_definitions as ensure_definitions
     from kingfisher.plugins.sessions.backend import LocalSessions as LocalSessions
     from kingfisher.plugins.sessions.backend import backend_at as backend_at
 

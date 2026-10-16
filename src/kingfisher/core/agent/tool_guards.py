@@ -9,7 +9,6 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.tools import BaseTool, StructuredTool, ToolException
 
-from kingfisher.config import DEFAULT_LAYOUT
 from kingfisher.core.agent.backend import shell_prompt_of, shell_runs_here
 from kingfisher.core.agent.host_paths import HostPathError
 from kingfisher.core.agent.middlewares.host_path_guard import HostPathGuard
@@ -22,7 +21,8 @@ from kingfisher.core.agent.middlewares.workspace_tools import (
 )
 from kingfisher.core.agent.references import UnsafeReferenceError
 from kingfisher.core.agent.session_paths import SessionPaths, refusal_text
-from kingfisher.layout import Layout
+from kingfisher.core.config import DEFAULT_LAYOUT
+from kingfisher.core.layout import Layout
 
 
 def tool_guards(

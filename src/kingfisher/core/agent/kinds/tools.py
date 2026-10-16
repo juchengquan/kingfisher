@@ -20,7 +20,7 @@ from kingfisher.core.definitions.tools.spec import Found, Offering, out_of_reach
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from kingfisher.config import Config
+    from kingfisher.core.config import Config
 
 
 def registered_tools(graph: Any) -> tuple[str, ...] | None:

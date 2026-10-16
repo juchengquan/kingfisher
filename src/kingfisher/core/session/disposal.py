@@ -19,7 +19,7 @@ from kingfisher.core.session.steps import Steps, adrive, changing, drive
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from kingfisher.config import Config
+    from kingfisher.core.config import Config
     from kingfisher.core.session.checkpointing import SharedThreads
 
 

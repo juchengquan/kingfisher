@@ -8,7 +8,7 @@ from dataclasses import fields, replace
 import pytest
 
 from kingfisher import Kingfisher, Plugins
-from kingfisher.config import ConfigError
+from kingfisher.core.config import ConfigError
 from kingfisher.presentation.cli.configured import configured_plugins
 from tests.conftest import RecordedEvents, StubCheckpointer
 

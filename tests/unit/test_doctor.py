@@ -557,7 +557,7 @@ models:
 
 def _half_keyed(cfg, tmp_path):
     """A catalogue naming two endpoints with a key for one, as a fleet does."""
-    from kingfisher.infrastructure.model_catalogue import load
+    from kingfisher.core.model_catalogue import load
 
     path = tmp_path / "half.yaml"
     path.write_text(TWO_ENDPOINTS, encoding="utf-8")
@@ -592,8 +592,8 @@ def test_an_endpoint_no_model_uses_is_not_called_keyed(cfg, tmp_path):
     """
     import pytest
 
-    from kingfisher.config import MissingCredentialsWarning
-    from kingfisher.infrastructure.model_catalogue import load
+    from kingfisher.core.config import MissingCredentialsWarning
+    from kingfisher.core.model_catalogue import load
 
     path = tmp_path / "idle.yaml"
     path.write_text(TWO_ENDPOINTS.replace("  far-model:\n    endpoint: elsewhere\n", ""))
@@ -838,8 +838,8 @@ def _backing(monkeypatch, sessions=None, **fields):
     pass just as happily against a `_at_rest` that had stopped looking at the
     sessions tree, which is the thing these tests are here to hold.
     """
+    from kingfisher.core.backing import MemoryBacking
     from kingfisher.core.session.model import sessions_root
-    from kingfisher.infrastructure.workspace import MemoryBacking
 
     on_the_workspace = MemoryBacking(**fields)
     on_the_sessions = MemoryBacking(**sessions) if sessions is not None else on_the_workspace
@@ -924,7 +924,7 @@ def test_a_workspace_nobody_has_seeded_still_reports_a_size(tmp_path):
     unknown-limit branch -- on the one run that matters most, `doctor` before
     `kingfisher seed`, which is when a tmpfs is being sized.
     """
-    from kingfisher.infrastructure.workspace import memory_backing
+    from kingfisher.core.backing import memory_backing
 
     bare = tmp_path / "unseeded"
     bare.mkdir()
@@ -1334,7 +1334,7 @@ def test_credentials_say_where_each_key_came_from(cfg):
 
 
 def test_a_missing_key_still_says_where_the_others_came_from(cfg, tmp_path):
-    from kingfisher.config import MissingCredentialsWarning
+    from kingfisher.core.config import MissingCredentialsWarning
 
     with pytest.warns(MissingCredentialsWarning):
         half = _half_keyed(cfg, tmp_path)

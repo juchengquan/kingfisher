@@ -5,12 +5,12 @@ import shutil
 
 from kingfisher import LocalSessions, WorkspacePaths
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
-from kingfisher.infrastructure.workspace import EXAMPLE, EXAMPLES, ensure_definitions, ensure_layout
-from kingfisher.layout import (
+from kingfisher.core.layout import (
     HARNESS,
     LAYOUT_DIRS,
     SESSION_DIRS,
 )
+from kingfisher.core.workspace import EXAMPLE, EXAMPLES, ensure_definitions, ensure_layout
 from kingfisher.plugins.sessions.folders import LocalSessionDirs, ensure_session_layout
 from tests.conftest import StubCheckpointer
 
@@ -61,7 +61,7 @@ def test_a_start_makes_no_kind_folder(tmp_path):
     empty.
     """
     from kingfisher import Kingfisher
-    from kingfisher.config import Config
+    from kingfisher.core.config import Config
     from tests.conftest import FAKE_CATALOGUE
 
     definitions = tmp_path / "definitions"
@@ -94,7 +94,7 @@ def test_the_definitions_folder_carries_a_keys_example_holding_no_keys(tmp_path)
     """
     import yaml
 
-    from kingfisher.infrastructure.workspace.layout import KEYS_EXAMPLE
+    from kingfisher.core.workspace import KEYS_EXAMPLE
 
     folder = ensure_definitions(tmp_path / "definitions")
     text = (folder / KEYS_EXAMPLE).read_text(encoding="utf-8")
@@ -155,7 +155,7 @@ def sweep(workspace, keep, checkpointer):
     import time
 
     from kingfisher import Kingfisher
-    from kingfisher.config import Config
+    from kingfisher.core.config import Config
     from tests.conftest import FAKE_CATALOGUE
     from tests.unit.test_run import StubAgent
 

@@ -31,7 +31,6 @@ from pathlib import Path
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.config import Config, ConfigError
 from kingfisher.core import environment as config_module
 from kingfisher.core.access import checks as access
 from kingfisher.core.access.capabilities import (
@@ -71,9 +70,12 @@ from kingfisher.core.agent.prompting import (
     refuse_a_workspace_prompt,
 )
 from kingfisher.core.agent.usable_backend import refuse_unusable_backend
+from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions, resolve_definitions
+from kingfisher.core.definitions.seeding import SEED_HINT, starter_agent
+from kingfisher.core.layout import PAUSED_STATE
 from kingfisher.core.origins import Origins
 from kingfisher.core.reporting import (
     opening_events,
@@ -143,12 +145,7 @@ from kingfisher.core.session.turn import (
     overrun,
     turn_message,
 )
-from kingfisher.infrastructure.workspace import (
-    SEED_HINT,
-    ensure_layout,
-    starter_agent,
-)
-from kingfisher.layout import PAUSED_STATE
+from kingfisher.core.workspace import ensure_layout
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

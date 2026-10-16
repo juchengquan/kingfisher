@@ -41,7 +41,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.layout import INPUTS, SESSION_DIRS
+from kingfisher.core.layout import INPUTS, SESSION_DIRS
 from kingfisher.plugins.sessions.sandbox.linux import MAX_OUTPUT_BYTES, outcome, present
 
 if TYPE_CHECKING:

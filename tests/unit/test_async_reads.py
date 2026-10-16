@@ -147,7 +147,7 @@ def test_a_turn_reads_the_pin_once(cfg, monkeypatch):
     which agent the turn runs, every turn under a policy paid a round trip for a file
     it already held.
     """
-    from kingfisher.layout import HARNESS_ROUTE, PINNED_AGENT
+    from kingfisher.core.layout import HARNESS_ROUTE, PINNED_AGENT
 
     an_agent(cfg, "only_a", source_ids="[A]")
     policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))

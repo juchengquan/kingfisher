@@ -15,7 +15,7 @@ from uuid import uuid4
 from deepagents.backends import CompositeBackend
 
 from kingfisher.core.agent.host_paths import HostPathError
-from kingfisher.layout import (
+from kingfisher.core.layout import (
     HARNESS_ROUTE,
     INPUTS_ROUTE,
     OUTPUTS_ROUTE,

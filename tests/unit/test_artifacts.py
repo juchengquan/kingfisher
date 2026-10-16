@@ -7,11 +7,11 @@ from dataclasses import replace
 import pytest
 
 from kingfisher import LocalSessions, backend_at
+from kingfisher.core.layout import Layout
 from kingfisher.core.result import ArtifactError
 from kingfisher.core.run import Request, run
 from kingfisher.core.session.files import collect_artifacts, read_artifact
 from kingfisher.core.session.steps import drive
-from kingfisher.layout import Layout
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 

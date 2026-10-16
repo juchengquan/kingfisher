@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.config import ConfigError
+from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions import seeding
 
 
@@ -55,7 +55,7 @@ def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(tmp_pat
     and a caller's own directory has no reason to hold one.
     """
     from kingfisher import WorkspacePaths
-    from kingfisher.infrastructure.workspace import EXAMPLE
+    from kingfisher.core.workspace import EXAMPLE
 
     mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
     into = WorkspacePaths(tmp_path / "definitions")

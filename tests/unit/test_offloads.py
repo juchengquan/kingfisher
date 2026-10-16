@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.layout import SCRATCH, SCRATCH_ROUTE
+from kingfisher.core.layout import SCRATCH, SCRATCH_ROUTE
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
 from tests.unit.test_delegation_ceiling import _subagent_graphs

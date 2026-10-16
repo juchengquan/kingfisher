@@ -19,9 +19,9 @@ from langgraph.graph import START, StateGraph
 from langgraph.types import Command, interrupt
 from typing_extensions import TypedDict
 
+from kingfisher.core.layout import PAUSED_STATE
 from kingfisher.core.session.checkpointing import paused_state, resumed_saver
 from kingfisher.core.session.steps import drive
-from kingfisher.layout import PAUSED_STATE
 from tests.conftest import harness_of, start
 
 

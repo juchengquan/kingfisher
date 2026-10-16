@@ -44,7 +44,7 @@ def test_the_definitions_layout_names_every_kind_a_catalogue_reads(tmp_path):
     and a check on a constant passes while the layout makes none of them.
     """
     from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
-    from kingfisher.infrastructure.workspace import ensure_definitions
+    from kingfisher.core.workspace import ensure_definitions
 
     made = {p.name for p in ensure_definitions(tmp_path / "definitions").iterdir() if p.is_dir()}
 
@@ -58,8 +58,8 @@ def test_the_workspace_layout_makes_no_kind(tmp_path):
     """A kind folder in the workspace is a place to write a definition that is never
     read, because every kind is read from the definitions folder.
     """
-    from kingfisher.infrastructure.workspace import ensure_layout
-    from kingfisher.layout import LAYOUT_DIRS
+    from kingfisher.core.layout import LAYOUT_DIRS
+    from kingfisher.core.workspace import ensure_layout
 
     made = {p.name for p in ensure_layout(tmp_path / "ws").iterdir() if p.is_dir()}
 

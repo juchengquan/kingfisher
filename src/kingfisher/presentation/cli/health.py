@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from kingfisher import Config, ConfigError, Inventory, inventory, kinds_at
+from kingfisher.core.backing import MemoryBacking, memory_backing
 
 # Everything below is past the front door on purpose, and this is the file to read if
 # you want to know what that door is now for. These are `doctor`'s probes: what fences
@@ -22,7 +23,6 @@ from kingfisher import Config, ConfigError, Inventory, inventory, kinds_at
 # takes each name where it lives.
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.session.model import sessions_root
-from kingfisher.infrastructure.workspace import MemoryBacking, memory_backing
 from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.sandbox.bubblewrap import bubblewrap_available
 from kingfisher.plugins.sessions.sandbox.confinement import (

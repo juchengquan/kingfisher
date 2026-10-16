@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from kingfisher import Config, LocalSessions, Plugins
 from kingfisher.core.agent.backend import Sessions
-from kingfisher.infrastructure.wiring import store_named
+from kingfisher.core.wiring import store_named
 
 
 def configured_sessions(cfg: Config) -> Sessions:

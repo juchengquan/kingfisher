@@ -29,13 +29,7 @@ from kingfisher.core.access.source_ids import parse
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.recorder import Recorder
 from kingfisher.core.agent.prompting import render_system_prompt
-from kingfisher.core.request import Decision, Resume
-from kingfisher.core.result import AWAITING, MAIN, WORKING, LedgerEntry
-from kingfisher.core.session.ledger import Ledger
-from kingfisher.core.session.store import KeptLedger, entry_id
-from kingfisher.core.session.transcript import from_json
-from kingfisher.core.session.turn import ledger_delta, ledger_index, turn_message
-from kingfisher.layout import (
+from kingfisher.core.layout import (
     HARNESS,
     LEDGER_FILE,
     PAUSED_STATE,
@@ -46,6 +40,12 @@ from kingfisher.layout import (
     TRANSCRIPT_FILE,
     Layout,
 )
+from kingfisher.core.request import Decision, Resume
+from kingfisher.core.result import AWAITING, MAIN, WORKING, LedgerEntry
+from kingfisher.core.session.ledger import Ledger
+from kingfisher.core.session.store import KeptLedger, entry_id
+from kingfisher.core.session.transcript import from_json
+from kingfisher.core.session.turn import ledger_delta, ledger_index, turn_message
 from kingfisher.plugins.sessions.backend import backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.sandbox.confinement import EXTERNAL

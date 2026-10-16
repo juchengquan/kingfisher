@@ -580,14 +580,6 @@ PROSE_GONE: dict[str, frozenset[str]] = {
     # that has since gone: its only caller was the upload path, and the reader went
     # with it.
     "docs/decisions.md": frozenset({"core.definitions.skills.reading.name_from"}),
-    # The file that owns the rules is the one place a gone module is named on
-    # purpose -- in the docstring of the rule that renaming broke, and in the
-    # negatives below, which are asserted gone rather than merely absent.
-    "tests/unit/test_architecture.py": frozenset({
-        "infrastructure.agent",
-        "infrastructure.backend",
-        "infrastructure.backend.shell_env",
-    }),
 }
 
 
@@ -937,15 +929,17 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
     ) == []
     assert _prose_unresolved("`plugins.sessions.backend.shell_env`") == []
 
-    assert _prose_unresolved("`infrastructure.backend.shell_env`") == [
-        "infrastructure.backend.shell_env"
-    ]
+    # Built rather than written, so this file is not itself a reference the rule refuses.
+    misplaced = "core.agent.backend.shell_env"
+    assert _prose_unresolved(f"`{misplaced}`") == [misplaced]
     # A package and a name it does not hold. This is the one a parent-only check
     # let through, and six of the thirteen were this shape.
-    assert _prose_unresolved("`infrastructure.backend`") == ["infrastructure.backend"]
+    holds_nothing = "core.backend"
+    assert _prose_unresolved(f"`{holds_nothing}`") == [holds_nothing]
     # Excused, but only where the table says so.
-    assert _prose_unresolved("`infrastructure.agent`") == ["infrastructure.agent"]
-    assert _prose_unresolved("`infrastructure.agent`", frozenset({"infrastructure.agent"})) == []
+    gone = "core.agent.gone"
+    assert _prose_unresolved(f"`{gone}`") == [gone]
+    assert _prose_unresolved(f"`{gone}`", frozenset({gone})) == []
 
     # Not rooted at a layer, so not this rule's business: these are the shapes
     # that make the unrestricted version unusable.
@@ -979,7 +973,7 @@ def test_a_nested_package_is_a_prose_root(tmp_path):
     Read one directory deep, the rule stops *matching* references to a package that
     moved down a level rather than failing them -- so the move buries every comment
     naming the old path and nothing goes red, which is the one failure this rule
-    cannot report about itself. `session`, `sandbox` and `workspace` are nested
+    cannot report about itself. `session`, `sandbox` and `access` are nested
     packages here.
     """
     (tmp_path / "layer").mkdir()
@@ -994,7 +988,7 @@ def test_a_nested_package_is_a_prose_root(tmp_path):
     # And against the real tree, which is what the rule actually runs on. Backticks
     # are added here rather than written, so the rule scanning this file does not
     # read its own negatives as claims about the tree.
-    for missing in ("session.nowhere", "workspace.nowhere", "sandbox.nowhere"):
+    for missing in ("session.nowhere", "access.nowhere", "sandbox.nowhere"):
         assert _prose_unresolved(f"`{missing}`") == [missing], (
             f"{missing} is rooted at a package that is not at the top level, and a "
             "reference the pattern never matches is one the rule cannot fail"
@@ -1012,7 +1006,7 @@ def test_the_prose_rule_reaches_the_packages_that_are_not_layers():
     `core.definitions.skills` was asserted to resolve while `skills` was not a root, so the
     pattern never matched it and the assertion held for the wrong reason.
     """
-    for missing in ("kinds.nowhere", "config.nowhere"):
+    for missing in ("kinds.nowhere", "core.nowhere"):
         assert _prose_unresolved(f"`{missing}`") == [missing], (
             f"{missing} is not a module and the rule has to say so"
         )
@@ -1020,12 +1014,12 @@ def test_the_prose_rule_reaches_the_packages_that_are_not_layers():
     # And the live ones still resolve, now that they are actually being read.
     assert _prose_unresolved("`core.definitions.skills.spec.FILENAME`") == []
     assert _prose_unresolved(
-        "`core.definitions.tools.spec`, `core.definitions.subagents.rules`, `config`"
+        "`core.definitions.tools.spec`, `core.definitions.subagents.rules`, `core.config`"
     ) == []
 
 
 def test_a_filename_is_not_read_as_a_module_and_a_segment():
-    """`config.py` parses as the module `config` plus a segment called `py`."""
+    """`tools.py` parses as the package `tools` plus a segment called `py`."""
     assert _prose_unresolved("`config.py` and `tools.py`") == []
     assert _prose_unresolved("`skills.py`, `subagents.py`, `config.yaml`") == []
     # The tail is what decides it, not the root: a real module under one of them
@@ -1035,14 +1029,14 @@ def test_a_filename_is_not_read_as_a_module_and_a_segment():
     # This said `config.models` until class members started counting, at which
     # point `Config.models` made it resolve and the rule was right about a test
     # that had gone quietly wrong.
-    absent = "config.no_such_field"
+    absent = "core.config.no_such_field"
     assert _prose_unresolved(f"`{absent}`") == [absent]
 
 
 def test_a_name_a_class_holds_is_a_name_the_module_defines():
     """`core.definitions.skills.registry.misfiled` is a documented field, and was read as stale."""
     assert _prose_unresolved("`core.definitions.skills.registry.misfiled`") == []
-    assert _prose_unresolved("`config.models`") == []
+    assert _prose_unresolved("`core.config.models`") == []
 
     # And the module's own top level still counts, which is most of the traffic.
     assert _prose_unresolved("`core.definitions.skills.spec.FILENAME`") == []
@@ -1116,7 +1110,6 @@ def test_no_rule_here_is_parametrized_over_nothing():
     """
     collections = {
         "the flat core": _flat_core(),
-        "infrastructure": _modules_in("infrastructure"),
         "the package": _package_modules(),
         "consumers": _consumer_modules(),
     }
@@ -1159,9 +1152,6 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # Running a turn and keeping its conversation: the stream the graph emits and the
     # checkpointer it was built with.
     "core/session": frozenset({"deepagents", "langchain_core", "langgraph"}),
-    # The rest of the layer adapts the disk and the environment, and needs one parser
-    # to do it.
-    "infrastructure": frozenset({"yaml"}),
     # Kingfisher's own sessions: a deepagents composite over a session's folder, and
     # the Linux shell fence, which is the OS in the most literal sense this table holds
     # -- Landlock, applied to a process before it execs. Optional and Linux-only, so
@@ -1201,11 +1191,10 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     "core/access": frozenset({"yaml"}),
     # The command reads a `.env` in the directory it runs in; nothing else here does.
     "presentation/cli": frozenset({"dotenv"}),
-    # Nothing: the modules directly in `core/` reach the runtime and the disk through
-    # the packages beside them.
-    "core": frozenset(),
-    # The modules at the package root, which belong to no layer: `__init__.py`,
-    # `config.py` and `layout.py` -- the workspace layout as data. Nothing.
+    # The modules directly in `core/` reach the runtime through the packages beside
+    # them. `model_catalogue` reads `models.yaml`, which takes the parser.
+    "core": frozenset({"yaml"}),
+    # The package root: `__init__.py`, the public names. Nothing.
     "": frozenset(),
 }
 
@@ -1243,12 +1232,11 @@ def test_an_area_is_refused_another_areas_dependencies():
     """The table has to partition, not merely enumerate."""
     assert _undeclared({"deepagents"}, "core") == {"deepagents"}
     assert _undeclared({"deepagents"}, "presentation/cli") == {"deepagents"}
-    assert _undeclared({"deepagents"}, "infrastructure") == {"deepagents"}
     assert _undeclared({"fastapi"}, "core/agent") == {"fastapi"}
     assert _undeclared({"yaml"}, "core/agent") == {"yaml"}
 
     assert _undeclared({"deepagents", "langgraph"}, "core/agent") == set()
-    assert _undeclared({"yaml"}, "infrastructure") == set()
+    assert _undeclared({"yaml"}, "core") == set()
     assert _undeclared({"fastapi"}, "presentation/cli") == {"fastapi"}
     assert _undeclared({"dotenv"}, "presentation/cli") == set()
     assert _undeclared({"dotenv"}, "core") == {"dotenv"}
@@ -1256,8 +1244,8 @@ def test_an_area_is_refused_another_areas_dependencies():
 
 def test_a_subpackage_is_judged_by_its_own_area():
     """`core/session/runtime.py` is judged as `core/session`, not the package root."""
-    buried = SRC / "infrastructure" / "workspace" / "backing.py"
-    for path in (buried, SRC / "core" / "request.py", SRC / "config.py"):
+    buried = SRC / "plugins" / "sessions" / "sandbox" / "fence.py"
+    for path in (buried, SRC / "core" / "request.py", SRC / "__init__.py"):
         assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
 
     assert _area_of(SRC / "core" / "session" / "runtime.py") == "core/session"
@@ -1269,11 +1257,11 @@ def test_a_subpackage_is_judged_by_its_own_area():
     # without an entry is judged by `kinds` -- which grants only `yaml` -- rather
     # than by the longest prefix happening to be the package root.
     assert _area_of(KINDS_DIR / "importing.py") == "core/definitions"
-    assert _area_of(SRC / "config.py") == ""
+    assert _area_of(SRC / "__init__.py") == ""
 
     # A subpackage with no entry of its own is judged by its parent -- which would
-    # stop being true the moment someone gave `workspace/` an entry.
-    assert _area_of(buried) == "infrastructure"
+    # stop being true the moment someone gave `sessions/` an entry.
+    assert _area_of(buried) == "plugins"
 
 
 def test_a_module_imports_only_what_its_area_may_depend_on():
@@ -1341,7 +1329,7 @@ def test_an_unspent_grant_is_what_that_rule_reads():
     """
     assert _unspent("plugins", {"deepagents", "sandlock", "json"}) == set()
     assert _unspent("plugins", {"deepagents"}) == {"sandlock"}
-    assert _unspent("core", set()) == set()
+    assert _unspent("", set()) == set()
 #: What may import from `plugins/`: the command, which may import anything, and the front
 #: door, whose table maps public names such as `LocalSessions` to where they live.
 MAY_NAME_A_PLUGIN = ("presentation", "")
@@ -1517,7 +1505,6 @@ def test_the_public_api_list_matches_the_lazy_export_table():
 #: only one of them had ever been checked against anything.
 LAZY_TABLES: dict[str, Path] = {
     "kingfisher": SRC / "__init__.py",
-    "kingfisher.infrastructure.workspace": SRC / "infrastructure" / "workspace" / "__init__.py",
 }
 
 
@@ -2224,6 +2211,26 @@ MUTATING_CALLS = frozenset({
 })
 
 
+#: The flat-core module whose job is writing: it lays out a new workspace. Named by
+#: path and asserted to write, so a move fails the rule instead of excusing nothing.
+LAYS_OUT_THE_WORKSPACE = SRC / "core" / "workspace.py"
+
+
+def _disk_writes(path: Path) -> list[str]:
+    """Each `shutil` import and filesystem-changing call in one module, by line."""
+    found = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import) and any(a.name == "shutil" for a in node.names):
+            found.append(f"{node.lineno} imports shutil")
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in MUTATING_CALLS
+        ):
+            found.append(f"{node.lineno} .{node.func.attr}()")
+    return found
+
+
 def _flat_core() -> list[Path]:
     """The modules directly in `core/`: the service and the records it is asked in."""
     return sorted((SRC / "core").glob("*.py"))
@@ -2240,18 +2247,15 @@ def test_the_flat_core_does_not_write_to_disk_itself():
     sharing a basename were accepted and one silently lost, and a missing one left the
     earlier files behind in the turn.
     """
-    offenders = []
-    for path in _every(_flat_core(), "the flat core"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import) and any(a.name == "shutil" for a in node.names):
-                offenders.append(f"{_module_id(path)}:{node.lineno} imports shutil")
-            elif (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr in MUTATING_CALLS
-            ):
-                offenders.append(f"{_module_id(path)}:{node.lineno} .{node.func.attr}()")
+    assert _disk_writes(LAYS_OUT_THE_WORKSPACE), (
+        f"{_module_id(LAYS_OUT_THE_WORKSPACE)} writes nothing, so it is excused for nothing"
+    )
+    offenders = [
+        f"{_module_id(path)}:{write}"
+        for path in _every(_flat_core(), "the flat core")
+        if path != LAYS_OUT_THE_WORKSPACE
+        for write in _disk_writes(path)
+    ]
 
     assert not offenders, (
         f"{offenders} write to disk from the flat core — put it beside the write it "
@@ -2599,7 +2603,7 @@ def test_the_package_ships_the_catalogue_example():
     """The one file that is not an asset and has to stay."""
     from importlib import resources
 
-    from kingfisher.infrastructure.workspace import layout as workspace_layout
+    from kingfisher.core import workspace as workspace_layout
 
     # Both, from `EXAMPLES` rather than named here, so the file added next is
     # covered by having been added rather than by somebody remembering. The
@@ -2609,7 +2613,7 @@ def test_the_package_ships_the_catalogue_example():
     # missing furniture rather than as anything failing.
     assert workspace_layout.EXAMPLES, "nothing is asserted if the tuple is empty"
     for name in workspace_layout.EXAMPLES:
-        assert (SRC / "templates" / name).is_file(), f"{name} left the package"
+        assert (SRC / "core" / "templates" / name).is_file(), f"{name} left the package"
         installed = resources.files(workspace_layout.TEMPLATES).joinpath(name)
         assert installed.is_file(), f"{name} is not reachable the way an install reaches it"
 
@@ -3371,7 +3375,7 @@ def test_no_constant_is_published_for_tests_alone():
     # the failure this file has shipped twice, once in `_modules_in` and once in
     # the consumer collector. Named layers rather than a count, so this says
     # which part of the package stopped being walked. All three define constants.
-    layers = {"core", "infrastructure", "presentation"}
+    layers = {"core", "plugins", "presentation"}
     walked = {path.relative_to(SRC).parts[0] for path in found.values()}
 
     assert layers <= walked, (

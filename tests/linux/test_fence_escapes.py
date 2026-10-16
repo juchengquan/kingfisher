@@ -202,7 +202,7 @@ def test_the_shell_cannot_write_the_sessions_own_harness(two_sessions):
     overwrote the agent definition its own session was pinned to. Landlock rules only
     grant, and a write walks up until one of them answers.
     """
-    from kingfisher.layout import HARNESS
+    from kingfisher.core.layout import HARNESS
 
     _, theirs = two_sessions
     pinned = theirs / HARNESS / "agent.yaml"
@@ -221,7 +221,7 @@ def test_the_shell_cannot_write_the_harness_of_a_session_it_opened(cfg):
     handed a path.
     """
     from kingfisher import LocalSessions
-    from kingfisher.layout import HARNESS
+    from kingfisher.core.layout import HARNESS
 
     shell = LocalSessions().open(cfg, "the-one")
     harness = cfg.workspace / "sessions" / "the-one" / HARNESS

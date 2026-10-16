@@ -25,13 +25,7 @@ from kingfisher.core.agent.backend import (
     Sessions,
 )
 from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.session.files import (
-    collect_artifacts,
-    place_inputs,
-    read_artifact,
-)
-from kingfisher.core.session.steps import drive
-from kingfisher.layout import (
+from kingfisher.core.layout import (
     HARNESS,
     INPUTS,
     SESSION_DIRS,
@@ -39,6 +33,12 @@ from kingfisher.layout import (
     Layout,
     routed_paths,
 )
+from kingfisher.core.session.files import (
+    collect_artifacts,
+    place_inputs,
+    read_artifact,
+)
+from kingfisher.core.session.steps import drive
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import Through, an_agent, pin, start
 from tests.unit.scripted import Scripted

@@ -8,23 +8,22 @@ from typing import Any, Protocol, runtime_checkable
 
 from deepagents.backends import CompositeBackend
 
-from kingfisher.config import DEFAULT_LAYOUT, Config, ConfigError
-
 # Re-exported: `ports.md` has named this path to deployments writing their own
 # backend, which may import it from here.
 from kingfisher.core.agent.host_paths import (
     HostPathError as HostPathError,  # noqa: PLC0414 -- the re-export above
 )
 from kingfisher.core.agent.prompting import ShellPrompt
+from kingfisher.core.config import DEFAULT_LAYOUT, Config, ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.spec import SubagentError
-from kingfisher.core.session.threads import off_loop, thread_pool
-from kingfisher.layout import (
+from kingfisher.core.layout import (
     BUNDLED_SKILLS_ROUTE,
     RESERVED_SKILL_FOLDER,
     SKILLS_ROUTE,
     Layout,
 )
+from kingfisher.core.session.threads import off_loop, thread_pool
 
 
 def _shell_of(backend: Any) -> Any:

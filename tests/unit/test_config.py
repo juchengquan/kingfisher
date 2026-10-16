@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.config import DEFAULT_THREAD_POOL_SIZE, FOLDED_SETTINGS, ConfigError
 from kingfisher.core import environment as config_module
 from kingfisher.core.access.source_ids import AccessError
+from kingfisher.core.config import DEFAULT_THREAD_POOL_SIZE, FOLDED_SETTINGS, ConfigError
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.environment import Environment, config_from_env
 from tests.conftest import FAKE_CATALOGUE, subagents_dir
@@ -128,7 +128,7 @@ def test_two_folders_that_overlap_are_refused(env, tmp_path, workspace, definiti
     Asked of the environment, of seeding's half of it and of a `Config` built in code,
     because each is a way in that would otherwise lay one folder over the other.
     """
-    from kingfisher.config import Config
+    from kingfisher.core.config import Config
 
     (tmp_path / definitions).mkdir(parents=True)
     values = {
@@ -359,7 +359,7 @@ def test_no_message_names_a_variable_nothing_reads():
     # anywhere, `health.py` included, still fails.
     # And a name refused where the environment is read, for the same reason from the
     # other side: the refusal names it so that whoever set it knows what went.
-    from kingfisher.config import REMOVED_SETTINGS, RENAMED_SETTINGS
+    from kingfisher.core.config import REMOVED_SETTINGS, RENAMED_SETTINGS
 
     allowed = (
         read
@@ -480,7 +480,7 @@ def test_the_two_records_cannot_disagree_about_where_things_go(tmp_path):
     """`Config` and `WorkspacePaths` answer the same question, and one of them is used
     to seed while the other is used to serve.
     """
-    from kingfisher.config import Config, WorkspacePaths
+    from kingfisher.core.config import Config, WorkspacePaths
 
     paths = WorkspacePaths(definitions=tmp_path / "defs", workspace=tmp_path / "ws")
     cfg = Config(
@@ -499,8 +499,8 @@ def test_a_config_is_a_seeding_destination(tmp_path, cfg):
     """Both records satisfy the protocol the seeder asks for, by shape and without
     either being told about it.
     """
-    from kingfisher.config import WorkspacePaths
-    from kingfisher.infrastructure.workspace import Destination
+    from kingfisher.core.config import WorkspacePaths
+    from kingfisher.core.definitions.seeding import Destination
 
     assert isinstance(WorkspacePaths(definitions=tmp_path), Destination)
     assert isinstance(cfg, Destination)
@@ -599,7 +599,7 @@ def test_the_two_forms_of_the_test_catalogue_agree(tmp_path):
     the fixture reached only half the suite, and the halves disagreed about what this
     deployment can run.
     """
-    from kingfisher.infrastructure.model_catalogue import load
+    from kingfisher.core.model_catalogue import load
     from tests.conftest import FAKE_CATALOGUE, FAKE_KEY_VAR, models_file
 
     loaded = load(models_file(tmp_path), {FAKE_KEY_VAR: "not-a-real-key"})

@@ -6,13 +6,13 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from kingfisher.config import ConfigError, Landing, WireFormat
 from kingfisher.core.access.capabilities import ALL, Selection, refuse_ungranted_endpoint
+from kingfisher.core.config import ConfigError, Landing, WireFormat
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
-    from kingfisher.config import Config, Endpoint, ModelProfile
+    from kingfisher.core.config import Config, Endpoint, ModelProfile
 
 
 #: The wire formats kingfisher ships. `models.yaml` picks from these by name

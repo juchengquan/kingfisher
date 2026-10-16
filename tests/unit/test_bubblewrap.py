@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from kingfisher.layout import HARNESS, INPUTS, SAVED_RESULTS, Layout
+from kingfisher.core.layout import HARNESS, INPUTS, SAVED_RESULTS, Layout
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.sandbox.bubblewrap import SYSTEM_PATHS, BubblewrapRunner, argv_for
 from kingfisher.plugins.sessions.sandbox.linux import present

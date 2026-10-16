@@ -11,7 +11,7 @@ from typing import Any
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.access.source_ids import SourceIds
-from kingfisher.layout import DEFAULT_LAYOUT, Layout
+from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 
 #: The frozen default for an `extra` mapping. Shared with `WireFormat.extra`
 #: rather than written twice: both spread into one `build_model` call and carry

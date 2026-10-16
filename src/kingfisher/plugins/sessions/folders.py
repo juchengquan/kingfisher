@@ -6,8 +6,7 @@ import shutil
 from contextlib import suppress
 from pathlib import Path
 
-from kingfisher.core.session.model import names_a_session
-from kingfisher.layout import (
+from kingfisher.core.layout import (
     AGENTS_SCAFFOLD,
     HARNESS,
     MEMORY,
@@ -15,6 +14,7 @@ from kingfisher.layout import (
     SCRATCH,
     SESSION_DIRS,
 )
+from kingfisher.core.session.model import names_a_session
 from kingfisher.plugins.sessions.permissions import keep_tmp_private, unlock_and_retry
 
 

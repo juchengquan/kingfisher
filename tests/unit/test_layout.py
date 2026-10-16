@@ -16,7 +16,7 @@ import pytest
 
 from kingfisher.core.agent.assembly import memory_is_denied, read_only_permissions
 from kingfisher.core.agent.backend import memory_sources
-from kingfisher.layout import (
+from kingfisher.core.layout import (
     MEMORY,
     OUTPUTS,
     ROUTES,

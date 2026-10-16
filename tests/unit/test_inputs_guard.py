@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 
 from kingfisher import LocalSessions, backend_at
+from kingfisher.core.layout import Layout
 from kingfisher.core.session.files import InputsError, place_inputs
 from kingfisher.core.session.steps import drive
-from kingfisher.layout import Layout
 from kingfisher.plugins.sessions.folders import LocalSessionDirs
 from kingfisher.plugins.sessions.permissions import protect_inputs, writable_inputs
 from tests.conftest import start

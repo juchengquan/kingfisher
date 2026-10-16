@@ -22,7 +22,6 @@ from typing import Any
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
 from deepagents.backends.protocol import ExecuteResponse
 
-from kingfisher.config import Config, ConfigError
 from kingfisher.core.agent.backend import (
     Sessions,
     skill_mounts,
@@ -35,11 +34,11 @@ from kingfisher.core.agent.host_paths import (
 )
 from kingfisher.core.agent.host_paths import reject_host_path
 from kingfisher.core.agent.prompting import ShellPrompt, kingfishers_shell
+from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.catalogue import Definitions, refuse_unmountable
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
 from kingfisher.core.interfaces import CommandRunner
-from kingfisher.core.session.model import session_dir, sessions_root, still_held
-from kingfisher.layout import (
+from kingfisher.core.layout import (
     CLAIM,
     HARNESS,
     HARNESS_OWNED,
@@ -52,6 +51,7 @@ from kingfisher.layout import (
     SKILLS_ROUTE,
     SKILLS_VIEW,
 )
+from kingfisher.core.session.model import session_dir, sessions_root, still_held
 from kingfisher.plugins.sessions.folders import (
     LocalSessionDirs,
     ensure_session_layout,
@@ -545,7 +545,7 @@ def backend_at(
         timeout=cfg.execution_timeout_s,
     )
     # What backs each path. Keyed by the table rather than written as one dict
-    # so that a route declared in `kingfisher.layout` and forgotten here raises when
+    # so that a route declared in `kingfisher.core.layout` and forgotten here raises when
     # the backend is built, instead of reaching a turn as a path that resolves
     # to the default backend and quietly ignores its own deny rule.
     layout = cfg.layout
@@ -573,7 +573,7 @@ def backend_at(
     }
     missing = [path for path in layout.routed_paths() if path not in backing]
     if missing:  # pragma: no cover -- a table edit, caught by its own test
-        msg = f"routes declared in kingfisher.layout with nothing to back them: {missing}"
+        msg = f"routes declared in kingfisher.core.layout with nothing to back them: {missing}"
         raise ConfigError(msg)
 
     routes: dict[str, Any] = {path: backing[path]() for path in layout.routed_paths()}

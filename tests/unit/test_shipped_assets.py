@@ -28,7 +28,7 @@ from kingfisher.core.definitions.skills.catalogue import reachable
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.core.definitions.tools.spec import Offering, out_of_reach
-from kingfisher.layout import SCRATCH
+from kingfisher.core.layout import SCRATCH
 from tests.conftest import FakeToolCallingModel, middleware_of, repository_root, subagent_of
 from tests.unit.test_subagent_helpers import _subagent, _tools_of
 
@@ -358,7 +358,7 @@ def test_the_readme_snippet_runs_and_uses_only_the_public_api(
         # The example sits in a blockquote, so every line carries the marker.
         source = "\n".join(line.removeprefix(">").removeprefix(" ") for line in block.splitlines())
 
-        assert "kingfisher.infrastructure" not in source
+        assert "kingfisher.presentation" not in source
         assert "kingfisher.core" not in source
         for name in re.findall(r"^from kingfisher import (.+)$", source, re.M):
             for imported in (part.strip() for part in name.split(",")):
@@ -1000,7 +1000,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     Driven against the real tree rather than asserted over it, because what could
     regress is the copying rather than the wording.
     """
-    from kingfisher.infrastructure.workspace import seed
+    from kingfisher.core.definitions.seeding import seed
 
     class Destination:
         # Written out rather than a `WorkspacePaths`, because the point of a
@@ -1044,7 +1044,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
 
 def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_path):
     """The deployment that already registered the names wants its own examples."""
-    from kingfisher.infrastructure.workspace import seed
+    from kingfisher.core.definitions.seeding import seed
 
     class Destination:
         # Written out rather than a `WorkspacePaths`, because the point of a
@@ -1071,7 +1071,7 @@ def test_seed_copies_the_middleware_examples_into_a_definitions_folder(shipped, 
     `DEFINITION_KINDS` was pinned; the copying that membership buys was not, so
     nothing went red.
     """
-    from kingfisher.infrastructure.workspace import seed
+    from kingfisher.core.definitions.seeding import seed
 
     class Destination:
         definitions = tmp_path
@@ -1088,7 +1088,7 @@ def test_seed_copies_the_middleware_examples_into_a_definitions_folder(shipped, 
 
 def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_path):
     """The property the rule exists for, checked over the result rather than the inputs."""
-    from kingfisher.infrastructure.workspace import middleware_named, seed
+    from kingfisher.core.definitions.seeding import middleware_named, seed
 
     class Destination:
         # Written out rather than a `WorkspacePaths`, because the point of a
@@ -1119,7 +1119,7 @@ def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
     registry, which is the one registry a seeded workspace never has.
     """
     from kingfisher.core.definitions.middlewares.catalogue import LocalMiddlewareRepository, name_of
-    from kingfisher.infrastructure.workspace import seed
+    from kingfisher.core.definitions.seeding import seed
 
     seed(cfg, shipped, everything=True)
     spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["assistant"]
@@ -1428,7 +1428,7 @@ def test_the_containing_source_id_reaches_what_it_contains(shipped):
 
 def test_every_source_id_the_presets_name_is_declared(shipped):
     """The assertion that keeps this set honest."""
-    from kingfisher.infrastructure.workspace import source_ids_named
+    from kingfisher.core.definitions.seeding import source_ids_named
 
     declared = set(_vocabulary(shipped).names)
     named = {

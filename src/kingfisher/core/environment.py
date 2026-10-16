@@ -7,7 +7,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from kingfisher.config import (
+from kingfisher.core import model_catalogue
+from kingfisher.core.access import policy as access_policy
+from kingfisher.core.config import (
     DEFAULT_THREAD_POOL_SIZE,
     FOLDED_SETTINGS,
     REMOVED_SETTINGS,
@@ -16,11 +18,9 @@ from kingfisher.config import (
     ConfigError,
     WorkspacePaths,
 )
-from kingfisher.core.access import policy as access_policy
-from kingfisher.infrastructure import model_catalogue
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
-# not re-exported. One blessed import path for the record — `kingfisher.config`
+# not re-exported. One blessed import path for the record — `kingfisher.core.config`
 # — is the whole point of it sitting where it does.
 __all__ = ["config_from_env", "enforce_local_only_tracing"]
 

@@ -22,8 +22,8 @@ from kingfisher.core.session.store import HarnessFiles, agent_started_with
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from kingfisher.config import Config
     from kingfisher.core.access.source_ids import Held, SourceIds
+    from kingfisher.core.config import Config
 
 
 class SessionMethods:
