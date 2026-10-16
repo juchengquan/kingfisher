@@ -689,12 +689,10 @@ def test_the_callers_context_reaches_the_turn(cfg):
 
 def test_a_busy_session_still_refuses_the_async_path(cfg):
     """The claim is the turn's, not the entry point's."""
-    from kingfisher import backend_at
-    from kingfisher.layout import CLAIM
 
     kf = service(cfg)
     session = start(cfg, "s")
-    assert backend_at(cfg, cfg.workspace / "sessions" / session).claim(CLAIM, stale_after=3600)
+    assert LocalSessions().claim(cfg, session, stale_after=3600)
 
     with pytest.raises(SessionBusyError, match="already has a turn running"):
         _drain(kf, Request("go", session_id=session))

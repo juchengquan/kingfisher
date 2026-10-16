@@ -346,21 +346,30 @@ def a_session_is_there_on_the_next_turn(make: Callable[[], Any]) -> None:
 def a_claim_is_exclusive(make: Callable[[], Any]) -> None:
     """Two turns in one session share a conversation and the last write wins; the
     claim is what refuses the second. A `write` that overwrites would let both take it.
+
+    And it is one session's: the lock is asked of the object serving every session, so
+    one that kept a single lock for all of them would let one turn run at a time across
+    the whole deployment, and pass every other line here.
     """
     cfg, backends = make()
-    one = CONTRACT_SESSIONS[0]
-    first, second = backends.open(cfg, one), backends.open(cfg, one)
-    if not first.claim("contract-claim", stale_after=3600):
+    one, two = CONTRACT_SESSIONS
+    backends.open(cfg, one)
+    backends.open(cfg, two)
+    if not backends.claim(cfg, one, stale_after=3600):
         msg = "a claim nobody held was refused"
         raise AssertionError(msg)
-    if second.claim("contract-claim", stale_after=3600):
-        msg = "a second backend for the same session took a claim the first still holds"
+    if backends.claim(cfg, one, stale_after=3600):
+        msg = f"{one!r} was claimed a second time while the first claim still holds"
         raise AssertionError(msg)
-    first.release("contract-claim")
-    if not second.claim("contract-claim", stale_after=3600):
+    if not backends.claim(cfg, two, stale_after=3600):
+        msg = f"claiming {one!r} refused a claim on {two!r}: one lock for every session"
+        raise AssertionError(msg)
+    backends.release(cfg, one)
+    if not backends.claim(cfg, one, stale_after=3600):
         msg = "a released claim could not be taken again"
         raise AssertionError(msg)
-    second.release("contract-claim")
+    backends.release(cfg, one)
+    backends.release(cfg, two)
 
 
 def a_deleted_session_is_gone(make: Callable[[], Any]) -> None:
@@ -525,25 +534,25 @@ def aclaim_and_claim_exclude_each_other(make: Callable[[], Any]) -> None:
     """
     cfg, backends = make()
     one = CONTRACT_SESSIONS[0]
-    sync, other = backends.open(cfg, one), backends.open(cfg, one)
+    backends.open(cfg, one)
 
     async def taken() -> bool:
-        return await other.aclaim("contract-twins", stale_after=3600)
+        return await backends.aclaim(cfg, one, stale_after=3600)
 
-    if not sync.claim("contract-twins", stale_after=3600):
+    if not backends.claim(cfg, one, stale_after=3600):
         msg = "a claim nobody held was refused"
         raise AssertionError(msg)
     if _on_a_loop_of_its_own(taken):
         msg = "aclaim took a claim that claim still holds"
         raise AssertionError(msg)
-    sync.release("contract-twins")
+    backends.release(cfg, one)
     if not _on_a_loop_of_its_own(taken):
         msg = "aclaim could not take a released claim"
         raise AssertionError(msg)
-    if sync.claim("contract-twins", stale_after=3600):
+    if backends.claim(cfg, one, stale_after=3600):
         msg = "claim took a claim that aclaim still holds"
         raise AssertionError(msg)
-    other.release("contract-twins")
+    backends.release(cfg, one)
 
 
 def arelease_gives_back_what_claim_took(make: Callable[[], Any]) -> None:
@@ -552,19 +561,19 @@ def arelease_gives_back_what_claim_took(make: Callable[[], Any]) -> None:
     """
     cfg, backends = make()
     one = CONTRACT_SESSIONS[0]
-    files = backends.open(cfg, one)
+    backends.open(cfg, one)
 
     async def released() -> None:
-        await files.arelease("contract-given-back")
+        await backends.arelease(cfg, one)
 
-    if not files.claim("contract-given-back", stale_after=3600):
+    if not backends.claim(cfg, one, stale_after=3600):
         msg = "a claim nobody held was refused"
         raise AssertionError(msg)
     _on_a_loop_of_its_own(released)
-    if not files.claim("contract-given-back", stale_after=3600):
+    if not backends.claim(cfg, one, stale_after=3600):
         msg = "arelease left the claim held: a second turn could not take it"
         raise AssertionError(msg)
-    files.release("contract-given-back")
+    backends.release(cfg, one)
 
 
 def asize_counts_what_size_does(make: Callable[[], Any]) -> None:

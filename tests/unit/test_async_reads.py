@@ -12,14 +12,14 @@ from deepagents.backends import CompositeBackend, FilesystemBackend
 from kingfisher import Kingfisher, LocalSessions
 from kingfisher.domain.access import parse
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.harness.backend import SessionClaims
 from tests.conftest import StubCheckpointer, an_agent, pin, start
 from tests.unit.test_run import StubAgent
 
 #: Every sync method the async paths can reach, on the classes that answer them.
 PORT_METHODS = {
-    LocalSessions: ("open", "sessions", "mark_used", "size", "delete"),
-    SessionClaims: ("claim", "release", "held"),
+    LocalSessions: (
+        "open", "sessions", "mark_used", "size", "delete", "claim", "release", "held",
+    ),
     CompositeBackend: ("download_files", "upload_files", "ls", "glob", "delete"),
     FilesystemBackend: ("download_files", "upload_files", "ls", "glob", "delete"),
 }
@@ -190,6 +190,6 @@ def test_an_async_turn_refused_after_its_claim_gives_it_back_off_the_loop(
     with pytest.raises(InputsError):
         asyncio.run(kf.arun(Request("go", session_id="s", inputs=(tmp_path / "nope.csv",))))
 
-    released = [loop for name, loop in sync_calls if name == "SessionClaims.release"]
+    released = [loop for name, loop in sync_calls if name == "LocalSessions.release"]
     assert released, "the claim was never given back"
     assert not any(released), "the claim was given back on the event loop's thread"

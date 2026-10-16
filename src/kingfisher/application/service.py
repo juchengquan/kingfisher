@@ -90,6 +90,7 @@ from kingfisher.infrastructure.harness.agent import (
 from kingfisher.infrastructure.harness.backend import (
     LocalSessions,
     Sessions,
+    WorkspaceScopedBackend,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
 from kingfisher.infrastructure.harness.checkpointing import (
@@ -144,7 +145,7 @@ from kingfisher.infrastructure.workspace import (
 )
 from kingfisher.kinds.agents.reading import read
 from kingfisher.kinds.agents.spec import AgentSpec
-from kingfisher.layout import CLAIM, PAUSED_STATE
+from kingfisher.layout import PAUSED_STATE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -687,7 +688,10 @@ class Kingfisher(SessionMethods, Disposal):
         yield changing(self._sessions, "mark_used", cfg, session.id)
         # Before the other refusals rather than after: those read the session,
         # and a turn arriving halfway through would be reading it as it moved.
-        if not (yield changing(files, "claim", CLAIM, stale_after=cfg.claim_stale_after)):
+        claimed = yield changing(
+            self._sessions, "claim", cfg, session.id, stale_after=cfg.claim_stale_after
+        )
+        if not claimed:
             msg = (
                 f"session {session.id} already has a turn running; "
                 f"wait for it to finish or start another session"
@@ -706,7 +710,7 @@ class Kingfisher(SessionMethods, Disposal):
             )
         except BaseException:
             # A call that changes something, so a cancel arriving during it waits for it.
-            yield changing(files, "release", CLAIM)
+            yield changing(self._sessions, "release", cfg, session.id)
             raise
 
     def _claimed(  # noqa: PLR0913 -- what setup already built, handed on rather
@@ -721,9 +725,10 @@ class Kingfisher(SessionMethods, Disposal):
         source_ids: Held | None = None,
     ) -> Steps[Prepared]:
         """The rest of setup, once the session is claimed."""
-        # What the backend could not make read-only, where it is one that says. Reported
-        # rather than raised; see `LocalSessions`.
-        unprotected = tuple(getattr(files, "unprotected", ()))
+        # What `LocalSessions` could not make read-only, reported rather than raised. Read
+        # off kingfisher's own backend only: it is that class's, and a deployment's own
+        # sessions are not asked for it.
+        unprotected = files.unprotected if isinstance(files, WorkspaceScopedBackend) else ()
 
         # Before the inputs are placed, not after: placing them grows the session,
         # so checking afterwards would let a request that is already over
@@ -1273,7 +1278,7 @@ class Kingfisher(SessionMethods, Disposal):
         finally:
             # The slot goes back however the turn ended -- answered, refused
             # mid-stream, cut short by its deadline, or cancelled during setup.
-            yield changing(prepared.files, "release", CLAIM)
+            yield changing(self._sessions, "release", self.cfg, prepared.session.id)
         # And so does the connection, when this service opened one. A
         # per-session database is a file descriptor per session, so a
         # process serving many would otherwise hold every one it touched.

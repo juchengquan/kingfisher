@@ -88,8 +88,8 @@ together, and the disagreements are brought to review rather than decided in a m
 | Offered middleware | a name for each factory | none |
 | Instructions | `text(cfg) -> str` | `INSTRUCTIONS.md` in the definitions folder |
 
-**Sessions takes the turn lock.** Today it sits on the backend `open` returns, so a
-deployment's own backend has to carry `claim`, `aclaim`, `release`, `arelease` and
+**Sessions takes the turn lock.** It sat on the backend `open` returns, so a
+deployment's own backend had to carry `claim`, `aclaim`, `release`, `arelease` and
 `held` beside the filesystem it is. On Sessions, the backend `open` returns is a plain
 deepagents backend, with `host_path` and `shell_prompt` as its only optional extras.
 `unprotected`, which the service reads with `getattr` off any backend, becomes
@@ -185,7 +185,7 @@ One pull request each, off `main` once the one before it has merged.
    `default_backends` instance become `LocalSessions`; `backend_at` keeps its name and
    stays public, because `ports.md` tells a deployment's own sessions to build on it.
    *(Landed.)* Then the turn lock moves onto `Sessions`, and `unprotected` becomes
-   `LocalSessions`' own.
+   `LocalSessions`' own. *(Landed.)*
 5. `Plugins`, `KINGFISHER_SESSIONS` and `KINGFISHER_PLUGINS`.
 6. `Adapter` becomes `WireFormat`.
 7. The Instructions plugin.

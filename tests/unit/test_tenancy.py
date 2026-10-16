@@ -10,14 +10,13 @@ from types import SimpleNamespace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import Kingfisher, LocalSessions, backend_at
+from kingfisher import Kingfisher, LocalSessions
 from kingfisher.domain.capabilities import UNRESTRICTED, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import (
     SessionBusyError,
     known,
 )
-from kingfisher.layout import CLAIM
 from tests.conftest import StubCheckpointer, Through, start
 from tests.unit.test_run import StubAgent
 
@@ -101,11 +100,6 @@ def test_grants_are_unrestricted_by_default(cfg):
 # double-click.
 
 
-def _slot(cfg, session_id: str):
-    """The backend a turn in this session claims its slot through."""
-    return backend_at(cfg, cfg.workspace / "sessions" / session_id)
-
-
 def _claim(cfg, session_id: str) -> Path:
     """One session's turn slot, which lives inside the session it guards."""
     from kingfisher.layout import CLAIM, HARNESS
@@ -122,7 +116,7 @@ def test_a_second_turn_on_a_busy_session_is_refused(cfg):
     )
     session = start(cfg, "s")
 
-    assert _slot(cfg, session).claim(CLAIM, stale_after=3600)
+    assert LocalSessions().claim(cfg, session, stale_after=3600)
 
     with pytest.raises(SessionBusyError, match="already has a turn running"):
         service.run(Request("go", session_id=session))
@@ -161,10 +155,10 @@ def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
 def test_a_claim_older_than_a_turn_could_be_is_taken_over(cfg):
     """A process that died leaves its claim behind."""
     session = start(cfg, "s")
-    assert _slot(cfg, session).claim(CLAIM, stale_after=3600)
+    assert LocalSessions().claim(cfg, session, stale_after=3600)
 
     # The same claim, seen from far enough in the future.
-    assert _slot(cfg, session).claim(CLAIM, stale_after=1.0, now=1e12)
+    assert LocalSessions().claim(cfg, session, stale_after=1.0, now=1e12)
 
 
 def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
@@ -180,7 +174,7 @@ def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
     from kingfisher.layout import HARNESS, denied_read_scopes, denied_scopes
 
     session = start(cfg, "s")
-    assert _slot(cfg, session).claim(CLAIM, stale_after=3600)
+    assert LocalSessions().claim(cfg, session, stale_after=3600)
     claim = _claim(cfg, session)
 
     assert claim.exists()
@@ -198,7 +192,7 @@ def test_two_sessions_do_not_block_each_other(cfg):
     busy = start(cfg, "busy")
     other = start(cfg, "other")
 
-    assert _slot(cfg, busy).claim(CLAIM, stale_after=3600)
+    assert LocalSessions().claim(cfg, busy, stale_after=3600)
 
     assert service.run(Request("go", session_id=other)).turn_id
 
