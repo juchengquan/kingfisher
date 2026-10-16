@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from kingfisher.domain.ports import SkillRepository
+    from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 
 # `SEPARATOR` is imported above rather than defined here. It was written out
 # again with a comment saying it matched the separator tools already use, which
@@ -220,7 +220,7 @@ class SkillRegistry:
         return self.offered[key].description if key is not None and key in self.offered else ""
 
 
-def read(repository: SkillRepository) -> SkillRegistry:
+def read(repository: LocalSkillRepository) -> SkillRegistry:
     """Ask deepagents what this repository offers."""
     # Deferred for the reason `listed` gives.
     from deepagents.backends import FilesystemBackend  # noqa: PLC0415

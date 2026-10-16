@@ -48,21 +48,6 @@ def test_a_supplied_catalogue_matching_the_configuration_is_not_an_override(cfg)
     assert found.skills.kind == "default"
 
 
-def test_a_repository_with_no_directory_has_no_path(cfg):
-    """A repository with no directory behind it says so with a `root` of `None`, and the
-    record reports it as supplied rather than inventing a folder.
-    """
-
-    class Rootless:
-        root = None
-
-    catalogue = replace(Definitions.from_roots(cfg.catalogue_roots), subagents=Rootless())  # type: ignore[arg-type]
-
-    found = Origins.of(cfg, catalogue=catalogue)
-
-    assert found.subagents == Origin("supplied", None)
-
-
 def test_an_absent_source_ids_file_still_says_where_it_looked(cfg):
     """The line this whole record was worth building for."""
     looked = cfg.authored_files["source_ids.yaml"]
@@ -229,21 +214,16 @@ def test_no_value_on_the_line_contains_a_space(cfg, tmp_path):
     stops `grep tools=` answering -- which is the whole reason every key is printed
     rather than the ordinary ones being collapsed.
     """
-
-    class Rootless:
-        root = None
-
     catalogue = replace(
         Definitions.from_roots(cfg.catalogue_roots),
-        subagents=Rootless(),  # type: ignore[arg-type]
         tools=Definitions.from_roots({**cfg.catalogue_roots, "tools": tmp_path}).tools,
     )
     line = Origins.of(replace(cfg, access=None, access_source=tmp_path / "source_ids.yaml"),
-                      catalogue=catalogue).line()
+                      catalogue=catalogue, sessions=object()).line()
 
     pairs = line.split(" ")
     assert all("=" in pair for pair in pairs), line
-    assert "subagents=<supplied>" in pairs
+    assert "sessions=<supplied>" in pairs
     assert f"tools={tmp_path}(overridden)" in pairs
     assert f"source_ids=unset({tmp_path / 'source_ids.yaml'})" in pairs
 

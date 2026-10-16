@@ -53,12 +53,23 @@ def _below(root: Path, deepest: int) -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class LocalSkillRepository:
-    """The skills in one directory, and in any mounted beside it."""
+    """The skills in one directory, and in any mounted beside it.
+
+    No `names`, unlike every other kind's reader. Which skills there are is
+    `SkillRegistry`'s answer, because the directories that look like a skill are not
+    the set deepagents parses and offers. Measured on a catalogue of four, a listing
+    here answered two: it missed both skills in a source folder and offered one whose
+    file does not parse.
+    """
 
     root: Path
     #: Each further directory, by the label it is mounted under.
     mounts: Mapping[str, Path] = field(default_factory=lambda: MappingProxyType({}))
-    #: The root is one source, as a mount is. See `SkillRepository.flat`.
+    #: Whether the root is one source with every skill directly in it, as a mount is.
+    #: A subagent's own folder is, and its skills index is given that folder as one
+    #: source. The catalogue is not: a folder under its root is a source of its own,
+    #: which buys one level of grouping. Both readers ask it, so the skills a subagent
+    #: is granted and the skills it is shown are found the same way.
     flat: bool = False
 
     @cached_property

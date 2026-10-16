@@ -4,14 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.domain.ports import (
-    AgentRepository,
-    AssetRepository,
-    MiddlewareRepository,
-    SkillRepository,
-    SubagentRepository,
-    ToolRepository,
-)
 from kingfisher.kinds.agents import catalogue as agent_store
 from kingfisher.kinds.agents.catalogue import LocalAgentRepository
 from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository
@@ -19,7 +11,7 @@ from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from kingfisher.kinds.subagents import catalogue as store
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.spec import SubagentError
-from kingfisher.kinds.tools.catalogue import LocalToolRepository
+from kingfisher.kinds.tools.catalogue import CarriedTools, LocalToolRepository
 from kingfisher.kinds.tools.spec import Offering
 
 NOISY = """
@@ -55,23 +47,6 @@ def catalogue(tmp_path):
 # -- the shape everything downstream reads -----------------------------
 
 
-def test_each_local_repository_satisfies_the_port_for_its_kind(catalogue):
-    """Every member a port declares is read without a default, so a local repository
-    missing one fails here rather than at whichever reader reaches it first.
-    """
-    skills = LocalSkillRepository(catalogue / "skills")
-    subagents = LocalSubagentRepository(catalogue / "subagents")
-    tools = LocalToolRepository(catalogue / "tools")
-
-    assert isinstance(skills, SkillRepository)
-    assert isinstance(subagents, SubagentRepository)
-    assert isinstance(tools, ToolRepository)
-    assert isinstance(LocalAgentRepository(catalogue / "agents"), AgentRepository)
-    assert isinstance(
-        LocalMiddlewareRepository(catalogue / "middlewares"), MiddlewareRepository
-    )
-
-
 #: Reads of a repository member's name that are not reads of a repository, each with
 #: what they are reading instead. The rule matches by name, so these are the collisions.
 NOT_A_REPOSITORY = {
@@ -79,10 +54,11 @@ NOT_A_REPOSITORY = {
 
 
 def test_nothing_reads_a_repository_member_with_a_default():
-    """A member read with `getattr` and a default answers nothing for a repository that
+    """A member read with `getattr` and a default answers nothing for a reader that
     lacks it -- which is how an agent repository without `documents` ran without pinning
     the session to its agent, and a subagent repository without `bundles` dropped a
-    subagent's carried tools. A member worth reading goes on the port.
+    subagent's carried tools. Two readers stand behind a bundle's tools, and a member
+    only one of them has is where the next such read would be written.
     """
     import ast
 
@@ -90,19 +66,19 @@ def test_nothing_reads_a_repository_member_with_a_default():
 
     declared = {
         name
-        for port in (
-            AssetRepository,
-            AgentRepository,
-            MiddlewareRepository,
-            SkillRepository,
-            SubagentRepository,
-            ToolRepository,
+        for reader in (
+            CarriedTools,
+            LocalAgentRepository,
+            LocalMiddlewareRepository,
+            LocalSkillRepository,
+            LocalSubagentRepository,
+            LocalToolRepository,
         )
-        for name in vars(port)
+        for name in vars(reader)
         if not name.startswith("_")
     }
     assert {"documents", "bundles", "root"} <= declared, (
-        "the ports no longer declare the members this rule is about"
+        "the readers no longer declare the members this rule is about"
     )
 
     src = repository_root() / "src"
@@ -119,7 +95,7 @@ def test_nothing_reads_a_repository_member_with_a_default():
 
     assert not reads - set(NOT_A_REPOSITORY), (
         f"{sorted(reads - set(NOT_A_REPOSITORY))} -- read the member directly. If a "
-        "repository may lack it, the port says what it answers instead"
+        "reader may lack it, the reader says what it answers instead"
     )
     assert set(NOT_A_REPOSITORY) <= reads, (
         f"{sorted(set(NOT_A_REPOSITORY) - reads)} is exempted and no longer read -- "
@@ -135,16 +111,15 @@ def test_the_kinds_a_grant_names_answer_the_one_question_it_asks(catalogue):
     registry's answer, because a directory holding a `SKILL.md` is not the same set as
     the skills deepagents parses. A listing here answered both halves wrongly at once
     -- it missed every skill in a source folder and offered one whose file does not
-    parse -- so `SkillRepository` stopped promising it.
+    parse -- so `LocalSkillRepository` stopped offering it.
     """
     every = (
         LocalSubagentRepository(catalogue / "subagents"),
         LocalToolRepository(catalogue / "tools"),
     )
 
-    assert all(isinstance(repo, AssetRepository) for repo in every)
     assert [repo.names for repo in every] == [("alpha",), ("noisy",)]
-    assert not isinstance(LocalSkillRepository(catalogue / "skills"), AssetRepository)
+    assert not hasattr(LocalSkillRepository(catalogue / "skills"), "names")
 
 
 # -- read once, however many views are taken -------------------------------
