@@ -114,7 +114,12 @@ default: MiniMax-M3
 models:
   MiniMax-M3:
     endpoint: minimax
-    max_tokens: 4096
+    # Room for a whole file in one `write_file`. At 4096 a long one was cut off
+    # mid-call and reached the tool without its `content`, and the agent retried the
+    # same write a dozen times. Not MiniMax's suggested 131072: deepagents also
+    # summarizes once the conversation passes 95% of the window less this, so above a
+    # tenth of the window it is this number, not the window, that summarizes sooner.
+    max_tokens: 32768
     # langchain has no profile for MiniMax, so this is the only word on its window.
     extra:
       profile:
@@ -125,7 +130,7 @@ models:
   # line, not one per model.
   MiniMax-M2.5:
     endpoint: minimax
-    max_tokens: 2048
+    max_tokens: 16384
     timeout_s: 60
 
   gpt-5:

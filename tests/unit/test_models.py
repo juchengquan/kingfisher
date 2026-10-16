@@ -501,3 +501,21 @@ def test_the_shipped_minimax_row_sizes_the_summarizer_from_its_window(tmp_path):
 
     assert model.profile == {"max_input_tokens": 1_000_000}
     assert compute_summarization_defaults(model)["trigger"] == ("fraction", 0.85)
+
+
+def test_the_shipped_minimax_reservation_leaves_the_summarizer_to_its_window(tmp_path):
+    """deepagents summarizes at 85% of the window and also once the conversation passes
+    95% of it less `max_tokens` -- `_input_budget` in its summarization middleware -- so
+    a reservation above a tenth of the window summarizes sooner than the window says.
+    MiniMax's own suggestion for M3, 131072, would have done that on the row this
+    raised from 4096, which cut long `write_file` calls off mid-argument.
+    """
+    keys = tmp_path / "keys.yaml"
+    keys.write_text("minimax: sk-not-real\nopenai: sk-not-real\n", encoding="utf-8")
+    template = repository_root() / "src" / "kingfisher" / "templates" / "models.yaml.example"
+    models = load(template, {}, keys_file=keys)
+
+    model = build_model(*models.resolve("MiniMax-M3"))
+    window = model.profile["max_input_tokens"]
+
+    assert int(window * 0.95) - model.max_tokens >= int(window * 0.85), model.max_tokens

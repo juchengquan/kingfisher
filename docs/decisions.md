@@ -2202,6 +2202,27 @@ that model name, which moves: it moved from 1,000,000 to 200,000 under this proj
 once. A row that started yesterday failing to start today is the right outcome when the
 alternative is every turn dying.
 
+**The shipped MiniMax rows reserve 32,768 and 16,384 output tokens, not 4,096 and
+2,048.** Measured across sixteen real MiniMax-M3 turns: 21 model calls stopped at exactly
+4,096 output tokens and none went past it. All 19 of those that called a tool reached it
+without the argument still being written -- `write_file` with no `content`, `execute`
+with no `command` -- and came back `Field required`; one session retried the same
+whole-file write a dozen times before writing in pieces. The other two were final
+answers cut off mid-sentence and reported as complete. MiniMax caps M3's output at
+524,288 and suggests 131,072. The template stays well under both because deepagents
+summarizes once the conversation passes 95% of the window less `max_tokens`, as well as
+at 85% of the window, so anything above a tenth of the window summarizes sooner than the
+window says -- a test holds the shipped row to that.
+
+The code's own default stays 4,096. It applies to a row on any vendor, including a small
+local endpoint that would refuse a large reservation, and the template is where a
+deployment reads what to write. A deployment seeded before this keeps its own row and
+has to raise it itself. What is not built is noticing a call that stopped at the cap:
+langchain keeps a cut tool call with whatever arguments parsed, and a provider that
+streams arguments as raw text would hand `write_file` a truncated file that saves
+cleanly. That check reads the response's stop reason and is its own change. *(2026-10-16,
+from the transcript-clearing trials.)*
+
 **`doctor` does check it, and the reason I said it could not was measured wrongly.**
 The paragraph here said the pair is only knowable from a built model, that building one
 imports a provider package at ~700ms against 17ms for kingfisher itself, and that
