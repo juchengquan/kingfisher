@@ -51,6 +51,9 @@ from kingfisher.application.turn import (
     turn_message,
 )
 from kingfisher.config import Config, ConfigError
+from kingfisher.core.definitions.agents.reading import read
+from kingfisher.core.definitions.agents.spec import AgentSpec
+from kingfisher.core.definitions.catalogue import Definitions, resolve_definitions
 from kingfisher.domain.access import (
     AccessReport,
     Held,
@@ -74,7 +77,6 @@ from kingfisher.domain.result import (
     normalize_answer,
 )
 from kingfisher.domain.session import Session, SessionBusyError, sessions_root, unknown_session
-from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.activation import (
     defined_subagents,
@@ -146,8 +148,6 @@ from kingfisher.infrastructure.workspace import (
     ensure_layout,
     starter_agent,
 )
-from kingfisher.kinds.agents.reading import read
-from kingfisher.kinds.agents.spec import AgentSpec
 from kingfisher.layout import PAUSED_STATE
 
 if TYPE_CHECKING:

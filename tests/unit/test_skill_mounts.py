@@ -11,12 +11,12 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.application.config import paths_from_env
 from kingfisher.config import ConfigError
+from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.skills import registry as skill_registry
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import skills_sources
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills
-from kingfisher.kinds.skills import registry as skill_registry
 from kingfisher.plugins.sessions.backend import backend_at, shell_env, skills_view
 from tests.conftest import FakeToolCallingModel
 

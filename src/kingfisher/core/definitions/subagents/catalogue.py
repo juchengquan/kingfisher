@@ -8,17 +8,17 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any
 
-from kingfisher.kinds.documents import DefinitionText, documents_in
-from kingfisher.kinds.importing import (
+from kingfisher.core.definitions.documents import DefinitionText, documents_in
+from kingfisher.core.definitions.importing import (
     Export,
     exported_from,
     modules_in,
     skipped,
 )
-from kingfisher.kinds.subagents import reading
-from kingfisher.kinds.subagents.spec import EXPORT, SubagentError, SubagentSpec, declared
-from kingfisher.kinds.tools.catalogue import CarriedTools, LocalToolRepository
-from kingfisher.kinds.tools.spec import SEPARATOR, reference
+from kingfisher.core.definitions.subagents import reading
+from kingfisher.core.definitions.subagents.spec import EXPORT, SubagentError, SubagentSpec, declared
+from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository
+from kingfisher.core.definitions.tools.spec import SEPARATOR, reference
 
 #: What a bundle's own assets are kept in, and therefore the two directory names that
 #: are not organisation here. A folder under `subagents/` is normally free -- it groups

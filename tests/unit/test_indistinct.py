@@ -6,13 +6,13 @@ from dataclasses import replace
 
 from kingfisher.application.service import opening_events
 from kingfisher.config import Endpoint, ModelProfile
+from kingfisher.core.definitions.subagents.rules import resolved_model
+from kingfisher.core.definitions.subagents.spec import RunOn
 from kingfisher.domain.capabilities import ALL, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.activation import indistinct_subagents
 from kingfisher.infrastructure.harness.models import WIRE_FORMATS
 from kingfisher.infrastructure.steps import drive
-from kingfisher.kinds.subagents.rules import resolved_model
-from kingfisher.kinds.subagents.spec import RunOn
 from tests.conftest import a_subagent, an_agent, start, subagents_dir
 
 ASKED = """name: second-opinion

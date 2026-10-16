@@ -13,11 +13,11 @@ from kingfisher.application.reporting import opening_events
 from kingfisher.application.service import refused_credentials
 from kingfisher.application.turn import turn_message
 from kingfisher.config import ConfigError
+from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.steps import drive
-from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.layout import HARNESS, PINNED_AGENT
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import (
@@ -334,7 +334,7 @@ def test_an_unrestricted_request_is_told_nothing(cfg):
 
 def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
     """Not off a list kept somewhere."""
-    from kingfisher.infrastructure.workspace import seeding
+    from kingfisher.core.definitions import seeding
 
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
@@ -364,7 +364,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
 
 def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     """Every axis narrows the same way and every one of them went silent the same way."""
-    from kingfisher.infrastructure.workspace import seeding
+    from kingfisher.core.definitions import seeding
 
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
@@ -432,7 +432,7 @@ def test_nothing_is_withheld_from_the_skills_axis_when_the_switch_is_off(cfg, sh
     deployment. The third reader of this switch to ask only the request; the subagent
     branch and `doctor` were the first two, and the entry recording those says why.
     """
-    from kingfisher.infrastructure.workspace import seeding
+    from kingfisher.core.definitions import seeding
 
     seeding.seed(cfg, shipped)
     an_agent(cfg)
@@ -453,8 +453,8 @@ def test_the_skills_axis_is_still_reported_when_the_switch_is_on(cfg, shipped):
     """The control: suppressing the row where nothing is offered must not suppress it
     where something is.
     """
+    from kingfisher.core.definitions import seeding
     from kingfisher.infrastructure.harness.activation import available_skills
-    from kingfisher.infrastructure.workspace import seeding
 
     seeding.seed(cfg, shipped)
     an_agent(cfg)
@@ -474,7 +474,7 @@ def test_the_skills_axis_is_still_reported_when_the_switch_is_on(cfg, shipped):
 
 def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
     """Narrowing tools should not produce a line about skills."""
-    from kingfisher.infrastructure.workspace import seeding
+    from kingfisher.core.definitions import seeding
 
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.

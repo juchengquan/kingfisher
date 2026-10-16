@@ -9,12 +9,14 @@ from typing import Any
 
 import pytest
 
-from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository as Middlewares
-from kingfisher.kinds.middlewares.catalogue import MiddlewareError
-from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository as Subagents
-from kingfisher.kinds.subagents.spec import SubagentError
-from kingfisher.kinds.tools.catalogue import LocalToolRepository as Tools
-from kingfisher.kinds.tools.catalogue import ToolError
+from kingfisher.core.definitions.middlewares.catalogue import (
+    LocalMiddlewareRepository as Middlewares,
+)
+from kingfisher.core.definitions.middlewares.catalogue import MiddlewareError
+from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository as Subagents
+from kingfisher.core.definitions.subagents.spec import SubagentError
+from kingfisher.core.definitions.tools.catalogue import LocalToolRepository as Tools
+from kingfisher.core.definitions.tools.catalogue import ToolError
 
 
 @dataclass(frozen=True)

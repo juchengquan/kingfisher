@@ -9,12 +9,12 @@ from dataclasses import replace
 import pytest
 
 from kingfisher import backend_at
+from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.skills import registry as skill_registry
+from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
-from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.activation import available_skills
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.kinds.skills import registry as skill_registry
-from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from tests.conftest import FakeToolCallingModel
 
 GOOD = "---\nname: {name}\ndescription: {desc}\n---\nBody of the skill.\n"
@@ -181,7 +181,7 @@ def test_only_the_registry_names_the_private_listers():
         or (isinstance(node, ast.Attribute) and node.attr in private)
     }
 
-    assert naming == {"kingfisher/kinds/skills/registry.py"}
+    assert naming == {"kingfisher/core/definitions/skills/registry.py"}
 
 
 def test_the_metadata_still_carries_what_the_registry_reads():

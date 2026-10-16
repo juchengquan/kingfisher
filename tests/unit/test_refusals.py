@@ -15,14 +15,14 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.infrastructure.catalogue import Definitions
+from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.presentation.cli.health import examine, worst
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "kingfisher"
 
 #: The areas a definition is read in. A refusal outside these is something else --
 #: a request being narrowed, a port being wired -- and is not what `doctor` promises.
-AREAS = ("kinds", "infrastructure/catalogue.py")
+AREAS = ("core/definitions",)
 
 #: The errors a kind raises. `load` and `require_literal_prompt` raise neither: they
 #: take the error class from the caller, which is how two refusals hid from the first
@@ -252,83 +252,85 @@ class Refusal:
 #: refuses and is not named here fails `test_every_refusal_in_the_catalogue_is_named`,
 #: and an entry naming a function that no longer refuses fails it too.
 REFUSALS: dict[str, Refusal] = {
-    "kinds/agents/catalogue.py::LocalAgentRepository._defined": Refusal(
+    "core/definitions/agents/catalogue.py::LocalAgentRepository._defined": Refusal(
         1, defect=two_agents_of_a_name),
-    "kinds/agents/spec.py::parse": Refusal(4, defect=an_agent_missing_a_field),
-    "kinds/agents/spec.py::_gated_tools": Refusal(
+    "core/definitions/agents/spec.py::parse": Refusal(4, defect=an_agent_missing_a_field),
+    "core/definitions/agents/spec.py::_gated_tools": Refusal(
         1, defect=an_agent_gating_every_tool_with_a_star),
     # Raises the error class it was handed, which is how it stayed out of the first
     # version of the rule below.
     # The walk both kinds' definition roots are read by. A subagent catalogue reaches
     # it here because that call passes `skipping` and the agent one does not, so the
     # defect filed covers the shape with the extra branch in it.
-    "kinds/documents.py::documents_in": Refusal(1, defect=a_subagent_filed_as_yml),
+    "core/definitions/documents.py::documents_in": Refusal(1, defect=a_subagent_filed_as_yml),
     # Both kinds' readers reach this one: it is everything they do to a document
     # before their own format looks at it. An agent's defect is filed here and a
     # subagent's below, so each kind still drives one refusal in this module.
-    "kinds/documents.py::fields_of": Refusal(1, defect=an_agent_that_will_not_parse),
-    "kinds/documents.py::require_literal_prompt": Refusal(
+    "core/definitions/documents.py::fields_of": Refusal(1, defect=an_agent_that_will_not_parse),
+    "core/definitions/documents.py::require_literal_prompt": Refusal(
         1, defect=a_prompt_written_so_it_reflows),
-    "kinds/importing.py::load": Refusal(2, defect=a_tool_module_that_will_not_import),
+    "core/definitions/importing.py::load": Refusal(2, defect=a_tool_module_that_will_not_import),
     # The envelope all three kinds' modules arrive in. A tool catalogue reaches it
     # here because one of them has to; what the other two get from the same two
     # refusals is now the same sentence rather than a near copy of it.
-    "kinds/importing.py::exported_from": Refusal(2, defect=a_tool_module_declaring_nothing),
-    "kinds/middlewares/catalogue.py::LocalMiddlewareRepository.found": Refusal(
+    "core/definitions/importing.py::exported_from": Refusal(
+        2, defect=a_tool_module_declaring_nothing
+    ),
+    "core/definitions/middlewares/catalogue.py::LocalMiddlewareRepository.found": Refusal(
         1, defect=two_files_defining_a_middleware_of_a_name),
-    "kinds/middlewares/catalogue.py::_refuse_unless_buildable": Refusal(
+    "core/definitions/middlewares/catalogue.py::_refuse_unless_buildable": Refusal(
         2, defect=a_middleware_that_is_not_one),
-    "kinds/subagents/catalogue.py::LocalSubagentRepository.bundles": Refusal(
+    "core/definitions/subagents/catalogue.py::LocalSubagentRepository.bundles": Refusal(
         1, defect=a_bundle_holding_two_definitions),
-    "kinds/subagents/spec.py::_refuse_unknown": Refusal(
+    "core/definitions/subagents/spec.py::_refuse_unknown": Refusal(
         1, defect=a_subagent_with_a_field_nobody_reads),
-    "kinds/subagents/spec.py::_carried": Refusal(
+    "core/definitions/subagents/spec.py::_carried": Refusal(
         2, defect=a_portable_subagent_carrying_tools_that_are_not_a_list),
-    "kinds/subagents/spec.py::_portable": Refusal(
+    "core/definitions/subagents/spec.py::_portable": Refusal(
         2, defect=a_portable_subagent_naming_a_model),
     # The required fields of both Python declarations, in one body since the compiled
     # one had only half of it. Filed on the *blank* name rather than the missing one:
     # that is the refusal this function added, and what this table is for is proving
     # `doctor` reports it.
-    "kinds/subagents/spec.py::_require": Refusal(
+    "core/definitions/subagents/spec.py::_require": Refusal(
         2, defect=a_compiled_subagent_with_a_blank_name),
-    "kinds/subagents/spec.py::_skills_directory": Refusal(
+    "core/definitions/subagents/spec.py::_skills_directory": Refusal(
         3, defect=a_portable_subagent_whose_skills_are_a_relative_path),
-    "kinds/subagents/spec.py::_skills_directories": Refusal(
+    "core/definitions/subagents/spec.py::_skills_directories": Refusal(
         2, defect=a_portable_subagent_whose_skills_hold_one_another),
-    "infrastructure/catalogue.py::_one_registry": Refusal(
+    "core/definitions/catalogue.py::_one_registry": Refusal(
         1, defect=a_portable_subagent_carrying_one_skill_name_twice),
     # Filed on the build rather than on a missing name, which is what it used to be:
     # an entry with no `build` is now a portable declaration rather than a compiled
     # one missing a key, so the old defect reaches `_portable` and never gets here.
-    "kinds/subagents/spec.py::declared": Refusal(
+    "core/definitions/subagents/spec.py::declared": Refusal(
         4, defect=a_compiled_subagent_whose_build_is_not_callable),
-    "kinds/subagents/spec.py::parse": Refusal(3, defect=a_subagent_missing_a_field),
-    "kinds/subagents/spec.py::_refuse_the_sandbox": Refusal(
+    "core/definitions/subagents/spec.py::parse": Refusal(3, defect=a_subagent_missing_a_field),
+    "core/definitions/subagents/spec.py::_refuse_the_sandbox": Refusal(
         1, defect=a_subagent_listing_the_code_sandbox),
-    "kinds/tools/catalogue.py::CarriedTools.found": Refusal(
+    "core/definitions/tools/catalogue.py::CarriedTools.found": Refusal(
         1, defect=a_portable_subagent_carrying_two_tools_of_a_name),
-    "kinds/tools/catalogue.py::LocalToolRepository.found": Refusal(
+    "core/definitions/tools/catalogue.py::LocalToolRepository.found": Refusal(
         1, defect=a_tool_module_defining_a_name_twice),
-    "kinds/tools/catalogue.py::refuse_untoollike": Refusal(
+    "core/definitions/tools/catalogue.py::refuse_untoollike": Refusal(
         2, defect=a_portable_subagent_carrying_a_class),
-    "kinds/tools/spec.py::Offering.refuse_moved": Refusal(
+    "core/definitions/tools/spec.py::Offering.refuse_moved": Refusal(
         1, defect=a_subagent_naming_a_tool_that_moved),
-    "kinds/subagents/rules.py::refuse_miscounted": Refusal(
+    "core/definitions/subagents/rules.py::refuse_miscounted": Refusal(
         1, defect=a_subagent_miscounting_its_own_folder),
     # The four a file on disk cannot reach. Each was measured the same way the others
     # were -- by writing the defect and watching a catalogue accept it -- rather than
     # reasoned about, because "nothing can reach this" is the claim in this table
     # most likely to be wrong and least likely to be noticed.
-    "kinds/skills/registry.py::SkillRegistry.resolve": Refusal(
+    "core/definitions/skills/registry.py::SkillRegistry.resolve": Refusal(
         3, unreachable="a grant naming a skill two sources both offer, which is a request"),
-    "kinds/subagents/rules.py::refuse_cycles": Refusal(
+    "core/definitions/subagents/rules.py::refuse_cycles": Refusal(
         1, unreachable="asked in `_activated_subagents`, over the set a request "
                        "activates rather than over a file on disk"),
-    "kinds/subagents/rules.py::refuse_two_of_a_name": Refusal(
+    "core/definitions/subagents/rules.py::refuse_two_of_a_name": Refusal(
         1, unreachable="two of a name coexist in a catalogue on purpose; it is an agent "
                        "holding both that is refused, which is a request"),
-    "kinds/tools/spec.py::Offering.refuse_unknown": Refusal(
+    "core/definitions/tools/spec.py::Offering.refuse_unknown": Refusal(
         1, unreachable="a request naming a tool the workspace does not offer"),
 }
 

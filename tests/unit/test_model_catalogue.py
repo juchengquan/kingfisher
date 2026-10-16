@@ -136,7 +136,7 @@ def test_an_unset_param_stays_unset(tmp_path):
 
 
 def test_a_key_this_format_does_not_define_is_refused(tmp_path):
-    """The rule `kinds.subagents.reading` states, for the same reason: ignoring a key is
+    """The rule `core.definitions.subagents.reading` states, for the same reason: ignoring a key is
     indistinguishable from honouring it.
     """
     for body, expected in [

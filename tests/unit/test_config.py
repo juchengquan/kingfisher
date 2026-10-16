@@ -9,8 +9,8 @@ import pytest
 from kingfisher.application import config as config_module
 from kingfisher.application.config import Environment, config_from_env
 from kingfisher.config import DEFAULT_THREAD_POOL_SIZE, FOLDED_SETTINGS, ConfigError
+from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.domain.access import AccessError
-from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from tests.conftest import FAKE_CATALOGUE, subagents_dir
 
 CATALOGUE = """

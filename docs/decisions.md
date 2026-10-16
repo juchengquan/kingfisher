@@ -159,7 +159,7 @@ a caller could activate a skill the agent was never told about. A directory the
 agent will not load is reported, not refused.
 *(2026-08-17, `skill-registry.md`.)*
 
-**Only `kinds.skills.registry` calls it.** The lister and its async twin were called
+**Only `core.definitions.skills.registry` calls it.** The lister and its async twin were called
 from there and from `infrastructure.harness.middlewares.narrowing`, so an upgrade
 that moved either meant the same edit in two files, and the async one was never
 pinned.
@@ -484,7 +484,7 @@ Left as it was, and taken out the next day: skills could still be mounted from a
 repository with no directory, through `files`, and nothing in production did that
 any more. *(2026-09-16.)*
 
-**Removed with it: skills mounted from a store.** `kinds.skills` could fill an
+**Removed with it: skills mounted from a store.** `core.definitions.skills` could fill an
 in-memory store from any repository's `files` and mount it read-only, so a skill
 catalogue need not be a directory. Once the repositories were internal, the only
 repositories with no directory were two test fakes. So the store module, `files` on
@@ -532,7 +532,7 @@ agent filed under `agents/tools/` with nothing red, so
 `test_a_folder_called_tools_is_organisation_here_too` is what holds the other side
 of it.
 
-`documents` now reads `kinds.importing.skipped`, so the Layering entry saying four
+`documents` now reads `core.definitions.importing.skipped`, so the Layering entry saying four
 kind catalogues are that module's only readers names one reader short.
 *(2026-09-18.)*
 
@@ -1234,7 +1234,7 @@ it spells one in the workspace `./<name>`. *(2026-10-13.)*
 
 **One refusal, with the caller naming itself.** Tool-name rules live in a value
 object, `Offering`, beside `Found` -- not a `Tool` entity. Both were in the domain
-when this was written and are in `kinds.tools.spec` now, with the tools format. Offered
+when this was written and are in `core.definitions.tools.spec` now, with the tools format. Offered
 names and sources are stored; grants are derived. There is a test that fails when
 a function has no caller outside tests.
 *(2026-08-17, `tool-rules-in-the-domain.md`.)*
@@ -1322,7 +1322,7 @@ Taking the tool out of the catalogue for a caller would have a definition that n
 it refused by `refuse_unknown` for that caller alone -- the failure that reversed the
 central `access.yaml` below. So the build takes it out of the grant, `kingfisher list`
 and the run report take it out of what they say is offered, and the ledger stamps a
-result no wider than its tool, each through `kinds.tools.spec.out_of_reach`.
+result no wider than its tool, each through `core.definitions.tools.spec.out_of_reach`.
 
 **The audience is a private attribute, not `metadata`.** `BaseTool.metadata` was the
 obvious home and is wrong: LangChain passes it to every callback, so an audience kept
@@ -6374,7 +6374,7 @@ that way. *(2026-09-10. Both are in `infrastructure/harness/kinds/` since 2026-1
 asset kind owns its own registration* said the kinds "do not answer to a layer", and
 five imports said otherwise: the subagent runtime half named three modules under
 `infrastructure/harness/` and `infrastructure.prompting`, and the tool surface named
-`infrastructure.catalogue`. Nothing was checking. `THIRD_PARTY` watches foreign
+`core.definitions.catalogue`. Nothing was checking. `THIRD_PARTY` watches foreign
 packages, `HARNESS_EDGES` watches the layers reaching *in*, and the direction between
 `kinds/` and the layers was written in prose and enforced nowhere -- which is how a
 sentence in `CLAUDE.md` about `infrastructure/harness/` had already been false for
@@ -6409,7 +6409,7 @@ one that lists it.
 
 **What it buys, stated so it can be checked.** The swap boundary is two areas rather
 than four: `infrastructure/harness/` and `kinds/skills`, plus `kinds/middlewares` for
-one `isinstance`. `kinds.subagents` and `kinds.tools` grant nothing at all now, and
+one `isinstance`. `core.definitions.subagents` and `core.definitions.tools` grant nothing at all now, and
 every kind import is 5-6ms and 65 modules. The skills store mount was then the one
 kind module that still reached the runtime at import, and *the swap boundary* entry
 above is where the argument for leaving it there lived; it has since been removed,
@@ -6502,13 +6502,13 @@ are here so the next reader is not told a better story than the one that happene
 **`infrastructure/importing.py` came too, and `documents.py` did not** -- until
 2026-09-11, when the seeding scans had gone to `seeding` and what was left served
 only the kind readers, and it moved into `kinds/` as well. Four kind
-catalogues are `kinds.importing`'s only readers and it imports nothing from
+catalogues are `core.definitions.importing`'s only readers and it imports nothing from
 kingfisher at all. `documents` serves two audiences -- `decode` and
 `require_literal_prompt` for the kind readers, `source_ids_named` and `middleware_named`
 for workspace seeding -- so it is not a kinds file, and *"Two modules came up a
 directory, and an import cycle is why"* is why moving it again would need its own
 argument. The cycle that entry records cannot recur here: `kinds/__init__` imports
-nothing, which is also what keeps `kinds.skills` at 6ms rather than the 1,033ms
+nothing, which is also what keeps `core.definitions.skills` at 6ms rather than the 1,033ms
 a re-export reaching a module that imports deepagents would cost every kind import.
 
 **`THIRD_PARTY` gained an entry rather than losing four.** Collapsing the five kinds
@@ -6525,8 +6525,8 @@ stopped being true the day `tools` and `subagents` became packages. No test read
 that file against `THIRD_PARTY`, and nothing else would have said so.
 *(2026-09-04, reversed in part 2026-09-10.)*
 
-**A kind reads its own documents.** `kinds.subagents.reading.read`,
-`kinds.skills.reading.name_from`, and `kinds.agents.reading.read`. Each was two functions in two packages: an envelope opener in
+**A kind reads its own documents.** `core.definitions.subagents.reading.read`,
+`core.definitions.skills.reading.name_from`, and `core.definitions.agents.reading.read`. Each was two functions in two packages: an envelope opener in
 `infrastructure` and the format's own parser, with the opener calling straight
 back into the module it was called from. *(2026-09-05.)*
 
@@ -6552,7 +6552,7 @@ and it imports nothing from kingfisher.)*
 *(That `reading` went on 2026-09-16 with the upload path, its only caller.)* A
 domain module may name a kind's `spec` and nothing else of it, on the stated
 grounds that a spec is format vocabulary with no adapter behind it. Reading a
-document needs `yaml`, so folding the reader into `kinds.skills.spec` would have made
+document needs `yaml`, so folding the reader into `core.definitions.skills.spec` would have made
 that sentence false while leaving it written down -- and the architecture test
 checks direct imports, so nothing would have said so.
 
@@ -6560,7 +6560,7 @@ checks direct imports, so nothing would have said so.
 `catalogue/__init__` imports three kind modules; `documents` and `importing`
 sat inside that package and were imported *by* those kinds. The loop resolved by
 luck of import ordering and stopped resolving when the readers moved -- a cold
-`import kingfisher.kinds.subagents.catalogue` failed outright. Both files are
+`import kingfisher.core.definitions.subagents.catalogue` failed outright. Both files are
 generic:
 `importing` imports nothing from kingfisher whatsoever, and `documents` now
 imports one thing. `infrastructure/__init__` imports nothing, so moving them up
@@ -6586,8 +6586,8 @@ turned out to be exercised by no test at all: mutating either left the whole
 suite green. That gap is older than the move and is now covered.
 
 **They deliberately do not share.** All three resolve a `source::name` and all
-three do it their own way -- `kinds.tools.spec.split_reference` and
-`kinds.skills.registry.split_qualified` differ today by one call that strips a
+three do it their own way -- `core.definitions.tools.spec.split_reference` and
+`core.definitions.skills.registry.split_qualified` differ today by one call that strips a
 trailing slash. Written once and shared, a change for one kind would have to be
 argued past the other two. *(Subagents have since taken the tools' `split_reference`,
 so two ways remain.)* The duplication is the price of each kind changing on
@@ -6604,7 +6604,7 @@ moved into the kinds, and two remain: `ports`, and `request` for `RunOn`. That i
 referring to itself, not the domain reaching for a layer.
 
 The rule was refused as a wall first and then measured, which is the order that
-was wrong. Importing `domain.ports` and `kinds.agents.spec` with those edges takes
+was wrong. Importing `domain.ports` and `core.definitions.agents.spec` with those edges takes
 39ms and loads 101 modules with no part of the agent runtime among them -- the
 same 39ms recorded below as the good case against 888ms. The direction was
 protecting two operational properties and this costs neither, so what stopped
@@ -6630,7 +6630,7 @@ choose: `SKILLS` and `UPLOADED_SKILL_DIR` were declared by the skill format and
 used by `kingfisher.layout`, which *is* the layout; `ceiling` sat in the tool module
 and touches no registry, so it went to `domain.capabilities` with the rest of
 that arithmetic; and `wanted_model` was in the subagent format while
-`kinds.agents.spec` imported it to read its own `model:` line, so it went to
+`core.definitions.agents.spec` imported it to read its own `model:` line, so it went to
 `domain.fields`, which is the field readers. A helper two formats need belongs
 to neither of them.
 
@@ -6694,7 +6694,7 @@ The pieces are where they are for reasons that survive being asked again.
 because the rule is expressible in kingfisher's vocabulary -- both fields are
 name lists -- while turning a name into an object is not. `declared_middleware`
 is in `harness/` because it imports `langchain`, which is the same rule that
-keeps `kinds.skills.registry` where it is. A
+keeps `core.definitions.skills.registry` where it is. A
 `kingfisher/middleware/` package would be the fifth area in `THIRD_PARTY`
 reaching the agent runtime, and the last three entries there each carry a note
 apologising for widening a boundary that used to be one directory.
@@ -6757,7 +6757,7 @@ group.
 **`activation` stayed beside `agent.py`.** It decides what one request turns on,
 across skills and subagents at once, and reads the backend to do it: not one kind's
 half, and `agent.py` is what it changes with. Nor is every kind in the folder.
-Skills reach the runtime from `kinds.skills.registry`, because deepagents reads a
+Skills reach the runtime from `core.definitions.skills.registry`, because deepagents reads a
 `SKILL.md` itself, and an agent is the graph `agent.py` builds -- which the folder's
 docstring says, so a reader looking for five does not conclude two are missing.
 
@@ -6767,7 +6767,7 @@ prefix was given to end.
 
 **A third mechanical fact: `_harness_reach` reads the whole path below the harness.**
 It kept the first segment, so after this move `reporting`'s edges to `activation` and
-`kinds.tools` would have read as `activation` and `kinds` -- and the table exists to
+`core.definitions.tools` would have read as `activation` and `kinds` -- and the table exists to
 say which module took the coupling, not which folder. `middlewares/` never showed it
 because nothing outside the harness imports from there.
 
@@ -7295,7 +7295,7 @@ re-measured and reversed on 2026-09-23. *(2026-09-24, from an architecture revie
 `spec.wanted` and handed it to `resolved_model`, whose only caller it was; both
 docstrings described the same answer. The adapter is gone and its four callers pass
 `spec.wanted`, which says which field the answer comes from. The rule itself stays in
-`kinds.subagents.rules`, where what a definition means belongs.
+`core.definitions.subagents.rules`, where what a definition means belongs.
 *(2026-09-24, same review.)*
 
 ## How much a comment says

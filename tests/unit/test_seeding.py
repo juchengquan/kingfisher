@@ -8,14 +8,14 @@ from pathlib import Path
 import pytest
 
 from kingfisher import backend_at
+from kingfisher.core.definitions import seeding
+from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository, reachable
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.activation import available_skills
 from kingfisher.infrastructure.harness.agent import (
     CapabilityError,
     build_agent,
 )
-from kingfisher.infrastructure.workspace import seeding
-from kingfisher.kinds.skills.catalogue import LocalSkillRepository, reachable
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import a_subagent, repository_root, subagents_dir, tools_dir
 
@@ -144,7 +144,7 @@ def test_a_skill_hidden_below_the_deepest_source_is_reported_not_ignored(tmp_pat
 
 def test_one_folder_of_grouping_is_not_misplaced(tmp_path):
     """The negative control for the level that now works."""
-    from kingfisher.kinds.skills.catalogue import LocalSkillRepository
+    from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
 
     target = tmp_path / "research" / "lookup" / "SKILL.md"
     target.parent.mkdir(parents=True)
@@ -472,7 +472,7 @@ def test_the_readme_subagent_table_matches_the_real_field_set(formats_doc):
     """The table is where a contributor learns which fields exist, and now that an
     unlisted one is an error, a stale row is a definition that will not load.
     """
-    from kingfisher.kinds.subagents.spec import KNOWN
+    from kingfisher.core.definitions.subagents.spec import KNOWN
 
     readme = (formats_doc).read_text(encoding="utf-8")
     table = readme.split("## Subagents")[1].split("\n---")[0]
@@ -504,8 +504,8 @@ def test_every_complete_definition_in_the_readme_parses(formats_doc):
     import re
     from pathlib import Path as _Path
 
-    from kingfisher.kinds.agents.reading import read
-    from kingfisher.kinds.documents import DefinitionText
+    from kingfisher.core.definitions.agents.reading import read
+    from kingfisher.core.definitions.documents import DefinitionText
 
     readme = (formats_doc).read_text(encoding="utf-8")
     # Split on the top-level headings, so each block is read by the format whose
@@ -543,8 +543,8 @@ def test_every_field_fragment_in_the_readme_parses_too(formats_doc):
     import re
     from pathlib import Path as _Path
 
-    from kingfisher.kinds.agents.reading import read
-    from kingfisher.kinds.documents import DefinitionText
+    from kingfisher.core.definitions.agents.reading import read
+    from kingfisher.core.definitions.documents import DefinitionText
 
     required = "name: probe\ndescription: A probe.\nsystem_prompt: |\n  Do the task.\n"
     fragments = [

@@ -95,21 +95,21 @@ record of it, and it stays however short the rest gets.
 **Layering is enforced, not remembered.** `tests/unit/test_architecture.py` parses
 imports against `THIRD_PARTY`, one entry per area, deny by default: `domain/`
 takes the standard library, itself and an asset kind's `spec`, and the agent
-runtime is reachable from `infrastructure/harness/` and from the two kinds that
-must name its types -- `kinds/skills`, which hands a repository to the lister that
-reads it, and `kinds/middlewares`, which refuses a class that is not an
+runtime is reachable from `infrastructure/harness/`, from `plugins/`, which builds
+kingfisher's own sessions on it, and from the two kinds that must name its types --
+`core/definitions/skills`, which hands a repository to the lister that reads it, and
+`core/definitions/middlewares`, which refuses a class that is not an
 `AgentMiddleware`. The other three kinds grant nothing. Adding a foreign
 dependency means editing that table, not working around it. No test reads this
 paragraph against that table, so this is the one place the two can drift apart --
 re-read it when the table moves.
 
-**Imports run one way across `kinds/`.** A layer may name a kind; a kind may not
-name a layer, and `test_no_kind_names_a_layer` is what holds it. `domain/` is not
-a layer for this purpose -- a spec is typed with `Capabilities` and a repository
-satisfies a port. What a kind needs from `application/`, `infrastructure/` or
-`presentation/` is passed in or moved out, which is where
-`infrastructure/harness/kinds/subagents.py` and
-`infrastructure/harness/kinds/tools.py` came from.
+**The core imports nothing from `plugins/`.** Only the command and the front door
+may, and `test_the_core_imports_nothing_from_plugins` holds it. A default the core
+falls back to lives in the core beside its interface; a plugin is what the core never
+names. The layers above are being folded into `core/` one move at a time -- see
+`docs/design/2026-10-16-core-and-plugins.md` -- and each move drops the layer rules it
+breaks.
 
 **Measure before building on a premise.** Several decisions in `docs/decisions.md`
 exist because a stated premise turned out to be false when someone checked. If a

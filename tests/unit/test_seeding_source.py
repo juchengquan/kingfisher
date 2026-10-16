@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher.config import ConfigError
-from kingfisher.infrastructure.workspace import seeding
+from kingfisher.core.definitions import seeding
 
 
 def _definitions(root: Path, *entries: str) -> Path:

@@ -13,9 +13,9 @@ import ast
 import inspect
 from dataclasses import fields
 
+from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.subagents.catalogue import ASSET_DIRECTORIES
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.kinds.subagents.catalogue import ASSET_DIRECTORIES
 from tests.integration import driver
 
 #: The vocabulary, derived here rather than imported. It was a constant on
@@ -43,7 +43,7 @@ def test_the_definitions_layout_names_every_kind_a_catalogue_reads(tmp_path):
     Driven rather than read off a tuple: the kinds come from `definition_roots_for`,
     and a check on a constant passes while the layout makes none of them.
     """
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
     from kingfisher.infrastructure.workspace import ensure_definitions
 
     made = {p.name for p in ensure_definitions(tmp_path / "definitions").iterdir() if p.is_dir()}
@@ -76,7 +76,7 @@ def test_the_first_read_makes_no_folder(cfg, tmp_path):
     """
     from dataclasses import replace
 
-    from kingfisher.infrastructure.catalogue import resolve_definitions
+    from kingfisher.core.definitions.catalogue import resolve_definitions
 
     bare = tmp_path / "bare"
     bare.mkdir()
@@ -132,7 +132,7 @@ def test_a_bundle_holds_only_kinds_the_catalogue_reads():
     `test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads`, one level
     down.
     """
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 
     assert set(ASSET_DIRECTORIES) <= set(DEFINITION_KINDS)
 
@@ -186,7 +186,7 @@ NOT_A_KIND: dict[str, str] = {}
 
 def test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads(shipped):
     """A kind the catalogue does not read would be copied where nothing looks."""
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 
     found = {p.name for p in shipped.iterdir() if p.is_dir() and not p.name.startswith("_")}
 
@@ -205,7 +205,7 @@ def test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads(shipped):
 
 def test_a_folder_that_is_not_a_kind_is_not_seeded_either(shipped, cfg):
     """The claim every `NOT_A_KIND` entry rests on, checked rather than asserted."""
-    from kingfisher.infrastructure.workspace import seeding
+    from kingfisher.core.definitions import seeding
 
     seeding.seed(cfg, shipped)
 
@@ -220,7 +220,7 @@ def test_a_folder_that_is_not_a_kind_is_not_seeded_either(shipped, cfg):
 
 def _kinds_the_seeder_can_report() -> set[str]:
     """Every `wants` value `_deployment_specific` can return, read off its source."""
-    from kingfisher.infrastructure.workspace import seeding
+    from kingfisher.core.definitions import seeding
 
     body = ast.parse(inspect.getsource(seeding))
     fn = next(
@@ -241,7 +241,7 @@ def _kinds_the_seeder_can_report() -> set[str]:
 
 def test_every_reason_a_definition_is_skipped_has_a_remedy():
     """A skipped definition is reported in two halves, and both are lookups."""
-    from kingfisher.infrastructure.workspace.seeding import REMEDY, UNCONSULTED
+    from kingfisher.core.definitions.seeding import REMEDY, UNCONSULTED
 
     reported = _kinds_the_seeder_can_report()
 

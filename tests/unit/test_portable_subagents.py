@@ -16,13 +16,10 @@ from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
 from kingfisher import backend_at
-from kingfisher.domain.capabilities import Capabilities
-from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
-from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
-from kingfisher.kinds.subagents.rules import miscounted
-from kingfisher.kinds.subagents.spec import (
+from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
+from kingfisher.core.definitions.subagents.rules import miscounted
+from kingfisher.core.definitions.subagents.spec import (
     KNOWN,
     NOT_PORTABLE,
     PORTABLE,
@@ -30,7 +27,10 @@ from kingfisher.kinds.subagents.spec import (
     SubagentSpec,
     declared,
 )
-from kingfisher.kinds.tools.spec import tool_name
+from kingfisher.core.definitions.tools.spec import tool_name
+from kingfisher.domain.capabilities import Capabilities
+from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from tests.conftest import FakeToolCallingModel, subagent_of
 from tests.unit.test_bundles import TOOL
 
@@ -506,7 +506,7 @@ def test_the_helper_refusal_points_at_a_key_that_exists():
     the prompt, in the one case where a prompt cannot help. What it does catch is the
     remedy quietly ceasing to exist.
     """
-    from kingfisher.kinds.subagents.spec import DECLARED
+    from kingfisher.core.definitions.subagents.spec import DECLARED
 
     said = NOT_PORTABLE["subagents"]
     named = [key for key in DECLARED if f"'{key}'" in said]

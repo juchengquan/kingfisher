@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 from langchain_core.tools import StructuredTool
 
+from kingfisher.core.definitions.tools.catalogue import ToolError
 from kingfisher.domain.capabilities import ALL
 from kingfisher.domain.fields import Reader
-from kingfisher.kinds.tools.catalogue import ToolError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -26,7 +26,7 @@ class AudiencedTool(StructuredTool):
     _source_ids: Audience = ALL
     _datazone: str | None = None
 
-    # Named `kinds.tools.spec.AUDIENCE_ATTRIBUTE`, which is how the loaders find it.
+    # Named `core.definitions.tools.spec.AUDIENCE_ATTRIBUTE`, which is how the loaders find it.
     @property
     def kingfisher_source_ids(self) -> Audience:
         """Who this tool admits by itself."""

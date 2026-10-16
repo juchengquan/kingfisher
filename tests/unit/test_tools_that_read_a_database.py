@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 
-from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
+from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 
 #: Values a `",".join` cannot carry: a comma makes a field boundary, a newline makes a
 #: record boundary, and a bare quote makes the rest of the line a quoted string.

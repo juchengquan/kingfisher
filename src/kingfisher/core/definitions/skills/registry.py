@@ -12,19 +12,19 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.core.definitions.skills import spec as skill
+from kingfisher.core.definitions.skills.catalogue import DEEPEST, MOUNT_DEEPEST, reachable
 from kingfisher.domain.capabilities import SEPARATOR, CapabilityError
-from kingfisher.kinds.skills import spec as skill
-from kingfisher.kinds.skills.catalogue import DEEPEST, MOUNT_DEEPEST, reachable
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from kingfisher.kinds.skills.catalogue import LocalSkillRepository
+    from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
 
 # `SEPARATOR` is imported above rather than defined here. It was written out
 # again with a comment saying it matched the separator tools already use, which
-# is a claim a copied literal cannot keep. `kinds.tools.spec` had already made
+# is a claim a copied literal cannot keep. `core.definitions.tools.spec` had already made
 # this move and said why: one separator both kinds import beats two that agree
 # by coincidence. Re-exported by the import, so `skills.registry.SEPARATOR`
 # still resolves for readers who look here first.

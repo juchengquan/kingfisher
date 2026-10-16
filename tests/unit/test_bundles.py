@@ -9,18 +9,18 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.application.inventory import inventory
 from kingfisher.config import ConfigError
+from kingfisher.core.definitions.agents import reading as agent_reading
+from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.documents import DefinitionText
+from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
+from kingfisher.core.definitions.subagents.spec import SubagentError
+from kingfisher.core.definitions.tools.catalogue import ToolError
+from kingfisher.core.definitions.tools.spec import Offering, tool_name
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import skills_sources
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
-from kingfisher.kinds.agents import reading as agent_reading
-from kingfisher.kinds.agents.spec import AgentError
-from kingfisher.kinds.documents import DefinitionText
-from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
-from kingfisher.kinds.subagents.spec import SubagentError
-from kingfisher.kinds.tools.catalogue import ToolError
-from kingfisher.kinds.tools.spec import Offering, tool_name
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
 from kingfisher.plugins.sessions.backend import backend_at
 from kingfisher.presentation.cli.health import examine, worst
@@ -1258,8 +1258,8 @@ def test_the_bundle_key_covers_every_directory_a_bundle_holds():
     and not the other is either a folder nobody can list from or a key naming a folder
     that is read as a subagent, and neither has a symptom before it happens.
     """
-    from kingfisher.kinds.subagents.catalogue import ASSET_DIRECTORIES
-    from kingfisher.kinds.subagents.spec import BUNDLE_KEYS
+    from kingfisher.core.definitions.subagents.catalogue import ASSET_DIRECTORIES
+    from kingfisher.core.definitions.subagents.spec import BUNDLE_KEYS
 
     assert set(BUNDLE_KEYS) == set(ASSET_DIRECTORIES)
 
@@ -1383,9 +1383,9 @@ def test_a_compiled_subagents_bundle_wins_a_name_the_catalogue_also_defines(cfg,
     """
     from langchain_core.runnables import RunnableLambda
 
+    from kingfisher.core.definitions.subagents.spec import SubagentSpec
+    from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
     from kingfisher.infrastructure.harness.kinds.subagents import compiled
-    from kingfisher.kinds.subagents.spec import SubagentSpec
-    from kingfisher.kinds.tools.catalogue import LocalToolRepository
 
     # Two `probe` definitions answering differently, so the winner can be named.
     for where, answer in (
@@ -1547,7 +1547,7 @@ def test_the_shipped_bundles_tool_loads_and_masks(tmp_path, shipped):
     """An example is judged by whether an agent can run it, not by this package's
     layering -- so it is imported and called.
     """
-    from kingfisher.kinds.tools.catalogue import LocalToolRepository
+    from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 
     found = LocalToolRepository(shipped / "subagents" / "redactor" / "tools").found
 

@@ -17,17 +17,17 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 from kingfisher import backend_at
+from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
+from kingfisher.core.definitions.importing import load
+from kingfisher.core.definitions.skills import spec as skill
+from kingfisher.core.definitions.skills.catalogue import reachable
+from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
+from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
+from kingfisher.core.definitions.tools.spec import Offering, out_of_reach
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent, declared_middleware
 from kingfisher.infrastructure.harness.kinds.declared_middleware import ByName
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills
-from kingfisher.kinds.agents.catalogue import LocalAgentRepository
-from kingfisher.kinds.importing import load
-from kingfisher.kinds.skills import spec as skill
-from kingfisher.kinds.skills.catalogue import reachable
-from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
-from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
-from kingfisher.kinds.tools.spec import Offering, out_of_reach
 from kingfisher.layout import SCRATCH
 from tests.conftest import FakeToolCallingModel, middleware_of, repository_root, subagent_of
 from tests.unit.test_subagent_helpers import _subagent, _tools_of
@@ -337,7 +337,7 @@ def test_the_shipped_catalogue_has_no_delegation_cycle(shipped):
     """Seeding a catalogue that refuses to load would be the worst kind of example:
     copied, broken on the first run, and the format blamed.
     """
-    from kingfisher.kinds.subagents.rules import refuse_cycles
+    from kingfisher.core.definitions.subagents.rules import refuse_cycles
 
     refuse_cycles(LocalSubagentRepository(shipped / "subagents").specs)
 
@@ -980,8 +980,8 @@ def test_the_middleware_example_is_a_definition_kind_the_workspace_can_load(ship
     into a definition root, and false the moment `protected` was widened to
     every one of them.
     """
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
-    from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository
+    from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
+    from kingfisher.core.definitions.middlewares.catalogue import LocalMiddlewareRepository
 
     assert (shipped / "middlewares").is_dir()
     assert "middlewares" in DEFINITION_KINDS
@@ -1118,8 +1118,8 @@ def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
     workspace that resolves it. The test the star had checked it against an empty
     registry, which is the one registry a seeded workspace never has.
     """
+    from kingfisher.core.definitions.middlewares.catalogue import LocalMiddlewareRepository, name_of
     from kingfisher.infrastructure.workspace import seed
-    from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository, name_of
 
     seed(cfg, shipped, everything=True)
     spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["assistant"]
@@ -1650,7 +1650,7 @@ def test_the_operator_stops_before_running_a_command(cfg, session_dir, shipped):
     from langchain_core.messages import AIMessage
     from langgraph.checkpoint.memory import InMemorySaver
 
-    from kingfisher.infrastructure.catalogue import Definitions
+    from kingfisher.core.definitions.catalogue import Definitions
     from tests.conftest import FakeToolCallingModel
 
     roots = Definitions.from_roots(
@@ -1702,7 +1702,7 @@ def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir
     """
     from dataclasses import replace
 
-    from kingfisher.infrastructure.catalogue import Definitions
+    from kingfisher.core.definitions.catalogue import Definitions
 
     roots = Definitions.from_roots(
         {kind: shipped / kind for kind in ("agents", "skills", "subagents", "tools", "middlewares")}
@@ -1785,7 +1785,7 @@ def _reply(message: AIMessage) -> ChatResult:
 
 def _read_under_compact(shipped, cfg, session_dir, model: _Reader) -> list[str]:
     """One turn of `model` on an agent naming `compact`, and what its build warned."""
-    from kingfisher.kinds.agents.spec import AgentSpec
+    from kingfisher.core.definitions.agents.spec import AgentSpec
     from kingfisher.plugins.sessions.backend import backend_at
 
     backend = backend_at(cfg, session_dir)
@@ -1857,7 +1857,7 @@ def test_compaction_fires_at_sixty_messages_however_small(shipped, cfg, session_
 
 def _scribe_subagents(cfg, session_dir, shipped) -> dict:
     """`scribe`, built from the shipped catalogue alone, as the subagents it handed on."""
-    from kingfisher.infrastructure.catalogue import Definitions
+    from kingfisher.core.definitions.catalogue import Definitions
 
     wired = replace(cfg, skills_enabled=True)
     definitions = Definitions.from_roots(
@@ -1944,7 +1944,7 @@ def test_every_shipped_file_tool_works_on_a_backend_with_nothing_on_this_host(sh
         FileUploadResponse,
     )
 
-    from kingfisher.kinds.tools.catalogue import LocalToolRepository
+    from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
     from tests.conftest import a_pdf, on_backend
 
     held = {

@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from kingfisher.kinds.importing import skipped
+from kingfisher.core.definitions.importing import skipped
 
 if TYPE_CHECKING:
     from pathlib import Path

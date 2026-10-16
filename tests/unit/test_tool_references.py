@@ -5,14 +5,20 @@ from __future__ import annotations
 import pytest
 from langchain_core.tools import tool
 
+from kingfisher.core.definitions import seeding
+from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
+from kingfisher.core.definitions.tools.spec import (
+    Found,
+    Offering,
+    reference,
+    split_reference,
+    tool_name,
+)
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
-from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.kinds.subagents import as_subagent
 from kingfisher.infrastructure.harness.kinds.tools import _ToolSurface
 from kingfisher.infrastructure.harness.middlewares.narrowing import ToolAllowlist
-from kingfisher.infrastructure.workspace import seeding
-from kingfisher.kinds.tools.catalogue import LocalToolRepository
-from kingfisher.kinds.tools.spec import Found, Offering, reference, split_reference, tool_name
 from tests.conftest import a_subagent, tools_dir
 
 TOOL = """from langchain_core.tools import tool

@@ -5,11 +5,11 @@ from __future__ import annotations
 import pytest
 
 from kingfisher import backend_at
+from kingfisher.core.definitions.subagents.spec import SubagentSpec
+from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
+from kingfisher.core.definitions.tools.spec import Offering, offered
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.kinds.subagents.spec import SubagentSpec
-from kingfisher.kinds.tools.catalogue import LocalToolRepository
-from kingfisher.kinds.tools.spec import Offering, offered
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import FakeToolCallingModel, tools_dir
 

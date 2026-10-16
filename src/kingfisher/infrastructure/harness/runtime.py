@@ -10,10 +10,10 @@ from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from langgraph.errors import GraphRecursionError
 from langgraph.types import Command, StreamMode
 
+from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.domain.request import Decision, DecisionError
 from kingfisher.domain.result import DECISIONS, PendingDecision, RunEvent
 from kingfisher.domain.transcript import Message, Role, ToolCall
-from kingfisher.kinds.subagents import TASK_TOOL
 
 #: What langgraph raises out of `stream` when a turn uses up `recursion_limit`.
 OutOfSteps = GraphRecursionError

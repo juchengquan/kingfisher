@@ -77,9 +77,9 @@ def main() -> int:
     load_dotenv()
 
     from kingfisher import Kingfisher, config_from_env, default_backends
+    from kingfisher.core.definitions.documents import SUFFIX
     from kingfisher.domain.capabilities import Capabilities
     from kingfisher.domain.request import Request
-    from kingfisher.kinds.documents import SUFFIX
 
     cfg = replace(config_from_env(), interpreter_enabled=True)
 

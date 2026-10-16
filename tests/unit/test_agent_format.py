@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
+from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
+from kingfisher.core.definitions.agents.reading import read
+from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.definitions.documents import DefinitionText
+from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.kinds.agents.catalogue import LocalAgentRepository
-from kingfisher.kinds.agents.reading import read
-from kingfisher.kinds.agents.spec import AgentError
-from kingfisher.kinds.documents import DefinitionText
-from kingfisher.kinds.subagents.spec import SubagentError
 from tests.conftest import a_subagent
 
 WHOLE = """name: surveyor
@@ -480,8 +480,8 @@ def test_the_starter_agent_the_refusal_prints_actually_loads(cfg):
 
     import yaml
 
+    from kingfisher.core.definitions.agents.spec import parse
     from kingfisher.infrastructure.workspace import starter_agent
-    from kingfisher.kinds.agents.spec import parse
 
     printed = starter_agent(cfg.definitions / "agents")
     block = printed.split("A minimal one:\n\n", 1)[1].split("\n\nOmitting", 1)[0]

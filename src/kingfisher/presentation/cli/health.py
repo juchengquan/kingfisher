@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 from kingfisher import Config, ConfigError, Inventory, inventory, kinds_at
-from kingfisher.domain.session import sessions_root
 
 # Everything below is past the front door on purpose, and this is the file to read if
 # you want to know what that door is now for. These are `doctor`'s probes: what fences
@@ -21,7 +20,8 @@ from kingfisher.domain.session import sessions_root
 # -- and a probe only `doctor` has ever wanted is not a promise worth making to
 # everybody who runs `pip install kingfisher`. The command ships in this wheel, so it
 # takes each name where it lives.
-from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
+from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.workspace import MemoryBacking, memory_backing
 from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.sandbox.bubblewrap import bubblewrap_available

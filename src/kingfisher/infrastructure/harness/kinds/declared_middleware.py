@@ -23,7 +23,7 @@ from kingfisher.domain.capabilities import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository
+    from kingfisher.core.definitions.middlewares.catalogue import LocalMiddlewareRepository
 
 
 #: `defaults` plus whatever the definition was allowed to write.

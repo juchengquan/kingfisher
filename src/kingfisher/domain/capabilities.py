@@ -402,7 +402,7 @@ UNRESTRICTED = Capabilities()
 
 
 #: Two lists into one, for a subagent that may narrow both. Here rather than in
-#: `kinds.tools.spec` because it takes two `Selection`s and answers a third, never
+#: `core.definitions.tools.spec` because it takes two `Selection`s and answers a third, never
 #: touching a registry -- which is the line that module draws.
 
 def ceiling(

@@ -58,7 +58,7 @@ kingfisher/
   __init__.py          the public names for embedding, and for tool files
   core/
     interfaces.py      the six interfaces
-    definitions/       the five kinds, the catalogue, seeding, templates/
+    definitions/       the five kinds, the catalogue, seeding
     access/            capabilities, source-id access, audiences, datazones
     agent/             building one request's deepagents graph, kingfisher's own
                        middleware, and prompts/ -- what kingfisher tells every agent,
@@ -67,7 +67,8 @@ kingfisher/
     defaults           the logger sink, InstructionsFile, the shipped wire formats,
                        the in-memory saver: what the core falls back to
     config.py layout.py request.py result.py service.py run.py inventory.py
-    origins.py reporting.py plugins.py (the Plugins record)
+    origins.py reporting.py plugins.py (the Plugins record), the models.yaml
+    reader beside config.py, and templates/ beside the workspace layout that reads it
   plugins/
     sessions/          LocalSessions: session folders, backend, sandbox, runner,
                        the turn lock
@@ -213,7 +214,7 @@ One pull request each, off `main` once the one before it has merged.
     fallback moved to `cli/`, and the built-in tool probe built on deepagents' own
     classes. *(Landed.)* Then the move itself, with the first of the new rules: the core
     imports nothing from `plugins/`. *(Landed.)*
-11. Move `core/definitions`.
+11. Move `core/definitions`: the kinds, the catalogue and seeding. *(Landed.)*
 12. Move `core/access`.
 13. Move `core/agent`.
 14. Move `core/session`.

@@ -8,6 +8,9 @@ import pytest
 import yaml
 from langchain.agents.middleware import AgentMiddleware
 
+from kingfisher.core.definitions.agents import spec as agent_format
+from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.domain.capabilities import ALL, CapabilityError
 from kingfisher.infrastructure.harness.agent import (
     _deployment_middleware,
@@ -15,9 +18,6 @@ from kingfisher.infrastructure.harness.agent import (
     _provisions,
 )
 from kingfisher.infrastructure.harness.kinds.declared_middleware import ByName, declared_middleware
-from kingfisher.kinds.agents import spec as agent_format
-from kingfisher.kinds.agents.spec import AgentError
-from kingfisher.kinds.subagents.spec import SubagentError
 from tests.conftest import a_subagent
 
 

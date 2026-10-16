@@ -8,6 +8,15 @@ from typing import TYPE_CHECKING, Any
 from deepagents import FilesystemPermission
 
 from kingfisher.config import ConfigError
+from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.skills import registry as skill_registry
+from kingfisher.core.definitions.skills.registry import SkillRegistry
+from kingfisher.core.definitions.subagents.rules import (
+    refuse_cycles,
+    refuse_two_of_a_name,
+    resolved_model,
+)
+from kingfisher.core.definitions.subagents.spec import RunOn, SubagentSpec
 from kingfisher.domain.access import handed_work_by, within_reach
 from kingfisher.domain.capabilities import (
     ALL,
@@ -17,24 +26,15 @@ from kingfisher.domain.capabilities import (
     narrowed,
     refuse_unoffered,
 )
-from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.backend import bundled_skill_mounts
 from kingfisher.infrastructure.harness.kinds.subagents import indistinct
-from kingfisher.kinds.skills import registry as skill_registry
-from kingfisher.kinds.skills.registry import SkillRegistry
-from kingfisher.kinds.subagents.rules import (
-    refuse_cycles,
-    refuse_two_of_a_name,
-    resolved_model,
-)
-from kingfisher.kinds.subagents.spec import RunOn, SubagentSpec
 from kingfisher.layout import SKILLS_ROUTE
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
     from kingfisher.config import Config
-    from kingfisher.kinds.agents.spec import AgentSpec
+    from kingfisher.core.definitions.agents.spec import AgentSpec
 
 
 def available_skills(cfg: Config, *, catalogue: Definitions | None = None) -> tuple[str, ...]:

@@ -20,8 +20,8 @@ from kingfisher import (
     UnknownSessionError,
     backend_at,
 )
+from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.domain.access import parse
-from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.backend import (
     Sessions,
 )

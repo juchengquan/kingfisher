@@ -8,7 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from types import MappingProxyType
 
-from kingfisher.kinds.skills.spec import FILENAME
+from kingfisher.core.definitions.skills.spec import FILENAME
 
 #: Where a skill has to be for anything to find it, said once so callers can
 #: quote it without knowing the filename themselves. Two shapes, because a

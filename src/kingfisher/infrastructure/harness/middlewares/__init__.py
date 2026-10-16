@@ -1,6 +1,6 @@
 """Middleware kingfisher installs itself, on every graph it builds.
 
-The other kind is what a definition names: `kinds.middlewares` holds it and
+The other kind is what a definition names: `core.definitions.middlewares` holds it and
 `infrastructure.harness.kinds.declared_middleware` builds it. Nothing here is in that
 registry, and nothing here may join it. A name a definition can write is a name it
 can leave out, and these are what hold a request to its capabilities -- an agent

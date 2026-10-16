@@ -14,9 +14,9 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately
 from langgraph.types import Command
 
+from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.infrastructure.harness.middlewares.recorder import _arguments
 from kingfisher.infrastructure.harness.models import summarizer_trigger
-from kingfisher.kinds.subagents import TASK_TOOL
 
 if TYPE_CHECKING:
     from kingfisher.domain.result import LedgerEntry

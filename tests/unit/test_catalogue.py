@@ -12,17 +12,17 @@ import pytest
 from kingfisher.application import service as service_module
 from kingfisher.application.service import Kingfisher
 from kingfisher.config import ConfigError
+from kingfisher.core.definitions.catalogue import Definitions, resolve_definitions
+from kingfisher.core.definitions.middlewares.catalogue import MiddlewareError
+from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness.activation import (
     available_skills,
     defined_subagents,
 )
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.kinds.tools import workspace_tool_names
-from kingfisher.kinds.middlewares.catalogue import MiddlewareError
-from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import SKILLS_ROUTE
 from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
 from tests.conftest import (
@@ -112,7 +112,7 @@ def test_a_staged_catalogue_gets_no_kind_folder_made_anywhere(tmp_path, cfg):
     """The layout made every configured kind in the workspace even where the definitions
     were staged somewhere else, and none of them would be read from there.
     """
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 
     staged = tmp_path / "staged"
     supplied = _roots(_staged(staged))
@@ -368,8 +368,8 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
     """
     from functools import cached_property
 
-    from kingfisher.infrastructure import catalogue as catalogue_module
-    from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
+    from kingfisher.core.definitions import catalogue as catalogue_module
+    from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
     from tests.unit.test_run import StubAgent
 
     (subagents_dir(cfg) / "a.yaml").write_text(
