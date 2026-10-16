@@ -860,18 +860,21 @@ SUBAGENTS = [
 ```
 
 **It may write `name`, `description`, `system_prompt`, `builtin_tools`, `tools`,
-`skills` and `metadata`, and nothing else.** `tools` and `skills` mean something
-different here: they hold what the definition brought, never names, because a name
-is a lookup in *your* catalogue and a string or `{name: ...}` entry in `tools` is
-refused. Every other field this format defines names something only one
-deployment knows — `subagents` names *your* subagents, `middlewares` selects code *you*
-registered, `model` a profile in *your* `models.yaml`, `source_ids` ids in *your*
-`source_ids.yaml`. A definition written somewhere else cannot mean anything by
-them, so each is refused with that reason rather than a generic "unknown key".
+`skills`, `metadata` and `source_ids`, and nothing else.** `tools` and `skills` mean
+something different here: they hold what the definition brought, never names,
+because a name is a lookup in *your* catalogue and a string or `{name: ...}` entry
+in `tools` is refused. The fields it may not write name something only one
+deployment knows — `subagents` names *your* subagents, `middlewares` selects code
+*you* registered, `model` a profile in *your* `models.yaml`. A definition written
+somewhere else cannot mean anything by them, so each is refused with that reason
+rather than a generic "unknown key".
 
-Nothing is lost by the last two. A request pins any subagent's model by name with
-`run_on`, and the agent granting the subagent carries the audience that decides
-who reaches it — so both stay with the deployment, in files it owns.
+`source_ids` names ids in *your* `source_ids.yaml` too, and is taken anyway, because
+it fails the safe way: a name your vocabulary does not declare stops the deployment
+at startup, naming it, and with no `source_ids.yaml` the line has no effect. It is
+who may reach this subagent, an **and** with the audience of the agent granting it,
+and it is read by kingfisher and never handed to deepagents. A request pins any
+subagent's model by name with `run_on`, so `model` stays with the deployment too.
 
 **This is what makes a subagent importable from an installed package.** Export
 `SUBAGENTS` from the package, and a deployment takes it by writing one file of
