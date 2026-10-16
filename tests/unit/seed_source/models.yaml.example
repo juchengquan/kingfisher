@@ -96,14 +96,14 @@ default: MiniMax-M3
 models:
   MiniMax-M3:
     endpoint: minimax
-    max_tokens: 4096
+    max_tokens: 32768
 
   # Several models behind one gateway is the ordinary case, and the reason
   # endpoints and models are separate tables: move the gateway and you edit one
   # line, not one per model.
   MiniMax-M2.5:
     endpoint: minimax
-    max_tokens: 2048
+    max_tokens: 16384
     timeout_s: 60
 
   gpt-5:
