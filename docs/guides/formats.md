@@ -1611,6 +1611,10 @@ Consequences worth knowing:
 - **A set is a set of names, not a mapping.** `{finance_db: pii}` is refused:
   read as a set it would take `finance_db` and throw away what was written
   beside it.
+- **In Python, a requirement is a Python set:**
+  `source_ids=["warehouse", {"finance_db", "pii"}]`. A list or tuple inside the
+  audience is refused rather than read as *all of*, because the same brackets
+  already mean *any of* one level up.
 
 `kingfisher list` writes a requirement the way the file does, `{finance_db, pii}`,
 and prints what each named compound requires above the audiences, since a name
