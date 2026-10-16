@@ -6,10 +6,10 @@ import subprocess
 
 import pytest
 
-from kingfisher.infrastructure.sandbox.bubblewrap import SYSTEM_PATHS, BubblewrapRunner, argv_for
-from kingfisher.infrastructure.sandbox.linux import present
-from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.layout import HARNESS, INPUTS, SAVED_RESULTS, Layout
+from kingfisher.plugins.sessions.folders import ensure_session_layout
+from kingfisher.plugins.sessions.sandbox.bubblewrap import SYSTEM_PATHS, BubblewrapRunner, argv_for
+from kingfisher.plugins.sessions.sandbox.linux import present
 
 
 @pytest.fixture
@@ -190,7 +190,7 @@ def test_the_runner_puts_the_command_after_the_sandbox(session):
         seen.append(argv)
         return Done()
 
-    import kingfisher.infrastructure.sandbox.bubblewrap as module
+    import kingfisher.plugins.sessions.sandbox.bubblewrap as module
 
     original, module.subprocess.run = module.subprocess.run, fake_run
     try:
@@ -218,7 +218,7 @@ def test_the_environment_is_given_rather_than_inherited(session, monkeypatch):
         handed.append(kwargs.get("env"))
         return Done(stdout="ok")
 
-    import kingfisher.infrastructure.sandbox.linux as module
+    import kingfisher.plugins.sessions.sandbox.linux as module
 
     monkeypatch.setattr(module.subprocess, "run", fake_run)
     BubblewrapRunner(argv_for(session), env={"PATH": "/usr/bin"}).run("env")
@@ -238,7 +238,7 @@ def _launching(monkeypatch, outcome):
     it is reachable on any host: `bwrap` never runs. What the sandbox *does* is
     asserted against a real one in `tests/linux/test_bubblewrap_escapes.py`.
     """
-    import kingfisher.infrastructure.sandbox.linux as module
+    import kingfisher.plugins.sessions.sandbox.linux as module
 
     def fake_run(*args, **kwargs):
         if isinstance(outcome, BaseException):
@@ -320,8 +320,8 @@ def test_the_runner_says_it_is_local(session):
 
 def a_linux_host(monkeypatch, *, landlock: bool, bwrap: bool):
     """A Linux host with either fence available, or neither."""
-    import kingfisher.infrastructure.sandbox.bubblewrap as bwrap_module
-    from kingfisher.infrastructure.sandbox import confinement
+    import kingfisher.plugins.sessions.sandbox.bubblewrap as bwrap_module
+    from kingfisher.plugins.sessions.sandbox import confinement
 
     monkeypatch.setattr(confinement.platform, "system", lambda: "Linux")
     monkeypatch.setattr(confinement, "landlock_ready", lambda: landlock)

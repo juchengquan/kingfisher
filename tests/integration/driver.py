@@ -46,13 +46,9 @@ from kingfisher.config import Config
 from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
 from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.harness.runlog import usage_of
-from kingfisher.infrastructure.workspace import (
-    SEED_HINT,
-    ensure_layout,
-    ensure_session_layout,
-    seeding,
-)
+from kingfisher.infrastructure.workspace import SEED_HINT, ensure_layout, seeding
 from kingfisher.layout import OUTPUTS
+from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.presentation.cli.progress import show
 
 #: The grants this driver exposes, in the order they are listed and reported.

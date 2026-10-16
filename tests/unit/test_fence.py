@@ -12,16 +12,16 @@ import pytest
 
 from kingfisher import LocalSessions
 from kingfisher.domain.ports import CommandResult
-from kingfisher.infrastructure.sandbox import confinement
-from kingfisher.infrastructure.sandbox.confinement import (
+from kingfisher.layout import HARNESS, OUTPUTS
+from kingfisher.plugins.sessions.folders import ensure_session_layout
+from kingfisher.plugins.sessions.sandbox import confinement
+from kingfisher.plugins.sessions.sandbox.confinement import (
     REQUIRED_LANDLOCK_ABI,
     Confinement,
     _unwrapped,
     landlock_ready,
 )
-from kingfisher.infrastructure.sandbox.fence import SYSTEM_PATHS, LandlockRunner, policy_for
-from kingfisher.infrastructure.workspace import ensure_session_layout
-from kingfisher.layout import HARNESS, OUTPUTS
+from kingfisher.plugins.sessions.sandbox.fence import SYSTEM_PATHS, LandlockRunner, policy_for
 from tests.conftest import repository_root
 
 #: A message short enough for `TRY003`, since what it says never survives
@@ -171,7 +171,7 @@ def test_a_path_that_is_not_there_is_dropped_rather_than_named(sandlock, tmp_pat
 
 def test_a_fence_that_could_not_be_built_says_so(sandlock, tmp_path, monkeypatch):
     """Measured in a container, and it did not fail loudly."""
-    from kingfisher.infrastructure.sandbox.fence import LandlockRunner
+    from kingfisher.plugins.sessions.sandbox.fence import LandlockRunner
 
     def refuse(_policy):
         raise OSError(FAILED)
@@ -195,7 +195,7 @@ def test_a_fence_that_could_not_be_built_says_so(sandlock, tmp_path, monkeypatch
 
 
 def a_runner(sandlock, tmp_path, **kwargs):
-    from kingfisher.infrastructure.sandbox.fence import LandlockRunner
+    from kingfisher.plugins.sessions.sandbox.fence import LandlockRunner
 
     session = tmp_path / "sessions" / "s1"
     session.mkdir(parents=True, exist_ok=True)
@@ -278,7 +278,7 @@ def test_a_named_mechanism_counts_as_confined_even_with_nothing_wrapped():
     """Landlock is applied to the process, not wrapped round the command, so "does
     `wrap` do anything" reports a fenced shell as unfenced.
     """
-    from kingfisher.infrastructure.sandbox.confinement import _unwrapped
+    from kingfisher.plugins.sessions.sandbox.confinement import _unwrapped
 
     assert Confinement(wrap=_unwrapped, mechanism="Landlock").confined
     assert not Confinement(wrap=_unwrapped).confined
@@ -291,7 +291,7 @@ def test_every_condition_has_to_hold_and_any_one_fails_quietly(monkeypatch):
     Unnumbered on purpose: this name said "three things" while a fourth -- what the
     installed `sandlock` demands of the kernel -- was added directly below it.
     """
-    import kingfisher.infrastructure.sandbox.confinement as c
+    import kingfisher.plugins.sessions.sandbox.confinement as c
 
     monkeypatch.setattr(c.platform, "system", lambda: "Linux")
     monkeypatch.setattr(c, "landlock_abi", lambda: REQUIRED_LANDLOCK_ABI - 1)
@@ -309,7 +309,7 @@ def test_a_sandlock_needing_a_newer_kernel_than_this_one_is_not_ready(monkeypatc
     The control is the same kernel with a library that fits, so this cannot pass by
     calling everything unready.
     """
-    import kingfisher.infrastructure.sandbox.confinement as c
+    import kingfisher.plugins.sessions.sandbox.confinement as c
 
     monkeypatch.setattr(c.platform, "system", lambda: "Linux")
     monkeypatch.setattr(c, "landlock_abi", lambda: REQUIRED_LANDLOCK_ABI)
@@ -326,7 +326,7 @@ def test_a_sandlock_that_imports_and_cannot_answer_is_not_a_fence(monkeypatch):
     nothing about the native half running -- what that hid is a fence reported present
     and refused at the moment it is applied.
     """
-    import kingfisher.infrastructure.sandbox.confinement as c
+    import kingfisher.plugins.sessions.sandbox.confinement as c
 
     mute = types.ModuleType("sandlock")
     monkeypatch.setitem(sys.modules, "sandlock", mute)
@@ -364,8 +364,8 @@ def test_the_fence_follows_the_confinement_rather_than_deciding_again(sandlock, 
     Both directions, on every platform: a test that only checked the unfenced branch
     would pass on this machine and prove nothing about the one the fence is for.
     """
-    from kingfisher.infrastructure.harness.backend import _fence_for
-    from kingfisher.infrastructure.sandbox.confinement import _unwrapped
+    from kingfisher.plugins.sessions.backend import _fence_for
+    from kingfisher.plugins.sessions.sandbox.confinement import _unwrapped
 
     session = tmp_path / "sessions" / "s1"
     ensure_session_layout(session)
@@ -380,9 +380,9 @@ def test_the_fence_follows_the_confinement_rather_than_deciding_again(sandlock, 
 
 def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
     """The two mechanisms must fence the same shell the same way."""
-    from kingfisher.infrastructure.harness.backend import _fence_for
-    from kingfisher.infrastructure.sandbox import bubblewrap, fence
-    from kingfisher.infrastructure.sandbox.confinement import _unwrapped
+    from kingfisher.plugins.sessions.backend import _fence_for
+    from kingfisher.plugins.sessions.sandbox import bubblewrap, fence
+    from kingfisher.plugins.sessions.sandbox.confinement import _unwrapped
 
     seen: dict[str, tuple[Path, list[Path], list[Path], str | None]] = {}
     saved: dict[str, object] = {}
@@ -434,9 +434,9 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
 
 def test_every_directory_on_the_agent_s_path_is_reachable(cfg, tmp_path, monkeypatch):
     """The rule the fence exists to keep, stated the way it actually breaks."""
-    from kingfisher.infrastructure.harness.backend import _fence_for, shell_env
-    from kingfisher.infrastructure.sandbox import bubblewrap, fence
-    from kingfisher.infrastructure.sandbox.confinement import _unwrapped
+    from kingfisher.plugins.sessions.backend import _fence_for, shell_env
+    from kingfisher.plugins.sessions.sandbox import bubblewrap, fence
+    from kingfisher.plugins.sessions.sandbox.confinement import _unwrapped
 
     seen: dict[str, tuple[list[Path], list[Path]]] = {}
 

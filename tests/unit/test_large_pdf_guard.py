@@ -14,11 +14,11 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import backend_at
 from kingfisher.infrastructure.harness.middlewares.large_pdf_guard import (
     MAX_PDF_BYTES,
     LargePdfGuard,
 )
+from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import a_pdf, repository_root, tools_dir
 from tests.unit.test_offloads import _Shown
 

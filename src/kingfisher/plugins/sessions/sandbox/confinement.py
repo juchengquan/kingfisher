@@ -64,7 +64,7 @@ EXTERNAL = "external"
 #: Landlock cannot run; naming it chooses it even where Landlock would, which is
 #: how a deployment closes the shell's network. Probed rather than trusted either
 #: way, because it works only in a container whose seccomp profile permits user
-#: namespaces. See `infrastructure/sandbox/bubblewrap.py`.
+#: namespaces. See `plugins/sessions/sandbox/bubblewrap.py`.
 BUBBLEWRAP = "bubblewrap"
 #: Deliberately unconfined. Warned about on every start, because an exposure
 #: nobody is reminded of is one nobody fixes.
@@ -176,7 +176,7 @@ def landlock_ready() -> bool:
 
 def _bubblewrap() -> Confinement:
     """The bubblewrap mode, probed rather than trusted."""
-    from kingfisher.infrastructure.sandbox.bubblewrap import bubblewrap_available  # noqa: PLC0415
+    from kingfisher.plugins.sessions.sandbox.bubblewrap import bubblewrap_available  # noqa: PLC0415
 
     if bubblewrap_available():
         return Confinement(wrap=_unwrapped, mechanism=BUBBLEWRAP)
@@ -593,7 +593,7 @@ def shell_readable(cfg: Config, mechanism: str) -> tuple[Path, ...]:
     if mechanism in LINUX_FENCES:
         # Each fence's own list, not one shared: bubblewrap binds no `/proc` or `/dev`,
         # and one list serving both is how a mechanism gains a path it meant to deny.
-        from kingfisher.infrastructure.sandbox import bubblewrap, fence  # noqa: PLC0415
+        from kingfisher.plugins.sessions.sandbox import bubblewrap, fence  # noqa: PLC0415
 
         system = fence.SYSTEM_PATHS if mechanism == LANDLOCK else bubblewrap.SYSTEM_PATHS
         granted = [*map(Path, system), *toolchain_roots(cfg.shell_path_extra), *map(Path, skills)]

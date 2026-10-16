@@ -22,8 +22,8 @@ from kingfisher.domain.request import Decision, DecisionError, Request, Resume
 from kingfisher.domain.result import AWAITING, DECISIONS, END_TURN
 from kingfisher.infrastructure.session_store import read_pause_mark, write_pause_mark
 from kingfisher.infrastructure.steps import drive
-from kingfisher.infrastructure.workspace import session_bytes
 from kingfisher.layout import HARNESS, PAUSED_MARK, PAUSED_STATE
+from kingfisher.plugins.sessions.folders import session_bytes
 from tests.conftest import FakeToolCallingModel, Through, harness_of
 
 PAUSED = f"{HARNESS}/{PAUSED_STATE}"

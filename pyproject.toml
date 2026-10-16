@@ -342,8 +342,8 @@ unresolved-import = "ignore"
 # and named.
 [[tool.ty.overrides]]
 include = [
-    "src/kingfisher/infrastructure/sandbox/fence.py",
-    "src/kingfisher/infrastructure/sandbox/confinement.py",
+    "src/kingfisher/plugins/sessions/sandbox/fence.py",
+    "src/kingfisher/plugins/sessions/sandbox/confinement.py",
 ]
 
 [tool.ty.overrides.rules]

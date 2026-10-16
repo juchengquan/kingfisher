@@ -31,13 +31,10 @@ from kingfisher.domain.request import Decision, Resume
 from kingfisher.domain.result import AWAITING, MAIN, WORKING, LedgerEntry
 from kingfisher.domain.transcript import from_json
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import backend_at
 from kingfisher.infrastructure.harness.ledger import Ledger
 from kingfisher.infrastructure.harness.middlewares.recorder import Recorder
 from kingfisher.infrastructure.prompting import render_system_prompt
-from kingfisher.infrastructure.sandbox.confinement import EXTERNAL
 from kingfisher.infrastructure.session_store import KeptLedger, entry_id
-from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.layout import (
     HARNESS,
     LEDGER_FILE,
@@ -49,6 +46,9 @@ from kingfisher.layout import (
     TRANSCRIPT_FILE,
     Layout,
 )
+from kingfisher.plugins.sessions.backend import backend_at
+from kingfisher.plugins.sessions.folders import ensure_session_layout
+from kingfisher.plugins.sessions.sandbox.confinement import EXTERNAL
 from tests.conftest import FakeToolCallingModel, an_agent, start, subagents_dir, tools_dir
 from tests.unit.scripted import Scripted
 

@@ -14,7 +14,7 @@ from kingfisher.infrastructure.harness.host_paths import HOST_ROOTS
 from kingfisher.infrastructure.harness.middlewares.workspace_tools import WorkspaceToolPaths
 from kingfisher.infrastructure.harness.session_paths import NOT_FOR_TOOLS
 from kingfisher.infrastructure.harness.tool_guards import guarded_tools
-from kingfisher.infrastructure.workspace import ensure_session_layout
+from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import paths_in
 
 

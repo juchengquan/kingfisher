@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.infrastructure.sandbox.confinement import (
+from kingfisher.plugins.sessions.sandbox.confinement import (
     REQUIRED_LANDLOCK_ABI,
     landlock_abi,
     landlock_ready,
@@ -36,7 +36,7 @@ def two_sessions(tmp_path):
     policy that grants nothing, and every escape below would fail for that reason
     instead of the one being tested.
     """
-    from kingfisher.infrastructure.workspace import ensure_session_layout
+    from kingfisher.plugins.sessions.folders import ensure_session_layout
 
     mine = tmp_path / "sessions" / "a"
     theirs = tmp_path / "sessions" / "b"
@@ -49,7 +49,7 @@ def two_sessions(tmp_path):
 @pytest.fixture
 def fenced(two_sessions):
     """A runner confined to the second session, as `LocalSessions` builds one."""
-    from kingfisher.infrastructure.sandbox.fence import LandlockRunner, policy_for
+    from kingfisher.plugins.sessions.sandbox.fence import LandlockRunner, policy_for
 
     _, theirs = two_sessions
     return LandlockRunner(
@@ -183,7 +183,7 @@ def test_the_agent_reaches_its_own_interpreter(fenced):
 
 
 def _runner_for(session):
-    from kingfisher.infrastructure.sandbox.fence import LandlockRunner, policy_for
+    from kingfisher.plugins.sessions.sandbox.fence import LandlockRunner, policy_for
 
     return LandlockRunner(
         policy_for(session, readable=toolchain_roots()),

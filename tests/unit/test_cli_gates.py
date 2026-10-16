@@ -422,7 +422,7 @@ def test_log_reaches_the_service_on_both_verbs_that_run_a_turn(verb, tmp_path, m
     a turn did, which is where it was left when the run log stopped being a file in
     the session.
     """
-    from kingfisher.infrastructure.harness.runlog import JsonlRunEvents
+    from kingfisher.plugins.events import JsonlRunEvents
 
     handed: list[object] = []
 
@@ -458,7 +458,7 @@ def test_log_reaches_the_service_on_both_verbs_that_run_a_turn(verb, tmp_path, m
 def test_the_plugins_reach_the_service_and_log_replaces_their_run_events(tmp_path, monkeypatch):
     """What `KINGFISHER_PLUGINS` names is handed to every `Kingfisher` the command builds,
     and `--log`, the narrower ask, takes the place of the run events it names."""
-    from kingfisher.infrastructure.harness.runlog import JsonlRunEvents
+    from kingfisher.plugins.events import JsonlRunEvents
 
     handed: list[dict[str, object]] = []
     events, threads = RecordedEvents(), object()

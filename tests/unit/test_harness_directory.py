@@ -20,9 +20,9 @@ from kingfisher import LocalSessions
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import backend_at
 from kingfisher.infrastructure.workspace import ensure_layout
 from kingfisher.layout import CLAIM, HARNESS, PINNED_AGENT
+from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeToolCallingModel, pin, start
 
 macos = pytest.mark.skipif(
@@ -140,7 +140,7 @@ def test_one_session_s_harness_is_not_denied_by_naming_another(cfg, workspace):
     """The profile is one static text covering every session, so the rule has to be a
     pattern -- and a pattern that matched too much would deny a path with `.harness`
     somewhere in the middle of it."""
-    from kingfisher.infrastructure.workspace import ensure_session_layout
+    from kingfisher.plugins.sessions.folders import ensure_session_layout
 
     session = ensure_session_layout(workspace / "sessions" / "second")
     decoy = session / "outputs" / ".harness"
@@ -180,8 +180,8 @@ def test_the_pin_and_the_claim_go_with_the_session(cfg):
 def test_the_harness_owned_directory_is_protected_too(cfg):
     """The profile lives in it, and after `TMPDIR` moved out nothing in it is the
     agent's -- so it is denied as a directory rather than as one named file."""
-    from kingfisher.infrastructure.sandbox import confinement
     from kingfisher.layout import HARNESS_OWNED
+    from kingfisher.plugins.sessions.sandbox import confinement
 
     protected = confinement.protected_roots(
         cfg.workspace, (cfg.skills_dir,), tuple(cfg.catalogue_roots.values())

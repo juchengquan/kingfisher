@@ -17,8 +17,8 @@ import pytest
 from kingfisher import Kingfisher, LocalSessions, backend_at
 from kingfisher.config import Config
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.workspace import session_bytes
 from kingfisher.layout import HARNESS, TRANSCRIPT_FILE
+from kingfisher.plugins.sessions.folders import session_bytes
 from tests.conftest import StubCheckpointer, Through
 from tests.unit.test_run import StubAgent
 

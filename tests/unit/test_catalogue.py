@@ -20,11 +20,11 @@ from kingfisher.infrastructure.harness.activation import (
     defined_subagents,
 )
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import LocalSessions, backend_at
 from kingfisher.infrastructure.harness.kinds.tools import workspace_tool_names
 from kingfisher.kinds.middlewares.catalogue import MiddlewareError
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import SKILLS_ROUTE
+from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
 from tests.conftest import (
     FakeToolCallingModel,
     middlewares_dir,

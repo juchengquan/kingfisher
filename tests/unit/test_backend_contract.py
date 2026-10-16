@@ -10,11 +10,8 @@ import pytest
 from deepagents.backends import CompositeBackend
 from deepagents.backends.protocol import ReadResult
 
-from kingfisher.infrastructure.harness.backend import (
-    WorkspaceScopedBackend,
-    backend_at,
-)
 from kingfisher.layout import SCRATCH_ROUTE
+from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, backend_at
 from tests.checks.backend import (
     BACKEND_CHECKS,
     execution_support,

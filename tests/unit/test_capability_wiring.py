@@ -22,10 +22,11 @@ from kingfisher.infrastructure.harness.agent import (
     CapabilityError,
     build_agent,
 )
-from kingfisher.infrastructure.harness.backend import backend_at, skills_sources
+from kingfisher.infrastructure.harness.backend import skills_sources
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.prompting import memory_guidelines
 from kingfisher.layout import MEMORY
+from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import (
     FakeToolCallingModel,
     declared_subagents,

@@ -164,7 +164,8 @@ the backend as one with a shell, and that the routes cover the layout.
 
 ## The rules
 
-- The core imports no plugin, and names no sessions implementation at all.
+- The core imports no plugin, and names no sessions implementation at all. Held by
+  `test_the_core_imports_nothing_from_plugins` since `plugins/` was made.
 - A plugin imports the core and never another plugin.
 - deepagents is part of the core.
 - `import kingfisher` loads no installed package. The command loads nothing but `dotenv`
@@ -210,7 +211,8 @@ One pull request each, off `main` once the one before it has merged.
 10. Move `plugins/`, in two pull requests. First the core stops reaching into
     `LocalSessions` in the five places it did: the extras above, the command's
     fallback moved to `cli/`, and the built-in tool probe built on deepagents' own
-    classes. *(Landed.)* Then the move itself.
+    classes. *(Landed.)* Then the move itself, with the first of the new rules: the core
+    imports nothing from `plugins/`. *(Landed.)*
 11. Move `core/definitions`.
 12. Move `core/access`.
 13. Move `core/agent`.

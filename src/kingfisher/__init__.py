@@ -43,11 +43,11 @@ _EXPORTS = {
     # What `LocalSessions` builds for one session, for a directory of the caller's
     # choosing. Public because `ports.md` tells a deployment writing its own sessions
     # to start from it rather than from nothing, and that has to be sayable from here.
-    "backend_at": "kingfisher.infrastructure.harness.backend",
+    "backend_at": "kingfisher.plugins.sessions.backend",
     # Kingfisher's own sessions. Every `Kingfisher` is handed its sessions, so a
     # deployment keeping these names them, and one building on them subclasses them:
     # `ports.md` shows both, and the refusal of a plain function names it.
-    "LocalSessions": "kingfisher.infrastructure.harness.backend",
+    "LocalSessions": "kingfisher.plugins.sessions.backend",
     # What a deployment's shell says of itself, which only the deployment knows: a
     # runner is handed the command and nothing else, so the agent is told neutrally
     # about any shell but kingfisher's own unless this says otherwise. Constructed by
@@ -208,12 +208,6 @@ if TYPE_CHECKING:
     from kingfisher.domain.session import SessionInfo as SessionInfo
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
     from kingfisher.infrastructure.harness.audienced_tool import tool as tool
-    from kingfisher.infrastructure.harness.backend import (
-        LocalSessions as LocalSessions,
-    )
-    from kingfisher.infrastructure.harness.backend import (
-        backend_at as backend_at,
-    )
     from kingfisher.infrastructure.harness.host_paths import HostPathError as HostPathError
     from kingfisher.infrastructure.harness.tool_context import ToolContext as ToolContext
     from kingfisher.infrastructure.prompting import ShellPrompt as ShellPrompt
@@ -226,6 +220,8 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace import seed as seed
     from kingfisher.kinds.subagents.spec import RunOn as RunOn
     from kingfisher.kinds.subagents.spec import SubagentError as SubagentError
+    from kingfisher.plugins.sessions.backend import LocalSessions as LocalSessions
+    from kingfisher.plugins.sessions.backend import backend_at as backend_at
 
 
 def __getattr__(name: str) -> Any:

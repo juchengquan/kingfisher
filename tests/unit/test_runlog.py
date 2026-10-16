@@ -189,7 +189,7 @@ def test_a_file_sink_keeps_one_line_per_event_in_its_own_alphabet(tmp_path):
     """
     import json
 
-    from kingfisher.infrastructure.harness.runlog import JsonlRunEvents
+    from kingfisher.plugins.events import JsonlRunEvents
 
     sink = JsonlRunEvents(tmp_path / "logs" / "turns.jsonl")
     _logger(sink).run_start("Résume le rapport")

@@ -10,12 +10,9 @@ import pytest
 from kingfisher import LocalSessions, backend_at
 from kingfisher.infrastructure.session_files import InputsError, place_inputs
 from kingfisher.infrastructure.steps import drive
-from kingfisher.infrastructure.workspace import (
-    LocalSessionDirs,
-    protect_inputs,
-    writable_inputs,
-)
 from kingfisher.layout import Layout
+from kingfisher.plugins.sessions.folders import LocalSessionDirs
+from kingfisher.plugins.sessions.permissions import protect_inputs, writable_inputs
 from tests.conftest import start
 
 macos = pytest.mark.skipif(
@@ -266,7 +263,7 @@ def test_inputs_are_read_only_again_even_when_a_copy_fails(cfg, session_dir, tmp
         raise OSError(gone)
 
     monkeypatch.setattr(
-        "kingfisher.infrastructure.harness.backend.FilesystemBackend.upload_files", explode
+        "kingfisher.plugins.sessions.backend.FilesystemBackend.upload_files", explode
     )
 
     with pytest.raises(OSError, match=gone):

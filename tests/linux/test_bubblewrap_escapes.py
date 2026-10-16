@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.infrastructure.sandbox.bubblewrap import (
+from kingfisher.layout import SAVED_RESULTS
+from kingfisher.plugins.sessions.folders import ensure_session_layout
+from kingfisher.plugins.sessions.sandbox.bubblewrap import (
     BubblewrapRunner,
     argv_for,
     bubblewrap_available,
 )
-from kingfisher.infrastructure.sandbox.confinement import toolchain_roots
-from kingfisher.infrastructure.workspace import ensure_session_layout
-from kingfisher.layout import SAVED_RESULTS
+from kingfisher.plugins.sessions.sandbox.confinement import toolchain_roots
 
 needs_bubblewrap = pytest.mark.skipif(
     not bubblewrap_available(),

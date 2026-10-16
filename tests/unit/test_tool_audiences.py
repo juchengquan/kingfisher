@@ -18,9 +18,9 @@ from kingfisher.domain.access import AccessError, parse
 from kingfisher.domain.capabilities import ALL
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.middlewares.recorder import Audiences
-from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.kinds.tools.catalogue import CarriedTools, LocalToolRepository, ToolError
 from kingfisher.kinds.tools.spec import own_audience
+from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import tools_dir
 
 #: `line_count` admits A by itself, and nothing in an agent file says so.

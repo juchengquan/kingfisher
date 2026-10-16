@@ -191,7 +191,7 @@ ROUTES: tuple[Route, ...] = (
     # A caller's inputs, and nothing else holds a copy: never re-derivable from
     # the workspace, and kingfisher versions nothing. The rule here binds the file
     # tools only -- the shell bypasses them entirely, which is why
-    # `infrastructure.workspace.permissions.protect_inputs` drops the write bits
+    # `plugins.sessions.permissions.protect_inputs` drops the write bits
     # underneath it.
     Route(INPUTS_ROUTE, deny_write_under=f"{INPUTS_ROUTE}**"),
     # Routed so a request that declines the memory a deployment wired has

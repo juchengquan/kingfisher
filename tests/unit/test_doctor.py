@@ -13,7 +13,7 @@ import pytest
 from kingfisher import LocalSessions, seed
 from kingfisher.application.inventory import inventory
 from kingfisher.application.service import Kingfisher
-from kingfisher.infrastructure.sandbox.confinement import LINUX_FENCES
+from kingfisher.plugins.sessions.sandbox.confinement import LINUX_FENCES
 from kingfisher.presentation.cli import health
 from kingfisher.presentation.cli.__main__ import main
 from kingfisher.presentation.cli.health import examine, worst
@@ -1082,7 +1082,7 @@ def test_the_probe_answers_nothing_where_there_is_no_landlock():
     inside `doctor`, whose whole job is to survive a host that is wrong in some way
     and report it.
     """
-    from kingfisher.infrastructure.sandbox.confinement import landlock_abi
+    from kingfisher.plugins.sessions.sandbox.confinement import landlock_abi
 
     assert landlock_abi() is None or platform.system() == "Linux"
 
@@ -1179,7 +1179,7 @@ def test_the_warning_and_the_remedy_name_the_same_missing_piece(cfg, monkeypatch
     """
     from dataclasses import replace
 
-    from kingfisher.infrastructure.sandbox import bubblewrap
+    from kingfisher.plugins.sessions.sandbox import bubblewrap
 
     monkeypatch.setattr(health.platform, "system", lambda: "Linux")
     monkeypatch.setattr(health.platform, "release", lambda: "6.12.0")
@@ -1202,7 +1202,7 @@ def test_a_confined_shell_names_what_is_confining_it(monkeypatch):
     branch is only reachable on a host with `sandbox-exec`, and a test that quietly
     asserts nothing on the CI runner is worse than no test.
     """
-    from kingfisher.infrastructure.sandbox.confinement import Confinement, _unwrapped
+    from kingfisher.plugins.sessions.sandbox.confinement import Confinement, _unwrapped
 
     assert health._mechanism(Confinement(wrap=lambda c: c, mechanism="sandbox-exec")) == (
         "sandbox-exec"
@@ -1230,7 +1230,7 @@ def test_a_supplied_local_runner_is_named_beside_the_mechanism():
     """It still receives the confined command, so the mechanism holds and has only
     gained company.
     """
-    from kingfisher.infrastructure.sandbox.confinement import Confinement
+    from kingfisher.plugins.sessions.sandbox.confinement import Confinement
 
     said = health._mechanism(
         Confinement(wrap=lambda c: c, mechanism="sandbox-exec", supplied=True)
@@ -1354,7 +1354,7 @@ def _with_keys_file(cfg, path, **change):
 
 def _fenced_by(monkeypatch, mechanism):
     """The mechanism doctor sees, whatever this host would choose."""
-    from kingfisher.infrastructure.sandbox.confinement import Confinement
+    from kingfisher.plugins.sessions.sandbox.confinement import Confinement
 
     seen = Confinement(wrap=lambda command: command, mechanism=mechanism)
     monkeypatch.setattr(health, "shell_confinement", lambda cfg, **kw: seen)
@@ -1369,7 +1369,7 @@ def test_a_keys_file_the_shell_can_read_is_warned_about(cfg, tmp_path, monkeypat
     """Inside the workspace on a Mac is the mistake a renamed example makes; outside the
     home folder is the one a check about the workspace alone would call safe.
     """
-    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+    from kingfisher.plugins.sessions.sandbox.confinement import SANDBOX_EXEC
 
     monkeypatch.setenv("HOME", str(tmp_path))
     _fenced_by(monkeypatch, SANDBOX_EXEC)
@@ -1424,7 +1424,7 @@ def test_a_keys_file_a_linux_fence_does_not_grant_is_said_to_be_hidden(
 
 
 def test_a_keys_file_the_sandbox_hides_is_said_to_be_hidden(cfg, tmp_path, monkeypatch):
-    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+    from kingfisher.plugins.sessions.sandbox.confinement import SANDBOX_EXEC
 
     monkeypatch.setenv("HOME", str(tmp_path))
     _fenced_by(monkeypatch, SANDBOX_EXEC)
@@ -1450,7 +1450,7 @@ def test_session_backends_doctor_cannot_see_into_are_said_so(cfg, tmp_path, monk
     """The same answer `session files` gives them: their shell may run on another machine,
     and nothing here can tell.
     """
-    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+    from kingfisher.plugins.sessions.sandbox.confinement import SANDBOX_EXEC
 
     monkeypatch.setenv("HOME", str(tmp_path))
     _fenced_by(monkeypatch, SANDBOX_EXEC)
@@ -1468,7 +1468,7 @@ def test_a_session_reached_through_a_link_of_its_own_is_named(cfg, tmp_path, mon
     session exists -- so the session is unusable and every command in it fails at `cd`
     with a message about the shell. This row is the only thing that says why.
     """
-    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+    from kingfisher.plugins.sessions.sandbox.confinement import SANDBOX_EXEC
 
     _fenced_by(monkeypatch, SANDBOX_EXEC)
     far = tmp_path / "far"
@@ -1492,7 +1492,7 @@ def test_doctor_answers_on_a_workspace_nothing_has_laid_out_yet(cfg, tmp_path, m
     That is the shape of the entry this check was added beside: one bad row took
     `doctor`, `list`, `sessions` and `reap` down together, a slice earlier.
     """
-    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+    from kingfisher.plugins.sessions.sandbox.confinement import SANDBOX_EXEC
 
     _fenced_by(monkeypatch, SANDBOX_EXEC)
     nowhere = replace(cfg, workspace=tmp_path / "never-made")
@@ -1510,7 +1510,7 @@ def test_a_link_to_something_that_is_not_a_session_is_not_named(cfg, tmp_path, m
     something that is not one -- and no fixture put a non-directory there, so the
     filter was indistinguishable from `True`.
     """
-    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+    from kingfisher.plugins.sessions.sandbox.confinement import SANDBOX_EXEC
 
     _fenced_by(monkeypatch, SANDBOX_EXEC)
     beside = tmp_path / "notes.txt"
@@ -1524,7 +1524,7 @@ def test_a_session_inside_the_sessions_directory_is_not_named(cfg, tmp_path, mon
     """The control: a row on every workspace tells an operator to go and look at an
     arrangement that is the ordinary one.
     """
-    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+    from kingfisher.plugins.sessions.sandbox.confinement import SANDBOX_EXEC
 
     _fenced_by(monkeypatch, SANDBOX_EXEC)
     (cfg.workspace / "sessions" / "ordinary").mkdir(parents=True)
@@ -1537,7 +1537,7 @@ def test_sessions_moved_all_at_once_are_not_named(cfg, tmp_path, monkeypatch):
     on `sessions` is the arrangement the profile now follows, so warning about it would
     send an operator to undo a thing that works.
     """
-    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+    from kingfisher.plugins.sessions.sandbox.confinement import SANDBOX_EXEC
 
     _fenced_by(monkeypatch, SANDBOX_EXEC)
     far = tmp_path / "far"
@@ -1557,7 +1557,7 @@ def test_a_linked_session_is_not_named_where_the_fence_grants_it_by_path(
     rules land on the real directory. A row there would send an operator to undo an
     arrangement that works.
     """
-    from kingfisher.infrastructure.sandbox.confinement import LANDLOCK
+    from kingfisher.plugins.sessions.sandbox.confinement import LANDLOCK
 
     _fenced_by(monkeypatch, LANDLOCK)
     far = tmp_path / "far"
@@ -1575,7 +1575,7 @@ def test_a_linked_session_is_not_named_for_backends_doctor_cannot_see_into(
     """
     from dataclasses import replace
 
-    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+    from kingfisher.plugins.sessions.sandbox.confinement import SANDBOX_EXEC
 
     _fenced_by(monkeypatch, SANDBOX_EXEC)
     far = tmp_path / "far"
@@ -1605,7 +1605,7 @@ def test_a_key_in_the_starting_environment_is_warned_about_where_it_is_read(cfg,
     """On a Mac, or with no fence, the shell reads a process's environment as it started
     -- so an exported key is readable, and one `.env` added afterwards is not.
     """
-    from kingfisher.infrastructure.sandbox.confinement import BUBBLEWRAP, SANDBOX_EXEC
+    from kingfisher.plugins.sessions.sandbox.confinement import BUBBLEWRAP, SANDBOX_EXEC
 
     keyed = _keyed_three_ways(cfg)
 
@@ -1651,7 +1651,7 @@ def test_the_command_line_says_which_keys_env_added(cfg, tmp_path, monkeypatch, 
 
 def _confined_as(monkeypatch, **seen):
     """The confinement doctor sees, whatever this host would choose."""
-    from kingfisher.infrastructure.sandbox.confinement import Confinement
+    from kingfisher.plugins.sessions.sandbox.confinement import Confinement
 
     confined = Confinement(wrap=lambda command: command, **seen)
     monkeypatch.setattr(health, "shell_confinement", lambda cfg, **kw: confined)

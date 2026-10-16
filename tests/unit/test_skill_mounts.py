@@ -14,14 +14,10 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import (
-    backend_at,
-    shell_env,
-    skills_sources,
-    skills_view,
-)
+from kingfisher.infrastructure.harness.backend import skills_sources
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills
 from kingfisher.kinds.skills import registry as skill_registry
+from kingfisher.plugins.sessions.backend import backend_at, shell_env, skills_view
 from tests.conftest import FakeToolCallingModel
 
 macos = pytest.mark.skipif(
@@ -359,7 +355,7 @@ def test_the_linux_fence_is_granted_the_view(mounted, session_dir, monkeypatch):
     on macOS the view is readable as part of the workspace, and the Linux fences grant
     only what they are named -- the targets alone leave the links unreachable.
     """
-    from kingfisher.infrastructure.harness import backend
+    from kingfisher.plugins.sessions import backend
 
     handed = []
     monkeypatch.setattr(

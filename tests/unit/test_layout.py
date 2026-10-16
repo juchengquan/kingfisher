@@ -15,8 +15,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher.infrastructure.harness.agent import memory_is_denied, read_only_permissions
-from kingfisher.infrastructure.harness.backend import backend_at, memory_sources
-from kingfisher.infrastructure.workspace import ensure_session_layout
+from kingfisher.infrastructure.harness.backend import memory_sources
 from kingfisher.layout import (
     MEMORY,
     OUTPUTS,
@@ -28,6 +27,8 @@ from kingfisher.layout import (
     denied_scopes,
     routed_paths,
 )
+from kingfisher.plugins.sessions.backend import backend_at
+from kingfisher.plugins.sessions.folders import ensure_session_layout
 
 #: One leaf renamed on every axis, so a test that passes by leaving a default in place
 #: fails here instead. None of these is a reserved name or a collision.

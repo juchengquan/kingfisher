@@ -8,8 +8,8 @@ import warnings
 
 import pytest
 
-from kingfisher.infrastructure.sandbox.bubblewrap import bubblewrap_available
-from kingfisher.infrastructure.sandbox.confinement import (
+from kingfisher.plugins.sessions.sandbox.bubblewrap import bubblewrap_available
+from kingfisher.plugins.sessions.sandbox.confinement import (
     REQUIRED_LANDLOCK_ABI,
     landlock_abi,
     landlock_ready,

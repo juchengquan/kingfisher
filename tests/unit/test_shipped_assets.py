@@ -1785,8 +1785,8 @@ def _reply(message: AIMessage) -> ChatResult:
 
 def _read_under_compact(shipped, cfg, session_dir, model: _Reader) -> list[str]:
     """One turn of `model` on an agent naming `compact`, and what its build warned."""
-    from kingfisher.infrastructure.harness.backend import backend_at
     from kingfisher.kinds.agents.spec import AgentSpec
+    from kingfisher.plugins.sessions.backend import backend_at
 
     backend = backend_at(cfg, session_dir)
     # A read of `big` is about 7k tokens. With no model profile deepagents
