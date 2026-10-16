@@ -10,8 +10,6 @@ import yaml
 
 import kingfisher
 from kingfisher import LocalSessions, backend_at
-from kingfisher.application.inventory import inventory
-from kingfisher.application.service import Kingfisher
 from kingfisher.core.access.source_ids import (
     UNSCOPED,
     AccessError,
@@ -25,6 +23,8 @@ from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.subagents.spec import SubagentError, declared
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, ToolError
 from kingfisher.core.definitions.tools.spec import tool_name
+from kingfisher.core.inventory import inventory
+from kingfisher.core.service import Kingfisher
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import subagents_dir, tools_dir

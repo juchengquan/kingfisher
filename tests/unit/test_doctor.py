@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 from kingfisher import LocalSessions, seed
-from kingfisher.application.inventory import inventory
-from kingfisher.application.service import Kingfisher
+from kingfisher.core.inventory import inventory
+from kingfisher.core.service import Kingfisher
 from kingfisher.plugins.sessions.sandbox.confinement import LINUX_FENCES
 from kingfisher.presentation.cli import health
 from kingfisher.presentation.cli.__main__ import main
@@ -81,7 +81,7 @@ def test_a_broken_subagent_does_not_take_the_agents_half_down(cfg):
     `inventory` record. Nothing held it: the catch could be narrowed to `AgentError`
     alone and the whole suite stayed green.
     """
-    from kingfisher.application.inventory import inventory
+    from kingfisher.core.inventory import inventory
 
     an_agent(cfg, "only")
     subagents = cfg.definitions / "subagents"

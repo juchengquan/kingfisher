@@ -9,15 +9,15 @@ from types import SimpleNamespace
 import pytest
 
 from kingfisher import Kingfisher, LocalSessions, backend_at
-from kingfisher.application.reporting import opening_events
-from kingfisher.application.service import refused_credentials
 from kingfisher.config import ConfigError
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
+from kingfisher.core.interfaces import CommandResult
+from kingfisher.core.reporting import opening_events
+from kingfisher.core.request import Request
+from kingfisher.core.service import refused_credentials
 from kingfisher.core.session.steps import drive
 from kingfisher.core.session.turn import turn_message
-from kingfisher.domain.ports import CommandResult
-from kingfisher.domain.request import Request
 from kingfisher.layout import HARNESS, PINNED_AGENT
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import (
@@ -555,7 +555,7 @@ def test_a_runner_is_built_for_each_turn_and_told_the_session(cfg, tmp_path, mon
     now: a service that built one per turn and then handed it to nothing would
     satisfy the first two assertions on its own.
     """
-    import kingfisher.application.service as service_module
+    import kingfisher.core.service as service_module
 
     asked: list[Path] = []
     handed: list[object] = []
@@ -715,7 +715,7 @@ def test_a_turn_translates_a_rejected_key_rather_than_raising_the_providers_erro
 
 def _snapshot_reads(monkeypatch) -> list[Path]:
     """Every read of a session's pinned agent, as they happen."""
-    from kingfisher.application import service as service_module
+    from kingfisher.core import service as service_module
 
     seen: list[Path] = []
     real = service_module.agent_started_with
@@ -748,7 +748,7 @@ def test_a_turn_resolves_its_agent_once(cfg, monkeypatch):
     the withheld report -- asks for the spec at all. Without one it never did, so a
     turn here would count one either way and this would pass against the defect.
     """
-    from kingfisher.application import service as service_module
+    from kingfisher.core import service as service_module
 
     service = Kingfisher(_policied(cfg), sessions=LocalSessions())
     reads = _snapshot_reads(monkeypatch)
@@ -798,7 +798,7 @@ def test_a_supplied_graph_under_a_policy_still_resolves_one(cfg, monkeypatch):
     still filters by what the agent declares, so under a policy the spec is asked for
     even though no build wanted it.
     """
-    from kingfisher.application import service as service_module
+    from kingfisher.core import service as service_module
 
     service = Kingfisher(
         _policied(cfg), graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()

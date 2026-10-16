@@ -31,14 +31,14 @@ __version__ = "0.1.0"
 _EXPORTS = {
     "Held": "kingfisher.core.access.source_ids",
     "AccessError": "kingfisher.core.access.source_ids",
-    "ArtifactError": "kingfisher.domain.result",
+    "ArtifactError": "kingfisher.core.result",
     "UNSCOPED": "kingfisher.core.access.source_ids",
     "Capabilities": "kingfisher.core.access.capabilities",
     "CapabilityError": "kingfisher.core.access.capabilities",
     "QuotaExceededError": "kingfisher.core.session.model",
     "SessionBusyError": "kingfisher.core.session.model",
     "SubagentError": "kingfisher.core.definitions.subagents.spec",
-    "UnsafeReferenceError": "kingfisher.domain.references",
+    "UnsafeReferenceError": "kingfisher.core.agent.references",
     "HostPathError": "kingfisher.core.agent.host_paths",
     # What `LocalSessions` builds for one session, for a directory of the caller's
     # choosing. Public because `ports.md` tells a deployment writing its own sessions
@@ -56,12 +56,12 @@ _EXPORTS = {
     # The seventh name a consumer has forced public, and the plainest: a
     # `CommandRunner` returns one of these, so a deployment writing a runner
     # cannot write one without it. `docs/guides/ports.md` documents the port and
-    # the only way to satisfy it was `from kingfisher.domain.ports import
+    # the only way to satisfy it was `from kingfisher.core.interfaces import
     # CommandResult` -- reaching past the front door, which the consumer rule
     # forbids. Found by the kit: the reference runner in
     # `tests/unit/test_confinement.py`'s reference runner had to import it from
     # somewhere.
-    "CommandResult": "kingfisher.domain.ports",
+    "CommandResult": "kingfisher.core.interfaces",
     # What a workspace tool annotates `runtime` with to be handed the turn's backend:
     # `runtime: ToolRuntime[ToolContext]`. A tool file is a caller outside this
     # wheel by construction -- it lives in a deployment's workspace -- and the bare
@@ -78,43 +78,43 @@ _EXPORTS = {
     # a wire format cannot write one without both.
     "WireFormat": "kingfisher.config",
     "Landing": "kingfisher.config",
-    "Kingfisher": "kingfisher.application.service",
+    "Kingfisher": "kingfisher.core.service",
     "ConfigError": "kingfisher.config",
-    "Request": "kingfisher.domain.request",
+    "Request": "kingfisher.core.request",
     # The four a caller needs to answer a gated call: what it was asked, how
     # to answer, the answer itself, and the refusal for an answer that does
     # not fit. All public for the reason `CapabilityError` is -- a consumer
     # holding a paused session has to be able to branch on this.
-    "Resume": "kingfisher.domain.request",
-    "Decision": "kingfisher.domain.request",
-    "DecisionError": "kingfisher.domain.request",
-    "PendingDecision": "kingfisher.domain.result",
+    "Resume": "kingfisher.core.request",
+    "Decision": "kingfisher.core.request",
+    "DecisionError": "kingfisher.core.request",
+    "PendingDecision": "kingfisher.core.result",
     # One row of `RunResult.ledger`, which a caller keeping them names.
-    "LedgerEntry": "kingfisher.domain.result",
+    "LedgerEntry": "kingfisher.core.result",
     "RunOn": "kingfisher.core.definitions.subagents.spec",
-    "RunEvent": "kingfisher.domain.result",
-    "RunResult": "kingfisher.domain.result",
+    "RunEvent": "kingfisher.core.result",
+    "RunResult": "kingfisher.core.result",
     "SessionInfo": "kingfisher.core.session.model",
     "definitions_source": "kingfisher.infrastructure.workspace",
     "ensure_definitions": "kingfisher.infrastructure.workspace",
     "kinds_at": "kingfisher.infrastructure.workspace",
     "seed": "kingfisher.infrastructure.workspace",
     "Seeded": "kingfisher.infrastructure.workspace",
-    "inventory": "kingfisher.application.inventory",
-    "Inventory": "kingfisher.application.inventory",
+    "inventory": "kingfisher.core.inventory",
+    "Inventory": "kingfisher.core.inventory",
     # Where this deployment reads from, as against what it offers. Public
     # because the answer was assembled three times and agreed nowhere: the
     # command printed four of eleven places, `doctor` printed one, and a
     # library caller had no way to ask at all.
-    "Origin": "kingfisher.application.origins",
+    "Origin": "kingfisher.core.origins",
     # What `KINGFISHER_PLUGINS` returns, so a deployment's own module builds one without
     # reaching past the door: `docs/guides/configuration.md` shows it.
-    "Plugins": "kingfisher.application.plugins",
-    "Origins": "kingfisher.application.origins",
-    "config_from_env": "kingfisher.application.config",
-    "paths_from_env": "kingfisher.application.config",
-    "run": "kingfisher.application.run",
-    "stream": "kingfisher.application.run",
+    "Plugins": "kingfisher.core.plugins",
+    "Origins": "kingfisher.core.origins",
+    "config_from_env": "kingfisher.core.environment",
+    "paths_from_env": "kingfisher.core.environment",
+    "run": "kingfisher.core.run",
+    "stream": "kingfisher.core.run",
 }
 
 __all__ = [
@@ -172,16 +172,6 @@ if TYPE_CHECKING:
     # So type checkers and IDEs see the real symbols rather than `Any`.
     # Redundant aliases mark these as re-exports; `__all__` is computed, so a
     # checker cannot otherwise tell they are public.
-    from kingfisher.application.config import config_from_env as config_from_env
-    from kingfisher.application.config import paths_from_env as paths_from_env
-    from kingfisher.application.inventory import Inventory as Inventory
-    from kingfisher.application.inventory import inventory as inventory
-    from kingfisher.application.origins import Origin as Origin
-    from kingfisher.application.origins import Origins as Origins
-    from kingfisher.application.plugins import Plugins as Plugins
-    from kingfisher.application.run import run as run
-    from kingfisher.application.run import stream as stream
-    from kingfisher.application.service import Kingfisher as Kingfisher
     from kingfisher.config import Config as Config
     from kingfisher.config import ConfigError as ConfigError
     from kingfisher.config import Landing as Landing
@@ -195,24 +185,34 @@ if TYPE_CHECKING:
     from kingfisher.core.agent.audienced_tool import tool as tool
     from kingfisher.core.agent.host_paths import HostPathError as HostPathError
     from kingfisher.core.agent.prompting import ShellPrompt as ShellPrompt
+    from kingfisher.core.agent.references import UnsafeReferenceError as UnsafeReferenceError
     from kingfisher.core.agent.tool_context import ToolContext as ToolContext
     from kingfisher.core.definitions.subagents.spec import RunOn as RunOn
     from kingfisher.core.definitions.subagents.spec import SubagentError as SubagentError
+    from kingfisher.core.environment import config_from_env as config_from_env
+    from kingfisher.core.environment import paths_from_env as paths_from_env
+    from kingfisher.core.interfaces import CommandResult as CommandResult
+    from kingfisher.core.inventory import Inventory as Inventory
+    from kingfisher.core.inventory import inventory as inventory
+    from kingfisher.core.origins import Origin as Origin
+    from kingfisher.core.origins import Origins as Origins
+    from kingfisher.core.plugins import Plugins as Plugins
+    from kingfisher.core.request import Decision as Decision
+    from kingfisher.core.request import DecisionError as DecisionError
+    from kingfisher.core.request import Request as Request
+    from kingfisher.core.request import Resume as Resume
+    from kingfisher.core.result import ArtifactError as ArtifactError
+    from kingfisher.core.result import LedgerEntry as LedgerEntry
+    from kingfisher.core.result import PendingDecision as PendingDecision
+    from kingfisher.core.result import RunEvent as RunEvent
+    from kingfisher.core.result import RunResult as RunResult
+    from kingfisher.core.run import run as run
+    from kingfisher.core.run import stream as stream
+    from kingfisher.core.service import Kingfisher as Kingfisher
     from kingfisher.core.session.model import QuotaExceededError as QuotaExceededError
     from kingfisher.core.session.model import SessionBusyError as SessionBusyError
     from kingfisher.core.session.model import SessionInfo as SessionInfo
     from kingfisher.core.session.model import UnknownSessionError as UnknownSessionError
-    from kingfisher.domain.ports import CommandResult as CommandResult
-    from kingfisher.domain.references import UnsafeReferenceError as UnsafeReferenceError
-    from kingfisher.domain.request import Decision as Decision
-    from kingfisher.domain.request import DecisionError as DecisionError
-    from kingfisher.domain.request import Request as Request
-    from kingfisher.domain.request import Resume as Resume
-    from kingfisher.domain.result import ArtifactError as ArtifactError
-    from kingfisher.domain.result import LedgerEntry as LedgerEntry
-    from kingfisher.domain.result import PendingDecision as PendingDecision
-    from kingfisher.domain.result import RunEvent as RunEvent
-    from kingfisher.domain.result import RunResult as RunResult
     from kingfisher.infrastructure.workspace import Seeded as Seeded
     from kingfisher.infrastructure.workspace import (
         definitions_source as definitions_source,

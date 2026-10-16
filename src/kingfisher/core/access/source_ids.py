@@ -8,7 +8,7 @@ from typing import Any, Final, Literal
 
 from kingfisher.core.access.capabilities import ALL, Selection
 from kingfisher.core.definitions.fields import text, unrecognised
-from kingfisher.domain.result import Listed
+from kingfisher.core.result import Listed
 
 #: The selection fields that may be written as a mapping of name to audience.
 #: `builtin_tools` is absent because deepagents registers those itself: kingfisher
@@ -240,7 +240,7 @@ def handed_work_by(
 
     One function for both readers, because a listing and a run report asking this
     separately is how they came to disagree before: see `offers` above, written for the
-    same reason. Here in the domain rather than beside the build, because the listing
+    same reason. Here in `core/access` rather than beside the build, because the listing
     asks it and `kingfisher list` may not load a provider SDK to find out --
     `test_a_light_export_stays_light` is what says so.
     """

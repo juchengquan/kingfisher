@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.application import config as config_module
-from kingfisher.application.config import Environment, config_from_env
 from kingfisher.config import DEFAULT_THREAD_POOL_SIZE, FOLDED_SETTINGS, ConfigError
+from kingfisher.core import environment as config_module
 from kingfisher.core.access.source_ids import AccessError
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
+from kingfisher.core.environment import Environment, config_from_env
 from tests.conftest import FAKE_CATALOGUE, subagents_dir
 
 CATALOGUE = """
@@ -315,7 +315,7 @@ def test_the_file_shows_exactly_the_knobs_that_exist():
     import re
     from pathlib import Path as _Path
 
-    from kingfisher.application import config as config_module
+    from kingfisher.core import environment as config_module
 
     # The repository, found by its marker rather than counted in parents: this
     # is two levels further up since the library moved under `packages/`, and a
@@ -349,7 +349,7 @@ def test_no_message_names_a_variable_nothing_reads():
     from pathlib import Path as _Path
 
     import kingfisher
-    from kingfisher.application import config as config_module
+    from kingfisher.core import environment as config_module
     from kingfisher.presentation.cli import health
 
     read = set(re.findall(r"KINGFISHER_[A-Z_]+", _Path(config_module.__file__).read_text()))
@@ -541,7 +541,7 @@ def test_a_reader_answers_from_the_mapping_it_was_given(monkeypatch):
     """The property that makes it testable at all: it reads what it was handed, never
     the process.
     """
-    from kingfisher.application.config import Environment
+    from kingfisher.core.environment import Environment
 
     monkeypatch.setenv("KINGFISHER_RECURSION_LIMIT", "9999")
     reading = Environment({"KINGFISHER_RECURSION_LIMIT": "7"})
@@ -554,7 +554,7 @@ def test_one_path_reading_now_rather_than_two(tmp_path):
     `config_from_env` -- because a closure over `environ` was the only way to share
     it while `environ` was a parameter.
     """
-    from kingfisher.application.config import Environment
+    from kingfisher.core.environment import Environment
 
     reading = Environment({"KINGFISHER_DEFINITIONS_DIR": "defs", "KINGFISHER_ASSETS": "assets"})
 
@@ -568,7 +568,7 @@ def test_the_exported_functions_are_the_class(tmp_path, monkeypatch):
     answering identically -- so it is asserted against the reader rather than left to
     look obvious.
     """
-    from kingfisher.application.config import Environment, paths_from_env
+    from kingfisher.core.environment import Environment, paths_from_env
 
     environ = {
         "KINGFISHER_WORKSPACE": str(tmp_path / "ws"),
@@ -582,7 +582,7 @@ def test_a_reader_with_no_mapping_reads_the_process(monkeypatch, tmp_path):
     """The default that `os.environ if environ is None` used to express, now in one
     place instead of at the top of every function.
     """
-    from kingfisher.application.config import Environment
+    from kingfisher.core.environment import Environment
 
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
     monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(tmp_path / "defs"))

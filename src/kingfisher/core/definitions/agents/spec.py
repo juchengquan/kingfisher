@@ -16,6 +16,7 @@ from types import MappingProxyType
 from kingfisher.core.access.capabilities import ALL, Capabilities, bare_name
 from kingfisher.core.access.source_ids import AUDIENCED
 from kingfisher.core.definitions import fields
+from kingfisher.core.definitions.definition import Definition
 
 # A `tools:` entry may be written `where::what`, so reading this format means
 # parsing a tool reference -- the format referring to itself, which is why the
@@ -23,7 +24,6 @@ from kingfisher.core.definitions import fields
 # measured in `test_domain_imports_only_the_standard_library_and_itself`.
 from kingfisher.core.definitions.subagents.spec import uncallable_helpers
 from kingfisher.core.definitions.tools.spec import claimed_sources
-from kingfisher.domain.definition import Definition
 
 DIRECTORY = "agents"
 

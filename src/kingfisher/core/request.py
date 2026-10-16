@@ -66,7 +66,7 @@ class Decision:
     #: Which gated call this answers, as `RunResult.pending` reported it.
     call_id: str
     #: One of `result.DECISIONS`. Checked against that tuple where the answer is
-    #: translated rather than here, so the domain keeps one list of what is allowed.
+    #: translated rather than here, so the core keeps one list of what is allowed.
     action: str
     #: What the model is told: why the call was refused, for `reject`, or what the
     #: tool is to have returned, for `respond`. Unused by `approve`.

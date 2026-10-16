@@ -8,11 +8,11 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import backend_at
-from kingfisher.application.config import config_from_env
 from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.models import WIRE_FORMATS
+from kingfisher.core.environment import config_from_env
 from tests.conftest import FakeToolCallingModel, subagent_of
 
 #: A second endpoint, on a different wire format, so a test can tell "went

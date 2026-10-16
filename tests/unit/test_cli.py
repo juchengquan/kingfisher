@@ -694,7 +694,7 @@ def test_the_library_and_the_commands_agree_on_where_sessions_are(cfg, monkeypat
     a path from the workspace, so the same deployment got two answers depending on which
     door it came through. The setting is what a surface holding only a `Config` can ask.
     """
-    from kingfisher.application.inventory import inventory
+    from kingfisher.core.inventory import inventory
 
     configured = replace(cfg, sessions_factory="acme.backends:build")
     _looking_at(monkeypatch, configured)

@@ -10,8 +10,8 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
 from kingfisher.core.agent.host_paths import HostPathError
+from kingfisher.core.agent.references import UnsafeReferenceError
 from kingfisher.core.agent.session_paths import SessionPaths, refusal_text
-from kingfisher.domain.references import UnsafeReferenceError
 
 
 class WorkspaceToolPaths(AgentMiddleware):

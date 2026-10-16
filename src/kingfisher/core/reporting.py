@@ -17,7 +17,7 @@ from kingfisher.core.agent.kinds.tools import (
 )
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.tools.spec import Offering, admitted, out_of_reach, placed
-from kingfisher.domain.result import RunEvent
+from kingfisher.core.result import RunEvent
 
 if TYPE_CHECKING:
     from kingfisher.config import Config

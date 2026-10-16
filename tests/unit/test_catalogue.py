@@ -9,9 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.application import service as service_module
-from kingfisher.application.service import Kingfisher
 from kingfisher.config import ConfigError
+from kingfisher.core import service as service_module
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.activation import (
     available_skills,
@@ -22,7 +21,8 @@ from kingfisher.core.agent.kinds.tools import workspace_tool_names
 from kingfisher.core.definitions.catalogue import Definitions, resolve_definitions
 from kingfisher.core.definitions.middlewares.catalogue import MiddlewareError
 from kingfisher.core.definitions.subagents.spec import SubagentError
-from kingfisher.domain.request import Request
+from kingfisher.core.request import Request
+from kingfisher.core.service import Kingfisher
 from kingfisher.layout import SKILLS_ROUTE
 from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
 from tests.conftest import (

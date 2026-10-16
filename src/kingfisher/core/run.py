@@ -9,11 +9,11 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from kingfisher.application.service import Kingfisher
 from kingfisher.config import Config
 from kingfisher.core.agent.backend import Sessions
-from kingfisher.domain.request import Request
-from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
+from kingfisher.core.request import Request
+from kingfisher.core.result import RunEvent, RunResult, normalize_answer
+from kingfisher.core.service import Kingfisher
 
 __all__ = [
     "Kingfisher",

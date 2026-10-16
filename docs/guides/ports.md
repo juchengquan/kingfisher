@@ -1,7 +1,7 @@
 # Writing your own
 
 Kingfisher reaches the world through the Protocols in
-[`domain/ports.py`](../../src/kingfisher/domain/ports.py) — what runs a shell
+[`core/interfaces.py`](../../src/kingfisher/core/interfaces.py) — what runs a shell
 command, and where each turn's record goes — and through the `sessions` every
 deployment names. The Protocols have defaults; the sessions have none to fall back
 on, and kingfisher's own, `LocalSessions`, works on one host with its own disk. This

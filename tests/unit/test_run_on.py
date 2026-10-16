@@ -13,7 +13,7 @@ from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityErr
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.definitions.subagents.spec import RunOn
-from kingfisher.domain.request import Request
+from kingfisher.core.request import Request
 from tests.conftest import FakeToolCallingModel, subagents_dir
 
 ELSEWHERE = Endpoint(

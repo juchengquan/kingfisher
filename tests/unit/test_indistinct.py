@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from kingfisher.application.service import opening_events
 from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.core.access.capabilities import ALL, Capabilities
 from kingfisher.core.agent.activation import indistinct_subagents
 from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.definitions.subagents.rules import resolved_model
 from kingfisher.core.definitions.subagents.spec import RunOn
+from kingfisher.core.request import Request
+from kingfisher.core.service import opening_events
 from kingfisher.core.session.steps import drive
-from kingfisher.domain.request import Request
 from tests.conftest import a_subagent, an_agent, start, subagents_dir
 
 ASKED = """name: second-opinion
@@ -250,7 +250,7 @@ def test_the_message_names_the_subagent(cfg, session_dir):
     """`[indistinct] second-opinion runs 'gpt-5' on endpoint 'openai', which points at
     the same host as the default (…)` -- readable without the field.
     """
-    from kingfisher.domain.result import RunEvent
+    from kingfisher.core.result import RunEvent
 
     rendered = str(RunEvent(kind="indistinct", text="second-opinion runs 'M3'", agent="x"))
 

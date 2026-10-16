@@ -13,11 +13,11 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, LocalSessions
 from kingfisher.core.access.capabilities import UNRESTRICTED, Capabilities
+from kingfisher.core.request import Request
 from kingfisher.core.session.model import (
     SessionBusyError,
     known,
 )
-from kingfisher.domain.request import Request
 from tests.conftest import StubCheckpointer, Through, start
 from tests.unit.test_run import StubAgent
 

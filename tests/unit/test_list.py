@@ -261,7 +261,7 @@ def test_the_listing_marks_a_compiled_subagent(cfg):
     """Marked because the rest of the listing means something different for it, and
     nothing else in the output would say so.
     """
-    from kingfisher.application.inventory import inventory
+    from kingfisher.core.inventory import inventory
     from kingfisher.presentation.cli.listing import render
 
     _subagent_catalogue(cfg)
@@ -275,7 +275,7 @@ def test_the_listing_marks_a_compiled_subagent(cfg):
 
 def test_the_listing_says_what_a_compiled_subagent_costs(cfg):
     """The assumption a reader would otherwise make."""
-    from kingfisher.application.inventory import inventory
+    from kingfisher.core.inventory import inventory
     from kingfisher.presentation.cli.listing import render
 
     _subagent_catalogue(cfg)
@@ -289,7 +289,7 @@ def test_a_workspace_with_no_compiled_subagent_says_nothing_about_them(cfg):
     """The note is about a minority, so it stays absent for everyone else -- a caveat
     printed to every reader is one none of them reads.
     """
-    from kingfisher.application.inventory import inventory
+    from kingfisher.core.inventory import inventory
     from kingfisher.presentation.cli.listing import render
 
     directory = cfg.definitions / "subagents"
@@ -303,7 +303,7 @@ def test_a_workspace_with_no_compiled_subagent_says_nothing_about_them(cfg):
 
 def test_a_compiled_subagent_is_not_annotated_with_the_file_you_can_already_see(cfg):
     """`_from` stays silent when the name already tells you the file."""
-    from kingfisher.application.inventory import inventory
+    from kingfisher.core.inventory import inventory
     from kingfisher.presentation.cli.listing import render
 
     _subagent_catalogue(cfg)
@@ -319,7 +319,7 @@ def test_the_json_listing_carries_it_too(cfg):
     """`--json` is what a script reads, and a script deciding whether a grant means
     anything needs the same fact the text gives a person.
     """
-    from kingfisher.application.inventory import inventory
+    from kingfisher.core.inventory import inventory
     from kingfisher.presentation.cli.listing import as_json
 
     _subagent_catalogue(cfg)
@@ -1453,8 +1453,8 @@ def test_a_scoped_view_carries_no_policy(cfg, at_the_command_line):
 
     import yaml
 
-    from kingfisher.application.inventory import inventory
     from kingfisher.core.access.source_ids import parse
+    from kingfisher.core.inventory import inventory
 
     # A definition restricting nobody, so the operator's report has something in it
     # and the scoped view emptying it is a difference rather than two empty tuples.
@@ -1800,7 +1800,7 @@ ERRORS_OUTSIDE_THE_KINDS = {
 def _errors_carried() -> tuple[str, ...]:
     from dataclasses import fields
 
-    from kingfisher.application.inventory import Inventory
+    from kingfisher.core.inventory import Inventory
 
     return tuple(sorted(f.name for f in fields(Inventory) if f.name.endswith("_error")))
 
@@ -1884,7 +1884,7 @@ def test_every_trouble_failed_reads_has_a_rule_here():
     import inspect
     from dataclasses import fields
 
-    from kingfisher.application.inventory import Inventory
+    from kingfisher.core.inventory import Inventory
     from kingfisher.presentation.cli.listing import failed
 
     source = inspect.getsource(failed)

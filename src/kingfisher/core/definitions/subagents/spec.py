@@ -23,9 +23,9 @@ from typing import Any
 from kingfisher.core.access.capabilities import ALL, Selection, bare_name
 from kingfisher.core.access.source_ids import AUDIENCED
 from kingfisher.core.definitions import fields
+from kingfisher.core.definitions.definition import Definition
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.definitions.tools.spec import claimed_sources
-from kingfisher.domain.definition import Definition
 
 DIRECTORY = "subagents"
 

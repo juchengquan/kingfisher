@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.application.inventory import inventory
 from kingfisher.config import ConfigError
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
@@ -21,6 +20,7 @@ from kingfisher.core.definitions.subagents.catalogue import LocalSubagentReposit
 from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.core.definitions.tools.catalogue import ToolError
 from kingfisher.core.definitions.tools.spec import Offering, tool_name
+from kingfisher.core.inventory import inventory
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
 from kingfisher.plugins.sessions.backend import backend_at
 from kingfisher.presentation.cli.health import examine, worst

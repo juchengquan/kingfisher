@@ -75,7 +75,7 @@ def _endpoint(style: str) -> tuple[str, str]:
     `base_url` lives and `key_env` says which variable holds the key, so the probe
     now points at exactly what the service would build -- one fewer thing to drift.
     """
-    from kingfisher.application.config import config_from_env
+    from kingfisher.core.environment import config_from_env
 
     wire = "anthropic" if style == "anthropic" else "openai_responses"
     endpoints = config_from_env().models.endpoints

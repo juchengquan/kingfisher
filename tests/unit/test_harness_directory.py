@@ -19,7 +19,7 @@ from langchain_core.messages import AIMessage
 from kingfisher import LocalSessions
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.domain.request import Request
+from kingfisher.core.request import Request
 from kingfisher.infrastructure.workspace import ensure_layout
 from kingfisher.layout import CLAIM, HARNESS, PINNED_AGENT
 from kingfisher.plugins.sessions.backend import backend_at
@@ -153,7 +153,7 @@ def test_one_session_s_harness_is_not_denied_by_naming_another(cfg, workspace):
 def test_the_pin_and_the_claim_go_with_the_session(cfg):
     """The residue this whole change is about: one file per session that ever existed,
     under `state_dir`, deleted by nothing."""
-    from kingfisher.application.service import Kingfisher
+    from kingfisher.core.service import Kingfisher
     from tests.conftest import StubCheckpointer
     from tests.unit.test_run import StubAgent
 

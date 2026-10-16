@@ -6458,7 +6458,7 @@ the innermost one.
 
 **The move activated a comment that had been wrong for some time.**
 `domain/ports.py` attributed `within` to the layout module; it is in
-`domain.references`.
+`core.agent.references`.
 Prose roots are read off the tree, so `layout` only became a resolvable root
 when the file arrived at one -- and the rule caught it on the first run after.
 *(2026-09-07.)*
@@ -6604,7 +6604,7 @@ moved into the kinds, and two remain: `ports`, and `request` for `RunOn`. That i
 referring to itself, not the domain reaching for a layer.
 
 The rule was refused as a wall first and then measured, which is the order that
-was wrong. Importing `domain.ports` and `core.definitions.agents.spec` with those edges takes
+was wrong. Importing `core.interfaces` and `core.definitions.agents.spec` with those edges takes
 39ms and loads 101 modules with no part of the agent runtime among them -- the
 same 39ms recorded below as the good case against 888ms. The direction was
 protecting two operational properties and this costs neither, so what stopped
@@ -6811,7 +6811,7 @@ import Kingfisher` works alongside the root import, and resolves through a
 `__getattr__` table rather than plain imports at the top of the file.
 
 That is not a style preference. A package's `__init__` runs before any of its
-submodules, so nine eager imports there would make `application.config` -- which
+submodules, so nine eager imports there would make `core.environment` -- which
 needs no harness at all -- pay for `service`, which imports deepagents, which
 imports three provider SDKs at module level. Measured both ways: 39ms lazy,
 888ms eager, and the eager form pulls deepagents into a process that only wanted

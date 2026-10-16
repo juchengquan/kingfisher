@@ -126,7 +126,7 @@ def test_what_the_agent_cannot_hold_is_said_out_loud(cfg):
     """Quietly holding less than was asked for is the failure this codebase refuses
     everywhere.
     """
-    from kingfisher.application.reporting import subagent_only
+    from kingfisher.core.reporting import subagent_only
 
     _two_vendors(cfg)
 

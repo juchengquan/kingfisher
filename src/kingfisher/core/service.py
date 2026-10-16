@@ -31,14 +31,8 @@ from pathlib import Path
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.application import config as config_module
-from kingfisher.application.origins import Origins
-from kingfisher.application.reporting import (
-    opening_events,
-    subagent_only,
-    withheld_by_kind,
-)
 from kingfisher.config import Config, ConfigError
+from kingfisher.core import environment as config_module
 from kingfisher.core.access import checks as access
 from kingfisher.core.access.capabilities import (
     UNRESTRICTED,
@@ -80,6 +74,22 @@ from kingfisher.core.agent.usable_backend import refuse_unusable_backend
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions, resolve_definitions
+from kingfisher.core.origins import Origins
+from kingfisher.core.reporting import (
+    opening_events,
+    subagent_only,
+    withheld_by_kind,
+)
+from kingfisher.core.request import DecisionError, Request, Resume
+from kingfisher.core.result import (
+    AWAITING,
+    END_TURN,
+    LedgerEntry,
+    PendingDecision,
+    RunEvent,
+    RunResult,
+    normalize_answer,
+)
 from kingfisher.core.session import runtime
 from kingfisher.core.session.checkpointing import (
     SharedThreads,
@@ -133,16 +143,6 @@ from kingfisher.core.session.turn import (
     overrun,
     turn_message,
 )
-from kingfisher.domain.request import DecisionError, Request, Resume
-from kingfisher.domain.result import (
-    AWAITING,
-    END_TURN,
-    LedgerEntry,
-    PendingDecision,
-    RunEvent,
-    RunResult,
-    normalize_answer,
-)
 from kingfisher.infrastructure.workspace import (
     SEED_HINT,
     ensure_layout,
@@ -153,7 +153,7 @@ from kingfisher.layout import PAUSED_STATE
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from kingfisher.domain.ports import RunEvents
+    from kingfisher.core.interfaces import RunEvents
 
 
 #: `kingfisher.origins`, and deliberately not `kingfisher`.

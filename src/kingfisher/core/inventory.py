@@ -6,7 +6,6 @@ from collections.abc import Callable, Container, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
-from kingfisher.application.origins import Origin, Origins
 from kingfisher.config import Config, ConfigError
 from kingfisher.core.access import checks as access
 from kingfisher.core.access.capabilities import CapabilityError, unoffered
@@ -39,6 +38,7 @@ from kingfisher.core.definitions.tools.spec import (
     placed,
     split_reference,
 )
+from kingfisher.core.origins import Origin, Origins
 
 #: An empty mapping that cannot be written to, so a default is shared safely.
 _NOTHING: Mapping[str, str] = MappingProxyType({})

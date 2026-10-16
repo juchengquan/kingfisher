@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from kingfisher.domain.ports import CommandResult, CommandRunner
+from kingfisher.core.interfaces import CommandResult, CommandRunner
 from tests.checks.runner import RUNNER_CHECKS
 
 

@@ -12,7 +12,7 @@ from kingfisher.core.agent import assembly as main_agent_module
 from kingfisher.core.definitions.skills import spec as skill
 from kingfisher.core.definitions.skills.catalogue import reachable
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
-from kingfisher.domain.result import RunEvent, RunResult
+from kingfisher.core.result import RunEvent, RunResult
 from kingfisher.infrastructure.workspace import SEED_HINT
 from kingfisher.infrastructure.workspace import layout as workspace_layout
 from kingfisher.presentation.cli.progress import show
@@ -582,7 +582,7 @@ def test_the_agent_is_only_built_when_a_subtraction_asks(cfg, monkeypatch):
 def _intercepted(monkeypatch) -> list:
     """Catch the `Request` the driver builds, without running a turn.
 
-    Patched on `kingfisher` itself rather than on `kingfisher.application.run`: the lazy
+    Patched on `kingfisher` itself rather than on `kingfisher.core.run`: the lazy
     export table caches, so patching the defining module worked for the first test in a
     session and handed every later one whatever the first had cached.
     """

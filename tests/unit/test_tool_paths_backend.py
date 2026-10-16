@@ -12,8 +12,8 @@ from kingfisher import Kingfisher, LocalSessions, Request
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent, read_only_permissions
 from kingfisher.core.agent.permitted_backend import PermittedBackend, host_path
+from kingfisher.core.agent.references import UnsafeReferenceError
 from kingfisher.core.agent.session_paths import SessionPaths
-from kingfisher.domain.references import UnsafeReferenceError
 from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced
 from tests.conftest import FakeToolCallingModel, an_agent, start, tools_dir
 from tests.unit.scripted import Scripted

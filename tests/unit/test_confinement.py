@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.domain.ports import CommandResult
+from kingfisher.core.interfaces import CommandResult
 from kingfisher.infrastructure.workspace import ensure_layout
 from kingfisher.layout import DEFAULT_LAYOUT, HARNESS, INPUTS_ROUTE, SAVED_RESULTS, Layout
 from kingfisher.plugins.sessions.backend import LocalSessions, backend_at

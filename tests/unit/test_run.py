@@ -7,9 +7,9 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import LocalSessions
-from kingfisher.application.run import Request, RunResult, normalize_answer, run
-from kingfisher.application.service import Kingfisher
-from kingfisher.domain.result import END_TURN, STOP_REASONS
+from kingfisher.core.result import END_TURN, STOP_REASONS
+from kingfisher.core.run import Request, RunResult, normalize_answer, run
+from kingfisher.core.service import Kingfisher
 from tests.conftest import RecordedEvents, StubCheckpointer, start
 
 

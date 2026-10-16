@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.application.inventory import Inventory, inventory
+from kingfisher.core.inventory import Inventory, inventory
 from tests.conftest import subagents_dir, tools_dir
 
 A_TOOL = '''
@@ -277,7 +277,7 @@ def test_the_record_cannot_be_edited_after_it_is_handed_back(cfg):
 
 def test_a_resolved_catalogue_is_not_resolved_twice(cfg, monkeypatch):
     """A caller that already has one hands it over."""
-    from kingfisher.application import inventory as module
+    from kingfisher.core import inventory as module
     from kingfisher.core.definitions.catalogue import resolve_definitions
 
     already = resolve_definitions(cfg)

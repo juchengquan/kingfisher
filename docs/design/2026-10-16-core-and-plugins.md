@@ -219,10 +219,15 @@ One pull request each, off `main` once the one before it has merged.
 13. Move `core/agent`, `agent.py` renamed `assembly.py`, and the harness-edge table
     deleted with the boundary it drew. *(Landed.)*
 14. Move `core/session`, which empties `infrastructure/harness/`. *(Landed.)*
-15. Move the flat core.
+15. Move the flat core, in two pull requests. First `application/` and `domain/`, with
+    `ports` renamed `interfaces` and the environment reader `environment`. *(Landed.)*
+    Then the root's `config` and `layout`, and the rest of `infrastructure/`, its
+    `workspace` package dissolved.
 16. Move `cli/`.
 17. The new import rules, one `decisions.md` entry in place of the three this supersedes,
-    `CLAUDE.md` and the guides, and this document deleted.
+    `CLAUDE.md` and the guides, and this document deleted. The rules include whatever
+    replaces the two the domain took with it: that the request and result records
+    touch nothing outside the process, and that the I/O happens somewhere visible.
 
 Renaming before moving keeps every move a pure move, which is what lets `git log
 --follow` and review read it as one. After its move, each file over about 600 lines is

@@ -39,7 +39,7 @@ four of which produce a turn that looks like it worked.
 Three exits, and prose owns two of them.
 
 `RunResult.answer` is a `str`, passed through `normalize_answer` in
-`domain/result.py` to strip the `<think>` blocks some gateways inline. Prose
+`core/result.py` to strip the `<think>` blocks some gateways inline. Prose
 reaches a streaming caller only as `token` events while it is being
 generated -- `RunEvent` has no `message` kind, because carrying the finished
 prose as well would hand every consumer the same text at two granularities.
@@ -275,7 +275,7 @@ piece of work with its own argument, and nothing has measured the need.
 **A fourth stop reason, for a turn that never satisfied its schema.** The fact
 is derivable -- with a schema declared, `max_steps` and an absent `structured`
 can only mean this -- and normally that would argue against adding to
-`STOP_REASONS`, which `domain/result.py` calls the whole of why a turn stops.
+`STOP_REASONS`, which `core/result.py` calls the whole of why a turn stops.
 What decides it is that the existing message does not merely under-inform: it
 tells the operator to raise `KINGFISHER_RECURSION_LIMIT`, and they will, and
 they will pay for a longer failure.

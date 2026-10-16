@@ -3,7 +3,7 @@ from __future__ import annotations
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from kingfisher import LocalSessions
-from kingfisher.application.run import Request, stream
+from kingfisher.core.run import Request, stream
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 
@@ -180,7 +180,7 @@ def test_tools_and_arguments_cannot_be_constructed_out_of_step():
     """Two parallel tuples are only safe if nothing can make them disagree."""
     import pytest as _pytest
 
-    from kingfisher.domain.result import RunEvent
+    from kingfisher.core.result import RunEvent
 
     with _pytest.raises(ValueError, match="parallel"):
         RunEvent(kind="model_call", tools=("a", "b"), args=({},))
@@ -289,7 +289,7 @@ def test_the_adapter_owns_the_stream_modes(cfg):
 def test_run_is_a_drain_of_stream(cfg):
     """One orchestration path: run() must not re-implement the sequence."""
     start(cfg, "drained")
-    from kingfisher.application.run import run
+    from kingfisher.core.run import run
 
     agent = StubAgent("<think>x</think>7")
     result = run(

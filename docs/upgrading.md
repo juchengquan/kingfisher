@@ -32,7 +32,7 @@ The core-and-plugins work renamed what a deployment names and moved two things o
 | No way to hand the command its run events, conversation store or middleware | `KINGFISHER_PLUGINS`, naming something that returns a `kingfisher.Plugins` |
 | `Adapter`, `ADAPTERS`, `Endpoint.adapter`, `KINGFISHER_ADAPTERS_FACTORY` | `WireFormat`, `WIRE_FORMATS`, `Endpoint.wire_format`, `KINGFISHER_WIRE_FORMATS` |
 | `Config.deployment_prompt`, and `PROMPT.md` in the workspace | `INSTRUCTIONS.md` beside the definitions, or `instructions=` on `Kingfisher`: an object with `text(cfg) -> str` |
-| The repository Protocols in `domain/ports.py` | Gone. Definitions are read from a directory; stage yours into one |
+| The repository Protocols in `core/interfaces.py` | Gone. Definitions are read from a directory; stage yours into one |
 | `catalogue=` and `grants=` on `Kingfisher` | `Config.definitions`, pointed at the folder you staged, and `Config.grants` |
 | `COMMAND_RUNNER_CONTRACT`, `BACKEND_CONTRACT`, `SESSION_BACKENDS_CONTRACT` from `kingfisher` | Gone from the package. The same checks are in this repository's `tests/checks/`, to copy; the promises they hold are on each interface's docstring |
 
@@ -646,7 +646,7 @@ and for a turn, `aclaim` and `arelease`:
 - **A checkpointer passed as `threads=`** is deleted from with its own `adelete_thread`
   on the async path, or on kingfisher's thread pool where it has none or raises
   `NotImplementedError` as langgraph's base saver does. `arun(delete_session=True)`
-  deletes this way too. `kingfisher.domain.ports.ThreadStore` is gone; `threads=` is
+  deletes this way too. `kingfisher.core.interfaces.ThreadStore` is gone; `threads=` is
   typed `Any`, and is still a langgraph checkpointer.
 
 ## Checklist
@@ -714,7 +714,7 @@ and for a turn, `aclaim` and `arelease`:
 
 - **Removed from `kingfisher`:** `LocalSessionStore`, `SESSION_STORE_CONTRACT`,
   `SESSION_ROOT_CONTRACT`. The `SessionRoot`, `SessionStore` and `SessionDirs` ports
-  are gone from `kingfisher.domain.ports`.
+  are gone from `kingfisher.core.interfaces`.
 - **Added:** `LocalSessions`, `backend_at`, `SESSION_BACKENDS_CONTRACT`,
   `ArtifactError`, and `Kingfisher.artifact` and
   `Kingfisher.pending` on the service.
