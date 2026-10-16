@@ -89,9 +89,9 @@ _EXPORTS = {
     "UnknownSessionError": "kingfisher.domain.session",
     "Config": "kingfisher.config",
     "WorkspacePaths": "kingfisher.config",
-    # What a `KINGFISHER_ADAPTERS_FACTORY` returns rows of, so a deployment adding
+    # What a `KINGFISHER_WIRE_FORMATS` returns rows of, so a deployment adding
     # a wire format cannot write one without both.
-    "Adapter": "kingfisher.config",
+    "WireFormat": "kingfisher.config",
     "Landing": "kingfisher.config",
     "Kingfisher": "kingfisher.application.service",
     "ConfigError": "kingfisher.config",
@@ -138,7 +138,6 @@ __all__ = [
     "SESSION_BACKENDS_CONTRACT",
     "UNSCOPED",
     "AccessError",
-    "Adapter",
     "ArtifactError",
     "Capabilities",
     "CapabilityError",
@@ -172,6 +171,7 @@ __all__ = [
     "ToolContext",
     "UnknownSessionError",
     "UnsafeReferenceError",
+    "WireFormat",
     "WorkspacePaths",
     "backend_at",
     "config_from_env",
@@ -200,10 +200,10 @@ if TYPE_CHECKING:
     from kingfisher.application.run import run as run
     from kingfisher.application.run import stream as stream
     from kingfisher.application.service import Kingfisher as Kingfisher
-    from kingfisher.config import Adapter as Adapter
     from kingfisher.config import Config as Config
     from kingfisher.config import ConfigError as ConfigError
     from kingfisher.config import Landing as Landing
+    from kingfisher.config import WireFormat as WireFormat
     from kingfisher.config import WorkspacePaths as WorkspacePaths
     from kingfisher.domain.access import UNSCOPED as UNSCOPED
     from kingfisher.domain.access import AccessError as AccessError

@@ -13,8 +13,8 @@ import yaml
 from dotenv import load_dotenv
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
-from kingfisher.config import Adapter, Config, Endpoint, Landing, ModelProfile, Models
-from kingfisher.infrastructure.harness.models import ADAPTERS
+from kingfisher.config import Config, Endpoint, Landing, ModelProfile, Models, WireFormat
+from kingfisher.infrastructure.harness.models import WIRE_FORMATS
 from kingfisher.infrastructure.steps import drive
 from kingfisher.infrastructure.workspace import (
     ensure_definitions,
@@ -41,7 +41,7 @@ class FakeToolCallingModel(FakeMessagesListChatModel):
 @pytest.fixture
 def scripted(cfg):
     """`cfg`, with every endpoint answered by `Scripted`."""
-    row = Adapter(
+    row = WireFormat(
         f"{Scripted.__module__}:Scripted",
         Landing(
             model="model",
@@ -52,7 +52,7 @@ def scripted(cfg):
         ),
     )
     endpoints = {
-        name: replace(endpoint, adapter=row) for name, endpoint in cfg.models.endpoints.items()
+        name: replace(endpoint, wire_format=row) for name, endpoint in cfg.models.endpoints.items()
     }
     Scripted.script.clear()
     Scripted.heard.clear()
@@ -115,7 +115,7 @@ FAKE_ENDPOINT = Endpoint(
     base_url="http://127.0.0.1:9/never-called",
     api_key="test-key-not-real",
     key_env=FAKE_KEY_VAR,
-    adapter=ADAPTERS["anthropic"],
+    wire_format=WIRE_FORMATS["anthropic"],
 )
 
 #: A second host, so "somewhere else" is expressible. `indistinct` compares
@@ -126,7 +126,7 @@ OTHER_ENDPOINT = Endpoint(
     base_url="http://127.0.0.2:9/never-called",
     api_key="test-key-not-real",
     key_env=FAKE_KEY_VAR,
-    adapter=ADAPTERS["anthropic"],
+    wire_format=WIRE_FORMATS["anthropic"],
 )
 
 #: Two models on one endpoint, which is the shape the catalogue exists to allow

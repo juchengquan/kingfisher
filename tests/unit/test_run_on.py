@@ -12,7 +12,7 @@ from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.models import ADAPTERS
+from kingfisher.infrastructure.harness.models import WIRE_FORMATS
 from kingfisher.kinds.subagents.spec import RunOn
 from tests.conftest import FakeToolCallingModel, subagents_dir
 
@@ -20,7 +20,7 @@ ELSEWHERE = Endpoint(
     "openai_responses",
     "https://api.openai.com/v1",
     "sk-test",
-    adapter=ADAPTERS["openai_responses"],
+    wire_format=WIRE_FORMATS["openai_responses"],
 )
 
 PINNED = """name: second-opinion

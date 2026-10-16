@@ -1436,7 +1436,7 @@ def test_no_area_is_granted_a_dependency_it_does_not_import():
 
     assert not unspent, (
         f"{unspent} — permitted and imported by nothing. A package named only in a "
-        "string, the way `ADAPTERS` names its chat classes, is not an import and is "
+        "string, the way `WIRE_FORMATS` names its chat classes, is not an import and is "
         "not what this table is about"
     )
 
@@ -1585,7 +1585,7 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # the graph itself; `agent.builtin_tool_names` does both halves now, because
     # startup needs the same probe and a second copy of it would be a second answer.
     "inventory": frozenset({"agent"}),
-    # Reads `ADAPTERS` to refuse an `api` kingfisher cannot build, as the
+    # Reads `WIRE_FORMATS` to refuse an `api` kingfisher cannot build, as the
     # catalogue loads rather than when a turn starts. The same argument as
     # `catalogue` above: the alternative is a second list of the wire formats
     # living in the config layer, and two lists of one fact drift -- here into
@@ -2020,9 +2020,9 @@ WITNESSES: dict[str, str] = {
     # `Config`, `run` returns a `RunResult`, `stream` yields `RunEvent`s. The
     # type of a documented call's answer cannot be private.
     "Config": "embedder",
-    # `configuration.md` writes a `KINGFISHER_ADAPTERS_FACTORY` out, and it returns
+    # `configuration.md` writes a `KINGFISHER_WIRE_FORMATS` out, and it returns
     # these.
-    "Adapter": "document",
+    "WireFormat": "document",
     "Landing": "document",
     "RunResult": "embedder",
     "RunEvent": "embedder",

@@ -624,7 +624,7 @@ class _RejectedKeyError(Exception):
 
     `status_code` and `response.request.url` are what `anthropic` and `openai` both
     carry, and matching on those rather than on a class is what lets one branch cover
-    every adapter.
+    every wire format.
     """
 
     def __init__(self, url: str, status: int = 401) -> None:

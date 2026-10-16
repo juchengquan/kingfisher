@@ -26,7 +26,7 @@ the definitions folder, since that is all it writes.
 | `KINGFISHER_DEFINITIONS_DIR` | What people write, under fixed names: `agents/`, `middlewares/`, `skills/`, `subagents/` and `tools/`; `models.yaml`, the model catalogue — which models exist, where each runs, which key it uses; and `source_ids.yaml`, the source-id vocabulary, whose absence turns access control off entirely. A missing kind folder means none of that kind. A start reads it and never writes it: a folder that is not there is refused rather than made. Neither it nor the workspace may be inside the other. | **required** |
 | `KINGFISHER_ASSETS` | Where `kingfisher seed` copies definitions from — the assets. This repository ships its own in `assets/`; definitions from another project belong outside the checkout, seeded with a second `--from`. Without it seeding lays the definitions folder out, writes `models.yaml.example`, and then refuses — in that order, so a deployment with nothing to seed still gets somewhere to start. | none |
 | `KINGFISHER_MODEL_KEYS_FILE` | The file an endpoint's `key:` names an entry in, one `name: key` line each. Read only once this names it; named and missing, unreadable or not such a list, it refuses startup. Keep it out of the workspace, and on macOS under the home folder — see *What each fence hides*. `seed` places a `keys.yaml.example` to copy out; `doctor` says where each key came from, and warns when the shell or another user can read the file. | none |
-| `KINGFISHER_ADAPTERS_FACTORY` | `module:name` naming something callable with no arguments that returns wire formats of your own, for an endpoint's `api` to name. See [below](#a-wire-format-kingfisher-does-not-ship). | none — `anthropic` and `openai_responses` only |
+| `KINGFISHER_WIRE_FORMATS` | `module:name` naming something callable with no arguments that returns wire formats of your own, for an endpoint's `api` to name. See [below](#a-wire-format-kingfisher-does-not-ship). `KINGFISHER_ADAPTERS_FACTORY`, its old name, is refused if still set. | none — `anthropic` and `openai_responses` only |
 | `KINGFISHER_SKILLS_MOUNTS` | Further skills directories, as `label=path` pairs separated by `:`. Each is offered at `/skills/<label>/` and granted as `<label>::<name>`, for a party that cannot write into the catalogue. Skills sit directly in each one, and nothing creates or seeds it. The shell reaches a mount's scripts as `$KINGFISHER_SKILLS/<label>/...`, through a view of links kingfisher keeps in `<workspace>/.kingfisher/`. | none |
 | `KINGFISHER_SESSIONS` | `module:name` naming something callable with no arguments that returns a `Sessions`, for the `kingfisher` command. Only the command reads it — `Kingfisher` takes its sessions as `sessions=` — and it is how `sessions`, `reap` and `artifact` see sessions yours keep elsewhere. `KINGFISHER_SESSION_STORE` and `KINGFISHER_SESSION_STORE_FACTORY`, which configured the store this replaced, are refused if still set, and so are `KINGFISHER_SESSION_BACKENDS_FACTORY` and `KINGFISHER_BACKEND_FACTORY`, this setting's old names. | `LocalSessions` |
 | `KINGFISHER_PLUGINS` | `module:name` naming something callable with no arguments that returns a `kingfisher.Plugins`: the run events, conversation store and offered middleware the `kingfisher` command hands every `Kingfisher` it builds, as `Kingfisher` takes them as keywords. A field left unset is kingfisher's own. `kingfisher run --log` replaces the run events it names. | kingfisher's own of each |
@@ -186,15 +186,15 @@ class to build, and what it needs to be told. kingfisher ships `anthropic` and
 `openai_responses`. To add one, return it from a factory and name the factory:
 
 ```
-KINGFISHER_ADAPTERS_FACTORY=mycompany.models:adapters
+KINGFISHER_WIRE_FORMATS=mycompany.models:wire_formats
 ```
 
 ```python
-from kingfisher import Adapter, Landing
+from kingfisher import Landing, WireFormat
 
-def adapters():
+def wire_formats():
     return {
-        "chat_completions": Adapter(
+        "chat_completions": WireFormat(
             "langchain_openai:ChatOpenAI",
             Landing(
                 model="model_name",
@@ -227,7 +227,7 @@ and builds anyway, so a URL it did not keep sends your prompts, and the gateway'
 key, to the vendor's default host.
 
 A name kingfisher already ships is refused rather than replaced, so an existing
-`api: anthropic` cannot quietly start meaning your class. `extra` on an `Adapter`
+`api: anthropic` cannot quietly start meaning your class. `extra` on a `WireFormat`
 is passed to every model it builds, and may not name anything the model entry
 already sets.
 

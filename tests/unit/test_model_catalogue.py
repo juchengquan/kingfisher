@@ -20,7 +20,7 @@ from kingfisher.config import (
     ModelProfile,
     Models,
 )
-from kingfisher.infrastructure.harness.models import ADAPTERS
+from kingfisher.infrastructure.harness.models import WIRE_FORMATS
 from kingfisher.infrastructure.model_catalogue import load
 
 GOOD = """
@@ -150,7 +150,7 @@ def test_a_key_this_format_does_not_define_is_refused(tmp_path):
 
 
 def test_extra_cannot_overrule_a_param_the_format_defines(tmp_path):
-    """`Adapter.extra` already carries this rule: additive only."""
+    """`WireFormat.extra` already carries this rule: additive only."""
     body = GOOD.replace("      reasoning_effort: high", "      max_tokens: 1")
 
     with pytest.raises(ConfigError, match="already defines"):
@@ -266,7 +266,10 @@ def test_a_profile_keyed_by_another_name_is_refused():
             models={"main-model": ModelProfile("something-else", "gateway")},
             endpoints={
                 "gateway": Endpoint(
-                    "anthropic", "https://example.invalid", "sk", adapter=ADAPTERS["anthropic"]
+                    "anthropic",
+                    "https://example.invalid",
+                    "sk",
+                    wire_format=WIRE_FORMATS["anthropic"],
                 )
             },
             default="main-model",

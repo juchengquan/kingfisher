@@ -12,7 +12,7 @@ from kingfisher.application.config import config_from_env
 from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.models import ADAPTERS
+from kingfisher.infrastructure.harness.models import WIRE_FORMATS
 from tests.conftest import FakeToolCallingModel, subagent_of
 
 #: A second endpoint, on a different wire format, so a test can tell "went
@@ -21,7 +21,7 @@ ELSEWHERE = Endpoint(
     "openai_responses",
     "https://api.openai.com/v1",
     "sk-elsewhere",
-    adapter=ADAPTERS["openai_responses"],
+    wire_format=WIRE_FORMATS["openai_responses"],
 )
 
 CATALOGUE = """

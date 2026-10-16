@@ -12,7 +12,7 @@ from typing import Any
 from kingfisher.domain.access import SourceIds
 from kingfisher.layout import DEFAULT_LAYOUT, Layout
 
-#: The frozen default for an `extra` mapping. Shared with `Adapter.extra`
+#: The frozen default for an `extra` mapping. Shared with `WireFormat.extra`
 #: rather than written twice: both spread into one `build_model` call and carry
 #: one rule between them -- additive only, may not name a value the deployment
 #: configured -- so a reader meeting one should find the other. Public for that
@@ -45,7 +45,7 @@ class Landing:
 
 
 @dataclass(frozen=True)
-class Adapter:
+class WireFormat:
     """One wire format: which class speaks it, and what it needs to be told.
 
     kingfisher targets **gateway-shaped** endpoints — one base URL, one key. A wire
@@ -84,7 +84,7 @@ class Endpoint:
     #: The row `api` named, resolved as the catalogue loaded. Carried rather than
     #: looked up again by name when a model is built, because a deployment's own
     #: rows exist only in the table that load was handed.
-    adapter: Adapter = field(kw_only=True)
+    wire_format: WireFormat = field(kw_only=True)
 
 
 @dataclass(frozen=True)
@@ -225,6 +225,7 @@ RENAMED_SETTINGS: Mapping[str, str] = MappingProxyType(
     {
         "KINGFISHER_BACKEND_FACTORY": "KINGFISHER_SESSIONS",
         "KINGFISHER_SESSION_BACKENDS_FACTORY": "KINGFISHER_SESSIONS",
+        "KINGFISHER_ADAPTERS_FACTORY": "KINGFISHER_WIRE_FORMATS",
     }
 )
 

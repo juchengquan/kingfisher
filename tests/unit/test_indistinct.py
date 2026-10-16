@@ -9,7 +9,7 @@ from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.domain.capabilities import ALL, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.activation import indistinct_subagents
-from kingfisher.infrastructure.harness.models import ADAPTERS
+from kingfisher.infrastructure.harness.models import WIRE_FORMATS
 from kingfisher.infrastructure.steps import drive
 from kingfisher.kinds.subagents.rules import resolved_model
 from kingfisher.kinds.subagents.spec import RunOn
@@ -67,7 +67,7 @@ def _elsewhere(cfg, url: str):
             endpoints={
                 **cfg.models.endpoints,
                 "openai": Endpoint(
-                    "openai_responses", url, "sk-test", adapter=ADAPTERS["openai_responses"]
+                    "openai_responses", url, "sk-test", wire_format=WIRE_FORMATS["openai_responses"]
                 ),
             },
             models={**cfg.models.models, "gpt-5": ModelProfile("gpt-5", "openai")},

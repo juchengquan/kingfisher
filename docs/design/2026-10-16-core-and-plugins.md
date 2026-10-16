@@ -192,7 +192,8 @@ One pull request each, off `main` once the one before it has merged.
    `LocalSessions`' own. *(Landed.)*
 5. `KINGFISHER_SESSIONS` and `KINGFISHER_PLUGINS`, and the `Plugins` record the second
    returns. *(Landed.)*
-6. `Adapter` becomes `WireFormat`.
+6. `Adapter` becomes `WireFormat`, and `KINGFISHER_ADAPTERS_FACTORY` becomes
+   `KINGFISHER_WIRE_FORMATS`. *(Landed.)*
 7. The Instructions plugin.
 8. `catalogue` and `grants` onto `Config`.
 9. The contract kits to `tests/checks/`; the two refusals into the core; the promises
