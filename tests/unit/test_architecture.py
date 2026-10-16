@@ -2753,6 +2753,9 @@ LIGHT_EXPORTS = frozenset({
     # Light for the reason `ToolContext` is, and it matters more: every tool file that
     # says who may use it imports this, and `kingfisher list` loads every tool file.
     "tool",
+    # How `--datazone` joins `--as`. A function over the domain's own types, and the
+    # command reaches it on every verb that takes a caller, `list` among them.
+    "with_datazone",
 })
 
 #: The rest, which genuinely need deepagents to do their job.

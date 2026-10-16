@@ -513,6 +513,7 @@ on the spot, so every entry after the first would be unreachable.
 | `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the subagent runs whatever summoned it |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 | `source_ids` | optional | Who may reach this subagent, wherever it is used. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
+| `datazone` | optional | The one datazone a caller must be in to reach this subagent. Unset means any — see [Datazones](#datazones--a-second-field-beside-source-ids) |
 
 ### A subagent that consults another
 
@@ -1626,3 +1627,46 @@ and prints what each named compound requires above the audiences, since a name
 alone tells a reader nothing on the line it appears on. The `--json` form nests
 it instead — `[["finance_db", "pii"]]` — so a script never has to parse a set out
 of a string.
+
+
+### Datazones — a second field beside source ids
+
+A caller may also be **in a datazone**: one name, never several. A subagent or a
+tool may say which datazone it is for, and a caller reaches it only from that one.
+
+```yaml
+# source_ids.yaml
+source_ids: [sales_db, audit_log]
+datazones: [finance, hr]
+```
+
+```yaml
+# subagents/ledger.yaml
+name: ledger
+description: Reads the ledger.
+datazone: finance
+system_prompt: |
+  ...
+```
+
+```python
+kf.run(Request(task="...", agent="analyst"), source_ids=["sales_db"], datazone="finance")
+```
+
+`kingfisher run`, `decide` and `list` take `--datazone NAME` beside `--as`. In
+Python, a subagent declared without `build` writes `"datazone": "finance"`, and a
+tool writes `kingfisher.tool(fn, datazone="finance")`.
+
+- **It is an *and* with everything else.** A caller has to pass the subagent's or
+  tool's `source_ids` *and* be in its datazone.
+- **A caller in no datazone reaches only what names none.** Forgetting to pass one
+  must not hand a caller every datazone's tools. `UNSCOPED` switches both checks off.
+- **An agent has no datazone**, and writing one is refused: an agent runs in
+  whichever datazone its caller names. Nor does an entry —
+  `{name: payroll, datazone: hr}` is refused, since on an entry it could only repeat
+  the tool's own or contradict it.
+- **A datazone the vocabulary does not declare stops the deployment**, as an
+  undeclared source id does. With no `source_ids.yaml`, `datazone:` lines have no
+  effect, and a caller naming a datazone is refused.
+- **Nothing is refused for being unreachable.** An agent that names a finance tool is
+  not wrong for an hr caller — the tool is left out of that caller's build.

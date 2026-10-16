@@ -42,6 +42,14 @@ def _spelled(extra: tuple[str, ...]) -> str:
     return " and/or ".join(repr(one) for one in extra)
 
 
+#: A key an entry may not write, with where it goes instead. A datazone is one value on
+#: the tool or subagent it is about; written on an entry it could only repeat that value
+#: or contradict it, and a contradiction is a tool nobody can reach through that agent.
+ON_THE_THING: Mapping[str, str] = MappingProxyType(
+    {"datazone": "write it in the tool's or subagent's own file, the one place it means one thing"}
+)
+
+
 def unrecognised(
     document: Iterable[str],
     *,
@@ -254,7 +262,11 @@ class Reader:
             )
             raise self.error(msg)
 
-        if (complaint := unrecognised(entry, known=entry_fields(*extra), noun="key")) is not None:
+        if (
+            complaint := unrecognised(
+                entry, known=entry_fields(*extra), declined=ON_THE_THING, noun="key"
+            )
+        ) is not None:
             msg = f"{self.source}: {key} entry {position} has {complaint}"
             raise self.error(msg)
         if "name" not in entry:
@@ -280,6 +292,15 @@ class Reader:
             )
             raise self.error(msg)
         return name
+
+    def datazone(self, value: object, *, key: str = "datazone") -> str | None:
+        """The one datazone something is for, or `None` for any."""
+        if value is None:
+            return None
+        if not isinstance(value, str) or not value.strip():
+            msg = f"{self.source}: {key} is one name -- write {key}: finance -- got {value!r}"
+            raise self.error(msg)
+        return value.strip()
 
     def source_ids(self, value: object, *, key: str = "source_ids") -> Audience:
         """A definition's own audience: who may reach it at all."""
@@ -408,7 +429,7 @@ class Reader:
         # before this sees it. Named here rather than stripped there, because
         # stripping would hand this a mapping the file does not contain and put
         # the two readers one edit apart from disagreeing about which keys exist.
-        if complaint := unrecognised(raw, known=set(known), noun="key"):
+        if complaint := unrecognised(raw, known=set(known), declined=ON_THE_THING, noun="key"):
             msg = f"{where}: {complaint}"
             raise self.error(msg)
         if "source_ids" not in raw:

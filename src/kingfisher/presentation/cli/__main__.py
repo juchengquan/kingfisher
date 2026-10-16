@@ -49,6 +49,7 @@ from kingfisher import (
 # command has a setting and no argument to be told its session backends by.
 # Everything above is public and comes through the front door because it is.
 from kingfisher.config import MissingCredentialsWarning
+from kingfisher.domain.access import with_datazone
 from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.workspace.seeding import REMEDY, UNCONSULTED
@@ -207,6 +208,12 @@ def build_parser() -> argparse.ArgumentParser:
             "with no caller. Required where the workspace declares source ids"
         ),
     )
+    doing.add_argument(
+        "--datazone",
+        default=None,
+        metavar="NAME",
+        help="the datazone the caller is in, one of the vocabulary's 'datazones:'",
+    )
     # A verb rather than flags on `run`, for the reason the library has a `Resume`
     # rather than a `Request` with the task left out: answering is not asking. `run`
     # takes a task positionally, so the alternative was making that optional, and a
@@ -288,6 +295,12 @@ def build_parser() -> argparse.ArgumentParser:
             "with no caller. Required where the workspace declares source ids"
         ),
     )
+    deciding.add_argument(
+        "--datazone",
+        default=None,
+        metavar="NAME",
+        help="the datazone the caller is in, one of the vocabulary's 'datazones:'",
+    )
     checkup = sub.add_parser(
         "doctor",
         help="check everything that stands between this install and a run",
@@ -344,6 +357,12 @@ def build_parser() -> argparse.ArgumentParser:
             "show what these source ids reach: comma-separated names, or UNSCOPED "
             "for the operator's view of everything"
         ),
+    )
+    listing.add_argument(
+        "--datazone",
+        default=None,
+        metavar="NAME",
+        help="the datazone the caller is in, one of the vocabulary's 'datazones:'",
     )
     fetching = sub.add_parser(
         "artifact",
@@ -535,7 +554,12 @@ def _run(args: argparse.Namespace) -> int:
         session_id=args.session,
         inputs=tuple(Path(p).expanduser() for p in args.input),
     )
-    return _drive(kf, request, held=args.held, delete_session=args.delete_session)
+    return _drive(
+        kf,
+        request,
+        held=with_datazone(args.held, args.datazone),
+        delete_session=args.delete_session,
+    )
 
 
 def _kept_in(log: Path | None) -> JsonlRunEvents | None:
@@ -634,7 +658,7 @@ def _decide(args: argparse.Namespace) -> int:
             decisions=tuple(decisions),
             agent=args.agent,
         ),
-        held=args.held,
+        held=with_datazone(args.held, args.datazone),
         delete_session=args.delete_session,
     )
 
@@ -1043,7 +1067,9 @@ HANDLERS = {
     "decide": _decide,
     "seed": lambda args: _seed(args.source, everything=args.everything),
     "doctor": lambda args: _doctor(as_document=args.json, from_dotenv=args.from_dotenv),
-    "list": lambda args: _list(as_document=args.json, held=args.held),
+    "list": lambda args: _list(
+        as_document=args.json, held=with_datazone(args.held, args.datazone)
+    ),
     "sessions": lambda args: _sessions(as_document=args.json),
     "artifact": _artifact,
     "reap": _reap,

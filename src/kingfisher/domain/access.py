@@ -47,6 +47,17 @@ Requires = frozenset[str]
 Audience = Literal["*"] | tuple[str | Requires, ...]
 
 
+#: What a datazone becomes among the names a caller holds, and in what a definition
+#: requires: one more name, which every reach check already knows how to ask about.
+#: Refused as a source id, so no vocabulary declares one and no caller presents one.
+DATAZONE_PREFIX = "datazone="
+
+
+def zone_name(datazone: str) -> str:
+    """A datazone as a name to hold."""
+    return f"{DATAZONE_PREFIX}{datazone}"
+
+
 @dataclass(frozen=True)
 class Stated:
     """What one definition says about who reaches what."""
@@ -55,11 +66,18 @@ class Stated:
     source_ids: Audience = ALL
     #: Field name -> entry name -> who reaches that entry there.
     entries: Mapping[str, Mapping[str, Audience]] = field(default_factory=dict)
+    #: The one datazone a caller must be in to reach it, or `None` for any.
+    datazone: str | None = None
 
     @property
     def says_nothing(self) -> bool:
         """Whether this definition restricts anyone at all."""
-        return self.source_ids == ALL and not self.entries
+        return self.source_ids == ALL and not self.entries and self.datazone is None
+
+    @property
+    def audience(self) -> Audience:
+        """Who reaches the definition: its source ids, and its datazone as well."""
+        return zoned(self.source_ids, self.datazone)
 
     def of(self, field_name: str) -> Mapping[str, Audience]:
         """One field's per-entry audiences, or nothing."""
@@ -124,6 +142,7 @@ def stated(spec: object) -> Stated:
         entries={
             field: dict(entries) for field, entries in getattr(spec, "audiences", {}).items()
         },
+        datazone=getattr(spec, "datazone", None),
     )
 
 
@@ -200,7 +219,7 @@ def within_reach(
     """
     if held is None:
         return tuple(names)
-    return tuple(name for name in names if reaches(stated(defined[name]).source_ids, held))
+    return tuple(name for name in names if reaches(stated(defined[name]).audience, held))
 
 
 def handed_work_by(
@@ -260,6 +279,40 @@ def narrowed_for(spec: object, held: frozenset[str] | None) -> dict[str, Selecti
         )
         for field in AUDIENCED
     }
+
+
+def zoned(audience: Audience, datazone: str | None) -> Audience:
+    """`audience`, and in `datazone` as well where there is one."""
+    if datazone is None:
+        return audience
+    return jointly((audience, (zone_name(datazone),)))
+
+
+class Datazone(str):
+    """A caller's datazone, carried among their source ids as far as `held_by`.
+
+    A `str` so that it travels in a `Held` unchanged: every door between the caller and
+    the one place the shape of `source_ids` is read passes the value on unread, and a
+    second parameter would have been one more each of them had to remember.
+    """
+
+    __slots__ = ()
+
+
+def with_datazone[Caller: Iterable[str] | _Unscoped | None](
+    source_ids: Caller, datazone: str | None
+) -> Caller | tuple[str, ...]:
+    """The caller's source ids, carrying their datazone where they named one."""
+    if datazone is None or isinstance(source_ids, str):
+        # A bare string is refused by `held_by`, naming the string; leave it to say so.
+        return source_ids
+    if isinstance(source_ids, _Unscoped):
+        msg = (
+            "UNSCOPED runs with no caller, so it has no datazone -- pass the caller's "
+            "source ids with their datazone, or UNSCOPED alone"
+        )
+        raise AccessError(msg)
+    return (*(source_ids or ()), Datazone(datazone))
 
 
 def jointly(audiences: Iterable[Audience]) -> Audience:
@@ -357,6 +410,8 @@ class SourceIds:
     #: Declared name -> the source ids a caller must hold for it to apply, for the
     #: names written as a set. Absent for every ordinary source id.
     compounds: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    #: The datazones a caller may be in and a definition may require.
+    datazones: frozenset[str] = frozenset()
 
     def mentions(self, audience: Audience) -> frozenset[str]:
         """Every source id an audience touches, following what names cover and require."""
@@ -625,15 +680,44 @@ def _closed(declared: Mapping[str, tuple[str, ...]], source: str) -> dict[str, t
 
 def parse(document: Mapping[str, object], source: str) -> SourceIds:
     """One vocabulary document, from its decoded fields."""
-    complaint = fields.unrecognised(document, known={"source_ids"}, declined=MOVED, noun="section")
+    complaint = fields.unrecognised(
+        document, known={"source_ids", "datazones"}, declined=MOVED, noun="section"
+    )
     if complaint is not None:
         msg = f"{source}: {complaint}"
         raise AccessError(msg)
     declared, compounds = _vocabulary(document.get("source_ids"), source)
+    if reserved := sorted(name for name in declared if name.startswith(DATAZONE_PREFIX)):
+        msg = (
+            f"{source}: {', '.join(map(repr, reserved))} begins {DATAZONE_PREFIX!r}, "
+            f"which is how a datazone is held -- declare datazones under 'datazones:'"
+        )
+        raise AccessError(msg)
     _refuse_undeclared_parts(declared, compounds, source)
     _refuse_granted_compounds(declared, compounds, source)
     _refuse_compound_loops(compounds, source)
-    return SourceIds(names=_closed(declared, source), compounds=compounds)
+    return SourceIds(
+        names=_closed(declared, source),
+        compounds=compounds,
+        datazones=_datazones(document.get("datazones"), source),
+    )
+
+
+def _datazones(raw: object, source: str) -> frozenset[str]:
+    """The declared datazones: a list of names, or none at all."""
+    if raw is None:
+        return frozenset()
+    if isinstance(raw, str) or not isinstance(raw, list):
+        msg = f"{source}: 'datazones' is a list of names -- write datazones: [finance, hr]"
+        raise AccessError(msg)
+    named = [fields.text(one) for one in raw]
+    if "" in named:
+        msg = f"{source}: 'datazones' holds an empty name"
+        raise AccessError(msg)
+    if twice := sorted({one for one in named if named.count(one) > 1}):
+        msg = f"{source}: 'datazones' names {', '.join(map(repr, twice))} twice"
+        raise AccessError(msg)
+    return frozenset(named)
 
 
 def _refuse_granted_compounds(
