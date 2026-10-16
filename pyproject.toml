@@ -129,8 +129,8 @@ packages = ["src/kingfisher"]
 # Definitions do not ride along. They lived at `src/kingfisher/assets` so that
 # `pip install kingfisher` followed by `kingfisher seed` wrote a workspace that
 # already worked; they are content, and where a deployment gets its content is a
-# setting now -- `KINGFISHER_ASSETS`. This repository keeps a worked set in
-# `assets_examples/`, outside this list and outside the wheel.
+# setting now -- `KINGFISHER_ASSETS`. This repository keeps its own in
+# `assets/`, outside this list and outside the wheel.
 #
 # What that costs is real and is written down rather than glossed: a fresh
 # install seeds nothing, and since a request must name an agent, it cannot run
@@ -159,7 +159,7 @@ dev = [
 # an interpreter that had them -- pip, uv, `find / -name python3.14` -- before
 # settling on a Homebrew Cellar path where its own `--break-system-packages`
 # install had landed. The skill said what to use and the environment did not
-# have it. Shipped tools need them too: `assets_examples/tools/pdf_text.py` runs
+# have it. Shipped tools need them too: `assets/tools/pdf_text.py` runs
 # pdfplumber and `pdf_pages.py` beside it pypdf, in kingfisher's own process, which
 # is this same interpreter.
 #
@@ -292,16 +292,15 @@ python-version = "3.12"
 python = ".venv"
 
 [tool.ty.src]
-# `assets_examples` is here because it holds Python -- shipped-looking tools
-# that an agent imports. Under `src/` it was checked by accident; at the root it
-# would fall out of this list silently, which is the kind of check that stops
-# running without ever going red. It was `examples` until the directory was
-# renamed, and this comment naming the old one would have been the same silence.
+# `assets` is here because it holds Python -- the tools an agent imports.
+# Under `src/` it was checked by accident; at the root it would fall out of this
+# list silently, which is the kind of check that stops running without ever
+# going red. Renaming the directory without this line is the same silence.
 #
 # `evals` is the same case, and was missed: the driver imports it, and nothing
 # checked it. `test_every_directory_holding_python_is_type_checked` is what says
 # so next time, because this comment could not.
-include = ["src", "tests", "assets_examples", "spikes", "evals"]
+include = ["src", "tests", "assets", "spikes", "evals"]
 
 [tool.ty.terminal]
 output-format = "concise"

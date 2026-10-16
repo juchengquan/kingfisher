@@ -57,9 +57,9 @@ subagent's model. Handing it a built instance is the fix, not a convenience.
 
 ## Wiring it
 
-    from assets_examples.middlewares.call_cap import CallCap, CallCapGenerous
-    from assets_examples.middlewares.compaction import Compact
-    from assets_examples.middlewares.tool_note import ToolNote
+    from assets.middlewares.call_cap import CallCap, CallCapGenerous
+    from assets.middlewares.compaction import Compact
+    from assets.middlewares.tool_note import ToolNote
 
     kingfisher = Kingfisher(
         cfg,

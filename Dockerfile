@@ -42,14 +42,14 @@ COPY src/ ./src/
 # `sys_platform == 'linux'` marker, so it is a no-op on any other base.
 RUN uv sync --frozen --no-dev --extra fence
 
-# The worked definitions. Not in the wheel -- `KINGFISHER_ASSETS` names a
+# The shipped definitions. Not in the wheel -- `KINGFISHER_ASSETS` names a
 # directory and this image ships one so `kingfisher seed` has somewhere to point.
-COPY assets_examples/ ./assets_examples/
+COPY assets/ ./assets/
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     KINGFISHER_WORKSPACE=/workspace \
     KINGFISHER_DEFINITIONS_DIR=/definitions \
-    KINGFISHER_ASSETS=/app/assets_examples
+    KINGFISHER_ASSETS=/app/assets
 
 # Nothing here creates /workspace or /definitions. Each is a mount, and a directory
 # baked into the image would be a silent fallback when the mount is missing --

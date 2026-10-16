@@ -180,7 +180,7 @@ model you have not set up.
 
 ### Approval gates
 
-`assets_examples/agents/operator.yaml` is this section as a working file, and is
+`assets/agents/operator.yaml` is this section as a working file, and is
 worth reading beside `surveyor.yaml`: one is safe because it was never granted
 the shell, the other because a person says yes before each command.
 
@@ -1216,7 +1216,7 @@ A source id is a name in this deployment's vocabulary and nothing else — not a
 path a definition was read from, and not a data file a run is handed. Nothing
 resolves it to either.
 
-A worked set to read alongside this section: `assets_examples/source_ids.yaml`,
+Three files to read alongside this section: `assets/source_ids.yaml`,
 `agents/analyst.yaml` and `subagents/auditor.yaml`. `seed` leaves them behind by
 default, because a workspace that has not declared `sales_db` cannot read a
 definition that names it — copy `source_ids.yaml` first, then

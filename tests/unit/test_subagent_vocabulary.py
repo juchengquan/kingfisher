@@ -18,7 +18,7 @@ ROOT = repository_root()
 
 #: Where kingfisher's own words are. Not `spikes/`: those are probes kept as a record of
 #: what ran at the time, and rewriting one is editing that record.
-AREAS = ("src", "tests", "docs", "assets_examples", "evals")
+AREAS = ("src", "tests", "docs", "assets", "evals")
 SINGLE_FILES = (".env.example", "README.md", "CLAUDE.md")
 SUFFIXES = {".py", ".md", ".yaml", ".yml", ".example"}
 

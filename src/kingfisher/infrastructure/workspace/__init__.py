@@ -21,7 +21,6 @@ _EXPORTS = {
     "is_new_workspace": "kingfisher.infrastructure.workspace.layout",
     "protect_inputs": "kingfisher.infrastructure.workspace.permissions",
     "writable_inputs": "kingfisher.infrastructure.workspace.permissions",
-    "DESTINATION": "kingfisher.infrastructure.workspace.seeding",
     "SEED_HINT": "kingfisher.infrastructure.workspace.seeding",
     "SUGGESTION": "kingfisher.infrastructure.workspace.seeding",
     "Destination": "kingfisher.infrastructure.workspace.seeding",
@@ -29,7 +28,6 @@ _EXPORTS = {
     "Skipped": "kingfisher.infrastructure.workspace.seeding",
     "Source": "kingfisher.infrastructure.workspace.seeding",
     "definitions_source": "kingfisher.infrastructure.workspace.seeding",
-    "destination_hint": "kingfisher.infrastructure.workspace.seeding",
     "kinds_at": "kingfisher.infrastructure.workspace.seeding",
     "middleware_named": "kingfisher.infrastructure.workspace.seeding",
     "seed": "kingfisher.infrastructure.workspace.seeding",
@@ -42,7 +40,6 @@ _EXPORTS = {
 }
 
 __all__ = [
-    "DESTINATION",
     "EXAMPLE",
     "EXAMPLES",
     "SEED_HINT",
@@ -55,7 +52,6 @@ __all__ = [
     "Skipped",
     "Source",
     "definitions_source",
-    "destination_hint",
     "ensure_definitions",
     "ensure_layout",
     "ensure_session_layout",
@@ -85,7 +81,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.layout import is_new_workspace as is_new_workspace
     from kingfisher.infrastructure.workspace.permissions import protect_inputs as protect_inputs
     from kingfisher.infrastructure.workspace.permissions import writable_inputs as writable_inputs
-    from kingfisher.infrastructure.workspace.seeding import DESTINATION as DESTINATION
     from kingfisher.infrastructure.workspace.seeding import SEED_HINT as SEED_HINT
     from kingfisher.infrastructure.workspace.seeding import SUGGESTION as SUGGESTION
     from kingfisher.infrastructure.workspace.seeding import Destination as Destination
@@ -95,7 +90,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.seeding import (
         definitions_source as definitions_source,
     )
-    from kingfisher.infrastructure.workspace.seeding import destination_hint as destination_hint
     from kingfisher.infrastructure.workspace.seeding import kinds_at as kinds_at
     from kingfisher.infrastructure.workspace.seeding import middleware_named as middleware_named
     from kingfisher.infrastructure.workspace.seeding import seed as seed

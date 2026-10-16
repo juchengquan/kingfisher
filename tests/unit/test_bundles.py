@@ -1527,7 +1527,7 @@ def test_the_shipped_bundle_is_a_bundle(shipped):
 
 
 def test_the_shipped_bundle_lists_what_it_holds(workspace_with_presets):
-    """The example is where a reader meets this, and `assets_examples/` is held to
+    """The example is where a reader meets this, and `assets/` is held to
     working -- so the check is driven by reading the shipped catalogue rather than by
     comparing the definition against a list written here, which would pass against
     itself however wrong both were.

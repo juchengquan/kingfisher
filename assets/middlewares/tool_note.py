@@ -18,8 +18,8 @@ registry that grows every time somebody writes a sentence.
 
 ## Wiring it
 
-    from assets_examples.middlewares.call_cap import CallCap, CallCapGenerous
-    from assets_examples.middlewares.tool_note import ToolNote
+    from assets.middlewares.call_cap import CallCap, CallCapGenerous
+    from assets.middlewares.tool_note import ToolNote
 
     kingfisher = Kingfisher(
         cfg,

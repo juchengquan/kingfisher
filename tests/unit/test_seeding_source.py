@@ -154,26 +154,6 @@ def test_the_refusal_names_a_worked_set_only_when_there_is_one(cfg, tmp_path, mo
     assert str(SUGGESTION) in str(beside_one.value), "did not name the one that is"
 
 
-def test_the_refusal_says_where_your_own_definitions_go(cfg, tmp_path, monkeypatch):
-    """The half of the advice these messages never gave."""
-    from dataclasses import replace
-
-    from kingfisher.infrastructure.workspace import DESTINATION
-
-    nowhere = replace(cfg, assets=None)
-
-    monkeypatch.chdir(tmp_path)
-    with pytest.raises(ConfigError) as bare:
-        seeding.definitions_source(nowhere)
-
-    (tmp_path / DESTINATION).mkdir()
-    with pytest.raises(ConfigError) as beside_one:
-        seeding.definitions_source(nowhere)
-
-    assert str(DESTINATION) not in str(bare.value), "named a directory that is not there"
-    assert str(DESTINATION) in str(beside_one.value), "did not name the one that is"
-
-
 def test_the_refusal_says_both_ways_of_answering_it(cfg, tmp_path, monkeypatch):
     """A variable and a flag."""
     from dataclasses import replace

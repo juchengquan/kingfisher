@@ -255,12 +255,12 @@ def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
 
 
 #: The trees this repository keeps Python in. One list, because two rules read it and
-#: a second copy is a second thing to keep in step. `assets_examples` is apart from
+#: a second copy is a second thing to keep in step. `assets` is apart from
 #: them: nothing there imports kingfisher, so the import rules must not walk it, while
 #: the shape rules below must -- it ships modules a deployment copies into its own
 #: workspace.
 CODE_AREAS: tuple[str, ...] = ("src", "tests", "evals", "spikes")
-EXAMPLES_AREA = "assets_examples"
+ASSETS_AREA = "assets"
 
 
 def _everything_that_imports_kingfisher() -> list[Path]:
@@ -282,14 +282,14 @@ def _everything_that_imports_kingfisher() -> list[Path]:
 def _every_module_here() -> list[Path]:
     """Every Python file in the repository, which is wider than the set above.
 
-    `assets_examples/` is the addition: it ships modules a deployment copies into its
+    `assets/` is the addition: it ships modules a deployment copies into its
     own workspace, and `ruff` reads it, so a mistake there reaches somebody. Named as
     an addition rather than by writing the area list again, so the two cannot drift.
     """
     found = [*_everything_that_imports_kingfisher()]
-    examples = REPO / EXAMPLES_AREA
-    if examples.is_dir():
-        found += [p for p in examples.rglob("*.py") if "__pycache__" not in p.parts]
+    assets = REPO / ASSETS_AREA
+    if assets.is_dir():
+        found += [p for p in assets.rglob("*.py") if "__pycache__" not in p.parts]
     return sorted(found)
 
 
@@ -341,7 +341,7 @@ def test_every_module_on_disk_reaches_the_collection_the_rules_walk():
     """`_every` refuses a collection that is empty and cannot see one that is partial.
 
     Measured: dropping `src`, `tests`, `evals` and `spikes` from the walk left the
-    files of `assets_examples` behind, and the rule below passed over them -- with
+    files of `assets` behind, and the rule below passed over them -- with
     `_every` satisfied the whole time.
 
     Counted per area, not named per area, which is the second half of that lesson. The
@@ -355,7 +355,7 @@ def test_every_module_on_disk_reaches_the_collection_the_rules_walk():
         name: sorted(
             p for p in (REPO / name).rglob("*.py") if "__pycache__" not in p.parts
         )
-        for name in (*CODE_AREAS, EXAMPLES_AREA)
+        for name in (*CODE_AREAS, ASSETS_AREA)
         if (REPO / name).is_dir()
     }
     assert want, "no area named here is on disk, so this rule is about nothing"
@@ -862,11 +862,11 @@ def test_the_bare_count_rule_leaves_a_count_that_says_what_it_counts(tmp_path):
 DEFERS_TO_MODULE_DOCSTRING = re.compile(r"\bthe module docstring\b", re.IGNORECASE)
 
 #: Areas this rule reads that the collection every other prose rule uses does not.
-#: The shipped examples are the files most likely to defer -- an example has a
-#: module docstring worth reading, so pointing at it feels free -- and four did.
+#: The shipped assets are the files most likely to defer -- each has a module
+#: docstring worth reading, so pointing at it feels free -- and four did.
 #:
 #: There is no exemption table, and the first draft's was worse than none: it
-#: excused `assets_examples/` on the argument that an example is read top to
+#: excused `assets/` on the argument that an example is read top to
 #: bottom, and mutating that entry proved it dead, because the walk had never
 #: reached the directory it named. An exemption nothing exercises is a comment
 #: asserting something untrue.
@@ -875,7 +875,7 @@ DEFERS_TO_MODULE_DOCSTRING = re.compile(r"\bthe module docstring\b", re.IGNORECA
 #: *is* the phrase it searches for, so the rule matches its own source however
 #: the prose around it is worded. That hole is real and small, and is the one
 #: `PROSE_GONE` already accepts for naming a gone module on purpose.
-DEFERRAL_WALKS = ("assets_examples",)
+DEFERRAL_WALKS = ("assets",)
 
 
 def _prose_run_together(path: Path) -> str:
@@ -2703,10 +2703,6 @@ LIGHT_EXPORTS = frozenset({
     # A renderer and a sentence. Both are what a consumer needed and neither
     # imports anything -- the cheapest names on this list.
     "offered", "SKILL_LAYOUT", "DEFINITION_KINDS", "SEED_HINT", "split_reference",
-    # A sentence that stats one directory. Cheaper than the renderer and the
-    # sentence above it, and
-    # public for the same reason `SEED_HINT` is -- `doctor` is a consumer.
-    "destination_hint",
     # The access policy, its report, its error and the sentinel for running
     # without a caller. `domain.access` imports `domain.fields` and
     # `domain.capabilities` and nothing else, which is the point of it being a
@@ -3108,7 +3104,7 @@ def test_no_definitions_live_inside_the_package():
         f"{documents} are definitions inside the package — they ship in the "
         f"wheel and are read by no rule in this file, which is what made the "
         f"old `CONTENT` exclusion necessary. Definitions belong in "
-        f"assets_examples/."
+        f"assets/."
     )
 
 
@@ -3152,7 +3148,7 @@ def test_this_repository_still_has_a_worked_set(shipped):
     missing = sorted(kind for kind in DEFINITION_KINDS if not (shipped / kind).is_dir())
 
     assert not missing, (
-        f"assets_examples/ holds no {', '.join(missing)} — this is the set the format "
+        f"assets/ holds no {', '.join(missing)} — this is the set the format "
         "tests read and the one a reader learns from"
     )
 

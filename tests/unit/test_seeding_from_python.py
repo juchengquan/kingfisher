@@ -16,21 +16,21 @@ from tests.integration.seed_example import main, seed_definitions
 
 
 @pytest.fixture
-def assets_examples():
+def assets():
     """The tree this repository actually ships, not a planted one.
 
-    A fixture would pass while `assets_examples/` held a definition no deployment could
+    A fixture would pass while `assets/` held a definition no deployment could
     seed.
     """
-    return repository_root() / "assets_examples"
+    return repository_root() / "assets"
 
 
-def test_the_readme_flow_seeds_a_definitions_folder(tmp_path, assets_examples):
+def test_the_readme_flow_seeds_a_definitions_folder(tmp_path, assets):
     """The four calls from the README, in the order it gives them."""
     paths = WorkspacePaths(tmp_path / "definitions")
 
     ensure_definitions(paths.definitions)
-    source = definitions_source(paths, assets_examples)
+    source = definitions_source(paths, assets)
     done = seed(paths, source)
 
     assert done.written, "the documented flow seeded nothing"
@@ -55,7 +55,7 @@ def test_laying_out_alone_writes_the_example_catalogue(tmp_path):
     )
 
 
-def test_the_flow_writes_nothing_into_a_workspace(tmp_path, assets_examples):
+def test_the_flow_writes_nothing_into_a_workspace(tmp_path, assets):
     """Seeding laid a workspace out and put `models.yaml.example` in it, where nothing
     reads it: the catalogue and every definition are read from the definitions folder.
     """
@@ -63,21 +63,21 @@ def test_the_flow_writes_nothing_into_a_workspace(tmp_path, assets_examples):
     paths = WorkspacePaths(tmp_path / "definitions", workspace=workspace)
 
     ensure_definitions(paths.definitions)
-    seed(paths, definitions_source(paths, assets_examples))
+    seed(paths, definitions_source(paths, assets))
 
     assert (paths.definitions / "models.yaml.example").is_file(), "the control"
     assert not workspace.exists(), "seeding made or wrote into the workspace"
 
 
-def test_the_flow_reports_what_it_left_behind(tmp_path, assets_examples):
+def test_the_flow_reports_what_it_left_behind(tmp_path, assets):
     """The field the README tells you to read, and why it tells you."""
     paths = WorkspacePaths(tmp_path / "definitions")
     ensure_definitions(paths.definitions)
 
-    done = seed(paths, definitions_source(paths, assets_examples))
+    done = seed(paths, definitions_source(paths, assets))
 
     assert done.skipped, (
-        "the shipped assets_examples no longer demonstrate a definition seeding leaves "
+        "the shipped assets no longer demonstrate a definition seeding leaves "
         "behind, so the README's `skipped` paragraph has nothing behind it"
     )
     for left in done.skipped:
@@ -88,15 +88,15 @@ def test_the_flow_reports_what_it_left_behind(tmp_path, assets_examples):
         )
 
 
-def test_everything_takes_what_the_default_leaves(tmp_path, assets_examples):
+def test_everything_takes_what_the_default_leaves(tmp_path, assets):
     """The other half of the README paragraph, for a deployment that registered the
     names.
     """
     paths = WorkspacePaths(tmp_path / "definitions")
     ensure_definitions(paths.definitions)
 
-    default = seed(paths, definitions_source(paths, assets_examples))
-    complete = seed(paths, definitions_source(paths, assets_examples), everything=True)
+    default = seed(paths, definitions_source(paths, assets))
+    complete = seed(paths, definitions_source(paths, assets), everything=True)
 
     assert not complete.skipped
     assert set(default.written) < set(complete.written), (
@@ -109,7 +109,7 @@ def test_everything_takes_what_the_default_leaves(tmp_path, assets_examples):
         )
 
 
-def test_a_workspace_paths_is_destination_enough(tmp_path, assets_examples):
+def test_a_workspace_paths_is_destination_enough(tmp_path, assets):
     """`seed` takes a destination, not a whole `Config`.
 
     Driven rather than asserted about the annotation, because what matters is that it
@@ -120,7 +120,7 @@ def test_a_workspace_paths_is_destination_enough(tmp_path, assets_examples):
     assert paths.workspace is None, "no workspace, deliberately"
     assert not (paths.definitions / "models.yaml").exists(), "no catalogue yet, deliberately"
 
-    assert seed(paths, definitions_source(paths, assets_examples)).written
+    assert seed(paths, definitions_source(paths, assets)).written
 
 
 def test_no_source_configured_says_how_to_name_one(tmp_path, monkeypatch):
@@ -135,9 +135,9 @@ def test_no_source_configured_says_how_to_name_one(tmp_path, monkeypatch):
 # -- the script on the live shelf ----------------------------------------
 
 
-def test_the_example_script_seeds_a_definitions_folder(tmp_path, assets_examples):
+def test_the_example_script_seeds_a_definitions_folder(tmp_path, assets):
     """`tests/integration/seed_example.py` is driven, not just readable."""
-    done = seed_definitions(tmp_path / "definitions", assets_examples)
+    done = seed_definitions(tmp_path / "definitions", assets)
 
     assert done.written
     assert (tmp_path / "definitions" / "agents" / "general.yaml").is_file()
@@ -146,19 +146,19 @@ def test_the_example_script_seeds_a_definitions_folder(tmp_path, assets_examples
     )
 
 
-def test_the_example_script_takes_everything_too(tmp_path, assets_examples):
+def test_the_example_script_takes_everything_too(tmp_path, assets):
     """Both branches, because the flag is half of what the example teaches."""
-    default = seed_definitions(tmp_path / "a", assets_examples)
-    complete = seed_definitions(tmp_path / "b", assets_examples, everything=True)
+    default = seed_definitions(tmp_path / "a", assets)
+    complete = seed_definitions(tmp_path / "b", assets, everything=True)
 
     assert default.skipped
     assert not complete.skipped
     assert len(complete.written) > len(default.written)
 
 
-def test_the_example_script_reports_what_it_left(tmp_path, assets_examples, capsys):
+def test_the_example_script_reports_what_it_left(tmp_path, assets, capsys):
     """Its output is its point, so the output is what this asserts."""
-    code = main(["--definitions", str(tmp_path / "definitions"), "--from", str(assets_examples)])
+    code = main(["--definitions", str(tmp_path / "definitions"), "--from", str(assets)])
     printed = capsys.readouterr().out
 
     assert code == 0

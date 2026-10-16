@@ -1,11 +1,11 @@
 """Putting the smoke's fixtures into a workspace.
 
-The sample skill is copied from `assets_examples/skills/tabular-qa`, not held here
+The sample skill is copied from `assets/skills/tabular-qa`, not held here
 as a string. It used to be both -- a constant in `smoke.py` *and* files under
 the presets directory -- which meant two homes for sample content and no way to
 tell which one a run had actually used.
 
-From `assets_examples/` in this repository, found by marker rather than counted.
+From `assets/` in this repository, found by marker rather than counted.
 It came through `importlib.resources` while the definitions rode inside the
 wheel; nothing ships them now, so that route resolves to a package that is not
 there.
@@ -26,19 +26,19 @@ from kingfisher.kinds.skills.spec import FILENAME
 
 SKILL_NAME = "tabular-qa"
 
-#: This repository's worked definitions. `evals/` is not in the wheel either, so
+#: The definitions this repository ships. `evals/` is not in the wheel either, so
 #: both sides of this path live or die together in a checkout.
-EXAMPLES = next(
+ASSETS = next(
     parent
     for parent in Path(__file__).resolve().parents
     if (parent / "pyproject.toml").is_file() and (parent / "src" / "kingfisher").is_dir()
-) / "assets_examples"
+) / "assets"
 
 
 def seed_sample_skill(definitions: Path) -> bool:
     """Copy the sample skill into the definitions folder. True if anything changed."""
     target = Path(definitions) / "skills" / SKILL_NAME
-    source = EXAMPLES / "skills" / SKILL_NAME
+    source = ASSETS / "skills" / SKILL_NAME
     if not source.is_dir():  # pragma: no cover -- this repository ships it
         msg = f"missing sample skill: {source}"
         raise FileNotFoundError(msg)

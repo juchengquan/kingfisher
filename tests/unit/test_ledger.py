@@ -23,7 +23,7 @@ from deepagents.backends.protocol import FileUploadResponse
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.types import Command
 
-from assets_examples.middlewares.tool_note import ToolNote
+from assets.middlewares.tool_note import ToolNote
 from kingfisher import Kingfisher, Request, default_backends
 from kingfisher.application.turn import ledger_delta, ledger_index, turn_message
 from kingfisher.domain.access import parse

@@ -450,7 +450,7 @@ def test_a_subagent_cannot_reach_a_looser_middleware_than_its_agent_granted():
     liked and leave the bound its parent runs under.
 
     So the narrowing is the feature, and this is what says so. The cost shows up
-    in `assets_examples/agents/researcher.yaml`, which grants a cap it does not
+    in `assets/agents/researcher.yaml`, which grants a cap it does not
     want because `sweeper` needs it, and says as much in a comment.
     """
     from kingfisher.kinds.agents.spec import AgentSpec

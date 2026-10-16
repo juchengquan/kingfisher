@@ -226,18 +226,11 @@ __marimo__/
 # Claude Code worktrees are local scratch, not project content.
 .claude/worktrees/
 
-# Definitions fetched from elsewhere, which arrive with their own licences.
-# Ignored rather than absent so the directory can explain itself: `assets/` is
-# where a deployment puts content it did not write, and this rule is what stops
-# a stray `git add -A` committing somebody else's terms into an MIT repository.
-assets/*
-!assets/README.md
-
 # This checkout doubles as a deployment when the CLI is run from it, and
 # `compose.yaml` mounts `./definitions` as one. A `models.yaml` at the root or in
 # there is one deployment's endpoints, not the project's --
 # `src/kingfisher/templates/models.yaml.example` is the tracked template, and
-# `assets_examples/` the tracked definitions, and those are what a reader should be
+# `assets/` the tracked definitions, and those are what a reader should be
 # reading.
 /models.yaml
 /definitions/

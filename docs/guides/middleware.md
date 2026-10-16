@@ -10,12 +10,12 @@ middleware wraps the agent that would be doing the writing. So a `middlewares/`
 directory is one the agent's shell is denied, `seed` leaves behind any definition
 naming middleware this deployment cannot build, and nothing a request carries
 widens the axis — *Capabilities* in [`decisions.md`](../decisions.md) has the
-rule, and `assets_examples/middlewares/call_cap.py` has the long version.
+rule, and `assets/middlewares/call_cap.py` has the long version.
 
 This page is the deployment's half. What a definition may then write — the field,
 the long form with `settings`, what is granted rather than inherited — is
-[`formats.md`](formats.md). The three worked examples are
-`assets_examples/middlewares/call_cap.py`, `tool_note.py` and `compaction.py`, in
+[`formats.md`](formats.md). The three shipped middlewares are
+`assets/middlewares/call_cap.py`, `tool_note.py` and `compaction.py`, in
 that order; the suite loads and runs all three, so they cannot rot quietly, and
 nothing here repeats them.
 
@@ -31,7 +31,7 @@ here wraps either.
 ```python
 from kingfisher import Kingfisher
 
-from assets_examples.middlewares.call_cap import CallCap, CallCapGenerous
+from assets.middlewares.call_cap import CallCap, CallCapGenerous
 
 kingfisher = Kingfisher(
     cfg,

@@ -324,26 +324,6 @@ def test_the_empty_source_detail_names_every_kind_it_looked_for(cfg, tmp_path):
         assert kind in check.detail, kind
 
 
-def test_the_unset_remedy_says_where_your_own_definitions_go(cfg, tmp_path, monkeypatch):
-    """`doctor` is where a deployment learns it has nothing to seed from, and the remedy
-    said only where to point -- never where to put.
-    """
-    from dataclasses import replace
-
-    from kingfisher.infrastructure.workspace import DESTINATION
-
-    unset = replace(cfg, assets=None)
-
-    monkeypatch.chdir(tmp_path)
-    bare = {c.name: c for c in examine(unset)}["definitions to seed"]
-
-    (tmp_path / DESTINATION).mkdir()
-    beside_one = {c.name: c for c in examine(unset)}["definitions to seed"]
-
-    assert str(DESTINATION) not in bare.remedy, "named a directory that is not there"
-    assert str(DESTINATION) in beside_one.remedy, "did not name the one that is"
-
-
 def test_the_exit_code_separates_will_not_run_from_worth_knowing(cfg, monkeypatch, shipped):
     """One place decides it, and this is what it decides."""
     from dataclasses import replace

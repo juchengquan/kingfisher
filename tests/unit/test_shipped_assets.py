@@ -994,7 +994,7 @@ def test_the_middleware_example_is_a_definition_kind_the_workspace_can_load(ship
 
 
 def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path):
-    """The curriculum has to keep running after a `kingfisher seed`.
+    """The shipped set has to keep running after a `kingfisher seed`.
 
     Driven against the real tree rather than asserted over it, because what could
     regress is the copying rather than the wording.
@@ -1071,7 +1071,7 @@ def test_seed_copies_the_middleware_examples_into_a_definitions_folder(shipped, 
     Driven against the real tree rather than asserted over it, because what could
     regress is the copying rather than the wording -- and the wording is what was
     wrong. `call_cap.py` said "Nothing copies this file anywhere" and
-    `assets_examples/README.md` had a section headed "One folder here is not a
+    `assets/README.md` had a section headed "One folder here is not a
     definition", both left behind by the change that made it one. Membership of
     `DEFINITION_KINDS` was pinned; the copying that membership buys was not, so
     nothing went red.
@@ -1395,7 +1395,7 @@ def test_the_generous_variant_is_a_subclass_rather_than_a_setting(shipped):
     assert module.CallCapGenerous.defaults["limit"] == 100
 
 
-# -- the worked set for source-id access ----------------------------------------
+# -- the shipped set for source-id access ---------------------------------------
 
 
 def _vocabulary(shipped):
@@ -1614,7 +1614,7 @@ def test_the_operator_gates_a_tool_it_actually_holds(shipped):
 
 
 def test_the_operator_stops_before_running_a_command(cfg, session_dir, shipped):
-    """The curriculum, run rather than read -- the rule this file is built on.
+    """The shipped set, run rather than read -- the rule this file is built on.
 
     Parsing the definition shows the line is *written*; only driving it shows the
     line is *wired*. Both were true of the middleware pairing below, and it was
@@ -1655,7 +1655,7 @@ def test_the_operator_stops_before_running_a_command(cfg, session_dir, shipped):
 
 
 def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir, shipped):
-    """The curriculum, run rather than read.
+    """The shipped set, run rather than read.
 
     `researcher` and `sweeper` are the shipped pair that show two ceilings over one
     behaviour.
