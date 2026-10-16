@@ -17,6 +17,8 @@ from kingfisher.core.access.capabilities import (
     refuse_unoffered,
 )
 from kingfisher.core.access.source_ids import handed_work_by, within_reach
+from kingfisher.core.agent.backend import bundled_skill_mounts
+from kingfisher.core.agent.kinds.subagents import indistinct
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skills import registry as skill_registry
 from kingfisher.core.definitions.skills.registry import SkillRegistry
@@ -26,8 +28,6 @@ from kingfisher.core.definitions.subagents.rules import (
     resolved_model,
 )
 from kingfisher.core.definitions.subagents.spec import RunOn, SubagentSpec
-from kingfisher.infrastructure.harness.backend import bundled_skill_mounts
-from kingfisher.infrastructure.harness.kinds.subagents import indistinct
 from kingfisher.layout import SKILLS_ROUTE
 
 if TYPE_CHECKING:

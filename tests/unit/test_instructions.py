@@ -7,8 +7,8 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, LocalSessions, Request, backend_at
 from kingfisher.config import ConfigError
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.prompting import INSTRUCTIONS_FILE, InstructionsFile
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.prompting import INSTRUCTIONS_FILE, InstructionsFile
 from tests.conftest import an_agent, subagent_of, subagents_dir
 from tests.unit.scripted import Scripted
 

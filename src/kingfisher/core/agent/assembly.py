@@ -4,7 +4,7 @@ Two jobs it used to do live elsewhere now, because at 657 lines it was doing fou
 `prompting` assembles the system prompt -- moved out because it needs nothing foreign,
 and sharing a file with `create_deep_agent` cost every consumer of `system_prompt` 764ms
 and three provider SDKs. Resolving what a subagent runs with is
-`infrastructure.harness.kinds.subagents`. Neither calls anything here.
+`core.agent.kinds.subagents`. Neither calls anything here.
 """
 
 from __future__ import annotations
@@ -27,12 +27,7 @@ from kingfisher.core.access.capabilities import (
     refuse_ungranted_models,
 )
 from kingfisher.core.access.source_ids import offers
-from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
-from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.definitions.subagents.spec import RunOn
-from kingfisher.core.definitions.tools.spec import Found, own_audiences
-from kingfisher.domain.session import sessions_root
-from kingfisher.infrastructure.harness.activation import (
+from kingfisher.core.agent.activation import (
     _activated_subagents,
     _private_skills,
     _skill_denials,
@@ -42,43 +37,48 @@ from kingfisher.infrastructure.harness.activation import (
     offered_to,
     refuse_misnamed_by,
 )
-from kingfisher.infrastructure.harness.backend import (
+from kingfisher.core.agent.backend import (
     memory_sources,
     shell_prompt_of,
     skills_sources,
 )
-from kingfisher.infrastructure.harness.interpreter import _interpreter
-from kingfisher.infrastructure.harness.kinds.declared_middleware import (
+from kingfisher.core.agent.interpreter import _interpreter
+from kingfisher.core.agent.kinds.declared_middleware import (
     ByName,
     MiddlewareFactory,
     declared_middleware,
     offered_middleware,
 )
-from kingfisher.infrastructure.harness.kinds.subagents import (
+from kingfisher.core.agent.kinds.subagents import (
     as_subagent,
     model_object,
     subagent_helpers,
     subagent_skills,
 )
-from kingfisher.infrastructure.harness.kinds.tools import (
+from kingfisher.core.agent.kinds.tools import (
     _private_tools,
     _resolve_tools,
     registered_tools,
 )
-from kingfisher.infrastructure.harness.middlewares.clearing import ResultClearing, high_mark
-from kingfisher.infrastructure.harness.middlewares.narrowing import (
+from kingfisher.core.agent.middlewares.clearing import ResultClearing, high_mark
+from kingfisher.core.agent.middlewares.narrowing import (
     DeclaredSubagentsOnly,
     NarrowedSkills,
     ToolAllowlist,
 )
-from kingfisher.infrastructure.harness.middlewares.recorder import Audiences, Recorder
-from kingfisher.infrastructure.harness.models import build_model, model_named
-from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
-from kingfisher.infrastructure.harness.session_paths import SessionPaths
-from kingfisher.infrastructure.harness.tool_context import ToolContext
-from kingfisher.infrastructure.harness.tool_guards import guarded_tools, tool_guards
-from kingfisher.infrastructure.harness.usable_backend import refuse_unusable_backend
-from kingfisher.infrastructure.prompting import memory_guidelines, system_prompt
+from kingfisher.core.agent.middlewares.recorder import Audiences, Recorder
+from kingfisher.core.agent.models import build_model, model_named
+from kingfisher.core.agent.permitted_backend import PermittedBackend
+from kingfisher.core.agent.prompting import memory_guidelines, system_prompt
+from kingfisher.core.agent.session_paths import SessionPaths
+from kingfisher.core.agent.tool_context import ToolContext
+from kingfisher.core.agent.tool_guards import guarded_tools, tool_guards
+from kingfisher.core.agent.usable_backend import refuse_unusable_backend
+from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
+from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.subagents.spec import RunOn
+from kingfisher.core.definitions.tools.spec import Found, own_audiences
+from kingfisher.domain.session import sessions_root
 from kingfisher.layout import Layout
 
 if TYPE_CHECKING:
@@ -331,7 +331,7 @@ def builtin_tool_names(
 ) -> tuple[str, ...] | None:
     """The built-in set, which is only knowable from an assembled graph.
 
-    Here rather than in `harness/kinds/tools.py`, where the rest of the tool surface lives:
+    Here rather than in `kinds/tools.py`, where the rest of the tool surface lives:
     this has to call `build_agent`, and that module is imported *by* this one, so the
     edge would close a cycle -- which `test_no_module_in_the_package_can_reach_itself`
     now refuses outright.

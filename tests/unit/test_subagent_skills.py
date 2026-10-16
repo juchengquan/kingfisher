@@ -9,8 +9,8 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import backend_at
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from tests.conftest import FakeToolCallingModel, a_subagent, middleware_of
 
 

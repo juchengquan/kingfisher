@@ -9,15 +9,15 @@ import yaml
 from langchain.agents.middleware import AgentMiddleware
 
 from kingfisher.core.access.capabilities import ALL, CapabilityError
-from kingfisher.core.definitions.agents import spec as agent_format
-from kingfisher.core.definitions.agents.spec import AgentError
-from kingfisher.core.definitions.subagents.spec import SubagentError
-from kingfisher.infrastructure.harness.agent import (
+from kingfisher.core.agent.assembly import (
     _deployment_middleware,
     _model_named,
     _provisions,
 )
-from kingfisher.infrastructure.harness.kinds.declared_middleware import ByName, declared_middleware
+from kingfisher.core.agent.kinds.declared_middleware import ByName, declared_middleware
+from kingfisher.core.definitions.agents import spec as agent_format
+from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.definitions.subagents.spec import SubagentError
 from tests.conftest import a_subagent
 
 

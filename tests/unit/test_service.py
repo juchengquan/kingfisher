@@ -405,7 +405,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     # offered, which resolves a skill in a source folder -- `incident::postmortem`.
     # A directory listing did not show that one, and the two agreed until a sourced
     # skill shipped.
-    from kingfisher.infrastructure.harness.activation import available_skills
+    from kingfisher.core.agent.activation import available_skills
 
     seeded_skills = set(available_skills(wired))
     seeded_subagents = set(LocalSubagentRepository(subagents_dir(cfg)).specs)
@@ -453,8 +453,8 @@ def test_the_skills_axis_is_still_reported_when_the_switch_is_on(cfg, shipped):
     """The control: suppressing the row where nothing is offered must not suppress it
     where something is.
     """
+    from kingfisher.core.agent.activation import available_skills
     from kingfisher.core.definitions import seeding
-    from kingfisher.infrastructure.harness.activation import available_skills
 
     seeding.seed(cfg, shipped)
     an_agent(cfg)

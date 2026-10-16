@@ -17,8 +17,8 @@ from kingfisher.config import (
     Models,
     WireFormat,
 )
+from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.definitions import fields
-from kingfisher.infrastructure.harness.models import WIRE_FORMATS
 from kingfisher.infrastructure.wiring import store_named
 from kingfisher.infrastructure.workspace import EXAMPLE
 

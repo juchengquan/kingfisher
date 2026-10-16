@@ -9,13 +9,13 @@ import pytest
 
 from kingfisher import backend_at
 from kingfisher.core.access.capabilities import Capabilities
-from kingfisher.core.definitions import seeding
-from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository, reachable
-from kingfisher.infrastructure.harness.activation import available_skills
-from kingfisher.infrastructure.harness.agent import (
+from kingfisher.core.agent.activation import available_skills
+from kingfisher.core.agent.assembly import (
     CapabilityError,
     build_agent,
 )
+from kingfisher.core.definitions import seeding
+from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository, reachable
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import a_subagent, repository_root, subagents_dir, tools_dir
 

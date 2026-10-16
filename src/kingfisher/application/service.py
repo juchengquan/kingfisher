@@ -63,6 +63,31 @@ from kingfisher.core.access.source_ids import (
     reaches,
     with_datazone,
 )
+from kingfisher.core.agent.activation import (
+    defined_subagents,
+    for_the_caller,
+    indistinct_subagents,
+    settled_request,
+)
+from kingfisher.core.agent.assembly import (
+    Assembled,
+    build_agent,
+    builtin_tool_names,
+)
+from kingfisher.core.agent.backend import (
+    Sessions,
+)
+from kingfisher.core.agent.interpreter import release_interpreter
+from kingfisher.core.agent.kinds.declared_middleware import (
+    MiddlewareFactory,
+    refuse_unbuildable_middleware,
+)
+from kingfisher.core.agent.prompting import (
+    Instructions,
+    InstructionsFile,
+    refuse_a_workspace_prompt,
+)
+from kingfisher.core.agent.usable_backend import refuse_unusable_backend
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions, resolve_definitions
@@ -78,20 +103,6 @@ from kingfisher.domain.result import (
 )
 from kingfisher.domain.session import Session, SessionBusyError, sessions_root, unknown_session
 from kingfisher.infrastructure.harness import runtime
-from kingfisher.infrastructure.harness.activation import (
-    defined_subagents,
-    for_the_caller,
-    indistinct_subagents,
-    settled_request,
-)
-from kingfisher.infrastructure.harness.agent import (
-    Assembled,
-    build_agent,
-    builtin_tool_names,
-)
-from kingfisher.infrastructure.harness.backend import (
-    Sessions,
-)
 from kingfisher.infrastructure.harness.checkpointing import (
     SharedThreads,
     build_session_checkpointer,
@@ -100,19 +111,8 @@ from kingfisher.infrastructure.harness.checkpointing import (
     release_checkpointer,
     resumed_saver,
 )
-from kingfisher.infrastructure.harness.interpreter import release_interpreter
-from kingfisher.infrastructure.harness.kinds.declared_middleware import (
-    MiddlewareFactory,
-    refuse_unbuildable_middleware,
-)
 from kingfisher.infrastructure.harness.ledger import Ledger, keep_ledger
 from kingfisher.infrastructure.harness.runlog import LoggedRunEvents, RunLogger
-from kingfisher.infrastructure.harness.usable_backend import refuse_unusable_backend
-from kingfisher.infrastructure.prompting import (
-    Instructions,
-    InstructionsFile,
-    refuse_a_workspace_prompt,
-)
 from kingfisher.infrastructure.session_files import (
     collect_artifacts,
     place_inputs,

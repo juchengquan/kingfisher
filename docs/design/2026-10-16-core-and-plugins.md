@@ -216,7 +216,8 @@ One pull request each, off `main` once the one before it has merged.
     imports nothing from `plugins/`. *(Landed.)*
 11. Move `core/definitions`: the kinds, the catalogue and seeding. *(Landed.)*
 12. Move `core/access`, and the field reader into `core/definitions`. *(Landed.)*
-13. Move `core/agent`.
+13. Move `core/agent`, `agent.py` renamed `assembly.py`, and the harness-edge table
+    deleted with the boundary it drew. *(Landed.)*
 14. Move `core/session`.
 15. Move the flat core.
 16. Move `cli/`.

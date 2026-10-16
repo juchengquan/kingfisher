@@ -9,9 +9,9 @@ from langchain_core.messages import AIMessage
 from kingfisher import backend_at
 from kingfisher.application.turn import ledger_delta, ledger_index
 from kingfisher.core.access.capabilities import Capabilities
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.kinds.subagents import as_subagent
-from kingfisher.infrastructure.prompting import (
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.kinds.subagents import as_subagent
+from kingfisher.core.agent.prompting import (
     kingfishers_shell,
     render_system_prompt,
     system_prompt,
@@ -171,7 +171,7 @@ def test_assembly_leaves_no_blank_line_runs_or_markers():
     """The marker is removed cleanly; the prefix ships on every step."""
     import re
 
-    from kingfisher.infrastructure.prompting import CAPABILITY_MARKER
+    from kingfisher.core.agent.prompting import CAPABILITY_MARKER
 
     for skills in (False, True):
         for memory in (False, True):
@@ -324,7 +324,7 @@ def test_the_prompt_claims_about_inputs_only_what_holds_with_no_fence():
     supported settings: measured, with the sandbox off, `chmod u+w` and the same write
     replaced the caller's file and `rm -rf` took the folder, both exit 0.
 
-    `harness/agent.py` records that exact measurement in the present tense a few lines
+    `core/agent/assembly.py` records that exact measurement in the present tense a few lines
     from the code that drops the bits -- so the prompt was contradicted by its own
     repository. This is the fifth sighting of that sentence: #743 corrected it in the
     permissions helper, a test docstring and the contract kit, and left it in the text

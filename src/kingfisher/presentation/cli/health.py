@@ -695,7 +695,7 @@ def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:
         )
         return
 
-    from kingfisher.infrastructure.harness.activation import (  # noqa: PLC0415
+    from kingfisher.core.agent.activation import (  # noqa: PLC0415
         unrunnable_agents,
         unrunnable_subagents,
     )

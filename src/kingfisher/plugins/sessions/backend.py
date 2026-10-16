@@ -23,22 +23,22 @@ from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellB
 from deepagents.backends.protocol import ExecuteResponse
 
 from kingfisher.config import Config, ConfigError
-from kingfisher.core.definitions.catalogue import Definitions, refuse_unmountable
-from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
-from kingfisher.domain.ports import CommandRunner
-from kingfisher.domain.session import session_dir, sessions_root, still_held
-from kingfisher.infrastructure.harness.backend import (
+from kingfisher.core.agent.backend import (
     Sessions,
     skill_mounts,
 )
 
 # Re-exported: `ports.md` has named this path to deployments writing their own
 # backend, which may import it from here.
-from kingfisher.infrastructure.harness.host_paths import (
+from kingfisher.core.agent.host_paths import (
     HostPathError as HostPathError,  # noqa: PLC0414 -- the re-export above
 )
-from kingfisher.infrastructure.harness.host_paths import reject_host_path
-from kingfisher.infrastructure.prompting import ShellPrompt, kingfishers_shell
+from kingfisher.core.agent.host_paths import reject_host_path
+from kingfisher.core.agent.prompting import ShellPrompt, kingfishers_shell
+from kingfisher.core.definitions.catalogue import Definitions, refuse_unmountable
+from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
+from kingfisher.domain.ports import CommandRunner
+from kingfisher.domain.session import session_dir, sessions_root, still_held
 from kingfisher.layout import (
     CLAIM,
     HARNESS,

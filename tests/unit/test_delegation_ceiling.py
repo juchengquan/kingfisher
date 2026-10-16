@@ -16,12 +16,12 @@ from kingfisher.core.access.capabilities import (
     ceiling,
     narrowed,
 )
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.kinds.subagents import as_subagent, subagent_skills
+from kingfisher.core.agent.middlewares.narrowing import ToolAllowlist
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.skills.registry import Listed, SkillRegistry
 from kingfisher.core.definitions.subagents.spec import SubagentError
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.kinds.subagents import as_subagent, subagent_skills
-from kingfisher.infrastructure.harness.middlewares.narrowing import ToolAllowlist
 from tests.conftest import FakeToolCallingModel, a_subagent, subagents_dir
 
 HELPER = """name: helper
@@ -475,7 +475,7 @@ def test_undeclared_skills_mean_none_and_undeclared_tools_inherit():
 
 def _built_with(cfg, session_dir, capabilities) -> dict:
     """The arguments `create_deep_agent` was handed, letting the call through."""
-    import kingfisher.infrastructure.harness.agent as agent_module
+    import kingfisher.core.agent.assembly as agent_module
 
     seen: dict = {}
     real = agent_module.create_deep_agent
@@ -675,7 +675,7 @@ def test_the_wrong_list_message_agrees_in_number(cfg, session_dir):
 
 def test_a_missing_subagent_type_says_so_rather_than_naming_none():
     """A missing argument is a different mistake from a refused name."""
-    from kingfisher.infrastructure.harness.middlewares.narrowing import DeclaredSubagentsOnly
+    from kingfisher.core.agent.middlewares.narrowing import DeclaredSubagentsOnly
 
     class _Call:
         tool_call = {"name": "task", "args": {"subagentType": "reviewer"}, "id": "c1"}
@@ -690,7 +690,7 @@ def test_a_missing_subagent_type_says_so_rather_than_naming_none():
 
 def test_a_subagent_that_does_not_exist_still_names_it():
     """The other half, unchanged: a real name that is not on the list."""
-    from kingfisher.infrastructure.harness.middlewares.narrowing import DeclaredSubagentsOnly
+    from kingfisher.core.agent.middlewares.narrowing import DeclaredSubagentsOnly
 
     class _Call:
         tool_call = {"name": "task", "args": {"subagent_type": "nobody"}, "id": "c1"}

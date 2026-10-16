@@ -23,7 +23,7 @@ __version__ = "0.1.0"
 #: command ships in this distribution and is family: it reaches such a name directly,
 #: and still comes through the front door for every name that *is* here.
 #:
-#: Narrowed rather than deleted. `from kingfisher.infrastructure.harness.agent import
+#: Narrowed rather than deleted. `from kingfisher.core.agent.assembly import
 #: build_agent` still works and is what the package itself does. An outside caller on
 #: the old spelling changes one import line, which is a real cost measured against users
 #: this repository cannot see -- accepted at 0.1.0, and noted here rather than
@@ -39,7 +39,7 @@ _EXPORTS = {
     "SessionBusyError": "kingfisher.domain.session",
     "SubagentError": "kingfisher.core.definitions.subagents.spec",
     "UnsafeReferenceError": "kingfisher.domain.references",
-    "HostPathError": "kingfisher.infrastructure.harness.host_paths",
+    "HostPathError": "kingfisher.core.agent.host_paths",
     # What `LocalSessions` builds for one session, for a directory of the caller's
     # choosing. Public because `ports.md` tells a deployment writing its own sessions
     # to start from it rather than from nothing, and that has to be sayable from here.
@@ -52,7 +52,7 @@ _EXPORTS = {
     # runner is handed the command and nothing else, so the agent is told neutrally
     # about any shell but kingfisher's own unless this says otherwise. Constructed by
     # the deployment, so it has to be sayable from here.
-    "ShellPrompt": "kingfisher.infrastructure.prompting",
+    "ShellPrompt": "kingfisher.core.agent.prompting",
     # The seventh name a consumer has forced public, and the plainest: a
     # `CommandRunner` returns one of these, so a deployment writing a runner
     # cannot write one without it. `docs/guides/ports.md` documents the port and
@@ -67,10 +67,10 @@ _EXPORTS = {
     # wheel by construction -- it lives in a deployment's workspace -- and the bare
     # `ToolRuntime` it would otherwise write has pydantic warn on every call that
     # the context it was handed is not the `None` it declared.
-    "ToolContext": "kingfisher.infrastructure.harness.tool_context",
+    "ToolContext": "kingfisher.core.agent.tool_context",
     # How a tool file says who may use its tool. Called inside a deployment's own
     # `tools/`, for the reason `ToolContext` is imported there.
-    "tool": "kingfisher.infrastructure.harness.audienced_tool",
+    "tool": "kingfisher.core.agent.audienced_tool",
     "UnknownSessionError": "kingfisher.domain.session",
     "Config": "kingfisher.config",
     "WorkspacePaths": "kingfisher.config",
@@ -192,6 +192,10 @@ if TYPE_CHECKING:
     from kingfisher.core.access.source_ids import UNSCOPED as UNSCOPED
     from kingfisher.core.access.source_ids import AccessError as AccessError
     from kingfisher.core.access.source_ids import Held as Held
+    from kingfisher.core.agent.audienced_tool import tool as tool
+    from kingfisher.core.agent.host_paths import HostPathError as HostPathError
+    from kingfisher.core.agent.prompting import ShellPrompt as ShellPrompt
+    from kingfisher.core.agent.tool_context import ToolContext as ToolContext
     from kingfisher.core.definitions.subagents.spec import RunOn as RunOn
     from kingfisher.core.definitions.subagents.spec import SubagentError as SubagentError
     from kingfisher.domain.ports import CommandResult as CommandResult
@@ -209,10 +213,6 @@ if TYPE_CHECKING:
     from kingfisher.domain.session import SessionBusyError as SessionBusyError
     from kingfisher.domain.session import SessionInfo as SessionInfo
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
-    from kingfisher.infrastructure.harness.audienced_tool import tool as tool
-    from kingfisher.infrastructure.harness.host_paths import HostPathError as HostPathError
-    from kingfisher.infrastructure.harness.tool_context import ToolContext as ToolContext
-    from kingfisher.infrastructure.prompting import ShellPrompt as ShellPrompt
     from kingfisher.infrastructure.workspace import Seeded as Seeded
     from kingfisher.infrastructure.workspace import (
         definitions_source as definitions_source,

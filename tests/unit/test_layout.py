@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.infrastructure.harness.agent import memory_is_denied, read_only_permissions
-from kingfisher.infrastructure.harness.backend import memory_sources
+from kingfisher.core.agent.assembly import memory_is_denied, read_only_permissions
+from kingfisher.core.agent.backend import memory_sources
 from kingfisher.layout import (
     MEMORY,
     OUTPUTS,
@@ -157,8 +157,8 @@ def test_the_shell_path_rule_and_matcher_follow_a_renamed_layout():
     """`ShellPaths` states the shell rule in `execute`'s description and spots a missed
     file-tool path in its output. Both name session folders, so both move with them.
     """
-    from kingfisher.infrastructure.harness.middlewares.shell_paths import _virtual, missed
-    from kingfisher.infrastructure.prompting import execute_line, kingfishers_shell
+    from kingfisher.core.agent.middlewares.shell_paths import _virtual, missed
+    from kingfisher.core.agent.prompting import execute_line, kingfishers_shell
 
     assert "`/in/data.csv` is `in/data.csv`" in (execute_line(kingfishers_shell(), MOVED) or "")
     virtual = _virtual(MOVED.session_dirs)
@@ -168,7 +168,7 @@ def test_the_shell_path_rule_and_matcher_follow_a_renamed_layout():
 
 
 def test_a_refused_tool_path_points_at_the_renamed_routes():
-    from kingfisher.infrastructure.harness.session_paths import SessionPaths, refusal_text
+    from kingfisher.core.agent.session_paths import SessionPaths, refusal_text
 
     paths = SessionPaths(None, Path("/w/sessions"), MOVED)
     text = refusal_text(ValueError("nope"), paths)
@@ -178,7 +178,7 @@ def test_a_refused_tool_path_points_at_the_renamed_routes():
 
 
 def test_a_refused_host_path_suggests_the_renamed_scratch(tmp_path):
-    from kingfisher.infrastructure.harness.host_paths import HostPathError, reject_host_path
+    from kingfisher.core.agent.host_paths import HostPathError, reject_host_path
 
     workspace = tmp_path
     session = tmp_path / "sessions" / "s"

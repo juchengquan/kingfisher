@@ -1,9 +1,9 @@
 """Assembling the system prompt from the markdown that ships with the package.
 
-Split out of `agent.py`, and not for tidiness. Nothing here needs more than `Config`
+Split out of `assembly.py`, and not for tidiness. Nothing here needs more than `Config`
 and the standard library, and reaching any of it -- `ShellPrompt`, which `kingfisher`
-exports, or `system_prompt`, which `agent.py` and the prompt's tests reach -- used to
-cost **764 ms and 3,107 modules**, because touching any name in `agent.py` runs that
+exports, or `system_prompt`, which `assembly.py` and the prompt's tests reach -- used to
+cost **764 ms and 3,107 modules**, because touching any name in `assembly.py` runs that
 module's `from deepagents import ...`, and Python cannot import one name from a module
 without executing all of it. Measured after the split: about 10 ms and 113 modules.
 
@@ -79,7 +79,8 @@ MEMORY_GUIDELINES = "memory_guidelines.md"
 
 
 def _prompt_text(name: str) -> str:
-    return resources.files("kingfisher.prompts").joinpath(name).read_text(encoding="utf-8")
+    prompts = resources.files("kingfisher.core.agent.prompts")
+    return prompts.joinpath(name).read_text(encoding="utf-8")
 
 
 def _names(layout: Layout) -> dict[str, str]:

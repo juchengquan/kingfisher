@@ -8,7 +8,7 @@ the core never does.
 from __future__ import annotations
 
 from kingfisher import Config, LocalSessions, Plugins
-from kingfisher.infrastructure.harness.backend import Sessions
+from kingfisher.core.agent.backend import Sessions
 from kingfisher.infrastructure.wiring import store_named
 
 

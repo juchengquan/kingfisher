@@ -17,14 +17,14 @@ from typing_extensions import TypedDict
 
 from kingfisher import LocalSessions
 from kingfisher.core.access.capabilities import Capabilities
-from kingfisher.infrastructure.harness.activation import available_skills
-from kingfisher.infrastructure.harness.agent import (
+from kingfisher.core.agent.activation import available_skills
+from kingfisher.core.agent.assembly import (
     CapabilityError,
     build_agent,
 )
-from kingfisher.infrastructure.harness.backend import skills_sources
-from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
-from kingfisher.infrastructure.prompting import memory_guidelines
+from kingfisher.core.agent.backend import skills_sources
+from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.core.agent.prompting import memory_guidelines
 from kingfisher.layout import MEMORY
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import (
@@ -313,7 +313,7 @@ def test_the_registered_tool_names_are_discoverable(cfg, session_dir):
 
 def test_unrecognised_graph_shapes_disable_the_check_rather_than_crashing(cfg):
     """Still no crash, and now it says which of the two answers it is giving."""
-    from kingfisher.infrastructure.harness.kinds.tools import registered_tools
+    from kingfisher.core.agent.kinds.tools import registered_tools
 
     assert registered_tools(object()) is None
 
@@ -568,21 +568,21 @@ def test_an_agent_with_no_tools_says_none_rather_than_unknown(fake_model):
     """
     from langchain.agents import create_agent
 
-    from kingfisher.infrastructure.harness.kinds.tools import registered_tools
+    from kingfisher.core.agent.kinds.tools import registered_tools
 
     assert registered_tools(create_agent(fake_model, tools=[])) == ()
 
 
 def test_a_graph_we_did_not_build_says_it_could_not_tell(fake_model):
-    from kingfisher.infrastructure.harness.kinds.tools import registered_tools
+    from kingfisher.core.agent.kinds.tools import registered_tools
 
     assert registered_tools(_hand_written_graph()) is None
 
 
 def test_a_real_build_is_readable(cfg, session_dir):
     """The pin."""
-    from kingfisher.infrastructure.harness.agent import build_agent
-    from kingfisher.infrastructure.harness.kinds.tools import registered_tools
+    from kingfisher.core.agent.assembly import build_agent
+    from kingfisher.core.agent.kinds.tools import registered_tools
 
     built = build_agent(cfg, backend=backend_at(cfg, session_dir), model=None)
     names = registered_tools(built.graph)
@@ -594,10 +594,10 @@ def test_a_real_build_is_readable(cfg, session_dir):
 def test_a_listing_says_unknown_rather_than_none_when_it_cannot_read(monkeypatch, cfg):
     """The reason any of this changed."""
     from kingfisher.application import inventory as inventory_module
-    from kingfisher.infrastructure.harness import agent as agent_module
+    from kingfisher.core.agent import assembly as agent_module
 
     # Patched where it is *called* rather than where it is defined: the probe is
-    # `agent.builtin_tool_names` now, and it took the name into its own namespace.
+    # `assembly.builtin_tool_names` now, and it took the name into its own namespace.
     monkeypatch.setattr(agent_module, "registered_tools", lambda _graph: None)
 
     found = inventory_module.inventory(cfg)

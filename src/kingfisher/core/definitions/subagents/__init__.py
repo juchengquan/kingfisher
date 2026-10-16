@@ -10,9 +10,9 @@ neither is free, and the domain may not import either.
 #: The name deepagents gives the tool that dispatches a subagent.
 #:
 #: The format reads it, to refuse a definition that names helpers and withholds the
-#: tool that calls them, and so do `infrastructure.harness.kinds.tools` and
-#: `infrastructure.harness.interpreter`. Not under `harness/`, because the obvious home
-#: there is an expensive one: `infrastructure.harness.kinds.subagents` is 1,588ms and
+#: tool that calls them, and so do `core.agent.kinds.tools` and
+#: `core.agent.interpreter`. Not under `harness/`, because the obvious home
+#: there is an expensive one: `core.agent.kinds.subagents` is 1,588ms and
 #: 3,164 modules, and four characters there would cost `interpreter` all of it -- a file
 #: that is 12ms and 82 modules with every other import stdlib.
 TASK_TOOL = "task"

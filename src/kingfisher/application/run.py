@@ -11,9 +11,9 @@ from typing import Any
 
 from kingfisher.application.service import Kingfisher
 from kingfisher.config import Config
+from kingfisher.core.agent.backend import Sessions
 from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
-from kingfisher.infrastructure.harness.backend import Sessions
 
 __all__ = [
     "Kingfisher",

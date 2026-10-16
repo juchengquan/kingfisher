@@ -60,7 +60,7 @@ The core-and-plugins work renamed what a deployment names and moved two things o
   a runner is refused.
 - **`render_system_prompt` and `system_prompt` take `shell=`**, and without it describe a
   shell that said nothing. `shell_paths.RULE` is gone; `execute_line(kingfishers_shell())`
-  in `kingfisher.infrastructure.prompting` is the same line.
+  in `kingfisher.core.agent.prompting` is the same line.
 
 ## The session is named in the request, after #739
 
@@ -478,7 +478,7 @@ until it is changed.
 | `kingfisher run --data PATH`, repeatable | `kingfisher run --input PATH`, repeatable. `--data` is refused as an unrecognised argument. |
 | `Request(..., data=(path, ...))`, and reading `request.data` | `Request(..., inputs=(path, ...))` and `request.inputs`. `data=` raises `TypeError`. |
 | A `RunEvent` of kind `data_placed`, which `kingfisher run` prints as `[data_placed] ...` | `inputs_placed`, with the same text. A consumer switching on `data_placed` never sees one again. |
-| `place_data`, `DataPlacement` and `DataError` in `kingfisher.infrastructure.session_files`; `DataBackend` in `kingfisher.infrastructure.harness.backend`; `protect_data` and `writable_data` in `kingfisher.infrastructure.workspace` | `place_inputs`, `InputsPlacement`, `InputsError`, `InputsBackend`, `protect_inputs` and `writable_inputs`, in the same modules. None was ever exported from `kingfisher`. |
+| `place_data`, `DataPlacement` and `DataError` in `kingfisher.infrastructure.session_files`; `DataBackend` in `kingfisher.core.agent.backend`; `protect_data` and `writable_data` in `kingfisher.infrastructure.workspace` | `place_inputs`, `InputsPlacement`, `InputsError`, `InputsBackend`, `protect_inputs` and `writable_inputs`, in the same modules. None was ever exported from `kingfisher`. |
 
 - **If you catch `DataError`** around a turn, for a file that is missing, named twice
   or refused by the backend, catch `InputsError`. It is still a `ValueError`.

@@ -9,9 +9,9 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
+from kingfisher.core.agent.host_paths import HostPathError
+from kingfisher.core.agent.session_paths import SessionPaths, refusal_text
 from kingfisher.domain.references import UnsafeReferenceError
-from kingfisher.infrastructure.harness.host_paths import HostPathError
-from kingfisher.infrastructure.harness.session_paths import SessionPaths, refusal_text
 
 
 class WorkspaceToolPaths(AgentMiddleware):

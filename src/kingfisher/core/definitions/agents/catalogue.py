@@ -1,7 +1,7 @@
 """Agent definitions held in a directory on this host.
 
 `spec` is the format and `reading` parses one; this finds the documents. Why the
-package exists, and why `harness/agent.py` is not in it, is `__init__`.
+package exists, and why `core/agent/assembly.py` is not in it, is `__init__`.
 """
 
 from __future__ import annotations

@@ -6,18 +6,18 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access.capabilities import Capabilities, Selection, withheld
 from kingfisher.core.access.source_ids import AUDIENCED, handed_work_by, offers
-from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.definitions.tools.spec import Offering, admitted, out_of_reach, placed
-from kingfisher.domain.result import RunEvent
-from kingfisher.infrastructure.harness.activation import (
+from kingfisher.core.agent.activation import (
     activatable_skills,
     available_skills,
     defined_subagents,
 )
-from kingfisher.infrastructure.harness.kinds.tools import (
+from kingfisher.core.agent.kinds.tools import (
     registered_tools,
     workspace_tool_names,
 )
+from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.tools.spec import Offering, admitted, out_of_reach, placed
+from kingfisher.domain.result import RunEvent
 
 if TYPE_CHECKING:
     from kingfisher.config import Config

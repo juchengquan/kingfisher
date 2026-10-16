@@ -16,11 +16,11 @@ from deepagents import SubAgent
 from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import Capabilities
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.definitions.subagents.spec import SubagentError
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeToolCallingModel, subagent_of

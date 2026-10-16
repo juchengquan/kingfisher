@@ -22,13 +22,13 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher import Kingfisher, LocalSessions, ToolContext, backend_at
 from kingfisher.core.access.capabilities import Capabilities
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.permitted_backend import PermittedBackend
+from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 from kingfisher.domain.request import Decision, Request, Resume
 from kingfisher.domain.result import AWAITING
 from kingfisher.infrastructure.harness import runtime
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
-from kingfisher.infrastructure.harness.tool_guards import guarded_tools
 from tests.conftest import (
     FakeToolCallingModel,
     an_agent,

@@ -8,11 +8,11 @@ from dataclasses import replace
 import pytest
 
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.backend import skills_sources
+from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills
 from kingfisher.core.definitions.skills import registry as skill_registry
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import skills_sources
-from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeToolCallingModel
 
