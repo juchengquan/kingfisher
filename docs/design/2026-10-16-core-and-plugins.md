@@ -61,18 +61,26 @@ kingfisher/
     definitions/       the five kinds, the catalogue, seeding, templates/
     access/            capabilities, source-id access, audiences, datazones
     agent/             building one request's deepagents graph, kingfisher's own
-                       middleware, and prompts/ -- what kingfisher tells every agent
+                       middleware, and prompts/ -- what kingfisher tells every agent,
+                       its own shell's wording included
     session/           one session's state and one turn
+    defaults           the logger sink, InstructionsFile, the shipped wire formats,
+                       the in-memory saver: what the core falls back to
     config.py layout.py request.py result.py service.py run.py inventory.py
-    origins.py reporting.py
+    origins.py reporting.py plugins.py (the Plugins record)
   plugins/
-    __init__.py        Plugins: what KINGFISHER_PLUGINS returns for the command
     sessions/          LocalSessions: session folders, backend, sandbox, runner,
-                       the turn lock, and prompts/ -- what the shell says of itself
-    events.py conversations.py wire_formats.py instructions.py
+                       the turn lock
+    events.py          JsonlRunEvents
   cli/
 tests/checks/          the contract checks, no longer shipped
 ```
+
+`plugins/` holds what the core never names, which is what makes "the core imports
+nothing from `plugins/`" a rule that can hold: a default the core falls back to has to be
+named by it, so the defaults sit in the core beside their interfaces. Kingfisher's own
+shell wording stays in the core too, because the core asks for it by identity to decide
+whether a mistyped path may be corrected.
 
 Which file goes where is settled per move, against the history of which files change
 together, and the disagreements are brought to review rather than decided in a move.
@@ -91,12 +99,12 @@ together, and the disagreements are brought to review rather than decided in a m
 **Sessions takes the turn lock.** It sat on the backend `open` returns, so a
 deployment's own backend had to carry `claim`, `aclaim`, `release`, `arelease` and
 `held` beside the filesystem it is. On Sessions, the backend `open` returns is a plain
-deepagents backend, with `host_path` and `shell_prompt` as its only optional extras.
-`unprotected`, which the service reads with `getattr` off any backend, becomes
-`LocalSessions`' own: the core reads it only off a backend `LocalSessions` opened, and
-still reports it to the caller as `protect_failed`. Where the origins line asks whether
-the sessions are kingfisher's own, it keeps asking for exactly `LocalSessions` rather
-than `isinstance`: a subclass may keep its sessions anywhere.
+deepagents backend. What else the core reads, it reads as extras an implementation may
+declare, by name, so it never names `LocalSessions`: `host_path`, `shell_prompt` and
+`unprotected` (reported to the caller as `protect_failed`) on the backend; `runs_here` on
+its shell; and `where(cfg)` on the sessions, the folder they are kept in on this host,
+for the origins line. `LocalSessions` answers `where` only for exactly its own class,
+since a subclass may keep its sessions anywhere.
 
 **Instructions replaces two settings with one plugin.** A deployment's standing text for
 every agent and subagent is read after kingfisher's own prompt and before the agent's.
@@ -199,7 +207,10 @@ One pull request each, off `main` once the one before it has merged.
    deployment staging its own points at its folder. *(Landed.)*
 9. The contract kits to `tests/checks/`; the two refusals into the core; the promises
    onto the interfaces and into `ports.md`. *(Landed.)*
-10. Move `plugins/`, splitting the prompts between it and the core.
+10. Move `plugins/`, in two pull requests. First the core stops reaching into
+    `LocalSessions` in the five places it did: the extras above, the command's
+    fallback moved to `cli/`, and the built-in tool probe built on deepagents' own
+    classes. *(Landed.)* Then the move itself.
 11. Move `core/definitions`.
 12. Move `core/access`.
 13. Move `core/agent`.

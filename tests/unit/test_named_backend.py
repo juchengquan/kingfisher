@@ -9,10 +9,10 @@ import pytest
 
 from kingfisher import LocalSessions
 from kingfisher.application.config import Environment
-from kingfisher.application.run import configured_sessions
 from kingfisher.config import REMOVED_SETTINGS, RENAMED_SETTINGS, ConfigError
 from kingfisher.infrastructure.harness.backend import Sessions
 from kingfisher.infrastructure.wiring import store_named
+from kingfisher.presentation.cli.configured import configured_sessions
 
 HERE = __name__
 

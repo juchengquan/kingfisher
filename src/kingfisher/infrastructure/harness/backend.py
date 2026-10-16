@@ -144,6 +144,11 @@ class ConfinedLocalShellBackend(LocalShellBackend):
         self.shell_prompt = shell_prompt
         super().__init__(**kwargs)
 
+    @property
+    def runs_here(self) -> bool:
+        """Whether commands run on this host, which `shell_runs_here` reads."""
+        return self.runner is None or runs_locally(self.runner)
+
     def execute(self, command: str, *, timeout: int | None = None) -> Any:
         if self.runner is None:
             return super().execute(self.confinement.wrap(command), timeout=timeout)
@@ -195,10 +200,7 @@ def shell_runs_here(backend: Any) -> bool:
     shipping commands elsewhere was handed paths that machine does not have. A shell of a
     deployment's own is not known to run here, and says what it sees for itself.
     """
-    shell = _shell_of(backend)
-    return isinstance(shell, ConfinedLocalShellBackend) and (
-        shell.runner is None or runs_locally(shell.runner)
-    )
+    return getattr(_shell_of(backend), "runs_here", False) is True
 
 
 def _refuse_wording_without_runner(runner: Any, shell_prompt: ShellPrompt | None) -> None:
@@ -617,6 +619,11 @@ class Sessions(Protocol):
     - a session serves under `/skills/` the skills kingfisher read;
     - every async twin answers as its sync one does.
 
+    What else kingfisher reads, it reads where an implementation declares it, by name:
+    `where(cfg)` here, the folder these sessions are kept in on this host, for the
+    origins line; `host_path`, `shell_prompt` and `unprotected` on a backend `open`
+    returns; and `runs_here` on its shell.
+
     And what `open` returns, held by `tests/checks/backend.py`: deepagents recognises it
     as running commands and it routes every path kingfisher denies -- both refused at
     startup by `refuse_unusable_backend` -- and it reads back what it was given, keeps
@@ -928,6 +935,14 @@ class LocalSessions(Sessions):
 
     def delete(self, cfg: Config, session_id: str) -> str | None:
         return LocalSessionDirs().remove_tree(_where(cfg, session_id))
+
+    def where(self, cfg: Config) -> Path | None:
+        """Where this keeps its sessions on this host, for the origins line.
+
+        Only for exactly this class: a subclass can return its backend with anything
+        changed, so it is answered as somewhere this cannot see.
+        """
+        return sessions_root(cfg.workspace) if type(self) is LocalSessions else None
 
     # The turn lock is a directory under the session's `.harness`. `mkdir` because it is
     # the one operation that fails when the name is taken, which is what a lock is --

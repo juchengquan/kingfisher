@@ -63,16 +63,13 @@ def _args(**over: Any) -> argparse.Namespace:
 def _drive(monkeypatch, result: RunResult) -> None:
     """Run the command's ending against a result, with nothing real behind it."""
     monkeypatch.setattr(cli, "config_from_env", object)
-    # The module itself, imported by name: as a dotted string `kingfisher.application.run`
-    # resolves to the `run` function the package exports, whenever nothing has loaded
-    # the module first -- so this patch worked in the full suite and failed alone.
     monkeypatch.setattr(
-        importlib.import_module("kingfisher.application.run"),
+        importlib.import_module("kingfisher.presentation.cli.configured"),
         "configured_sessions",
         lambda cfg: None,
     )
     monkeypatch.setattr(
-        importlib.import_module("kingfisher.application.run"),
+        importlib.import_module("kingfisher.presentation.cli.configured"),
         "configured_plugins",
         lambda cfg: Plugins(),
     )
@@ -185,16 +182,13 @@ def test_the_three_decisions_reach_the_library_as_written(monkeypatch):
             return iter(())
 
     monkeypatch.setattr(cli, "config_from_env", object)
-    # The module itself, imported by name: as a dotted string `kingfisher.application.run`
-    # resolves to the `run` function the package exports, whenever nothing has loaded
-    # the module first -- so this patch worked in the full suite and failed alone.
     monkeypatch.setattr(
-        importlib.import_module("kingfisher.application.run"),
+        importlib.import_module("kingfisher.presentation.cli.configured"),
         "configured_sessions",
         lambda cfg: None,
     )
     monkeypatch.setattr(
-        importlib.import_module("kingfisher.application.run"),
+        importlib.import_module("kingfisher.presentation.cli.configured"),
         "configured_plugins",
         lambda cfg: Plugins(),
     )
@@ -438,12 +432,12 @@ def test_log_reaches_the_service_on_both_verbs_that_run_a_turn(verb, tmp_path, m
 
     monkeypatch.setattr(cli, "config_from_env", object)
     monkeypatch.setattr(
-        importlib.import_module("kingfisher.application.run"),
+        importlib.import_module("kingfisher.presentation.cli.configured"),
         "configured_sessions",
         lambda cfg: None,
     )
     monkeypatch.setattr(
-        importlib.import_module("kingfisher.application.run"),
+        importlib.import_module("kingfisher.presentation.cli.configured"),
         "configured_plugins",
         lambda cfg: Plugins(),
     )
@@ -474,7 +468,7 @@ def test_the_plugins_reach_the_service_and_log_replaces_their_run_events(tmp_pat
             handed.append(kwargs)
 
     monkeypatch.setattr(cli, "config_from_env", object)
-    run = importlib.import_module("kingfisher.application.run")
+    run = importlib.import_module("kingfisher.presentation.cli.configured")
     monkeypatch.setattr(run, "configured_sessions", lambda cfg: None)
     monkeypatch.setattr(
         run, "configured_plugins", lambda cfg: Plugins(run_events=events, threads=threads)
