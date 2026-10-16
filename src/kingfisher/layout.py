@@ -116,13 +116,6 @@ PAUSED_STATE = "paused.state"
 #: case this answers, and answering it means reading this without reading that.
 PAUSED_MARK = "paused.json"
 
-#: What a run produces and would lose. `/inputs` is read-only and came from the
-#: caller; `/scratchpad` is disposable and says so. These two are the ones the agent
-#: is told will outlive the run, so these are what a reaped session takes with it
-#: unless the caller is handed a list.
-ARTIFACT_DIRS: tuple[str, ...] = (OUTPUTS, MEMORY)
-
-
 #: The folder name a catalogue may not use for its own skills, because a
 #: subagent's bundled skills already mean something under this root.
 RESERVED_SKILL_FOLDER = "subagents"
@@ -340,7 +333,13 @@ class Layout:
 
     @property
     def artifact_dirs(self) -> tuple[str, ...]:
-        """What a reaped session hands back: produced, not given or disposable."""
+        """What a reaped session hands back: produced, not given or disposable.
+
+        The inputs folder is read-only and came from the caller; the scratchpad is
+        disposable and the prompt says so. These two are what the agent is told will
+        outlive the run, so these are what a reaped session takes with it unless the
+        caller is handed a list.
+        """
         return (self.outputs, self.memory)
 
     @property

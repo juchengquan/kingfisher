@@ -4314,6 +4314,45 @@ turns the entries into mounts and `infrastructure.harness.agent` turns the scope
 into deny rules. Policy here, the runtime's objects there -- the division this
 module's first line already describes. *(2026-09-07.)*
 
+**The rename reached everything the agent addresses and neither edge the caller
+does.** `Layout` threaded the configurable leaves through the routes, both fences, the
+prompt, the ledger, the sweep and `doctor` -- and `session_files`, which is where a
+caller's files go in and a turn's results come out, read the module constants instead.
+Measured through one real turn under a renamed layout: `artifacts` came back `()` with
+the turn's own report sitting in the session, `read_artifact` refused the configured
+names outright so `kingfisher get` could fetch nothing, and the caller's supplied file
+landed at `/inputs/` -- a route that layout does not mount, so the write fell through
+to the session root and made a sixth folder nothing had routed, hardened or fenced.
+The agent's file tools saw an empty inputs folder, and its shell rewrote the caller's
+file with exit 0. `place_inputs` also read `replaced` off a listing of the wrong
+folder, so a resupply reported as a first supply.
+
+The module no longer imports `ARTIFACT_DIRS` or `INPUTS_ROUTE` at all, which is the
+part worth keeping: both edges here are a caller's, the layout arrives as an argument,
+and the names are not reachable from that file to be spelt again. `ARTIFACT_DIRS` is
+gone from `layout.py` with it -- it had no other reader, and the entry above about the
+route constants already called it "a third spelling" of two leaves this module owns.
+`Layout.artifact_dirs` was built by the same commit and wired to nothing, which is why
+a reader checking whether artifacts had been threaded found a property and stopped.
+
+**`TMPDIR` was the one leaf `backend_at` did not pass on.** `ensure_session_layout`
+takes `memory` and `scratchpad` separately as well as in the tuple, because the two
+steps that scaffold and harden one directory each cannot pick it out -- and the call
+passed `memory` only. Measured: a renamed scratchpad laid out `0o755` where the default
+gives `0o700`, with `TMPDIR` pointing at it.
+
+**None of it was visible, and the fixture is why.** Every rule covering those paths ran
+the default layout, so the subject was covered and the rename was not: mutating the
+constants in that module reddens nineteen tests, all of them default. The one
+renamed-layout rule that existed pre-created its session *passing the argument
+production omits*, so the call under test was never reached. `tests/conftest.py`'s
+`start` was the same shape one level down -- it laid out the default folders whatever
+the configuration said, so a renamed-layout test ran against a session holding both
+spellings, and a measurement of which folder production had made was really a
+measurement of the helper. It takes the layout now. The new rules pair each renamed
+case with the default rather than driving the rename alone, because the default
+working is exactly what hid this. *(2026-10-15, from an architecture review.)*
+
 **It exists because one route was three facts in two modules.** The path was a
 constant in `harness/backend.py`, the mount was a dict literal inside
 `default_backend`, and whether it was writable was a `FilesystemPermission` in

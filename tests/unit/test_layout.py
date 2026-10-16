@@ -18,7 +18,8 @@ from kingfisher.infrastructure.harness.agent import memory_is_denied, read_only_
 from kingfisher.infrastructure.harness.backend import backend_at, memory_sources
 from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.layout import (
-    ARTIFACT_DIRS,
+    MEMORY,
+    OUTPUTS,
     ROUTES,
     SESSION_DIRS,
     Layout,
@@ -51,7 +52,7 @@ def test_the_default_layout_is_the_module_constants():
     """`Layout()` and the module cannot drift: this is the pin that says so."""
     default = Layout()
     assert default.session_dirs == SESSION_DIRS
-    assert default.artifact_dirs == ARTIFACT_DIRS
+    assert default.artifact_dirs == (OUTPUTS, MEMORY)
     assert default.routes == ROUTES
     assert default.routed_paths() == routed_paths()
     assert default.denied_scopes() == denied_scopes()

@@ -887,7 +887,13 @@ class DefaultBackends(SessionBackends):
         catalogue: Definitions | None = None,
     ) -> WorkspaceScopedBackend:
         directory = ensure_session_layout(
-            _where(cfg, session_id), cfg.layout.session_dirs, memory=cfg.layout.memory
+            _where(cfg, session_id),
+            cfg.layout.session_dirs,
+            memory=cfg.layout.memory,
+            # Named as well as being in the tuple, because `keep_tmp_private` cannot
+            # pick one directory out of it. Omitted, the configured scratchpad was laid
+            # out `0o755` where the default one is `0o700` -- and TMPDIR points at it.
+            scratchpad=cfg.layout.scratchpad,
         )
         # Kernel-level, because the deny rule covers only the file tools. What it
         # could not harden is reported by the turn rather than raised: raising here

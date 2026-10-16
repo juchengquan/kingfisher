@@ -229,10 +229,21 @@ def at_the_command_line(cfg, monkeypatch):
 
 
 def start(cfg, session_id: str) -> str:
-    """Create a named session, as a service would before serving a turn."""
+    """Create a named session, as a service would before serving a turn.
+
+    Under `cfg`'s own layout, which is what a service does. Called with no layout, this
+    made the default folders whatever the configuration said, so a test of a renamed
+    deployment ran against a session holding both spellings -- and a measurement of
+    which folder production had made was really a measurement of this helper.
+    """
     from kingfisher.infrastructure.workspace import ensure_session_layout
 
-    ensure_session_layout(cfg.workspace / "sessions" / session_id)
+    ensure_session_layout(
+        cfg.workspace / "sessions" / session_id,
+        cfg.layout.session_dirs,
+        memory=cfg.layout.memory,
+        scratchpad=cfg.layout.scratchpad,
+    )
     return session_id
 
 

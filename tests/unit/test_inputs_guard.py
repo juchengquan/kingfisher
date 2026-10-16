@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+import platform
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from kingfisher import backend_at
+from kingfisher import backend_at, default_backends
 from kingfisher.infrastructure.session_files import InputsError, place_inputs
 from kingfisher.infrastructure.steps import drive
 from kingfisher.infrastructure.workspace import (
@@ -13,6 +15,101 @@ from kingfisher.infrastructure.workspace import (
     protect_inputs,
     writable_inputs,
 )
+from kingfisher.layout import Layout
+from tests.conftest import start
+
+macos = pytest.mark.skipif(
+    platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
+)
+
+#: A deployment that renamed the folder the caller's files go in.
+MOVED = Layout(inputs="in", outputs="out", memory="mem", scratchpad="scratch")
+
+
+@macos
+def test_the_callers_files_land_in_the_folder_this_deployment_named_and_are_fenced_there(
+    cfg, tmp_path
+):
+    """`_contents_of` spelt the route as the module constant, so the files landed at
+    `/inputs/` whatever the layout said. Under a renamed one that route does not
+    exist, so the write fell through to the session root and made a folder nothing had
+    routed, hardened or fenced: measured, the agent's own file tools saw an empty
+    folder while its shell rewrote the caller's file with exit 0.
+
+    Three things in one rule because they are one fault: where the file lands, whether
+    that folder is hardened, and whether the profile refuses it. Any one of them alone
+    passes on a file that is in the wrong place.
+
+    The mode bits are lifted first, so what refuses the write is the fence and not the
+    permissions -- a refusal from those satisfies `exit_code != 0` on its own, with a
+    different errno.
+    """
+    cfg = replace(cfg, layout=MOVED)
+    source = tmp_path / "secret.csv"
+    source.write_text("caller,data\n", encoding="utf-8")
+    start(cfg, "s")
+    session = cfg.workspace / "sessions" / "s"
+    backend = backend_at(cfg, session)
+
+    drive(place_inputs((source,), backend, cfg.layout))
+
+    landed = session / MOVED.inputs / "secret.csv"
+    assert landed.is_file(), "the caller's file is not in the folder the agent is told"
+    assert not (session / "inputs").exists(), "a folder nothing routed was made"
+    assert backend.download_files([f"{MOVED.inputs_route}secret.csv"])[0].content == (
+        b"caller,data\n"
+    ), "the agent's own file tools cannot read what the caller supplied"
+
+    lifted = backend.execute(
+        f"chmod -R u+w {MOVED.inputs} 2>/dev/null; printf FORGED > {MOVED.inputs}/secret.csv"
+    )
+
+    assert lifted.exit_code != 0
+    assert landed.read_text(encoding="utf-8") == "caller,data\n"
+
+
+def test_resupplying_under_a_renamed_layout_still_says_what_was_replaced(cfg, tmp_path):
+    """`replaced` is read off a listing of the inputs folder, and that listing is the
+    third place in this function that names a route. Pointed at the default one it
+    comes back empty under a renamed layout, so a caller who overwrote a file they had
+    supplied before is told nothing was replaced -- which is the one thing this field
+    exists to say.
+    """
+    cfg = replace(cfg, layout=MOVED)
+    source = tmp_path / "given.csv"
+    source.write_text("first\n", encoding="utf-8")
+    start(cfg, "s")
+    backend = backend_at(cfg, cfg.workspace / "sessions" / "s")
+
+    first = drive(place_inputs((source,), backend, cfg.layout))
+    source.write_text("second\n", encoding="utf-8")
+    again = drive(place_inputs((source,), backend, cfg.layout))
+
+    assert first.placed == ("given.csv",) and first.replaced == ()
+    assert again.replaced == ("given.csv",), "a resupply read as a first supply"
+
+
+def test_a_renamed_scratchpad_is_as_private_as_the_default_one(cfg):
+    """TMPDIR points at it, so it is the one session folder whose mode is not the
+    default. `ensure_session_layout` takes the leaf on its own because
+    `keep_tmp_private` cannot pick one directory out of the tuple, and `backend_at`
+    passed every other leaf and not that one -- measured, `0o755` where the default
+    layout gives `0o700`.
+
+    Both layouts, because the default was the only one driven and the default is the
+    one that worked.
+    """
+    for layout in (Layout(), MOVED):
+        made = replace(cfg, layout=layout)
+        session_id = f"s-{layout.scratchpad}"
+        # Through `open`, which is what lays a session out in production -- the call
+        # that was missing the leaf. A test making the directory itself would be
+        # passing the argument production omits, which is how this hid.
+        default_backends.open(made, session_id)
+        session = made.workspace / "sessions" / session_id
+        mode = (session / layout.scratchpad).stat().st_mode & 0o777
+
+        assert mode == 0o700, f"{layout.scratchpad} is {oct(mode)}"
 
 
 def test_inputs_become_read_only_to_the_os(workspace):
@@ -123,7 +220,7 @@ def test_a_supplied_file_lands_in_the_sessions_inputs(cfg, session_dir, tmp_path
     source = tmp_path / "sales.csv"
     source.write_text("a,b\n1,2\n")
 
-    placement = drive(place_inputs((source,), backend_at(cfg, session_dir)))
+    placement = drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout))
 
     assert placement.placed == ("sales.csv",)
     assert (session_dir / "inputs" / "sales.csv").read_text() == "a,b\n1,2\n"
@@ -134,7 +231,7 @@ def test_inputs_are_read_only_again_afterwards(cfg, session_dir, tmp_path):
     source = tmp_path / "sales.csv"
     source.write_text("x")
 
-    drive(place_inputs((source,), backend_at(cfg, session_dir)))
+    drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout))
 
     assert not os.access(session_dir / "inputs", os.W_OK)
     with pytest.raises(PermissionError):
@@ -149,7 +246,7 @@ def test_the_folder_an_upload_lands_in_is_the_one_hardened(cfg, session_dir, tmp
     source = tmp_path / "sales.csv"
     source.write_text("x")
 
-    drive(place_inputs((source,), backend_at(cfg, session_dir)))
+    drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout))
 
     # Found rather than named: a folder spelled here would agree with whichever side
     # spelled it the same way, and pass against the drift it is meant to catch.
@@ -173,7 +270,7 @@ def test_inputs_are_read_only_again_even_when_a_copy_fails(cfg, session_dir, tmp
     )
 
     with pytest.raises(OSError, match=gone):
-        drive(place_inputs((source,), backend_at(cfg, session_dir)))
+        drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout))
 
     monkeypatch.undo()
     assert not os.access(session_dir / "inputs", os.W_OK)
@@ -189,7 +286,7 @@ def test_two_sources_with_one_basename_are_refused(cfg, session_dir, tmp_path):
     second.write_text("two")
 
     with pytest.raises(InputsError, match=r"report\.pdf"):
-        drive(place_inputs((first, second), backend_at(cfg, session_dir)))
+        drive(place_inputs((first, second), backend_at(cfg, session_dir), cfg.layout))
 
     assert not (session_dir / "inputs" / "report.pdf").exists()
 
@@ -199,7 +296,9 @@ def test_a_missing_source_is_refused_before_anything_is_written(cfg, session_dir
     good.write_text("x")
 
     with pytest.raises(InputsError, match=r"ghost\.csv"):
-        drive(place_inputs((good, tmp_path / "ghost.csv"), backend_at(cfg, session_dir)))
+        drive(place_inputs(
+            (good, tmp_path / "ghost.csv"), backend_at(cfg, session_dir), cfg.layout
+        ))
 
     assert not (session_dir / "inputs" / "good.csv").exists()
 
@@ -220,10 +319,10 @@ def test_resupplying_replaces_and_says_so(cfg, session_dir, tmp_path):
     """
     source = tmp_path / "sales.csv"
     source.write_text("first")
-    drive(place_inputs((source,), backend_at(cfg, session_dir)))
+    drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout))
 
     source.write_text("second")
-    placement = drive(place_inputs((source,), backend_at(cfg, session_dir)))
+    placement = drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout))
 
     assert (session_dir / "inputs" / "sales.csv").read_text() == "second"
     assert placement.replaced == ("sales.csv",)
@@ -233,11 +332,11 @@ def test_nothing_is_replaced_on_a_first_supply(cfg, session_dir, tmp_path):
     source = tmp_path / "new.csv"
     source.write_text("x")
 
-    assert drive(place_inputs((source,), backend_at(cfg, session_dir))).replaced == ()
+    assert drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout)).replaced == ()
 
 
 def test_supplying_nothing_touches_nothing(cfg, session_dir):
-    placement = drive(place_inputs((), backend_at(cfg, session_dir)))
+    placement = drive(place_inputs((), backend_at(cfg, session_dir), cfg.layout))
 
     assert placement.placed == ()
     assert placement.replaced == ()
@@ -252,7 +351,7 @@ def test_a_session_that_was_given_inputs_can_still_be_removed(cfg, session_dir, 
     """
     source = tmp_path / "orders.csv"
     source.write_text("a,b\n1,2\n")
-    drive(place_inputs((source,), backend_at(cfg, session_dir)))
+    drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout))
     assert not os.access(session_dir / "inputs", os.W_OK), "not hardened; test proves nothing"
 
     failure = LocalSessionDirs().remove_tree(session_dir)

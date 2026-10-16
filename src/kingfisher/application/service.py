@@ -554,7 +554,7 @@ class Kingfisher(Sessions, Disposal):
         if reached is None:
             raise unknown_session(session_id)
         _, files = reached
-        return (yield from read_artifact(files, name))
+        return (yield from read_artifact(files, name, self.cfg.layout))
 
     def _pin_agent_in(self, harness: HarnessFiles, name: str | None) -> Steps[None]:
         """Keep the agent, in the session this is about.
@@ -732,7 +732,9 @@ class Kingfisher(Sessions, Disposal):
         # A resume places nothing. It is finishing work already proposed rather
         # than asking for something, so there is no `inputs` on it to place -- see
         # `Resume`, where the absence of the field carries the reason.
-        placement = yield from place_inputs(getattr(request, "inputs", ()), files)
+        placement = yield from place_inputs(
+            getattr(request, "inputs", ()), files, self.cfg.layout
+        )
 
         # What this deployment permits, narrowed by what the request asked for.
         granted = self._effective_grants(source_ids)
@@ -1036,7 +1038,7 @@ class Kingfisher(Sessions, Disposal):
     def _keep(self, prepared: Prepared, snapshot: Any) -> Steps[tuple[str, ...]]:
         """Persist what this turn produced, and name it."""
         yield from self._record_transcript(prepared, snapshot)
-        return (yield from collect_artifacts(prepared.files))
+        return (yield from collect_artifacts(prepared.files, self.cfg.layout))
 
     def _finished(  # noqa: PLR0913 -- one terminal event, assembled from the four
         # things a turn ends holding. A parameter object here would exist only to
