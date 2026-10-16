@@ -6975,7 +6975,7 @@ opens more than four.
 **The split cost one invariant its structure.** *Nothing outside this module
 should ever chmod `/data`* was a fact about a file while `place_data` and the
 `chmod` were the same 700 lines. It is now a rule --
-`test_only_one_workspace_module_changes_a_mode` -- because the code that copies
+`test_only_one_module_changes_a_mode` -- because the code that copies
 into `/data` sits one import from the code that lifts the write bits, and the
 unlock that is allowed puts them back in a `finally` an open-coded chmod would
 not have.

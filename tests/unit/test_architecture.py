@@ -2458,28 +2458,34 @@ def _mode_changes(path: Path) -> list[int]:
     )
 
 
-def test_only_one_workspace_module_changes_a_mode():
-    """`permissions` owns the write bits on `/inputs`, and used to own them by being a
-    file.
+#: The one module in the package that changes a file's mode.
+MODE_OWNER = "plugins/sessions/permissions.py"
 
-    `harness/backend.py` chmods too and is deliberately out of scope: `prepare_scratch`
-    makes a scratch directory private inside a world-writable `/tmp`, the opposite
-    operation on a tree the agent's data never enters.
+
+def test_only_one_module_changes_a_mode():
+    """`permissions` owns the write bits on `/inputs`, and the scratch directory's mode.
+
+    Walked over the whole package rather than the folder `permissions` sits in: scoped
+    to a folder, this went on passing over one that no longer held it, and checked
+    nothing. The owner is named by path and asserted to change a mode, so a move
+    fails here instead of exempting nothing.
 
     Reaching for a mode change when a directory refused a copy is what once left
     root-owned files in a workspace and made a session permanently unusable.
     """
+    owner = SRC / MODE_OWNER
+    assert _mode_changes(owner), f"{MODE_OWNER} changes no mode, so it owns nothing here"
+
     offenders = [
         f"{_module_id(path)}:{line}"
-        for path in _every(_modules_in("infrastructure/workspace"), "the workspace package")
-        if path.name != "permissions.py"
+        for path in _every(_package_modules(), "the package")
+        if path != owner
         for line in _mode_changes(path)
     ]
 
     assert not offenders, (
-        f"{offenders} change a file mode inside the workspace package — "
-        "`permissions` is the one module allowed to, and `writable_inputs` is how "
-        "the rest of it asks"
+        f"{offenders} change a file mode — `{MODE_OWNER}` is the one module allowed "
+        "to, and `writable_inputs` is how the rest ask"
     )
 
 
