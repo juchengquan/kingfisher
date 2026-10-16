@@ -988,7 +988,7 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
     """
     assert _prose_unresolved("`infrastructure.harness.backend`") == []
     assert _prose_unresolved("`kinds.skills.spec.FILENAME` and `application.inventory`") == []
-    assert _prose_unresolved("`infrastructure.harness.backend.shell_env`") == []
+    assert _prose_unresolved("`plugins.sessions.backend.shell_env`") == []
 
     assert _prose_unresolved("`infrastructure.backend.shell_env`") == [
         "infrastructure.backend.shell_env"
@@ -1264,13 +1264,15 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
         "langchain_quickjs",
         "langgraph",
     }),
-    # The rest of the layer adapts the disk, the OS and the environment, and
-    # needs one parser to do it -- plus the Linux shell fence, which is the OS
-    # in the most literal sense this table holds: Landlock, applied to a process
-    # before it execs. Optional and Linux-only, so both imports of it are inside
-    # functions behind an `ImportError` or a platform check, and a macOS install
-    # never sees it.
-    "infrastructure": frozenset({"sandlock", "yaml"}),
+    # The rest of the layer adapts the disk and the environment, and needs one parser
+    # to do it.
+    "infrastructure": frozenset({"yaml"}),
+    # Kingfisher's own sessions: a deepagents composite over a session's folder, and
+    # the Linux shell fence, which is the OS in the most literal sense this table holds
+    # -- Landlock, applied to a process before it execs. Optional and Linux-only, so
+    # both imports of `sandlock` are inside functions behind an `ImportError` or a
+    # platform check, and a macOS install never sees it.
+    "plugins": frozenset({"deepagents", "sandlock"}),
     # Registering skills means handing them to the runtime that reads them: `registry`
     # asks deepagents which skills an agent will actually have. That cannot be done from
     # outside, and inverting it behind a port would put one implementation behind an
@@ -1443,8 +1445,8 @@ def test_an_unspent_grant_is_what_that_rule_reads():
     nothing about whether the predicate can tell them apart. Read against the table
     rather than a copy of it, for the reason the rule beside `_undeclared` is.
     """
-    assert _unspent("infrastructure", {"sandlock", "yaml", "json"}) == set()
-    assert _unspent("infrastructure", {"yaml"}) == {"sandlock"}
+    assert _unspent("plugins", {"deepagents", "sandlock", "json"}) == set()
+    assert _unspent("plugins", {"deepagents"}) == {"sandlock"}
     assert _unspent("domain", set()) == set()
 #: The layers, which a kind may not name. `domain` is not among them and `kinds` is not
 #: a layer: a spec is typed with `Capabilities` and a repository satisfies a port, so
@@ -1515,6 +1517,39 @@ def test_the_layer_rule_walks_every_kind():
         assert f"kinds/{helper}.py" in walked, f"the walk misses `kinds/{helper}.py`"
 
 
+#: What may import from `plugins/`: the command, which may import anything, and the front
+#: door, whose table maps public names such as `LocalSessions` to where they live.
+MAY_NAME_A_PLUGIN = ("presentation", "")
+
+
+def _reaches_a_plugin(path: Path) -> list[str]:
+    return sorted(m for m in _imported_modules(path) if m.startswith("kingfisher.plugins"))
+
+
+def test_the_core_imports_nothing_from_plugins():
+    """A default the core falls back to filed under `plugins/`, or an `isinstance` against
+    `LocalSessions`, which would make kingfisher's own sessions impossible to ship apart
+    -- the reason the five places that did it were cut before anything moved."""
+    reaching = {
+        _module_id(path): found
+        for path in _every(sorted(SRC.rglob("*.py")), "the package")
+        if not path.is_relative_to(SRC / "plugins")
+        and path.relative_to(SRC).parts[0] not in MAY_NAME_A_PLUGIN
+        and path.relative_to(SRC) != Path("__init__.py")
+        and (found := _reaches_a_plugin(path))
+    }
+
+    assert not reaching, f"{reaching} -- the core names a plugin; ask it by an interface"
+
+
+def test_the_plugin_rule_sees_an_import_of_one(tmp_path):
+    """A rule that read nothing would pass over every import it is about."""
+    written = tmp_path / "probe.py"
+    written.write_text("from kingfisher.plugins.sessions.backend import LocalSessions\n")
+
+    assert _reaches_a_plugin(written) == ["kingfisher.plugins.sessions.backend"]
+
+
 def test_the_layer_rule_tells_a_layer_from_the_domain():
     """The half a clean tree cannot show.
 
@@ -1528,6 +1563,7 @@ def test_the_layer_rule_tells_a_layer_from_the_domain():
     assert sorted(LAYERS_A_KIND_MAY_NOT_NAME) == [
         "application",
         "infrastructure",
+        "plugins",
         "presentation",
     ]
 
@@ -3327,7 +3363,7 @@ def test_both_import_collectors_see_the_same_modules():
 def test_the_back_door_rule_tells_the_two_consumers_apart():
     """The questions the tree cannot ask."""
     deep = "kingfisher.application.service"
-    private = "kingfisher.infrastructure.sandbox.confinement"
+    private = "kingfisher.plugins.sessions.sandbox.confinement"
 
     # A stranger may not reach, whatever it reached for.
     assert _taken_by_the_back_door(deep, frozenset({"Kingfisher"}), family=False) == {deep}
@@ -4111,11 +4147,11 @@ def test_only_the_confinement_module_calls_resolve_directly():
 #: narrower one passes the rule itself -- which is how it came to see two of six.
 SPELLINGS = (
     "confinement.resolve(cfg)",
-    "from kingfisher.infrastructure.sandbox.confinement import resolve",
-    "import kingfisher.infrastructure.sandbox.confinement as sb\nsb.resolve(cfg)",
-    "from kingfisher.infrastructure.sandbox import confinement as sb\nsb.resolve(cfg)",
-    "import kingfisher.infrastructure.sandbox.confinement\n"
-    "kingfisher.infrastructure.sandbox.confinement.resolve(cfg)",
+    "from kingfisher.plugins.sessions.sandbox.confinement import resolve",
+    "import kingfisher.plugins.sessions.sandbox.confinement as sb\nsb.resolve(cfg)",
+    "from kingfisher.plugins.sessions.sandbox import confinement as sb\nsb.resolve(cfg)",
+    "import kingfisher.plugins.sessions.sandbox.confinement\n"
+    "kingfisher.plugins.sessions.sandbox.confinement.resolve(cfg)",
     'getattr(confinement, "resolve")(cfg)',
 )
 

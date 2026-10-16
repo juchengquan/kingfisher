@@ -20,7 +20,7 @@ from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.middlewares.narrowing import ToolAllowlist
 from kingfisher.infrastructure.steps import drive
-from kingfisher.infrastructure.workspace import ensure_session_layout
+from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import (
     an_agent,

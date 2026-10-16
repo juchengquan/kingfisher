@@ -111,7 +111,7 @@ def test_the_kit_passes_where_a_fence_holds_both_folders(cfg, session_dir):
     the fence this host offers, the kit finds nothing. Without this, a kit that raised
     for every backend would pass that rule too.
     """
-    from kingfisher.infrastructure.sandbox import confinement
+    from kingfisher.plugins.sessions.sandbox import confinement
 
     if confinement.shell_confinement(cfg).mechanism != confinement.SANDBOX_EXEC:
         pytest.skip("no fence here to hold them")
@@ -144,7 +144,7 @@ def test_doctor_warns_where_nothing_it_can_see_keeps_the_shell_out(cfg, change, 
 
 
 def test_doctor_is_satisfied_where_the_sandbox_keeps_the_shell_out(cfg):
-    from kingfisher.infrastructure.sandbox.confinement import harness_unfenced
+    from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced
     from kingfisher.presentation.cli.health import _session_files
 
     if harness_unfenced(cfg) is not None:

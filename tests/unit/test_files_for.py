@@ -11,7 +11,7 @@ from kingfisher import Kingfisher, Request, UnknownSessionError
 from kingfisher.application import service as service_module
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.session import session_dir
-from kingfisher.infrastructure.harness.backend import LocalSessions
+from kingfisher.plugins.sessions.backend import LocalSessions
 from tests.conftest import StubCheckpointer, Through, an_agent, start
 from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent

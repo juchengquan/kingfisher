@@ -14,8 +14,9 @@ from kingfisher.infrastructure.harness.agent import (
     CapabilityError,
     build_agent,
 )
-from kingfisher.infrastructure.workspace import ensure_session_layout, seeding
+from kingfisher.infrastructure.workspace import seeding
 from kingfisher.kinds.skills.catalogue import LocalSkillRepository, reachable
+from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import a_subagent, repository_root, subagents_dir, tools_dir
 
 #: The pack the seeding tests below use. A real one, reached the way a shipped pack is

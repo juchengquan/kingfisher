@@ -19,8 +19,6 @@ _EXPORTS = {
     "ensure_definitions": "kingfisher.infrastructure.workspace.layout",
     "ensure_layout": "kingfisher.infrastructure.workspace.layout",
     "is_new_workspace": "kingfisher.infrastructure.workspace.layout",
-    "protect_inputs": "kingfisher.infrastructure.workspace.permissions",
-    "writable_inputs": "kingfisher.infrastructure.workspace.permissions",
     "SEED_HINT": "kingfisher.infrastructure.workspace.seeding",
     "Destination": "kingfisher.infrastructure.workspace.seeding",
     "Seeded": "kingfisher.infrastructure.workspace.seeding",
@@ -32,10 +30,6 @@ _EXPORTS = {
     "seed": "kingfisher.infrastructure.workspace.seeding",
     "source_ids_named": "kingfisher.infrastructure.workspace.seeding",
     "starter_agent": "kingfisher.infrastructure.workspace.seeding",
-    "LocalSessionDirs": "kingfisher.infrastructure.workspace.sessions",
-    "ensure_session_layout": "kingfisher.infrastructure.workspace.sessions",
-    "scaffold_memory": "kingfisher.infrastructure.workspace.sessions",
-    "session_bytes": "kingfisher.infrastructure.workspace.sessions",
 }
 
 __all__ = [
@@ -44,7 +38,6 @@ __all__ = [
     "SEED_HINT",
     "TEMPLATES",
     "Destination",
-    "LocalSessionDirs",
     "MemoryBacking",
     "Seeded",
     "Skipped",
@@ -52,18 +45,13 @@ __all__ = [
     "definitions_source",
     "ensure_definitions",
     "ensure_layout",
-    "ensure_session_layout",
     "is_new_workspace",
     "kinds_at",
     "memory_backing",
     "middleware_named",
-    "protect_inputs",
-    "scaffold_memory",
     "seed",
-    "session_bytes",
     "source_ids_named",
     "starter_agent",
-    "writable_inputs",
 ]
 
 if TYPE_CHECKING:
@@ -77,8 +65,6 @@ if TYPE_CHECKING:
     )
     from kingfisher.infrastructure.workspace.layout import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace.layout import is_new_workspace as is_new_workspace
-    from kingfisher.infrastructure.workspace.permissions import protect_inputs as protect_inputs
-    from kingfisher.infrastructure.workspace.permissions import writable_inputs as writable_inputs
     from kingfisher.infrastructure.workspace.seeding import SEED_HINT as SEED_HINT
     from kingfisher.infrastructure.workspace.seeding import Destination as Destination
     from kingfisher.infrastructure.workspace.seeding import Seeded as Seeded
@@ -92,12 +78,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.seeding import seed as seed
     from kingfisher.infrastructure.workspace.seeding import source_ids_named as source_ids_named
     from kingfisher.infrastructure.workspace.seeding import starter_agent as starter_agent
-    from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs as LocalSessionDirs
-    from kingfisher.infrastructure.workspace.sessions import (
-        ensure_session_layout as ensure_session_layout,
-    )
-    from kingfisher.infrastructure.workspace.sessions import scaffold_memory as scaffold_memory
-    from kingfisher.infrastructure.workspace.sessions import session_bytes as session_bytes
 
 
 def __getattr__(name: str) -> Any:

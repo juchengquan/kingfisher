@@ -104,7 +104,7 @@ def test_the_prompt_names_the_folders_deepagents_writes_on_its_own(cfg, session_
     The root is read off what `backend_at` builds rather than spelled here, so moving
     the setting or renaming the scratchpad fails this until the prompt follows.
     """
-    from kingfisher.infrastructure.harness.backend import backend_at
+    from kingfisher.plugins.sessions.backend import backend_at
 
     root = backend_at(cfg, session_dir).artifacts_root.rstrip("/")
     text = render_system_prompt()
@@ -221,7 +221,7 @@ def test_the_shell_mapping_the_prompt_promises_is_the_one_the_backend_implements
     """The prompt tells the agent a virtual path becomes a shell path by dropping the
     leading slash.
     """
-    from kingfisher.infrastructure.harness.backend import backend_at
+    from kingfisher.plugins.sessions.backend import backend_at
 
     backend = backend_at(cfg, session_dir)
     cwd = Path(backend.default.cwd).resolve()
@@ -239,7 +239,7 @@ def test_the_skills_exception_is_still_an_exception(cfg, session_dir):
     """The skills section warns that `/skills` is the one path where dropping the slash
     silently reads the wrong directory.
     """
-    from kingfisher.infrastructure.harness.backend import backend_at
+    from kingfisher.plugins.sessions.backend import backend_at
 
     backend = backend_at(cfg, session_dir)
     cwd = Path(backend.default.cwd).resolve()

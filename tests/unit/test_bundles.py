@@ -12,7 +12,7 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import backend_at, skills_sources
+from kingfisher.infrastructure.harness.backend import skills_sources
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.kinds.agents import reading as agent_reading
 from kingfisher.kinds.agents.spec import AgentError
@@ -22,6 +22,7 @@ from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.kinds.tools.catalogue import ToolError
 from kingfisher.kinds.tools.spec import Offering, tool_name
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
+from kingfisher.plugins.sessions.backend import backend_at
 from kingfisher.presentation.cli.health import examine, worst
 from kingfisher.presentation.cli.listing import failed, render
 from tests.conftest import FakeToolCallingModel, a_subagent, subagent_of

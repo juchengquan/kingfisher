@@ -5,19 +5,13 @@ import shutil
 
 from kingfisher import LocalSessions, WorkspacePaths
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
-from kingfisher.infrastructure.workspace import (
-    EXAMPLE,
-    EXAMPLES,
-    LocalSessionDirs,
-    ensure_definitions,
-    ensure_layout,
-    ensure_session_layout,
-)
+from kingfisher.infrastructure.workspace import EXAMPLE, EXAMPLES, ensure_definitions, ensure_layout
 from kingfisher.layout import (
     HARNESS,
     LAYOUT_DIRS,
     SESSION_DIRS,
 )
+from kingfisher.plugins.sessions.folders import LocalSessionDirs, ensure_session_layout
 from tests.conftest import StubCheckpointer
 
 

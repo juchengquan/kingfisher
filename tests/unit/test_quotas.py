@@ -11,7 +11,7 @@ from langgraph.errors import GraphRecursionError
 from kingfisher import Kingfisher, LocalSessions
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import QuotaExceededError
-from kingfisher.infrastructure.workspace import session_bytes
+from kingfisher.plugins.sessions.folders import session_bytes
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 

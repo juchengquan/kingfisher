@@ -11,14 +11,10 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.ports import CommandResult, CommandRunner
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import (
-    LocalSessions,
-    WorkspaceScopedBackend,
-    backend_at,
-)
 from kingfisher.infrastructure.harness.usable_backend import refuse_unusable_backend
 from kingfisher.infrastructure.steps import drive
 from kingfisher.layout import INPUTS
+from kingfisher.plugins.sessions.backend import LocalSessions, WorkspaceScopedBackend, backend_at
 from tests.conftest import StubCheckpointer, an_agent, harness_in
 from tests.unit.test_run import StubAgent
 from tests.unit.test_session_files import Elsewhere as KeptElsewhere

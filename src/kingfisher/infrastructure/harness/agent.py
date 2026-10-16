@@ -169,7 +169,7 @@ def read_only_permissions(layout: Layout = DEFAULT_LAYOUT) -> list[FilesystemPer
     results are refused by two of them: Landlock cannot carve a folder out of the
     scratchpad it grants whole.
 
-    `infrastructure.workspace.permissions` drops the write bits under `/inputs` as
+    `plugins.sessions.permissions` drops the write bits under `/inputs` as
     well, and that is not the other half of this rule -- it is a layer below both. The
     shell runs as the uid owning those files, so it lifts them: measured, `chmod u+w`
     and the same write replaced the caller's file, and `rm -rf inputs` took the folder,

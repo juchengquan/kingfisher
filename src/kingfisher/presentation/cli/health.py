@@ -22,9 +22,10 @@ from kingfisher.domain.session import sessions_root
 # everybody who runs `pip install kingfisher`. The command ships in this wheel, so it
 # takes each name where it lives.
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
-from kingfisher.infrastructure.sandbox import confinement
-from kingfisher.infrastructure.sandbox.bubblewrap import bubblewrap_available
-from kingfisher.infrastructure.sandbox.confinement import (
+from kingfisher.infrastructure.workspace import MemoryBacking, memory_backing
+from kingfisher.plugins.sessions.sandbox import confinement
+from kingfisher.plugins.sessions.sandbox.bubblewrap import bubblewrap_available
+from kingfisher.plugins.sessions.sandbox.confinement import (
     LINUX_FENCES,
     SANDBOX_EXEC,
     Confinement,
@@ -32,7 +33,6 @@ from kingfisher.infrastructure.sandbox.confinement import (
     harness_unfenced,
     shell_confinement,
 )
-from kingfisher.infrastructure.workspace import MemoryBacking, memory_backing
 
 #: `fail` means this deployment will not run. `warn` means it will, and
 #: something about it is worth knowing -- an unconfined shell runs fine.

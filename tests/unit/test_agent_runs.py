@@ -32,7 +32,7 @@ system_prompt: |
 def _session(cfg, session_id: str):
     """One session's directory, made. `_agent_for` takes the directory now: the pin
     lives inside the session rather than in a directory keyed by its name."""
-    from kingfisher.infrastructure.workspace import ensure_session_layout
+    from kingfisher.plugins.sessions.folders import ensure_session_layout
 
     return ensure_session_layout(cfg.workspace / "sessions" / session_id)
 

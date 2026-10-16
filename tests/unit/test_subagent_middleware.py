@@ -11,7 +11,7 @@ from langchain_core.messages import AIMessage
 from kingfisher import Kingfisher, LocalSessions, backend_at
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.workspace import ensure_session_layout
+from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import (
     FakeToolCallingModel,
     StubCheckpointer,

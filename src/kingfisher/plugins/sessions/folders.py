@@ -7,7 +7,6 @@ from contextlib import suppress
 from pathlib import Path
 
 from kingfisher.domain.session import names_a_session
-from kingfisher.infrastructure.workspace.permissions import keep_tmp_private, unlock_and_retry
 from kingfisher.layout import (
     AGENTS_SCAFFOLD,
     HARNESS,
@@ -16,6 +15,7 @@ from kingfisher.layout import (
     SCRATCH,
     SESSION_DIRS,
 )
+from kingfisher.plugins.sessions.permissions import keep_tmp_private, unlock_and_retry
 
 
 class LocalSessionDirs:

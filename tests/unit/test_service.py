@@ -17,9 +17,9 @@ from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.steps import drive
-from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.layout import HARNESS, PINNED_AGENT
+from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import (
     FAKE_ENDPOINT,
     OTHER_ENDPOINT,
@@ -163,7 +163,7 @@ def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
     """
     start(cfg, "s")
     monkeypatch.setattr(
-        "kingfisher.infrastructure.harness.backend.protect_inputs",
+        "kingfisher.plugins.sessions.backend.protect_inputs",
         lambda _dir, _inputs=None: ("theirs.pdf: Operation not permitted",),
     )
     service = Kingfisher(

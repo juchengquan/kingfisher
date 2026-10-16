@@ -14,7 +14,7 @@ from kingfisher.domain.references import UnsafeReferenceError
 from kingfisher.infrastructure.harness.agent import build_agent, read_only_permissions
 from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend, host_path
 from kingfisher.infrastructure.harness.session_paths import SessionPaths
-from kingfisher.infrastructure.sandbox.confinement import harness_unfenced
+from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced
 from tests.conftest import FakeToolCallingModel, an_agent, start, tools_dir
 from tests.unit.scripted import Scripted
 from tests.unit.test_session_files import Elsewhere, ElsewhereFiles

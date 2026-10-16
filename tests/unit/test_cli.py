@@ -904,7 +904,7 @@ def test_a_session_that_will_not_go_exits_non_zero(cfg, monkeypatch, capsys):
     start(cfg, "stuck")
     os.utime(cfg.workspace / "sessions" / "stuck", (1_000, 1_000))
     monkeypatch.setattr(
-        "kingfisher.infrastructure.workspace.sessions.LocalSessionDirs.remove_tree",
+        "kingfisher.plugins.sessions.folders.LocalSessionDirs.remove_tree",
         lambda self, path: "directory not removed (Permission denied)",
     )
 

@@ -18,11 +18,11 @@ from langchain_core.messages import AIMessage
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import backend_at
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE
+from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeToolCallingModel, subagent_of
 
 #: The installed package, as a library author would write it: a `SubAgent`, typed

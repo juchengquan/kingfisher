@@ -23,12 +23,13 @@ from pathlib import Path
 import pytest
 
 from kingfisher.domain.ports import CommandResult
-from kingfisher.infrastructure.harness.backend import LocalSessions, backend_at
-from kingfisher.infrastructure.sandbox import confinement
-from kingfisher.infrastructure.sandbox.bubblewrap import BubblewrapRunner
-from kingfisher.infrastructure.sandbox.fence import LandlockRunner
-from kingfisher.infrastructure.workspace import ensure_layout, ensure_session_layout
+from kingfisher.infrastructure.workspace import ensure_layout
 from kingfisher.layout import DEFAULT_LAYOUT, HARNESS, INPUTS_ROUTE, SAVED_RESULTS, Layout
+from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
+from kingfisher.plugins.sessions.folders import ensure_session_layout
+from kingfisher.plugins.sessions.sandbox import confinement
+from kingfisher.plugins.sessions.sandbox.bubblewrap import BubblewrapRunner
+from kingfisher.plugins.sessions.sandbox.fence import LandlockRunner
 
 macos = pytest.mark.skipif(
     platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
@@ -1468,7 +1469,7 @@ def test_what_the_shell_reads_follows_each_fences_shape(tmp_path):
     fences grant a list and nothing else. A rule asking only "is it in the workspace"
     would call `/tmp` safe on a Mac, where it is not.
     """
-    from kingfisher.infrastructure.sandbox.confinement import (
+    from kingfisher.plugins.sessions.sandbox.confinement import (
         BUBBLEWRAP,
         LANDLOCK,
         SANDBOX_EXEC,
@@ -1502,7 +1503,7 @@ def test_each_linux_fence_is_read_from_its_own_list_of_system_paths(cfg):
     Asserted as a difference rather than against either list, so adding a system path
     to both fences leaves this alone and giving one fence the other's list reddens it.
     """
-    from kingfisher.infrastructure.sandbox import bubblewrap, fence
+    from kingfisher.plugins.sessions.sandbox import bubblewrap, fence
 
     assert set(fence.SYSTEM_PATHS) != set(bubblewrap.SYSTEM_PATHS), (
         "the two lists are identical, so this rule cannot tell them apart"

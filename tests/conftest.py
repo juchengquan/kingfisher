@@ -16,11 +16,8 @@ from langchain_core.language_models.fake_chat_models import FakeMessagesListChat
 from kingfisher.config import Config, Endpoint, Landing, ModelProfile, Models, WireFormat
 from kingfisher.infrastructure.harness.models import WIRE_FORMATS
 from kingfisher.infrastructure.steps import drive
-from kingfisher.infrastructure.workspace import (
-    ensure_definitions,
-    ensure_layout,
-    ensure_session_layout,
-)
+from kingfisher.infrastructure.workspace import ensure_definitions, ensure_layout
+from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.unit.scripted import Scripted
 
 if TYPE_CHECKING:
@@ -236,7 +233,7 @@ def start(cfg, session_id: str) -> str:
     deployment ran against a session holding both spellings -- and a measurement of
     which folder production had made was really a measurement of this helper.
     """
-    from kingfisher.infrastructure.workspace import ensure_session_layout
+    from kingfisher.plugins.sessions.folders import ensure_session_layout
 
     ensure_session_layout(
         cfg.workspace / "sessions" / session_id,
@@ -286,8 +283,8 @@ def _backend_in(cfg, session_dir: Path):
     """Kingfisher's own backend for a session kept in this directory, laid out first as
     `LocalSessions` lays out every session it opens.
     """
-    from kingfisher.infrastructure.harness.backend import backend_at
-    from kingfisher.infrastructure.workspace import ensure_session_layout
+    from kingfisher.plugins.sessions.backend import backend_at
+    from kingfisher.plugins.sessions.folders import ensure_session_layout
 
     return backend_at(cfg, ensure_session_layout(Path(session_dir)))
 
