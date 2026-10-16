@@ -2470,6 +2470,52 @@ entry above justified 500 on time, said nothing about memory, and memory was the
 cost. pypdf, which `pdf_pages` uses, needed nothing: 2,000 pages copied in 0.16s and 109
 MB, measured before changing anything. *(2026-10-14, from an architecture review.)*
 
+**`mask_secrets` could be made to spend days on one line, and answered for a fifth of
+a file as though it were the file.** The bundled tool, and the one shipped tool written
+for content nobody trusts -- which makes its input the attacker's, not the
+deployment's.
+
+Its address pattern was `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`. The `.`,
+`-`, `+` and `%` are in that class and are word characters to nobody, so each one
+starts a fresh `\b` the class can still consume through: on a run with no `@` every
+start position consumed to the end of the run and backtracked the whole way. Measured
+through the real tool -- 128 KB of `1.` took 7.25 seconds, 1 MB took 472, clean n², so
+about five and a half days at the 32 MB the tool admits, on the turn's thread where
+nothing can stop it. Non-contrived shapes reach it: a European-formatted number run,
+224 KB in 13.5s; an SNMP OID run, 336 KB in 42.5s. `max_lines` did not help, a single
+huge line being line 1.
+
+Every repetition is bounded now, and the bounds are the standard's rather than picked:
+RFC 5321 gives 64 octets for a local part and 255 for a domain. Measured linear after
+it -- 440 times faster at 64 KB, with the same addresses matched and none invented.
+Possessive quantifiers are the other obvious answer and are wrong twice over, which is
+worth recording because it is the fix a reader will reach for: `[A-Za-z0-9.-]++\.`
+cannot give back the dot the pattern then needs, so it matches no address at all, and
+the cost stays n² regardless, because what repeats is the number of positions a match
+is attempted from. Both were measured.
+
+**And the line cut was silent, in the tool whose whole purpose is not being silent.**
+`[:max_lines]` was applied before anything was counted, so a thousand-line file whose
+only credential sat on the last line answered `200 line(s), 0 masked` -- which
+`skills/redaction/` tells the subagent to read as "this file held nothing sensitive",
+and `redactor.yaml`'s own prompt warns that a caller who cannot tell that from "I
+removed the sensitive parts" will eventually treat the second as the first. The header
+says `200 of 1001` now and names what it did not read. `max_lines` is in the docstring,
+which it never was, so the model can see the knob at all.
+
+Raising it is the only remedy this subagent has -- it holds no `read_file`,
+deliberately -- so the number has a ceiling and the answer has a bound in characters,
+for the reason `sql_query` has one: lines are not characters, and two thousand lines of
+a minified payload is not two thousand lines of a log. A non-positive `max_lines` is
+refused rather than answering `0 line(s)`, which reads as an empty file, or `[:-1]`,
+which dropped the last line -- the one a credential is as likely to be on as any other.
+
+Nothing held any of it. Two of the three patterns could be deleted with the suite
+green, because one `sk-live-123` was the whole of this tool's coverage. There is a rule
+per pattern now, a time bound driven on a 150 KB line of each pattern's own worst
+shape, and the cut, the ceiling, the remedy and the docstring's numbers each have one.
+*(2026-10-16, from an architecture review.)*
+
 **`http_fetch` bounded nothing, guarded the wrong URL, and read every page as UTF-8.**
 The last of the shipped tools nothing had ever called. Three faults, each driven against
 a server written for the purpose on the loopback:

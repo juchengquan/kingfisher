@@ -14,7 +14,10 @@ one any request may activate; this one arrives with the subagent or not at all.
 1. `mask_secrets` first, always. Never `read_file` a file you are about to quote
    from — the point is that the unmasked text never enters the transcript.
 2. Read the header it returns. `0 masked` and `12 masked` are different answers
-   and the caller needs to know which they got.
+   and the caller needs to know which they got. It also says how many lines it read
+   *of how many the file has* — `200 of 1001` means the other 801 were never looked
+   at, so "this file is clean" is not something you can say yet. Raise `max_lines`
+   and call it again before reporting on a file it did not finish.
 3. Quote the smallest span that makes your point. A masked file is safer than an
    unmasked one, not safe.
 4. Say what you masked. "Three lines contained credentials" is information; a

@@ -569,6 +569,23 @@ for the next byte, and how long the whole call may take. The first is also why t
 second is not enough on its own -- a connection that answers nothing is the socket
 timeout's to end.
 
+**A pattern over text you did not write is a cost too, and it shows up in neither
+bytes nor rows.** `mask_secrets` matched addresses with `[A-Za-z0-9._%+-]+@…`, and `.`,
+`-`, `+` and `%` sit in that class while being word characters to nobody -- so each one
+starts a fresh `\b` the class can still consume through. On a run with no `@`, every
+start position consumed to the end of the run and backtracked the whole way: measured,
+one line of 128 KB took 7.25 seconds and 1 MB took 472, clean n², which is about five
+and a half days at the 32 MB that tool admits. Its input is file content, and it is the
+one shipped tool written for content nobody trusts.
+
+Bound every repetition in a pattern, and take the bound from whatever defines the thing
+you are matching rather than picking one -- RFC 5321 gives 64 octets for an address's
+local part and 255 for its domain, which made that pattern linear and 440 times faster
+at 64 KB with the same matches. Possessive quantifiers look like the answer and are not:
+`[A-Za-z0-9.-]++\.` cannot give back the dot the pattern then needs, so it matches
+nothing at all, and the cost stays n² regardless, because what repeats is the number of
+positions a match is attempted from.
+
 Whatever your tool talks to, the shape is the same: find what it actually spends, and
 then ask whether the library it spends it in gives you a way to stop.
 
