@@ -5024,7 +5024,10 @@ place, because a compiled graph does not say what it was compiled on.
 `run` and `stream` still fill in `default_backends` for a caller with no graph, and
 refuse one with a graph the way the constructor does. So their default moved from
 the signature into the body: in the signature it would have been handed to a graph
-caller who never named it. *(2026-10-05.)*
+caller who never named it. *(2026-10-05. Reversed 2026-10-16: they require
+`backends=` as the constructor does, graph or not. A default there was the core
+picking what a deployment's agents run on, and the core now names no sessions
+implementation at all.)*
 
 **`backends` has no default.** It kept `None` only so that leaving it out reached a
 message naming `default_backends`. A missing argument is reported by the type checker

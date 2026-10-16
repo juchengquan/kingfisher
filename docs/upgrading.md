@@ -580,11 +580,11 @@ session's directory on this host comes from them instead.
 | Before | Now |
 |---|---|
 | `Kingfisher(cfg, graph=my_graph)` | `Kingfisher(cfg, graph=my_graph, backends=default_backends)`, or the session backends that reach where your graph's backend keeps a session. A graph without `backends=` is **refused**. |
-| `run(..., graph=my_graph)`, `stream(..., graph=my_graph)` | Name `backends=` beside `graph=` here too. Without a graph, `backends` still defaults to `default_backends`. |
+| `run(...)`, `stream(...)`, with or without `graph=` | Name `backends=` here too. Neither fills it in. |
 | `Kingfisher(cfg, backends=default_backends, runner=my_runner)` | `Kingfisher(cfg, backends=DefaultBackends(runner=my_runner))`. `runner=` is gone from `Kingfisher`; `my_runner` is still a callable given the session's directory. |
 | `open(cfg, session_id, /, *, catalogue=None, runner=None)` and `aopen` on your `SessionBackends` | Drop `runner`. A subclass of `DefaultBackends` gets the runner it was built with from `super().open(...)`; session backends of your own decide how their commands run themselves. |
 | A factory passed as `threads=`, called with the session's directory, `<workspace>/sessions/<id>` | Called with the session's id. A factory that kept a file per session on this host builds that path itself, from its own configuration. A checkpointer passed as `threads=` rather than a factory is unaffected. |
-| `Kingfisher(cfg)` with no `backends=` | **Refused** by Python: `backends` has no default on the constructor (#657). Pass `backends=default_backends`. Only `run()` and `stream()` still fill it in, and only without a graph. |
+| `Kingfisher(cfg)` with no `backends=` | **Refused** by Python: `backends` has no default on the constructor (#657), nor on `run()` and `stream()`. Pass `backends=default_backends`. |
 
 Every session's backend is now checked when it is opened, beside a pre-built graph
 too: it has to run commands as deepagents recognises them, and route every path the
@@ -813,8 +813,7 @@ backend* and *A tool's path is the backend's path*, explains why.
 | `KINGFISHER_DEFINITIONS_DIR is …, which is not a directory` | The folder is not there, or its mount failed | Run `kingfisher seed`, or fix the mount; a start never makes it |
 | `… neither may be inside the other …` | The definitions folder and the workspace are one folder, or one holds the other | Give each a folder of its own; see *Definitions in a folder of their own* |
 | `TypeError: backends= takes a SessionBackends …` | A plain factory function, or one backend, passed as `backends=` | Subclass `DefaultBackends` |
-| `TypeError: … missing 1 required keyword-only argument: 'backends'` | `Kingfisher(...)` called without `backends=`, with or without a graph | Pass `backends=default_backends`, or session backends of your own; see *Session backends always given* |
-| `a pre-built graph needs session backends named beside it …` | `run()` or `stream()` given `graph=` without `backends=` | Name `backends=` beside the graph |
+| `TypeError: … missing 1 required keyword-only argument: 'backends'` | `Kingfisher(...)`, `run()` or `stream()` called without `backends=`, with or without a graph | Pass `backends=default_backends`, or session backends of your own; see *Session backends always given* |
 | `ConfigError: … is not recognised by deepagents as running commands …` or `… routes nothing covering …` | A session backend your `open` returned has no shell, or leaves a path unrouted | Subclass `SandboxBackendProtocol`, or route the path; see *For backend authors* |
 | `KINGFISHER_BACKEND_FACTORY was renamed …` | The setting's old name is still set | Rename it; see *Renamed after #617* |
 | `… is not kept on this host by this session's backend …` | A `path` tool on a backend without local files | Read through `ToolContext`, or give the backend a `host_path` |

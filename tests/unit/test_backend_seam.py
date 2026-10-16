@@ -86,11 +86,13 @@ def test_a_pre_built_graph_is_refused_without_backends_named(cfg):
         Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())  # ty: ignore[missing-argument]
 
 
+@pytest.mark.parametrize("graph", [None, StubAgent("ok")], ids=["alone", "beside-a-graph"])
 @pytest.mark.parametrize("door", [run, stream])
-def test_the_one_liners_refuse_a_graph_without_backends_named(cfg, door):
-    """Their default is a guess about the one thing only a graph's builder knows."""
-    with pytest.raises(ValueError, match="a pre-built graph needs session backends"):
-        door(Request("t"), cfg=cfg, graph=StubAgent("ok"), checkpointer=StubCheckpointer())
+def test_the_one_liners_refuse_to_run_without_backends_named(cfg, door, graph):
+    """A default here would be the core picking what a deployment's agents run on, and
+    beside a graph, a guess about the one thing only the graph's builder knows."""
+    with pytest.raises(TypeError, match="required keyword-only argument: 'backends'"):
+        door(Request("t"), cfg=cfg, graph=graph, checkpointer=StubCheckpointer())
 
 
 def test_a_pre_built_graph_reaches_its_session_through_the_backends_named(cfg, tmp_path):
@@ -269,32 +271,3 @@ def test_the_backend_kingfisher_builds_satisfies_what_it_refuses_others_for(
     whatever the checks became.
     """
     refuse_unusable_backend(backend_at(cfg, session_dir))
-
-
-def test_the_one_liner_keeps_a_default_where_the_constructor_refuses_one(monkeypatch):
-    """`run` and `stream` are conveniences over a *default* `Kingfisher`, and that is
-    the difference worth keeping: the constructor is where a deployment says what its
-    agents run on, and these two are what spares a caller from saying it -- unless
-    the caller hands over a graph, which
-    `test_the_one_liners_refuse_a_graph_without_backends_named` holds.
-    """
-    import importlib
-
-    helpers = importlib.import_module("kingfisher.application.run")
-    handed: list[object] = []
-
-    class Recording:
-        def __init__(self, cfg, **wiring) -> None:
-            handed.append(wiring["backends"])
-
-        def run(self, request) -> None:
-            return None
-
-        def stream(self, request) -> None:
-            return None
-
-    monkeypatch.setattr(helpers, "Kingfisher", Recording)
-    helpers.run("t")
-    helpers.stream("t")
-
-    assert handed == [default_backends, default_backends]

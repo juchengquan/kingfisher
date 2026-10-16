@@ -318,6 +318,7 @@ include = ["spikes/**"]
 
 [tool.ty.overrides.rules]
 invalid-argument-type = "ignore"
+missing-argument = "ignore"
 unresolved-attribute = "ignore"
 
 # `sandlock` is the Linux shell fence, installed by the `fence` extra under a
