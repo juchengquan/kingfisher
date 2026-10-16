@@ -173,7 +173,15 @@ def _event_for(message: Any) -> RunEvent | None:
 
 
 def messages_in(update: Any) -> list[Any]:
-    """Messages carried by a node update, tolerating shapes that carry none."""
+    """Messages carried by a node update, tolerating shapes that carry none.
+
+    A node that writes more than once in a step is streamed as a list of its updates
+    rather than one mapping: a model call whose middleware returns a state update beside
+    the reply, as clearing does. Read as a mapping, that list carried nothing, and every
+    call that cleared went unreported.
+    """
+    if isinstance(update, (list, tuple)):
+        return [message for one in update for message in messages_in(one)]
     if not isinstance(update, Mapping):
         return []
     messages = update.get("messages")

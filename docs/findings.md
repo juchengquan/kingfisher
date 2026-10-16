@@ -48,6 +48,13 @@ wrong.*
   the conversation held at the last `values` are what tell a rewrite apart --
   `SeenMessages` in `infrastructure/harness/runtime.py`, held by
   `tests/unit/test_rewritten_events.py`. *(2026-10-16, langgraph 1.2.15.)*
+- **A node that writes twice in one step streams its update as a list.** A model call
+  whose middleware returns a state update beside the reply -- clearing, once it moved
+  inside the model call -- arrives as `{"model": [{"messages": [reply]}, {"messages":
+  [handles]}]}` rather than one mapping. Read as a mapping it carried nothing, so every
+  call that cleared went missing from the events, reply and all. `messages_in` in
+  `infrastructure/harness/runtime.py` reads both shapes, held by
+  `tests/unit/test_rewritten_events.py`. *(2026-10-16, langgraph 1.2.15.)*
 - **Tool results arrive on the `messages` stream untruncated.** They must be
   skipped explicitly, or preview protection is bypassed and a 50KB file read
   reaches the terminal.

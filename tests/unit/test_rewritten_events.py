@@ -47,6 +47,27 @@ def test_a_message_the_conversation_already_held_is_not_announced_again():
     assert [(e.kind, e.text) for e in events] == [("tool_result", "more")]
 
 
+def test_a_step_that_writes_twice_is_read_whole():
+    """A model call that clears streams its reply and its handles as a list of two
+    updates, and a reader expecting one mapping reported neither -- the calls that
+    cleared went missing from the events once clearing moved inside the model call."""
+    seen = runtime.SeenMessages()
+    result = ToolMessage("ten results", tool_call_id="c1", name="web_search", id="t1")
+    _events((), "values", {"messages": [HumanMessage("go", id="h1"), result]}, seen)
+    reply = AIMessage(
+        "", tool_calls=[{"name": "web_search", "args": {}, "id": "c2"}], id="a2",
+        usage_metadata=USAGE,
+    )
+    written = [
+        {"messages": [reply]},
+        {"messages": [result.model_copy(update={"content": "handle"})]},
+    ]
+
+    events = _events((), "updates", {"model": written}, seen)
+
+    assert [e.kind for e in events] == ["model_call"]
+
+
 def test_each_graph_is_judged_by_its_own_conversation():
     """A subagent's conversation is another graph's, streamed under its namespace: what
     the main agent holds does not make a subagent's message a rewrite, nor the reverse."""
