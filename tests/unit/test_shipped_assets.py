@@ -358,7 +358,7 @@ def test_the_readme_snippet_runs_and_uses_only_the_public_api(
         # The example sits in a blockquote, so every line carries the marker.
         source = "\n".join(line.removeprefix(">").removeprefix(" ") for line in block.splitlines())
 
-        assert "kingfisher.presentation" not in source
+        assert "kingfisher.cli" not in source
         assert "kingfisher.core" not in source
         for name in re.findall(r"^from kingfisher import (.+)$", source, re.M):
             for imported in (part.strip() for part in name.split(",")):

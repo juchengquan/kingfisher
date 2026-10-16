@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
+from kingfisher.cli.health import examine, worst
+from kingfisher.cli.listing import failed, render
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.backend import skills_sources
@@ -23,8 +25,6 @@ from kingfisher.core.definitions.tools.spec import Offering, tool_name
 from kingfisher.core.inventory import inventory
 from kingfisher.core.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
 from kingfisher.plugins.sessions.backend import backend_at
-from kingfisher.presentation.cli.health import examine, worst
-from kingfisher.presentation.cli.listing import failed, render
 from tests.conftest import FakeToolCallingModel, a_subagent, subagent_of
 
 DEFINITION = "name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"

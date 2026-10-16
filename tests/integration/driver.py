@@ -42,6 +42,7 @@ from kingfisher import (
     config_from_env,
     paths_from_env,
 )
+from kingfisher.cli.progress import show
 from kingfisher.core.access.capabilities import ALL, CapabilityError, all_but
 from kingfisher.core.config import Config
 from kingfisher.core.definitions import seeding
@@ -51,7 +52,6 @@ from kingfisher.core.session.model import sessions_root
 from kingfisher.core.session.runlog import usage_of
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins.sessions.folders import ensure_session_layout
-from kingfisher.presentation.cli.progress import show
 
 #: The grants this driver exposes, in the order they are listed and reported.
 #: `builtin_tools` and `tools` are two axes rather than one because they are
@@ -108,8 +108,8 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     flags rather than losing them to the shipped command. Removing them would have
     cost 23 edits across 8 files to buy something this import already gives.
     """
+    from kingfisher.cli.listing import failed, render
     from kingfisher.core.inventory import inventory
-    from kingfisher.presentation.cli.listing import failed, render
 
     found = inventory(cfg)
     for line in render(found):

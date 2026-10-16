@@ -20,6 +20,7 @@ from kingfisher import (
     UnknownSessionError,
     backend_at,
 )
+from kingfisher.cli.__main__ import main
 from kingfisher.core.access.source_ids import parse
 from kingfisher.core.agent.backend import (
     Sessions,
@@ -39,7 +40,6 @@ from kingfisher.core.session.files import (
     read_artifact,
 )
 from kingfisher.core.session.steps import drive
-from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import Through, an_agent, pin, start
 from tests.unit.scripted import Scripted
 

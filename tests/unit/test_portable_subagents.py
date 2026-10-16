@@ -443,8 +443,8 @@ def test_the_listing_says_a_carried_tool_is_not_in_this_workspace(
     this workspace is the thing an operator cannot audit -- driven against the shipped
     catalogue rather than a fixture, so it is the output a reader actually gets.
     """
+    from kingfisher.cli.listing import render
     from kingfisher.core.inventory import inventory
-    from kingfisher.presentation.cli.listing import render
 
     printed = list(render(inventory(workspace_with_presets)))
 
@@ -460,7 +460,7 @@ def test_doctor_names_what_arrived_with_a_definition(workspace_with_presets):
     defect -- but said at all, because a carried bundle's tools run in this sandbox
     on this deployment's credentials and are files nobody here reviewed.
     """
-    from kingfisher.presentation.cli.health import examine
+    from kingfisher.cli.health import examine
 
     said = [
         check

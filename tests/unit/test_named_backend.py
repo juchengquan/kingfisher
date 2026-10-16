@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 
 from kingfisher import LocalSessions
+from kingfisher.cli.configured import configured_sessions
 from kingfisher.core.agent.backend import Sessions
 from kingfisher.core.config import REMOVED_SETTINGS, RENAMED_SETTINGS, ConfigError
 from kingfisher.core.environment import Environment
 from kingfisher.core.wiring import store_named
-from kingfisher.presentation.cli.configured import configured_sessions
 
 HERE = __name__
 

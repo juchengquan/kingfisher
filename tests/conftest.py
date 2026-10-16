@@ -440,7 +440,7 @@ def repository_root(start: Path | None = None) -> Path:
 #: Every module that calls `load_dotenv`, each reached by a test. Named rather than
 #: found at run time so the guard below patches the name those modules bound, and
 #: `test_every_module_that_loads_a_dotenv_file_is_guarded` is what finds a third.
-READS_DOTENV = ("kingfisher.presentation.cli.__main__", "tests.integration.driver")
+READS_DOTENV = ("kingfisher.cli.__main__", "tests.integration.driver")
 
 
 def refusing(protected: Path) -> Callable[..., bool]:

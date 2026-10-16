@@ -134,7 +134,7 @@ def test_doctor_warns_where_nothing_it_can_see_keeps_the_shell_out(cfg, change, 
     """A warning and never a failure: the deployment runs, and may well be fenced by
     something this command cannot see. What it can say is where to look.
     """
-    from kingfisher.presentation.cli.health import _session_files
+    from kingfisher.cli.health import _session_files
 
     (check,) = _session_files(replace(cfg, **change))
 
@@ -144,8 +144,8 @@ def test_doctor_warns_where_nothing_it_can_see_keeps_the_shell_out(cfg, change, 
 
 
 def test_doctor_is_satisfied_where_the_sandbox_keeps_the_shell_out(cfg):
+    from kingfisher.cli.health import _session_files
     from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced
-    from kingfisher.presentation.cli.health import _session_files
 
     if harness_unfenced(cfg) is not None:
         pytest.skip("no sandbox kingfisher applies itself is available on this host")
@@ -159,7 +159,7 @@ def test_a_session_key_still_set_is_reported_as_read_by_nothing():
     """Set by a deployment that followed the upgrade notes of the day before. It now
     does nothing, and the only thing that will ever say so is this.
     """
-    from kingfisher.presentation.cli.health import _retired
+    from kingfisher.cli.health import _retired
 
     (check,) = _retired({"KINGFISHER_SESSION_KEY": "a" * 64})
 
