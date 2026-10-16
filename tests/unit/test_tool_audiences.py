@@ -11,7 +11,7 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.tools import StructuredTool, tool
 
 import kingfisher
-from kingfisher import backend_at, default_backends
+from kingfisher import backend_at
 from kingfisher.application.inventory import inventory
 from kingfisher.application.service import Kingfisher
 from kingfisher.domain.access import AccessError, parse
@@ -146,7 +146,7 @@ def test_a_caller_the_tool_shuts_out_does_not_get_it_from_an_agent_that_grants_i
     """Driven through the real builder: B opens `surveyor`, which names the tool, and
     the tool itself admits only A.
     """
-    kf = Kingfisher(policied, backends=default_backends)
+    kf = Kingfisher(policied)
 
     assert "line_count" in built(kf, ("A",)), "the control: A is admitted"
     assert "line_count" not in built(kf, ("B",))
@@ -160,7 +160,7 @@ def test_an_agent_granting_every_tool_still_leaves_it_out(policied):
     (agents / "surveyor.yaml").write_text(
         AGENT.replace("tools: [line_count]\n", ""), encoding="utf-8"
     )
-    kf = Kingfisher(policied, backends=default_backends)
+    kf = Kingfisher(policied)
 
     assert "line_count" in built(kf, ("A",))
     assert "line_count" not in built(kf, ("B",))
@@ -175,7 +175,7 @@ def test_an_agents_entry_can_narrow_the_tools_audience_and_never_widen_it(polici
         ),
         encoding="utf-8",
     )
-    kf = Kingfisher(policied, backends=default_backends)
+    kf = Kingfisher(policied)
 
     assert "line_count" not in built(kf, ("B",)), "the entry widened the tool"
     assert "line_count" not in built(kf, ("A",)), "the entry was ignored"
@@ -195,7 +195,7 @@ def test_a_tool_naming_an_undeclared_source_id_stops_the_deployment(policied):
     )
 
     with pytest.raises(AccessError, match=r"line_count\.py::line_count.*'sales_bd'"):
-        Kingfisher(policied, backends=default_backends)
+        Kingfisher(policied)
 
 
 def test_a_saved_result_is_stamped_no_wider_than_its_tool():
@@ -241,7 +241,7 @@ def test_a_subagents_own_tool_is_held_back_from_a_caller_it_shuts_out(policied):
     subagents = policied.catalogue_roots["subagents"]
     subagents.mkdir(parents=True, exist_ok=True)
     (subagents / "counter.py").write_text(CARRIER, encoding="utf-8")
-    kf = Kingfisher(policied, backends=default_backends)
+    kf = Kingfisher(policied)
 
     assert [one.name for one in _private_tools(kf.catalogue, "counter", held=frozenset({"A"}))] == [
         "count"
@@ -296,7 +296,7 @@ def test_the_run_report_agrees_with_the_build(policied):
     from kingfisher.infrastructure.steps import drive
     from tests.conftest import harness_in
 
-    kf = Kingfisher(policied, backends=default_backends)
+    kf = Kingfisher(policied)
 
     def report(held_names: tuple[str, ...]) -> dict[str, tuple[str, ...]]:
         session = kf.workspace / "sessions" / f"report-{'-'.join(held_names)}"

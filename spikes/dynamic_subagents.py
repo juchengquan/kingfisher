@@ -76,7 +76,7 @@ system_prompt: |
 def main() -> int:
     load_dotenv()
 
-    from kingfisher import Kingfisher, config_from_env, default_backends
+    from kingfisher import Kingfisher, config_from_env
     from kingfisher.domain.capabilities import Capabilities
     from kingfisher.domain.request import Request
     from kingfisher.kinds.documents import SUFFIX
@@ -99,7 +99,7 @@ def main() -> int:
             written.append(definition)
 
     try:
-        service = Kingfisher(cfg, backends=default_backends)
+        service = Kingfisher(cfg)
         subagents = cfg.catalogue_roots["subagents"]
         print(f"catalogue : {subagents}")
         print(f"task      : fan out over {list(WORDS)}\n", flush=True)

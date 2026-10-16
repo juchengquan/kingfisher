@@ -36,7 +36,7 @@ that imports for real in a fresh interpreter holds it without a folder rule.
 keyword arguments, `backends` among them as required. Two settings name factories, for
 session backends and for wire formats, and nothing else a deployment can replace has
 one, so the command cannot reach most of what the library can. `ports.md` documents six
-repository Protocols and says they are not for replacing, and `graph=` exists for tests.
+repository Protocols and says they are not for replacing.
 
 ## Words
 
@@ -110,7 +110,8 @@ supplies is a follow-up, below.
 replaces one. `KINGFISHER_PLUGINS=module:callable` names a callable returning `Plugins`,
 which gives the command the same reach as the library and replaces both `*_FACTORY`
 settings. `catalogue` and `grants` move onto `Config`, which is otherwise left as it is.
-`Kingfisher`'s methods keep their names and signatures.
+`Kingfisher`'s methods keep their names and signatures. `graph=` stays: a deployment may
+still run a graph it compiled itself, and then has to name the sessions it keeps.
 
 **`backends` stops being required, and that reverses a reason written on it.** It has no
 default so that a deployment cannot wire the service without learning there is a
@@ -151,7 +152,7 @@ move that breaks it; the rest stay, and the last slice adds the rules above.
 
 ## What goes
 
-The six repository Protocols. `graph=`, whose tests move to the fake model. Both
+The six repository Protocols. Both
 `*_FACTORY` settings. `Config.deployment_prompt` and the workspace's `PROMPT.md`. The
 shipped contract kits and their `*_CONTRACT` names. The table that justifies each public
 name. The rules tied to today's folders.
@@ -162,11 +163,12 @@ One pull request each, off `main` once the one before it has merged.
 
 1. This document, and the startup check.
 2. Delete the repository Protocols.
-3. Drop `graph=`.
+3. `backends` stops being required, before anything renames it, so the call sites that
+   only named the default are deleted once rather than renamed first.
 4. Sessions: `SessionBackends` becomes `Sessions`; `DefaultBackends`, `default_backends`
    and `backend_at` become `LocalSessions`; the turn lock moves onto it; `unprotected`
-   becomes its own.
-5. `Plugins` and `KINGFISHER_PLUGINS`; `backends` stops being required.
+   becomes its own, still reported to the caller as `protect_failed`.
+5. `Plugins` and `KINGFISHER_PLUGINS`.
 6. `Adapter` becomes `WireFormat`.
 7. The Instructions plugin.
 8. `catalogue` and `grants` onto `Config`.
@@ -193,6 +195,9 @@ split by subject in a pull request of its own, with the cut lines agreed first:
 
 - **Regrouping `Config`.** Only `catalogue` and `grants` join it here.
 - **Trimming `Kingfisher`'s methods.**
+- **Whether to drop `graph=`.** It was proposed here as a seam only tests used, and is
+  not: `upgrading.md` documents running a graph a deployment compiled itself, and the
+  tests hand it 145 stand-ins of several kinds. Kept until that is decided on its own.
 - **Pausing with a deployment's own conversation store**, which the pause path has not
   been shown to support.
 - **Refusing a save outside the session's folders.** It was built once, on a layout that

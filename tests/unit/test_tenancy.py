@@ -73,7 +73,6 @@ def test_a_request_cannot_widen_past_what_the_deployment_granted(cfg, session_di
     """`intersect` was implemented, tested and called by nothing. Now it runs."""
     kf = Kingfisher(
         cfg,
-        backends=default_backends,
         threads=StubCheckpointer(),
         grants=Capabilities(builtin_tools=("read_file",)),
     )
@@ -85,7 +84,7 @@ def test_a_request_cannot_widen_past_what_the_deployment_granted(cfg, session_di
 
 def test_grants_are_unrestricted_by_default(cfg):
     """A deployment serving one caller is unaffected by any of this."""
-    kf = Kingfisher(cfg, backends=default_backends, threads=StubCheckpointer())
+    kf = Kingfisher(cfg, threads=StubCheckpointer())
     assert kf.grants == UNRESTRICTED
 
 

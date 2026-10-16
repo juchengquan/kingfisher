@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 import kingfisher
-from kingfisher import backend_at, default_backends
+from kingfisher import backend_at
 from kingfisher.application.inventory import inventory
 from kingfisher.application.service import Kingfisher
 from kingfisher.domain.access import (
@@ -134,7 +134,7 @@ def test_a_source_id_spelled_like_a_held_datazone_is_refused():
 
 
 def test_a_caller_in_a_datazone_holds_it_beside_their_source_ids(zoned):
-    kf = Kingfisher(zoned, backends=default_backends)
+    kf = Kingfisher(zoned)
 
     assert kf.held_for(with_datazone(("A",), "finance")) == {"A", zone_name("finance")}
 
@@ -147,7 +147,7 @@ def test_a_caller_in_a_datazone_holds_it_beside_their_source_ids(zoned):
     ],
 )
 def test_a_datazone_that_cannot_be_honoured_is_refused(zoned, source_ids, datazone, said):
-    kf = Kingfisher(zoned, backends=default_backends)
+    kf = Kingfisher(zoned)
 
     with pytest.raises(AccessError, match=said):
         kf.held_for(with_datazone(source_ids, datazone))
@@ -155,7 +155,7 @@ def test_a_datazone_that_cannot_be_honoured_is_refused(zoned, source_ids, datazo
 
 def test_a_datazone_where_none_are_declared_is_refused(cfg):
     """Ignored, the caller would believe the zone narrowed what they were handed."""
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg)
 
     with pytest.raises(AccessError, match="declares no datazones"):
         kf.held_for(with_datazone((), "finance"))
@@ -163,7 +163,7 @@ def test_a_datazone_where_none_are_declared_is_refused(cfg):
 
 def test_every_turn_door_takes_the_datazone(zoned):
     """A door that dropped it would run the turn as a caller in no datazone."""
-    kf = Kingfisher(zoned, backends=default_backends)
+    kf = Kingfisher(zoned)
 
     with pytest.raises(AccessError, match="unknown datazone"):
         kf.run("t", source_ids=("A",), datazone="payroll")
@@ -201,7 +201,7 @@ def test_an_agent_has_no_datazone(zoned):
     (agents / "surveyor.yaml").write_text(AGENT + "datazone: finance\n", encoding="utf-8")
 
     with pytest.raises(AgentError, match="whichever datazone its caller names"):
-        Kingfisher(zoned, backends=default_backends)
+        Kingfisher(zoned)
 
 
 def test_an_entry_has_no_datazone(zoned):
@@ -216,7 +216,7 @@ def test_an_entry_has_no_datazone(zoned):
     )
 
     with pytest.raises(AgentError, match="the one place it means one thing"):
-        Kingfisher(zoned, backends=default_backends)
+        Kingfisher(zoned)
 
 
 def test_a_tool_says_its_datazone_and_the_loader_keeps_it(tmp_path):
@@ -249,14 +249,14 @@ def test_a_datazone_the_vocabulary_lacks_stops_the_deployment(zoned, where):
         )
 
     with pytest.raises(AccessError, match="undeclared datazone 'fiance'"):
-        Kingfisher(zoned, backends=default_backends)
+        Kingfisher(zoned)
 
 
 # -- honoured wherever a reach is decided ----------------------------------------------
 
 
 def test_a_finance_caller_gets_the_finance_tool_and_subagent(zoned):
-    kf = Kingfisher(zoned, backends=default_backends)
+    kf = Kingfisher(zoned)
 
     tools, subagents = built(kf, ("A",), "finance")
 
@@ -265,7 +265,7 @@ def test_a_finance_caller_gets_the_finance_tool_and_subagent(zoned):
 
 
 def test_a_caller_in_another_datazone_gets_neither(zoned):
-    kf = Kingfisher(zoned, backends=default_backends)
+    kf = Kingfisher(zoned)
 
     tools, subagents = built(kf, ("A",), "hr")
 
@@ -278,7 +278,7 @@ def test_a_caller_in_no_datazone_gets_only_what_is_for_any(zoned):
     """Closed rather than open: forgetting to pass a datazone must not hand a caller
     every zone's tools, which is the silent widening `source_ids=` refuses as well.
     """
-    kf = Kingfisher(zoned, backends=default_backends)
+    kf = Kingfisher(zoned)
 
     tools, subagents = built(kf, ("A",), None)
 
@@ -288,7 +288,7 @@ def test_a_caller_in_no_datazone_gets_only_what_is_for_any(zoned):
 
 
 def test_unscoped_reaches_every_datazone(zoned):
-    kf = Kingfisher(zoned, backends=default_backends)
+    kf = Kingfisher(zoned)
 
     tools, subagents = built(kf, UNSCOPED, None)
 

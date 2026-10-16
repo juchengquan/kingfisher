@@ -74,7 +74,7 @@ def test_a_start_makes_no_kind_folder(tmp_path):
     definitions.mkdir()
     cfg = Config(workspace=tmp_path / "ws", definitions=definitions, models=FAKE_CATALOGUE)
 
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg)
 
     assert not list(definitions.iterdir()), "a start wrote into the definitions folder"
     assert not set(DEFINITION_KINDS) & {p.name for p in kf.workspace.iterdir()}, (

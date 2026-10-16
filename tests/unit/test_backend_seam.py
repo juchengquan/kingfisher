@@ -6,6 +6,7 @@ import pytest
 from deepagents.backends import CompositeBackend
 
 from kingfisher import Kingfisher
+from kingfisher.application.origins import Origin
 from kingfisher.application.run import run, stream
 from kingfisher.config import ConfigError
 from kingfisher.domain.ports import CommandResult, CommandRunner
@@ -68,12 +69,13 @@ class Elsewhere(CommandRunner):
         raise NotImplementedError
 
 
-def test_a_service_with_no_filesystem_named_is_refused(cfg):
-    """Silence used to mean kingfisher picked, so a deployment could wire the entire
-    service without learning there was a sandbox in it at all.
+def test_a_service_with_no_backends_named_runs_on_kingfisher_s_own(cfg):
+    """Left out, the session backends are the ones kingfisher ships, which are the
+    sandbox: a default that ran without them would lose confinement by saying less.
     """
-    with pytest.raises(TypeError, match="required keyword-only argument: 'backends'"):
-        Kingfisher(cfg, threads=StubCheckpointer())  # ty: ignore[missing-argument]
+    kf = Kingfisher(cfg, threads=StubCheckpointer())
+
+    assert kf.origins.sessions == Origin("default", cfg.workspace / "sessions")
 
 
 def test_a_pre_built_graph_is_refused_without_backends_named(cfg):
@@ -82,8 +84,8 @@ def test_a_pre_built_graph_is_refused_without_backends_named(cfg):
     and the files it collects -- somewhere a graph whose backend runs elsewhere never
     looks.
     """
-    with pytest.raises(TypeError, match="required keyword-only argument: 'backends'"):
-        Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())  # ty: ignore[missing-argument]
+    with pytest.raises(ValueError, match="a pre-built graph needs session backends"):
+        Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
 
 
 @pytest.mark.parametrize("door", [run, stream])
@@ -269,32 +271,3 @@ def test_the_backend_kingfisher_builds_satisfies_what_it_refuses_others_for(
     whatever the checks became.
     """
     refuse_unusable_backend(backend_at(cfg, session_dir))
-
-
-def test_the_one_liner_keeps_a_default_where_the_constructor_refuses_one(monkeypatch):
-    """`run` and `stream` are conveniences over a *default* `Kingfisher`, and that is
-    the difference worth keeping: the constructor is where a deployment says what its
-    agents run on, and these two are what spares a caller from saying it -- unless
-    the caller hands over a graph, which
-    `test_the_one_liners_refuse_a_graph_without_backends_named` holds.
-    """
-    import importlib
-
-    helpers = importlib.import_module("kingfisher.application.run")
-    handed: list[object] = []
-
-    class Recording:
-        def __init__(self, cfg, **wiring) -> None:
-            handed.append(wiring["backends"])
-
-        def run(self, request) -> None:
-            return None
-
-        def stream(self, request) -> None:
-            return None
-
-    monkeypatch.setattr(helpers, "Kingfisher", Recording)
-    helpers.run("t")
-    helpers.stream("t")
-
-    assert handed == [default_backends, default_backends]

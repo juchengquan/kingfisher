@@ -70,7 +70,7 @@ def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wir
             policied, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
         )
         if wiring == "graph"
-        else Kingfisher(policied, backends=default_backends)
+        else Kingfisher(policied)
     )
     start(policied, "s")
     produced = policied.workspace / "sessions" / "s" / "outputs" / "out.txt"
@@ -130,7 +130,7 @@ def test_opening_a_sessions_files_makes_no_sync_port_call_on_the_loop(cfg, sync_
     """`files_for` on the loop is a session's backend -- a sandbox, on a remote one --
     opened while every other coroutine waits for it.
     """
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg)
     start(cfg, "s")
     sync_calls.clear()
 

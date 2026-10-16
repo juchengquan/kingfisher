@@ -82,7 +82,7 @@ def test_construction_prepares_only_what_sessions_share(cfg):
     """Eagerly, so a broken workspace fails at startup rather than mid-turn -- but only
     the shared tier, and no definition kind, which nothing reads from the workspace.
     """
-    service = Kingfisher(cfg, backends=default_backends, threads=StubCheckpointer())
+    service = Kingfisher(cfg, threads=StubCheckpointer())
 
     assert service.workspace.is_dir()
     assert (service.workspace / "sessions").is_dir()
@@ -118,7 +118,7 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     # A real checkpointer: this builds a real agent, and deepagents type-checks
     # the saver it is handed.
     an_agent(cfg)
-    service = Kingfisher(cfg, backends=default_backends)
+    service = Kingfisher(cfg)
     asked = Request("go", agent="only")
 
     built = drive(service._agent_for(asked, harness_in(cfg, session_dir)))
@@ -343,7 +343,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
-    service = Kingfisher(cfg, backends=default_backends)  # adds http_fetch, sql_query, sql_tables
+    service = Kingfisher(cfg)  # adds http_fetch, sql_query, sql_tables
     start(cfg, "s")
     asked = Request(
         "go",
@@ -378,7 +378,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     # skills at all, so a report naming one "not granted" says the others were -- which
     # is the answer the switch exists to suppress, and what this asserted.
     wired = replace(cfg, skills_enabled=True)
-    service = Kingfisher(wired, backends=default_backends)
+    service = Kingfisher(wired)
     start(cfg, "s")
     asked = Request(
         "go",
@@ -443,7 +443,7 @@ def test_nothing_is_withheld_from_the_skills_axis_when_the_switch_is_off(cfg, sh
         capabilities=Capabilities(skills=("code-review",)),
     )
 
-    prepared = drive(Kingfisher(off, backends=default_backends)._prepare_steps(asked))
+    prepared = drive(Kingfisher(off)._prepare_steps(asked))
     withheld = dict(prepared.withheld)
 
     assert "skill" not in withheld, "a skill cannot be withheld where none is offered"
@@ -465,7 +465,7 @@ def test_the_skills_axis_is_still_reported_when_the_switch_is_on(cfg, shipped):
         capabilities=Capabilities(skills=("code-review",)),
     )
 
-    prepared = drive(Kingfisher(on, backends=default_backends)._prepare_steps(asked))
+    prepared = drive(Kingfisher(on)._prepare_steps(asked))
     withheld = dict(prepared.withheld)
 
     assert withheld["skill"] == tuple(sorted(set(available_skills(on)) - {"code-review"}))
@@ -483,7 +483,7 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
-    service = Kingfisher(cfg, backends=default_backends)
+    service = Kingfisher(cfg)
     start(cfg, "s")
     asked = Request(
         "go",
@@ -750,7 +750,7 @@ def test_a_turn_resolves_its_agent_once(cfg, monkeypatch):
     """
     from kingfisher.application import service as service_module
 
-    service = Kingfisher(_policied(cfg), backends=default_backends)
+    service = Kingfisher(_policied(cfg))
     reads = _snapshot_reads(monkeypatch)
     reported: list[object] = []
     real = service_module.withheld_by_kind
@@ -832,7 +832,7 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     an_agent(cfg, "other")
     # A session whose files are not under the workspace at all.
     elsewhere = ensure_session_layout(tmp_path / "for-one-turn" / "a-session")
-    service = Kingfisher(cfg, backends=default_backends)
+    service = Kingfisher(cfg)
 
     drive(service._agent_for(Request("go", agent="only"), harness_in(cfg, elsewhere)))
 

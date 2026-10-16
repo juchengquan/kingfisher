@@ -90,6 +90,7 @@ from kingfisher.infrastructure.harness.agent import (
 from kingfisher.infrastructure.harness.backend import (
     DefaultBackends,
     SessionBackends,
+    default_backends,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
 from kingfisher.infrastructure.harness.checkpointing import (
@@ -243,15 +244,13 @@ class Kingfisher(Sessions, Disposal):
         # checkpointer is langgraph's own type, which this layer may not name, so
         # it is `Any` and `SharedThreads` is what kingfisher asks of it.
         threads: Any = None,
-        # No default, so leaving it out is reported where the call is written. The
-        # backend is the sandbox -- it confines every command, refuses host paths and
-        # carries the route table a read-only rule is only legal against -- and a
-        # default would let a deployment wire the whole service without learning
-        # there was a boundary at all. A pre-built graph names them too: kingfisher
-        # places a request's inputs, collects what a turn left and takes the turn lock
-        # through them, and only the graph's builder knows where its backend keeps a
-        # session.
-        backends: SessionBackends,
+        # Left out, kingfisher's own, which are the sandbox: they confine every command,
+        # refuse host paths and carry the route table a read-only rule is only legal
+        # against, so naming nothing gets the boundary rather than none. A pre-built
+        # graph has to name them: kingfisher places a request's inputs, collects what a
+        # turn left and takes the turn lock through them, and only the graph's builder
+        # knows where its backend keeps a session.
+        backends: SessionBackends | None = None,
         catalogue: Definitions | Path | None = None,
         grants: Capabilities | None = None,
         middlewares: Mapping[str, MiddlewareFactory] | None = None,
@@ -304,6 +303,16 @@ class Kingfisher(Sessions, Disposal):
             with suppress(ConfigError):
                 builtin_tool_names(self.cfg, self.catalogue)
 
+        if backends is None:
+            if graph is not None:
+                msg = (
+                    "a pre-built graph needs session backends named beside it: they are "
+                    "how kingfisher reaches the sessions its backend keeps, and only the "
+                    "graph's builder knows where that is. Pass backends=default_backends "
+                    "if it was built on kingfisher's own"
+                )
+                raise ValueError(msg)
+            backends = default_backends
         # Session backends and not a backend: one backend is rooted at one session,
         # so a single instance shared by every session would be one filesystem for
         # every caller. A deployment separating its callers by *where their files

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import default_backends, seed
+from kingfisher import seed
 from kingfisher.application.inventory import inventory
 from kingfisher.application.service import Kingfisher
 from kingfisher.infrastructure.sandbox.confinement import LINUX_FENCES
@@ -217,7 +217,7 @@ def test_doctor_sees_an_agents_moved_tool_that_nothing_else_would(cfg):
     assert "probe_one" in checks["tool references"].detail
 
     # And startup is deliberately unchanged: the agent runs, without the tool.
-    Kingfisher(cfg, backends=default_backends)
+    Kingfisher(cfg)
 
 
 def test_a_clean_catalogue_says_its_tool_references_are_fine(cfg, shipped):

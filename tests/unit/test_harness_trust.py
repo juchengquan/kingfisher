@@ -35,7 +35,7 @@ def test_what_a_session_keeps_is_written_as_it_is(scripted):
     start(scripted, "s")
     Scripted.script.append(AIMessage(content="done"))
 
-    Kingfisher(scripted, backends=default_backends).run(Request("go", agent="only", session_id="s"))
+    Kingfisher(scripted).run(Request("go", agent="only", session_id="s"))
 
     held = sorted(p.name for p in (scripted.workspace / "sessions" / "s" / HARNESS).iterdir())
     assert PINNED_AGENT in held, "nothing was pinned, so there was nothing to leave unsigned"

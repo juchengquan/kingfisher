@@ -39,18 +39,10 @@ def _service(
     checkpointer: Any,
     run_events: Any,
 ) -> Kingfisher:
-    if backends is None and graph is not None:
-        msg = (
-            "a pre-built graph needs session backends named beside it: they are how "
-            "kingfisher reaches the sessions its backend keeps, and only the graph's "
-            "builder knows where that is. Pass backends=default_backends if it was "
-            "built on kingfisher's own"
-        )
-        raise ValueError(msg)
     return Kingfisher(
         cfg,
         graph=graph,
-        backends=default_backends if backends is None else backends,
+        backends=backends,
         threads=checkpointer,
         run_events=run_events,
     )

@@ -27,7 +27,7 @@ from langchain_anthropic.chat_models import _format_messages
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately
 
-from kingfisher import Kingfisher, Request, default_backends
+from kingfisher import Kingfisher, Request
 from kingfisher.domain.result import MAIN, LedgerEntry
 from kingfisher.domain.transcript import from_json
 from kingfisher.infrastructure.harness.agent import build_agent
@@ -720,7 +720,7 @@ def _marked(cfg: Any, model: str | None = None, **fields: Any) -> Any:
 def _turn(cfg: Any, *script: AIMessage, way: str = "sync") -> Any:
     """One turn, through `run` or `arun`: the two loops call different hooks."""
     Scripted.script.extend(script)
-    service = Kingfisher(cfg, backends=default_backends)
+    service = Kingfisher(cfg)
     request = Request("go", agent="only", session_id="s")
     return asyncio.run(service.arun(request)) if way == "async" else service.run(request)
 

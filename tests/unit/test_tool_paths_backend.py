@@ -8,7 +8,7 @@ from deepagents.backends import CompositeBackend, FilesystemBackend
 from deepagents.backends.protocol import BackendProtocol
 from langchain_core.messages import AIMessage
 
-from kingfisher import Kingfisher, Request, default_backends
+from kingfisher import Kingfisher, Request
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.references import UnsafeReferenceError
 from kingfisher.infrastructure.harness.agent import build_agent, read_only_permissions
@@ -58,7 +58,7 @@ def test_a_skills_file_reaches_a_tool_where_the_backend_keeps_it(scripted):
     Scripted.script.extend([_calls(path="/skills/report/template.md"), AIMessage("done")])
 
     events = list(
-        Kingfisher(scripted, backends=default_backends).stream(
+        Kingfisher(scripted).stream(
             Request("go", agent="only", session_id="s")
         )
     )
@@ -77,7 +77,7 @@ def test_the_pinned_agent_is_not_handed_to_a_tool(scripted):
     Scripted.script.extend([_calls(path="/.harness/agent.yaml"), AIMessage("done")])
 
     events = list(
-        Kingfisher(scripted, backends=default_backends).stream(
+        Kingfisher(scripted).stream(
             Request("go", agent="only", session_id="s")
         )
     )

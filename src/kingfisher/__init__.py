@@ -55,12 +55,8 @@ _EXPORTS = {
     # Its companion for the object that makes backends and answers for every session:
     # that two sessions never share a filesystem, and that a claim is exclusive.
     "SESSION_BACKENDS_CONTRACT": "kingfisher.infrastructure.harness.backend_contract",
-    # One of the eleven, back. The rule those left under still holds -- a caller
-    # means a caller outside this wheel -- and what changed is that every such
-    # caller now has to name this one: `Kingfisher` no longer picks the filesystem
-    # its agents run on, so a deployment keeping the one it always had writes
-    # `backends=default_backends` and has to be able to say it without reaching past
-    # the door for an infrastructure path.
+    # Public because a pre-built graph built on kingfisher's own has to name it:
+    # `Kingfisher(cfg, graph=..., backends=default_backends)`.
     "default_backends": "kingfisher.infrastructure.harness.backend",
     # What `default_backends` builds for one session, for a directory of the caller's
     # choosing. Public because `ports.md` tells a deployment replacing the backend to

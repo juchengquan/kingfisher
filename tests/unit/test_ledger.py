@@ -139,7 +139,7 @@ def _task(at: str, subagent: str = "researcher") -> AIMessage:
 
 def _run(cfg, *script: AIMessage, kf: Kingfisher | None = None, **request: Any):
     Scripted.script.extend(script)
-    service = kf or Kingfisher(cfg, backends=default_backends)
+    service = kf or Kingfisher(cfg)
     return service.run(Request("go", agent="only", session_id="s", **request))
 
 
@@ -216,7 +216,7 @@ def test_a_renamed_layout_records_under_its_own_scratchpad(ledgered):
     Scripted.script.extend(
         [_calls(("web_search", {"query": "EV price war"}, "c1")), AIMessage(content="done")]
     )
-    service = Kingfisher(moved, backends=default_backends)
+    service = Kingfisher(moved)
     result = service.run(Request("go", agent="only", session_id="s2"))
 
     (entry,) = result.ledger
@@ -314,7 +314,7 @@ def test_the_file_tools_are_not_recorded_and_the_shell_is(ledgered):
             ("web_search", {"query": "EV"}, "c9"),
         ),
         AIMessage(content="done"),
-        kf=Kingfisher(cfg, backends=default_backends),
+        kf=Kingfisher(cfg),
     )
 
     # The control: every file tool ran and succeeded, so absent means skipped.
@@ -408,7 +408,7 @@ def test_what_a_deployments_middleware_left_is_recorded(ledgered):
     anything else would be a record of a result nobody was shown.
     """
     an_agent(ledgered, subagents="[researcher]", middlewares="[tool-note]")
-    kf = Kingfisher(ledgered, backends=default_backends, middlewares={"tool-note": ToolNote})
+    kf = Kingfisher(ledgered, middlewares={"tool-note": ToolNote})
 
     result = _run(
         ledgered,
@@ -787,7 +787,7 @@ def _delegated(cfg, *, awaited: bool = False):
             AIMessage(content="done"),
         ]
     )
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg)
     request = Request("go", agent="only", session_id="s")
     return asyncio.run(kf.arun(request)) if awaited else kf.run(request)
 
@@ -959,7 +959,7 @@ def test_access_is_the_audience_each_result_was_offered_under(ledgered):
         ]
     )
 
-    result = Kingfisher(cfg, backends=default_backends).run(
+    result = Kingfisher(cfg).run(
         Request("go", agent="only", session_id="s"), source_ids=HOLDING
     )
 
@@ -984,7 +984,7 @@ def test_a_subagent_paused_at_a_gate_answers_under_everything_its_run_read(ledge
     would claim a wider audience than the work it repeats.
     """
     cfg = _audienced(ledgered, gated="sql_query")
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg)
     Scripted.script.extend(
         [
             _task("t1"),
@@ -1320,7 +1320,7 @@ def test_the_next_message_lists_what_was_recorded_since_the_last_one(ledgered):
     reaching further lists again what an earlier message already did.
     """
     an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
-    kf = Kingfisher(ledgered, backends=default_backends)
+    kf = Kingfisher(ledgered)
     _run(ledgered, _calls(("web_search", {"query": "one"}, "c1")), AIMessage("done"), kf=kf)
     paused = _run(
         ledgered,
@@ -1351,7 +1351,7 @@ def test_a_resume_says_so_on_its_closing_line_and_an_asked_turn_does_not(ledgere
     hides the turn it paused, and an asked turn with it reaches into the one before.
     """
     an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
-    kf = Kingfisher(ledgered, backends=default_backends)
+    kf = Kingfisher(ledgered)
     paused = _run(ledgered, _calls(("sql_query", {"query": "select 1"}, "c1")), kf=kf)
     Scripted.script.append(AIMessage(content="done"))
     resumed = kf.run(
@@ -1505,7 +1505,7 @@ def test_a_turn_says_on_its_closing_line_whether_it_ended_summarised(ledgered):
     key is called.
     """
     cfg = _windowed(ledgered)
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg)
 
     first = _say(kf, HALF, AIMessage(content="done"))
     assert Scripted.summaries == 0, "the control: a turn under the trigger was summarised"
@@ -1521,7 +1521,7 @@ def test_a_resume_of_a_summarised_turn_is_marked_summarised_too(ledgered):
     """
     an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
     cfg = _windowed(ledgered)
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg)
     # Half before the paused turn, which its summary replaces.
     asked = _say(kf, HALF, AIMessage(content="done"))
     paused = _say(kf, HALF, _calls(("sql_query", {"query": "select 1"}, "c1")))
@@ -1554,7 +1554,7 @@ def test_once_a_turn_summarised_the_next_message_carries_the_index_and_not_the_d
     turn's message and nothing short of both turns shows it arriving.
     """
     cfg = _windowed(ledgered)
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg)
     _say(kf, HALF, _calls(("web_search", {"query": "one"}, "c1")), AIMessage(content="done"))
     _say(kf, HALF, _calls(("web_search", {"query": "two"}, "c2")), AIMessage(content="done"))
     assert Scripted.summaries >= 1, "the summariser never fired on the second turn"
@@ -1697,7 +1697,7 @@ def test_a_resume_is_rolled_up_with_the_turn_it_answered(ledgered):
     """
     an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
     cfg = _windowed(ledgered)
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg)
     paused = _say(
         kf,
         "go",

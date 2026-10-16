@@ -763,7 +763,7 @@ def test_a_turn_the_service_runs_hands_the_tool_its_sessions_backend(scripted):
     Scripted.script.extend(
         [_calls("first_line", file_path="/inputs/notes.txt"), AIMessage(content="done")]
     )
-    kf = Kingfisher(scripted, backends=default_backends)
+    kf = Kingfisher(scripted)
 
     events = list(kf.stream(Request("go", agent="only", session_id=_session(scripted))))
 
@@ -780,7 +780,7 @@ def test_a_resumed_turn_is_handed_it_again(scripted):
     Scripted.script.extend(
         [_calls("first_line", file_path="/inputs/notes.txt"), AIMessage(content="done")]
     )
-    kf = Kingfisher(scripted, backends=default_backends)
+    kf = Kingfisher(scripted)
     paused = kf.run(Request("go", agent="only", session_id=_session(scripted)))
     assert paused.stop_reason == AWAITING, "the turn never stopped, so nothing is resumed"
 

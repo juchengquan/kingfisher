@@ -193,7 +193,7 @@ class ShipToCollector:
     def record(self, event):
         collector.send(dict(event))
 
-kingfisher = Kingfisher(cfg, backends=default_backends, run_events=ShipToCollector())
+kingfisher = Kingfisher(cfg, run_events=ShipToCollector())
 ```
 
 Each event is a flat mapping. `event` names it — `run_start`, `run_end`,
@@ -239,30 +239,24 @@ says which.
 
 ## `backends` — the filesystem the agent runs against
 
-Not optional. Every `Kingfisher` names them:
+Left out, a `Kingfisher` runs on kingfisher's own, `default_backends`:
 
 ```python
-from kingfisher import Kingfisher, default_backends
+from kingfisher import Kingfisher
 
-kingfisher = Kingfisher(cfg, backends=default_backends)
+kingfisher = Kingfisher(cfg)
 ```
 
-Most deployments write exactly that and read no further. `default_backends` opens the
-backend kingfisher used to build for you without asking, unchanged — naming it
-costs you nothing and buys the rest of this section a reader.
+Most deployments write exactly that and read no further.
 
-**Why it is the one thing on this page you cannot leave out.** The backend is the
-sandbox. It wraps every shell command in `sandbox-exec` or Landlock. It refuses a
+**What the default is.** The backend is the sandbox. It wraps every shell command in `sandbox-exec` or Landlock. It refuses a
 host path handed to a file tool. Its route table is what makes `/inputs` read-only
 legal at all — deepagents refuses read-only rules outright on a backend that
 executes unless every rule sits under a route. And it is the filesystem for every
 unrouted path, which is why the model can be told, in a table it reads every turn,
-that *nothing in the workspace is out of the shell's reach*.
-
-None of which makes the old silence unsafe: the default was always the strict
-option and still is, and requiring the parameter makes no deployment safer on its
-own. What it does is make sure nobody wires kingfisher without finding out there
-is a boundary here at all.
+that *nothing in the workspace is out of the shell's reach*. Replace it to keep
+sessions, files or commands somewhere kingfisher did not choose, and the rest of this
+section is what yours then has to do.
 
 **What it is: a `SessionBackends`.** One object whose `open` is called per turn
 with the id of the session it is for, and returns that session's backend — and which
@@ -369,9 +363,7 @@ places a request's inputs, collects what a turn left and takes the turn lock thr
 the session backends you pass — so a graph is refused without them, and one built on
 kingfisher's own passes `backends=default_backends`. Pass the ones that reach the
 sessions your graph's backend keeps: nothing can check that from outside a compiled
-graph. `run()` and `stream()` use `default_backends` when `backends` is left out,
-because they are conveniences over a *default* `Kingfisher` and that is what makes
-the one-liner a one-liner — except beside `graph=`, where they refuse the same way.
+graph. `run()` and `stream()` refuse a graph without them the same way.
 
 **What you return is also what a workspace tool is handed.** A tool that asks for
 it reaches this backend's file methods directly — behind the turn's permissions,

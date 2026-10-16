@@ -9,7 +9,7 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from kingfisher import Kingfisher, backend_at, default_backends
+from kingfisher import Kingfisher, backend_at
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
@@ -625,7 +625,7 @@ def test_no_sandbox_outlives_a_turn_in_which_a_helper_reached_for_it(scripted):
     )
     try:
         events = list(
-            Kingfisher(wired, backends=default_backends).stream(
+            Kingfisher(wired).stream(
                 Request(
                     "go",
                     agent="only",

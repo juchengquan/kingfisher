@@ -91,7 +91,7 @@ def test_a_missing_kind_folder_means_none_of_that_kind_and_is_never_made(cfg):
     for kind in ("skills", "subagents", "tools"):
         shutil.rmtree(cfg.catalogue_roots[kind])
 
-    catalogue = Kingfisher(cfg, backends=default_backends).catalogue
+    catalogue = Kingfisher(cfg).catalogue
 
     assert available_skills(cfg, catalogue=catalogue) == ()
     assert catalogue.subagents.specs == {}
@@ -126,7 +126,7 @@ def test_a_supplied_catalogue_gets_no_kind_folder_made_anywhere(tmp_path, cfg):
     supplied = _roots(_staged(staged))
     fresh = replace(cfg, workspace=tmp_path / "fresh")
 
-    kf = Kingfisher(fresh, catalogue=staged, backends=default_backends)
+    kf = Kingfisher(fresh, catalogue=staged)
 
     assert not set(DEFINITION_KINDS) & {p.name for p in kf.workspace.iterdir()}, (
         "a kind folder in the workspace, where a supplied catalogue is not read from"
@@ -210,7 +210,7 @@ def test_the_service_settles_it_once_and_hands_it_down(tmp_path, cfg):
     """Resolved at construction, not per request."""
     roots = _staged(tmp_path / "staged", skill="staged-only", subagent=SUBAGENT)
 
-    service = Kingfisher(cfg, backends=default_backends, catalogue=roots)
+    service = Kingfisher(cfg, catalogue=roots)
 
     assert service.catalogue == roots
 
@@ -219,7 +219,7 @@ def test_a_broken_catalogue_fails_at_startup(tmp_path, cfg):
     """Rather than on the first turn, when a caller is already waiting."""
     missing = tmp_path / "never-staged"
     with pytest.raises(ConfigError):
-        Kingfisher(cfg, backends=default_backends, catalogue=missing)
+        Kingfisher(cfg, catalogue=missing)
 
 
 NOT_MIDDLEWARE = """
@@ -282,7 +282,7 @@ def test_a_tool_wearing_a_builtin_name_fails_at_startup(cfg):
     (tools_dir(cfg) / "shadow.py").write_text(SHADOWING_TOOL, encoding="utf-8")
 
     with pytest.raises(CapabilityError, match="read_file"):
-        Kingfisher(cfg, backends=default_backends)
+        Kingfisher(cfg)
 
 
 def test_a_workspace_whose_tools_clash_with_nothing_still_starts(cfg):
@@ -294,7 +294,7 @@ def test_a_workspace_whose_tools_clash_with_nothing_still_starts(cfg):
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "fine.py").write_text(ITS_OWN_NAME, encoding="utf-8")
 
-    Kingfisher(cfg, backends=default_backends)
+    Kingfisher(cfg)
 
 
 def test_a_workspace_with_no_tools_never_assembles_the_probe(cfg, monkeypatch):
@@ -311,7 +311,7 @@ def test_a_workspace_with_no_tools_never_assembles_the_probe(cfg, monkeypatch):
 
     monkeypatch.setattr(service_module, "builtin_tool_names", refuse)
 
-    Kingfisher(cfg, backends=default_backends)
+    Kingfisher(cfg)
 
 
 def test_a_subagent_is_activated_from_the_supplied_catalogue(tmp_path, cfg, session_dir):
@@ -463,4 +463,4 @@ def test_a_definition_that_will_not_parse_fails_at_startup_too(cfg):
     )
 
     with pytest.raises(SubagentError):
-        Kingfisher(cfg, graph=None, backends=default_backends)
+        Kingfisher(cfg, graph=None)

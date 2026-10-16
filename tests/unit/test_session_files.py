@@ -206,7 +206,7 @@ def test_a_name_that_is_not_there_is_refused_by_name(cfg, way):
 
 
 def test_a_session_that_is_not_there_is_the_same_error_as_ever(cfg, way):
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg)
 
     with pytest.raises(UnknownSessionError):
         Through(kf, way).artifact("nobody", "outputs/out.txt")

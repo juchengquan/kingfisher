@@ -5031,7 +5031,11 @@ message naming `default_backends`. A missing argument is reported by the type ch
 where the call is written, which is earlier than any message at construction, and
 Python still refuses it at runtime for a caller nobody type-checks. The part of the
 message that was not obvious -- a graph needs them too -- is said by `run` and
-`stream`, the only callers that leave `backends` out on purpose. *(2026-10-05.)*
+`stream`, the only callers that leave `backends` out on purpose. *(2026-10-05. Reversed
+2026-10-16: left out, they are `default_backends`, which are the sandbox, so naming
+nothing gets the boundary rather than an error. A pre-built graph is still refused
+without them, by the constructor now, which is where `run` and `stream` get the refusal
+from.)*
 
 **What a session opens is checked where it is opened.** `refuse_unusable_backend` ran
 only where an agent was built on a backend, which beside a pre-built graph is never,
