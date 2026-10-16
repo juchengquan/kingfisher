@@ -363,7 +363,7 @@ def _under_a_policy(cfg):
     words -- so a session built that way has no agent for a resume to name a different
     one from, and the rules below would assert on nothing.
     """
-    from kingfisher.domain.access import parse
+    from kingfisher.core.access.source_ids import parse
     from tests.conftest import an_agent
 
     for name in ("analyst", "somebody-else"):

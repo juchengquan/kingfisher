@@ -19,18 +19,18 @@ from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.config import DEFAULT_LAYOUT, Config
-from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
-from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.definitions.subagents.spec import RunOn
-from kingfisher.core.definitions.tools.spec import Found, own_audiences
-from kingfisher.domain.access import offers
-from kingfisher.domain.capabilities import (
+from kingfisher.core.access.capabilities import (
     ALL,
     Capabilities,
     CapabilityError,
     Selection,
     refuse_ungranted_models,
 )
+from kingfisher.core.access.source_ids import offers
+from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
+from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.subagents.spec import RunOn
+from kingfisher.core.definitions.tools.spec import Found, own_audiences
 from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.harness.activation import (
     _activated_subagents,

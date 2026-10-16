@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from kingfisher.domain.capabilities import (
+from kingfisher.core.access.capabilities import (
     ALL,
     SELECTIONS,
     SWITCH,

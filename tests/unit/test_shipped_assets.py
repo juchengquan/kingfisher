@@ -17,6 +17,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 from kingfisher import backend_at
+from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.importing import load
 from kingfisher.core.definitions.skills import spec as skill
@@ -24,7 +25,6 @@ from kingfisher.core.definitions.skills.catalogue import reachable
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.core.definitions.tools.spec import Offering, out_of_reach
-from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent, declared_middleware
 from kingfisher.infrastructure.harness.kinds.declared_middleware import ByName
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills
@@ -1395,7 +1395,7 @@ def test_the_generous_variant_is_a_subclass_rather_than_a_setting(shipped):
 
 def _vocabulary(shipped):
     """The shipped `source_ids.yaml`, read the way a deployment would."""
-    from kingfisher.infrastructure import access_policy
+    from kingfisher.core.access import policy as access_policy
 
     return access_policy.load(shipped / "source_ids.yaml")
 
@@ -1472,8 +1472,8 @@ def test_the_shipped_quarters_is_for_sales_db_callers_in_emea(shipped):
     """The datazone, asserted against the files: `analyst` grants `quarters` by its bare
     name, and only the dict's own two lines decide who is handed it.
     """
-    from kingfisher.application.access import held_by
-    from kingfisher.domain.access import handed_work_by, with_datazone
+    from kingfisher.core.access.checks import held_by
+    from kingfisher.core.access.source_ids import handed_work_by, with_datazone
 
     agents = LocalAgentRepository(shipped / "agents").specs
     subagents = LocalSubagentRepository(shipped / "subagents").specs
@@ -1559,7 +1559,7 @@ def test_a_shipped_requirement_takes_both_source_ids_at_once(shipped):
 
 def test_a_shipped_compound_cannot_be_presented_by_a_caller(shipped):
     """It is derived, so claiming it would be claiming the conclusion."""
-    from kingfisher.domain.access import AccessError
+    from kingfisher.core.access.source_ids import AccessError
 
     with pytest.raises(AccessError, match=r"all of \[pii, sales_db\]"):
         _vocabulary(shipped).expand(["sales_db_pii"])
@@ -1608,7 +1608,7 @@ def test_a_bare_entry_sits_beside_a_long_one(shipped):
 
 def test_the_other_presets_still_restrict_nobody(shipped):
     """Adding a policied set must not quietly narrow the ones that were here."""
-    from kingfisher.domain.capabilities import ALL
+    from kingfisher.core.access.capabilities import ALL
 
     agents = LocalAgentRepository(shipped / "agents").specs
 
@@ -1628,7 +1628,7 @@ def test_the_operator_gates_a_tool_it_actually_holds(shipped):
     the definition still parses, still builds, and demonstrates nothing -- which is
     exactly the failure nothing else here would report.
     """
-    from kingfisher.domain.capabilities import ALL
+    from kingfisher.core.access.capabilities import ALL
 
     spec = LocalAgentRepository(shipped / "agents").specs["operator"]
 

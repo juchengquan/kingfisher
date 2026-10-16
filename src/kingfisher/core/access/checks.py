@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from kingfisher.domain.access import (
+from kingfisher.core.access.capabilities import ALL
+from kingfisher.core.access.source_ids import (
     AccessError,
     AccessReport,
     Datazone,
@@ -14,12 +15,11 @@ from kingfisher.domain.access import (
     stated,
     zone_name,
 )
-from kingfisher.domain.capabilities import ALL
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
 
-    from kingfisher.domain.access import SourceIds, Stated
+    from kingfisher.core.access.source_ids import SourceIds, Stated
 
 #: One kind of definition and what this deployment has of it, as the callers
 #: hold it: `("agent", {name: spec})`. A pair rather than two arguments because

@@ -8,7 +8,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.layout import SCRATCH, SCRATCH_ROUTE
 from kingfisher.plugins.sessions.backend import backend_at

@@ -6,9 +6,9 @@ from dataclasses import replace
 
 from kingfisher.application.service import opening_events
 from kingfisher.config import Endpoint, ModelProfile
+from kingfisher.core.access.capabilities import ALL, Capabilities
 from kingfisher.core.definitions.subagents.rules import resolved_model
 from kingfisher.core.definitions.subagents.spec import RunOn
-from kingfisher.domain.capabilities import ALL, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.activation import indistinct_subagents
 from kingfisher.infrastructure.harness.models import WIRE_FORMATS

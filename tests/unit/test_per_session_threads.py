@@ -178,7 +178,7 @@ def test_a_turn_that_fails_to_build_closes_the_saver_it_opened(cfg):
     """The saver is opened beside the build, and a build that raised left it open with
     nothing holding it to close -- the turn never existed, so no turn's end ran.
     """
-    from kingfisher.domain.capabilities import Capabilities
+    from kingfisher.core.access.capabilities import Capabilities
 
     closed: list[object] = []
 

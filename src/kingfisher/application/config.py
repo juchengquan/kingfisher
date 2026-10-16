@@ -16,7 +16,8 @@ from kingfisher.config import (
     ConfigError,
     WorkspacePaths,
 )
-from kingfisher.infrastructure import access_policy, model_catalogue
+from kingfisher.core.access import policy as access_policy
+from kingfisher.infrastructure import model_catalogue
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
 # not re-exported. One blessed import path for the record — `kingfisher.config`

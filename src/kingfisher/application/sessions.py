@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.application.access import caller_holds
+from kingfisher.core.access.checks import caller_holds
+from kingfisher.core.access.source_ids import reaches
 from kingfisher.core.definitions.agents.reading import read
-from kingfisher.domain.access import reaches
 from kingfisher.domain.request import Request, Resume
 from kingfisher.domain.session import (
     DEFAULT_SESSION,
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from kingfisher.config import Config
-    from kingfisher.domain.access import Held, SourceIds
+    from kingfisher.core.access.source_ids import Held, SourceIds
 
 
 class SessionMethods:

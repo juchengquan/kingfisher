@@ -14,17 +14,17 @@ from urllib.parse import urlsplit
 from deepagents.middleware import SubAgentMiddleware
 from langchain_core.runnables import Runnable
 
-from kingfisher.core.definitions.agents.spec import AgentSpec
-from kingfisher.core.definitions.subagents.rules import resolved_model
-from kingfisher.core.definitions.subagents.spec import RunOn, SubagentError, SubagentSpec
-from kingfisher.core.definitions.tools.spec import Found, Offering, select, split_reference
-from kingfisher.domain.capabilities import (
+from kingfisher.core.access.capabilities import (
     ALL,
     Selection,
     ceiling,
     narrowed,
     refuse_unoffered,
 )
+from kingfisher.core.definitions.agents.spec import AgentSpec
+from kingfisher.core.definitions.subagents.rules import resolved_model
+from kingfisher.core.definitions.subagents.spec import RunOn, SubagentError, SubagentSpec
+from kingfisher.core.definitions.tools.spec import Found, Offering, select, split_reference
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.session_paths import SessionPaths

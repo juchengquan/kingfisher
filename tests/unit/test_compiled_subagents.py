@@ -6,6 +6,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import backend_at
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.definitions.subagents.spec import (
     DECLARED,
@@ -14,7 +15,6 @@ from kingfisher.core.definitions.subagents.spec import (
     SubagentError,
     declared,
 )
-from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel, declared_subagents
 

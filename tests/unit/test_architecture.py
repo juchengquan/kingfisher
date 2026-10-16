@@ -141,8 +141,26 @@ def _module_id(path: Path) -> str:
     return path.relative_to(REPO).as_posix()
 
 
+#: Modules outside `domain/` that the domain rule treats as the domain's own: the
+#: vocabulary a request and a definition are written in. The domain names them, so
+#: the rule walks them as well -- otherwise one could take `yaml` from its own area's
+#: entry and every domain module would load it through them.
+DOMAIN_VOCABULARY = (
+    "core/access/capabilities.py",
+    "core/access/source_ids.py",
+    "core/definitions/fields.py",
+)
+
+
 def _inside_domain(module: str) -> bool:
-    return module == "kingfisher.domain" or module.startswith("kingfisher.domain.")
+    return (
+        module == "kingfisher.domain"
+        or module.startswith("kingfisher.domain.")
+        or module in {
+            "kingfisher." + path.removesuffix(".py").replace("/", ".")
+            for path in DOMAIN_VOCABULARY
+        }
+    )
 
 
 def test_a_layer_rule_reaches_into_a_subpackage(tmp_path):
@@ -150,7 +168,7 @@ def test_a_layer_rule_reaches_into_a_subpackage(tmp_path):
 
     Built here rather than asserted against `src/`, so it keeps testing the collection
     after the real tree changes shape. `import yaml` is the violation the domain rule
-    was written for -- the third-party parser that sat in `domain/fields.py` while three
+    was written for -- the third-party parser that sat in `core/definitions/fields.py` while three
     rules looked straight past it.
     """
     layer = tmp_path / "domain"
@@ -1203,7 +1221,8 @@ def test_domain_imports_only_the_standard_library_and_itself():
     `catalogue` or a `harness` would not be free, and those stay refused.
     """
     outside = []
-    for path in _every(_modules_in("domain"), "the domain"):
+    vocabulary = [SRC / path for path in DOMAIN_VOCABULARY]
+    for path in _every(_modules_in("domain"), "the domain") + vocabulary:
         foreign = {
             module
             for module in _imported_modules(path)
@@ -1215,7 +1234,8 @@ def test_domain_imports_only_the_standard_library_and_itself():
             outside.append(f"{_module_id(path)} imports {sorted(foreign)}")
 
     assert not outside, (
-        f"{outside} -- the domain takes the standard library, itself, and an asset "
+        f"{outside} -- the domain takes the standard library, itself and "
+        "DOMAIN_VOCABULARY, and an asset "
         "kind's `spec`; have an adapter do the rest and hand it the result"
     )
 
@@ -1310,6 +1330,8 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # `test_kinds_holds_exactly_the_kinds` refuses a directory that is not in
     # `DEFINITION_KINDS` -- so the hole needs a deliberate edit before it opens.
     "core/definitions": frozenset({"yaml"}),
+    # `policy` reads the access policy file, which is YAML.
+    "core/access": frozenset({"yaml"}),
     # The command reads a `.env` in the directory it runs in; nothing else here does.
     "presentation/cli": frozenset({"dotenv"}),
     # Nothing. The domain has a stricter rule of its own; these two are here so
@@ -1370,11 +1392,11 @@ def test_an_area_is_refused_another_areas_dependencies():
 def test_a_subpackage_is_judged_by_its_own_area():
     """`infrastructure/harness/agent.py` is not judged as `infrastructure/`."""
     buried = SRC / "infrastructure" / "workspace" / "backing.py"
-    for path in (buried, SRC / "domain" / "capabilities.py", SRC / "config.py"):
+    for path in (buried, SRC / "domain" / "request.py", SRC / "config.py"):
         assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
 
     assert _area_of(SRC / "infrastructure" / "harness" / "agent.py") == "infrastructure/harness"
-    assert _area_of(SRC / "domain" / "capabilities.py") == "domain"
+    assert _area_of(SRC / "domain" / "request.py") == "domain"
     # A kind's module is its own area, which is what lets `core/definitions/skills/registry.py`
     # name the runtime without `domain/` or `kinds/` inheriting the permission.
     assert _area_of(KINDS_DIR / "skills" / "registry.py") == "core/definitions/skills"
@@ -2406,14 +2428,14 @@ def test_the_cycle_finder_finds_one_in_this_tree():
     is that the finder sees a loop this package could actually grow.
     """
     graph = _package_graph()
-    assert "kingfisher.domain.capabilities" in graph, "the edge below is about nothing"
+    assert "kingfisher.core.access.capabilities" in graph, "the edge below is about nothing"
 
     closed = dict(graph)
-    closed["kingfisher.domain.capabilities"] = frozenset({"kingfisher.application.service"})
+    closed["kingfisher.core.access.capabilities"] = frozenset({"kingfisher.application.service"})
     found = _cycles(closed)
 
     assert found, "the finder reports nothing on a graph with a cycle in it"
-    assert any("kingfisher.domain.capabilities" in group for group in found), (
+    assert any("kingfisher.core.access.capabilities" in group for group in found), (
         f"the finder found {found}, none of it the loop that was added"
     )
 
@@ -2928,13 +2950,17 @@ def test_the_catalogue_holds_one_module_per_kind():
 #: What sits in `kinds/` and is not a kind. `importing` loads a workspace's own
 #: Python without putting it on the import path, and the kind catalogues that load
 #: Python read it; `documents` reads the YAML the agent and subagent formats are
-#: written in; `__init__` is the folder's docstring and holds no import on purpose.
-#: A fourth name here is where the kinds start sharing an implementation, which they
+#: written in; `fields` reads one decoded field as the value the format meant, for
+#: both those formats and the model catalogue, which share the grammar; `__init__` is
+#: the folder's docstring and holds no import on purpose.
+#: Another name here is where the kinds start sharing an implementation, which they
 #: duplicate in order to avoid -- so it is an edit somebody argues for, not a file
 #: that turns up.
 #: `catalogue` and `seeding` are not helpers the kinds share but the two readers over all
 #: of them: one reads every kind into `Definitions`, the other copies a definitions folder.
-KINDS_HELPERS = frozenset({"__init__", "catalogue", "documents", "importing", "seeding"})
+KINDS_HELPERS = frozenset(
+    {"__init__", "catalogue", "documents", "fields", "importing", "seeding"}
+)
 
 
 def _kinds_directory_contents(root: Path) -> tuple[frozenset[str], frozenset[str]]:
@@ -3661,7 +3687,7 @@ def test_nothing_is_defined_for_tests_alone():
 #
 # The rule above collects `FunctionDef`, `AsyncFunctionDef` and `ClassDef` off
 # each module's body, which is every kind of definition a module has except the
-# commonest one. A constant was invisible to it, and `domain.capabilities.AXES`
+# commonest one. A constant was invisible to it, and `core.access.capabilities.AXES`
 # spent its whole life in that blind spot: a public tuple in the domain, read by
 # three test files and by nothing in either distribution, deleted only because
 # somebody went looking by hand. This half is the same rule pointed at the shape
@@ -4092,7 +4118,7 @@ def test_the_resolve_rule_sees_every_spelling_of_that_reach(source):
     "source",
     [
         "other.resolve(cfg)",
-        "from kingfisher.domain.access import parse",
+        "from kingfisher.core.access.source_ids import parse",
         "confinement.profile(home=h)",
         'getattr(confinement, "profile")(home=h)',
         "make().resolve(cfg)",

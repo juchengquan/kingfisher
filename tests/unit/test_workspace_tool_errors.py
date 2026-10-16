@@ -238,7 +238,7 @@ system_prompt: |
 
 def _subagent_with_a_failing_tool(cfg, session_dir):
     """The same graph, one level down: a subagent holding the failing tool."""
-    from kingfisher.domain.capabilities import Capabilities
+    from kingfisher.core.access.capabilities import Capabilities
     from kingfisher.infrastructure.harness.agent import build_agent
     from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
     from tests.unit.test_delegation_ceiling import _subagent_graphs
@@ -303,7 +303,7 @@ def test_a_helper_below_a_subagent_is_guarded_too(cfg, session_dir):
     reaching for the top-level instance instead is an easy mistake that passes -- a
     standalone subagent has neither the helper nor the bug.
     """
-    from kingfisher.domain.capabilities import Capabilities
+    from kingfisher.core.access.capabilities import Capabilities
     from kingfisher.infrastructure.harness.agent import build_agent
     from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
     from tests.unit.test_delegation_ceiling import _subagent_graphs

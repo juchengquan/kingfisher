@@ -13,8 +13,8 @@ from kingfisher.application.reporting import opening_events
 from kingfisher.application.service import refused_credentials
 from kingfisher.application.turn import turn_message
 from kingfisher.config import ConfigError
+from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
-from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.steps import drive
@@ -732,7 +732,7 @@ def _policied(cfg):
     """A deployment with a vocabulary, which is the only case that resolved twice."""
     import yaml
 
-    from kingfisher.domain.access import parse
+    from kingfisher.core.access.source_ids import parse
 
     an_agent(cfg, "only", source_ids="[A]")
     return replace(cfg, access=parse(yaml.safe_load("source_ids: [A]\n"), source="s.yaml"))

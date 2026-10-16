@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.middlewares.large_pdf_guard import (
     MAX_PDF_BYTES,

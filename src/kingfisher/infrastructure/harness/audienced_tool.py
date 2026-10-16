@@ -7,14 +7,14 @@ from typing import TYPE_CHECKING, Any, cast
 
 from langchain_core.tools import StructuredTool
 
+from kingfisher.core.access.capabilities import ALL
+from kingfisher.core.definitions.fields import Reader
 from kingfisher.core.definitions.tools.catalogue import ToolError
-from kingfisher.domain.capabilities import ALL
-from kingfisher.domain.fields import Reader
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from kingfisher.domain.access import Audience
+    from kingfisher.core.access.source_ids import Audience
 
 
 class AudiencedTool(StructuredTool):

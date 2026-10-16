@@ -12,7 +12,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, LocalSessions
-from kingfisher.domain.capabilities import UNRESTRICTED, Capabilities
+from kingfisher.core.access.capabilities import UNRESTRICTED, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import (
     SessionBusyError,

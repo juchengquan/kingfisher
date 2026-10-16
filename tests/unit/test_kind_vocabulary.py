@@ -13,13 +13,13 @@ import ast
 import inspect
 from dataclasses import fields
 
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.catalogue import ASSET_DIRECTORIES
-from kingfisher.domain.capabilities import Capabilities
 from tests.integration import driver
 
 #: The vocabulary, derived here rather than imported. It was a constant on
-#: `domain.capabilities`, and nothing in the package ever read it -- only
+#: `core.access.capabilities`, and nothing in the package ever read it -- only
 #: these tests and the wire test in `service`, one of which re-derived it
 #: anyway. A name published from the domain for its own tests to import is
 #: API surface pointing the wrong way; `fields(Capabilities)` is the same

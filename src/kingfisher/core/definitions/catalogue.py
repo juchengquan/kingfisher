@@ -8,6 +8,7 @@ from functools import cached_property
 from pathlib import Path
 
 from kingfisher.config import NO_MOUNTS, Config, ConfigError, definition_roots_for
+from kingfisher.core.access.capabilities import ALL, SEPARATOR
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.agents.spec import DIRECTORY as AGENT_DIRECTORY
 from kingfisher.core.definitions.middlewares.catalogue import LocalMiddlewareRepository
@@ -19,7 +20,6 @@ from kingfisher.core.definitions.subagents.rules import refuse_miscounted
 from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository, ToolError
 from kingfisher.core.definitions.tools.spec import Found, Offering
-from kingfisher.domain.capabilities import ALL, SEPARATOR
 from kingfisher.layout import RESERVED_SKILL_FOLDER
 
 

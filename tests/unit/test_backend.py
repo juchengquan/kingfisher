@@ -361,7 +361,7 @@ def test_a_subagent_gets_the_correction_too(cfg, session_dir):
     """
     from langchain_core.messages import AIMessage
 
-    from kingfisher.domain.capabilities import Capabilities
+    from kingfisher.core.access.capabilities import Capabilities
     from kingfisher.infrastructure.harness.agent import build_agent
     from tests.conftest import FakeToolCallingModel, subagents_dir
     from tests.unit.test_delegation_ceiling import _subagent_graphs

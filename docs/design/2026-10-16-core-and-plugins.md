@@ -58,7 +58,7 @@ kingfisher/
   __init__.py          the public names for embedding, and for tool files
   core/
     interfaces.py      the six interfaces
-    definitions/       the five kinds, the catalogue, seeding
+    definitions/       the five kinds, the catalogue, seeding, the field reader
     access/            capabilities, source-id access, audiences, datazones
     agent/             building one request's deepagents graph, kingfisher's own
                        middleware, and prompts/ -- what kingfisher tells every agent,
@@ -215,7 +215,7 @@ One pull request each, off `main` once the one before it has merged.
     classes. *(Landed.)* Then the move itself, with the first of the new rules: the core
     imports nothing from `plugins/`. *(Landed.)*
 11. Move `core/definitions`: the kinds, the catalogue and seeding. *(Landed.)*
-12. Move `core/access`.
+12. Move `core/access`, and the field reader into `core/definitions`. *(Landed.)*
 13. Move `core/agent`.
 14. Move `core/session`.
 15. Move the flat core.

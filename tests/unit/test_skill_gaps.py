@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
+from kingfisher.core.access.capabilities import CapabilityError, all_but
 from kingfisher.core.definitions.skills import registry as skill_registry
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
-from kingfisher.domain.capabilities import CapabilityError, all_but
 
 SKILL = "---\nname: {name}\ndescription: {desc}\n---\nBody.\n"
 

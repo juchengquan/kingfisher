@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import backend_at
 from kingfisher.application.turn import ledger_delta, ledger_index
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.kinds.subagents import as_subagent
 from kingfisher.infrastructure.prompting import (

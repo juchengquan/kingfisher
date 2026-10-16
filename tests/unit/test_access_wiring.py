@@ -14,8 +14,8 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher import LocalSessions, backend_at
 from kingfisher.application.service import Kingfisher
-from kingfisher.domain.access import UNSCOPED, AccessError, parse
-from kingfisher.domain.capabilities import Capabilities, CapabilityError
+from kingfisher.core.access.capabilities import Capabilities, CapabilityError
+from kingfisher.core.access.source_ids import UNSCOPED, AccessError, parse
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.middlewares.narrowing import ToolAllowlist
@@ -221,9 +221,9 @@ def test_one_function_reads_what_shape_a_caller_s_source_ids_are_in():
 
     from tests.conftest import repository_root
 
-    application = repository_root() / "src" / "kingfisher" / "application"
+    src = repository_root() / "src" / "kingfisher"
     readers = set()
-    for path in sorted(application.glob("*.py")):
+    for path in sorted([*(src / "application").glob("*.py"), src / "core/access/checks.py"]):
         for function in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
@@ -238,9 +238,9 @@ def test_one_function_reads_what_shape_a_caller_s_source_ids_are_in():
                 ):
                     readers.add(f"{path.stem}.{function.name}")
 
-    assert readers == {"access.held_by"}, (
+    assert readers == {"checks.held_by"}, (
         f"the shape of source_ids is read in {sorted(readers)} -- ask "
-        "`application.access.held_by` instead, or one reader will disagree with another"
+        "`core.access.checks.held_by` instead, or one reader will disagree with another"
     )
 
 

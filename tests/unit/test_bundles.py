@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.application.inventory import inventory
 from kingfisher.config import ConfigError
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.definitions.agents import reading as agent_reading
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.catalogue import Definitions
@@ -17,7 +18,6 @@ from kingfisher.core.definitions.subagents.catalogue import LocalSubagentReposit
 from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.core.definitions.tools.catalogue import ToolError
 from kingfisher.core.definitions.tools.spec import Offering, tool_name
-from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import skills_sources
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.domain.access import (
+from kingfisher.core.access.capabilities import ALL
+from kingfisher.core.access.source_ids import (
     UNSCOPED,
     AccessError,
     SourceIds,
@@ -15,7 +16,6 @@ from kingfisher.domain.access import (
     spell,
     unlisted,
 )
-from kingfisher.domain.capabilities import ALL
 
 
 def vocabulary(**covers: tuple[str, ...]) -> SourceIds:

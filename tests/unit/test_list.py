@@ -1454,7 +1454,7 @@ def test_a_scoped_view_carries_no_policy(cfg, at_the_command_line):
     import yaml
 
     from kingfisher.application.inventory import inventory
-    from kingfisher.domain.access import parse
+    from kingfisher.core.access.source_ids import parse
 
     # A definition restricting nobody, so the operator's report has something in it
     # and the scoped view emptying it is a difference rather than two empty tuples.
@@ -1648,8 +1648,8 @@ def test_an_entry_narrowing_past_its_definition_is_reported(cfg, at_the_command_
 def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, at_the_command_line):
     """The report is not the point -- this is."""
     from kingfisher import config_from_env
+    from kingfisher.core.access.source_ids import reaches
     from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
-    from kingfisher.domain.access import reaches
 
     _workspace(cfg, NARROWED, vocabulary="source_ids: [A, B, C]\n")
     reach = config_from_env().access

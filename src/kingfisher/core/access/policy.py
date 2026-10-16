@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from kingfisher.domain.access import AccessError, SourceIds, parse
+from kingfisher.core.access.source_ids import AccessError, SourceIds, parse
 
 if TYPE_CHECKING:
     from pathlib import Path

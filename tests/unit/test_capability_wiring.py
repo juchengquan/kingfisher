@@ -16,7 +16,7 @@ from pydantic import Field
 from typing_extensions import TypedDict
 
 from kingfisher import LocalSessions
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.infrastructure.harness.activation import available_skills
 from kingfisher.infrastructure.harness.agent import (
     CapabilityError,

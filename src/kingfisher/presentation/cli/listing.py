@@ -6,8 +6,7 @@ from collections.abc import Iterator
 from pathlib import PurePath
 
 from kingfisher import Inventory, Origins
-from kingfisher.core.definitions.skills.catalogue import SKILL_LAYOUT
-from kingfisher.core.definitions.tools.spec import offered, split_reference
+from kingfisher.core.access.capabilities import ALL
 
 # The renderer's own vocabulary, taken where it lives. A listing prints audiences, tells
 # a bare name from a `where::what` reference, and quotes the sentence a refusal quotes
@@ -16,8 +15,9 @@ from kingfisher.core.definitions.tools.spec import offered, split_reference
 # the one worth naming: a renderer in the domain looks odd until you see that the block
 # a refusal prints is the block a listing prints, so a name two files define reads the
 # same in both. Shared for that reason, not promised for it.
-from kingfisher.domain.access import AUDIENCED, Audience, spell
-from kingfisher.domain.capabilities import ALL
+from kingfisher.core.access.source_ids import AUDIENCED, Audience, spell
+from kingfisher.core.definitions.skills.catalogue import SKILL_LAYOUT
+from kingfisher.core.definitions.tools.spec import offered, split_reference
 from kingfisher.infrastructure.workspace import SEED_HINT
 
 
