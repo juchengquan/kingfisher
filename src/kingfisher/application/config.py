@@ -178,7 +178,7 @@ class Environment:
             models=model_catalogue.load(
                 models_file,
                 self.values,
-                model_catalogue.adapters(self.optional_text("KINGFISHER_ADAPTERS_FACTORY")),
+                model_catalogue.wire_formats(self.optional_text("KINGFISHER_WIRE_FORMATS")),
                 keys_file=self.optional_path("KINGFISHER_MODEL_KEYS_FILE"),
             ),
             access=access_policy.load(access_file),

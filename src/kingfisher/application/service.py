@@ -190,7 +190,7 @@ def _asked(value: str | Request | Resume) -> Request | Resume:
 
 #: What a provider answers with when it will not accept the credentials. Matched
 #: on the exception's own `status_code` rather than its class, so one branch
-#: covers every adapter: `anthropic` and `openai` both raise their own
+#: covers every wire format: `anthropic` and `openai` both raise their own
 #: `AuthenticationError`, and the presentation layer may import neither.
 UNAUTHORIZED = 401
 

@@ -15,7 +15,7 @@
 #
 # `api` picks a wire format. It is not a name you invent here: kingfisher ships
 # the two below, and a deployment adds its own in Python through
-# KINGFISHER_ADAPTERS_FACTORY -- see docs/guides/configuration.md. It is code
+# KINGFISHER_WIRE_FORMATS -- see docs/guides/configuration.md. It is code
 # rather than data because a row names a class to import:
 #
 #   anthropic         Anthropic's wire format. This is the gateway path;

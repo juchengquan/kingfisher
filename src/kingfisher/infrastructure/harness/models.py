@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from kingfisher.config import Adapter, ConfigError, Landing
+from kingfisher.config import ConfigError, Landing, WireFormat
 from kingfisher.domain.capabilities import ALL, Selection, refuse_ungranted_endpoint
 
 if TYPE_CHECKING:
@@ -17,17 +17,17 @@ if TYPE_CHECKING:
 
 #: The wire formats kingfisher ships. `models.yaml` picks from these by name
 #: through an endpoint's `api`, together with any a deployment adds through
-#: `KINGFISHER_ADAPTERS_FACTORY`.
+#: `KINGFISHER_WIRE_FORMATS`.
 #:
 #: A row names its package as a string and `resolve` imports it by name, so neither
 #: provider is an import anywhere in `src/` and neither belongs in `THIRD_PARTY` --
 #: which reads imports, and now refuses a grant nothing spends. Adding one back to
 #: that table on the strength of a row here fails
 #: `test_no_area_is_granted_a_dependency_it_does_not_import`.
-ADAPTERS: Mapping[str, Adapter] = {
+WIRE_FORMATS: Mapping[str, WireFormat] = {
     # The gateway path. MiniMax and anything else imitating Anthropic's wire
     # format lives here — see models.yaml.example, which recommends this style.
-    "anthropic": Adapter(
+    "anthropic": WireFormat(
         "langchain_anthropic:ChatAnthropic",
         Landing(
             model="model",
@@ -37,12 +37,12 @@ ADAPTERS: Mapping[str, Adapter] = {
             timeout="default_request_timeout",
         ),
     ),
-    # OpenAI proper, on the Responses API. This adapter is *not* a general
+    # OpenAI proper, on the Responses API. This wire format is *not* a general
     # OpenAI-compatible client: `/v1/responses` is what we target, and virtually no
-    # gateway imitating OpenAI implements it. Point a gateway at the anthropic adapter
+    # gateway imitating OpenAI implements it. Point a gateway at the anthropic wire format
     # instead. A future Chat-Completions row would be a new entry here, not a flag on
     # this one.
-    "openai_responses": Adapter(
+    "openai_responses": WireFormat(
         "langchain_openai:ChatOpenAI",
         Landing(
             model="model_name",
@@ -68,16 +68,16 @@ FILLABLE = 0.95
 
 def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
     """Build a chat model from `profile`, pointed at `endpoint`."""
-    adapter = endpoint.adapter
-    model = adapter.resolve()(
+    wire_format = endpoint.wire_format
+    model = wire_format.resolve()(
         model=profile.model,
         base_url=endpoint.base_url,
         api_key=endpoint.api_key,
         **profile.kwargs(),
         **profile.extra,
-        **adapter.extra,
+        **wire_format.extra,
     )
-    _refuse_what_did_not_land(model, adapter, profile, endpoint)
+    _refuse_what_did_not_land(model, wire_format, profile, endpoint)
     _refuse_an_output_reservation_that_fills_the_window(model, profile)
     _refuse_a_clearing_mark_the_summarizer_reaches_first(model, profile)
     return model
@@ -155,7 +155,7 @@ def summarizer_trigger(model: BaseChatModel) -> int:
     tokens with none. It also summarises once a request is over its input budget, the
     sooner of the two where `max_tokens` is above a tenth of the window.
 
-    Imported here rather than at the top, because a catalogue reading `ADAPTERS` should
+    Imported here rather than at the top, because a catalogue reading `WIRE_FORMATS` should
     not load deepagents to do it.
     """
     from deepagents.middleware.summarization import (  # noqa: PLC0415
@@ -205,7 +205,7 @@ def _refuse_a_clearing_mark_the_summarizer_reaches_first(
 
 
 def _refuse_what_did_not_land(
-    model: BaseChatModel, adapter: Adapter, profile: ModelProfile, endpoint: Endpoint
+    model: BaseChatModel, wire_format: WireFormat, profile: ModelProfile, endpoint: Endpoint
 ) -> None:
     """Refuse a model that did not keep a value it was built with.
 
@@ -221,7 +221,7 @@ def _refuse_what_did_not_land(
         "timeout": profile.timeout_s,
     }
     for value, expected in sent.items():
-        site = getattr(adapter.lands, value)
+        site = getattr(wire_format.lands, value)
         landed = getattr(model, site, None)
         if hasattr(landed, "get_secret_value"):
             landed = landed.get_secret_value()
@@ -230,7 +230,7 @@ def _refuse_what_did_not_land(
             found = "something else" if value == "api_key" else repr(landed)
             msg = (
                 f"endpoint {profile.endpoint!r} names api {endpoint.api!r}, whose "
-                f"{adapter.chat_class} did not keep {value!r} at {site!r} (found "
+                f"{wire_format.chat_class} did not keep {value!r} at {site!r} (found "
                 f"{found}); refusing to build a model that would send its requests "
                 "somewhere nobody chose"
             )

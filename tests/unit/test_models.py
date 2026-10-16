@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING
 import pytest
 from deepagents.middleware.summarization import compute_summarization_defaults
 
-from kingfisher.config import Adapter, ConfigError, Endpoint, ModelProfile
+from kingfisher.config import ConfigError, Endpoint, ModelProfile, WireFormat
 from kingfisher.infrastructure.harness.models import (
-    ADAPTERS,
     FILLABLE,
+    WIRE_FORMATS,
     build_model,
     summarizer_trigger,
 )
@@ -27,12 +27,12 @@ OPENAI = Endpoint(
     "openai_responses",
     "https://api.openai.com/v1",
     "sk-not-real",
-    adapter=ADAPTERS["openai_responses"],
+    wire_format=WIRE_FORMATS["openai_responses"],
 )
 
 
 def test_openai_uses_the_responses_api(cfg):
-    """The openai adapter targets `/v1/responses`, and only that."""
+    """The openai wire format targets `/v1/responses`, and only that."""
     model = build_model(cfg.models.models["fake-model"], OPENAI)
 
     assert model.use_responses_api is True
@@ -40,7 +40,7 @@ def test_openai_uses_the_responses_api(cfg):
 
 def test_an_adapter_row_cannot_overrule_a_configured_value(cfg):
     """`extra` is additive: it may not name a value the profile carries."""
-    colliding = replace(ADAPTERS["openai_responses"], extra={"max_tokens": 1})
+    colliding = replace(WIRE_FORMATS["openai_responses"], extra={"max_tokens": 1})
 
     with pytest.raises(TypeError, match="multiple values for keyword argument"):
         _build_with(colliding, cfg.models.models["fake-model"])
@@ -104,11 +104,13 @@ def test_every_value_reaches_the_client():
     Read back here as well as inside `build_model`, so deleting that check leaves
     something red besides the test written for it.
     """
-    for api, adapter in sorted(ADAPTERS.items()):
-        endpoint = Endpoint(api, "https://example.invalid/v1", "sk-not-real", adapter=adapter)
+    for api, wire_format in sorted(WIRE_FORMATS.items()):
+        endpoint = Endpoint(
+            api, "https://example.invalid/v1", "sk-not-real", wire_format=wire_format
+        )
         profile = ModelProfile("a-model", "somewhere", max_tokens=321, timeout_s=45)
         model = build_model(profile, endpoint)
-        sites = adapter.lands
+        sites = wire_format.lands
 
         assert getattr(model, sites.model) == profile.model
         assert getattr(model, sites.base_url) == endpoint.base_url
@@ -118,7 +120,7 @@ def test_every_value_reaches_the_client():
 
 
 @dataclass(frozen=True)
-class _Renames(Adapter):
+class _Renames(WireFormat):
     """A row whose class calls one keyword something else, as most vendors' own do."""
 
     keyword: str = "base_url"
@@ -141,7 +143,7 @@ def test_a_url_the_class_did_not_keep_is_refused(cfg):
     this dangerous is that class's own habit of moving an unknown keyword into
     `model_kwargs` and carrying on.
     """
-    shipped = ADAPTERS["openai_responses"]
+    shipped = WIRE_FORMATS["openai_responses"]
     row = _Renames(shipped.chat_class, shipped.lands, shipped.extra)
 
     with (
@@ -157,7 +159,7 @@ def test_a_refusal_never_quotes_the_key_it_found(cfg, monkeypatch):
     """
     ambient = "sk-ambient-not-real"
     monkeypatch.setenv("OPENAI_API_KEY", ambient)
-    shipped = ADAPTERS["openai_responses"]
+    shipped = WIRE_FORMATS["openai_responses"]
     row = _Renames(shipped.chat_class, shipped.lands, shipped.extra, keyword="api_key")
 
     with (
@@ -168,12 +170,12 @@ def test_a_refusal_never_quotes_the_key_it_found(cfg, monkeypatch):
     assert ambient not in str(refused.value)
 
 
-#: The gateway shape `models.yaml.example` recommends, on the adapter most rows use.
+#: The gateway shape `models.yaml.example` recommends, on the wire format most rows use.
 ANTHROPIC = Endpoint(
     "anthropic",
     "https://example.invalid/anthropic",
     "sk-not-real",
-    adapter=ADAPTERS["anthropic"],
+    wire_format=WIRE_FORMATS["anthropic"],
 )
 
 
@@ -518,9 +520,9 @@ def test_the_command_says_it_in_one_line_rather_than_a_traceback(
     assert "Traceback" not in said
 
 
-def _build_with(row: Adapter, profile: ModelProfile) -> Any:
-    """`build_model` on `OPENAI`, with `row` standing in for its shipped adapter."""
-    return build_model(profile, replace(OPENAI, adapter=row))
+def _build_with(row: WireFormat, profile: ModelProfile) -> Any:
+    """`build_model` on `OPENAI`, with `row` standing in for its shipped wire format."""
+    return build_model(profile, replace(OPENAI, wire_format=row))
 
 
 def test_describing_an_adapter_does_not_import_its_sdk():
@@ -546,7 +548,7 @@ def test_a_row_naming_an_absent_class_fails_where_it_is_built():
     """Deferring the import defers the error too, so it has to still be a clear one -- a
     typo'd row must not surface as a mysterious attribute failure.
     """
-    row = replace(ADAPTERS["openai_responses"], chat_class="langchain_openai:NoSuchModel")
+    row = replace(WIRE_FORMATS["openai_responses"], chat_class="langchain_openai:NoSuchModel")
     with pytest.raises(AttributeError, match="NoSuchModel"):
         row.resolve()
 

@@ -10,15 +10,15 @@ from typing import TYPE_CHECKING, Any
 import yaml
 
 from kingfisher.config import (
-    Adapter,
     ConfigError,
     Endpoint,
     MissingCredentialsWarning,
     ModelProfile,
     Models,
+    WireFormat,
 )
 from kingfisher.domain import fields
-from kingfisher.infrastructure.harness.models import ADAPTERS
+from kingfisher.infrastructure.harness.models import WIRE_FORMATS
 from kingfisher.infrastructure.wiring import store_named
 from kingfisher.infrastructure.workspace import EXAMPLE
 
@@ -28,11 +28,11 @@ if TYPE_CHECKING:
 #: Top-level keys. `default` names a model; the other two are the tables.
 KNOWN_TOP: frozenset[str] = frozenset({"endpoints", "models", "default"})
 
-#: What an endpoint entry may say. `api` picks a wire format from `adapters`
+#: What an endpoint entry may say. `api` picks a wire format from `wire_formats`
 #: below; `base_url` is literal because it is topology, not a
 #: secret, and because two gateways speaking one wire format cannot both be
 #: described by a single conventional variable name -- which is the whole reason
-#: this table exists apart from the adapter table.
+#: this table exists apart from the wire-format table.
 KNOWN_ENDPOINT: frozenset[str] = frozenset({"api", "base_url", "key", "key_env"})
 
 #: What names the file an endpoint's `key:` is an entry in. No default: everything but
@@ -78,25 +78,25 @@ def _refuse_unknown(document: Mapping[str, Any], known: frozenset[str], where: s
         raise ConfigError(msg)
 
 
-SETTING = "KINGFISHER_ADAPTERS_FACTORY"
+SETTING = "KINGFISHER_WIRE_FORMATS"
 
 
-def adapters(spec: str | None) -> Mapping[str, Adapter]:
+def wire_formats(spec: str | None) -> Mapping[str, WireFormat]:
     """The wire formats this deployment can build: kingfisher's, and its own."""
     if spec is None:
-        return ADAPTERS
+        return WIRE_FORMATS
     theirs = store_named(spec, setting=SETTING, port=Mapping)
     for name, row in theirs.items():
-        if not isinstance(row, Adapter):
+        if not isinstance(row, WireFormat):
             msg = (
                 f"{SETTING} names {spec!r}, whose {name!r} is a "
-                f"{type(row).__name__} -- every value has to be a kingfisher Adapter"
+                f"{type(row).__name__} -- every value has to be a kingfisher WireFormat"
             )
             raise ConfigError(msg)
     # Refused rather than letting the deployment's row win: every endpoint already
     # written as `api: anthropic` would move to a class its author never chose, and
     # nothing in `models.yaml` would show it.
-    taken = sorted(set(theirs) & set(ADAPTERS))
+    taken = sorted(set(theirs) & set(WIRE_FORMATS))
     if taken:
         msg = (
             f"{SETTING} names {spec!r}, which redefines {', '.join(map(repr, taken))} -- "
@@ -104,7 +104,7 @@ def adapters(spec: str | None) -> Mapping[str, Adapter]:
             "the endpoints that want it there"
         )
         raise ConfigError(msg)
-    return MappingProxyType({**ADAPTERS, **theirs})
+    return MappingProxyType({**WIRE_FORMATS, **theirs})
 
 
 def _mapping(value: Any, where: str) -> Mapping[str, Any]:
@@ -179,7 +179,7 @@ def _endpoints(  # noqa: PLR0913 -- one argument per source a key can come from
     document: Mapping[str, Any],
     environ: Mapping[str, str],
     source: Path,
-    buildable: Mapping[str, Adapter],
+    buildable: Mapping[str, WireFormat],
     *,
     keys: Mapping[str, str] | None,
     keys_file: Path | None,
@@ -244,7 +244,7 @@ def _endpoints(  # noqa: PLR0913 -- one argument per source a key can come from
             api_key=key,
             key_env=named_variable,
             key_entry=named_entry,
-            adapter=buildable[api],
+            wire_format=buildable[api],
         )
     return resolved, dropped
 
@@ -280,7 +280,7 @@ def _models(
             raise ConfigError(msg)
         extra = _mapping(entry.get("extra"), f"{source}: model {name!r} extra")
         if collision := tuple(sorted(set(extra) & KNOWN_MODEL)):
-            # The rule `Adapter.extra` already carries: additive only. A row
+            # The rule `WireFormat.extra` already carries: additive only. A row
             # that could overrule a named param would silently discard a value
             # written three lines above it.
             msg = (
@@ -325,7 +325,7 @@ def _models(
 def load(
     path: Path,
     environ: Mapping[str, str],
-    buildable: Mapping[str, Adapter] = ADAPTERS,
+    buildable: Mapping[str, WireFormat] = WIRE_FORMATS,
     *,
     keys_file: Path | None = None,
 ) -> Models:
