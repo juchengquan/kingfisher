@@ -927,7 +927,7 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
     assert _prose_unresolved(
         "`core.definitions.skills.spec.FILENAME` and `core.inventory`"
     ) == []
-    assert _prose_unresolved("`plugins.sessions.backend.shell_env`") == []
+    assert _prose_unresolved("`plugins.sessions.shell.shell_env`") == []
 
     # Built rather than written, so this file is not itself a reference the rule refuses.
     misplaced = "core.agent.backend.shell_env"

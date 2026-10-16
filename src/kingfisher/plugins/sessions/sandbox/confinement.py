@@ -77,14 +77,14 @@ MODES = (AUTO, BUBBLEWRAP, EXTERNAL, OFF)
 #: what a deployment asks for, and a mechanism is what ended up confining the command.
 #: `AUTO` produces every one of these and is not any of them.
 #:
-#: Named because three files outside this one branched on the spellings -- `_fence_for`
+#: Named because three files outside this one branched on the spellings -- `fence_for`
 #: twice, `doctor` once -- and a mechanism renamed here would have gone on reading as
 #: "not a fence" at each of them, which is a shell running unfenced and reported as
 #: confined.
 LANDLOCK = "Landlock"
 SANDBOX_EXEC = "sandbox-exec"
 
-#: The two this process builds and runs itself, which is the question `_fence_for`
+#: The two this process builds and runs itself, which is the question `fence_for`
 #: asks. `SANDBOX_EXEC` is not one: it confines by wrapping the command string.
 LINUX_FENCES = (LANDLOCK, BUBBLEWRAP)
 

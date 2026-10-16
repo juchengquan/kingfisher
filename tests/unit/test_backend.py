@@ -22,8 +22,9 @@ from kingfisher.core.layout import (
     denied_scopes,
     routed_paths,
 )
-from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, backend_at, shell_env
+from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
+from kingfisher.plugins.sessions.shell import shell_env
 
 
 def test_shell_env_carries_no_credentials(cfg, session_dir):
