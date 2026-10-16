@@ -17,7 +17,7 @@ from kingfisher.infrastructure.harness.kinds.tools import (
     registered_tools,
     workspace_tool_names,
 )
-from kingfisher.kinds.tools.spec import Offering, placed
+from kingfisher.kinds.tools.spec import Offering, admitted, out_of_reach, placed
 
 if TYPE_CHECKING:
     from kingfisher.config import Config
@@ -125,7 +125,10 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
     # long form a tool's own catalogue spells short, and comparing them unspelt named
     # nothing.
     spelt = set(workspace)
-    offers_tool = offers("tools", held, reached_agents, same=lambda one: placed(one, spelt))
+    offers_tool = admitted(
+        offers("tools", held, reached_agents, same=lambda one: placed(one, spelt)),
+        shut=out_of_reach(catalogue.tools.found, held),
+    )
     offers_skill = offers("skills", held, reached_agents, same=spelling["skills"])
 
     offered = (

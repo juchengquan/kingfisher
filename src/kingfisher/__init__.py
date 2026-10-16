@@ -89,6 +89,9 @@ _EXPORTS = {
     # `ToolRuntime` it would otherwise write has pydantic warn on every call that
     # the context it was handed is not the `None` it declared.
     "ToolContext": "kingfisher.infrastructure.harness.tool_context",
+    # How a tool file says who may use its tool. Called inside a deployment's own
+    # `tools/`, for the reason `ToolContext` is imported there.
+    "tool": "kingfisher.infrastructure.harness.audienced_tool",
     "UnknownSessionError": "kingfisher.domain.session",
     "Config": "kingfisher.config",
     "WorkspacePaths": "kingfisher.config",
@@ -183,6 +186,7 @@ __all__ = [
     "run",
     "seed",
     "stream",
+    "tool",
 ]
 
 if TYPE_CHECKING:
@@ -223,6 +227,7 @@ if TYPE_CHECKING:
     from kingfisher.domain.session import SessionBusyError as SessionBusyError
     from kingfisher.domain.session import SessionInfo as SessionInfo
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
+    from kingfisher.infrastructure.harness.audienced_tool import tool as tool
     from kingfisher.infrastructure.harness.backend import (
         DefaultBackends as DefaultBackends,
     )

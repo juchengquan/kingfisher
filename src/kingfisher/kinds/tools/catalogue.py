@@ -14,7 +14,7 @@ from kingfisher.kinds.importing import (
     exported_from,
     modules_in,
 )
-from kingfisher.kinds.tools.spec import Found, named, tool_name
+from kingfisher.kinds.tools.spec import Found, named, own_audience, tool_name
 
 if TYPE_CHECKING:
     pass
@@ -125,7 +125,7 @@ class CarriedTools:
                 msg = f"{self.source}: tool {name!r} is carried twice by this definition"
                 raise ToolError(msg)
             seen.add(name)
-            entries.append(Found(tool=tool, source=self.source))
+            entries.append(Found(tool=tool, source=self.source, source_ids=own_audience(tool)))
         return tuple(entries)
 
     @property
@@ -172,7 +172,7 @@ class LocalToolRepository:
                     msg = f"{where}: tool {name!r} is defined twice in this file"
                     raise ToolError(msg)
                 claimed[name] = where
-                found.append(Found(tool=tool, source=where))
+                found.append(Found(tool=tool, source=where, source_ids=own_audience(tool)))
 
         return tuple(found)
 

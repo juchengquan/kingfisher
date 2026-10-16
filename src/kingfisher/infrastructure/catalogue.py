@@ -8,7 +8,7 @@ from functools import cached_property
 from pathlib import Path
 
 from kingfisher.config import NO_MOUNTS, Config, ConfigError, definition_roots_for
-from kingfisher.domain.capabilities import SEPARATOR
+from kingfisher.domain.capabilities import ALL, SEPARATOR
 from kingfisher.domain.ports import (
     AgentRepository,
     MiddlewareRepository,
@@ -26,7 +26,7 @@ from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.rules import refuse_miscounted
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.kinds.tools.catalogue import LocalToolRepository, ToolError
-from kingfisher.kinds.tools.spec import Offering
+from kingfisher.kinds.tools.spec import Found, Offering
 from kingfisher.layout import RESERVED_SKILL_FOLDER
 
 
@@ -66,6 +66,19 @@ class Definitions:
             for name, bundle in bundles.items()
             if (repository := bundle.tools) is not None
         }
+
+    @property
+    def audienced_tools(self) -> Mapping[str, Found]:
+        """Every tool that says who it admits, the catalogue's and each bundle's.
+
+        Keyed by where each lives, so a refusal names the file rather than a name two
+        files may share.
+        """
+        found = (
+            *self.tools.found,
+            *(one for bundle in self.bundled_tools.values() for one in bundle.found),
+        )
+        return {one.reference: one for one in found if one.source_ids != ALL}
 
     @cached_property
     def bundled_skills(self) -> Mapping[str, SkillRegistry]:

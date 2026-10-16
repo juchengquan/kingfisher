@@ -8,7 +8,7 @@ import re
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import AgentMiddleware
@@ -53,18 +53,28 @@ class Audiences:
     default: Audience
     #: By the name a call dispatches on, which is how a tool reaches a recorder.
     tools: Mapping[str, Audience]
+    #: Each tool's own audience, by the same name, where it states one. Without it a
+    #: result is stamped at whatever the definition offered the tool at, and a later
+    #: caller the tool itself shuts out is shown what it found.
+    own: Mapping[str, Audience] = field(default_factory=dict)
 
     @classmethod
-    def of(cls, definition: object | None) -> Audiences:
+    def of(
+        cls, definition: object | None, *, own: Mapping[str, Audience] | None = None
+    ) -> Audiences:
         """The definition's own audience, and each `tools:` entry's where it wrote one."""
         said = stated(definition)
         return cls(
             default=said.source_ids,
             tools={split_reference(name)[1]: who for name, who in said.of("tools").items()},
+            own=own or {},
         )
 
     def offered(self, tool: str) -> Audience:
-        return self.tools.get(tool, self.default)
+        granted = self.tools.get(tool, self.default)
+        if (own := self.own.get(tool)) is None:
+            return granted
+        return jointly((granted, own))
 
 
 @contextmanager

@@ -256,9 +256,9 @@ def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
 
 #: The trees this repository keeps Python in. One list, because two rules read it and
 #: a second copy is a second thing to keep in step. `assets` is apart from
-#: them: nothing there imports kingfisher, so the import rules must not walk it, while
-#: the shape rules below must -- it ships modules a deployment copies into its own
-#: workspace.
+#: them: it imports kingfisher only through the front door, as a deployment's own tool
+#: file does, so the import rules must not walk it, while the shape rules below must --
+#: it ships modules a deployment copies into its own workspace.
 CODE_AREAS: tuple[str, ...] = ("src", "tests", "evals", "spikes")
 ASSETS_AREA = "assets"
 
@@ -2083,6 +2083,9 @@ WITNESSES: dict[str, str] = {
     # hands a tool the turn's backend. A tool file is in a deployment's workspace,
     # so nothing in this repository imports the name and nothing ever will.
     "ToolContext": "document",
+    # `tools.md` writes `kingfisher.tool(...)` for a tool that says who may use it, in
+    # a tool file of the deployment's own, as `ToolContext` above is.
+    "tool": "document",
     # The type of `Kingfisher.run`'s `source_ids=`. `UNSCOPED` is one of its two
     # members and is documented; the type that admits it cannot be private.
     "Held": "embedder",
@@ -2519,6 +2522,9 @@ SDK_LOADING: frozenset[str] = frozenset({
     "kingfisher.infrastructure.harness.runlog",
     "kingfisher.infrastructure.harness.runtime",
     "kingfisher.infrastructure.harness.kinds.subagents",
+    # A subclass of langchain's `StructuredTool`, so langchain by definition -- but only
+    # `langchain_core`, none of the provider SDKs, which is what keeps `tool` light.
+    "kingfisher.infrastructure.harness.audienced_tool",
     # The application layer's half: what a turn needs on the way to running one. Each
     # is imported by `service` and by nothing else, so being heavy costs no caller that
     # was not already paying -- which is why these are a fact recorded rather than a
@@ -2743,6 +2749,9 @@ LIGHT_EXPORTS = frozenset({
     # and 82 modules where it is, against 1.1-1.3s and three provider SDKs beside
     # `PermittedBackend`, which subclasses a deepagents class.
     "ToolContext",
+    # Light for the reason `ToolContext` is, and it matters more: every tool file that
+    # says who may use it imports this, and `kingfisher list` loads every tool file.
+    "tool",
 })
 
 #: The rest, which genuinely need deepagents to do their job.

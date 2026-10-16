@@ -370,8 +370,12 @@ class Kingfisher(Sessions, Disposal):
                 ("subagent", defined_subagents(self.cfg, catalogue=self.catalogue)),
             )
             # Refusals first: a typo makes a line both undeclared and narrowing,
-            # and reported as a narrowing it would explain the wrong fault.
-            access.refuse_undeclared(*kinds, vocabulary=self.access)
+            # and reported as a narrowing it would explain the wrong fault. Tools are
+            # checked and not audited: one stating no audience is not open, it is
+            # whatever the agent granting it says.
+            access.refuse_undeclared(
+                *kinds, ("tool", self.catalogue.audienced_tools), vocabulary=self.access
+            )
             self.access_report = access.audit(*kinds, vocabulary=self.access)
 
         # Last, so the line reports what was resolved rather than what was asked for --
