@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from kingfisher.cli.health import examine, worst
 from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.presentation.cli.health import examine, worst
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "kingfisher"
 

@@ -1,4 +1,4 @@
-"""`kingfisher`, and `python -m kingfisher.presentation.cli`."""
+"""`kingfisher`, and `python -m kingfisher.cli`."""
 
 from __future__ import annotations
 
@@ -38,6 +38,9 @@ from kingfisher import (
     paths_from_env,
     seed,
 )
+from kingfisher.cli.health import _retired, examine, worst
+from kingfisher.cli.listing import as_json, failed, origins_document, render
+from kingfisher.cli.progress import show
 from kingfisher.core.access.source_ids import with_datazone
 
 # The names here the door does not carry. The command ships in the same
@@ -52,9 +55,6 @@ from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.definitions.seeding import REMEDY, UNCONSULTED
 from kingfisher.core.session.model import sessions_root
-from kingfisher.presentation.cli.health import _retired, examine, worst
-from kingfisher.presentation.cli.listing import as_json, failed, origins_document, render
-from kingfisher.presentation.cli.progress import show
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -563,7 +563,7 @@ def _configured(cfg: Config, *, log: Path | None = None) -> Kingfisher:
     # `test_the_command_starts_without_the_agent_runtime` holds every verb to not paying
     # it until it builds one. `seed`, `list` and `doctor` do not.
     from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.presentation.cli.configured import (  # noqa: PLC0415
+    from kingfisher.cli.configured import (  # noqa: PLC0415
         configured_plugins,
         configured_sessions,
     )

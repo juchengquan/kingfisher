@@ -37,7 +37,7 @@ from dotenv import load_dotenv
 # installed, and the driver is not part of it.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from kingfisher.presentation.cli.progress import Progress
+from kingfisher.cli.progress import Progress
 
 WORDS = ("sea", "grass", "sun")
 

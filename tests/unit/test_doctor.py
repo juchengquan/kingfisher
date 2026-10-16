@@ -11,12 +11,12 @@ from pathlib import Path
 import pytest
 
 from kingfisher import LocalSessions, seed
+from kingfisher.cli import health
+from kingfisher.cli.__main__ import main
+from kingfisher.cli.health import examine, worst
 from kingfisher.core.inventory import inventory
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins.sessions.sandbox.confinement import LINUX_FENCES
-from kingfisher.presentation.cli import health
-from kingfisher.presentation.cli.__main__ import main
-from kingfisher.presentation.cli.health import examine, worst
 from tests.conftest import an_agent, middlewares_dir, subagents_dir, tools_dir, verbs
 
 BROKEN_TOOL = '''
@@ -753,7 +753,7 @@ def test_the_catalogue_line_says_what_it_did_not_check(cfg):
 
 def test_the_description_names_its_own_limit():
     """A command that never calls a model has to say so where it is read."""
-    from kingfisher.presentation.cli.__main__ import build_parser
+    from kingfisher.cli.__main__ import build_parser
 
     description = verbs(build_parser())["doctor"].description or ""
 
@@ -848,7 +848,7 @@ def _backing(monkeypatch, sessions=None, **fields):
     marker = sessions_root(Path("/anywhere")).name
 
     monkeypatch.setattr(
-        "kingfisher.presentation.cli.health.memory_backing",
+        "kingfisher.cli.health.memory_backing",
         lambda path: on_the_sessions if Path(path).name == marker else on_the_workspace,
     )
 

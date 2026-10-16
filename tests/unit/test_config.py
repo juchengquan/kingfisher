@@ -349,8 +349,8 @@ def test_no_message_names_a_variable_nothing_reads():
     from pathlib import Path as _Path
 
     import kingfisher
+    from kingfisher.cli import health
     from kingfisher.core import environment as config_module
-    from kingfisher.presentation.cli import health
 
     read = set(re.findall(r"KINGFISHER_[A-Z_]+", _Path(config_module.__file__).read_text()))
     # A name `doctor` reports as retired is the one kind of message that names a
@@ -424,7 +424,7 @@ def test_every_retired_name_is_one_the_file_lists():
     import re
     from pathlib import Path as _Path
 
-    from kingfisher.presentation.cli import health
+    from kingfisher.cli import health
 
     root = next(
         p for p in _Path(__file__).resolve().parents if (p / ".env.example").is_file()

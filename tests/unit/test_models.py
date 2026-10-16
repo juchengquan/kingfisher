@@ -417,7 +417,7 @@ def test_a_dead_model_row_still_leaves_every_other_verb_answering(
     `inventory`'s own comment records this shape as the reason `CapabilityError` is in
     its catch set; this is the same fault one exception type over.
     """
-    from kingfisher.presentation.cli.__main__ import main
+    from kingfisher.cli.__main__ import main
 
     argv, code = ASKED[verb]
     monkeypatch.setenv("GATEWAY_API_KEY", "sk-not-real")
@@ -433,7 +433,7 @@ def test_the_listing_and_doctor_both_name_the_row(cfg, at_the_command_line, caps
     """
     import json
 
-    from kingfisher.presentation.cli.__main__ import main
+    from kingfisher.cli.__main__ import main
 
     monkeypatch.setenv("GATEWAY_API_KEY", "sk-not-real")
     _dead_row(cfg)
@@ -456,7 +456,7 @@ def test_a_turn_still_refuses_the_row_it_cannot_run(cfg, at_the_command_line, ca
     nothing else refused -- the turn does, naming the row, which is the whole of what
     #747 was for.
     """
-    from kingfisher.presentation.cli.__main__ import main
+    from kingfisher.cli.__main__ import main
 
     monkeypatch.setenv("GATEWAY_API_KEY", "sk-not-real")
     _dead_row(cfg)
@@ -505,7 +505,7 @@ def test_the_command_says_it_in_one_line_rather_than_a_traceback(
     Driven through the command rather than through `build_model`, because the traceback
     is what a person met and `ConfigError` reaching `main` is what replaces it.
     """
-    from kingfisher.presentation.cli.__main__ import main
+    from kingfisher.cli.__main__ import main
     from tests.conftest import an_agent
 
     monkeypatch.setenv("GATEWAY_API_KEY", "sk-not-real")

@@ -222,7 +222,7 @@ def test_no_code_cites_a_document_that_is_not_there() -> None:
 
     Found by doing it. Retiring the last two proposals on 2026-09-04 left
     `Dockerfile` naming `nothing-at-rest-on-this-machine.md`, and
-    `presentation/cli/__init__.py` was already naming `the-verb-that-runs-a-task.md`,
+    `cli/__init__.py` was already naming `the-verb-that-runs-a-task.md`,
     removed days earlier by the commit that was cleaning up after it.
     """
     cited = _cited()

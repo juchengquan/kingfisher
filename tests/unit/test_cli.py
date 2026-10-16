@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 from kingfisher import Kingfisher, LocalSessions, Origin
+from kingfisher.cli.__main__ import build_parser, main
 from kingfisher.core.definitions.skills.catalogue import reachable
-from kingfisher.presentation.cli.__main__ import build_parser, main
 from tests.conftest import repository_root, start, verbs
 
 
@@ -199,7 +199,7 @@ def test_the_help_verb_is_gone_and_the_four_other_routes_are_not(capsys):
     """`-h`, `--help`, a bare invocation and `<verb> --help` all reach the same text; a
     fifth road to it was a verb that could go stale on its own.
     """
-    from kingfisher.presentation.cli.__main__ import build_parser
+    from kingfisher.cli.__main__ import build_parser
 
     assert "help" not in verbs(build_parser())
 
@@ -216,7 +216,7 @@ def test_the_help_verb_is_gone_and_the_four_other_routes_are_not(capsys):
 
 def test_every_verb_the_parser_offers_has_something_to_run_it():
     """The one risk the dispatch table introduces."""
-    from kingfisher.presentation.cli.__main__ import HANDLERS, build_parser
+    from kingfisher.cli.__main__ import HANDLERS, build_parser
 
     offered = set(verbs(build_parser()))
 
@@ -308,7 +308,7 @@ def test_the_refusal_names_the_file_it_looked_at(tmp_path, monkeypatch, capsys):
 
 
 def test_as_parses_a_comma_separated_list():
-    from kingfisher.presentation.cli.__main__ import _held
+    from kingfisher.cli.__main__ import _held
 
     assert _held("A,B") == ("A", "B")
     assert _held(" A , B ") == ("A", "B")
@@ -318,8 +318,8 @@ def test_as_unscoped_is_spelled_out_rather_than_implied():
     """An empty `--as` is far more likely to be a shell variable that did not expand
     than a considered decision to run with no caller.
     """
+    from kingfisher.cli.__main__ import _held
     from kingfisher.core.access.source_ids import UNSCOPED
-    from kingfisher.presentation.cli.__main__ import _held
 
     assert _held("UNSCOPED") is UNSCOPED
     assert _held("") == ()
@@ -330,7 +330,7 @@ def test_as_unscoped_is_spelled_out_rather_than_implied():
 
 def _ran(monkeypatch, events, cfg):
     """Point `run` at a scripted stream, so nothing reaches a model."""
-    from kingfisher.presentation.cli import __main__ as entry
+    from kingfisher.cli import __main__ as entry
 
     class Stub:
         def __init__(self, *a, **k) -> None:
@@ -588,7 +588,7 @@ def test_seeding_never_makes_a_workspace(tmp_path, shipped, monkeypatch):
 
 def _looking_at(monkeypatch, cfg):
     """Point the verbs at this workspace, so none of them reads the real environment."""
-    from kingfisher.presentation.cli import __main__ as entry
+    from kingfisher.cli import __main__ as entry
 
     monkeypatch.setattr(entry, "config_from_env", lambda: cfg)
 
@@ -1017,7 +1017,7 @@ def test_every_flag_the_command_names_is_one_it_takes():
     """
     taken = _options(build_parser())
     named: dict[str, list[str]] = {}
-    for path in sorted((repository_root() / "src/kingfisher/presentation/cli").glob("*.py")):
+    for path in sorted((repository_root() / "src/kingfisher/cli").glob("*.py")):
         source = path.read_text(encoding="utf-8")
         for token in tokenize.generate_tokens(io.StringIO(source).readline):
             if token.type in (tokenize.STRING, tokenize.FSTRING_MIDDLE):

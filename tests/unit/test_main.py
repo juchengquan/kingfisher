@@ -6,6 +6,7 @@ import io
 
 import pytest
 
+from kingfisher.cli.progress import show
 from kingfisher.core import workspace as workspace_layout
 from kingfisher.core.access.capabilities import CapabilityError
 from kingfisher.core.agent import assembly as main_agent_module
@@ -15,7 +16,6 @@ from kingfisher.core.definitions.skills import spec as skill
 from kingfisher.core.definitions.skills.catalogue import reachable
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.result import RunEvent, RunResult
-from kingfisher.presentation.cli.progress import show
 from tests.conftest import subagents_dir, tools_dir
 from tests.integration import driver as main
 

@@ -504,7 +504,7 @@ did not work. All of it langchain-core 1.5.5, langgraph 1.2.11, deepagents 0.7.6
 ## Memory-backed workspaces
 
 *Measured for `nothing-at-rest-on-this-machine.md`, removed 2026-09-04 once what
-it proposed had shipped. The rule is enforced in `presentation/cli/health.py` and
+it proposed had shipped. The rule is enforced in `cli/health.py` and
 stated in `decisions.md`; what is kept here is the evidence, which neither of
 those carries.*
 

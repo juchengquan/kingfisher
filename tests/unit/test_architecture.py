@@ -1190,7 +1190,7 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # `policy` reads the access policy file, which is YAML.
     "core/access": frozenset({"yaml"}),
     # The command reads a `.env` in the directory it runs in; nothing else here does.
-    "presentation/cli": frozenset({"dotenv"}),
+    "cli": frozenset({"dotenv"}),
     # The modules directly in `core/` reach the runtime through the packages beside
     # them. `model_catalogue` reads `models.yaml`, which takes the parser.
     "core": frozenset({"yaml"}),
@@ -1231,14 +1231,14 @@ def _unspent(area: str, imported: set[str]) -> frozenset[str]:
 def test_an_area_is_refused_another_areas_dependencies():
     """The table has to partition, not merely enumerate."""
     assert _undeclared({"deepagents"}, "core") == {"deepagents"}
-    assert _undeclared({"deepagents"}, "presentation/cli") == {"deepagents"}
+    assert _undeclared({"deepagents"}, "cli") == {"deepagents"}
     assert _undeclared({"fastapi"}, "core/agent") == {"fastapi"}
     assert _undeclared({"yaml"}, "core/agent") == {"yaml"}
 
     assert _undeclared({"deepagents", "langgraph"}, "core/agent") == set()
     assert _undeclared({"yaml"}, "core") == set()
-    assert _undeclared({"fastapi"}, "presentation/cli") == {"fastapi"}
-    assert _undeclared({"dotenv"}, "presentation/cli") == set()
+    assert _undeclared({"fastapi"}, "cli") == {"fastapi"}
+    assert _undeclared({"dotenv"}, "cli") == set()
     assert _undeclared({"dotenv"}, "core") == {"dotenv"}
 
 
@@ -1332,7 +1332,7 @@ def test_an_unspent_grant_is_what_that_rule_reads():
     assert _unspent("", set()) == set()
 #: What may import from `plugins/`: the command, which may import anything, and the front
 #: door, whose table maps public names such as `LocalSessions` to where they live.
-MAY_NAME_A_PLUGIN = ("presentation", "")
+MAY_NAME_A_PLUGIN = ("cli", "")
 
 
 def _reaches_a_plugin(path: Path) -> list[str]:
@@ -1813,7 +1813,7 @@ def _loaded_by(dotted: str) -> str | None:
 
     `from kingfisher import Kingfisher` loads `core.service`, not `kingfisher`:
     the name resolves through `__getattr__`. That is the one place walking the prefix
-    gives the wrong answer, and it is the answer the three `presentation/cli` modules
+    gives the wrong answer, and it is the answer the three `cli` modules
     turn on -- each reaches a dozen names through the front door and would otherwise
     look like it loads nothing but `kingfisher` itself.
     """
@@ -1908,7 +1908,7 @@ def test_no_deferred_import_defers_nothing():
 #: prefix walk under-reports, and `reporting` sits at the bottom of a graph three
 #: thousand modules deep.
 CLOSURE_WITNESSES = (
-    "kingfisher.presentation.cli.listing",
+    "kingfisher.cli.listing",
     "kingfisher.core.reporting",
 )
 
@@ -2754,7 +2754,7 @@ def test_a_caller_facing_error_is_the_same_class_either_way():
 #: that any caller can drive this library is worth something only if the callers that
 #: ship with it are held to it.
 CONSUMERS: dict[str, Path] = {
-    "cli": SRC / "presentation" / "cli",
+    "cli": SRC / "cli",
 }
 
 
@@ -2766,7 +2766,7 @@ def _reaches_past_the_public_api(module: str) -> bool:
     """True when a consumer imports something deeper than `kingfisher` itself."""
     if module.split(".", maxsplit=1)[0] != "kingfisher" or module == "kingfisher":
         return False
-    return not module.startswith("kingfisher.presentation.cli")
+    return not module.startswith("kingfisher.cli")
 
 
 #: Consumers that ship in this wheel, and may therefore reach for a name the front door
@@ -2808,7 +2808,7 @@ def test_the_reach_predicate_says_what_it_means():
             ("kingfisher.core.request", True),        # past it
             ("kingfisher.core.service", True),   # past it, and the tempting one
             # the CLI ships inside the package
-            ("kingfisher.presentation.cli.health", False),
+            ("kingfisher.cli.health", False),
             ("kingfisher_other.app", False),            # shares the prefix, not the package
             ("fastapi", False),                         # not ours to have an opinion on
         ]:
@@ -3375,7 +3375,7 @@ def test_no_constant_is_published_for_tests_alone():
     # the failure this file has shipped twice, once in `_modules_in` and once in
     # the consumer collector. Named layers rather than a count, so this says
     # which part of the package stopped being walked. All three define constants.
-    layers = {"core", "plugins", "presentation"}
+    layers = {"core", "plugins", "cli"}
     walked = {path.relative_to(SRC).parts[0] for path in found.values()}
 
     assert layers <= walked, (

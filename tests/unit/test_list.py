@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from kingfisher.presentation.cli.__main__ import main
+from kingfisher.cli.__main__ import main
 from tests.conftest import an_agent, subagents_dir
 
 
@@ -66,7 +66,7 @@ def test_a_missing_catalogue_is_reported_rather_than_raised(tmp_path, monkeypatc
 def test_both_drivers_render_through_the_same_code(cfg, capsys):
     """Two doors printing one block, and now by construction."""
     from kingfisher import inventory
-    from kingfisher.presentation.cli.listing import render
+    from kingfisher.cli.listing import render
     from tests.integration import driver
 
     _seed_something(cfg)
@@ -111,7 +111,7 @@ def test_the_json_document_carries_every_field_the_record_has(cfg):
     from dataclasses import fields
 
     from kingfisher import inventory
-    from kingfisher.presentation.cli.listing import as_json
+    from kingfisher.cli.listing import as_json
 
     document = as_json(inventory(cfg))
 
@@ -123,7 +123,7 @@ def test_the_json_document_survives_a_round_trip(cfg):
     import json
 
     from kingfisher import inventory
-    from kingfisher.presentation.cli.listing import as_json
+    from kingfisher.cli.listing import as_json
 
     _seed_something(cfg)
 
@@ -144,7 +144,7 @@ def test_the_json_document_survives_a_round_trip(cfg):
 def test_the_header_names_every_catalogue_including_tools(cfg):
     """The regression this record was built to make impossible."""
     from kingfisher import inventory
-    from kingfisher.presentation.cli.listing import render
+    from kingfisher.cli.listing import render
 
     header = list(render(inventory(cfg)))[:11]
 
@@ -160,7 +160,7 @@ def test_the_json_carries_the_kind_and_a_path_a_script_can_open(cfg, tmp_path):
     from dataclasses import replace
 
     from kingfisher import inventory
-    from kingfisher.presentation.cli.listing import as_json
+    from kingfisher.cli.listing import as_json
 
     document = json.loads(json.dumps(as_json(inventory(replace(cfg, assets=tmp_path)))))
     origins = document["origins"]
@@ -261,8 +261,8 @@ def test_the_listing_marks_a_compiled_subagent(cfg):
     """Marked because the rest of the listing means something different for it, and
     nothing else in the output would say so.
     """
+    from kingfisher.cli.listing import render
     from kingfisher.core.inventory import inventory
-    from kingfisher.presentation.cli.listing import render
 
     _subagent_catalogue(cfg)
     lines = list(render(inventory(cfg)))
@@ -275,8 +275,8 @@ def test_the_listing_marks_a_compiled_subagent(cfg):
 
 def test_the_listing_says_what_a_compiled_subagent_costs(cfg):
     """The assumption a reader would otherwise make."""
+    from kingfisher.cli.listing import render
     from kingfisher.core.inventory import inventory
-    from kingfisher.presentation.cli.listing import render
 
     _subagent_catalogue(cfg)
     printed = "\n".join(render(inventory(cfg)))
@@ -289,8 +289,8 @@ def test_a_workspace_with_no_compiled_subagent_says_nothing_about_them(cfg):
     """The note is about a minority, so it stays absent for everyone else -- a caveat
     printed to every reader is one none of them reads.
     """
+    from kingfisher.cli.listing import render
     from kingfisher.core.inventory import inventory
-    from kingfisher.presentation.cli.listing import render
 
     directory = cfg.definitions / "subagents"
     directory.mkdir(parents=True, exist_ok=True)
@@ -303,8 +303,8 @@ def test_a_workspace_with_no_compiled_subagent_says_nothing_about_them(cfg):
 
 def test_a_compiled_subagent_is_not_annotated_with_the_file_you_can_already_see(cfg):
     """`_from` stays silent when the name already tells you the file."""
+    from kingfisher.cli.listing import render
     from kingfisher.core.inventory import inventory
-    from kingfisher.presentation.cli.listing import render
 
     _subagent_catalogue(cfg)
     (line,) = [
@@ -319,8 +319,8 @@ def test_the_json_listing_carries_it_too(cfg):
     """`--json` is what a script reads, and a script deciding whether a grant means
     anything needs the same fact the text gives a person.
     """
+    from kingfisher.cli.listing import as_json
     from kingfisher.core.inventory import inventory
-    from kingfisher.presentation.cli.listing import as_json
 
     _subagent_catalogue(cfg)
 
@@ -1606,7 +1606,7 @@ def test_a_conjunction_survives_the_json_round_trip(cfg, at_the_command_line):
     import json
 
     from kingfisher import config_from_env, inventory
-    from kingfisher.presentation.cli.listing import as_json
+    from kingfisher.cli.listing import as_json
 
     _workspace(cfg, BOTH, NAMED,
         vocabulary="source_ids:\n  A:\n  B:\n  ab: {A, B}\n",
@@ -1824,7 +1824,7 @@ def test_every_error_the_inventory_carries_makes_a_listing_non_zero(field_name):
     an error, every other check keeps passing, and the deployment that breaks on it
     is the one nobody told.
     """
-    from kingfisher.presentation.cli.listing import failed
+    from kingfisher.cli.listing import failed
     from tests.conftest import an_inventory
 
     broken = an_inventory(**{field_name: "something is wrong here"})
@@ -1842,7 +1842,7 @@ def test_every_error_the_inventory_carries_is_said_in_the_human_listing(field_na
     unparseable `middlewares/*.py` exited 1 over a listing that looked fine. Every rule
     that proved those errors were carried asserted on `--json`, which is how.
     """
-    from kingfisher.presentation.cli.listing import render
+    from kingfisher.cli.listing import render
     from tests.conftest import an_inventory
 
     said = "cap.py: SyntaxError: '(' was never closed"
@@ -1855,7 +1855,7 @@ def test_a_listing_with_nothing_wrong_says_none_of_that():
     """The control: the rule above passes for every field if the renderer prints the
     string unconditionally, or prints every error it can think of.
     """
-    from kingfisher.presentation.cli.listing import render
+    from kingfisher.cli.listing import render
     from tests.conftest import an_inventory
 
     printed = "\n".join(render(an_inventory()))
@@ -1884,8 +1884,8 @@ def test_every_trouble_failed_reads_has_a_rule_here():
     import inspect
     from dataclasses import fields
 
+    from kingfisher.cli.listing import failed
     from kingfisher.core.inventory import Inventory
-    from kingfisher.presentation.cli.listing import failed
 
     source = inspect.getsource(failed)
     named = {f.name for f in fields(Inventory) if f"found.{f.name}" in source}
@@ -1902,7 +1902,7 @@ def test_every_trouble_besides_an_error_is_said_in_the_human_listing(field_name)
     """
     from types import MappingProxyType
 
-    from kingfisher.presentation.cli.listing import render
+    from kingfisher.cli.listing import render
     from tests.conftest import an_inventory
 
     value, said = TROUBLES_BESIDE_THE_ERRORS[field_name]
@@ -1917,7 +1917,7 @@ def test_every_trouble_besides_an_error_is_said_in_the_human_listing(field_name)
 
 def test_an_inventory_with_nothing_wrong_is_not_reported_as_broken():
     """The control: the rule above passes for every field if `failed` is always true."""
-    from kingfisher.presentation.cli.listing import failed
+    from kingfisher.cli.listing import failed
     from tests.conftest import an_inventory
 
     assert not failed(an_inventory())

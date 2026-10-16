@@ -10,6 +10,7 @@ import yaml
 
 import kingfisher
 from kingfisher import LocalSessions, backend_at
+from kingfisher.cli.__main__ import main
 from kingfisher.core.access.source_ids import (
     UNSCOPED,
     AccessError,
@@ -26,7 +27,6 @@ from kingfisher.core.definitions.tools.spec import tool_name
 from kingfisher.core.inventory import inventory
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins.sessions.folders import ensure_session_layout
-from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import subagents_dir, tools_dir
 
 VOCABULARY = "source_ids: [A, B]\ndatazones: [finance, hr]\n"

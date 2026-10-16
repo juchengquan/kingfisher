@@ -224,7 +224,7 @@ One pull request each, off `main` once the one before it has merged.
     Then the root's `config` and `layout`, and the rest of `infrastructure/`, its
     `workspace` package dissolved into `backing` and `workspace` with `templates/`
     beside them. *(Landed.)*
-16. Move `cli/`.
+16. Move `cli/`. *(Landed.)*
 17. The new import rules, one `decisions.md` entry in place of the three this supersedes,
     `CLAUDE.md` and the guides, and this document deleted. The rules include whatever
     replaces the two the domain took with it: that the request and result records
