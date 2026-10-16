@@ -13,16 +13,16 @@ from kingfisher.application import service as service_module
 from kingfisher.application.service import Kingfisher
 from kingfisher.config import ConfigError
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
+from kingfisher.core.agent.activation import (
+    available_skills,
+    defined_subagents,
+)
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.kinds.tools import workspace_tool_names
 from kingfisher.core.definitions.catalogue import Definitions, resolve_definitions
 from kingfisher.core.definitions.middlewares.catalogue import MiddlewareError
 from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.harness.activation import (
-    available_skills,
-    defined_subagents,
-)
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.kinds.tools import workspace_tool_names
 from kingfisher.layout import SKILLS_ROUTE
 from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
 from tests.conftest import (

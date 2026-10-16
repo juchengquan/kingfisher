@@ -21,10 +21,10 @@ from kingfisher import (
     backend_at,
 )
 from kingfisher.core.access.source_ids import parse
-from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.infrastructure.harness.backend import (
+from kingfisher.core.agent.backend import (
     Sessions,
 )
+from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.infrastructure.session_files import (
     collect_artifacts,
     place_inputs,

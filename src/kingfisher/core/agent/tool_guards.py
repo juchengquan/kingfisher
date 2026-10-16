@@ -10,18 +10,18 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.tools import BaseTool, StructuredTool, ToolException
 
 from kingfisher.config import DEFAULT_LAYOUT
-from kingfisher.domain.references import UnsafeReferenceError
-from kingfisher.infrastructure.harness.backend import shell_prompt_of, shell_runs_here
-from kingfisher.infrastructure.harness.host_paths import HostPathError
-from kingfisher.infrastructure.harness.middlewares.host_path_guard import HostPathGuard
-from kingfisher.infrastructure.harness.middlewares.large_pdf_guard import LargePdfGuard
-from kingfisher.infrastructure.harness.middlewares.recorder import Recorder
-from kingfisher.infrastructure.harness.middlewares.shell_paths import ShellPaths
-from kingfisher.infrastructure.harness.middlewares.workspace_tools import (
+from kingfisher.core.agent.backend import shell_prompt_of, shell_runs_here
+from kingfisher.core.agent.host_paths import HostPathError
+from kingfisher.core.agent.middlewares.host_path_guard import HostPathGuard
+from kingfisher.core.agent.middlewares.large_pdf_guard import LargePdfGuard
+from kingfisher.core.agent.middlewares.recorder import Recorder
+from kingfisher.core.agent.middlewares.shell_paths import ShellPaths
+from kingfisher.core.agent.middlewares.workspace_tools import (
     WorkspaceToolErrors,
     WorkspaceToolPaths,
 )
-from kingfisher.infrastructure.harness.session_paths import SessionPaths, refusal_text
+from kingfisher.core.agent.session_paths import SessionPaths, refusal_text
+from kingfisher.domain.references import UnsafeReferenceError
 from kingfisher.layout import Layout
 
 

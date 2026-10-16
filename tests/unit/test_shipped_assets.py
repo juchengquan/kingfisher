@@ -18,6 +18,9 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 
 from kingfisher import backend_at
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
+from kingfisher.core.agent.assembly import build_agent, declared_middleware
+from kingfisher.core.agent.kinds.declared_middleware import ByName
+from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.importing import load
 from kingfisher.core.definitions.skills import spec as skill
@@ -25,9 +28,6 @@ from kingfisher.core.definitions.skills.catalogue import reachable
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.core.definitions.tools.spec import Offering, out_of_reach
-from kingfisher.infrastructure.harness.agent import build_agent, declared_middleware
-from kingfisher.infrastructure.harness.kinds.declared_middleware import ByName
-from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills
 from kingfisher.layout import SCRATCH
 from tests.conftest import FakeToolCallingModel, middleware_of, repository_root, subagent_of
 from tests.unit.test_subagent_helpers import _subagent, _tools_of
@@ -208,7 +208,7 @@ def test_the_shipped_set_shows_all_four_tool_shapes(shipped):
     """
     from langchain_core.tools import BaseTool, StructuredTool
 
-    from kingfisher.infrastructure.harness.audienced_tool import AudiencedTool
+    from kingfisher.core.agent.audienced_tool import AudiencedTool
 
     tools = LocalToolRepository(shipped / "tools").tools
     decorated = {tool_name(t) for t in tools if type(t) is StructuredTool}

@@ -632,7 +632,7 @@ def _builtin_tools(
     cfg: Config, resolved: Definitions, found: Sequence[Found] | None
 ) -> tuple[str, ...] | None:
     """The built-in set, asked of the harness that knows how to assemble one."""
-    from kingfisher.infrastructure.harness.agent import builtin_tool_names  # noqa: PLC0415
+    from kingfisher.core.agent.assembly import builtin_tool_names  # noqa: PLC0415
 
     return builtin_tool_names(cfg, resolved, found)
 

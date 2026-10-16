@@ -16,10 +16,10 @@ from kingfisher.application.inventory import inventory
 from kingfisher.application.service import Kingfisher
 from kingfisher.core.access.capabilities import ALL
 from kingfisher.core.access.source_ids import AccessError, parse
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.middlewares.recorder import Audiences
 from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository, ToolError
 from kingfisher.core.definitions.tools.spec import own_audience
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.middlewares.recorder import Audiences
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import tools_dir
 
@@ -236,7 +236,7 @@ def test_a_subagents_own_tool_is_held_back_from_a_caller_it_shuts_out(policied):
     """A bundle skips the request's grant -- the subagent is made of its parts -- and the
     tool's own audience is the one thing that must not be skipped with it.
     """
-    from kingfisher.infrastructure.harness.kinds.tools import _private_tools
+    from kingfisher.core.agent.kinds.tools import _private_tools
 
     subagents = policied.catalogue_roots["subagents"]
     subagents.mkdir(parents=True, exist_ok=True)
@@ -254,8 +254,8 @@ def test_an_unrestricted_grant_still_gets_an_allowlist_without_the_tool():
     between a shut-out caller and the tool would be that nothing registered it.
     """
     from kingfisher.core.access.capabilities import Capabilities
+    from kingfisher.core.agent.kinds.tools import _ToolSurface
     from kingfisher.core.definitions.tools.spec import Found, Offering
-    from kingfisher.infrastructure.harness.kinds.tools import _ToolSurface
 
     found = (
         Found(tool=kingfisher.tool(count, source_ids=["A"]), source="count.py", source_ids=("A",)),

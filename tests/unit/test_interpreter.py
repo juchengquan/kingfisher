@@ -11,10 +11,10 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from kingfisher import Kingfisher, LocalSessions, backend_at
 from kingfisher.core.access.capabilities import Capabilities
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.interpreter import release_interpreter
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.interpreter import release_interpreter
 from tests.conftest import (
     FakeToolCallingModel,
     an_agent,
@@ -499,7 +499,7 @@ def test_the_runtime_is_given_back_when_a_turn_ends_by_exception(cfg, session_di
     """
     from langgraph.errors import GraphRecursionError
 
-    from kingfisher.infrastructure.harness.interpreter import release_interpreter
+    from kingfisher.core.agent.interpreter import release_interpreter
 
     wired = replace(cfg, interpreter_enabled=True)
     model = FakeToolCallingModel(

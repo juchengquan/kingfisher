@@ -8,15 +8,15 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, LocalSessions, backend_at
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
-from kingfisher.core.definitions.agents.spec import AgentSpec
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import skills_sources
-from kingfisher.infrastructure.harness.kinds.declared_middleware import (
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.backend import skills_sources
+from kingfisher.core.agent.kinds.declared_middleware import (
     REQUIRED_BY_DEEPAGENTS,
     _deepagents_middleware_names,
     declared_middleware,
 )
-from kingfisher.infrastructure.prompting import kingfishers_shell, system_prompt
+from kingfisher.core.agent.prompting import kingfishers_shell, system_prompt
+from kingfisher.core.definitions.agents.spec import AgentSpec
 from tests.conftest import (
     FakeToolCallingModel,
     declared_subagents,

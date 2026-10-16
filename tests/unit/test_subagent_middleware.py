@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, LocalSessions, backend_at
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
-from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.core.agent.assembly import build_agent
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import (
     FakeToolCallingModel,

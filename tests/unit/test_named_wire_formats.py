@@ -10,7 +10,7 @@ import pytest
 
 from kingfisher.application.config import config_from_env
 from kingfisher.config import ConfigError, Landing, WireFormat
-from kingfisher.infrastructure.harness.models import WIRE_FORMATS, build_model
+from kingfisher.core.agent.models import WIRE_FORMATS, build_model
 from kingfisher.infrastructure.model_catalogue import load, wire_formats
 
 HERE = __name__

@@ -17,6 +17,8 @@ from langchain_core.runnables import RunnableLambda
 
 from kingfisher import backend_at
 from kingfisher.core.access.capabilities import Capabilities
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.definitions.subagents.rules import miscounted
@@ -29,8 +31,6 @@ from kingfisher.core.definitions.subagents.spec import (
     declared,
 )
 from kingfisher.core.definitions.tools.spec import tool_name
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from tests.conftest import FakeToolCallingModel, subagent_of
 from tests.unit.test_bundles import TOOL
 

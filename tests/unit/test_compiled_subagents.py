@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import backend_at
 from kingfisher.core.access.capabilities import Capabilities
+from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.definitions.subagents.spec import (
     DECLARED,
@@ -15,7 +16,6 @@ from kingfisher.core.definitions.subagents.spec import (
     SubagentError,
     declared,
 )
-from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel, declared_subagents
 
 COMPILED = '''"""A subagent the workspace assembled."""
@@ -394,8 +394,8 @@ def test_something_that_merely_looks_like_a_graph_is_refused(cfg):
     the cases that matter -- a compiled graph, this stub, whatever a class constructs
     to, and `None` -- `Runnable` is what separates the first from the rest.
     """
+    from kingfisher.core.agent.kinds.subagents import compiled
     from kingfisher.core.definitions.subagents.spec import SubagentSpec
-    from kingfisher.infrastructure.harness.kinds.subagents import compiled
 
     class OnlyInvoke:
         def invoke(self, *a, **k):
@@ -419,8 +419,8 @@ def test_the_check_is_the_interface_not_a_particular_graph_class(cfg):
     """
     from langchain_core.runnables import RunnableLambda
 
+    from kingfisher.core.agent.kinds.subagents import compiled
     from kingfisher.core.definitions.subagents.spec import SubagentSpec
-    from kingfisher.infrastructure.harness.kinds.subagents import compiled
 
     not_a_graph = RunnableLambda(lambda state: state)
     spec = SubagentSpec(
@@ -548,9 +548,9 @@ def test_a_compiled_subagent_is_handed_the_tool_it_named_either_way(cfg):
     from langchain_core.runnables import RunnableLambda
     from langchain_core.tools import tool
 
+    from kingfisher.core.agent.kinds.subagents import compiled
     from kingfisher.core.definitions.subagents.spec import SubagentSpec
     from kingfisher.core.definitions.tools.spec import Found, tool_name
-    from kingfisher.infrastructure.harness.kinds.subagents import compiled
 
     @tool
     def probe(x: str) -> str:

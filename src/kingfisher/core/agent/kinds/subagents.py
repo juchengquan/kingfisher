@@ -1,7 +1,7 @@
 """Turning a `SubagentSpec` into the `SubAgent` deepagents expects.
 
-Nothing here calls anything in `agent.py`, and that rather than size is what keeps the
-two apart: `agent.py` assembles a graph, this answers what one subagent runs with, and
+Nothing here calls anything in `assembly.py`, and that rather than size is what keeps the
+two apart: `assembly.py` assembles a graph, this answers what one subagent runs with, and
 a call back the other way makes them one job again.
 """
 
@@ -21,22 +21,22 @@ from kingfisher.core.access.capabilities import (
     narrowed,
     refuse_unoffered,
 )
+from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.core.agent.models import build_model, model_named
+from kingfisher.core.agent.prompting import behind_instructions
+from kingfisher.core.agent.session_paths import SessionPaths
+from kingfisher.core.agent.tool_guards import guarded_tools, tool_guards
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.subagents.rules import resolved_model
 from kingfisher.core.definitions.subagents.spec import RunOn, SubagentError, SubagentSpec
 from kingfisher.core.definitions.tools.spec import Found, Offering, select, split_reference
-from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills, ToolAllowlist
-from kingfisher.infrastructure.harness.models import build_model, model_named
-from kingfisher.infrastructure.harness.session_paths import SessionPaths
-from kingfisher.infrastructure.harness.tool_guards import guarded_tools, tool_guards
-from kingfisher.infrastructure.prompting import behind_instructions
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from kingfisher.config import Config
+    from kingfisher.core.agent.middlewares.recorder import Recorder
     from kingfisher.core.definitions.skills.registry import SkillRegistry
-    from kingfisher.infrastructure.harness.middlewares.recorder import Recorder
 
 
 def _identities(registry: SkillRegistry, selection: Selection) -> Selection:
@@ -440,7 +440,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # A *name* here would be resolved by deepagents' `init_chat_model`, which infers its
     # own provider and reads credentials from the environment -- around the catalogue,
     # its endpoint's base_url, and every param the profile carries. It also re-enables
-    # the profile behaviour that `infrastructure.harness.models` exists to avoid. So we
+    # the profile behaviour that `core.agent.models` exists to avoid. So we
     # build the instance ourselves.
     if mine or private or tool_objects is not None:
         # Objects, not names -- `SubAgent.tools` is what deepagents registers,

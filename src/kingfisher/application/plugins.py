@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.domain.ports import RunEvents
 
 if TYPE_CHECKING:
-    from kingfisher.infrastructure.prompting import Instructions
+    from kingfisher.core.agent.prompting import Instructions
 
 
 @dataclass(frozen=True)

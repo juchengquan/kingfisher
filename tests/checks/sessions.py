@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Any
 
 from deepagents.backends import FilesystemBackend
 
+from kingfisher.core.agent.backend import skill_mounts
+from kingfisher.core.agent.permitted_backend import host_path
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skills import registry as skill_registry
-from kingfisher.infrastructure.harness.backend import skill_mounts
-from kingfisher.infrastructure.harness.permitted_backend import host_path
 from kingfisher.layout import (
     OUTPUTS_ROUTE,
     SKILLS_ROUTE,

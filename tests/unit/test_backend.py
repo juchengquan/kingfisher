@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from deepagents.backends import CompositeBackend
 
-from kingfisher.infrastructure.harness.agent import read_only_permissions
-from kingfisher.infrastructure.harness.host_paths import (
+from kingfisher.core.agent.assembly import read_only_permissions
+from kingfisher.core.agent.host_paths import (
     HOST_ROOTS,
     HostPathError,
     reject_host_path,
@@ -318,7 +318,7 @@ def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir,
     """
     from langchain_core.messages import AIMessage
 
-    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.core.agent.assembly import build_agent
     from tests.conftest import FakeToolCallingModel
 
     host_path = f"{cfg.workspace}/sessions/s1/scratchpad/notes.md"
@@ -362,7 +362,7 @@ def test_a_subagent_gets_the_correction_too(cfg, session_dir):
     from langchain_core.messages import AIMessage
 
     from kingfisher.core.access.capabilities import Capabilities
-    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.core.agent.assembly import build_agent
     from tests.conftest import FakeToolCallingModel, subagents_dir
     from tests.unit.test_delegation_ceiling import _subagent_graphs
 

@@ -8,7 +8,7 @@ agent does not have: no `rules`, because what has to be true across a *set* of
 agents is one sentence -- two of a name is refused in `catalogue` where it is
 found -- and no `harness`, for the reason below.
 
-**`harness/agent.py` did not come with them, and that is the point rather than
+**`core/agent/assembly.py` did not come with them, and that is the point rather than
 an omission.** *Not a module: agents* refused this package on the grounds that
 an agent "is the thing the graph *is* rather than something the graph holds",
 and drew from that: "assembling a graph out of the three kinds is kingfisher's
@@ -22,7 +22,7 @@ from what was found". An agent has all three -- `agents/*.yaml`, this `reading`,
 and `LocalAgentRepository` -- which is why it is here.
 
 **It reaches no framework at all**, and `THIRD_PARTY` says so with an empty
-set. That is a consequence of leaving `harness/agent.py` where it was: an
+set. That is a consequence of keeping `core/agent/assembly.py` out of it: an
 agent's runtime half is not a kind's to hold.
 
 `spec` is the one file outside this directory's business to import. It is the

@@ -11,7 +11,7 @@ import pytest
 from deepagents.middleware.summarization import compute_summarization_defaults
 
 from kingfisher.config import ConfigError, Endpoint, ModelProfile, WireFormat
-from kingfisher.infrastructure.harness.models import (
+from kingfisher.core.agent.models import (
     FILLABLE,
     WIRE_FORMATS,
     build_model,
@@ -535,7 +535,7 @@ def test_describing_an_adapter_does_not_import_its_sdk():
 
     probe = (
         "import sys;"
-        "import kingfisher.infrastructure.harness.models as m;"
+        "import kingfisher.core.agent.models as m;"
         "print('langchain_openai' in sys.modules, 'langchain_anthropic' in sys.modules)"
     )
     out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal

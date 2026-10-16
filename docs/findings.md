@@ -184,7 +184,7 @@ for the next reader who reaches for one.*
   so a deployment's class named like one of deepagents' own removes it from the
   stack rather than running beside it. Kingfisher warns about this; the mechanism
   and the reasoning are in `_warn_if_it_replaces_deepagents` in
-  `infrastructure/harness/kinds/declared_middleware.py`, and the names are
+  `core/agent/kinds/declared_middleware.py`, and the names are
   discovered at run time rather than listed. *(2026-08-31.)*
 - **The memory block gets a cache breakpoint of its own only in deepagents' slot
   for it.** With `memory=`, `MemoryMiddleware` runs after
@@ -202,7 +202,7 @@ for the next reader who reaches for one.*
   `_apply_custom_middleware` will replace them without a word. *(2026-08-31.)*
 - **A subagent inherits none of its parent's middleware.** Each definition's is
   built separately, so a cap on an agent bounds nothing its subagent does.
-  `infrastructure/harness/kinds/subagents.py` says so where a subagent is built. *(2026-08-30.)*
+  `core/agent/kinds/subagents.py` says so where a subagent is built. *(2026-08-30.)*
 - **A sync run does not skip an async-only hook; it raises.** Under `stream`, a
   middleware implementing only `awrap_tool_call` or `awrap_model_call` raises the
   base class's `NotImplementedError` the first time the hook is reached, and one

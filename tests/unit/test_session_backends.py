@@ -13,7 +13,7 @@ import pytest
 from deepagents.backends import FilesystemBackend
 
 from kingfisher import Kingfisher, LocalSessions
-from kingfisher.infrastructure.harness.backend import bundled_skills_route
+from kingfisher.core.agent.backend import bundled_skills_route
 from kingfisher.layout import SKILLS_ROUTE
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from kingfisher.presentation.cli.__main__ import main

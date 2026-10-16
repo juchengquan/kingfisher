@@ -160,7 +160,7 @@ agent will not load is reported, not refused.
 *(2026-08-17, `skill-registry.md`.)*
 
 **Only `core.definitions.skills.registry` calls it.** The lister and its async twin were called
-from there and from `infrastructure.harness.middlewares.narrowing`, so an upgrade
+from there and from `core.agent.middlewares.narrowing`, so an upgrade
 that moved either meant the same edit in two files, and the async one was never
 pinned.
 `listed` and `alisted` are the only calls now; `test_skill_registry` pins both
@@ -3645,7 +3645,7 @@ design and an unchanged command is correct on Linux and a failure on macOS.
 
 `runs_locally` is the one reading now. **The contract kit keeps its own on purpose**:
 `testing.a_runner_says_where_it_runs` validates a deployment's adapter, and importing
-`infrastructure.harness.backend` there would take the kit from 70 loaded modules to
+`core.agent.backend` there would take the kit from 70 loaded modules to
 3,104 -- measured -- to share one `getattr`, against the decision that it stays light
 enough to run in somebody else's CI. *(2026-09-25, from an architecture review. The
 second number was written as 103 and remeasured on 2026-10-16: that module reaches
@@ -4688,8 +4688,8 @@ to run anything over them. Object storage reaches a session as a mount
 
 **What the agent addresses is a table in `kingfisher.layout`.** One entry per path,
 saying whether the composite mounts it, which scope denies writes under it, and
-whether its members are generated per catalogue. `infrastructure.harness.backend`
-turns the entries into mounts and `infrastructure.harness.agent` turns the scopes
+whether its members are generated per catalogue. `core.agent.backend`
+turns the entries into mounts and `core.agent.assembly` turns the scopes
 into deny rules. Policy here, the runtime's objects there -- the division this
 module's first line already describes. *(2026-09-07.)*
 
@@ -6373,7 +6373,7 @@ that way. *(2026-09-10. Both are in `infrastructure/harness/kinds/` since 2026-1
 **The entry it reverses was right about ownership and wrong about direction.** *An
 asset kind owns its own registration* said the kinds "do not answer to a layer", and
 five imports said otherwise: the subagent runtime half named three modules under
-`infrastructure/harness/` and `infrastructure.prompting`, and the tool surface named
+`infrastructure/harness/` and `core.agent.prompting`, and the tool surface named
 `core.definitions.catalogue`. Nothing was checking. `THIRD_PARTY` watches foreign
 packages, `HARNESS_EDGES` watches the layers reaching *in*, and the direction between
 `kinds/` and the layers was written in prose and enforced nowhere -- which is how a
@@ -6450,7 +6450,7 @@ imports no framework does not belong in the package defined by importing one.
 shaped by deepagents -- `routed` exists because `CompositeBackend` has a default
 slot, `deny_write_under` is a glob because `FilesystemMiddleware` takes globs,
 the trailing slash exists because matching is by prefix -- and only
-`infrastructure.harness.backend` and `infrastructure.harness.agent` read it in
+`core.agent.backend` and `core.agent.assembly` read it in
 code, with the backend contract kit beside them. That is a real argument, and the entry above is one day older than it:
 pulling the table apart would undo the joining that entry exists to record. The
 root belongs to no layer, so framework-shaped data there costs much less than in
@@ -7661,7 +7661,7 @@ fixed them says how each was caught.*
 **Not taken: splitting the build plan.** An architecture review named
 `build_agent` as assembling in one pass with thin seams, and the reading went the
 other way. The pass is deliberate and already recorded at the function: it was 657
-lines doing four jobs, `prompting` and `infrastructure.harness.kinds.subagents` left with
+lines doing four jobs, `prompting` and `core.agent.kinds.subagents` left with
 a rule that neither calls back, and what remains is wiring where every statement
 attaches one thing to the graph. Four decisions above constrain the shape further --
 the middleware registry merged once before either branch reads it, both `wants`

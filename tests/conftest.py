@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
 from kingfisher.config import Config, Endpoint, Landing, ModelProfile, Models, WireFormat
-from kingfisher.infrastructure.harness.models import WIRE_FORMATS
+from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.infrastructure.steps import drive
 from kingfisher.infrastructure.workspace import ensure_definitions, ensure_layout
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -24,8 +24,8 @@ if TYPE_CHECKING:
     # Type-only, and deliberately: naming the record at runtime would pull
     # deepagents into every collection of this file for one annotation, which is
     # the 1.4s the lazy front door exists to avoid paying.
+    from kingfisher.core.agent.assembly import Assembled
     from kingfisher.core.definitions.subagents.spec import SubagentSpec
-    from kingfisher.infrastructure.harness.agent import Assembled
 
 
 class FakeToolCallingModel(FakeMessagesListChatModel):
@@ -308,9 +308,9 @@ def paths_in(cfg, session_dir: Path, *, sessions: Path | None = None):
     every turn starts from -- the `SessionPaths` a build hands its tool guards. Its
     sibling sessions are under `sessions`, or beside it when that is not given.
     """
-    from kingfisher.infrastructure.harness.agent import read_only_permissions
-    from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
-    from kingfisher.infrastructure.harness.session_paths import SessionPaths
+    from kingfisher.core.agent.assembly import read_only_permissions
+    from kingfisher.core.agent.permitted_backend import PermittedBackend
+    from kingfisher.core.agent.session_paths import SessionPaths
 
     under_rules = PermittedBackend(_backend_in(cfg, session_dir), read_only_permissions())
     return SessionPaths(under_rules, Path(session_dir).parent if sessions is None else sessions)
@@ -524,7 +524,7 @@ def dispatched(graph) -> tuple[str, ...]:
     how a rename upstream would empty the built-in set with every assertion still
     passing.
     """
-    from kingfisher.infrastructure.harness.kinds.tools import registered_tools
+    from kingfisher.core.agent.kinds.tools import registered_tools
 
     names = registered_tools(graph)
     assert names is not None, "a graph built here must be readable"

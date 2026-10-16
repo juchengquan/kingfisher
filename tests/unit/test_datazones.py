@@ -19,12 +19,12 @@ from kingfisher.core.access.source_ids import (
     with_datazone,
     zone_name,
 )
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.middlewares.recorder import Audiences
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.subagents.spec import SubagentError, declared
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, ToolError
 from kingfisher.core.definitions.tools.spec import tool_name
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.middlewares.recorder import Audiences
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import subagents_dir, tools_dir

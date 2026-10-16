@@ -186,7 +186,7 @@ def _resolve_tools(  # noqa: PLR0913 -- the sixth is who is asking, which nothin
     capabilities: Capabilities,
     workspace_tools: Sequence[Found],
     # `Any` rather than the record it actually returns: naming that type here would
-    # make this module import `infrastructure.harness.agent`, which imports this one
+    # make this module import `core.agent.assembly`, which imports this one
     # -- the cycle `test_no_module_in_the_package_can_reach_itself` refuses. The
     # probe takes the graph off it below, which is all this function wants.
     assemble: Callable[[tuple[Any, ...]], Any],

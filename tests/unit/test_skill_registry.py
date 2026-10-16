@@ -10,11 +10,11 @@ import pytest
 
 from kingfisher import backend_at
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
+from kingfisher.core.agent.activation import available_skills
+from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skills import registry as skill_registry
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
-from kingfisher.infrastructure.harness.activation import available_skills
-from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel
 
 GOOD = "---\nname: {name}\ndescription: {desc}\n---\nBody of the skill.\n"

@@ -8,7 +8,7 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
-from kingfisher.infrastructure.harness.host_paths import HostPathError
+from kingfisher.core.agent.host_paths import HostPathError
 
 
 # The guard is the other half of `reject_host_path`: it catches what that raises and

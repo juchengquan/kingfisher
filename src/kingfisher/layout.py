@@ -184,8 +184,8 @@ class Route:
 
 
 #: What the agent addresses, and what is true of each. Read by
-#: `infrastructure.harness.backend` for the mounts and by
-#: `infrastructure.harness.agent` for the deny rules, so the two cannot disagree
+#: `core.agent.backend` for the mounts and by
+#: `core.agent.assembly` for the deny rules, so the two cannot disagree
 #: about which paths exist.
 ROUTES: tuple[Route, ...] = (
     # A caller's inputs, and nothing else holds a copy: never re-derivable from

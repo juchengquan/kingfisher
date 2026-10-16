@@ -6,10 +6,10 @@ import pytest
 
 from kingfisher import backend_at
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
+from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.subagents.spec import SubagentSpec
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 from kingfisher.core.definitions.tools.spec import Offering, offered
-from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import FakeToolCallingModel, tools_dir
 

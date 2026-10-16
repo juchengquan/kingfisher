@@ -6,7 +6,7 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
-from kingfisher.infrastructure.harness.host_paths import HOST_ROOTS, HostPathError
+from kingfisher.core.agent.host_paths import HOST_ROOTS, HostPathError
 from kingfisher.layout import DEFAULT_LAYOUT, INPUTS_ROUTE, OUTPUTS_ROUTE, Layout
 
 #: Which arguments name a file. A convention `tools.md` documents and tool authors

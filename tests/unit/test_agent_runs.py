@@ -8,9 +8,9 @@ from langchain_core.messages import AIMessage
 from kingfisher import LocalSessions, backend_at
 from kingfisher.application.service import Kingfisher
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.prompting import system_prompt
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.prompting import system_prompt
 from kingfisher.infrastructure.steps import drive
 from tests.conftest import FakeToolCallingModel, harness_in
 

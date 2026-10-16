@@ -13,7 +13,7 @@ import pytest
 from langchain_core.messages import ToolMessage
 
 from kingfisher import backend_at
-from kingfisher.infrastructure.harness.middlewares.workspace_tools import WorkspaceToolErrors
+from kingfisher.core.agent.middlewares.workspace_tools import WorkspaceToolErrors
 
 
 class _Request:
@@ -131,7 +131,7 @@ def _guard_in(built) -> WorkspaceToolErrors | None:
 
 def test_the_build_guards_the_names_the_workspace_defined(cfg, session_dir):
     """A middleware nobody installs guards nothing."""
-    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.core.agent.assembly import build_agent
     from tests.conftest import tools_dir
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
@@ -146,7 +146,7 @@ def test_the_build_guards_the_names_the_workspace_defined(cfg, session_dir):
 
 def test_a_workspace_with_no_tools_installs_no_guard(cfg, session_dir):
     """Nothing to guard, so nothing added."""
-    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.core.agent.assembly import build_agent
 
     built = build_agent(cfg, backend=backend_at(cfg, session_dir), model=_a_model())
 
@@ -191,7 +191,7 @@ def _calls(name: str, call_id: str = "call-1"):
 
 
 def _graph_with_a_failing_tool(cfg, session_dir):
-    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.core.agent.assembly import build_agent
     from tests.conftest import FakeToolCallingModel, tools_dir
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
@@ -239,7 +239,7 @@ system_prompt: |
 def _subagent_with_a_failing_tool(cfg, session_dir):
     """The same graph, one level down: a subagent holding the failing tool."""
     from kingfisher.core.access.capabilities import Capabilities
-    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.core.agent.assembly import build_agent
     from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
     from tests.unit.test_delegation_ceiling import _subagent_graphs
 
@@ -304,7 +304,7 @@ def test_a_helper_below_a_subagent_is_guarded_too(cfg, session_dir):
     standalone subagent has neither the helper nor the bug.
     """
     from kingfisher.core.access.capabilities import Capabilities
-    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.core.agent.assembly import build_agent
     from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
     from tests.unit.test_delegation_ceiling import _subagent_graphs
 

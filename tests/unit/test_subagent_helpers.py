@@ -7,9 +7,9 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import backend_at
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
+from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.subagents.rules import refuse_cycles
 from kingfisher.core.definitions.subagents.spec import SubagentError, SubagentSpec
-from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel, a_subagent, subagents_dir
 
 REVIEWER = """name: reviewer
@@ -386,7 +386,7 @@ def test_a_definition_is_compiled_once_for_each_position(cfg, session_dir, monke
     right = REVIEWER.replace("reviewer", "right").replace("second-opinion", "shared")
     _define(cfg, left, right, shared)
 
-    from kingfisher.infrastructure.harness.kinds import subagents as delegation
+    from kingfisher.core.agent.kinds import subagents as delegation
 
     built: list[str] = []
     real = delegation.as_subagent
@@ -395,7 +395,7 @@ def test_a_definition_is_compiled_once_for_each_position(cfg, session_dir, monke
         "as_subagent",
         lambda spec, *a, **k: (built.append(spec.name), real(spec, *a, **k))[1],
     )
-    monkeypatch.setattr("kingfisher.infrastructure.harness.agent.as_subagent",
+    monkeypatch.setattr("kingfisher.core.agent.assembly.as_subagent",
                         delegation.as_subagent)
 
     _build(cfg, session_dir, subagents=("left", "right", "shared"))

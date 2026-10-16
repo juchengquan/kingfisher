@@ -39,7 +39,7 @@ from deepagents.backends.protocol import FileDownloadResponse, FileUploadRespons
 
 from kingfisher import Kingfisher, Request
 from kingfisher.config import DEFAULT_THREAD_POOL_SIZE, Config
-from kingfisher.infrastructure.harness.backend import SessionBackends
+from kingfisher.core.agent.backend import SessionBackends
 from tests.conftest import FAKE_CATALOGUE, StubCheckpointer
 from tests.unit.test_run import StubAgent
 

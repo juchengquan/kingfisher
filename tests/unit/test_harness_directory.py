@@ -18,8 +18,8 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import LocalSessions
 from kingfisher.core.access.capabilities import Capabilities
+from kingfisher.core.agent.assembly import build_agent
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.workspace import ensure_layout
 from kingfisher.layout import CLAIM, HARNESS, PINNED_AGENT
 from kingfisher.plugins.sessions.backend import backend_at

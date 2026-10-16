@@ -20,7 +20,7 @@ from kingfisher.config import (
     ModelProfile,
     Models,
 )
-from kingfisher.infrastructure.harness.models import WIRE_FORMATS
+from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.infrastructure.model_catalogue import load
 
 GOOD = """

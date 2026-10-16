@@ -70,7 +70,7 @@ def test_a_real_graph_checkpoints_into_the_session_database(cfg, session_dir):
     """The whole reason a checkpointer exists."""
     from langchain_core.messages import AIMessage
 
-    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.core.agent.assembly import build_agent
     from kingfisher.infrastructure.harness.checkpointing import build_session_checkpointer
     from tests.conftest import FakeToolCallingModel
 
@@ -302,7 +302,7 @@ def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
     """
     from langchain_core.messages import AIMessage
 
-    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.core.agent.assembly import build_agent
     from kingfisher.infrastructure.harness.checkpointing import build_session_checkpointer
     from tests.conftest import FakeToolCallingModel
 

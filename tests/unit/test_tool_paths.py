@@ -10,10 +10,10 @@ from typing import Any
 import pytest
 
 from kingfisher import backend_at
-from kingfisher.infrastructure.harness.host_paths import HOST_ROOTS
-from kingfisher.infrastructure.harness.middlewares.workspace_tools import WorkspaceToolPaths
-from kingfisher.infrastructure.harness.session_paths import NOT_FOR_TOOLS
-from kingfisher.infrastructure.harness.tool_guards import guarded_tools
+from kingfisher.core.agent.host_paths import HOST_ROOTS
+from kingfisher.core.agent.middlewares.workspace_tools import WorkspaceToolPaths
+from kingfisher.core.agent.session_paths import NOT_FOR_TOOLS
+from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import paths_in
 
@@ -276,7 +276,7 @@ def a_workspace_with_the_tool(cfg):
 def ran(cfg, session_dir, argument: str) -> str:
     from langchain_core.messages import AIMessage
 
-    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.core.agent.assembly import build_agent
     from tests.conftest import FakeToolCallingModel
 
     responses = [
@@ -344,7 +344,7 @@ def test_a_file_argument_with_another_name_cannot_read_another_session(cfg, sess
     """
     from langchain_core.messages import AIMessage
 
-    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.core.agent.assembly import build_agent
     from tests.conftest import FakeToolCallingModel, tools_dir
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
@@ -398,7 +398,7 @@ def test_a_link_inside_the_session_does_not_widen_it(cfg, session_dir):
     """
     from langchain_core.messages import AIMessage
 
-    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.core.agent.assembly import build_agent
     from tests.conftest import FakeToolCallingModel, tools_dir
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)

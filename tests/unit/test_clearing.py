@@ -28,22 +28,22 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langchain_core.messages.utils import count_tokens_approximately
 
 from kingfisher import Kingfisher, LocalSessions, Request
-from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
-from kingfisher.domain.result import MAIN, LedgerEntry
-from kingfisher.domain.transcript import from_json
-from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.ledger import Ledger
-from kingfisher.infrastructure.harness.middlewares.clearing import (
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.middlewares.clearing import (
     DEFAULT_MARK,
     ResultClearing,
     high_mark,
 )
-from kingfisher.infrastructure.harness.middlewares.recorder import (
+from kingfisher.core.agent.middlewares.recorder import (
     UNRECORDED,
     _arguments,
     _summary,
 )
-from kingfisher.infrastructure.harness.models import summarizer_trigger
+from kingfisher.core.agent.models import summarizer_trigger
+from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
+from kingfisher.domain.result import MAIN, LedgerEntry
+from kingfisher.domain.transcript import from_json
+from kingfisher.infrastructure.harness.ledger import Ledger
 from kingfisher.infrastructure.session_store import KeptLedger
 from kingfisher.layout import HARNESS, OFFLOADS_ROUTE, TOOL_RESULTS_ROUTE, TRANSCRIPT_FILE
 from kingfisher.plugins.sessions.backend import backend_at

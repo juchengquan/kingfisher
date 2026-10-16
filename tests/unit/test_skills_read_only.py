@@ -13,7 +13,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import Capabilities
-from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.core.agent.assembly import build_agent
 from kingfisher.plugins.sessions.backend import backend_at
 from kingfisher.plugins.sessions.sandbox import confinement
 from tests.conftest import FakeToolCallingModel

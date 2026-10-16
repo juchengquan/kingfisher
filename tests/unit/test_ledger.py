@@ -27,13 +27,13 @@ from assets.middlewares.tool_note import ToolNote
 from kingfisher import Kingfisher, LocalSessions, Request
 from kingfisher.application.turn import ledger_delta, ledger_index, turn_message
 from kingfisher.core.access.source_ids import parse
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.middlewares.recorder import Recorder
+from kingfisher.core.agent.prompting import render_system_prompt
 from kingfisher.domain.request import Decision, Resume
 from kingfisher.domain.result import AWAITING, MAIN, WORKING, LedgerEntry
 from kingfisher.domain.transcript import from_json
-from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.ledger import Ledger
-from kingfisher.infrastructure.harness.middlewares.recorder import Recorder
-from kingfisher.infrastructure.prompting import render_system_prompt
 from kingfisher.infrastructure.session_store import KeptLedger, entry_id
 from kingfisher.layout import (
     HARNESS,

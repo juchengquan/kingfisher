@@ -18,10 +18,10 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from kingfisher import backend_at
 from kingfisher.core.access.capabilities import Capabilities
+from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.documents import DefinitionText
-from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel, tools_dir
 
 WRITES = [

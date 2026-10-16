@@ -135,7 +135,7 @@ def _modules_in(layer: str, root: Path = SRC) -> list[Path]:
 
 
 def _module_id(path: Path) -> str:
-    """`harness/agent.py`, not `agent.py`."""
+    """`core/agent/assembly.py`, not `assembly.py`."""
     if path.is_relative_to(SRC):
         return path.relative_to(SRC).as_posix()
     return path.relative_to(REPO).as_posix()
@@ -210,53 +210,6 @@ def test_a_relative_import_is_read_as_the_module_it_reaches(tmp_path):
         "kingfisher.config",  # `..` is its parent -- the one that was invisible
         "kingfisher.domain.capabilities",  # and a dotted form resolves too
     }
-
-
-def test_a_harness_edge_is_seen_however_it_is_spelled(tmp_path):
-    """`_harness_reach` had the same blindness as `_imported_modules`."""
-    package = tmp_path / "kingfisher" / "infrastructure"
-    (package / "harness").mkdir(parents=True)
-    for marker in (
-        tmp_path / "kingfisher" / "__init__.py",
-        package / "__init__.py",
-        package / "harness" / "__init__.py",
-    ):
-        marker.touch()
-
-    absolute = package / "absolute.py"
-    absolute.write_text(
-        "from kingfisher.infrastructure.harness import agent\n", encoding="utf-8"
-    )
-    relative = package / "relative.py"
-    relative.write_text("from .harness import agent\n", encoding="utf-8")
-
-    assert _harness_reach(absolute) == {"agent"}
-    assert _harness_reach(relative) == {"agent"}, "the spelling that used to hide the edge"
-
-
-def test_a_harness_edge_into_a_subpackage_names_the_module(tmp_path):
-    """Cut at the first segment, every module in `harness/kinds/` read as `kinds`."""
-    package = tmp_path / "kingfisher" / "infrastructure"
-    (package / "harness" / "kinds").mkdir(parents=True)
-    for marker in (
-        tmp_path / "kingfisher" / "__init__.py",
-        package / "__init__.py",
-        package / "harness" / "__init__.py",
-        package / "harness" / "kinds" / "__init__.py",
-        package / "harness" / "kinds" / "tools.py",
-    ):
-        marker.touch()
-
-    spellings = (
-        "from kingfisher.infrastructure.harness.kinds import tools\n",
-        "from kingfisher.infrastructure.harness.kinds.tools import surface\n",
-        "import kingfisher.infrastructure.harness.kinds.tools\n",
-        "from .harness.kinds import tools\n",
-    )
-    for index, spelling in enumerate(spellings):
-        consumer = package / f"consumer_{index}.py"
-        consumer.write_text(spelling, encoding="utf-8")
-        assert _harness_reach(consumer) == {"kinds.tools"}, spelling
 
 
 def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
@@ -580,7 +533,7 @@ def test_the_dangling_import_rule_can_tell_a_gone_module_from_a_real_one():
     assert _names_a_real_module("kingfisher")
     assert _names_a_real_module("kingfisher.core.definitions.tools.spec")
     assert _names_a_real_module("kingfisher.infrastructure.harness")
-    assert _names_a_real_module("kingfisher.infrastructure.harness.agent")
+    assert _names_a_real_module("kingfisher.core.agent.assembly")
 
     assert not _names_a_real_module("kingfisher.infrastructure.agent")
     assert not _names_a_real_module("kingfisher.server")
@@ -600,7 +553,7 @@ def test_the_trees_outside_the_package_are_in_scope():
 
 #: What a prose reference can be rooted at, and the only form of it that can be checked.
 #: `models.yaml`, `run.py` and `uploads.provision` are shaped exactly like module paths;
-#: `infrastructure.harness.backend` cannot be anything else. Unrooted, the pattern reads
+#: `core.agent.backend` cannot be anything else. Unrooted, the pattern reads
 #: every dotted phrase in the repository as a claim about a module and calls most of them
 #: broken -- `importlib.resources` and every filename among them. Rooting it at a package
 #: this tree actually has is what separates a claim from ordinary prose.
@@ -651,15 +604,12 @@ PROSE_GONE: dict[str, frozenset[str]] = {
     # with it.
     "docs/decisions.md": frozenset({"core.definitions.skills.reading.name_from"}),
     # The file that owns the rules is the one place a gone module is named on
-    # purpose -- in the docstring of the rule that renaming broke, in the
-    # negatives below, which are asserted gone rather than merely absent, and in
-    # the `HARNESS_EDGES` note saying which edge a move closed.
+    # purpose -- in the docstring of the rule that renaming broke, and in the
+    # negatives below, which are asserted gone rather than merely absent.
     "tests/unit/test_architecture.py": frozenset({
-        "harness.skill_registry",
         "infrastructure.agent",
         "infrastructure.backend",
         "infrastructure.backend.shell_env",
-        "infrastructure.workspace_fs.resolve_definitions",
     }),
 }
 
@@ -731,7 +681,7 @@ def test_prose_naming_a_module_names_one_that_exists():
 #: These are the endings a sentence cannot stop on: a dash or a colon introducing
 #: a list, a comma or a conjunction mid-clause. Trimming a docstring drops the
 #: block underneath and leaves the introduction behind, which reads as complete
-#: prose and is not -- `agent.py` promised "the last of three parts --" and named
+#: prose and is not -- `assembly.py` promised "the last of three parts --" and named
 #: none of them, and the scratch preparer promised "two problems" and listed
 #: neither. That second one is named without backticks on purpose: it went with
 #: the shared scratch directory, and the rule below would now call it unresolved.
@@ -1004,7 +954,7 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
     """Every reference in the tree resolves once the thirteen are fixed, so the rule
     above passes whether it discriminates or answers nothing at all.
     """
-    assert _prose_unresolved("`infrastructure.harness.backend`") == []
+    assert _prose_unresolved("`core.agent.backend`") == []
     assert _prose_unresolved(
         "`core.definitions.skills.spec.FILENAME` and `application.inventory`"
     ) == []
@@ -1075,7 +1025,7 @@ def test_a_nested_package_is_a_prose_root(tmp_path):
 
     # Rooted at the top, a real module still resolves: widening the roots must not
     # turn the full path into a second way to be wrong.
-    assert _prose_unresolved("`infrastructure.harness.agent`") == []
+    assert _prose_unresolved("`core.agent.assembly`") == []
 
 
 def test_the_prose_rule_reaches_the_packages_that_are_not_layers():
@@ -1279,19 +1229,21 @@ def test_the_domain_may_name_a_spec_but_not_a_catalogue():
 #:
 #: Measured, not declared -- every entry is a package some module imports today.
 THIRD_PARTY: dict[str, frozenset[str]] = {
-    # The agent runtime. This *was* the swap boundary in one directory, and is
-    # now the larger half of it: `core/definitions/skills` and
-    # `core/definitions/middlewares` reach the
-    # runtime too, and their entries below say so. What the boundary buys is unchanged in kind and
-    # weaker in degree -- an upgrade is still a list of files rather than a
-    # search, and the list now spans more than one directory.
-    "infrastructure/harness": frozenset({
+    # The agent runtime, which building one request's graph speaks to throughout.
+    # `infrastructure/harness`, `core/definitions/skills` and
+    # `core/definitions/middlewares` reach it too, and their entries below say so --
+    # an upgrade is still a list of files rather than a search, and the list spans
+    # more than one directory.
+    "core/agent": frozenset({
         "deepagents",
         "langchain",
         "langchain_core",
         "langchain_quickjs",
         "langgraph",
     }),
+    # Running a turn and keeping its conversation: the stream the graph emits and the
+    # checkpointer it was built with.
+    "infrastructure/harness": frozenset({"deepagents", "langchain_core", "langgraph"}),
     # The rest of the layer adapts the disk and the environment, and needs one parser
     # to do it.
     "infrastructure": frozenset({"yaml"}),
@@ -1307,14 +1259,14 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # interface derived from it.
     "core/definitions/skills": frozenset({"deepagents"}),
     # Nothing, since the route to the runtime moved out: reading a tool roster off a
-    # compiled langgraph object is `infrastructure.harness.kinds.tools` now.
+    # compiled langgraph object is `core.agent.kinds.tools` now.
     "core/definitions/tools": frozenset(),
     # Nothing, for the same move: turning a spec into the `SubAgent` deepagents
     # expects cannot be done without naming the type, and it is done in
-    # `infrastructure.harness.kinds.subagents` now.
+    # `core.agent.kinds.subagents` now.
     "core/definitions/subagents": frozenset(),
     # Nothing, and this one never had anything: an agent's runtime half is
-    # `harness/agent.py`, which is not this package's.
+    # `core/agent/assembly.py`, which is not this package's.
     "core/definitions/agents": frozenset(),
     # The fifth, and back on the boundary: `core.definitions.middlewares.catalogue` refuses a class
     # that is not an `AgentMiddleware` as the directory is read rather than at the
@@ -1379,10 +1331,10 @@ def test_an_area_is_refused_another_areas_dependencies():
     assert _undeclared({"deepagents"}, "application") == {"deepagents"}
     assert _undeclared({"deepagents"}, "presentation/cli") == {"deepagents"}
     assert _undeclared({"deepagents"}, "infrastructure") == {"deepagents"}
-    assert _undeclared({"fastapi"}, "infrastructure/harness") == {"fastapi"}
-    assert _undeclared({"yaml"}, "infrastructure/harness") == {"yaml"}
+    assert _undeclared({"fastapi"}, "core/agent") == {"fastapi"}
+    assert _undeclared({"yaml"}, "core/agent") == {"yaml"}
 
-    assert _undeclared({"deepagents", "langgraph"}, "infrastructure/harness") == set()
+    assert _undeclared({"deepagents", "langgraph"}, "core/agent") == set()
     assert _undeclared({"yaml"}, "infrastructure") == set()
     assert _undeclared({"fastapi"}, "presentation/cli") == {"fastapi"}
     assert _undeclared({"dotenv"}, "presentation/cli") == set()
@@ -1390,12 +1342,14 @@ def test_an_area_is_refused_another_areas_dependencies():
 
 
 def test_a_subpackage_is_judged_by_its_own_area():
-    """`infrastructure/harness/agent.py` is not judged as `infrastructure/`."""
+    """`infrastructure/harness/runtime.py` is not judged as `infrastructure/`."""
     buried = SRC / "infrastructure" / "workspace" / "backing.py"
     for path in (buried, SRC / "domain" / "request.py", SRC / "config.py"):
         assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
 
-    assert _area_of(SRC / "infrastructure" / "harness" / "agent.py") == "infrastructure/harness"
+    assert _area_of(SRC / "infrastructure" / "harness" / "runtime.py") == (
+        "infrastructure/harness"
+    )
     assert _area_of(SRC / "domain" / "request.py") == "domain"
     # A kind's module is its own area, which is what lets `core/definitions/skills/registry.py`
     # name the runtime without `domain/` or `kinds/` inheriting the permission.
@@ -1510,234 +1464,18 @@ def test_the_plugin_rule_sees_an_import_of_one(tmp_path):
     assert _reaches_a_plugin(written) == ["kingfisher.plugins.sessions.backend"]
 
 
-def test_the_harness_package_is_the_one_speaking_to_the_harness():
-    """The half of the old rule worth keeping, scoped to where it means something."""
-    runtime = THIRD_PARTY["infrastructure/harness"]
-    imports = {
-        m.split(".")[0]
-        for p in _modules_in("infrastructure")
-        if "harness" in p.parts
-        for m in _imported_modules(p)
-    }
+def test_the_agent_package_is_the_one_speaking_to_the_harness():
+    """The runtime's entry in `THIRD_PARTY` is about a package that still uses it."""
+    runtime = THIRD_PARTY["core/agent"]
+    imports = {m.split(".")[0] for p in _modules_in("core/agent") for m in _imported_modules(p)}
     assert imports & runtime, (
-        "no module under infrastructure/harness/ imports the agent runtime — "
-        "either the adapters left, or the coupling did not"
-    )
-
-
-#: Which flat `infrastructure/` modules may reach into `infrastructure/harness/`, and
-#: what each one reaches for. Deny by default, like `THIRD_PARTY`: an edge named nowhere
-#: below fails, so this table is what has to be edited to add one, and editing it is
-#: where someone asks whether the edge belongs.
-def _harness_consumers() -> list[Path]:
-    """Every module the harness table is about, in both layers that reach it.
-
-    One function rather than the same comprehension in three places, and not for
-    tidiness: a mutation narrowing it back to `infrastructure/` survived twice -- once
-    because a rule with no cases passes, and once because the test written to catch that
-    restated the walk instead of calling it, so it tested its own copy.
-    """
-    return [
-        path
-        for path in [*_modules_in("infrastructure"), *_modules_in("application")]
-        if "harness" not in path.parts
-    ]
-
-
-HARNESS_EDGES: dict[str, frozenset[str]] = {
-    # Reads the registry to answer which skill names a deployment already
-    # offers. Left a direct import rather than inverted through a port: the port
-    # would have exactly one implementation, forever, whose whole purpose is to
-    # be deepagents-specific.
-    # `catalogue` asked `harness.skill_registry` which names were taken; the
-    # registry is `core.definitions.skills.registry` now, which is not the harness, so this is
-    # no longer an edge into it at all.
-    "catalogue": frozenset(),
-    # Builds an agent to enumerate what it registered -- the only way to know the
-    # built-in tool set is to assemble one and look. It used to read the roster off
-    # the graph itself; `agent.builtin_tool_names` does both halves now, because
-    # startup needs the same probe and a second copy of it would be a second answer.
-    "inventory": frozenset({"agent"}),
-    # Reads `WIRE_FORMATS` to refuse an `api` kingfisher cannot build, as the
-    # catalogue loads rather than when a turn starts. The same argument as
-    # `catalogue` above: the alternative is a second list of the wire formats
-    # living in the config layer, and two lists of one fact drift -- here into
-    # a file that loads and a deployment that cannot run.
-    #
-    # Cheap in the terms this package measures. `models.py` names its chat
-    # classes as strings and resolves them on demand, so importing it costs
-    # 1.2ms and two modules on top of `model_catalogue`, and pulls in no
-    # provider SDK at all.
-    "model_catalogue": frozenset({"models"}),
-    # Names `LocalSessions` in `configured_sessions`, for a command line with no
-    # factory set: the command is kingfisher's own deployment, and that fallback is
-    # what spares a person at a terminal the choice, so the edge is the point of it.
-    "run": frozenset({"backend"}),
-    # The service is the harness's largest consumer, and was never in this table
-    # because the rule only walked `infrastructure/`. Running a turn *is* driving
-    # the harness: an agent to run, a checkpointer to resume it, a run log to
-    # record it, and the runtime that turns its stream into events.
-    # `interpreter` joined the four when it left `agent`, and the edge is the
-    # same one it always had: a turn opens a QuickJS runtime and must close it,
-    # which is the one of the three closables that hangs the process rather than
-    # leaking a handle. Splitting a harness module widens the consumer's list
-    # without widening what the consumer does -- worth knowing before reading
-    # five as more coupling than four.
-    "service": frozenset(
-        {
-            "activation",
-            "agent",
-            # `Sessions`, for the parameter a deployment has to fill. The
-            # type belongs beside the default that satisfies it rather than beside
-            # the builder that consumes it, so naming the shape costs this edge --
-            # which is the honest price. Re-exporting it through `agent` to keep the
-            # list at five would be a second spelling of one name to make a table
-            # read smaller.
-            "backend",
-            # `refuse_unusable_backend`, on every backend a session opens. `agent`
-            # runs it on the ones it builds on, which beside a pre-built graph is
-            # none of them.
-            "usable_backend",
-            "checkpointing",
-            "interpreter",
-            "kinds.declared_middleware",
-            # A turn makes the collector its graphs record into and keeps what they
-            # recorded when it ends; keeping it asks where deepagents offloaded a
-            # result, which is deepagents' own answer to read.
-            "ledger",
-            "runlog",
-            "runtime",
-        }
-    ),
-    # The disposal half of `service`, which took this edge with it: reaping a
-    # session deletes the thread behind it, through the `SharedThreads` the service
-    # wraps its checkpointer in -- which is also how it learns which threads no
-    # session owns any more.
-    "disposal": frozenset({"checkpointing"}),
-    # The withheld report, which left `service` and took one of its four edges
-    # along. It has to ask the *assembled* agent what it registered and the
-    # workspace what it offers, because the whole claim of the report is that it
-    # measures against what was actually wired rather than against a list kept
-    # somewhere -- so the edge is the point of it, not an accident of where it
-    # used to live.
-    # `surface` lived under `kinds/` for a while and is `infrastructure.harness.kinds.tools`,
-    # so the edge this note once recorded closing is back. Nothing about the coupling
-    # changed either time -- only whether this table could see it.
-    "reporting": frozenset({"activation", "kinds.tools"}),
-    # One stream chunk, read. The reading is deepagents' shape rather than ours
-    # -- which namespace a chunk came from, which mode carries the answer -- so
-    # it is an edge wherever it is written.
-    "turn": frozenset({"runtime"}),
-}
-
-
-#: The package the edges below cross into.
-HARNESS = "kingfisher.infrastructure.harness"
-
-
-def _consumer_key(path: Path) -> str:
-    """A module's name below its layer, which is how `HARNESS_EDGES` is keyed."""
-    parts = list(path.relative_to(SRC).parts[1:])
-    parts = parts[:-1] if parts[-1] == "__init__.py" else [*parts[:-1], parts[-1][:-3]]
-    return ".".join(parts)
-
-
-def _harness_reach(path: Path) -> set[str]:
-    """Which harness modules one flat module imports, by their paths below the harness."""
-    reached: set[str] = set()
-    package = _package_of(path)
-    root = path.parents[len(package)]
-
-    def below(module: str) -> str:
-        return module[len(HARNESS) + 1 :]
-
-    def is_module(module: str) -> bool:
-        base = root.joinpath(*module.split("."))
-        return base.with_suffix(".py").is_file() or (base / "__init__.py").is_file()
-
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if isinstance(node, ast.ImportFrom):
-            # Resolved first, for the reason `_imported_modules` is: written
-            # relatively, `node.module` is a fragment that matches neither
-            # branch below, and the edge is simply lost. Same rule, same file,
-            # different spelling.
-            base = package[: max(len(package) - (node.level - 1), 0)] if node.level else ()
-            module = ".".join((*base, node.module)) if node.module else ".".join(base)
-            if module != HARNESS and not module.startswith(HARNESS + "."):
-                continue
-            # The whole path below the harness, never its first segment: cut there,
-            # every module in `harness/kinds/` reads as `kinds`, and the table can no
-            # longer say which of them took the coupling.
-            for alias in node.names:
-                if is_module(f"{module}.{alias.name}"):     # from <pkg>.harness import agent
-                    reached.add(below(f"{module}.{alias.name}"))
-                elif module == HARNESS:                     # a name the package itself holds
-                    reached.add(alias.name)
-                else:                                       # from <pkg>.harness.agent import x
-                    reached.add(below(module))
-        elif isinstance(node, ast.Import):
-            for alias in node.names:                        # import <pkg>.harness.agent
-                if alias.name.startswith(HARNESS + "."):
-                    reached.add(below(alias.name))
-    return reached
-
-
-def test_only_the_named_adapters_reach_into_the_harness():
-    """The line runs one way, apart from the edges written down above.
-
-    Names, not counts: a rule saying "at most three" would pass while an edge moved from
-    one module to another, and the question is always *which* adapter took the coupling
-    on.
-    """
-    escaped: list[str] = []
-    # Both layers, and `application` was missing until `inventory` moved there
-    # and took its edge out of sight. The hole was older than that move:
-    # `application/service.py` has reached into four harness modules the whole
-    # time, unnamed, because this walked one directory.
-    for path in _harness_consumers():
-        allowed = HARNESS_EDGES.get(_consumer_key(path), frozenset())
-        if extra := _harness_reach(path) - allowed:
-            escaped.append(f"{_module_id(path)} -> harness.{{{', '.join(sorted(extra))}}}")
-
-    assert not escaped, (
-        f"{escaped} reach into infrastructure/harness/ without being named in "
-        "HARNESS_EDGES; add the entry and the reason, or route the call through "
-        "an adapter that already has one"
-    )
-
-
-def test_the_harness_rule_looks_at_both_layers():
-    """A rule with no cases passes, and both halves above have none by design: every
-    edge is named, so narrowing the walk back to `infrastructure/` alone changes no
-    result.
-    """
-    walked = {_consumer_key(path) for path in _harness_consumers()}
-
-    assert "service" in walked, "the rule stopped reading application/"
-    assert "inventory" in walked
-    assert _harness_reach(SRC / "application" / "service.py"), (
-        "service.py reaches into the harness, so it is a real case rather than "
-        "a name in a set"
-    )
-
-
-def test_every_named_harness_edge_is_a_real_one():
-    """The other half, so the table cannot outlive what it describes."""
-    actual = {_consumer_key(path): _harness_reach(path) for path in _harness_consumers()}
-    stale = [
-        f"{module} -> harness.{{{', '.join(sorted(named - actual.get(module, set())))}}}"
-        for module, named in HARNESS_EDGES.items()
-        if named - actual.get(module, set())
-    ]
-
-    assert not stale, (
-        f"HARNESS_EDGES names {stale}, which nothing imports any more; delete the "
-        "entry so the table keeps describing the code"
+        "no module under core/agent/ imports the agent runtime — "
+        "either the graph is built somewhere else, or the coupling did not move with it"
     )
 
 
 #: Where kingfisher's own middleware lives, and the only place it may.
-OWN_MIDDLEWARE = "kingfisher.infrastructure.harness.middlewares"
+OWN_MIDDLEWARE = "kingfisher.core.agent.middlewares"
 
 
 def _bases_of(path: Path) -> dict[str, list[tuple[str, str]]]:
@@ -1799,7 +1537,7 @@ def _middleware_classes() -> set[tuple[str, str]]:
 
     from langchain.agents.middleware import AgentMiddleware
 
-    runtime = THIRD_PARTY["infrastructure/harness"]
+    runtime = THIRD_PARTY["core/agent"]
     bases = {
         (module, name): found
         for module, path in _module_paths().items()

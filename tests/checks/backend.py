@@ -14,7 +14,7 @@ from uuid import uuid4
 
 from deepagents.backends import CompositeBackend
 
-from kingfisher.infrastructure.harness.host_paths import HostPathError
+from kingfisher.core.agent.host_paths import HostPathError
 from kingfisher.layout import (
     HARNESS_ROUTE,
     INPUTS_ROUTE,
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-from kingfisher.infrastructure.harness.usable_backend import executes, not_executing, uncovered
+from kingfisher.core.agent.usable_backend import executes, not_executing, uncovered
 
 
 def execution_support(make: Callable[[], Any]) -> None:
