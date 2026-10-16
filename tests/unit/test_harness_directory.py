@@ -174,7 +174,7 @@ def test_the_pin_and_the_claim_go_with_the_session(cfg):
     assert not list((cfg.workspace / "sessions").iterdir())
 
 
-# -- a workspace laid out by a version that arranged it differently -------
+# -- the harness-owned directory, and laying one out ----------------------
 
 
 def test_the_harness_owned_directory_is_protected_too(cfg):

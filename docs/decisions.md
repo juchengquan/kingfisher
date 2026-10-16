@@ -308,14 +308,15 @@ So this was taken as the breaking change it is, not as tidying: `middlewares:` i
 an agent or subagent file, `middlewares` in a `CapabilitiesBody` that forbids
 unknown fields, `Kingfisher(middlewares=...)`, `MIDDLEWARES` in a workspace file,
 `middlewares/` in a workspace. The last one is the quiet one -- `middlewares/` is
-outside `LAYOUT_DIRS`, and the marker's `LAYOUT_VERSION` is a number compared rather
-than a list of directories checked, so it cannot refuse an old layout here the way
-it refuses one inside a session. A workspace that
+outside `LAYOUT_DIRS`, and the marker's `LAYOUT_VERSION` was a number compared rather
+than a list of directories checked, so it could not refuse an old layout here the way
+it refused one inside a session. A workspace that
 keeps a populated `middleware/` gets an empty `middlewares/` made beside it and
 offers nothing, with nothing said.
 
 *(`middlewares/` is made by the layout since 2026-09-24, and where its setting points
-since 2026-10-07; see below.)*
+since 2026-10-07; see below. `LAYOUT_VERSION` went with #756 -- the marker holds no
+number now, and nothing refuses an older workspace anywhere.)*
 
 **The layout names every kind, and makes each where its setting points.** It made
 three of the five, and resolving a catalogue makes all five, so a workspace had two
@@ -329,7 +330,7 @@ and the same call spread to the three that already existed: 69 `mkdir` calls acr
 are -- idempotent, and removing them is churn across 28 files for no behaviour --
 but the rule that made them look necessary is gone.
 
-No `LAYOUT_VERSION` bump. That number refuses a workspace laid out *differently*,
+No `LAYOUT_VERSION` bump. That number refused a workspace laid out *differently*,
 and nothing here moves; an existing workspace gains two empty directories on its
 next start, which is what `mkdir(exist_ok=True)` is for. A version bump would have
 refused every workspace in existence in order to add a folder.
@@ -2955,9 +2956,11 @@ One folder a row can name is still unprotected, and left so deliberately: a sess
 opened before the results moved to `tool_results/` has rows naming `results/`, and
 nothing denies that. A deny there would protect only rows written by a version that did
 not have this property at all, at the cost of a third permanent route and a fifth entry
-in the four places this deny set is pinned. What would close it properly is
-`LAYOUT_VERSION`, which has not moved across three layout changes -- an open question
-recorded elsewhere, not one to settle here. *(2026-10-14, from an architecture review.)*
+in the four places this deny set is pinned. What would have closed it properly is
+`LAYOUT_VERSION`, and that is gone (#756): there is no number to move and nothing
+refuses a workspace holding older sessions, so a row naming `results/` is left to age
+out with the session that wrote it. *(2026-10-14, from an architecture review; the
+deferral closed on 2026-10-16, together with the constant it deferred to.)*
 
 **Two fences of three now refuse the shell both folders a row can name.** Clearing older
 results to handles in the replayed conversation leaves the saved file as the only copy of
@@ -3617,9 +3620,11 @@ design and an unchanged command is correct on Linux and a failure on macOS.
 
 `runs_locally` is the one reading now. **The contract kit keeps its own on purpose**:
 `testing.a_runner_says_where_it_runs` validates a deployment's adapter, and importing
-`infrastructure.harness.backend` there would take the kit from 75 loaded modules to 103 -- measured --
-to share one `getattr`, against the decision that it stays light enough to run in
-somebody else's CI. *(2026-09-25, from an architecture review.)*
+`infrastructure.harness.backend` there would take the kit from 70 loaded modules to
+3,104 -- measured -- to share one `getattr`, against the decision that it stays light
+enough to run in somebody else's CI. *(2026-09-25, from an architecture review. The
+second number was written as 103 and remeasured on 2026-10-16: that module reaches
+deepagents, and deepagents reaches the provider SDKs.)*
 
 **Sessions reaching each other is reported, not refused.** On macOS the sandbox denies
 the operator's home and gives the whole workspace back, for writes as well as reads, so
@@ -4159,6 +4164,16 @@ while anything in `sessions/` or `.kingfisher/{agents,runs,claims,tmp}` remains,
 and `ensure_layout` rewrites the marker once nothing does. Still no migration:
 nothing is moved, and a workspace with old state in it is refused as before.
 *(2026-10-06.)*
+
+*Then the version went as well, and nothing refuses an older workspace now.* The number
+would have ratcheted on every change to a layout still being reshaped week to week, and
+the state it protected is disposable either way: a session holds a conversation, a pin
+and some files, none of it meant to outlive the shape it was written in. `MARKER_TEXT`
+is a bare identity line again, nothing reads it, and `ensure_layout` neither refuses an
+old workspace nor rewrites its marker. What this gives up is exactly the loudness the
+argument above was for; the replacement, once workspaces outlive config churn, is a
+fingerprint of the configurable names in the marker and a mismatch refused.
+*(2026-10-15, #756.)*
 
 **`KINGFISHER_STATE_DIR` and `KINGFISHER_SCRATCH_DIR` are gone.** Scratch first:
 per-session and relocatable are not both expressible, because `session_bytes`
@@ -6126,7 +6141,12 @@ accepted: the route the entry above closed, back by another door. `files_for` an
 later turn to accept. The check is at those two doors and not in `_files_for`,
 where it would refuse every turn that starts a session -- that turn opens the id it
 has just minted -- and repeat a question `reap` and the session reads have just
-asked. *(2026-10-07.)*
+asked. *(2026-10-07.)* *Undone 2026-10-14 under "Reversed: a session is named by the
+request" below: an id nobody has used starts that session by design, so there is no
+listing for a made-up id to fail, and `files_for` makes the one it is asked for again.
+What the check was reaching for is held by the id itself -- `names_a_session` refuses
+anything but one visible path segment, so a made-up id can name only a folder directly
+under `sessions/`.*
 
 **Taken: definitions passed by id go.** `Request.skill_refs` and
 `subagent_refs` let a caller send catalogue ids for skills and subagents of its
@@ -7117,6 +7137,25 @@ the shadowing row says everything the plain one does, so it is the one kept. And
 `<property object at 0x...>` -- had no case: every middleware in the suite spelt its own
 name, so the one class that inherits `AgentMiddleware.name` was rendered and never
 asserted on. *(2026-10-12, from an architecture review.)*
+
+*Swept again on 2026-10-16, and `LAYOUT_VERSION` is why the discipline alone is thin.*
+#756 dropped that constant from the code and touched no document, which left three
+descriptions in `docs/upgrading.md` promising a refusal that is gone -- a layout number,
+a startup refusal listing what to delete, and a troubleshooting row for its message --
+and two sentences here in the present tense about a number that no longer exists. The
+deferral from 2026-10-14 is the worst of them: it declined to route one of the folders a
+recorded result can name on the grounds that `LAYOUT_VERSION` would close it properly,
+and the constant was removed the next day, so the entry deferred to nothing. Measured,
+`ensure_layout` on an old workspace neither refuses it nor rewrites its marker, so the
+honest replacement is worse news for an operator than the promise it replaces. Four more
+claims had nothing to do with the layout: `files_for` was documented as refusing an id
+no turn issued and has made the session instead since #739, with no marker where its
+siblings in that document carry one; `kingfisher seed` was said to need only
+`KINGFISHER_DEFINITIONS_DIR`, and refuses without `KINGFISHER_ASSETS` or `--from`;
+`prompting` called `system_prompt` a public export, which raises `ImportError`; and the
+contract kit's import cost was written as 103 modules against 3,104 measured,
+understating it thirtyfold. A measurement in prose rots one way -- the number that made
+the argument is the number nobody re-runs. *(2026-10-16, from an architecture review.)*
 Sixty-one module paths appear in `src/` prose. Resolved the way a reader does --
 sibling first, then the package root, then the tree -- twelve do not exist:
 **seven are illustrative** (`vendor_a/fetch.py` is a *workspace's* layout, not
