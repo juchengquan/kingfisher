@@ -1406,6 +1406,22 @@ A set whose names happen to be `contains` and `all_of` is legal and stays legal.
 The value is what marks a keyword, which is the same test the parser uses one
 line down. *(2026-09-15.)*
 
+**In Python, a requirement is a set, and a list inside an audience is refused.** An
+audience written in Python had one spelling for *all of*, `{"a": None, "b": None}` --
+the dict YAML's `{a, b}` parses to, which nobody types. A Python set fell through to
+the name branch and became one source id spelled `"{'a', 'b'}"`, and a tuple did the
+same; with a vocabulary that is a confusing refusal at startup, and without one it is
+nothing at all. A set now reads as the requirement it looks like.
+
+A list or tuple inside the audience is refused rather than read as *all of*, though
+that is how a caller's own format may nest it. A bracket whose meaning depends on its
+depth is misread in the direction that widens: `(a, b)` at the top is *a or b*, a field
+named `required_sources` invites reading it as both, and only the second level would
+mean that. Keeping one bracket per operation makes the misreading impossible at any
+depth, and the conversion is a line in the caller's own translation. The `--json`
+listing still nests a requirement as an inner list, because JSON has no set; that is
+output, and handing it back in is refused rather than misread. *(2026-10-16.)*
+
 **Reversed: `refuse_dead`, the rule that an entry audience must overlap its
 definition's.** It moved off `parse` onto `SourceIds` first, which was a real fix
 -- a definition `[reviewers]` with an entry `[analysts]` is alive when

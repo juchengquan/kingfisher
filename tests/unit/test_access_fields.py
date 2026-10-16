@@ -239,6 +239,46 @@ def test_a_definitions_own_line_reads_a_requirement_the_same_way():
     )
 
 
+def test_a_python_set_is_a_requirement():
+    """A definition written in Python had no way to say "all of" but `{"a": None}`: a set
+    was turned into one source id spelled `"{'finance', 'senior'}"`, which nobody holds.
+    """
+    assert read.source_ids(["admin", {"finance", "senior"}]) == (
+        "admin",
+        frozenset({"finance", "senior"}),
+    )
+
+
+@pytest.mark.parametrize("inner", [("finance", "senior"), ["finance", "senior"]])
+def test_a_list_inside_an_audience_is_refused_rather_than_guessed(inner):
+    """It became one source id spelled like the list. Reading it as "all of" instead would
+    make the same brackets mean "or" one level up, and a reader who gets the depth wrong
+    hands the tool to anybody holding either name.
+    """
+    with pytest.raises(AgentError, match=r"write \{finance, senior\}"):
+        read.source_ids([inner, "admin"])
+
+
+def test_a_python_set_as_the_whole_audience_is_refused():
+    """The Python spelling of `source_ids: {A, B}`, refused the same way and for the same
+    reason: there is no list for the requirement to be one entry of.
+    """
+    with pytest.raises(AgentError, match=r"\[\{A, B\}\]"):
+        read.source_ids({"B", "A"})
+
+
+def test_a_python_set_of_anything_but_names_is_refused():
+    """A tuple inside a set would otherwise become one source id spelled like the tuple."""
+    with pytest.raises(AgentError, match="set of names"):
+        read.source_ids([{("finance", "senior"), "admin"}])
+
+
+def test_an_empty_python_set_is_refused():
+    """`set()` requires nothing and so admits everyone, as `{}` does."""
+    with pytest.raises(AgentError, match="requires nothing"):
+        read.source_ids([set()])
+
+
 def test_a_definitions_own_line_still_takes_a_single_unbracketed_name():
     """The one thing the two sites do not agree on, kept rather than reconciled: every
     list field in these formats takes a lone name, and an entry's audience is already

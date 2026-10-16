@@ -291,9 +291,14 @@ class Reader:
         """A list of source ids, any entry of which may be a set `{a, b}`."""
         if isinstance(listed, str) and lone_name and listed.strip() and listed.strip() != ALL:
             return (listed.strip(),)
-        if isinstance(listed, Mapping):
-            inner = listed.get("all_of")
-            named = inner if isinstance(inner, list) else tuple(listed)
+        if isinstance(listed, (Mapping, set, frozenset)):
+            inner = listed.get("all_of") if isinstance(listed, Mapping) else None
+            named = (
+                inner
+                if isinstance(inner, list)
+                else sorted(listed, key=str) if isinstance(listed, (set, frozenset))
+                else tuple(listed)
+            )
             parts = ", ".join(str(one) for one in named) or "..."
             msg = (
                 f"{where}: an audience is a list, so a requirement is one entry "
@@ -309,6 +314,19 @@ class Reader:
         for one in listed:
             if isinstance(one, Mapping):
                 written.append(self._conjunction(one, where=where))
+            elif isinstance(one, (set, frozenset)):
+                written.append(self._python_conjunction(one, where=where))
+            elif isinstance(one, (list, tuple)):
+                # Refused rather than read as "all of". A bracket whose meaning depends
+                # on its depth is misread in the direction that widens: `(a, b)` at the
+                # top is "a or b", and the same pair one level down would be "a and b".
+                parts = ", ".join(str(name) for name in one) or "..."
+                msg = (
+                    f"{where}: {list(one)!r} is a list inside the audience, which does "
+                    f"not say whether it means any or all of its names. A requirement "
+                    f"-- every name held at once -- is a set: write {{{parts}}}"
+                )
+                raise self.error(msg)
             elif name := text(one):
                 written.append(name)
         if not written:
@@ -322,6 +340,14 @@ class Reader:
             msg = f'{where}: ["{ALL}"] is everyone, so it cannot mean both that and {rest}'
             raise self.error(msg)
         return ALL if written == [ALL] else tuple(written)
+
+    def _python_conjunction(self, raw: Collection[object], *, where: str) -> frozenset[str]:
+        """A requirement written as a Python set, which YAML has no way to produce."""
+        if odd := sorted(repr(one) for one in raw if not isinstance(one, str)):
+            msg = f"{where}: a requirement is a set of names, and {', '.join(odd)} is not one"
+            raise self.error(msg)
+        names = sorted(one for one in raw if isinstance(one, str))
+        return self._conjunction(dict.fromkeys(names), where=where)
 
     def _conjunction(self, raw: Mapping[str, object], *, where: str) -> frozenset[str]:
         """One audience entry that is satisfied only by holding every name in it."""
