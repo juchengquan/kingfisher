@@ -73,8 +73,8 @@ slices land.
   deployment that needs it.
 - [Core and plugins](design/2026-10-16-core-and-plugins.md) — replacing the four layers
   with a core, six plugins that each ship a default, and the command, so that what a
-  deployment may replace is one list. The startup check landed with it; the rest is
-  sixteen slices, renames first and moves after.
+  deployment may replace is one list. Built a slice at a time, renames first and moves
+  after; the document marks the slices that have landed.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
