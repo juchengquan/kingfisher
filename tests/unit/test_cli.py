@@ -672,7 +672,7 @@ def test_no_surface_names_the_workspace_directory_when_backends_keep_sessions(
     # faked for that reason: `configured_sessions` imports the dotted path, so a
     # plausible-looking string would fail before any of this is reached.
     configured = replace(
-        cfg, session_backends_factory="tests.unit.test_named_backend:make_backends"
+        cfg, sessions_factory="tests.unit.test_named_backend:make_backends"
     )
     _looking_at(monkeypatch, configured)
     derived = str(configured.workspace / "sessions")
@@ -696,7 +696,7 @@ def test_the_library_and_the_commands_agree_on_where_sessions_are(cfg, monkeypat
     """
     from kingfisher.application.inventory import inventory
 
-    configured = replace(cfg, session_backends_factory="acme.backends:build")
+    configured = replace(cfg, sessions_factory="acme.backends:build")
     _looking_at(monkeypatch, configured)
 
     class Theirs(LocalSessions):

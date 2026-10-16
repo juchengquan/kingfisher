@@ -124,8 +124,8 @@ def test_the_kit_passes_where_a_fence_holds_both_folders(cfg, session_dir):
     [
         ({"shell_sandbox": "off"}, "'off'"),
         (
-            {"session_backends_factory": "deployment.backends:Remote"},
-            "KINGFISHER_SESSION_BACKENDS_FACTORY",
+            {"sessions_factory": "deployment.backends:Remote"},
+            "KINGFISHER_SESSIONS",
         ),
     ],
     ids=["sandbox-off", "own-backend"],

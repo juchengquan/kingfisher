@@ -171,7 +171,7 @@ def _shell_of(backend: Any) -> Any:
 def shell_prompt_of(backend: Any) -> ShellPrompt | None:
     """What the shell `backend` runs `execute` on says of itself, or `None` for nothing.
 
-    Read off the shell rather than off the session backends that made it. A
+    Read off the shell rather than off the sessions that made it. A
     `LocalSessions` subclass that swaps in a sandbox of its own would inherit
     kingfisher's wording from the class, and its agents be told about a shell they do not
     have; on the shell, a sandbox that says nothing is described neutrally until it does.

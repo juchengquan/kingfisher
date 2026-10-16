@@ -21,6 +21,7 @@ _EXPORTS = {
     "Kingfisher": "kingfisher.application.service",
     "Origin": "kingfisher.application.origins",
     "Origins": "kingfisher.application.origins",
+    "Plugins": "kingfisher.application.plugins",
     "config_from_env": "kingfisher.application.config",
     "inventory": "kingfisher.application.inventory",
     "paths_from_env": "kingfisher.application.config",
@@ -33,6 +34,7 @@ __all__ = [
     "Kingfisher",
     "Origin",
     "Origins",
+    "Plugins",
     "config_from_env",
     "inventory",
     "paths_from_env",
@@ -49,6 +51,7 @@ if TYPE_CHECKING:
     from kingfisher.application.inventory import inventory as inventory
     from kingfisher.application.origins import Origin as Origin
     from kingfisher.application.origins import Origins as Origins
+    from kingfisher.application.plugins import Plugins as Plugins
     from kingfisher.application.run import run as run
     from kingfisher.application.run import stream as stream
     from kingfisher.application.service import Kingfisher as Kingfisher

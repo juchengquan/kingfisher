@@ -261,7 +261,7 @@ class Counting(LocalSessions):
 )
 def test_reading_a_session_opens_its_backend_once(cfg, read, way):
     """Both opened the session's backend once to decide whether the caller reached it
-    and again to read through, so remote session backends handed out two sandboxes
+    and again to read through, so remote sessions handed out two sandboxes
     per query.
     """
     counting = Counting()
@@ -273,7 +273,7 @@ def test_reading_a_session_opens_its_backend_once(cfg, read, way):
 
 
 def test_asking_whether_a_session_exists_opens_nothing_where_nothing_narrows(cfg, way):
-    """Opened to read a pin no check would consult, remote session backends handed out
+    """Opened to read a pin no check would consult, remote sessions handed out
     a sandbox to say that a session exists.
     """
     counting = Counting()

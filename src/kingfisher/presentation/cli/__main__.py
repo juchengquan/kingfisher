@@ -46,7 +46,7 @@ from kingfisher import (
 # used to say what a directory has none of; where a workspace keeps its
 # sessions; and the warning `doctor` says as a check instead. `configured_sessions`
 # is taken the same way, inside the commands that build a service, because only a
-# command has a setting and no argument to be told its session backends by.
+# command has a setting and no argument to be told its sessions by.
 # Everything above is public and comes through the front door because it is.
 from kingfisher.config import MissingCredentialsWarning
 from kingfisher.domain.access import with_datazone
@@ -62,7 +62,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from typing import TextIO
 
-    from kingfisher import Kingfisher, RunResult
+    from kingfisher import Config, Kingfisher, RunResult
     from kingfisher.infrastructure.harness.runlog import JsonlRunEvents
 
 #: Read from the working directory and nowhere else. A bare `load_dotenv()`
@@ -406,7 +406,7 @@ def build_parser() -> argparse.ArgumentParser:
             "The size is a walk per session -- about a millisecond each -- which\n"
             "a workspace holding thousands will feel.\n"
             "\n"
-            "Asked of the session backends KINGFISHER_SESSION_BACKENDS_FACTORY\n"
+            "Asked of the sessions KINGFISHER_SESSIONS\n"
             "names, or of <workspace>/sessions where it names none -- so a\n"
             "deployment whose own keep sessions elsewhere sets it for this to see them."
         ),
@@ -537,15 +537,8 @@ def _run(args: argparse.Namespace) -> int:
         print(f"no such file: {', '.join(missing)}", file=sys.stderr)
         return 2
 
-    # Imported here, not at module scope. `Kingfisher` pulls deepagents and
-    # three provider SDKs -- about a second -- and
-    # `test_reaching_the_cli_stays_free_of_provider_sdks` holds every other verb
-    # to not paying it. `seed`, `list` and `doctor` do not build one.
-    from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_sessions  # noqa: PLC0415
-
     cfg = config_from_env()
-    kf = Kingfisher(cfg, sessions=configured_sessions(cfg), run_events=_kept_in(args.log))
+    kf = _configured(cfg, log=args.log)
     request = Request(
         task=args.task,
         agent=args.agent,
@@ -558,6 +551,29 @@ def _run(args: argparse.Namespace) -> int:
         held=with_datazone(args.held, args.datazone),
         delete_session=args.delete_session,
     )
+
+
+def _configured(cfg: Config, *, log: Path | None = None) -> Kingfisher:
+    """The `Kingfisher` a verb that runs or reads a session builds: the deployment's
+    sessions and plugins, from the two settings that name them.
+
+    `--log` replaces any run events `KINGFISHER_PLUGINS` names, because it is the
+    narrower ask -- this command, this file.
+    """
+    # Imported here, not at module scope. `Kingfisher` pulls deepagents and three
+    # provider SDKs -- about a second -- and
+    # `test_the_command_starts_without_the_agent_runtime` holds every verb to not paying
+    # it until it builds one. `seed`, `list` and `doctor` do not.
+    from kingfisher import Kingfisher  # noqa: PLC0415
+    from kingfisher.application.run import (  # noqa: PLC0415
+        configured_plugins,
+        configured_sessions,
+    )
+
+    wiring = configured_plugins(cfg).keywords()
+    if (kept := _kept_in(log)) is not None:
+        wiring["run_events"] = kept
+    return Kingfisher(cfg, sessions=configured_sessions(cfg), **wiring)
 
 
 def _kept_in(log: Path | None) -> JsonlRunEvents | None:
@@ -625,12 +641,6 @@ def _drive(
 
 def _decide(args: argparse.Namespace) -> int:
     """Answer a waiting session, or say what it is waiting on."""
-    # Only the two that cost. `Decision` and `Resume` are frozen dataclasses in
-    # `domain`, which importing this module already loads, so deferring them would
-    # save nothing -- they are at module scope beside `Request`.
-    from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_sessions  # noqa: PLC0415
-
     decisions: list[Decision] = [
         *(Decision(call_id=one, action="approve") for one in args.approve),
         *(Decision(call_id=one, action="reject") for one in args.reject),
@@ -646,7 +656,7 @@ def _decide(args: argparse.Namespace) -> int:
         decisions.append(Decision(call_id=call_id, action="respond", message=text))
 
     cfg = config_from_env()
-    kf = Kingfisher(cfg, sessions=configured_sessions(cfg), run_events=_kept_in(args.log))
+    kf = _configured(cfg, log=args.log)
     if not decisions:
         return _show_pending(kf, args.session, args.held)
     return _drive(
@@ -816,11 +826,8 @@ def _count(sessions: int) -> str:
 
 def _sessions(*, as_document: bool = False) -> int:
     """What this workspace is holding, and what each session costs it."""
-    from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_sessions  # noqa: PLC0415
-
     cfg = config_from_env()
-    kf = Kingfisher(cfg, sessions=configured_sessions(cfg))
+    kf = _configured(cfg)
     # Asked of `origins` rather than derived from the workspace. The listing below
     # already comes from the backends, and this line sat beside it saying
     # `<workspace>/sessions` whatever they were -- so the one deployment the setting
@@ -831,7 +838,7 @@ def _sessions(*, as_document: bool = False) -> int:
     # there; a sentence where it does not, rather than a path it would be guessing.
     kept = kf.origins.sessions
     root: Path | None = sessions_root(kf.workspace) if kept.kind == "default" else None
-    where = str(root) if root is not None else "the session backends this deployment configured"
+    where = str(root) if root is not None else "the sessions this deployment configured"
     now = time.time()
     # A walk per session, at ~0.8ms each. The same trade `sessions()` already
     # makes for the listing: cheap where it is read, and a workspace large
@@ -876,11 +883,8 @@ def _sessions(*, as_document: bool = False) -> int:
 
 def _reap(args: argparse.Namespace) -> int:
     """Delete sessions: one by name, or every one that has been idle too long."""
-    from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_sessions  # noqa: PLC0415
-
     cfg = config_from_env()
-    kf = Kingfisher(cfg, sessions=configured_sessions(cfg))
+    kf = _configured(cfg)
     if args.session is not None:
         return _reap_one(kf, args.session)
 
@@ -943,11 +947,8 @@ def _nothing_reaped(kept: int, busy: int, age: float, *, from_config: bool) -> N
 
 def _artifact(args: argparse.Namespace) -> int:
     """Fetch one file a turn produced, to a file or to standard output."""
-    from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_sessions  # noqa: PLC0415
-
     cfg = config_from_env()
-    kf = Kingfisher(cfg, sessions=configured_sessions(cfg))
+    kf = _configured(cfg)
     content = kf.artifact(args.session, args.name, source_ids=args.held)
     if args.out is None:
         # The buffer, not `print`: an artifact is bytes, and a text stream would

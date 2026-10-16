@@ -150,11 +150,11 @@ def _keys_file(cfg: Config) -> Iterator[Check]:
     path = cfg.models.keys_file
     if path is None:
         return
-    if cfg.session_backends_factory:
+    if cfg.sessions_factory:
         yield Check(
             "keys file",
             "warn",
-            f"KINGFISHER_SESSION_BACKENDS_FACTORY names {cfg.session_backends_factory}, and "
+            f"KINGFISHER_SESSIONS names {cfg.sessions_factory}, and "
             f"nothing here can see whether its shell can read {path}",
             "a shell on another machine cannot; one on this machine reads what its own "
             "fence allows",
@@ -205,10 +205,10 @@ def _starting_environment(cfg: Config, from_dotenv: frozenset[str] | None) -> It
     On macOS a sandboxed shell reads any same-user process's environment as it started,
     and with no fence nothing stops it; what `.env` added afterwards is not in there.
     `None` is a caller that cannot say what `.env` added, which is told nothing rather
-    than told something that may be wrong -- and so are session backends whose shell
+    than told something that may be wrong -- and so are sessions whose shell
     this cannot see.
     """
-    if from_dotenv is None or cfg.session_backends_factory:
+    if from_dotenv is None or cfg.sessions_factory:
         return
     mechanism = shell_confinement(cfg).mechanism
     if mechanism == SANDBOX_EXEC:
@@ -357,18 +357,18 @@ def _at_rest(cfg: Config) -> Iterator[Check]:
 
     # Two things that only matter once sessions are in memory, and both are
     # silent until the moment they are expensive.
-    if cfg.session_backends_factory is None:
+    if cfg.sessions_factory is None:
         yield Check(
             "sessions survive",
             "fail",
             f"{devices} — nothing is configured to keep sessions, so everything a "
             "session produced goes with the process",
             "mount durable storage at <workspace>/sessions, or set "
-            "KINGFISHER_SESSION_BACKENDS_FACTORY to session backends that keep them",
+            "KINGFISHER_SESSIONS to sessions that keep them",
         )
     else:
         yield Check(
-            "sessions survive", "ok", f"{devices} — kept by {cfg.session_backends_factory}"
+            "sessions survive", "ok", f"{devices} — kept by {cfg.sessions_factory}"
         )
 
     if cfg.session_max_bytes is None:
@@ -826,17 +826,17 @@ def _session_files(cfg: Config) -> Iterator[Check]:
 
     Nothing signs what kingfisher keeps there -- the pinned agent, the conversation, a
     paused turn -- so a shell that can write it can rewrite them. Asked of what this
-    command can see: the session backends `KINGFISHER_SESSION_BACKENDS_FACTORY` names, and
+    command can see: the sessions `KINGFISHER_SESSIONS` names, and
     the sandbox. A deployment wiring its own backends, graph or runner in code is out of its
     sight.
     A warning rather than a failure, because the deployment runs either way and may
     well be fenced by something this cannot look into.
     """
-    if cfg.session_backends_factory:
+    if cfg.sessions_factory:
         yield Check(
             "session files",
             "warn",
-            f"KINGFISHER_SESSION_BACKENDS_FACTORY names {cfg.session_backends_factory}, "
+            f"KINGFISHER_SESSIONS names {cfg.sessions_factory}, "
             "and nothing here can see whether its shell is kept out of .harness",
             "run BACKEND_CONTRACT from kingfisher against it: its shell_denied check "
             "drives the shell at /.harness",
@@ -874,7 +874,7 @@ def _linked_sessions(cfg: Config) -> Iterator[Check]:
     fences are built from the session directory itself, so a link is followed when it
     is opened and the rules land on the real one.
     """
-    if cfg.session_backends_factory:
+    if cfg.sessions_factory:
         return
     if shell_confinement(cfg).mechanism != SANDBOX_EXEC:
         return
@@ -906,10 +906,10 @@ def _sessions_apart(cfg: Config) -> Iterator[Check]:
     `shell` says what the host is exposed to; this says the consequence for the people
     one workspace serves. A report, never a refusal: kingfisher is mostly run as a
     package, and on many servers no fence can start. Quiet where it cannot happen -- a
-    Linux fence handing each turn its own session -- and for session backends this
+    Linux fence handing each turn its own session -- and for sessions this
     command cannot see into, whose contract asks it of them.
     """
-    if cfg.session_backends_factory:
+    if cfg.sessions_factory:
         return
     confined = shell_confinement(cfg)
     if confined.mechanism in LINUX_FENCES:

@@ -24,13 +24,15 @@ a dict.
 kingfisher = Kingfisher(cfg, sessions=LocalSessions(runner=my_runner), run_events=my_sink)
 ```
 
-**As a setting**, which only the sessions have, and only for the command line. A
-constructor argument reaches the construction site you control, and `kingfisher
-sessions`, `reap` and `artifact` build their own instance with nowhere to point
-it. `KINGFISHER_SESSION_BACKENDS_FACTORY` is where they are told:
+**As a setting**, for the command line only. A constructor argument reaches the
+construction site you control, and `kingfisher run`, `sessions`, `reap` and
+`artifact` build their own instance with nowhere to point it. `KINGFISHER_SESSIONS`
+is where they are told the sessions, and `KINGFISHER_PLUGINS` the rest, as a
+`kingfisher.Plugins` whose fields are the keywords above:
 
 ```
-KINGFISHER_SESSION_BACKENDS_FACTORY=mycompany.sessions:build_backends
+KINGFISHER_SESSIONS=mycompany.sessions:build_sessions
+KINGFISHER_PLUGINS=mycompany.plugins:build_plugins
 ```
 
 It names `module:name` — something **callable with no arguments** that returns
@@ -414,7 +416,7 @@ unless your backend keeps it out. Nothing signs them, so what stands between the
 agent and rewriting its own pinned agent is that fence, and it is yours to get
 right: **`shell_denied`**, in the kit below, drives `execute` at `/.harness` and
 `/inputs` and fails if the shell can write either. `kingfisher doctor` warns when
-`KINGFISHER_SESSION_BACKENDS_FACTORY` names sessions of yours, because it
+`KINGFISHER_SESSIONS` names sessions of yours, because it
 cannot look inside them.
 
 Nothing else is read from a directory on this host. A backend that keeps its
@@ -443,7 +445,7 @@ into two sessions and reads back what your answer names. The turn's rules still
 apply first: a path the file tools may not read, `/.harness` among them, is
 refused before your method is asked.
 
-For the command line, name it with `KINGFISHER_SESSION_BACKENDS_FACTORY`; without it,
+For the command line, name it with `KINGFISHER_SESSIONS`; without it,
 `kingfisher sessions`, `reap` and `artifact` run on `LocalSessions`.
 
 ### Checking what you returned

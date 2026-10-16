@@ -98,7 +98,7 @@ def test_sessions_are_supplied_where_the_setting_names_backends_to_build(cfg):
     default -- and `kingfisher doctor` printed `sessions : ./sessions` three rows above
     its own `sessions survive` row, which reads this same setting and knew better.
     """
-    configured = replace(cfg, session_backends_factory="acme.backends:build")
+    configured = replace(cfg, sessions_factory="acme.backends:build")
 
     assert Origins.of(configured).sessions == Origin("supplied", None)
     # The control: with nothing naming backends, the derived default is the right

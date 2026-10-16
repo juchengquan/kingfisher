@@ -2110,6 +2110,9 @@ WITNESSES: dict[str, str] = {
     # it, and building a backend for a directory of its own with `backend_at`, and
     # checking what it wrote with the kit beside `BACKEND_CONTRACT`.
     "LocalSessions": "document",
+    # What `KINGFISHER_PLUGINS` returns, which `configuration.md` tells a deployment to
+    # build in a module of its own.
+    "Plugins": "document",
     "backend_at": "document",
     "SESSION_BACKENDS_CONTRACT": "document",
     # The same page has a deployment whose shell is not kingfisher's say what it sees,

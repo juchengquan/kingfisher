@@ -19,7 +19,7 @@ HERE = __name__
 #: The setting these are about. `store_named` takes the name a message must carry
 #: as an argument, so a test that spelled it at every call would stop checking
 #: that the caller passes it.
-SETTING = "KINGFISHER_SESSION_BACKENDS_FACTORY"
+SETTING = "KINGFISHER_SESSIONS"
 
 
 def named(spec: str):
@@ -144,7 +144,7 @@ def test_naming_nothing_is_the_default(cfg):
 
 
 def test_a_named_factory_is_what_the_command_line_runs_on(cfg):
-    named = replace(cfg, session_backends_factory=f"{HERE}:make_backends")
+    named = replace(cfg, sessions_factory=f"{HERE}:make_backends")
 
     assert isinstance(configured_sessions(named), Recording)
 
@@ -175,7 +175,7 @@ def test_a_removed_setting_is_refused_rather_than_ignored(tmp_path: Path, remove
 
 @pytest.mark.parametrize(("old", "new"), RENAMED_SETTINGS.items())
 def test_a_renamed_setting_is_refused_under_its_old_name(tmp_path: Path, old, new):
-    """Ignored, the command line ran on the local session backends instead of the ones
+    """Ignored, the command line ran on the local sessions instead of the ones
     the deployment named -- its agent's shell on this host, `reap` looking elsewhere.
     """
     read = Environment({"KINGFISHER_WORKSPACE": str(tmp_path), old: f"{HERE}:make_backends"})

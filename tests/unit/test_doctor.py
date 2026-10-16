@@ -1015,7 +1015,7 @@ def test_a_memory_workspace_with_nowhere_to_keep_sessions_fails(cfg, monkeypatch
     check = {c.name: c for c in examine(cfg)}["sessions survive"]
 
     assert check.verdict == "fail"
-    assert "KINGFISHER_SESSION_BACKENDS_FACTORY" in check.remedy
+    assert "KINGFISHER_SESSIONS" in check.remedy
 
 
 def test_no_quota_fails_only_once_memory_is_shared(cfg, monkeypatch, tmp_path):
@@ -1028,7 +1028,7 @@ def test_no_quota_fails_only_once_memory_is_shared(cfg, monkeypatch, tmp_path):
         monkeypatch, filesystem="tmpfs", size_bytes=300 * 1024**2,
         limit_bytes=400 * 1024**2, swap_enabled=False,
     )
-    wired = replace(cfg, session_backends_factory="mystores:build", session_max_bytes=None)
+    wired = replace(cfg, sessions_factory="mystores:build", session_max_bytes=None)
 
     check = {c.name: c for c in examine(wired)}["session quota"]
 
@@ -1044,7 +1044,7 @@ def test_a_quota_larger_than_the_filesystem_warns_that_it_cannot_bind(cfg, monke
         limit_bytes=400 * 1024**2, swap_enabled=False,
     )
     wired = replace(
-        cfg, session_backends_factory="mystores:build", session_max_bytes=1024 * 1024**2
+        cfg, sessions_factory="mystores:build", session_max_bytes=1024 * 1024**2
     )
 
     check = {c.name: c for c in examine(wired)}["session quota"]
@@ -1455,12 +1455,12 @@ def test_session_backends_doctor_cannot_see_into_are_said_so(cfg, tmp_path, monk
     monkeypatch.setenv("HOME", str(tmp_path))
     _fenced_by(monkeypatch, SANDBOX_EXEC)
     hidden = tmp_path / ".config" / "kingfisher" / "keys.yaml"
-    named = _with_keys_file(cfg, hidden, session_backends_factory="deployment:Remote")
+    named = _with_keys_file(cfg, hidden, sessions_factory="deployment:Remote")
 
     check = _row(examine(named), "keys file")
 
     assert check is not None and check.verdict == "warn"
-    assert "KINGFISHER_SESSION_BACKENDS_FACTORY" in check.detail
+    assert "KINGFISHER_SESSIONS" in check.detail
 
 
 def test_a_session_reached_through_a_link_of_its_own_is_named(cfg, tmp_path, monkeypatch):
@@ -1581,7 +1581,7 @@ def test_a_linked_session_is_not_named_for_backends_doctor_cannot_see_into(
     far = tmp_path / "far"
     far.mkdir()
     (cfg.workspace / "sessions" / "strayed").symlink_to(far)
-    theirs = replace(cfg, session_backends_factory="deployment:Remote")
+    theirs = replace(cfg, sessions_factory="deployment:Remote")
 
     assert _row(examine(theirs), "session paths") is None
 
@@ -1695,6 +1695,6 @@ def test_session_backends_doctor_cannot_see_into_are_left_to_their_contract(cfg,
     from dataclasses import replace
 
     _confined_as(monkeypatch, warning="unconfined")
-    named = replace(cfg, session_backends_factory="deployment:Remote")
+    named = replace(cfg, sessions_factory="deployment:Remote")
 
     assert _row(examine(named), "sessions apart") is None
