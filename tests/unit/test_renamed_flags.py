@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 
-from kingfisher.application.config import Environment
+from kingfisher.core.environment import Environment
 from kingfisher.presentation.cli.health import RETIRED
 
 #: The four whose replacement is another flag, taken from the list `doctor`

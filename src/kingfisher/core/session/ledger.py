@@ -23,7 +23,7 @@ from kingfisher.layout import TOOL_RESULTS_ROUTE
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from kingfisher.domain.result import LedgerEntry, Listed
+    from kingfisher.core.result import LedgerEntry, Listed
 
 
 class Ledger:

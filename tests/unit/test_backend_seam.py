@@ -6,13 +6,13 @@ import pytest
 from deepagents.backends import CompositeBackend
 
 from kingfisher import Kingfisher
-from kingfisher.application.run import run, stream
 from kingfisher.config import ConfigError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.usable_backend import refuse_unusable_backend
+from kingfisher.core.interfaces import CommandResult, CommandRunner
+from kingfisher.core.request import Request
+from kingfisher.core.run import run, stream
 from kingfisher.core.session.steps import drive
-from kingfisher.domain.ports import CommandResult, CommandRunner
-from kingfisher.domain.request import Request
 from kingfisher.layout import INPUTS
 from kingfisher.plugins.sessions.backend import LocalSessions, WorkspaceScopedBackend, backend_at
 from tests.conftest import StubCheckpointer, an_agent, harness_in

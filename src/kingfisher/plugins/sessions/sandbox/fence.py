@@ -47,7 +47,7 @@ from kingfisher.plugins.sessions.sandbox.linux import MAX_OUTPUT_BYTES, outcome,
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from kingfisher.domain.ports import CommandResult
+    from kingfisher.core.interfaces import CommandResult
 
 #: What a shell needs to be a shell. Landlock denies by default and the fence is
 #: applied before `exec`, so a policy without these cannot start `/bin/sh` at

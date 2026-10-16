@@ -47,7 +47,7 @@ from kingfisher.plugins.sessions.sandbox.linux import MAX_OUTPUT_BYTES, outcome,
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
-    from kingfisher.domain.ports import CommandResult
+    from kingfisher.core.interfaces import CommandResult
 
 #: Bound read-only so a shell can be a shell. `/proc` is absent for the reason
 #: the module explains, and `/dev` is not here because `--dev` builds a fresh

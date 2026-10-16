@@ -186,7 +186,7 @@ def placed(entry: str, offered: Iterable[str]) -> str:
 
     Public because two readers compare a written grant against the catalogue's own
     names: `spelt` below, over a whole selection on its way into a build, and `offers`
-    in the domain, one name at a time. `offers` compared them unspelt, so the long form
+    in `core/access`, one name at a time. `offers` compared them unspelt, so the long form
     `formats.md` documents -- `reports.py::count_rows` -- matched nothing, and a scoped
     caller was told they reached no tools at all while the build handed them one.
 

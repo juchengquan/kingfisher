@@ -21,8 +21,8 @@ from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from kingfisher import Kingfisher, LocalSessions
-from kingfisher.domain.request import Decision, Request, Resume
-from kingfisher.domain.result import AWAITING, END_TURN
+from kingfisher.core.request import Decision, Request, Resume
+from kingfisher.core.result import AWAITING, END_TURN
 from tests.conftest import FakeToolCallingModel
 
 

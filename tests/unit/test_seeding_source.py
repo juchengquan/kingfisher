@@ -115,7 +115,7 @@ def test_the_variable_is_used_when_nothing_was_asked_for(cfg, tmp_path):
 
 def test_the_variable_reaches_a_first_run(monkeypatch, tmp_path):
     """On `WorkspacePaths`, not only on `Config`."""
-    from kingfisher.application.config import paths_from_env
+    from kingfisher.core.environment import paths_from_env
 
     monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(tmp_path / "definitions"))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(tmp_path / "mine"))
@@ -125,7 +125,7 @@ def test_the_variable_reaches_a_first_run(monkeypatch, tmp_path):
 
 def test_no_variable_is_not_an_error_by_itself(monkeypatch, tmp_path):
     """A workspace seeded once runs for years without this being set."""
-    from kingfisher.application.config import paths_from_env
+    from kingfisher.core.environment import paths_from_env
 
     monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(tmp_path / "definitions"))
     monkeypatch.delenv("KINGFISHER_ASSETS", raising=False)

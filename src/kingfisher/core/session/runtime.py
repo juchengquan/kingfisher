@@ -11,9 +11,9 @@ from langgraph.errors import GraphRecursionError
 from langgraph.types import Command, StreamMode
 
 from kingfisher.core.definitions.subagents import TASK_TOOL
+from kingfisher.core.request import Decision, DecisionError
+from kingfisher.core.result import DECISIONS, PendingDecision, RunEvent
 from kingfisher.core.session.transcript import Message, Role, ToolCall
-from kingfisher.domain.request import Decision, DecisionError
-from kingfisher.domain.result import DECISIONS, PendingDecision, RunEvent
 
 #: What langgraph raises out of `stream` when a turn uses up `recursion_limit`.
 OutOfSteps = GraphRecursionError
@@ -412,8 +412,8 @@ def resume_payload(answers: Iterable[Decision], pending: Iterable[PendingDecisio
     """The caller's answers as a graph is driven with them: per interrupt, in order.
 
     Returns the `Command` rather than the mapping inside it, so that the one place
-    naming langgraph stays this one -- `application/` reaches the runtime through
-    this module and the dependency table is what holds that.
+    naming langgraph stays this one -- the service reaches the runtime through this
+    module, and the dependency table is what holds that.
 
     Keyed by interrupt id rather than handed over as one list, which is what lets a
     turn paused in two places be answered in one resume. Within an interrupt the order

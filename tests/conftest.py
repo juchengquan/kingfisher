@@ -574,8 +574,8 @@ def an_inventory(**wrong: Any) -> Any:
     how `middlewares_error` came to be computed and read by nothing, and driving that
     needs a record whose *other* fields are all quiet.
     """
-    from kingfisher.application.inventory import Inventory
-    from kingfisher.application.origins import Origin, Origins
+    from kingfisher.core.inventory import Inventory
+    from kingfisher.core.origins import Origin, Origins
 
     nowhere = Origin(kind="default")
     return Inventory(

@@ -14,10 +14,10 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import LocalSessions
-from kingfisher.application.service import Kingfisher
+from kingfisher.core.request import Request
+from kingfisher.core.service import Kingfisher
 from kingfisher.core.session import runtime
 from kingfisher.core.session.model import SessionBusyError
-from kingfisher.domain.request import Request
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 

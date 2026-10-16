@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kingfisher.domain.ports import CommandResult
+from kingfisher.core.interfaces import CommandResult
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable

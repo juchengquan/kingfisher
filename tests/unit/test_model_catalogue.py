@@ -294,7 +294,7 @@ def test_a_deployment_can_supply_models_without_a_file_at_all(tmp_path):
     assembling it in code, needs no file, no path, and no loader.
     """
     from kingfisher import Kingfisher
-    from kingfisher.domain.request import Request
+    from kingfisher.core.request import Request
     from tests.conftest import FAKE_CATALOGUE
     from tests.unit.test_run import StubAgent
 

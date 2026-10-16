@@ -359,7 +359,7 @@ def test_the_readme_snippet_runs_and_uses_only_the_public_api(
         source = "\n".join(line.removeprefix(">").removeprefix(" ") for line in block.splitlines())
 
         assert "kingfisher.infrastructure" not in source
-        assert "kingfisher.domain" not in source
+        assert "kingfisher.core" not in source
         for name in re.findall(r"^from kingfisher import (.+)$", source, re.M):
             for imported in (part.strip() for part in name.split(",")):
                 assert imported in kingfisher.__all__, imported

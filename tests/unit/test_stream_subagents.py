@@ -7,7 +7,7 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
 from kingfisher import LocalSessions
-from kingfisher.application.run import Request, stream
+from kingfisher.core.run import Request, stream
 from kingfisher.core.session import runtime
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeToolCallingModel, StubCheckpointer, start

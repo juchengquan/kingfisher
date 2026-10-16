@@ -14,7 +14,7 @@ from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.interpreter import release_interpreter
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
-from kingfisher.domain.request import Request
+from kingfisher.core.request import Request
 from tests.conftest import (
     FakeToolCallingModel,
     an_agent,

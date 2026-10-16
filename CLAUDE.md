@@ -93,12 +93,11 @@ guards a specific past bug, name the bug -- that sentence is often the only
 record of it, and it stays however short the rest gets.
 
 **Layering is enforced, not remembered.** `tests/unit/test_architecture.py` parses
-imports against `THIRD_PARTY`, one entry per area, deny by default: `domain/`
-takes the standard library, itself, the vocabulary it names in `core/access/` and
-`core/definitions/fields.py`, and an asset kind's `spec`; and the agent runtime is
-reachable from `core/agent/`, which builds the graph, from `core/session/`,
-which runs a turn on it, from `plugins/`, which builds kingfisher's own sessions on
-it, and from the two kinds that must name its types --
+imports against `THIRD_PARTY`, one entry per area, deny by default: the flat
+modules of `core/` take nothing, and the agent runtime is reachable from
+`core/agent/`, which builds the graph, from `core/session/`, which runs a turn on
+it, from `plugins/`, which builds kingfisher's own sessions on it, and from the two
+kinds that must name its types --
 `core/definitions/skills`, which hands a repository to the lister that reads it, and
 `core/definitions/middlewares`, which refuses a class that is not an
 `AgentMiddleware`. The other three kinds grant nothing. Adding a foreign

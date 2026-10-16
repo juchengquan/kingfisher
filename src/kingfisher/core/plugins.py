@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.domain.ports import RunEvents
+from kingfisher.core.interfaces import RunEvents
 
 if TYPE_CHECKING:
     from kingfisher.core.agent.prompting import Instructions

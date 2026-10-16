@@ -1,4 +1,4 @@
-"""What the domain needs the world to do for it."""
+"""What the core needs the world to do for it."""
 
 from __future__ import annotations
 

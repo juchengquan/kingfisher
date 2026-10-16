@@ -12,7 +12,7 @@ from kingfisher.core.access.capabilities import ALL
 # a bare name from a `where::what` reference, and quotes the sentence a refusal quotes
 # -- none of which anybody outside this wheel has ever asked for, and all of which were
 # on the front door because *this file* was forbidden to reach for them. `offered` is
-# the one worth naming: a renderer in the domain looks odd until you see that the block
+# the one worth naming: a renderer beside a format looks odd until you see that the block
 # a refusal prints is the block a listing prints, so a name two files define reads the
 # same in both. Shared for that reason, not promised for it.
 from kingfisher.core.access.source_ids import AUDIENCED, Audience, spell

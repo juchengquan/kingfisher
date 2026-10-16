@@ -141,35 +141,12 @@ def _module_id(path: Path) -> str:
     return path.relative_to(REPO).as_posix()
 
 
-#: Modules outside `domain/` that the domain rule treats as the domain's own: the
-#: vocabulary a request and a definition are written in. The domain names them, so
-#: the rule walks them as well -- otherwise one could take `yaml` from its own area's
-#: entry and every domain module would load it through them.
-DOMAIN_VOCABULARY = (
-    "core/access/capabilities.py",
-    "core/access/source_ids.py",
-    "core/definitions/fields.py",
-)
-
-
-def _inside_domain(module: str) -> bool:
-    return (
-        module == "kingfisher.domain"
-        or module.startswith("kingfisher.domain.")
-        or module in {
-            "kingfisher." + path.removesuffix(".py").replace("/", ".")
-            for path in DOMAIN_VOCABULARY
-        }
-    )
-
-
 def test_a_layer_rule_reaches_into_a_subpackage(tmp_path):
     """The collection every rule below is built on, tested for the case it missed.
 
     Built here rather than asserted against `src/`, so it keeps testing the collection
-    after the real tree changes shape. `import yaml` is the violation the domain rule
-    was written for -- the third-party parser that sat in `core/definitions/fields.py` while three
-    rules looked straight past it.
+    after the real tree changes shape. `import yaml` in a subpackage is the case: a
+    third-party parser once sat in one while three rules looked straight past it.
     """
     layer = tmp_path / "domain"
     (layer / "inner").mkdir(parents=True)
@@ -956,7 +933,7 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
     """
     assert _prose_unresolved("`core.agent.backend`") == []
     assert _prose_unresolved(
-        "`core.definitions.skills.spec.FILENAME` and `application.inventory`"
+        "`core.definitions.skills.spec.FILENAME` and `core.inventory`"
     ) == []
     assert _prose_unresolved("`plugins.sessions.backend.shell_env`") == []
 
@@ -1079,7 +1056,7 @@ def test_the_documents_are_read_by_the_prose_rule():
     assert "CLAUDE.md" in scanned
     # Asserted through what the rule reads rather than through `_documents()`,
     # so dropping the documents from the scan fails here instead of passing.
-    assert "src/kingfisher/application/service.py" in scanned, (
+    assert "src/kingfisher/core/service.py" in scanned, (
         "the Python half has to survive the documents being added to it"
     )
 
@@ -1138,8 +1115,7 @@ def test_no_rule_here_is_parametrized_over_nothing():
     call still fails here. It only reaches a collection somebody wrote down.
     """
     collections = {
-        "domain": _modules_in("domain"),
-        "application": _modules_in("application"),
+        "the flat core": _flat_core(),
         "infrastructure": _modules_in("infrastructure"),
         "the package": _package_modules(),
         "consumers": _consumer_modules(),
@@ -1159,67 +1135,6 @@ def test_compiled_files_are_not_mistaken_for_modules(tmp_path):
     (layer / "real.py").touch()
 
     assert [p.name for p in _modules_in("domain", root=tmp_path)] == ["real.py"]
-
-
-def test_domain_imports_only_the_standard_library_and_itself():
-    """Deny by default, replacing three rules that were allowlists by omission.
-
-    **One exception, measured rather than granted.** A domain module may name an
-    asset kind's `spec`: it is the *format's* vocabulary, and importing
-    `domain.ports` and `core.definitions.agents.spec` takes 39ms and loads 101 modules, none of them
-    the agent runtime, against the 888ms `decisions.md` quotes for the bad case. A
-    `catalogue` or a `harness` would not be free, and those stay refused.
-    """
-    outside = []
-    vocabulary = [SRC / path for path in DOMAIN_VOCABULARY]
-    for path in _every(_modules_in("domain"), "the domain") + vocabulary:
-        foreign = {
-            module
-            for module in _imported_modules(path)
-            if module.split(".")[0] not in sys.stdlib_module_names
-            and not _inside_domain(module)
-            and not _is_asset_spec(module)
-        }
-        if foreign:
-            outside.append(f"{_module_id(path)} imports {sorted(foreign)}")
-
-    assert not outside, (
-        f"{outside} -- the domain takes the standard library, itself and "
-        "DOMAIN_VOCABULARY, and an asset "
-        "kind's `spec`; have an adapter do the rest and hand it the result"
-    )
-
-
-def _is_asset_spec(module: str) -> bool:
-    """Whether a module is an asset kind's format vocabulary."""
-    from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
-
-    parts = module.split(".")
-    return (
-        len(parts) == 5
-        and parts[:3] == ["kingfisher", "core", "definitions"]
-        and parts[3] in DEFINITION_KINDS
-        and parts[4] == "spec"
-    )
-
-
-def test_the_domain_may_name_a_spec_but_not_a_catalogue():
-    """The exception above, asserted at its edges rather than trusted."""
-    assert _is_asset_spec("kingfisher.core.definitions.tools.spec")
-    assert _is_asset_spec("kingfisher.core.definitions.skills.spec")
-    assert not _is_asset_spec("kingfisher.core.definitions.tools.catalogue"), "the disk is not free"
-    assert not _is_asset_spec("kingfisher.core.definitions.skills.registry"), (
-        "the runtime is not free"
-    )
-    assert not _is_asset_spec("kingfisher.application.service")
-    assert not _is_asset_spec("kingfisher.core.definitions.tools.spec.inner")
-    assert not _is_asset_spec("kingfisher.application.spec"), "only a kind has a spec"
-    # The kind check on its own: a directory under `kinds/` that is not one. The
-    # position check alone passes every assertion above, so without this the
-    # predicate could drop `DEFINITION_KINDS` and nothing would say so -- which is
-    # what `test_kinds_holds_exactly_the_kinds` refuses to let happen on disk, and
-    # this refuses to let happen in the predicate.
-    assert not _is_asset_spec("kingfisher.core.definitions.widgets.spec"), "only a kind has a spec"
 
 
 #: Which third-party packages each area may import. Deny by default: a package
@@ -1286,10 +1201,9 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     "core/access": frozenset({"yaml"}),
     # The command reads a `.env` in the directory it runs in; nothing else here does.
     "presentation/cli": frozenset({"dotenv"}),
-    # Nothing. The domain has a stricter rule of its own; these two are here so
-    # the table is total and an unlisted area cannot mean "anything goes".
-    "domain": frozenset(),
-    "application": frozenset(),
+    # Nothing: the modules directly in `core/` reach the runtime and the disk through
+    # the packages beside them.
+    "core": frozenset(),
     # The modules at the package root, which belong to no layer: `__init__.py`,
     # `config.py` and `layout.py` -- the workspace layout as data. Nothing.
     "": frozenset(),
@@ -1327,8 +1241,7 @@ def _unspent(area: str, imported: set[str]) -> frozenset[str]:
 
 def test_an_area_is_refused_another_areas_dependencies():
     """The table has to partition, not merely enumerate."""
-    assert _undeclared({"deepagents"}, "domain") == {"deepagents"}
-    assert _undeclared({"deepagents"}, "application") == {"deepagents"}
+    assert _undeclared({"deepagents"}, "core") == {"deepagents"}
     assert _undeclared({"deepagents"}, "presentation/cli") == {"deepagents"}
     assert _undeclared({"deepagents"}, "infrastructure") == {"deepagents"}
     assert _undeclared({"fastapi"}, "core/agent") == {"fastapi"}
@@ -1338,19 +1251,19 @@ def test_an_area_is_refused_another_areas_dependencies():
     assert _undeclared({"yaml"}, "infrastructure") == set()
     assert _undeclared({"fastapi"}, "presentation/cli") == {"fastapi"}
     assert _undeclared({"dotenv"}, "presentation/cli") == set()
-    assert _undeclared({"dotenv"}, "application") == {"dotenv"}
+    assert _undeclared({"dotenv"}, "core") == {"dotenv"}
 
 
 def test_a_subpackage_is_judged_by_its_own_area():
     """`core/session/runtime.py` is judged as `core/session`, not the package root."""
     buried = SRC / "infrastructure" / "workspace" / "backing.py"
-    for path in (buried, SRC / "domain" / "request.py", SRC / "config.py"):
+    for path in (buried, SRC / "core" / "request.py", SRC / "config.py"):
         assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
 
     assert _area_of(SRC / "core" / "session" / "runtime.py") == "core/session"
-    assert _area_of(SRC / "domain" / "request.py") == "domain"
+    assert _area_of(SRC / "core" / "request.py") == "core"
     # A kind's module is its own area, which is what lets `core/definitions/skills/registry.py`
-    # name the runtime without `domain/` or `kinds/` inheriting the permission.
+    # name the runtime without the rest of `core/definitions` inheriting the permission.
     assert _area_of(KINDS_DIR / "skills" / "registry.py") == "core/definitions/skills"
     # And the folder over them is an area of its own, so a kind that arrives
     # without an entry is judged by `kinds` -- which grants only `yaml` -- rather
@@ -1428,7 +1341,7 @@ def test_an_unspent_grant_is_what_that_rule_reads():
     """
     assert _unspent("plugins", {"deepagents", "sandlock", "json"}) == set()
     assert _unspent("plugins", {"deepagents"}) == {"sandlock"}
-    assert _unspent("domain", set()) == set()
+    assert _unspent("core", set()) == set()
 #: What may import from `plugins/`: the command, which may import anything, and the front
 #: door, whose table maps public names such as `LocalSessions` to where they live.
 MAY_NAME_A_PLUGIN = ("presentation", "")
@@ -1588,16 +1501,6 @@ def test_kingfisher_keeps_its_own_middleware_in_one_package():
     )
 
 
-def test_infrastructure_does_not_reach_back_into_application():
-    """The outward half of the rule, which went unenforced for a while."""
-    for path in _modules_in("infrastructure"):
-        modules = _imported_modules(path)
-        assert not any(m.startswith("kingfisher.application") for m in modules), (
-            f"{_module_id(path)} depends on application/ — "
-            "move the shared shape into domain/"
-        )
-
-
 def test_the_public_api_list_matches_the_lazy_export_table():
     """`__all__` is a literal so a linter can see it, and `_EXPORTS` drives the lazy
     loading.
@@ -1614,7 +1517,6 @@ def test_the_public_api_list_matches_the_lazy_export_table():
 #: only one of them had ever been checked against anything.
 LAZY_TABLES: dict[str, Path] = {
     "kingfisher": SRC / "__init__.py",
-    "kingfisher.application": SRC / "application" / "__init__.py",
     "kingfisher.infrastructure.workspace": SRC / "infrastructure" / "workspace" / "__init__.py",
 }
 
@@ -1837,43 +1739,6 @@ def test_every_public_name_has_a_witness():
     assert not stale, f"{stale} are in WITNESSES and are not exported any more"
 
 
-def test_the_layer_and_the_root_agree_about_this_layer():
-    """Two tables naming the same nine things, held to each other."""
-    import kingfisher
-    from kingfisher import application
-
-    root_here = {
-        name: module
-        for name, module in kingfisher._EXPORTS.items()
-        if module.startswith("kingfisher.application.")
-    }
-
-    assert root_here, "the root exports nothing from this layer -- this asserts nothing"
-    assert root_here == application._EXPORTS, (
-        "kingfisher.application and the package root disagree about this layer: "
-        f"{sorted(set(application._EXPORTS.items()) ^ set(root_here.items()))}"
-    )
-    assert sorted(application.__all__) == sorted(application._EXPORTS), (
-        "the layer's __all__ and its export table name different things"
-    )
-
-
-def test_naming_the_layer_does_not_pull_in_deepagents():
-    """The reason the layer's table is lazy rather than nine plain imports."""
-    import subprocess
-    import sys
-
-    probe = (
-        "import sys\n"
-        "from kingfisher.application import config_from_env\n"
-        "assert not any(m.startswith('deepagents') for m in sys.modules), "
-        "'naming the layer pulled in the harness'\n"
-    )
-    subprocess.run(  # noqa: S603 -- this interpreter, and a literal above
-        [sys.executable, "-c", probe], check=True
-    )
-
-
 def _dotted(node: ast.Import | ast.ImportFrom, package: tuple[str, ...]) -> list[str]:
     """What one import statement names, one dotted string per name it takes.
 
@@ -1938,7 +1803,7 @@ def _imports_by_scope(path: Path) -> tuple[frozenset[str], tuple[tuple[str, int]
 
 @cache
 def _module_paths() -> dict[str, Path]:
-    """`kingfisher.domain.ports` -> the file, for every module in the package."""
+    """`kingfisher.core.interfaces` -> the file, for every module in the package."""
     found: dict[str, Path] = {}
     for path in _every(_package_modules(), "the package"):
         parts = list(path.relative_to(SRC.parent).with_suffix("").parts)
@@ -1959,7 +1824,7 @@ def _lazy_tables() -> dict[str, dict[str, str]]:
 def _loaded_by(dotted: str) -> str | None:
     """The module an import statement actually puts in `sys.modules`.
 
-    `from kingfisher import Kingfisher` loads `application.service`, not `kingfisher`:
+    `from kingfisher import Kingfisher` loads `core.service`, not `kingfisher`:
     the name resolves through `__getattr__`. That is the one place walking the prefix
     gives the wrong answer, and it is the answer the three `presentation/cli` modules
     turn on -- each reaches a dozen names through the front door and would otherwise
@@ -2057,7 +1922,7 @@ def test_no_deferred_import_defers_nothing():
 #: thousand modules deep.
 CLOSURE_WITNESSES = (
     "kingfisher.presentation.cli.listing",
-    "kingfisher.application.reporting",
+    "kingfisher.core.reporting",
 )
 
 
@@ -2167,7 +2032,7 @@ def test_the_cycle_finder_finds_one_in_this_tree():
     assert "kingfisher.core.access.capabilities" in graph, "the edge below is about nothing"
 
     closed = dict(graph)
-    closed["kingfisher.core.access.capabilities"] = frozenset({"kingfisher.application.service"})
+    closed["kingfisher.core.access.capabilities"] = frozenset({"kingfisher.core.service"})
     found = _cycles(closed)
 
     assert found, "the finder reports nothing on a graph with a cycle in it"
@@ -2342,86 +2207,41 @@ def test_the_package_names_nothing_in_assets():
 
 def test_the_package_does_not_depend_on_the_eval_harness():
     """`evals/` is test material and lives outside `src/`, so it is not in the wheel."""
-    for layer in ("domain", "infrastructure", "application"):
-        for path in _modules_in(layer):
-            modules = _imported_modules(path)
-            assert not any(m.split(".")[0] == "evals" for m in modules), (
-                f"{_module_id(path)} imports evals/ — the wheel does not ship it"
-            )
-
-
-#: Calls that reach outside the process. Not exhaustive as a security measure --
-#: it is a design guard, and its job is to make the *easy* violation loud.
-WORLD_CALLS = frozenset({
-    "mkdir", "rmdir", "rmtree", "copytree", "copyfile", "copy", "move",
-    "write_text", "write_bytes", "read_text", "read_bytes", "open",
-    "unlink", "touch", "chmod", "rename", "replace",
-    "iterdir", "glob", "rglob", "walk", "exists", "is_dir", "is_file",
-    "stat", "resolve", "run", "check_output", "Popen",
-})
-
-WORLD_MODULES = frozenset({"subprocess", "shutil", "os", "tempfile", "io", "socket"})
-
-
-def _world_contact(path: Path) -> list[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    found = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            found += [
-                f"L{node.lineno} import {a.name}"
-                for a in node.names
-                if a.name.split(".")[0] in WORLD_MODULES
-            ]
-        elif (
-            isinstance(node, ast.ImportFrom)
-            and node.module
-            and node.module.split(".")[0] in WORLD_MODULES
-        ):
-            found.append(f"L{node.lineno} from {node.module}")
-        elif (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr in WORLD_CALLS
-        ):
-            found.append(f"L{node.lineno} .{node.func.attr}()")
-    return found
-
-
-def test_domain_touches_nothing_outside_the_process():
-    """The boundary the older tests were mistaken for."""
-    reaching = [
-        f"{_module_id(path)}: {contact}"
-        for path in _every(_modules_in("domain"), "the domain")
-        if (contact := _world_contact(path))
-    ]
-
-    assert not reaching, f"the domain reaches the world: {reaching}"
+    for path in _every(_package_modules(), "the package"):
+        modules = _imported_modules(path)
+        assert not any(m.split(".")[0] == "evals" for m in modules), (
+            f"{_module_id(path)} imports evals/ — the wheel does not ship it"
+        )
 
 
 #: Calls that *change* the filesystem, as opposed to reading it or the
-#: environment. Deliberately narrower than `WORLD_CALLS`: `open` and `replace`
-#: are left out because `Session.open` and `dataclasses.replace` are named the
-#: same and this rule runs over a layer where both are legitimate.
+#: environment. `open` and `replace` are left out because `Session.open` and
+#: `dataclasses.replace` are named the same, and both are legitimate where this
+#: rule runs.
 MUTATING_CALLS = frozenset({
     "mkdir", "rmdir", "rmtree", "copytree", "copyfile", "copy", "move",
     "write_text", "write_bytes", "unlink", "touch", "chmod", "rename",
 })
 
 
-def test_the_application_layer_does_not_write_to_disk_itself():
-    """Orchestration decides what happens; an adapter is what makes it happen.
+def _flat_core() -> list[Path]:
+    """The modules directly in `core/`: the service and the records it is asked in."""
+    return sorted((SRC / "core").glob("*.py"))
+
+
+def test_the_flat_core_does_not_write_to_disk_itself():
+    """Orchestration decides what happens; the package that owns a write makes it happen.
 
     This was not true when it was written -- `service.py` copied a request's input files
     itself, a `mkdir` and a bare `shutil.copy`. Reading is not the target:
-    `application/config.py` reads the environment, which is its job.
+    `core/environment.py` reads the environment, which is its job.
 
     Measured against the real service before both went through `_checked`: two inputs
     sharing a basename were accepted and one silently lost, and a missing one left the
     earlier files behind in the turn.
     """
     offenders = []
-    for path in _modules_in("application"):
+    for path in _every(_flat_core(), "the flat core"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import) and any(a.name == "shutil" for a in node.names):
@@ -2434,8 +2254,8 @@ def test_the_application_layer_does_not_write_to_disk_itself():
                 offenders.append(f"{_module_id(path)}:{node.lineno} .{node.func.attr}()")
 
     assert not offenders, (
-        f"{offenders} write to disk from the application layer — put it in "
-        "infrastructure/workspace/, where the guards already are"
+        f"{offenders} write to disk from the flat core — put it beside the write it "
+        "belongs with, as `core/session/files.py` holds placing a request's inputs"
     )
 
 
@@ -2500,13 +2320,6 @@ def test_the_mode_rule_can_tell_a_chmod_from_the_calls_around_it(tmp_path):
 
     assert _mode_changes(guilty) == [3], "a chmod two calls in is the case this exists for"
     assert _mode_changes(innocent) == [], "the neighbouring filesystem calls are not modes"
-
-
-def test_infrastructure_is_the_layer_doing_the_touching():
-    """The other half: if nothing in infrastructure/ touches the world either, the I/O
-    did not move out, it moved somewhere less visible.
-    """
-    assert any(_world_contact(p) for p in _modules_in("infrastructure"))
 
 
 def test_no_test_stubs_out_agent_construction():
@@ -2693,7 +2506,8 @@ def test_the_catalogue_holds_one_module_per_kind():
 #: Python without putting it on the import path, and the kind catalogues that load
 #: Python read it; `documents` reads the YAML the agent and subagent formats are
 #: written in; `fields` reads one decoded field as the value the format meant, for
-#: both those formats and the model catalogue, which share the grammar; `__init__` is
+#: both those formats and the model catalogue, which share the grammar; `definition`
+#: declares once the fields an agent and a subagent both have; `__init__` is
 #: the folder's docstring and holds no import on purpose.
 #: Another name here is where the kinds start sharing an implementation, which they
 #: duplicate in order to avoid -- so it is an edit somebody argues for, not a file
@@ -2701,7 +2515,7 @@ def test_the_catalogue_holds_one_module_per_kind():
 #: `catalogue` and `seeding` are not helpers the kinds share but the two readers over all
 #: of them: one reads every kind into `Definitions`, the other copies a definitions folder.
 KINDS_HELPERS = frozenset(
-    {"__init__", "catalogue", "documents", "fields", "importing", "seeding"}
+    {"__init__", "catalogue", "definition", "documents", "fields", "importing", "seeding"}
 )
 
 
@@ -2809,7 +2623,7 @@ def test_the_package_ships_the_catalogue_example():
 #: underneath them.
 MAY_BE_MUTABLE: frozenset[str] = frozenset({
     # `_Turn` is the one record here that is never handed anywhere: it is private
-    # to `application/service.py` and exists so that `_turn_outcome` and the
+    # to `core/service.py` and exists so that `_turn_outcome` and the
     # loop inside it agree about what the turn produced. Being written in place is
     # the mechanism -- a frozen one would have to be rebuilt on every chunk, and
     # the context manager could not see what the loop wrote. The rule this
@@ -2921,7 +2735,7 @@ def test_every_caller_facing_error_is_public():
 
 def test_a_caller_facing_error_is_the_same_class_either_way():
     """The lazy export table resolves to the class itself, not a copy -- so a consumer
-    catching `kingfisher.SessionBusyError` catches what the domain raises.
+    catching `kingfisher.SessionBusyError` catches what the core raises.
     """
     import kingfisher
     from kingfisher.core.session.model import SessionBusyError
@@ -2987,8 +2801,8 @@ def test_the_reach_predicate_says_what_it_means():
     """The rule's own arithmetic, checked against named inputs."""
     for module, reaches in [
             ("kingfisher", False),                      # the front door itself
-            ("kingfisher.domain.request", True),        # past it
-            ("kingfisher.application.service", True),   # past it, and the tempting one
+            ("kingfisher.core.request", True),        # past it
+            ("kingfisher.core.service", True),   # past it, and the tempting one
             # the CLI ships inside the package
             ("kingfisher.presentation.cli.health", False),
             ("kingfisher_other.app", False),            # shares the prefix, not the package
@@ -3008,7 +2822,7 @@ def test_the_rule_above_still_finds_every_consumer():
 
 
 def test_a_consumer_uses_the_library_only_through_its_public_api():
-    """`from kingfisher import X`, never `from kingfisher.domain.y import X`."""
+    """`from kingfisher import X`, never `from kingfisher.core.y import X`."""
     reaching = []
     for path in _every(_consumer_modules(), "the consumers"):
         family = _consumer_of(path) in FAMILY
@@ -3052,7 +2866,7 @@ def test_both_import_collectors_see_the_same_modules():
 
 def test_the_back_door_rule_tells_the_two_consumers_apart():
     """The questions the tree cannot ask."""
-    deep = "kingfisher.application.service"
+    deep = "kingfisher.core.service"
     private = "kingfisher.plugins.sessions.sandbox.confinement"
 
     # A stranger may not reach, whatever it reached for.
@@ -3082,7 +2896,7 @@ def test_the_event_kinds_are_what_the_package_emits():
     retention moved off the request path, and omitting `cut_short`, which is how a
     caller learns its answer is incomplete.
     """
-    from kingfisher.domain.result import KINDS
+    from kingfisher.core.result import KINDS
 
     emitted = set()
     for path in sorted(SRC.rglob("*.py")):
@@ -3105,10 +2919,10 @@ def test_the_event_kinds_are_what_the_package_emits():
 
 def test_the_stop_reasons_are_what_the_package_assigns():
     """`STOP_REASONS` is a contract with a caller like `KINDS`, and pinned the same way."""
-    from kingfisher.domain import result as result_module
-    from kingfisher.domain.result import STOP_REASONS
+    from kingfisher.core import result as result_module
+    from kingfisher.core.result import STOP_REASONS
 
-    # Every module-level name in `domain/result.py` whose value is a stop reason, so
+    # Every module-level name in `core/result.py` whose value is a stop reason, so
     # that assigning one by its constant counts as producing it. This resolved only
     # `END_TURN`, by name, and the second constant to be assigned that way --
     # `AWAITING` -- then looked like a reason no turn produces. Resolved against the
@@ -3143,7 +2957,7 @@ def test_the_stop_reasons_are_what_the_package_assigns():
                 continue
             if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 assigned.add(node.value.value)
-            # Or by its constant, which is the spelling `domain/result.py` asks for
+            # Or by its constant, which is the spelling `core/result.py` asks for
             # and the one a dataclass default uses. Reading only literals made the
             # *better* spelling look like a reason no turn produces.
             elif isinstance(node.value, ast.Name) and node.value.id in by_name:
@@ -3185,14 +2999,14 @@ def test_no_surface_decides_for_itself_what_a_finished_turn_is():
     that already has it.
     """
     decided = []
-    trees = [path for path in SRC.rglob("*.py") if path != SRC / "domain" / "result.py"]
+    trees = [path for path in SRC.rglob("*.py") if path != SRC / "core" / "result.py"]
     for path in sorted(trees):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Compare) and _decides_from_a_stop_reason(node):
                 decided.append(f"{path.relative_to(REPO)}:{node.lineno}")
 
     assert not decided, (
-        f"a stop reason compared against a literal outside domain/result.py: {decided} "
+        f"a stop reason compared against a literal outside core/result.py: {decided} "
         "— ask `RunResult.completed` instead, or the surfaces that ask will disagree "
         "about a reason added later and nothing will go red"
     )
@@ -3225,9 +3039,9 @@ def _unreachable(branched: set[str], kinds: tuple[str, ...]) -> set[str]:
 
 def test_no_branch_is_written_for_a_kind_that_cannot_exist():
     """The other direction of the rule above, and the one that went unwatched."""
-    from kingfisher.domain.result import KINDS
+    from kingfisher.core.result import KINDS
 
-    branched = _kinds_branched_on((SRC / "domain" / "result.py").read_text(encoding="utf-8"))
+    branched = _kinds_branched_on((SRC / "core" / "result.py").read_text(encoding="utf-8"))
 
     # A reader pointed at the wrong file finds nothing and passes, which is the
     # `_modules_in` failure again: a rule that has quietly stopped being about
@@ -3556,9 +3370,8 @@ def test_no_constant_is_published_for_tests_alone():
     # A collector pointed at the wrong root finds nothing and reports success --
     # the failure this file has shipped twice, once in `_modules_in` and once in
     # the consumer collector. Named layers rather than a count, so this says
-    # which half of the package stopped being walked. All four define constants,
-    # most of them in `domain` and `infrastructure`.
-    layers = {"domain", "application", "infrastructure", "presentation"}
+    # which part of the package stopped being walked. All three define constants.
+    layers = {"core", "infrastructure", "presentation"}
     walked = {path.relative_to(SRC).parts[0] for path in found.values()}
 
     assert layers <= walked, (
@@ -3582,7 +3395,7 @@ def test_the_unread_check_knows_the_three_ways_out():
     """Every constant in the tree is read, published or exempted, so the rule above
     passes whether `_unread` subtracts anything or nothing.
     """
-    here = Path("domain/result.py")
+    here = Path("core/result.py")
     found = {"READ": here, "PUBLISHED": here, "KINDS": here, "ORPHAN": here}
 
     assert _unread(found, {"READ"}, frozenset({"PUBLISHED"})) == {"ORPHAN": here}

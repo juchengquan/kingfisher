@@ -13,13 +13,13 @@ from deepagents.middleware import SubAgentMiddleware
 from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher import LocalSessions, backend_at
-from kingfisher.application.service import Kingfisher
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.access.source_ids import UNSCOPED, AccessError, parse
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.narrowing import ToolAllowlist
+from kingfisher.core.request import Request
+from kingfisher.core.service import Kingfisher
 from kingfisher.core.session.steps import drive
-from kingfisher.domain.request import Request
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import (
@@ -223,7 +223,7 @@ def test_one_function_reads_what_shape_a_caller_s_source_ids_are_in():
 
     src = repository_root() / "src" / "kingfisher"
     readers = set()
-    for path in sorted([*(src / "application").glob("*.py"), src / "core/access/checks.py"]):
+    for path in sorted([*(src / "core").glob("*.py"), src / "core/access/checks.py"]):
         for function in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
@@ -347,7 +347,7 @@ def reported(kf, source_ids, name: str, *, asked_for: Capabilities | None = None
     request left at its default, so without one every axis is skipped and the report is
     empty -- which is how a rule asserting a name was absent from it asserted nothing.
     """
-    from kingfisher.application.reporting import withheld_by_kind
+    from kingfisher.core.reporting import withheld_by_kind
 
     session = session_at(kf, name)
     held_names = tuple(source_ids) if source_ids is not UNSCOPED else source_ids
@@ -782,7 +782,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         held=kf.held_for(held),
         files=drive(kf._files_for(session.name)),
     ).graph
-    from kingfisher.application.reporting import withheld_by_kind
+    from kingfisher.core.reporting import withheld_by_kind
 
     kinds = dict(
         withheld_by_kind(
@@ -867,7 +867,7 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
 
 def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tuple[str, ...]:
     """The skills a caller holding `held` is told a request granting `granted` left out."""
-    from kingfisher.application.reporting import withheld_by_kind
+    from kingfisher.core.reporting import withheld_by_kind
 
     grants = replace(kf._effective_grants(held), skills=granted)
     session = session_at(kf, "withheld-" + "-".join(held))

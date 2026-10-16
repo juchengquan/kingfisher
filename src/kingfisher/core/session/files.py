@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from kingfisher.core.result import ArtifactError
 from kingfisher.core.session.steps import Steps, changing, on_host, reading
-from kingfisher.domain.result import ArtifactError
 from kingfisher.layout import Layout
 
 # Deliberately not importing `ARTIFACT_DIRS` or `INPUTS_ROUTE`: both edges here are a

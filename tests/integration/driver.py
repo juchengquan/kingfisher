@@ -107,7 +107,7 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     flags rather than losing them to the shipped command. Removing them would have
     cost 23 edits across 8 files to buy something this import already gives.
     """
-    from kingfisher.application.inventory import inventory
+    from kingfisher.core.inventory import inventory
     from kingfisher.presentation.cli.listing import failed, render
 
     found = inventory(cfg)
@@ -167,7 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
     """What this workspace offers right now, per kind."""
-    from kingfisher.application.inventory import inventory
+    from kingfisher.core.inventory import inventory
 
     return inventory(cfg).offered
 

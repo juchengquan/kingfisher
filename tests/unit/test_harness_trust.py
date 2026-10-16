@@ -13,7 +13,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, LocalSessions, Request, backend_at
-from kingfisher.domain.request import Decision, DecisionError, Resume
+from kingfisher.core.request import Decision, DecisionError, Resume
 from kingfisher.layout import HARNESS, PAUSED_STATE, PINNED_AGENT
 from tests.checks.backend import shell_denied
 from tests.conftest import an_agent, start

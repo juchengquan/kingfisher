@@ -237,8 +237,8 @@ def test_an_unnamed_tool_survives_the_allowlist():
 
 def test_an_injected_graph_cannot_honour_capabilities(cfg, session_dir):
     """It was built elsewhere, so the restrictions were never applied to it."""
-    from kingfisher.application.run import run
-    from kingfisher.domain.request import Request
+    from kingfisher.core.request import Request
+    from kingfisher.core.run import run
 
     # The graph itself: `graph=` is the injected-graph seam, and what a deployment
     # supplies there is a compiled graph rather than kingfisher's own record.
@@ -593,7 +593,7 @@ def test_a_real_build_is_readable(cfg, session_dir):
 
 def test_a_listing_says_unknown_rather_than_none_when_it_cannot_read(monkeypatch, cfg):
     """The reason any of this changed."""
-    from kingfisher.application import inventory as inventory_module
+    from kingfisher.core import inventory as inventory_module
     from kingfisher.core.agent import assembly as agent_module
 
     # Patched where it is *called* rather than where it is defined: the probe is
@@ -677,7 +677,7 @@ def _handed_to_the_build(monkeypatch) -> list[Capabilities]:
     do and still be checking anything. The intersection is what is under test; a test
     that computes it and compares agrees with itself.
     """
-    from kingfisher.application import service as service_module
+    from kingfisher.core import service as service_module
 
     handed: list[Capabilities] = []
     real = service_module.build_agent
@@ -700,8 +700,8 @@ def test_a_turn_is_built_inside_the_deployments_ceiling(cfg, monkeypatch):
     other fixture here leaves the deployment unrestricted, where the two are equal.
     """
     from kingfisher import LocalSessions
-    from kingfisher.application.service import Kingfisher
-    from kingfisher.domain.request import Request
+    from kingfisher.core.request import Request
+    from kingfisher.core.service import Kingfisher
     from tests.conftest import an_agent
 
     an_agent(cfg, "only")

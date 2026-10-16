@@ -12,14 +12,14 @@ from langchain_core.tools import StructuredTool, tool
 
 import kingfisher
 from kingfisher import LocalSessions, backend_at
-from kingfisher.application.inventory import inventory
-from kingfisher.application.service import Kingfisher
 from kingfisher.core.access.capabilities import ALL
 from kingfisher.core.access.source_ids import AccessError, parse
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.recorder import Audiences
 from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository, ToolError
 from kingfisher.core.definitions.tools.spec import own_audience
+from kingfisher.core.inventory import inventory
+from kingfisher.core.service import Kingfisher
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import tools_dir
 
@@ -290,10 +290,10 @@ def test_the_run_report_agrees_with_the_build(policied):
     """The third reader of what a caller reaches. A report naming a tool as withheld
     tells the caller it exists, which is what leaving it out of the build was for.
     """
-    from kingfisher.application.reporting import withheld_by_kind
     from kingfisher.core.access.capabilities import Capabilities
+    from kingfisher.core.reporting import withheld_by_kind
+    from kingfisher.core.request import Request
     from kingfisher.core.session.steps import drive
-    from kingfisher.domain.request import Request
     from tests.conftest import harness_in
 
     kf = Kingfisher(policied, sessions=LocalSessions())

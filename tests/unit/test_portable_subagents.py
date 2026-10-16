@@ -443,7 +443,7 @@ def test_the_listing_says_a_carried_tool_is_not_in_this_workspace(
     this workspace is the thing an operator cannot audit -- driven against the shipped
     catalogue rather than a fixture, so it is the output a reader actually gets.
     """
-    from kingfisher.application.inventory import inventory
+    from kingfisher.core.inventory import inventory
     from kingfisher.presentation.cli.listing import render
 
     printed = list(render(inventory(workspace_with_presets)))
@@ -477,7 +477,7 @@ def test_carrying_is_read_off_the_backing_rather_than_the_file_extension(cfg):
     that decided this by how a definition was written would call a compiled subagent
     with an ordinary bundle 'carried' and mislead about where its tools are.
     """
-    from kingfisher.application.inventory import inventory
+    from kingfisher.core.inventory import inventory
 
     root = cfg.definitions / "subagents" / "surveyor"
     root.mkdir(parents=True, exist_ok=True)

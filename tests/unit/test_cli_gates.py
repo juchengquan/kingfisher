@@ -17,10 +17,10 @@ import pytest
 
 import kingfisher
 from kingfisher import LocalSessions
-from kingfisher.application.plugins import Plugins
+from kingfisher.core.plugins import Plugins
+from kingfisher.core.result import AWAITING, RunResult
+from kingfisher.core.result import PendingDecision as Pending
 from kingfisher.core.session.steps import drive
-from kingfisher.domain.result import AWAITING, RunResult
-from kingfisher.domain.result import PendingDecision as Pending
 from kingfisher.presentation.cli import __main__ as cli
 from tests.conftest import RecordedEvents, Through
 
