@@ -32,7 +32,7 @@ from kingfisher.infrastructure.sandbox.confinement import (
     harness_unfenced,
     shell_confinement,
 )
-from kingfisher.infrastructure.workspace import MemoryBacking, destination_hint, memory_backing
+from kingfisher.infrastructure.workspace import MemoryBacking, memory_backing
 
 #: `fail` means this deployment will not run. `warn` means it will, and
 #: something about it is worth knowing -- an unconfined shell runs fine.
@@ -240,7 +240,7 @@ def _packs(cfg: Config) -> Iterator[Check]:
             "warn",
             "KINGFISHER_ASSETS is not set",
             "set it to a directory of definitions, or pass"
-            f" `kingfisher seed --from DIR`{destination_hint()}",
+            " `kingfisher seed --from DIR`",
         )
         return
     if not cfg.assets.is_dir():

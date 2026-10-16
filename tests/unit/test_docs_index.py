@@ -168,11 +168,11 @@ CITATION = re.compile(r"docs/[A-Za-z0-9_./-]+\.md")
 #: `docs/README.md` names removed documents on purpose -- its recovery commands
 #: are `git show <commit>^:docs/design/...`, which are supposed to be paths that
 #: no longer resolve.
-#: `assets_examples` joined the four when `call_cap.py` started naming
+#: `assets` joined the four when `call_cap.py` started naming
 #: `guides/middleware.md`. It was outside the rule for no reason anybody had
 #: stated -- it is tracked text and it is not under `docs/`, which is the whole
 #: of what the sentence above asks for.
-CITED_FROM = ("src", "tests", "service", ".github", "assets_examples")
+CITED_FROM = ("src", "tests", "service", ".github", "assets")
 
 #: The root files, named rather than globbed: the repository root also holds a
 #: `.venv`, a `.git` and whatever a developer left there, and a rule that reads

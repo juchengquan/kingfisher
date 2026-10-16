@@ -84,7 +84,7 @@ def _files(messages) -> list:
 
 def _with_pdf_text(cfg) -> None:
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
-    shutil.copy(repository_root() / "assets_examples" / "tools" / "pdf_text.py", tools_dir(cfg))
+    shutil.copy(repository_root() / "assets" / "tools" / "pdf_text.py", tools_dir(cfg))
 
 
 def test_a_large_pdf_read_whole_reaches_the_model_as_advice(cfg, session_dir):
@@ -216,7 +216,7 @@ def test_a_slice_pdf_pages_saves_is_handed_over_whole(cfg, session_dir):
     slice the guard refused too would leave that model no way to see the page.
     """
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
-    shutil.copy(repository_root() / "assets_examples" / "tools" / "pdf_pages.py", tools_dir(cfg))
+    shutil.copy(repository_root() / "assets" / "tools" / "pdf_pages.py", tools_dir(cfg))
     pages = [f"page {n} " + "x" * 1500 for n in range(1, 201)]
     (session_dir / "inputs" / "big.pdf").write_bytes(a_pdf(*pages))
     model = _calls(

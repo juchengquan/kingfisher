@@ -51,7 +51,7 @@ definition naming middleware or source ids this deployment has not registered is
 refused when it is built, so seeding one produces a file that cannot run.
 `seed` leaves those behind and says which names each would have needed;
 `seed(..., everything=True)` and `kingfisher seed --all` take them once you have
-registered the names. The shipped `assets_examples/` has several, `assistant`
+registered the names. The shipped `assets/` has several, `assistant`
 among them, and ships the middleware they name beside them -- so seed that set
 with `--all`.
 
@@ -82,7 +82,7 @@ that should leave nothing behind can say so at the time: `kingfisher run
 
 An agent can be written to stop before a tool runs and wait for you — see
 *Approval gates* in [`formats.md`](docs/guides/formats.md), and
-`assets_examples/agents/operator.yaml` for one that does. A turn that stops says
+`assets/agents/operator.yaml` for one that does. A turn that stops says
 what it is holding and prints the command that answers it; `kingfisher decide
 --session ID` on its own says the same thing again for anyone who has lost the
 output.
@@ -97,6 +97,6 @@ step.
 
 The cost is real and is not hidden. A fresh install seeds nothing, and since a
 request must name an agent, it cannot run until definitions arrive from
-somewhere. This repository keeps a worked set in `assets_examples/` — every kind
-the formats define, each file demonstrating a distinct feature of one — and
-`assets/` is where a deployment puts content it fetched from elsewhere.
+somewhere. This repository ships its own in `assets/` — every kind the
+formats define, held to working by the suite — and definitions from another
+project belong outside the checkout, seeded with a second `--from`.

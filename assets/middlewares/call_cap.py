@@ -27,7 +27,7 @@ entry may be a factory closing over a live object, which a file cannot be.
 
 ## Wiring it
 
-    from assets_examples.middlewares.call_cap import CallCap, CallCapGenerous
+    from assets.middlewares.call_cap import CallCap, CallCapGenerous
 
     kingfisher = Kingfisher(
         cfg,
@@ -45,10 +45,10 @@ and in `agents/researcher.yaml`, or any `subagents/*.yaml`:
 
     middlewares: [call-cap-strict]
 
-Both halves of that are written out: `assets_examples/agents/researcher.yaml` and
-`assets_examples/subagents/sweeper.yaml` are an agent and its subagent, naming the
+Both halves of that are written out: `assets/agents/researcher.yaml` and
+`assets/subagents/sweeper.yaml` are an agent and its subagent, naming the
 registry entries above under two different ceilings.
-`assets_examples/agents/assistant.yaml` names every example as well.
+`assets/agents/assistant.yaml` names every example as well.
 
 They live under their own kinds, and `seed` is what keeps them out of a
 workspace that cannot build them: it reads the `middlewares:` field, leaves such

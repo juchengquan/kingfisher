@@ -491,8 +491,8 @@ def isolated_from_the_developer(monkeypatch):
 
 @pytest.fixture(scope="session")
 def shipped():
-    """This repository's worked definitions, found in this repository."""
-    return repository_root() / "assets_examples"
+    """The definitions this repository ships, found in this repository."""
+    return repository_root() / "assets"
 
 
 @pytest.fixture

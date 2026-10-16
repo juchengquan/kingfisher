@@ -19,18 +19,10 @@ from kingfisher.infrastructure.workspace.layout import ensure_definitions
 #:
 #: A path inside this repository is true for someone standing in a checkout and
 #: false for everyone else, and the reader most likely to hit that refusal is the
-#: one who installed the package -- who has no `assets_examples/` anywhere. Advice that
+#: one who installed the package -- who has no `assets/` anywhere. Advice that
 #: fails the way the thing it is advising about failed is the fault four other
 #: messages here were rewritten to stop making.
-SUGGESTION = Path("assets_examples")
-
-#: Named beside `SUGGESTION`, and conditional for exactly the same reason.
-#:
-#: `SUGGESTION` says where definitions can be copied *from*; this says where a
-#: deployment's own belong once it has fetched some. Both are directories in
-#: this checkout and nowhere else, so the reader who installed the package must
-#: not be sent to either -- see `SUGGESTION` for the fault that guards against.
-DESTINATION = Path("assets")
+SUGGESTION = Path("assets")
 
 #: How the four "this workspace is empty" messages tell a reader to fill it.
 SEED_HINT = "`kingfisher seed --from DIR`"
@@ -308,11 +300,6 @@ def kinds_at(source: Path) -> tuple[str, ...]:
     return tuple(kind for kind in DEFINITION_KINDS if (source / kind).is_dir())
 
 
-def destination_hint() -> str:
-    """The clause naming `assets/`, and nothing at all where there is none."""
-    return f", and ./{DESTINATION} is where your own go" if DESTINATION.is_dir() else ""
-
-
 def definitions_source(paths: Source, override: str | Path | None = None) -> Path:
     """The directory `seed` should copy from, or a refusal saying how to name one."""
     if override is not None:
@@ -326,7 +313,6 @@ def definitions_source(paths: Source, override: str | Path | None = None) -> Pat
     )
     if SUGGESTION.is_dir():
         msg += f" -- ./{SUGGESTION} is one"
-    msg += destination_hint()
     raise ConfigError(msg)
 
 

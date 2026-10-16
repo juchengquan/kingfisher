@@ -557,7 +557,7 @@ number it looked like -- an agent rebuild costs what the workspace holds, and th
 figure recorded had been taken against an empty one.*
 
 - **A whole agent rebuild costs what the catalogue holds.** 8ms in an empty
-  workspace; **54ms** in one seeded with the shipped `assets_examples/`, where
+  workspace; **54ms** in one seeded with the shipped `assets/`, where
   the default agent compiles every subagent it is offered. Between them, 25ms
   for a seeded workspace whose agent names no subagents.
 

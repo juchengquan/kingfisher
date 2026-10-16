@@ -1,43 +1,46 @@
 # assets
 
-Definitions this deployment runs, fetched from somewhere else. Point
-`KINGFISHER_ASSETS` here once there is something in it.
+The definitions this repository ships: agents, middlewares, skills, subagents and
+tools, and the `source_ids.yaml` several of them name. `KINGFISHER_ASSETS` points
+here, and `seed` copies them into a deployment's definitions folder:
 
-Until then `.env.example` points at `../assets_examples`, so a fresh checkout
-can seed without editing anything. That is the one confusing part of this
-arrangement and it is deliberate: the variable names a *role* — where
-definitions are copied from — rather than this directory, and the example
-demonstrates the role with the set this repository ships.
+    kingfisher seed --all --from ./assets
 
-## The two directories, and why they are two
+`--all` because several definitions here name middleware or source ids,
+`assistant` among them, and a plain `seed` leaves those behind. The middleware
+they name is in `middlewares/` and arrives in the same run.
 
-**`assets_examples/`** is ours. Every kind the formats define — agents, skills,
-subagents, tools, middlewares — each file demonstrating a distinct feature of
-one. It is committed, and the suite parses, loads and runs every file in it.
-It is a curriculum rather than a bag of assets — it is named for the thing it is
-an example *of*, so that it sorts beside this directory and finding either finds
-both. That was the whole argument for the name: this pair is the one part of the
-arrangement a reader has to meet as a pair.
+Everything here is committed, and it is held to working. The tests parse every
+file here, load every tool, build an agent from what `assistant` declares, and
+render the skills index each subagent is actually handed, so a definition that
+stops working fails the suite rather than quietly rotting.
 
-`assets_examples/middlewares/` is a definition kind like the rest, and `seed`
-copies it. A definition that *names* middleware is the different case: `seed`
-cannot see what a deployment registered, so it leaves such a definition behind
-and `--all` takes it — which is why the worked set is seeded with `--all`. A
-name is still all a definition ever says, and no upload may bring one; see
-`assets_examples/middlewares/call_cap.py`.
+Rendering the index is the part worth naming. Granting a skill and being offered
+one are different facts, a definition shows only the first, and nothing you can
+read in this directory distinguishes a subagent that holds a procedure from one
+handed an empty index.
 
-**`assets/`** — here — is theirs. A skill fetched from another project arrives
-with its own `LICENSE.txt` and its own idea of what it is for. Everything under
-this directory is ignored by git except this file, and that ignore rule is the
-point of the directory existing at all: an MIT repository should not absorb
-somebody else's terms as a side effect of `git add -A`.
+What none of it covers is a model. Nothing here is called against an endpoint,
+which is what keeps the suite cheap enough to run on every commit and is equally
+its edge: a definition can parse, build, and still be a bad prompt.
 
-## Using both
+## Definitions from another project
 
-`seed` takes one directory, and merges rather than replacing, so two sources is
-two commands in the order you choose:
+Keep them outside this checkout, and seed them with a second command:
 
-    kingfisher seed --all --from ./assets_examples
-    kingfisher seed --from ./assets
+    kingfisher seed --from ~/vendor-definitions
 
-Files that collide are reported; files that do not are left alone.
+Not in here, for two reasons. A skill fetched from another project arrives with
+its own `LICENSE.txt`, and in an MIT repository it is one `git add -A` from being
+committed under the wrong terms. And the suite reads every file in this
+directory as one of ours, so somebody else's skill would be held to our tests and
+could fail a change that never touched it. `seed` merges rather than replacing,
+so the two sources are two commands in whichever order you choose, and files
+that collide are reported.
+
+## Middleware
+
+`middlewares/` is a definition kind like the rest, and `seed` copies it. What a
+definition *names* is still only a name: `call-cap-strict` selects code the
+deployment wrote, and nothing a request carries can widen that.
+`middlewares/call_cap.py` carries the argument in place.

@@ -887,10 +887,11 @@ This reversed twice. The current answer is the third one.
 **Definitions live outside the wheel, and where a deployment gets them is a
 setting.** `KINGFISHER_ASSETS` names one path, read in `application/config.py`;
 `seed(into, source)` takes it as a required argument with no `None` branch. This
-repository's own set is `assets_examples/`, which is *not* shipped and exists to
-be read and copied. `assets/` is committed holding only a `README.md` and ignores
-everything else, because it is where a deployment puts content it did not write.
-*(2026-08-19, `examples-are-ours-assets-are-yours.md`.)*
+repository's own are in `assets/`, outside the wheel, committed and held to
+working by the suite. Definitions from another project belong outside the
+checkout, and are seeded with a second `--from`.
+*(2026-08-19, `examples-are-ours-assets-are-yours.md`. Its second directory
+reversed 2026-10-16, below.)*
 
 **A subagent can travel, and kingfisher discovers nothing.** A `SUBAGENTS` entry
 with no `build` is a declaration kingfisher assembles, restricted to what a
@@ -1039,6 +1040,22 @@ Not measured, and said so plainly: nobody has hit the refusal yet. Build it when
 somebody does, and their case will say which of the decisions above to take.
 *(2026-09-17.)*
 
+**Reversed: a second directory, ignored, for definitions somebody else wrote.**
+`assets/` was committed holding only a `README.md` with everything else ignored,
+so a skill fetched with its own `LICENSE.txt` could not reach an MIT repository
+through `git add -A`. This repository's set sat beside it as `assets_examples/`,
+a name chosen only so the two would sort together. Nothing ever went into the
+ignored one, and the one in use carried the awkward name, so the set took
+`assets/`.
+
+The licence argument stands and moved rather than went: such definitions live
+outside the checkout. An ignored subdirectory was the alternative, and is wrong
+for a reason the old arrangement never met -- the suite walks every file under
+`assets/` as one of ours, so a fetched skill there would be held to our tests and
+could fail a change that never touched it. What the move costs: an ignore rule
+stopped a careless `git add -A`, and a sentence in `assets/README.md` does not.
+*(2026-08-19. Reversed 2026-10-16.)*
+
 **Reversed: definitions as separate pip packages.** Assets were to leave the
 repository entirely, become distributions of their own, and be found through
 entry points that kingfisher named none of. Built in full, then taken back out.
@@ -1134,7 +1151,7 @@ workspace where its names are not declared. That is precisely the failure the
 proposal names.
 
 What the two readers do agree on was measured rather than assumed: every definition
-in `assets_examples/`, and every legal spelling of an audience -- a bare name, a
+in `assets/`, and every legal spelling of an audience -- a bare name, a
 list, a requirement set, an entry's own `source_ids:`. On all of them the tolerant
 reader finds what the format finds.
 
@@ -1696,14 +1713,14 @@ partial lists and whoever pastes the first is skipped again on the second. The
 flat form only: what a name covers and what it requires are a deployment's
 choices about its own organisation, and nothing can infer which a name wants.
 
-`assets_examples/source_ids.yaml` is now the only source ids example, and it is named
+`assets/source_ids.yaml` is now the only source ids example, and it is named
 the thing the message points at rather than a `.example` beside it.
 
 **`models.yaml.example` stays, and the asymmetry is the point.** The two were
 never alike: `models.yaml` is required with no fallback, its example is a
 hundred lines of annotation about endpoints and keys, and nothing else anywhere
 carries that -- where deleting the source ids example leaves
-`assets_examples/source_ids.yaml` standing. Its error message already prints a
+`assets/source_ids.yaml` standing. Its error message already prints a
 minimal working catalogue inline, so the getting-started path exists and the
 file is the reference beside it.
 
@@ -1758,7 +1775,7 @@ handed.
 `reviewers`, `senior` and `senior-analysts` are now `sales_db`, `audit_log`,
 `warehouse`, `pii` and `sales_db_pii`. A key called `source_ids` whose worked
 example lists job titles teaches the wrong reading of the line it is there to
-explain, and `assets_examples/` is built and run by the suite rather than
+explain, and `assets/` is built and run by the suite rather than
 eyeballed, so the sentences around those names had to move too.
 
 No compatibility window, on the precedent the export table set at 0.1.0. Most of
