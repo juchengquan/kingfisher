@@ -87,6 +87,14 @@ source_ids:
 # reads as legal and is the requirement defeated by the file that writes it, so
 # it is refused where it is written rather than at the caller.
 #
+# The datazones a caller may be in, and a subagent or tool may require. A caller
+# is in one at most -- `datazone="emea"` beside `source_ids=` -- and reaches what
+# names that one or none. `subagents/ledger.py` is the one that names `emea`.
+#
+# Not source ids, and not listed among them: a caller holds any number of source
+# ids and is in exactly one datazone, which is the difference worth a second field.
+datazones: [emea, apac]
+
 # There is no `agents:`, `subagents:` or `tools:` section here, and writing one
 # is refused by name. There was, in the first version of this feature: one
 # central table listing every asset and who reached it. It went because a table

@@ -6,13 +6,17 @@ assembling a graph itself. This is the third shape: a declaration in Python, wit
 no `build`, carrying its own tool and its own skill.
 
 It exists because of what it *cannot* say. A portable definition may not name a
-tool, a skill, a subagent, a middleware, a model or a source id -- every one of
-those is a lookup in some particular deployment's catalogue, and a definition
-that travels has never seen the deployment it will be installed into. So its
-`tools` holds the tool objects rather than names, and its `skills` the directory
-they are in. What is left is what a definition can answer on its own: who it
-is, what it does, which of deepagents' own tools it wants, and what it brought
-with it.
+tool, a skill, a subagent, a middleware or a model -- every one of those is a
+lookup in some particular deployment's catalogue, and a definition that travels
+has never seen the deployment it will be installed into. So its `tools` holds the
+tool objects rather than names, and its `skills` the directory they are in. What
+is left is what a definition can answer on its own: who it is, what it does,
+which of deepagents' own tools it wants, and what it brought with it.
+
+It may also say who reaches it, with `source_ids` and `datazone`, as `ledger.py`
+beside it does. Those name a deployment's vocabulary too, and are taken anyway
+because a name the deployment does not declare stops it at startup: a definition
+that travels badly fails loudly. This one says nothing, so it is anyone's.
 
 That constraint is the feature. Copy this module into an installed package,
 export `SUBAGENTS` from it, and a deployment reaches it by writing one file:

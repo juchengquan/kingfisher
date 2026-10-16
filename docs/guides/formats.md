@@ -1633,6 +1633,8 @@ of a string.
 
 A caller may also be **in a datazone**: one name, never several. A subagent or a
 tool may say which datazone it is for, and a caller reaches it only from that one.
+`assets/subagents/ledger.py` is this section as a working file, and `analyst.yaml`
+grants it.
 
 ```yaml
 # source_ids.yaml
