@@ -17,6 +17,7 @@ from kingfisher.infrastructure.harness.backend import (
     WorkspaceScopedBackend,
     bundled_skills_route,
 )
+from kingfisher.infrastructure.harness.backend_contract import CONTRACT_SESSIONS
 from kingfisher.layout import SKILLS_ROUTE
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import StubCheckpointer
@@ -48,6 +49,16 @@ class Overwriting(LocalSessions):
 
     def claim(self, cfg, session_id, /, *, stale_after, now=None):
         return True
+
+
+class OneLockForAll(LocalSessions):
+    """One lock for the whole object, taken whichever session asks."""
+
+    def claim(self, cfg, session_id, /, *, stale_after, now=None):
+        return super().claim(cfg, CONTRACT_SESSIONS[0], stale_after=stale_after, now=now)
+
+    def release(self, cfg, session_id, /):
+        super().release(cfg, CONTRACT_SESSIONS[0])
 
 
 def _check(name):
@@ -153,6 +164,13 @@ def test_the_kit_catches_two_sessions_on_one_filesystem(cfg):
 def test_the_kit_catches_a_claim_that_is_not_exclusive(cfg):
     with pytest.raises(AssertionError, match="still holds"):
         _check("a_claim_is_exclusive")(lambda: (cfg, Overwriting()))
+
+
+def test_the_kit_catches_one_lock_for_every_session(cfg):
+    """A turn in one session refusing a turn in another, which every other line of the
+    check passes now that the lock is asked of the object serving every session."""
+    with pytest.raises(AssertionError, match="one lock for every session"):
+        _check("a_claim_is_exclusive")(lambda: (cfg, OneLockForAll()))
 
 
 def test_a_turn_refuses_while_the_sessions_say_it_is_claimed(cfg):
