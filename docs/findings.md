@@ -201,6 +201,15 @@ for the next reader who reaches for one.*
   provided`. The quiet case is a subclass: override only `abefore_model` of a
   parent implementing both, and the parent's `before_model` runs with no error.
   `guides/middleware.md` draws the consequence. *(2026-09-15.)*
+- **A `before_model` or `after_model` hook is a graph step, and the recursion limit
+  counts it.** `create_agent` makes each a node of its own, run on every trip round
+  the loop. Kingfisher's loop is `model`, `TodoListMiddleware.after_model`, `tools`:
+  every turn of the four tm-* trials that ran out stopped at 50 model calls, 150
+  steps. One `before_model` hook more made it 37, measured on a writing turn, and the
+  graph's node list showed the fourth node. A `wrap_model_call` adds no node, and the
+  state update it returns in an `ExtendedModelResponse` reaches the state from inside
+  other layers too: langchain collects every layer's commands and applies them with
+  the model's reply. *(2026-10-16, langchain 1.4.5, langgraph 1.2.15.)*
 - **deepagents' summarizer keeps an index, not a rewrite, and nothing re-checks
   it.** It stores `_summarization_event.cutoff_index` into `state["messages"]` and
   rebuilds each call's view as the summary plus everything after that index;

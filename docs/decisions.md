@@ -3104,11 +3104,19 @@ nowhere else, and a failure is what stops the same call being made again. The
 transcript keeps no status, so a replayed failure is known by its wording -- deepagents'
 `Error:`, its patched call that never finished, a non-zero exit.
 
-**`before_model`, replacing in place, writing nothing.** deepagents' summariser counts
-inside `wrap_model_call`, so a change made there lands after it decided and changes one
-request; only `before_model` changes the conversation it counts, which is also the one
-the transcript is written from. Each message keeps its id and position, because the
-summariser's cut is an index into that list. It writes no file, so reading a handle back
+**Inside the model call, replacing in place, writing nothing.** A pass clears the request
+the call sends, and returns the handles as a state update, so every later call and the
+transcript are built from the cleared conversation. It was a `before_model` hook first,
+so that the summariser would count the cleared conversation on the very call a pass ran.
+That hook is a graph step, and the acceptance run measured what it cost: the recursion
+limit's 150 steps bought 37 model calls instead of 50, and a writing turn stopped there.
+Inside the call it costs no step; the summariser, outside it, counts the uncleared
+conversation on the one call a pass starts on, which with the default mark at most half
+its trigger only a batch adding more than that half reaches. Topping the limit up to
+cover the hook's step, and wrapping deepagents' summariser to clear before it counts,
+were the other two; the owner chose this one. *(2026-10-16, after the acceptance run.)*
+Each message keeps its id and position, because the summariser's cut is an index into
+that list. It writes no file, so reading a handle back
 cannot start another pass, and a handle is never cleared again: read as if it were what
 it replaced, an offloaded result's was pointed at the copy the turn's sweep removes.
 
@@ -3130,16 +3138,15 @@ costs a re-cache of everything after the earliest message it touched. 48k fired 
 times, once on a session's last call, which then cost 116%. Keeping two, three or five
 recent results made no difference there. The guard changed nothing from 32k up, and is
 what stops a pass on every call once what can never be cleared nears the low mark: at a
-20k mark one session fired 40 times without it and 12 with it. The count includes the
-system prompt and tools as the last call was sent, which `before_model` cannot see, so a
-turn's first call counts the conversation alone.
+20k mark one session fired 40 times without it and 12 with it. The count is the request
+the call sends, system prompt and tools with it, as the summariser counts it.
 
 **One setting, and no flag and no off switch.** The trigger moves with the model's
 window, so a mark beside the model is where a deployment would want to say it, and a
 flag would be a second place to look. A mark at or past the summariser's trigger is
 refused when the model is built, since clearing would never come first; the highest
-allowed clears only just before summarising, which is the nearest thing to off. The
-summariser also fires on the last reply's reported usage, which this does not read, so
+allowed almost never clears, which is the nearest thing to off -- only a call landing
+between it and the trigger starts a pass. The summariser also fires on the last reply's reported usage, which this does not read, so
 a mark right under the trigger can still lose to that. A model the deployment passes in
 has no entry and takes the default. The ledger is unchanged: it records what the tools
 returned, and what was cleared is in the transcript.
