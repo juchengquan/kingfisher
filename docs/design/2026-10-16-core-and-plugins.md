@@ -195,7 +195,8 @@ One pull request each, off `main` once the one before it has merged.
 6. `Adapter` becomes `WireFormat`, and `KINGFISHER_ADAPTERS_FACTORY` becomes
    `KINGFISHER_WIRE_FORMATS`. *(Landed.)*
 7. The Instructions plugin. *(Landed.)*
-8. `catalogue` and `grants` onto `Config`.
+8. `catalogue` and `grants` onto `Config`: the catalogue is `Config.definitions`, which a
+   deployment staging its own points at its folder. *(Landed.)*
 9. The contract kits to `tests/checks/`; the two refusals into the core; the promises
    onto the interfaces and into `ports.md`.
 10. Move `plugins/`, splitting the prompts between it and the core.

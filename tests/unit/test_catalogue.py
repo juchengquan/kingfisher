@@ -108,28 +108,20 @@ def test_a_missing_definitions_folder_is_refused_rather_than_made(tmp_path, cfg)
     assert not unseeded.definitions.exists()
 
 
-def test_a_supplied_catalogue_must_already_exist(tmp_path, cfg):
-    """Creating one would hide the failure it is there to surface."""
-    missing = tmp_path / "never-staged"
-    with pytest.raises(ConfigError, match="not a directory"):
-        resolve_definitions(cfg, missing)
-    assert not missing.exists()
-
-
-def test_a_supplied_catalogue_gets_no_kind_folder_made_anywhere(tmp_path, cfg):
-    """The layout made every configured kind in the workspace even when `catalogue=`
-    meant none of them would be read.
+def test_a_staged_catalogue_gets_no_kind_folder_made_anywhere(tmp_path, cfg):
+    """The layout made every configured kind in the workspace even where the definitions
+    were staged somewhere else, and none of them would be read from there.
     """
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
     staged = tmp_path / "staged"
     supplied = _roots(_staged(staged))
-    fresh = replace(cfg, workspace=tmp_path / "fresh")
+    fresh = replace(cfg, workspace=tmp_path / "fresh", definitions=staged)
 
-    kf = Kingfisher(fresh, catalogue=staged, sessions=LocalSessions())
+    kf = Kingfisher(fresh, sessions=LocalSessions())
 
     assert not set(DEFINITION_KINDS) & {p.name for p in kf.workspace.iterdir()}, (
-        "a kind folder in the workspace, where a supplied catalogue is not read from"
+        "a kind folder in the workspace, where the definitions are not read from"
     )
     assert {p.name for p in staged.iterdir()} == set(supplied), (
         "a folder made beside the staged catalogue, which its caller did not stage"
@@ -145,7 +137,7 @@ def test_a_supplied_folder_missing_a_kind_offers_none_of_it(tmp_path, cfg):
     _staged(staged, skill="staged-only")
     shutil.rmtree(staged / "tools")
 
-    roots = resolve_definitions(cfg, staged)
+    roots = resolve_definitions(replace(cfg, definitions=staged))
 
     assert roots.skills.root == staged / "skills"
     assert available_skills(cfg, catalogue=roots) == ("staged-only",)
@@ -210,7 +202,7 @@ def test_the_service_settles_it_once_and_hands_it_down(tmp_path, cfg):
     """Resolved at construction, not per request."""
     roots = _staged(tmp_path / "staged", skill="staged-only", subagent=SUBAGENT)
 
-    service = Kingfisher(cfg, sessions=LocalSessions(), catalogue=roots)
+    service = Kingfisher(replace(cfg, definitions=tmp_path / "staged"), sessions=LocalSessions())
 
     assert service.catalogue == roots
 
@@ -219,7 +211,7 @@ def test_a_broken_catalogue_fails_at_startup(tmp_path, cfg):
     """Rather than on the first turn, when a caller is already waiting."""
     missing = tmp_path / "never-staged"
     with pytest.raises(ConfigError):
-        Kingfisher(cfg, sessions=LocalSessions(), catalogue=missing)
+        Kingfisher(replace(cfg, definitions=missing), sessions=LocalSessions())
 
 
 NOT_MIDDLEWARE = """
@@ -360,24 +352,6 @@ def test_the_three_directories_are_attributes_not_keys(cfg):
     assert catalogue.subagents.root == subagents_dir(cfg)
     assert catalogue.tools.root == tools_dir(cfg)
     assert not hasattr(catalogue, "__getitem__"), "indexing would let both idioms survive"
-
-
-def test_resolving_accepts_one_that_is_already_resolved(tmp_path, cfg):
-    """Something that already holds a `Definitions` -- another kingfisher, a fixture --
-    should not have to take it apart to pass it back.
-    """
-    staged = _staged(tmp_path / "staged")
-
-    assert resolve_definitions(cfg, staged) == staged
-
-
-def test_a_resolved_one_is_still_checked(tmp_path, cfg):
-    """Accepting the type is not accepting it unread."""
-    missing = tmp_path / "never-staged"
-    handed = Definitions.from_roots({"skills": missing, "subagents": missing, "tools": missing})
-
-    with pytest.raises(ConfigError, match="not a directory"):
-        resolve_definitions(cfg, handed)
 
 
 # -- the catalogue reads once ---------------------------------------------

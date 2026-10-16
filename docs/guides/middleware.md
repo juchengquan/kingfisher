@@ -54,7 +54,7 @@ definition writing `settings` beside one is refused rather than built without
 them.
 
 Registering is not permitting. A name a request withheld is refused even though
-the deployment registered it, and `grants` is where a deployment says what its
+the deployment registered it, and `Config.grants` is where a deployment says what its
 definitions may reach by default.
 
 ## When it needs something YAML cannot hold

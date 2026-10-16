@@ -705,7 +705,9 @@ def test_a_turn_is_built_inside_the_deployments_ceiling(cfg, monkeypatch):
 
     an_agent(cfg, "only")
     _two_tools(cfg)
-    kf = Kingfisher(cfg, sessions=LocalSessions(), grants=Capabilities(tools=("granted",)))
+    kf = Kingfisher(
+        replace(cfg, grants=Capabilities(tools=("granted",))), sessions=LocalSessions()
+    )
     handed = _handed_to_the_build(monkeypatch)
 
     events = kf.stream(

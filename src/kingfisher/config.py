@@ -10,6 +10,7 @@ from types import MappingProxyType
 from typing import Any
 
 from kingfisher.domain.access import SourceIds
+from kingfisher.domain.capabilities import Capabilities
 from kingfisher.layout import DEFAULT_LAYOUT, Layout
 
 #: The frozen default for an `extra` mapping. Shared with `WireFormat.extra`
@@ -435,6 +436,11 @@ class Config:
     # reads one answer. Measured: with it on, a two-turn workspace carries a ~0.4MB
     # database it never reads back.
     conversation_enabled: bool = True
+    # What this deployment permits every request, before any asks for anything: a
+    # ceiling a request's own capabilities are narrowed by, and never widened past.
+    # `None` restricts nothing, so a single-caller deployment is unaffected; a service
+    # in front of many callers sets it. Set in code, as the `Capabilities` it is.
+    grants: Capabilities | None = None
     # The per-session folder names the agent addresses. Defaulted to kingfisher's own;
     # a deployment renames the leaves by passing a `Layout`. Set once at startup, so the
     # routes, the sandbox rules and the prompt that derive from it are stable per

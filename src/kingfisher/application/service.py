@@ -258,8 +258,6 @@ class Kingfisher(SessionMethods, Disposal):
         # through them, and only the graph's builder knows where its backend keeps a
         # session.
         sessions: Sessions,
-        catalogue: Definitions | Path | None = None,
-        grants: Capabilities | None = None,
         middlewares: Mapping[str, MiddlewareFactory] | None = None,
         graph: Any | None = None,
         run_events: RunEvents | None = None,
@@ -278,17 +276,14 @@ class Kingfisher(SessionMethods, Disposal):
         # request, because its path is not known until the request names it.
         self.workspace: Path = ensure_layout(self.cfg.workspace)
 
-        # Where the reviewed definitions are read from, settled once. Omitted,
-        # it is the definitions folder `cfg` names; supplied, a deployment has
-        # staged them somewhere itself and this is the only place that has to
-        # know. Resolved here rather than per
-        # request so a deployment that fetches them pays once, and so a
-        # catalogue that cannot be read fails at startup rather than serving an
-        # agent that has quietly been told about nothing.
-        # Read now rather than on the first turn: a definition that will not
-        # parse is a wiring mistake, and this is the last moment it is cheap
-        # to say so. `--list` deliberately does not do this -- see `warm`.
-        self.catalogue: Definitions = resolve_definitions(self.cfg, catalogue).warm()
+        # The reviewed definitions, from the folder `cfg` names: a deployment that
+        # stages its own points `definitions` there. Resolved here rather than per
+        # request so a catalogue that cannot be read fails at startup rather than
+        # serving an agent that has quietly been told about nothing. Read now rather
+        # than on the first turn: a definition that will not parse is a wiring
+        # mistake, and this is the last moment it is cheap to say so. `--list`
+        # deliberately does not do this -- see `warm`.
+        self.catalogue: Definitions = resolve_definitions(self.cfg).warm()
         # The one refusal `warm` cannot make for itself: whether a workspace tool
         # wears a built-in's name is only answerable from an assembled graph, and
         # `warm` has no `Config` to assemble one with. Left to the first request
@@ -344,11 +339,10 @@ class Kingfisher(SessionMethods, Disposal):
         self._shared = (
             SharedThreads(threads) if (threads is not None and not callable(threads)) else None
         )
-        # What this deployment permits, before any request asks for anything.
-        # Unrestricted by default, so a single-caller deployment is unaffected;
-        # a service in front of many callers sets it, and `intersect` can only
-        # subtract, so no request can widen past it.
-        self.grants: Capabilities = grants if grants is not None else UNRESTRICTED
+        # `intersect` can only subtract, so no request can widen past this.
+        self.grants: Capabilities = (
+            self.cfg.grants if self.cfg.grants is not None else UNRESTRICTED
+        )
         # What a definition may name in its `middlewares:` field. Empty by
         # default, so any such line fails loudly until a deployment wires one --
         # kingfisher cannot define these, only a deployment knows what its

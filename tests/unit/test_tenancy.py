@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 from concurrent import futures
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -71,10 +72,9 @@ def test_the_id_it_hands_back_can_be_resumed(cfg):
 def test_a_request_cannot_widen_past_what_the_deployment_granted(cfg, session_dir):
     """`intersect` was implemented, tested and called by nothing. Now it runs."""
     kf = Kingfisher(
-        cfg,
+        replace(cfg, grants=Capabilities(builtin_tools=("read_file",))),
         sessions=LocalSessions(),
         threads=StubCheckpointer(),
-        grants=Capabilities(builtin_tools=("read_file",)),
     )
 
     allowed = kf.grants.intersect(Capabilities(builtin_tools=("read_file", "execute")))
