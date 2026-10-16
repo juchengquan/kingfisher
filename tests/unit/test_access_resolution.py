@@ -5,14 +5,13 @@ from __future__ import annotations
 import pytest
 
 from kingfisher.core.access.capabilities import ALL
+from kingfisher.core.access.reach import reaches, reaching
 from kingfisher.core.access.source_ids import (
     UNSCOPED,
     AccessError,
     SourceIds,
     jointly,
     listed,
-    reaches,
-    reaching,
     spell,
     unlisted,
 )

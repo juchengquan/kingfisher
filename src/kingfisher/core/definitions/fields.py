@@ -473,7 +473,7 @@ class Reader:
         chosen = self.selection(written, absent=absent, key=key, refuse_all=refuse_all)
         # Every name is selected; only the ones that stated an audience carry
         # one. An entry that wrote the long form and left `source_ids` out falls
-        # back to the definition's own in `source_ids.reaching`, which is the same
+        # back to the definition's own in `reach.reaching`, which is the same
         # fallback a plain name gets -- so the two spellings agree about an
         # unrestricted name.
         return chosen, {n: a for n, a in stated.items() if a is not None}

@@ -1648,7 +1648,7 @@ def test_an_entry_narrowing_past_its_definition_is_reported(cfg, at_the_command_
 def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, at_the_command_line):
     """The report is not the point -- this is."""
     from kingfisher import config_from_env
-    from kingfisher.core.access.source_ids import reaches
+    from kingfisher.core.access.reach import reaches
     from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 
     _workspace(cfg, NARROWED, vocabulary="source_ids: [A, B, C]\n")

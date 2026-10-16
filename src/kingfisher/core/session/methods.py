@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access.checks import caller_holds
-from kingfisher.core.access.source_ids import reaches
+from kingfisher.core.access.reach import reaches
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.request import Request, Resume
 from kingfisher.core.session.model import (

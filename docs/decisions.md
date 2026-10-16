@@ -1755,7 +1755,7 @@ audienced fields to one caller was written out six times -- three fields, in eac
 of the two `declares` bodies, with the subagent listing its own fields a second
 time for the no-caller case. `AUDIENCED` already named those three fields and
 already drove five other loops, so the enumeration was the duplicated part rather
-than the rule. `core.access.source_ids.stated` and `narrowed_for` are the one of each now,
+than the rule. `core.access.reach.stated` and `narrowed_for` are the one of each now,
 and they live beside `reaching` because a kind may not hold a helper the kinds
 share.
 

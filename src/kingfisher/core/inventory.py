@@ -8,16 +8,8 @@ from types import MappingProxyType
 
 from kingfisher.core.access import checks as access
 from kingfisher.core.access.capabilities import CapabilityError, unoffered
-from kingfisher.core.access.source_ids import (
-    AccessReport,
-    SourceIds,
-    Stated,
-    activated,
-    handed_work_by,
-    offers,
-    reaches,
-    with_datazone,
-)
+from kingfisher.core.access.reach import activated, handed_work_by, offers, reaches
+from kingfisher.core.access.source_ids import AccessReport, SourceIds, Stated, with_datazone
 from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.catalogue import (

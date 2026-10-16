@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access.capabilities import Capabilities, Selection, withheld
-from kingfisher.core.access.source_ids import AUDIENCED, handed_work_by, offers
+from kingfisher.core.access.reach import handed_work_by, offers
+from kingfisher.core.access.source_ids import AUDIENCED
 from kingfisher.core.agent.activation import (
     activatable_skills,
     available_skills,

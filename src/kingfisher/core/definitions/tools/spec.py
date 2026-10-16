@@ -15,7 +15,8 @@ from kingfisher.core.access.capabilities import (
     narrowed,
     refuse_unoffered,
 )
-from kingfisher.core.access.source_ids import jointly, reaches, zoned
+from kingfisher.core.access.reach import reaches
+from kingfisher.core.access.source_ids import jointly, zoned
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence

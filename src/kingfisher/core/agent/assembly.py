@@ -25,7 +25,7 @@ from kingfisher.core.access.capabilities import (
     Selection,
     refuse_ungranted_models,
 )
-from kingfisher.core.access.source_ids import offers
+from kingfisher.core.access.reach import offers
 from kingfisher.core.agent.activation import (
     _activated_subagents,
     _private_skills,

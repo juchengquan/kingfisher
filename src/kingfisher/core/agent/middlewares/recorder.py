@@ -15,7 +15,8 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
-from kingfisher.core.access.source_ids import Audience, jointly, listed, stated, unlisted
+from kingfisher.core.access.reach import stated
+from kingfisher.core.access.source_ids import Audience, jointly, listed, unlisted
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.definitions.tools.spec import split_reference
 from kingfisher.core.layout import TOOL_RESULTS_ROUTE
