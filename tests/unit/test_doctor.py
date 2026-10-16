@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher import LocalSessions, seed
-from kingfisher.cli import health
+from kingfisher.cli import health, health_isolation
 from kingfisher.cli.__main__ import main
 from kingfisher.cli.health import examine, worst
 from kingfisher.core.inventory import inventory
@@ -1093,9 +1093,9 @@ def test_an_unconfined_shell_is_told_what_this_kernel_could_do(cfg, monkeypatch)
     """
     from dataclasses import replace
 
-    monkeypatch.setattr(health.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(health.platform, "release", lambda: "6.12.0")
-    monkeypatch.setattr(health.confinement, "landlock_abi", lambda: 6)
+    monkeypatch.setattr(health_isolation.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(health_isolation.platform, "release", lambda: "6.12.0")
+    monkeypatch.setattr(health_isolation.confinement, "landlock_abi", lambda: 6)
 
     check = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"]
 
@@ -1109,9 +1109,9 @@ def test_a_kernel_below_the_full_ruleset_is_told_it_is_below(cfg, monkeypatch):
     """
     from dataclasses import replace
 
-    monkeypatch.setattr(health.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(health.platform, "release", lambda: "6.1.0")
-    monkeypatch.setattr(health.confinement, "landlock_abi", lambda: 4)
+    monkeypatch.setattr(health_isolation.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(health_isolation.platform, "release", lambda: "6.1.0")
+    monkeypatch.setattr(health_isolation.confinement, "landlock_abi", lambda: 4)
 
     remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
 
@@ -1125,9 +1125,9 @@ def test_a_kernel_with_no_landlock_is_not_offered_one(cfg, monkeypatch):
     """
     from dataclasses import replace
 
-    monkeypatch.setattr(health.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(health.platform, "release", lambda: "5.10.0")
-    monkeypatch.setattr(health.confinement, "landlock_abi", lambda: None)
+    monkeypatch.setattr(health_isolation.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(health_isolation.platform, "release", lambda: "5.10.0")
+    monkeypatch.setattr(health_isolation.confinement, "landlock_abi", lambda: None)
 
     remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
 
@@ -1141,14 +1141,14 @@ def test_a_kernel_that_can_fence_is_told_what_is_missing_rather_than_to_wait(cfg
     """
     from dataclasses import replace
 
-    monkeypatch.setattr(health.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(health.platform, "release", lambda: "6.12.0")
-    monkeypatch.setattr(health.confinement, "landlock_abi", lambda: 6)
-    monkeypatch.setattr(health.confinement, "landlock_ready", lambda: False)
+    monkeypatch.setattr(health_isolation.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(health_isolation.platform, "release", lambda: "6.12.0")
+    monkeypatch.setattr(health_isolation.confinement, "landlock_abi", lambda: 6)
+    monkeypatch.setattr(health_isolation.confinement, "landlock_ready", lambda: False)
     # Named rather than inherited from the machine. "Not ready" has two causes now,
     # and on a Linux runner with the extra installed this would otherwise assert
     # against the other one -- green here, red in CI.
-    monkeypatch.setattr(health.confinement, "sandlock_minimum", lambda: None)
+    monkeypatch.setattr(health_isolation.confinement, "sandlock_minimum", lambda: None)
 
     remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
 
@@ -1161,10 +1161,10 @@ def test_a_kernel_ready_to_fence_is_told_the_one_setting_that_turns_it_on(cfg, m
     """`off` on a host with Landlock and `sandlock` both in place is one setting away."""
     from dataclasses import replace
 
-    monkeypatch.setattr(health.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(health.platform, "release", lambda: "6.12.0")
-    monkeypatch.setattr(health.confinement, "landlock_abi", lambda: 6)
-    monkeypatch.setattr(health.confinement, "landlock_ready", lambda: True)
+    monkeypatch.setattr(health_isolation.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(health_isolation.platform, "release", lambda: "6.12.0")
+    monkeypatch.setattr(health_isolation.confinement, "landlock_abi", lambda: 6)
+    monkeypatch.setattr(health_isolation.confinement, "landlock_ready", lambda: True)
 
     remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
 
@@ -1181,11 +1181,11 @@ def test_the_warning_and_the_remedy_name_the_same_missing_piece(cfg, monkeypatch
 
     from kingfisher.plugins.sessions.sandbox import bubblewrap
 
-    monkeypatch.setattr(health.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(health.platform, "release", lambda: "6.12.0")
-    monkeypatch.setattr(health.confinement, "landlock_abi", lambda: 6)
-    monkeypatch.setattr(health.confinement, "landlock_ready", lambda: False)
-    monkeypatch.setattr(health.confinement, "sandlock_minimum", lambda: None)
+    monkeypatch.setattr(health_isolation.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(health_isolation.platform, "release", lambda: "6.12.0")
+    monkeypatch.setattr(health_isolation.confinement, "landlock_abi", lambda: 6)
+    monkeypatch.setattr(health_isolation.confinement, "landlock_ready", lambda: False)
+    monkeypatch.setattr(health_isolation.confinement, "sandlock_minimum", lambda: None)
     monkeypatch.setattr(bubblewrap, "bubblewrap_available", lambda: False)
 
     check = {c.name: c for c in examine(replace(cfg, shell_sandbox="auto"))}["shell"]
@@ -1204,14 +1204,14 @@ def test_a_confined_shell_names_what_is_confining_it(monkeypatch):
     """
     from kingfisher.plugins.sessions.sandbox.confinement import Confinement, _unwrapped
 
-    assert health._mechanism(Confinement(wrap=lambda c: c, mechanism="sandbox-exec")) == (
+    assert health_isolation._mechanism(Confinement(wrap=lambda c: c, mechanism="sandbox-exec")) == (
         "sandbox-exec"
     )
 
     # And bubblewrap says more than its name, because `auto` reaching it means
     # the shell lost its network as well as its reach. An operator whose skill
     # suddenly cannot download anything should find the reason here.
-    said = health._mechanism(Confinement(wrap=_unwrapped, mechanism="bubblewrap"))
+    said = health_isolation._mechanism(Confinement(wrap=_unwrapped, mechanism="bubblewrap"))
     assert "bubblewrap" in said
     assert "no network" in said
 
@@ -1232,7 +1232,7 @@ def test_a_supplied_local_runner_is_named_beside_the_mechanism():
     """
     from kingfisher.plugins.sessions.sandbox.confinement import Confinement
 
-    said = health._mechanism(
+    said = health_isolation._mechanism(
         Confinement(wrap=lambda c: c, mechanism="sandbox-exec", supplied=True)
     )
 
@@ -1357,7 +1357,9 @@ def _fenced_by(monkeypatch, mechanism):
     from kingfisher.plugins.sessions.sandbox.confinement import Confinement
 
     seen = Confinement(wrap=lambda command: command, mechanism=mechanism)
-    monkeypatch.setattr(health, "shell_confinement", lambda cfg, **kw: seen)
+    # Both readers: the keys-file checks and the session-paths checks each ask.
+    for module in (health, health_isolation):
+        monkeypatch.setattr(module, "shell_confinement", lambda cfg, **kw: seen)
 
 
 def _row(checks, name):
@@ -1654,7 +1656,7 @@ def _confined_as(monkeypatch, **seen):
     from kingfisher.plugins.sessions.sandbox.confinement import Confinement
 
     confined = Confinement(wrap=lambda command: command, **seen)
-    monkeypatch.setattr(health, "shell_confinement", lambda cfg, **kw: confined)
+    monkeypatch.setattr(health_isolation, "shell_confinement", lambda cfg, **kw: confined)
 
 
 @pytest.mark.parametrize(
