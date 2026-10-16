@@ -79,6 +79,7 @@ def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
     )
     _refuse_what_did_not_land(model, adapter, profile, endpoint)
     _refuse_an_output_reservation_that_fills_the_window(model, profile)
+    _refuse_a_clearing_mark_the_summarizer_reaches_first(model, profile)
     return model
 
 
@@ -129,6 +130,77 @@ def _refuse_an_output_reservation_that_fills_the_window(
         f"it first, so every turn would be refused before it was sent. Lower max_tokens "
         f"in models.yaml -- it is how much the model may *write*, not how much it may "
         f"read, and the window is this model's own, from the table its class ships with"
+    )
+    raise ConfigError(msg)
+
+
+def _reserved_output(model: BaseChatModel) -> int:
+    """The output tokens deepagents' `_input_budget` takes off the window for `model`."""
+    reserved = (
+        getattr(model, key, None)
+        for key in ("max_tokens", "max_completion_tokens", "max_output_tokens")
+    )
+    return max(
+        (one for one in reserved if isinstance(one, int) and not isinstance(one, bool)),
+        default=0,
+    )
+
+
+def summarizer_trigger(model: BaseChatModel) -> int:
+    """How large a conversation on `model` gets, in deepagents' approximate tokens,
+    before its summariser rewrites it.
+
+    Read from `compute_summarization_defaults`, which is what sizes the summariser on
+    every graph, and never from a number copied out of it: 85% of the window, or 170,000
+    tokens with none. It also summarises once a request is over its input budget, the
+    sooner of the two where `max_tokens` is above a tenth of the window.
+
+    Imported here rather than at the top, because a catalogue reading `ADAPTERS` should
+    not load deepagents to do it.
+    """
+    from deepagents.middleware.summarization import (  # noqa: PLC0415
+        compute_summarization_defaults,
+    )
+
+    kind, value = compute_summarization_defaults(model)["trigger"]
+    window = _advertised_window(model)
+    if kind != "fraction":
+        trigger = int(value)
+    elif window is None:
+        # A profile deepagents read as a window and `_advertised_window` refuses as
+        # one -- `max_input_tokens: 0` -- for which langchain triggers at one token.
+        return 1
+    else:
+        trigger = max(1, int(window * value))
+    if window is not None:
+        # Over the budget, not at it, so one past it.
+        trigger = min(trigger, int(window * FILLABLE) - _reserved_output(model) + 1)
+    return trigger
+
+
+def _refuse_a_clearing_mark_the_summarizer_reaches_first(
+    model: BaseChatModel, profile: ModelProfile
+) -> None:
+    """Refuse a `clear_results_at` at or past where this model's conversation is summarised.
+
+    Clearing runs before each model call and the summariser inside it, so a mark it
+    reaches first would never clear anything and say nothing. The highest mark this
+    lets through clears only just before summarising, which is the nearest thing to
+    off there is.
+    """
+    mark = profile.clear_results_at
+    if mark is None or mark < (trigger := summarizer_trigger(model)):
+        return
+    window = _advertised_window(model)
+    where = (
+        f"an advertised {window}-token input window"
+        if window is not None
+        else "no advertised input window"
+    )
+    msg = (
+        f"model {profile.model!r} sets clear_results_at: {mark}, and deepagents summarises "
+        f"its conversation at {trigger} tokens ({where}), before clearing would start. "
+        f"Lower it below {trigger} in models.yaml, or leave it out for the default"
     )
     raise ConfigError(msg)
 

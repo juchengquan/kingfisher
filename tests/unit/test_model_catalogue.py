@@ -61,6 +61,42 @@ def loaded(tmp_path, body: str = GOOD, environ=None):
 # -- what it reads ---------------------------------------------------------
 
 
+def test_an_entry_may_say_where_clearing_starts_and_it_is_never_sent(tmp_path):
+    """Read off the entry onto the profile, and nowhere into the chat class: a key that
+    parsed and was dropped would leave every model on the default with nothing saying so,
+    and one passed as a keyword is refused by every class there is."""
+    body = GOOD.replace(
+        "  main-model:\n    endpoint: gateway\n",
+        "  main-model:\n    endpoint: gateway\n    clear_results_at: 40000\n",
+    )
+    models = loaded(tmp_path, body).models
+
+    assert models["main-model"].clear_results_at == 40_000
+    assert models["tuned"].clear_results_at is None
+    assert "clear_results_at" not in models["main-model"].kwargs()
+
+
+@pytest.mark.parametrize("written_as", ["lots", "0", "-1", "true", "1.5"])
+def test_a_clearing_mark_that_is_no_count_of_tokens_is_refused(tmp_path, written_as):
+    """Not a mark at all: a zero would clear on every call, and `true` would read as one."""
+    body = GOOD.replace(
+        "  main-model:\n    endpoint: gateway\n",
+        f"  main-model:\n    endpoint: gateway\n    clear_results_at: {written_as}\n",
+    )
+
+    with pytest.raises(ConfigError, match="'main-model': clear_results_at is"):
+        loaded(tmp_path, body)
+
+
+def test_a_clearing_mark_under_extra_is_refused(tmp_path):
+    """Under `extra` it would be handed to the chat class as a keyword, beside the mark
+    this format reads, which is the collision `extra` already refuses."""
+    body = GOOD.replace("      reasoning_effort: high\n", "      clear_results_at: 40000\n")
+
+    with pytest.raises(ConfigError, match="names clear_results_at under 'extra'"):
+        loaded(tmp_path, body)
+
+
 def test_it_reads_endpoints_models_and_the_default(tmp_path):
     catalogue = loaded(tmp_path)
     endpoints, models, default = catalogue.endpoints, catalogue.models, catalogue.default

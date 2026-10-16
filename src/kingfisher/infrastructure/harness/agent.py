@@ -63,6 +63,7 @@ from kingfisher.infrastructure.harness.kinds.tools import (
     _resolve_tools,
     registered_tools,
 )
+from kingfisher.infrastructure.harness.middlewares.clearing import ResultClearing, high_mark
 from kingfisher.infrastructure.harness.middlewares.narrowing import (
     DeclaredSubagentsOnly,
     NarrowedSkills,
@@ -250,18 +251,19 @@ def _wanted_endpoints(
 
 def _running(
     agent: AgentSpec | None, cfg: Config, endpoints: Selection, injected: Any
-) -> Any:
-    """The model instance this agent's graph is built on.
+) -> tuple[Any, int | None]:
+    """The model instance this agent's graph is built on, and the `clear_results_at` of
+    the entry that built it -- `None` for a model the deployment passed in, which has no
+    entry, and for one that sets none.
 
-    It returned the model *id* beside the instance until `distinct` went. The id was
-    what a subagent refusing to match its caller was measured against, and nothing
-    tracks the caller chain any more -- `indistinct` still reports, and has always
-    compared against the deployment's default rather than the caller.
+    The entry is looked up by the name `model_object` builds from, so the mark is the
+    one written beside the model this graph runs and not the default's.
     """
-    if agent is None:
-        return injected or build_model(*cfg.models.resolve())
-    mine = model_object(agent, cfg, endpoints=endpoints)
-    return injected or mine or build_model(*cfg.models.resolve())
+    mine = None if agent is None else model_object(agent, cfg, endpoints=endpoints)
+    if injected is not None:
+        return injected, None
+    profile, endpoint = cfg.models.resolve(None if agent is None else agent.wanted)
+    return mine or build_model(profile, endpoint), profile.clear_results_at
 
 
 def _model_named(written: str, subject: str, cfg: Config, endpoints: Selection) -> Any:
@@ -430,7 +432,17 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         audiences = Audiences.of(definition) if cfg.access is not None else None
         return Recorder(ledger, backend, audiences, cfg.layout.tool_results_route)
 
+    running, mark = _running(agent, cfg, capabilities.endpoints, model)
     middleware: list[Any] = [
+        # The agent's own and no subagent's, and only where a turn keeps the ledger
+        # whose rows its handles name. First, so the request it measures is the one
+        # deepagents' summariser counted, before anything here adds to the prompt or
+        # narrows the tools.
+        *(
+            ()
+            if ledger is None
+            else (ResultClearing(ledger, high_mark(running, mark), cfg.layout.offloads_route),)
+        ),
         TodoListMiddleware(),
         *tool_guards(guarded, paths, recording(agent), cfg.layout, backend),
     ]
@@ -513,8 +525,6 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         # `allowed_decisions` default is all four -- `edit` included, which is
         # narrowed where a pause is read rather than here, so one place decides it.
         extras["interrupt_on"] = dict.fromkeys(gated, True)
-
-    running = _running(agent, cfg, capabilities.endpoints, model)
 
     def assemble(extra_tools: tuple[Any, ...]) -> Assembled:
         # One mapping, spent twice: it is what `create_deep_agent` is called with and

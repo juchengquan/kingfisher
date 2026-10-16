@@ -2972,11 +2972,84 @@ event and all, and that counts too, so nothing tries to tell the two apart.
 and `<artifact_delta>`. In kingfisher an artifact is a file under `/outputs` or
 `/memory`, as `RunResult.artifacts` lists, and the word would come to mean two things.
 
+**Older results and file text are cleared to handles once the agent's conversation is
+large.** Before each model call on the main agent, once the conversation reaches a high
+mark and a quarter of that could be freed, the oldest results with a saved copy, file
+tools' results and the text inside `write_file` and `edit_file` calls are replaced by
+handles until it is under half the mark. A recorded result keeps its summary, its size and
+its id, and names its file; a file tool's names the call that gets it back; a write or an
+edit keeps its id and `file_path` and says the file holds the current text. The latest
+batch of calls and the three most recent clearable results besides stay whole. Settled
+with the owner question by question, after four real sessions were measured.
+*(2026-10-16.)*
+
+It is not the handle for every result declined below: that replaced each result as it
+arrived, when most are needed at once. This touches only older ones, and only once the
+conversation is large.
+
+**The scope is what was resent, not what was saved.** Results with a ledger copy were
+14.7% of what four four-turn MiniMax sessions resent on each call; file reads were
+36.5%, and write and edit text 30.7%. Those have no copy, but they have the file, so
+their handle points at it and says it may have changed rather than at a snapshot, which
+would be a second store to write and sweep. Inline `execute` scripts, what the user and
+the agent said, `task` answers and failed results stay whole: the first three exist
+nowhere else, and a failure is what stops the same call being made again. The
+transcript keeps no status, so a replayed failure is known by its wording -- deepagents'
+`Error:`, its patched call that never finished, a non-zero exit.
+
+**`before_model`, replacing in place, writing nothing.** deepagents' summariser counts
+inside `wrap_model_call`, so a change made there lands after it decided and changes one
+request; only `before_model` changes the conversation it counts, which is also the one
+the transcript is written from. Each message keeps its id and position, because the
+summariser's cut is an index into that list. It writes no file, so reading a handle back
+cannot start another pass, and a handle is never cleared again: read as if it were what
+it replaced, an offloaded result's was pointed at the copy the turn's sweep removes.
+
+**An offloaded result is named by a search for its id, not by a path.** deepagents names
+its copy after the call id, with no turn in the name, and a later call with the same id
+overwrites it, so a path would name another call's result where a search finds nothing.
+Telling one apart needs no listing: a row the ledger already pointed there, or this
+turn's result whose stub is shorter than what the recorder kept. A tool that offloads its
+own output hands the recorder the stub, and is named by our copy, which holds it.
+
+**The marks.** The high mark is the model entry's `clear_results_at` as written, or else
+the smaller of 64,000 tokens and half the summariser's trigger -- read from
+`compute_summarization_defaults` and the input budget, never copied, so a small window
+still clears first. The low mark is half the high; a pass needs a quarter of it
+clearable, with nothing kept between calls. A simulation replaying the 372 model calls of
+those sessions chose them: at 64k, four passes, input tokens 72% and transcripts 60% of a
+run without clearing, and 82% of the cost at Anthropic's cache prices, since each pass
+costs a re-cache of everything after the earliest message it touched. 48k fired seven
+times, once on a session's last call, which then cost 116%. Keeping two, three or five
+recent results made no difference there. The guard changed nothing from 32k up, and is
+what stops a pass on every call once what can never be cleared nears the low mark: at a
+20k mark one session fired 40 times without it and 12 with it. The count includes the
+system prompt and tools as the last call was sent, which `before_model` cannot see, so a
+turn's first call counts the conversation alone.
+
+**One setting, and no flag and no off switch.** The trigger moves with the model's
+window, so a mark beside the model is where a deployment would want to say it, and a
+flag would be a second place to look. A mark at or past the summariser's trigger is
+refused when the model is built, since clearing would never come first; the highest
+allowed clears only just before summarising, which is the nearest thing to off. The
+summariser also fires on the last reply's reported usage, which this does not read, so
+a mark right under the trigger can still lose to that. A model the deployment passes in
+has no entry and takes the default. The ledger is unchanged: it records what the tools
+returned, and what was cleared is in the transcript.
+
+**Still open: the summariser re-runs every turn once past its trigger.** Its event is in
+state the next turn's graph is not given, and the transcript is the whole conversation,
+so each turn summarises again and appends the same history to its file once more. The
+fix designed writes the summary and the messages after its cut as the transcript.
+Clearing makes the trigger rare on a large window; on a small one it is the next thing to
+fix.
+
 **Not built, and still open.**
 
 - **A handle in place of a large result's stub.** A handle in place of *every* result,
   as the plan has it, was declined: most results are needed at once, and reading each
-  back would double the round trips of every search.
+  back would double the round trips of every search. Older ones are cleared once the
+  conversation is large, above.
 - **Reusing a result for an identical call within a freshness window, declared
   supersession, and "derived from" links.** Each needs information nothing supplies.
 - **Regeneration, which gets a design of its own:** rewinding or forking, what becomes
