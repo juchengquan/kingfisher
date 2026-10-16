@@ -10,7 +10,7 @@ from kingfisher import (
     ensure_definitions,
     seed,
 )
-from kingfisher.config import ConfigError
+from kingfisher.core.config import ConfigError
 from tests.conftest import repository_root
 from tests.integration.seed_example import main, seed_definitions
 

@@ -12,7 +12,7 @@ import pytest
 
 from kingfisher import LocalSessions
 from kingfisher.core.interfaces import CommandResult
-from kingfisher.layout import HARNESS, OUTPUTS
+from kingfisher.core.layout import HARNESS, OUTPUTS
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.sandbox.confinement import (

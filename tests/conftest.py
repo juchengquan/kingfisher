@@ -13,10 +13,10 @@ import yaml
 from dotenv import load_dotenv
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
-from kingfisher.config import Config, Endpoint, Landing, ModelProfile, Models, WireFormat
 from kingfisher.core.agent.models import WIRE_FORMATS
+from kingfisher.core.config import Config, Endpoint, Landing, ModelProfile, Models, WireFormat
 from kingfisher.core.session.steps import drive
-from kingfisher.infrastructure.workspace import ensure_definitions, ensure_layout
+from kingfisher.core.workspace import ensure_definitions, ensure_layout
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.unit.scripted import Scripted
 

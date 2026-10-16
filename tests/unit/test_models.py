@@ -10,14 +10,14 @@ from typing import TYPE_CHECKING
 import pytest
 from deepagents.middleware.summarization import compute_summarization_defaults
 
-from kingfisher.config import ConfigError, Endpoint, ModelProfile, WireFormat
 from kingfisher.core.agent.models import (
     FILLABLE,
     WIRE_FORMATS,
     build_model,
     summarizer_trigger,
 )
-from kingfisher.infrastructure.model_catalogue import load
+from kingfisher.core.config import ConfigError, Endpoint, ModelProfile, WireFormat
+from kingfisher.core.model_catalogue import load
 from tests.conftest import repository_root
 
 if TYPE_CHECKING:
@@ -567,7 +567,7 @@ def test_the_shipped_minimax_row_sizes_the_summarizer_from_its_window(tmp_path):
     """
     keys = tmp_path / "keys.yaml"
     keys.write_text("minimax: sk-not-real\nopenai: sk-not-real\n", encoding="utf-8")
-    template = repository_root() / "src" / "kingfisher" / "templates" / "models.yaml.example"
+    template = repository_root() / "src/kingfisher/core/templates/models.yaml.example"
     models = load(template, {}, keys_file=keys)
 
     model = build_model(*models.resolve("MiniMax-M3"))
@@ -585,7 +585,7 @@ def test_the_shipped_minimax_reservation_leaves_the_summarizer_to_its_window(tmp
     """
     keys = tmp_path / "keys.yaml"
     keys.write_text("minimax: sk-not-real\nopenai: sk-not-real\n", encoding="utf-8")
-    template = repository_root() / "src" / "kingfisher" / "templates" / "models.yaml.example"
+    template = repository_root() / "src/kingfisher/core/templates/models.yaml.example"
     models = load(template, {}, keys_file=keys)
 
     model = build_model(*models.resolve("MiniMax-M3"))

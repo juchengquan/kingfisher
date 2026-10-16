@@ -15,9 +15,9 @@ from kingfisher.core.agent.prompting import (
     render_system_prompt,
     system_prompt,
 )
+from kingfisher.core.layout import INPUTS, OUTPUTS, SCRATCH, TOOL_RESULTS_ROUTE, Layout
 from kingfisher.core.session.store import entry_id
 from kingfisher.core.session.turn import ledger_delta, ledger_index
-from kingfisher.layout import INPUTS, OUTPUTS, SCRATCH, TOOL_RESULTS_ROUTE, Layout
 from tests.conftest import FakeToolCallingModel, a_subagent
 
 

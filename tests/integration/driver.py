@@ -32,7 +32,7 @@ from evals.checks import check_result
 from evals.seed import seed_sample_data, seed_sample_skill
 from evals.task import SMOKE_TASK
 
-# Only the light end of the package at module scope. `kingfisher.infrastructure`
+# Only the light end of the package at module scope. `kingfisher.core.agent`
 # reaches deepagents, which costs about a second in provider SDKs, and `--help`
 # should not pay for a model it will never build.
 from kingfisher import (
@@ -42,13 +42,14 @@ from kingfisher import (
     config_from_env,
     paths_from_env,
 )
-from kingfisher.config import Config
 from kingfisher.core.access.capabilities import ALL, CapabilityError, all_but
+from kingfisher.core.config import Config
 from kingfisher.core.definitions import seeding
+from kingfisher.core.definitions.seeding import SEED_HINT
+from kingfisher.core.layout import OUTPUTS
 from kingfisher.core.session.model import sessions_root
 from kingfisher.core.session.runlog import usage_of
-from kingfisher.infrastructure.workspace import SEED_HINT, ensure_layout
-from kingfisher.layout import OUTPUTS
+from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.presentation.cli.progress import show
 

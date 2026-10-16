@@ -94,7 +94,7 @@ record of it, and it stays however short the rest gets.
 
 **Layering is enforced, not remembered.** `tests/unit/test_architecture.py` parses
 imports against `THIRD_PARTY`, one entry per area, deny by default: the flat
-modules of `core/` take nothing, and the agent runtime is reachable from
+modules of `core/` take only `yaml`, and the agent runtime is reachable from
 `core/agent/`, which builds the graph, from `core/session/`, which runs a turn on
 it, from `plugins/`, which builds kingfisher's own sessions on it, and from the two
 kinds that must name its types --

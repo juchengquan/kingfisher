@@ -11,10 +11,8 @@ red: the paragraph above has named the two ever since, contradicting a sentence 
 line up in the same docstring. A name a reader can grep beats a number nobody
 re-counts.
 
-Here rather than under `infrastructure/` because a kind may not name a layer. That is
-the whole of the reason -- by subject this is as much the workspace's business as the
-kinds', which is why the two scans it used to sit beside went the other way, to the
-seeding that is their only reader.
+Here beside the kinds because they are what reads it, though by subject it is as
+much the workspace's business as theirs.
 """
 
 from __future__ import annotations

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from kingfisher.core.agent.host_paths import HOST_ROOTS, HostPathError
-from kingfisher.layout import DEFAULT_LAYOUT, INPUTS_ROUTE, OUTPUTS_ROUTE, Layout
+from kingfisher.core.layout import DEFAULT_LAYOUT, INPUTS_ROUTE, OUTPUTS_ROUTE, Layout
 
 #: Which arguments name a file. A convention `tools.md` documents and tool authors
 #: write to, so widening it is a line here and a sentence there, rather than a design

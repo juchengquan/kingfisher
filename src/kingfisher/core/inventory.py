@@ -6,7 +6,6 @@ from collections.abc import Callable, Container, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
-from kingfisher.config import Config, ConfigError
 from kingfisher.core.access import checks as access
 from kingfisher.core.access.capabilities import CapabilityError, unoffered
 from kingfisher.core.access.source_ids import (
@@ -19,6 +18,7 @@ from kingfisher.core.access.source_ids import (
     reaches,
     with_datazone,
 )
+from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.catalogue import (
     Definitions,

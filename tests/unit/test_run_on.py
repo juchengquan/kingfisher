@@ -8,10 +8,10 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import backend_at
-from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.models import WIRE_FORMATS
+from kingfisher.core.config import Endpoint, ModelProfile
 from kingfisher.core.definitions.subagents.spec import RunOn
 from kingfisher.core.request import Request
 from tests.conftest import FakeToolCallingModel, subagents_dir

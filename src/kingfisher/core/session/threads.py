@@ -9,7 +9,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.config import DEFAULT_THREAD_POOL_SIZE, ConfigError
+from kingfisher.core.config import DEFAULT_THREAD_POOL_SIZE, ConfigError
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

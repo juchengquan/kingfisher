@@ -34,8 +34,8 @@ from kingfisher.core.definitions.tools.spec import Found, Offering, select, spli
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from kingfisher.config import Config
     from kingfisher.core.agent.middlewares.recorder import Recorder
+    from kingfisher.core.config import Config
     from kingfisher.core.definitions.skills.registry import SkillRegistry
 
 

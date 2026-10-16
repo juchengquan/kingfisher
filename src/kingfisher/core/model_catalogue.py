@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from kingfisher.config import (
+from kingfisher.core.agent.models import WIRE_FORMATS
+from kingfisher.core.config import (
     ConfigError,
     Endpoint,
     MissingCredentialsWarning,
@@ -17,10 +18,9 @@ from kingfisher.config import (
     Models,
     WireFormat,
 )
-from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.definitions import fields
-from kingfisher.infrastructure.wiring import store_named
-from kingfisher.infrastructure.workspace import EXAMPLE
+from kingfisher.core.wiring import store_named
+from kingfisher.core.workspace import EXAMPLE
 
 if TYPE_CHECKING:
     from pathlib import Path

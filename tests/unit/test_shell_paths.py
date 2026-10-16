@@ -22,7 +22,7 @@ from kingfisher.core.agent.middlewares.shell_paths import (
     missed,
 )
 from kingfisher.core.agent.prompting import execute_line, kingfishers_shell
-from kingfisher.layout import Layout
+from kingfisher.core.layout import Layout
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from tests.conftest import an_agent, start, subagents_dir
 from tests.unit.scripted import Scripted

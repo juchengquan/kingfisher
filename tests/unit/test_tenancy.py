@@ -102,7 +102,7 @@ def test_grants_are_unrestricted_by_default(cfg):
 
 def _claim(cfg, session_id: str) -> Path:
     """One session's turn slot, which lives inside the session it guards."""
-    from kingfisher.layout import CLAIM, HARNESS
+    from kingfisher.core.layout import CLAIM, HARNESS
 
     return cfg.workspace / "sessions" / session_id / HARNESS / CLAIM
 
@@ -171,7 +171,7 @@ def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
     safe there is the pair of denials `.harness` carries, so that is what this
     asserts instead of a location.
     """
-    from kingfisher.layout import HARNESS, denied_read_scopes, denied_scopes
+    from kingfisher.core.layout import HARNESS, denied_read_scopes, denied_scopes
 
     session = start(cfg, "s")
     assert LocalSessions().claim(cfg, session, stale_after=3600)

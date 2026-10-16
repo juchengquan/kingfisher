@@ -8,10 +8,10 @@ from typing import Any
 
 import pytest
 
-from kingfisher.config import ConfigError, Landing, WireFormat
 from kingfisher.core.agent.models import WIRE_FORMATS, build_model
+from kingfisher.core.config import ConfigError, Landing, WireFormat
 from kingfisher.core.environment import config_from_env
-from kingfisher.infrastructure.model_catalogue import load, wire_formats
+from kingfisher.core.model_catalogue import load, wire_formats
 
 HERE = __name__
 GUIDE = Path(__file__).parents[2] / "docs" / "guides" / "configuration.md"

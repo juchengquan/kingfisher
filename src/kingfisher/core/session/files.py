@@ -13,9 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from kingfisher.core.layout import Layout
 from kingfisher.core.result import ArtifactError
 from kingfisher.core.session.steps import Steps, changing, on_host, reading
-from kingfisher.layout import Layout
 
 # Deliberately not importing `ARTIFACT_DIRS` or `INPUTS_ROUTE`: both edges here are a
 # caller's, and a deployment renaming a session folder renames them. Reading the module

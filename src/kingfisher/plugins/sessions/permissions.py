@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 
-from kingfisher.layout import INPUTS, SCRATCH
+from kingfisher.core.layout import INPUTS, SCRATCH
 
 
 def _drop_write_bits(path: Path) -> None:

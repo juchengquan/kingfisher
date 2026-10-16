@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.layout import SAVED_RESULTS
+from kingfisher.core.layout import SAVED_RESULTS
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.sandbox.bubblewrap import (
     BubblewrapRunner,

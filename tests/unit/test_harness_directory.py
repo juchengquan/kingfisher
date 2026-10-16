@@ -19,9 +19,9 @@ from langchain_core.messages import AIMessage
 from kingfisher import LocalSessions
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.layout import CLAIM, HARNESS, PINNED_AGENT
 from kingfisher.core.request import Request
-from kingfisher.infrastructure.workspace import ensure_layout
-from kingfisher.layout import CLAIM, HARNESS, PINNED_AGENT
+from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeToolCallingModel, pin, start
 
@@ -180,7 +180,7 @@ def test_the_pin_and_the_claim_go_with_the_session(cfg):
 def test_the_harness_owned_directory_is_protected_too(cfg):
     """The profile lives in it, and after `TMPDIR` moved out nothing in it is the
     agent's -- so it is denied as a directory rather than as one named file."""
-    from kingfisher.layout import HARNESS_OWNED
+    from kingfisher.core.layout import HARNESS_OWNED
     from kingfisher.plugins.sessions.sandbox import confinement
 
     protected = confinement.protected_roots(

@@ -41,7 +41,7 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kingfisher.layout import HARNESS, INPUTS, SAVED_RESULTS
+from kingfisher.core.layout import HARNESS, INPUTS, SAVED_RESULTS
 from kingfisher.plugins.sessions.sandbox.linux import MAX_OUTPUT_BYTES, outcome, present
 
 if TYPE_CHECKING:

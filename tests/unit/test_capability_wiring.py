@@ -25,7 +25,7 @@ from kingfisher.core.agent.assembly import (
 from kingfisher.core.agent.backend import skills_sources
 from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.core.agent.prompting import memory_guidelines
-from kingfisher.layout import MEMORY
+from kingfisher.core.layout import MEMORY
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import (
     FakeToolCallingModel,

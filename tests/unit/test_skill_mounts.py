@@ -9,11 +9,11 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.config import ConfigError
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.backend import skills_sources
 from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills
+from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skills import registry as skill_registry
 from kingfisher.core.environment import paths_from_env

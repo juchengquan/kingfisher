@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.core.access.capabilities import ALL, Capabilities
 from kingfisher.core.agent.activation import indistinct_subagents
 from kingfisher.core.agent.models import WIRE_FORMATS
+from kingfisher.core.config import Endpoint, ModelProfile
 from kingfisher.core.definitions.subagents.rules import resolved_model
 from kingfisher.core.definitions.subagents.spec import RunOn
 from kingfisher.core.request import Request

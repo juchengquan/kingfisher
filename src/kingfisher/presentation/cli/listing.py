@@ -16,9 +16,9 @@ from kingfisher.core.access.capabilities import ALL
 # a refusal prints is the block a listing prints, so a name two files define reads the
 # same in both. Shared for that reason, not promised for it.
 from kingfisher.core.access.source_ids import AUDIENCED, Audience, spell
+from kingfisher.core.definitions.seeding import SEED_HINT
 from kingfisher.core.definitions.skills.catalogue import SKILL_LAYOUT
 from kingfisher.core.definitions.tools.spec import offered, split_reference
-from kingfisher.infrastructure.workspace import SEED_HINT
 
 
 def _from(source: str | None, expected: str) -> str:

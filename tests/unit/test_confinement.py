@@ -23,8 +23,8 @@ from pathlib import Path
 import pytest
 
 from kingfisher.core.interfaces import CommandResult
-from kingfisher.infrastructure.workspace import ensure_layout
-from kingfisher.layout import DEFAULT_LAYOUT, HARNESS, INPUTS_ROUTE, SAVED_RESULTS, Layout
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, INPUTS_ROUTE, SAVED_RESULTS, Layout
+from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.sandbox import confinement

@@ -222,7 +222,8 @@ One pull request each, off `main` once the one before it has merged.
 15. Move the flat core, in two pull requests. First `application/` and `domain/`, with
     `ports` renamed `interfaces` and the environment reader `environment`. *(Landed.)*
     Then the root's `config` and `layout`, and the rest of `infrastructure/`, its
-    `workspace` package dissolved.
+    `workspace` package dissolved into `backing` and `workspace` with `templates/`
+    beside them. *(Landed.)*
 16. Move `cli/`.
 17. The new import rules, one `decisions.md` entry in place of the three this supersedes,
     `CLAUDE.md` and the guides, and this document deleted. The rules include whatever

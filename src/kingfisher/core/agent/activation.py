@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 
 from deepagents import FilesystemPermission
 
-from kingfisher.config import ConfigError
 from kingfisher.core.access.capabilities import (
     ALL,
     Capabilities,
@@ -19,6 +18,7 @@ from kingfisher.core.access.capabilities import (
 from kingfisher.core.access.source_ids import handed_work_by, within_reach
 from kingfisher.core.agent.backend import bundled_skill_mounts
 from kingfisher.core.agent.kinds.subagents import indistinct
+from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skills import registry as skill_registry
 from kingfisher.core.definitions.skills.registry import SkillRegistry
@@ -28,12 +28,12 @@ from kingfisher.core.definitions.subagents.rules import (
     resolved_model,
 )
 from kingfisher.core.definitions.subagents.spec import RunOn, SubagentSpec
-from kingfisher.layout import SKILLS_ROUTE
+from kingfisher.core.layout import SKILLS_ROUTE
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
-    from kingfisher.config import Config
+    from kingfisher.core.config import Config
     from kingfisher.core.definitions.agents.spec import AgentSpec
 
 

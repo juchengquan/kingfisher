@@ -5,12 +5,12 @@ from __future__ import annotations
 from importlib import resources
 from pathlib import Path
 
-from kingfisher.config import definition_roots_for
-from kingfisher.layout import LAYOUT_DIRS, MARKER, MARKER_TEXT
+from kingfisher.core.config import definition_roots_for
+from kingfisher.core.layout import LAYOUT_DIRS, MARKER, MARKER_TEXT
 
 #: Where the shipped templates sit, as an import path rather than a filesystem one -- an
 #: installed package is not in this repository's directory tree.
-TEMPLATES = "kingfisher.templates"
+TEMPLATES = "kingfisher.core.templates"
 
 
 #: The worked example of the one file a deployment *must* write. It lived at the
@@ -32,11 +32,6 @@ KEYS_EXAMPLE = "keys.yaml.example"
 
 #: The examples this package places.
 EXAMPLES = (EXAMPLE, KEYS_EXAMPLE)
-
-
-def is_new_workspace(workspace: Path) -> bool:
-    """True when this path has never been used as a workspace."""
-    return not (Path(workspace) / MARKER).exists()
 
 
 def ensure_layout(workspace: Path) -> Path:

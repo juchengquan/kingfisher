@@ -162,7 +162,7 @@ request.*
 
 - **The folder is `/scratchpad/tool_results/`**, where it was `/scratchpad/results/`.
   An entry's `path`, the rows of `.harness/ledger.jsonl` and the lists the model is
-  shown all name the new one. In `kingfisher.layout`, `RESULTS` and `RESULTS_ROUTE`
+  shown all name the new one. In `kingfisher.core.layout`, `RESULTS` and `RESULTS_ROUTE`
   are now `TOOL_RESULTS` and `TOOL_RESULTS_ROUTE`.
 - **A backend of your own** is asked for the same `upload_files`, `ls` and `delete`,
   under the new folder. Built on `backend_at`, there is nothing to do.
@@ -537,7 +537,7 @@ and was never read.
 |---|---|
 | `ensure_layout(workspace, authored=...)` made `agents`, `middlewares`, `skills`, `subagents` and `tools` in the workspace | It still does without `catalogue_roots=`. Pass `catalogue_roots=paths.catalogue_roots`, as the README now does, and each is made where it is read from. A `Config` has the same property, and `seed` passes it already. |
 | `Kingfisher(cfg, ...)` made all five in the workspace | Makes each where `cfg` reads it from, and none when given `catalogue=`: whoever staged that catalogue made its folders. |
-| `LAYOUT_DIRS` in `kingfisher.layout` named the five kinds beside `sessions` and `.kingfisher` | Names only `sessions` and `.kingfisher`, which are always in the workspace. |
+| `LAYOUT_DIRS` in `kingfisher.core.layout` named the five kinds beside `sessions` and `.kingfisher` | Names only `sessions` and `.kingfisher`, which are always in the workspace. |
 | `STARTER_AGENT` in `kingfisher.infrastructure.workspace` | `starter_agent(agents_dir)`, which names the directory it is given. Neither was exported from `kingfisher`. |
 
 - **A folder an earlier start made in the workspace stays**, empty or not. If a

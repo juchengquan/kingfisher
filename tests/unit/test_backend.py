@@ -12,7 +12,7 @@ from kingfisher.core.agent.host_paths import (
     HostPathError,
     reject_host_path,
 )
-from kingfisher.layout import (
+from kingfisher.core.layout import (
     BUNDLED_SKILLS_ROUTE,
     OFFLOADS_ROUTE,
     ROUTES,
@@ -107,7 +107,7 @@ def test_every_route_the_layout_declares_is_one_the_backend_mounts(cfg, session_
 
     assert declared <= set(backend.routes), "declared in the layout, mounted nowhere"
     assert set(backend.routes) - generated == declared, (
-        "mounted by the builder, absent from kingfisher.layout.ROUTES -- add it there, "
+        "mounted by the builder, absent from kingfisher.core.layout.ROUTES -- add it there, "
         "or it has no deny rule and nothing says it exists"
     )
 

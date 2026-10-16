@@ -412,14 +412,14 @@ DEFAULT_LAYOUT = Layout()
 
 MARKER = f"{HARNESS_OWNED}/WORKSPACE"
 
-#: What the marker says. Nothing reads its contents -- `is_new_workspace` asks only
-#: whether the file exists -- so it is a bare identity line. It once carried a
-#: `layout N` number and `ensure_layout` refused a workspace laid out by an older one,
-#: because moving per-session state into the session made an old workspace go quiet and
-#: wrong rather than break. That refusal is gone while the layout is still being
-#: reshaped week to week and sessions are disposable; the version would ratchet on
-#: every change for a compatibility nobody wants yet. When workspaces outlive config
-#: churn, a fingerprint of the configurable names belongs here and a mismatch refused.
+#: What the marker says. Nothing reads its contents, so it is a bare identity line.
+#: It once carried a `layout N` number and `ensure_layout` refused a workspace laid
+#: out by an older one, because moving per-session state into the session made an
+#: old workspace go quiet and wrong rather than break. That refusal is gone while the
+#: layout is still being reshaped week to week and sessions are disposable; the
+#: version would ratchet on every change for a compatibility nobody wants yet. When
+#: workspaces outlive config churn, a fingerprint of the configurable names belongs
+#: here and a mismatch refused.
 MARKER_TEXT = "kingfisher workspace\n"
 
 AGENTS_SCAFFOLD = """\

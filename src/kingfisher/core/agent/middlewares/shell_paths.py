@@ -12,7 +12,7 @@ from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
 from kingfisher.core.agent.prompting import ShellPrompt, execute_line, kingfishers_shell
-from kingfisher.layout import DEFAULT_LAYOUT, SESSION_DIRS, Layout
+from kingfisher.core.layout import DEFAULT_LAYOUT, SESSION_DIRS, Layout
 
 EXECUTE = "execute"
 

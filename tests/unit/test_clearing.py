@@ -41,11 +41,11 @@ from kingfisher.core.agent.middlewares.recorder import (
 )
 from kingfisher.core.agent.models import summarizer_trigger
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
+from kingfisher.core.layout import HARNESS, OFFLOADS_ROUTE, TOOL_RESULTS_ROUTE, TRANSCRIPT_FILE
 from kingfisher.core.result import MAIN, LedgerEntry
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
 from kingfisher.core.session.transcript import from_json
-from kingfisher.layout import HARNESS, OFFLOADS_ROUTE, TOOL_RESULTS_ROUTE, TRANSCRIPT_FILE
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeToolCallingModel, an_agent, start, subagents_dir, tools_dir
 from tests.unit.scripted import Scripted

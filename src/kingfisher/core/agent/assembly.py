@@ -18,7 +18,6 @@ from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellB
 from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 from langchain.agents.middleware import TodoListMiddleware
 
-from kingfisher.config import DEFAULT_LAYOUT, Config
 from kingfisher.core.access.capabilities import (
     ALL,
     Capabilities,
@@ -74,12 +73,13 @@ from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.agent.tool_context import ToolContext
 from kingfisher.core.agent.tool_guards import guarded_tools, tool_guards
 from kingfisher.core.agent.usable_backend import refuse_unusable_backend
+from kingfisher.core.config import DEFAULT_LAYOUT, Config
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.spec import RunOn
 from kingfisher.core.definitions.tools.spec import Found, own_audiences
+from kingfisher.core.layout import Layout
 from kingfisher.core.session.model import sessions_root
-from kingfisher.layout import Layout
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence

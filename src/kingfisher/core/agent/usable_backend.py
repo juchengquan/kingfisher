@@ -20,8 +20,8 @@ from typing import Any
 from deepagents.backends import CompositeBackend
 from deepagents.backends.protocol import SandboxBackendProtocol
 
-from kingfisher.config import ConfigError
-from kingfisher.layout import denied_read_scopes, denied_scopes
+from kingfisher.core.config import ConfigError
+from kingfisher.core.layout import denied_read_scopes, denied_scopes
 
 
 def executes(backend: Any) -> bool:

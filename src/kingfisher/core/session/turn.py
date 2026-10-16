@@ -7,14 +7,14 @@ from dataclasses import dataclass
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.core.result import LedgerEntry, PendingDecision, RunEvent
 from kingfisher.core.session import runtime
-from kingfisher.layout import DEFAULT_LAYOUT, Layout
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from kingfisher.config import Config
+    from kingfisher.core.config import Config
     from kingfisher.core.session.store import KeptLedger
     from kingfisher.core.session.transcript import Message
 

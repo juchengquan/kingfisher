@@ -29,9 +29,9 @@ from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path, PurePosixPath
 
-from kingfisher.config import Config
+from kingfisher.core.config import Config
+from kingfisher.core.layout import HARNESS, HARNESS_OWNED, INPUTS, SANDBOX_PROFILE, SAVED_RESULTS
 from kingfisher.core.session.model import sessions_root
-from kingfisher.layout import HARNESS, HARNESS_OWNED, INPUTS, SANDBOX_PROFILE, SAVED_RESULTS
 
 #: `landlock_create_ruleset`, which is 444 on every architecture that has it --
 #: the three Landlock calls were added to the syscall table in one go rather
@@ -736,7 +736,7 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
         # The catalogue is instructions the agent follows, so a writable one made a
         # skill something the agent could rewrite for every later request, including
         # in the other deployments sharing it. Read at the tool level too, by the deny
-        # rule `kingfisher.layout` declares for this route; both are needed, because
+        # rule `kingfisher.core.layout` declares for this route; both are needed, because
         # the shell bypasses tool permissions entirely.
         protected=protected_roots(workspace, skills, definitions),
         # Resolved, because the profile matches real paths and a workspace under

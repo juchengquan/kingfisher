@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 
 from kingfisher import LocalSessions
-from kingfisher.config import ConfigError
+from kingfisher.core.config import ConfigError
 from kingfisher.core.service import Kingfisher
 from kingfisher.core.session import threads
 from tests.conftest import StubCheckpointer

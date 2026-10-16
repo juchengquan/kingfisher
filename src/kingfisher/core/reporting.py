@@ -20,7 +20,7 @@ from kingfisher.core.definitions.tools.spec import Offering, admitted, out_of_re
 from kingfisher.core.result import RunEvent
 
 if TYPE_CHECKING:
-    from kingfisher.config import Config
+    from kingfisher.core.config import Config
     from kingfisher.core.definitions.agents.spec import AgentSpec
 
 

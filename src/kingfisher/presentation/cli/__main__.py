@@ -38,6 +38,7 @@ from kingfisher import (
     paths_from_env,
     seed,
 )
+from kingfisher.core.access.source_ids import with_datazone
 
 # The names here the door does not carry. The command ships in the same
 # distribution as the library, so it may take one at the module defining it --
@@ -46,8 +47,7 @@ from kingfisher import (
 # used to say what a directory has none of; where a workspace keeps its
 # sessions; and the warning `doctor` says as a check instead.
 # Everything above is public and comes through the front door because it is.
-from kingfisher.config import MissingCredentialsWarning
-from kingfisher.core.access.source_ids import with_datazone
+from kingfisher.core.config import MissingCredentialsWarning
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.definitions.seeding import REMEDY, UNCONSULTED

@@ -21,15 +21,15 @@ from functools import lru_cache
 from importlib import resources
 from typing import TYPE_CHECKING, Protocol
 
-from kingfisher.config import ConfigError
-from kingfisher.layout import DEFAULT_LAYOUT, Layout
+from kingfisher.core.config import ConfigError
+from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 
 if TYPE_CHECKING:
-    from kingfisher.config import Config
+    from kingfisher.core.config import Config
 
 BASE_PROMPT = "system.md"
 
-#: `kingfisher.layout` and nothing heavier: the module stays clear of deepagents and the
+#: `kingfisher.core.layout` and nothing heavier: the module stays clear of deepagents and the
 #: provider SDKs its docstring is about, and `Layout` carries only strings.
 
 #: A `{{leaf}}` placeholder in the shipped markdown, filled with the layout's name for
