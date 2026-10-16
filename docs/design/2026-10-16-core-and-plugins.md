@@ -178,7 +178,7 @@ One pull request each, off `main` once the one before it has merged.
 
 1. This document, and the startup check. *(Landed.)*
 2. Delete the repository Protocols. *(Landed.)*
-3. `run()` and `stream()` require session backends, as `Kingfisher` does.
+3. `run()` and `stream()` require session backends, as `Kingfisher` does. *(Landed.)*
 4. Sessions: `SessionBackends` becomes `Sessions` and `backends=` becomes `sessions=`;
    `DefaultBackends` and `default_backends` become `LocalSessions`, with `backend_at`
    kept as its private builder; the turn lock moves onto it; `unprotected` becomes its

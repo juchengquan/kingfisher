@@ -195,6 +195,7 @@ def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
         run(
             Request("t", capabilities=Capabilities(subagents=("ghost",))),
             cfg=cfg,
+            backends=default_backends,
             checkpointer=StubCheckpointer(),
         )
 

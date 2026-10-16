@@ -369,9 +369,8 @@ places a request's inputs, collects what a turn left and takes the turn lock thr
 the session backends you pass — so a graph is refused without them, and one built on
 kingfisher's own passes `backends=default_backends`. Pass the ones that reach the
 sessions your graph's backend keeps: nothing can check that from outside a compiled
-graph. `run()` and `stream()` use `default_backends` when `backends` is left out,
-because they are conveniences over a *default* `Kingfisher` and that is what makes
-the one-liner a one-liner — except beside `graph=`, where they refuse the same way.
+graph. `run()` and `stream()` take `backends=` too, and refuse to run without it,
+with a graph or without.
 
 **What you return is also what a workspace tool is handed.** A tool that asks for
 it reaches this backend's file methods directly — behind the turn's permissions,

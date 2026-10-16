@@ -30,7 +30,7 @@ workspace catalogue, and what it says there is yours.
 A request then names what it wants:
 
 ```python
-from kingfisher import Capabilities, Request, run
+from kingfisher import Capabilities, Request, default_backends, run
 
 run(Request(
     task="Review the diff in /inputs/change.patch",
@@ -40,7 +40,7 @@ run(Request(
         skills=("code-review",),
         subagents=("reviewer",),
     ),
-))
+), backends=default_backends)
 ```
 
 `agent` is required; there is no default. Leaving a *capability* unset means
@@ -64,7 +64,7 @@ run(Request(
     agent="assistant",
     capabilities=Capabilities(subagents=("reviewer", "second-opinion"), models=("MiniMax-M2.5",)),
     run_on={"second-opinion": RunOn("MiniMax-M2.5")},
-))
+), backends=default_backends)
 ```
 
 **It is off until a deployment grants it, and granted per model name.** Every
