@@ -79,7 +79,7 @@ from kingfisher.infrastructure.sandbox.confinement import EXTERNAL
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.kinds.agents.spec import AgentError, AgentSpec
 from kingfisher.kinds.subagents.spec import RunOn
-from kingfisher.kinds.tools.spec import Found
+from kingfisher.kinds.tools.spec import Found, own_audiences
 from kingfisher.layout import Layout
 
 if TYPE_CHECKING:
@@ -412,6 +412,16 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     under_rules = PermittedBackend(backend, permissions)
     paths = SessionPaths(under_rules, sessions_root(cfg.workspace), cfg.layout)
 
+    # A bundle's tools as well as the catalogue's, since a subagent's calls are
+    # recorded too and a bundled tool may say who it admits.
+    own = (
+        own_audiences(
+            (*walked, *(one for bundle in roots.bundled_tools.values() for one in bundle.found))
+        )
+        if cfg.access is not None
+        else {}
+    )
+
     def recording(definition: object | None) -> Recorder | None:
         """A recorder for one graph, reading access off `definition`'s audiences.
 
@@ -427,7 +437,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         """
         if ledger is None:
             return None
-        audiences = Audiences.of(definition) if cfg.access is not None else None
+        audiences = Audiences.of(definition, own=own) if cfg.access is not None else None
         return Recorder(ledger, backend, audiences, cfg.layout.tool_results_route)
 
     middleware: list[Any] = [
@@ -570,6 +580,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             for n in activated
         ),
         in_reach=in_reach,
+        held=held,
     )
     # After the probe, because what a workspace offers is only knowable from an
     # assembled graph -- `builtin_tool_names` builds one to answer it, so asking it
@@ -658,7 +669,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                 # key a grant uses, which is what `bundled_tools` is keyed by,
                 # so a qualified `analysis/surveyor.yaml::surveyor` finds its
                 # bundle and a bare `surveyor` finds its own.
-                private=_private_tools(roots, name),
+                private=_private_tools(roots, name, held=held),
                 # Not behind the switch: a bundle is the subagent's own folder rather
                 # than the catalogue the switch is about, and the backend mounts its
                 # route either way -- withholding the index here would leave the files

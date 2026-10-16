@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.domain.access import reaches
 from kingfisher.domain.capabilities import (
     ALL,
     Capabilities,
@@ -14,7 +15,7 @@ from kingfisher.domain.capabilities import (
 )
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.kinds.subagents import INTERPRETER_TOOL, TASK_TOOL
-from kingfisher.kinds.tools.spec import Found, Offering
+from kingfisher.kinds.tools.spec import Found, Offering, out_of_reach
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -93,6 +94,10 @@ class _ToolSurface:
     #: of the two out of a dictionary and lose the other before any narrowing
     #: ran.
     found: tuple[Found, ...] = ()
+    #: Tools whose own audience shuts this caller out, as a grant writes them. Taken
+    #: out of the grant itself rather than out of `found`: a definition naming one is
+    #: still naming a real tool, and `refuse_unknown` must not call it a typo.
+    out_of_reach: frozenset[str] = frozenset()
 
     @property
     def carried(self) -> tuple[Any, ...]:
@@ -113,7 +118,11 @@ class _ToolSurface:
         """The parent's allowlist, or `None` for no restriction at all."""
         if self.offering is None:
             return None
-        return self.offering.permitted(self.asked.builtin_tools, self.asked.tools)
+        # The grant, not the request, once a tool has been taken out of it: an
+        # unrestricted request is otherwise "no allowlist", and that would put the
+        # tool straight back for the parent and for every subagent it caps.
+        tools = self.granted_workspace if self.out_of_reach else self.asked.tools
+        return self.offering.permitted(self.asked.builtin_tools, tools)
 
     @property
     def granted_builtin(self) -> Selection:
@@ -129,21 +138,29 @@ class _ToolSurface:
             return ALL
         # `spelt` first, for the reason it exists: `narrowed` is set membership
         # and would drop a long-form grant without a word.
-        return narrowed(self.offering.spelt(self.asked.tools), by=self.offering.workspace) or ()
+        granted = narrowed(self.offering.spelt(self.asked.tools), by=self.offering.workspace)
+        return tuple(name for name in granted or () if name not in self.out_of_reach)
 
 
-def _private_tools(catalogue: Definitions, name: str) -> tuple[Found, ...]:
-    """The tools a subagent brings itself, or none."""
+def _private_tools(
+    catalogue: Definitions, name: str, *, held: frozenset[str] | None = None
+) -> tuple[Found, ...]:
+    """The tools a subagent brings itself that this caller may use, or none."""
     repository = catalogue.bundled_tools.get(name)
     if repository is None:
         return ()
+    # A bundle is held whatever the request granted, and that is the only grant it
+    # skips: a carried tool's own audience still shuts out a caller it does not admit.
+    owned = tuple(
+        one for one in repository.found if held is None or reaches(one.source_ids, held)
+    )
     spec = catalogue.subagents.specs.get(name)
     if spec is None or spec.carried:
-        return tuple(repository.found)
+        return owned
     # Filtered here as well as refused at load, so a build that skipped `warm` still
     # hands a subagent only what its definition lists from the folder.
     listed = set(spec.bundled.get("tools", ()))
-    return tuple(one for one in repository.found if one.name in listed)
+    return tuple(one for one in owned if one.name in listed)
 
 
 def _tool_objects(graph: Any) -> Mapping[str, Any]:
@@ -178,6 +195,7 @@ def _resolve_tools(  # noqa: PLR0913 -- the sixth is who is asking, which nothin
     #: What a refusal may list, where there is a caller to narrow it for. Passed in
     #: rather than worked out here: who is asking is the composition root's to know.
     in_reach: Callable[[str], bool] | None = None,
+    held: frozenset[str] | None = None,
 ) -> _ToolSurface:
     """What this request may call, and what this agent offers at all.
 
@@ -209,4 +227,5 @@ def _resolve_tools(  # noqa: PLR0913 -- the sixth is who is asking, which nothin
         asked=capabilities,
         objects=_tool_objects(probe),
         found=tuple(workspace_tools),
+        out_of_reach=out_of_reach(workspace_tools, held),
     )

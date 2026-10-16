@@ -26,7 +26,14 @@ from kingfisher.kinds.middlewares.catalogue import MiddlewareError
 from kingfisher.kinds.subagents.rules import miscounted, refuse_cycles
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.kinds.tools.catalogue import ToolError
-from kingfisher.kinds.tools.spec import Found, Offering, placed, split_reference
+from kingfisher.kinds.tools.spec import (
+    Found,
+    Offering,
+    admitted,
+    out_of_reach,
+    placed,
+    split_reference,
+)
 
 #: An empty mapping that cannot be written to, so a default is shared safely.
 _NOTHING: Mapping[str, str] = MappingProxyType({})
@@ -442,6 +449,8 @@ def _moved_tools(
     """
     try:
         offers = Offering.of(resolved.tools.found)
+        # By the bare name, which is what a claim is keyed on.
+        shut = {split_reference(one)[1] for one in out_of_reach(resolved.tools.found, held)}
         return MappingProxyType({
             _subject(kind, name): tuple(one for one, _claimed, _actual in moved)
             for kind, specs in (
@@ -449,7 +458,11 @@ def _moved_tools(
                 ("subagent", resolved.subagents.specs),
             )
             for name, spec in specs.items()
-            if (moved := offers.moved(_claimed_by(spec, held)))
+            if (
+                moved := offers.moved(
+                    {one: at for one, at in _claimed_by(spec, held).items() if one not in shut}
+                )
+            )
         })
     except (ToolError, AgentError, SubagentError):
         return None
@@ -541,6 +554,7 @@ def _access(
     *,
     agents: Mapping[str, object],
     subagents: Mapping[str, object],
+    tools: Mapping[str, object],
 ) -> tuple[dict[str, Mapping[str, Stated]], AccessReport, dict[str, str]]:
     """What the definitions say, and what restricts nobody."""
     stated = {
@@ -557,7 +571,7 @@ def _access(
     report = access.audit(*kinds, vocabulary=cfg.access)
     broken = {
         f"{kind}s": complaint
-        for kind, specs in kinds
+        for kind, specs in (*kinds, ("tool", tools))
         if (complaint := access.undeclared_in(specs, kind=kind, vocabulary=cfg.access))
         is not None
     }
@@ -587,6 +601,26 @@ def _reaching(
         }
 
     return keep
+
+
+def _audienced_tools(resolved: Definitions) -> Mapping[str, Found]:
+    """The tools that say who they admit, or none where the catalogue would not walk."""
+    try:
+        return resolved.audienced_tools
+    except (ToolError, CapabilityError, SubagentError):
+        return {}
+
+
+def _shut_out(resolved: Definitions, held: frozenset[str] | None) -> frozenset[str]:
+    """The tools whose own audience shuts this caller out, as the build would leave them.
+
+    Nothing where the catalogue would not walk: `_tools` carries that failure, and a
+    listing that could not read the tools lists none of them anyway.
+    """
+    try:
+        return out_of_reach(resolved.tools.found, held)
+    except (ToolError, CapabilityError):
+        return frozenset()
 
 
 def _builtin_tools(
@@ -760,7 +794,9 @@ def inventory(
         # somebody goes because something is broken.
         agents_error = str(exc)
 
-    stated, report, broken = _access(cfg, agents=defined_agents, subagents=specs)
+    stated, report, broken = _access(
+        cfg, agents=defined_agents, subagents=specs, tools=_audienced_tools(resolved)
+    )
     reaching = _reaching(held, stated)
     scoped = held is not None
     # A scoped view carries only what that caller reaches, and the policy itself is
@@ -814,7 +850,10 @@ def inventory(
     # `where::what`, and the shipped `surveyor` is written that way -- and had none, so
     # a caller whose agent granted the long form was told they reached no tools.
     spelt = set(workspace_tools)
-    offers_tool = offers("tools", held, reached_agents, same=lambda one: placed(one, spelt))
+    offers_tool = admitted(
+        offers("tools", held, reached_agents, same=lambda one: placed(one, spelt)),
+        shut=_shut_out(resolved, held),
+    )
     offers_skill = offers("skills", held, reached_agents, same=registry.identity)
 
     return Inventory(
@@ -855,7 +894,7 @@ def inventory(
         tool_sources=MappingProxyType(
             {name: where for name, where in sources.items() if offers_tool(name)}
         ),
-        tools_error=tools_error,
+        tools_error=tools_error or (None if scoped else broken.get("tools")),
         build_error=build_error,
         skills={
             name: registry.description(name) for name in registry.names if offers_skill(name)

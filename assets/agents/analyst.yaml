@@ -36,24 +36,12 @@ builtin_tools: [read_file, ls, glob, grep, task]
 # entry is a name, or a mapping of `name` and the one thing that field lets a
 # name carry. One long form to learn rather than one per field.
 tools:
-  - name: sql_query
-    # Narrower than the definition. A caller holding only `audit_log` opens
-    # this agent and runs it without the database; one holding `sales_db` gets
-    # the whole set. One agent, two shapes, and no second file to keep in step
-    # with the first.
-    #
-    # An entry audience is an **and** with the definition's, always: the only
-    # way to reach a tool is through the agent holding it, and a caller who
-    # cannot open this agent never gets here. So `[sales_db]` means "opens this
-    # agent, and holds `sales_db`".
-    #
-    # Which is why naming a source id from *outside* the line above is allowed
-    # and useful. `source_ids: [pii]` here would mean "anyone who opens this
-    # agent, and holds `pii`" -- a second requirement rather than a mistake.
-    # Startup reports it, under `narrows past this definition's own audience`,
-    # because the same line is what somebody trying to *widen* would write by
-    # accident. Only the author knows which, so it is said rather than vetoed.
-    source_ids: [sales_db]
+  # Bare, and still narrower than this definition: `tools/sql_query.py` says
+  # itself that it is for `sales_db`. A caller holding only `audit_log` opens
+  # this agent and runs it without the database; one holding `sales_db` gets
+  # the whole set. The tool's own line holds whichever agent grants it, so it
+  # is written once, beside the database it guards.
+  - sql_query
   # **A tool that takes two things at once.** Leaving the workspace to fetch
   # something is for a caller holding `sales_db` who also holds `pii` -- not
   # either, both.
@@ -72,6 +60,18 @@ tools:
   # mean "both of those, or else `audit_log`", which is how an exception is
   # written next to a requirement -- and `[{sales_db, pii}, audit_log]` says the
   # same thing without the name.
+  #
+  # An entry audience is an **and** with the definition's, always: the only
+  # way to reach a tool is through the agent holding it, and a caller who
+  # cannot open this agent never gets here. So `[sales_db_pii]` means "opens
+  # this agent, and holds both".
+  #
+  # Which is why naming a source id from *outside* the line above is allowed
+  # and useful. `source_ids: [pii]` would mean "anyone who opens this agent,
+  # and holds `pii`" -- a second requirement rather than a mistake. Startup
+  # reports it, under `narrows past this definition's own audience`, because
+  # the same line is what somebody trying to *widen* would write by accident.
+  # Only the author knows which, so it is said rather than vetoed.
   - name: http_fetch
     source_ids: [sales_db_pii]
   # Bare names, so `[sales_db, audit_log]` -- this definition's own. Say

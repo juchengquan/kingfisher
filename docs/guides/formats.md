@@ -1210,7 +1210,9 @@ it, not loading it is the mechanism working.
 ## Access — `source_ids:` in the definitions, `source_ids.yaml` for the vocabulary
 
 Which source ids may reach which agents, subagents, tools and skills. Optional:
-with no `source_ids.yaml`, kingfisher controls nothing by source id.
+with no `source_ids.yaml`, kingfisher controls nothing by source id. A tool written
+with `kingfisher.tool` may also say who it admits, in its own file — see
+[`tools.md`](tools.md#or-kingfishertool-when-the-tool-says-who-may-use-it).
 
 A source id is a name in this deployment's vocabulary and nothing else — not a
 path a definition was read from, and not a data file a run is handed. Nothing

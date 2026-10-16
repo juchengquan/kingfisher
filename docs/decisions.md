@@ -1292,6 +1292,29 @@ outside that line adds a second requirement rather than replacing the first. A d
 every such definition is built at startup -- default-open must not also be silent.
 It is `kingfisher list` that prints it; a plain start says nothing.
 
+**A tool may say who may use it, through `kingfisher.tool`.** A tool built by
+`kingfisher.tool(fn, source_ids=[...])` carries an audience of its own, and it is an
+**and** on every grant of that tool: an agent's entry can narrow it, and nothing an
+agent writes can widen it. It is the rule a definition's entries already follow --
+the only way to reach an entry is through the definition holding it -- carried one
+level further down, to the thing the audience is actually about. A deployment whose
+tools are written in Python had nowhere else to put it: the translation from its own
+tool record to a LangChain tool dropped the field, and writing it on every agent that
+grants the tool is the line one of them forgets.
+
+It is applied where the grant is resolved rather than where the catalogue is read.
+Taking the tool out of the catalogue for a caller would have a definition that names
+it refused by `refuse_unknown` for that caller alone -- the failure that reversed the
+central `access.yaml` below. So the build takes it out of the grant, `kingfisher list`
+and the run report take it out of what they say is offered, and the ledger stamps a
+result no wider than its tool, each through `kinds.tools.spec.out_of_reach`.
+
+**The audience is a private attribute, not `metadata`.** `BaseTool.metadata` was the
+obvious home and is wrong: LangChain passes it to every callback, so an audience kept
+there is in the trace of every call. Measured on a `StructuredTool` subclass: the
+private attribute reaches neither `model_dump` nor a callback. The loaders read it by
+name, `AUDIENCE_ATTRIBUTE`, because `kinds/tools` may not import langchain. *(2026-10-16.)*
+
 **Reversed: a central `access.yaml` listing every asset by name.** Built in full
 -- vocabulary, per-asset audiences, reconciliation against the catalogue, two
 load reports -- then replaced within the same branch. What killed it was not

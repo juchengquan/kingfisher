@@ -201,22 +201,26 @@ def test_the_preset_tools_load_where_the_agent_group_is_not_installed(shipped, m
     assert {"pdf_text", "pdf_pages"} <= {tool_name(t) for t in tools}
 
 
-def test_the_shipped_set_shows_all_three_tool_shapes(shipped):
-    """`docs/guides/tools.md` documents three ways to write a tool, and a reference that
+def test_the_shipped_set_shows_all_four_tool_shapes(shipped):
+    """`docs/guides/tools.md` documents four ways to write a tool, and a reference that
     describes a shape nothing ships is a shape somebody has to take on trust.
     """
-    from langchain_core.tools import BaseTool
+    from langchain_core.tools import BaseTool, StructuredTool
+
+    from kingfisher.infrastructure.harness.audienced_tool import AudiencedTool
 
     tools = LocalToolRepository(shipped / "tools").tools
-    decorated = {tool_name(t) for t in tools if type(t).__name__ == "StructuredTool"}
+    decorated = {tool_name(t) for t in tools if type(t) is StructuredTool}
+    audienced = {tool_name(t) for t in tools if isinstance(t, AudiencedTool)}
     classes = {
         tool_name(t)
         for t in tools
-        if isinstance(t, BaseTool) and type(t).__name__ != "StructuredTool"
+        if isinstance(t, BaseTool) and not isinstance(t, StructuredTool)
     }
     plain = {tool_name(t) for t in tools if not isinstance(t, BaseTool)}
 
     assert decorated, "no `@tool` preset"
+    assert audienced == {"sql_query"}
     assert classes == {"sql_explain"}
     assert plain == {"line_count"}
 
@@ -1478,15 +1482,25 @@ def test_an_entry_that_states_nothing_inherits(shipped):
     source_ids = _vocabulary(shipped)
     analyst = specs["analyst"]
 
-    # Two entries carry an audience; the other two say nothing and inherit.
-    assert analyst.audiences["tools"] == {
-        "sql_query": ("sales_db",),
-        "http_fetch": ("sales_db_pii",),
-    }
+    # One entry carries an audience; the other three say nothing and inherit. The
+    # definition's half only: `sql_query` says `sales_db` itself, which is the tool's
+    # half and is asserted by `test_the_shipped_database_tool_says_who_it_is_for`.
+    assert analyst.audiences["tools"] == {"http_fetch": ("sales_db_pii",)}
     assert analyst.declares(source_ids.expand(["audit_log"])).tools == (
+        "sql_query",
         "csv_profile::csv_profile",
         "line_count",
     )
+
+
+def test_the_shipped_database_tool_says_who_it_is_for(shipped):
+    """The audience moved off `analyst.yaml` onto the tool, so an agent that grants the
+    tool and forgets the line no longer hands the database to whoever opened it.
+    """
+    found = {one.name: one for one in LocalToolRepository(shipped / "tools").found}
+
+    assert found["sql_query"].source_ids == ("sales_db",)
+    assert found["sql_tables"].source_ids == "*", "the schema listing is not the database"
 
 
 def test_a_shipped_requirement_takes_both_source_ids_at_once(shipped):

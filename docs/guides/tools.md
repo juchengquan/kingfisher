@@ -16,9 +16,11 @@ that range in its own `pyproject.toml`, so a tool written against 1.x keeps
 working across kingfisher upgrades. If a 2.0 arrives it is a breaking change
 here too, and this line is where it will be said.
 
-Nothing wraps it. A kingfisher-flavoured decorator would be a second name for
-someone else's rule, and the loader accepts what LangChain accepts — a `BaseTool`
-from `@tool`, an instantiated `BaseTool` subclass, or a plain function.
+Nothing wraps it, with one exception below. A kingfisher-flavoured decorator would
+be a second name for someone else's rule, and the loader accepts what LangChain
+accepts — a `BaseTool` from `@tool`, an instantiated `BaseTool` subclass, or a plain
+function. The exception is `kingfisher.tool`, for the one thing LangChain has no
+field for: who may use the tool.
 
 ```python
 from langchain_core.tools import tool
@@ -114,6 +116,41 @@ shout.py: TOOLS names the class 'Shout' rather than a tool -- write Shout() to
 build one. A class loads and is offered to the model, and calling it returns a
 new instance as if it were an answer
 ```
+
+## Or `kingfisher.tool`, when the tool says who may use it
+
+The fourth shape, and the only one that imports kingfisher. A tool that reads
+something only some callers may see can say so itself, rather than relying on
+every agent that grants it to remember:
+
+```python
+import kingfisher
+
+
+def sql_query(statement: str) -> str:
+    """Run one read-only SQL SELECT and return the rows as CSV."""
+    ...
+
+
+TOOLS = [kingfisher.tool(sql_query, source_ids=["sales_db"])]
+```
+
+`source_ids` is written the way a definition writes its own line — any one of the
+names is enough, and a set is a requirement: `["admin", {"sales_db", "pii"}]`.
+Every name has to be declared in `source_ids.yaml`, or the deployment does not
+start. With no `source_ids.yaml` at all, the line has no effect.
+
+It holds **whichever agent grants the tool**. An agent's own entry can narrow it
+further — `{name: sql_query, source_ids: [senior]}` means `sales_db` *and*
+`senior` — and nothing an agent writes can widen it. A caller it shuts out does
+not get the tool, and is not shown it by `kingfisher list` or the run report. A
+result the tool produces is recorded in the session's ledger under the tool's
+audience as well as the agent's.
+
+What comes back is a LangChain `StructuredTool`, and `description`, `args_schema`
+and `name` mean what they mean to `StructuredTool.from_function`. The source ids
+are kept off it: not in `metadata`, which LangChain hands to every callback, so
+they never appear in a trace.
 
 ## What a tool returns
 

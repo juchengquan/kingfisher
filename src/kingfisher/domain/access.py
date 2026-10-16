@@ -134,11 +134,12 @@ def offers(
     *,
     same: Callable[[str], str | None] = lambda name: name,
 ) -> Callable[[str], bool]:
-    """Whether a caller reaches one entry of a catalogue that audiences nothing itself.
+    """Whether any definition this caller reaches offers them one entry of a catalogue.
 
-    Neither a tool module nor a skill's own file has anywhere to write `source_ids:` --
-    an audience for one exists only inside the definition offering it -- so what can be
-    asked is whether any definition here offers it to this caller.
+    The grant's half only. A skill's own file has nowhere to write `source_ids:`, but a
+    tool made by `kingfisher.tool` may say who it admits, and that is an **and** this
+    cannot see: the build, the listing and the run report each take out the tools
+    `kinds.tools.spec.out_of_reach` names as well.
 
     A definition leaving the field unset offers the whole catalogue at its own audience,
     which is why one of those ends the walk rather than contributing to it: `ALL` is the
