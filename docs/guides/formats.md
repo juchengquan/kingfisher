@@ -1271,7 +1271,7 @@ vocabulary, because then no audience can be checked at all.
 Once a vocabulary exists, every call has to say:
 
 ```python
-kf = Kingfisher(config_from_env())
+kf = Kingfisher(config_from_env(), backends=default_backends)
 kf.run(Request(task="...", agent="assistant"), source_ids=["B", "C"])
 ```
 

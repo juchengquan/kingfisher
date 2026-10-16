@@ -1,14 +1,14 @@
 # Core and plugins
 
-**Status:** proposed. Slice 1 is this document and the startup check that replaced the
-import-cost tables; the rest is listed under *Slices*, one pull request each.
+**Status:** proposed, and built a slice at a time: *Slices* marks the ones that have
+landed.
 **Date:** 2026-10-16.
 **Occasion:** a review of the package's shape. The four layers -- `domain/`,
 `application/`, `infrastructure/`, `presentation/` -- no longer describe how the code
 depends on itself, and what a deployment may replace is spread over a constructor, two
 settings and a guide that tells it most of the interfaces are not for replacing. This
-replaces the layers with a core, a set of plugins that each ship a default, and the
-command.
+replaces the layers with a core, a set of plugins kingfisher ships an implementation of,
+and the command.
 **Cited by symbol, not by line**, for the reason
 `docs/design/2026-09-05-an-answer-that-is-not-prose.md` gives.
 **Supersedes, once built,** *Layering*, *The front door* and *Splitting a file* in
@@ -36,12 +36,14 @@ that imports for real in a fresh interpreter holds it without a folder rule.
 keyword arguments, `backends` among them as required. Two settings name factories, for
 session backends and for wire formats, and nothing else a deployment can replace has
 one, so the command cannot reach most of what the library can. `ports.md` documents six
-repository Protocols and says they are not for replacing, and `graph=` exists for tests.
+repository Protocols and says they are not for replacing.
 
 ## Words
 
-A **plugin** is a part of kingfisher a deployment may replace with its own. Each ships a
-**default**, used when the deployment names none, so replacing one is never required.
+A **plugin** is a part of kingfisher a deployment may replace with its own, and
+kingfisher ships an implementation of each. Five have a **default**, used when the
+deployment names none. The sessions plugin has none: it is the sandbox and decides where
+each caller's files are, so a deployment always names it, kingfisher's own included.
 The **interface** is what a plugin must be for the core to use it, stated once, by the
 core. The **core** is everything every deployment runs whatever it has replaced: what a
 request, a turn, a session and a grant are, and the interfaces.
@@ -64,7 +66,7 @@ kingfisher/
     config.py layout.py request.py result.py service.py run.py inventory.py
     origins.py reporting.py
   plugins/
-    __init__.py        Plugins, every field defaulted
+    __init__.py        Plugins: the five that have a default
     sessions/          LocalSessions: session folders, backend, sandbox, runner,
                        the turn lock, and prompts/ -- what the shell says of itself
     events.py conversations.py wire_formats.py instructions.py
@@ -79,7 +81,7 @@ together, and the disagreements are brought to review rather than decided in a m
 
 | Plugin | Interface | Default |
 |---|---|---|
-| Sessions | `open`, `sessions`, `size`, `delete`, `mark_used` and their async twins, and the turn lock: `claim(cfg, session_id, *, stale_after)`, `release`, `held` | `LocalSessions` |
+| Sessions | `open`, `sessions`, `size`, `delete`, `mark_used` and their async twins, and the turn lock: `claim(cfg, session_id, *, stale_after)`, `release`, `held` | none: always named; kingfisher ships `LocalSessions` |
 | Run events | `record(event)` | the logger sink and the JSONL sink |
 | Conversation store | langgraph's checkpointer, unchanged | an in-memory saver |
 | Wire formats | rows, named by format | the shipped rows; `Adapter` becomes `WireFormat` |
@@ -90,8 +92,10 @@ together, and the disagreements are brought to review rather than decided in a m
 deployment's own backend has to carry `claim`, `aclaim`, `release`, `arelease` and
 `held` beside the filesystem it is. On Sessions, the backend `open` returns is a plain
 deepagents backend, with `host_path` and `shell_prompt` as its only optional extras.
-`unprotected`, which the service reads with `getattr`, becomes `LocalSessions`' own and
-is reported through the log. `type(backends) is DefaultBackends` becomes `isinstance`.
+`unprotected`, which the service reads with `getattr` off any backend, becomes
+`LocalSessions`' own: the core reads it only off a backend `LocalSessions` opened, and
+still reports it to the caller as `protect_failed`. `type(backends) is DefaultBackends`
+becomes `isinstance`.
 
 **Instructions replaces two settings with one plugin.** A deployment's standing text for
 every agent and subagent is read after kingfisher's own prompt and before the agent's.
@@ -106,26 +110,37 @@ supplies is a follow-up, below.
 
 ## Wiring
 
-`Kingfisher(cfg)` runs with every default. `Kingfisher(cfg, plugins=Plugins(sessions=...))`
-replaces one. `KINGFISHER_PLUGINS=module:callable` names a callable returning `Plugins`,
-which gives the command the same reach as the library and replaces both `*_FACTORY`
-settings. `catalogue` and `grants` move onto `Config`, which is otherwise left as it is.
-`Kingfisher`'s methods keep their names and signatures.
+`Kingfisher` is always told its sessions: `Kingfisher(cfg, sessions=LocalSessions())`, or
+a deployment's own. Leaving them out is refused, and so is a pre-built graph without
+them. `graph=` stays, and a graph never stands in for sessions: kingfisher places a
+request's inputs, collects what a turn left and takes the turn lock through them, whatever
+runs the agent. `kingfisher.run()` and `kingfisher.stream()` require them the same way,
+so Python that runs kingfisher always says what it runs on. The other five come in one
+object, every field defaulted: `Kingfisher(cfg, sessions=..., plugins=Plugins(...))`.
 
-**`backends` stops being required, and that reverses a reason written on it.** It has no
-default so that a deployment cannot wire the service without learning there is a
-boundary, because the backend is the sandbox. With Sessions a plugin, the default is
-`LocalSessions`, which is that sandbox: naming nothing gets the boundary, not its
-absence, and a deployment replacing it meets the interface it has to satisfy.
+**The core never picks a sessions implementation, so it never imports one.**
+`LocalSessions` is the one kingfisher ships, named by a deployment exactly as its own
+would be, and nothing in the core refers to it -- so it can later leave the package, or
+be loaded by name like the definitions in `assets/`, without the core changing.
+
+**The command reads both from settings**, because it has no call a caller could name
+them on. `KINGFISHER_SESSIONS=module:callable` names a callable returning the sessions,
+and where it is unset the command runs on `LocalSessions`: the command is outside the
+core, and is kingfisher's own deployment naming its own. `KINGFISHER_PLUGINS` names one
+returning `Plugins`. The two replace both `*_FACTORY` settings, one per argument the
+command cannot be given.
+
+`catalogue` and `grants` move onto `Config`, which is otherwise left as it is.
+`Kingfisher`'s methods keep their names and signatures.
 
 ## The public names
 
 Two addresses. `kingfisher`, for embedding and for tool files -- `Config`, `Request`,
 the result types, `Capabilities`, the errors, `run` and `stream`, seeding and
 `inventory`, `ToolContext` and `tool`. `kingfisher.plugins`, for writing a plugin --
-`Plugins`, the six interfaces, every default, `CommandRunner`, `CommandResult`,
-`ShellPrompt` and `HostPathError`. Everything else is private and may move. The command
-may import anything.
+`Plugins`, the six interfaces, every implementation kingfisher ships, `CommandRunner`,
+`CommandResult`, `ShellPrompt` and `HostPathError`. Everything else is private and may
+move. The command may import anything.
 
 The contract kits leave the wheel for `tests/checks/`. What each one checks is written
 on the interface it checks, as a promise, and `ports.md`'s *Checking what you wrote*
@@ -135,7 +150,8 @@ the backend as one with a shell, and that the routes cover the layout.
 
 ## The rules
 
-- The core imports no plugin, except `core/service.py` importing `Plugins`.
+- The core imports no plugin, except `core/service.py` importing `Plugins`, and names no
+  sessions implementation at all.
 - A plugin imports the core and never another plugin.
 - deepagents is part of the core.
 - `import kingfisher` loads no installed package. The command loads nothing but `dotenv`
@@ -151,8 +167,8 @@ move that breaks it; the rest stay, and the last slice adds the rules above.
 
 ## What goes
 
-The six repository Protocols. `graph=`, whose tests move to the fake model. Both
-`*_FACTORY` settings. `Config.deployment_prompt` and the workspace's `PROMPT.md`. The
+The six repository Protocols. Both `*_FACTORY` settings, for `KINGFISHER_SESSIONS` and
+`KINGFISHER_PLUGINS`. `Config.deployment_prompt` and the workspace's `PROMPT.md`. The
 shipped contract kits and their `*_CONTRACT` names. The table that justifies each public
 name. The rules tied to today's folders.
 
@@ -160,13 +176,14 @@ name. The rules tied to today's folders.
 
 One pull request each, off `main` once the one before it has merged.
 
-1. This document, and the startup check.
-2. Delete the repository Protocols.
-3. Drop `graph=`.
-4. Sessions: `SessionBackends` becomes `Sessions`; `DefaultBackends`, `default_backends`
-   and `backend_at` become `LocalSessions`; the turn lock moves onto it; `unprotected`
-   becomes its own.
-5. `Plugins` and `KINGFISHER_PLUGINS`; `backends` stops being required.
+1. This document, and the startup check. *(Landed.)*
+2. Delete the repository Protocols. *(Landed.)*
+3. `run()` and `stream()` require session backends, as `Kingfisher` does.
+4. Sessions: `SessionBackends` becomes `Sessions` and `backends=` becomes `sessions=`;
+   `DefaultBackends` and `default_backends` become `LocalSessions`, with `backend_at`
+   kept as its private builder; the turn lock moves onto it; `unprotected` becomes its
+   own.
+5. `Plugins`, `KINGFISHER_SESSIONS` and `KINGFISHER_PLUGINS`.
 6. `Adapter` becomes `WireFormat`.
 7. The Instructions plugin.
 8. `catalogue` and `grants` onto `Config`.
@@ -193,6 +210,12 @@ split by subject in a pull request of its own, with the cut lines agreed first:
 
 - **Regrouping `Config`.** Only `catalogue` and `grants` join it here.
 - **Trimming `Kingfisher`'s methods.**
+- **Whether to drop `graph=`.** It was proposed here as a seam only tests used, and is
+  not: `upgrading.md` documents running a graph a deployment compiled itself, and the
+  tests hand it 145 stand-ins of several kinds. Kept until that is decided on its own.
+- **Shipping `LocalSessions` apart from the core**, as its own package or loaded by name.
+  Nothing in the core refers to it once slice 4 lands, so this is a move when it is
+  wanted.
 - **Pausing with a deployment's own conversation store**, which the pause path has not
   been shown to support.
 - **Refusing a save outside the session's folders.** It was built once, on a layout that
