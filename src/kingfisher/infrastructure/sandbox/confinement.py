@@ -9,7 +9,7 @@ such reviewer, so the boundary has to come from the operating system instead.
 What that boundary is worth closing was measured rather than assumed. With nothing in
 place the agent's shell could read the deployment's own `.env` -- both API keys --
 along with `~/.aws` and `~/.config/gh`, where the GitHub CLI keeps its token.
-`http_fetch` is a registered tool, so reading and sending are one turn apart for
+A workspace tool may fetch a URL, so reading and sending are one turn apart for
 anything that gets an injection into a document.
 """
 

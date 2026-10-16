@@ -13,7 +13,7 @@ tool objects rather than names, and its `skills` the directory they are in. What
 is left is what a definition can answer on its own: who it is, what it does,
 which of deepagents' own tools it wants, and what it brought with it.
 
-It may also say who reaches it, with `source_ids` and `datazone`, as `ledger.py`
+It may also say who reaches it, with `source_ids` and `datazone`, as `quarters.py`
 beside it does. Those name a deployment's vocabulary too, and are taken anyway
 because a name the deployment does not declare stops it at startup: a definition
 that travels badly fails loudly. This one says nothing, so it is anyone's.

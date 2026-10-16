@@ -49,7 +49,7 @@ def test_every_preset_subagent_parses(shipped):
         "redactor",
         "show-your-work",
         "sweeper",
-        "ledger",
+        "quarters",
     }
     for spec in specs.values():
         assert spec.description.strip()
@@ -1468,8 +1468,8 @@ def test_the_source_id_presets_narrow_for_a_narrower_caller(shipped):
     assert holds("warehouse") == ("sql_query", "line_count")
 
 
-def test_the_shipped_ledger_is_for_sales_db_callers_in_emea(shipped):
-    """The datazone, asserted against the files: `analyst` grants `ledger` by its bare
+def test_the_shipped_quarters_is_for_sales_db_callers_in_emea(shipped):
+    """The datazone, asserted against the files: `analyst` grants `quarters` by its bare
     name, and only the dict's own two lines decide who is handed it.
     """
     from kingfisher.application.access import held_by
@@ -1481,7 +1481,7 @@ def test_the_shipped_ledger_is_for_sales_db_callers_in_emea(shipped):
 
     def reached(source_ids: list[str], datazone: str | None) -> bool:
         held = held_by(vocabulary, with_datazone(source_ids, datazone))
-        return "ledger" in handed_work_by([agents["analyst"]], subagents, held)
+        return "quarters" in handed_work_by([agents["analyst"]], subagents, held)
 
     assert reached(["sales_db"], "emea")
     assert reached(["warehouse"], "emea"), "covering `sales_db` is enough"

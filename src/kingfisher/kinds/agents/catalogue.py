@@ -42,7 +42,7 @@ class LocalAgentRepository:
         # Two of a name is refused here rather than reported, which is the one
         # place this differs from subagents. A request names exactly one agent,
         # so there is no roster for a reference to disambiguate within -- two
-        # files claiming `assistant` means a request for `assistant` gets
+        # files claiming `helper` means a request for `helper` gets
         # whichever the walk reached last, and nothing anywhere says which.
         seen: dict[str, str] = {}
         for spec, where, _ in read:

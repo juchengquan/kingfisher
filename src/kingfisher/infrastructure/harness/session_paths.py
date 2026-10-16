@@ -9,10 +9,9 @@ from typing import Any
 from kingfisher.infrastructure.harness.host_paths import HOST_ROOTS, HostPathError
 from kingfisher.layout import DEFAULT_LAYOUT, INPUTS_ROUTE, OUTPUTS_ROUTE, Layout
 
-#: Which arguments name a file. The convention this repository already keeps --
-#: `test_every_shipped_tool_naming_a_file_reads_it_through_the_backend` walks the shipped
-#: tools looking for exactly this parameter name -- so widening it is a line here and a
-#: test, rather than a design question.
+#: Which arguments name a file. A convention `tools.md` documents and tool authors
+#: write to, so widening it is a line here and a sentence there, rather than a design
+#: question.
 PATH_ARGUMENTS: frozenset[str] = frozenset({"path"})
 
 #: Where a workspace tool's *other* arguments may not point: the prefixes the file tools

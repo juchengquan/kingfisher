@@ -470,10 +470,8 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
     for line in written.report():
         print(line)
 
-    # Non-zero, and this changed with the definitions leaving the wheel. It was nearly
-    # unreachable before -- the shipped set always held all four kinds -- and is now one
-    # of the likelier mistakes: `--from ./assets/skills` names a directory that
-    # exists, is readable, and holds none of them.
+    # Non-zero, because this is one of the likelier mistakes: `--from ./definitions/skills`
+    # names a directory that exists, is readable, and holds none of the kinds.
     if not written.written:
         if written.skipped:
             # A different failure from an empty directory, and the remedy is

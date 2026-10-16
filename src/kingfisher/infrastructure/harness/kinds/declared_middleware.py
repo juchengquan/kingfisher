@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 #: `defaults` plus whatever the definition was allowed to write.
 #:
 #: Deliberately loose. Narrowed to `Callable[[], Any]` it stopped covering a
-#: registered class, so a deployment pasting the wiring block `call_cap.py`
+#: registered class, so a deployment pasting the wiring block `middleware.md`
 #: documents got a type error on its own registry while the code ran correctly --
 #: and a signature narrower than the contract is worse than a loose one, because
 #: the reader who believes it is the one following the docs.

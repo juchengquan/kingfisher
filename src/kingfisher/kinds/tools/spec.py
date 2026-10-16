@@ -187,9 +187,8 @@ def placed(entry: str, offered: Iterable[str]) -> str:
     Public because two readers compare a written grant against the catalogue's own
     names: `spelt` below, over a whole selection on its way into a build, and `offers`
     in the domain, one name at a time. `offers` compared them unspelt, so the long form
-    `formats.md` documents -- `csv_profile::csv_profile`, which the shipped `analyst`
-    is written with -- matched nothing, and a scoped caller was told they reached no
-    tools at all while the build handed them one.
+    `formats.md` documents -- `reports.py::count_rows` -- matched nothing, and a scoped
+    caller was told they reached no tools at all while the build handed them one.
 
     A name two sources offer is spelt long by the offering itself, so a written short
     form stays short and matches neither: ambiguous is not a thing a caller is told
@@ -233,9 +232,8 @@ class Offering:
     def spelt(self, selection: Selection) -> Selection:
         """A written grant in the spelling this offering uses.
 
-        Measured: before this, a shipped agent and `analysis/profiler.yaml` both wrote
-        the long form and neither could be run. The short form works, which is why a
-        suite full of it stayed green.
+        Measured: two definitions writing the long form could not be run, while the
+        short form worked -- which is why a suite full of it stayed green.
         """
         if selection in (ALL, None):
             return selection
@@ -322,7 +320,7 @@ class Offering:
         # grant resolved correctly while the *allowlist* was still built from
         # the written form, so the tool was registered and then refused at the
         # moment it was called. Measured, not read -- the definition loaded, the
-        # run started, and `csv_profile` was simply absent from "Available
+        # run started, and `count_rows` was simply absent from "Available
         # tools" when the model reached for it.
         tools = self.spelt(tools)
         # The workspace half comes back to bare names, because that is what the

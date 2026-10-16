@@ -852,8 +852,8 @@ def inventory(
     # `same` on both axes, and for one reason: a definition writes a grant and the
     # catalogue has its own name for the same thing. Skills have two legal spellings
     # and so have always had one; tools have two as well -- `formats.md` documents
-    # `where::what`, and the shipped `analyst` is written that way -- and had none, so
-    # a caller whose agent granted the long form was told they reached no tools.
+    # `where::what` -- and had none, so a caller whose agent granted the long form was
+    # told they reached no tools.
     spelt = set(workspace_tools)
     offers_tool = admitted(
         offers("tools", held, reached_agents, same=lambda one: placed(one, spelt)),
@@ -969,8 +969,8 @@ def inventory(
         access_report=AccessReport() if scoped else report,
         held=held,
         # And empty with no vocabulary at all: a `source_ids:` line is inert until a
-        # `source_ids.yaml` declares the names, which `formats.md` and the shipped
-        # example both say, and the human form prints no access section in that state.
+        # `source_ids.yaml` declares the names, which `formats.md` says, and the
+        # human form prints no access section in that state.
         # `--json` carried every definition's lines, so the form a script reads
         # reported a policy that is not in force. Here rather than in the renderer,
         # because the record is what both forms are handed.

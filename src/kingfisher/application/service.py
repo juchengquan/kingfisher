@@ -626,9 +626,8 @@ class Kingfisher(Sessions, Disposal):
             }
         listing = ", ".join(sorted(offered)) if offered else "none"
         # Two refusals, one remedy, and the remedy is different when there is nothing at
-        # all. `SEED_HINT` says `--from DIR`, which needs a DIR -- and `SUGGESTION`
-        # names none to a reader who installed the package, because the directory it
-        # could name does not exist for them. Correct, and a dead end: the next thing that
+        # all. `SEED_HINT` says `--from DIR`, which needs a DIR a reader who installed
+        # the package may not have. Correct, and a dead end: the next thing that
         # reader needs is the file itself -- written where the agents are read from,
         # which a setting may have moved, and offered only where there is a directory.
         root = self.catalogue.agents.root

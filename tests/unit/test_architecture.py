@@ -2603,6 +2603,43 @@ def test_the_runtime_check_sees_the_runtime():
     )
 
 
+#: Names the formats define, which the package writes because they are its own words.
+FORMAT_FILES = frozenset({"SKILL.md", "README.md", "__init__.py", "source_ids.yaml"})
+
+
+def test_the_package_names_nothing_in_assets():
+    """`assets/` is this repository's and not in the wheel, so a path, file or definition
+    named from it in `src/` points an installed reader at something they do not have.
+
+    Read off the tree rather than listed here, so whatever is added there is covered.
+    """
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS, Definitions
+
+    assets = REPO / ASSETS_AREA
+    files = {p.name for p in assets.rglob("*") if p.is_file() and "__pycache__" not in p.parts}
+    roots = Definitions.from_roots({kind: assets / kind for kind in DEFINITION_KINDS})
+    names = {
+        name.split("::")[-1]
+        for name in (*roots.agents.names, *roots.subagents.names, *roots.tools.names,
+                     *roots.middlewares.names, *roots.registry.offered,
+                     *(n for bundle in roots.bundled_tools.values() for n in bundle.names))
+    }
+    named = re.compile(
+        r"\bassets/|"
+        + "|".join(map(re.escape, sorted(files - FORMAT_FILES)))
+        + r"|`(?:" + "|".join(map(re.escape, sorted(names))) + r")(?![\w-])"
+    )
+    found = [
+        f"{path.relative_to(REPO)}: {match.group()}"
+        for path in sorted((REPO / "src").rglob("*.*"))
+        if "__pycache__" not in path.parts
+        for match in named.finditer(path.read_text(encoding="utf-8"))
+    ]
+
+    assert files and names, "assets/ read as empty, so this checks nothing"
+    assert not found, f"src/ names what only this repository has: {found}"
+
+
 def test_the_package_does_not_depend_on_the_eval_harness():
     """`evals/` is test material and lives outside `src/`, so it is not in the wheel."""
     for layer in ("domain", "infrastructure", "application"):

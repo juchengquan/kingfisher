@@ -23,7 +23,7 @@ class WorkspaceToolPaths(AgentMiddleware):
     a real run: the model passed `/inputs/config.ini` and the tool raised
     `FileNotFoundError`. The only way it could succeed was to go looking -- `pwd` in
     the shell, learn the layout -- and from there it can name *any* session:
-    `line_count('/workspace/sessions/<other>/secret.txt')` returned an answer.
+    `count_lines('/workspace/sessions/<other>/secret.txt')` returned an answer.
 
     Rewriting the call rather than wrapping each tool, because a graph this is
     attached to holds tools that are not alike: some are `BaseTool`s from `@tool` and
@@ -79,7 +79,7 @@ class WorkspaceToolErrors(AgentMiddleware):
     tool had neither, so upstream's default applied -- bad *arguments* are converted,
     everything else is re-raised -- and one wrong path killed a sixteen-call run.
     Measured, on one deployment: the same mistake through `read_file` cost nothing,
-    and through `csv_profile` cost the run. Which of the two happened depended on the
+    and through a workspace tool cost the run. Which of the two happened depended on the
     tool the model reached for, which the deployment cannot predict.
     """
 

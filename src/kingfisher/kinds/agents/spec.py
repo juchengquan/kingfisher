@@ -113,8 +113,8 @@ class AgentSpec(Definition):
 
         **`middlewares` is deliberately not among them**, and the contrast is the
         reason this is worth reading: middleware is not additive in effect --
-        `call-cap-generous` is a *looser* ceiling than `call-cap-strict`, so a
-        subagent free to name any registered entry could pick the roomiest one a
+        a cap registered as `cap-generous` is a *looser* ceiling than `cap-strict`, so
+        a subagent free to name any registered entry could pick the roomiest one a
         deployment happens to offer and leave the bound its parent runs under. So it
         stays narrowed in the base, which is what makes an agent decide which its
         subagents may choose from, and why an agent lists one it does not use itself
