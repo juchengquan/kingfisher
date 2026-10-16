@@ -9,7 +9,14 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.infrastructure.steps import adrive, changing, drive, on_host, reading
+from kingfisher.infrastructure.steps import (
+    adrive,
+    adrive_finished,
+    changing,
+    drive,
+    on_host,
+    reading,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src" / "kingfisher"
@@ -136,6 +143,44 @@ def test_a_cancel_during_a_read_abandons_it_and_still_reaches_the_sequence():
     asyncio.run(cancel_during_the_read())
 
     assert port.log == ["aclaim started", "aclaim finished", "release"]
+
+
+def _claims_and_stops(port: _Port):
+    """A sequence whose last step changes something, so there is no later step for a
+    cancel to be thrown into.
+    """
+    yield changing(port, "claim")
+    return "claimed"
+
+
+def test_a_cancel_during_the_last_changing_call_still_reaches_the_caller():
+    """`adrive`'s own re-raise, which dropping left the whole suite green. The two
+    cancel rules above reach `CancelledError` through the sequence's `throw`, because
+    each has a later step for the cancel to go in at; a sequence that stops on a
+    changing call has none, so the cancel comes back beside the answer and only this
+    tail raises it. Swallowed, a turn cancelled at its last write returns an answer as
+    though nothing had happened.
+
+    `adrive_finished` is the control and the reason the tail exists: it hands the cancel
+    back rather than raising, so a caller holding what the answer holds can let it go.
+    """
+
+    async def cancel_during_the_claim(port, driver):
+        task = asyncio.ensure_future(driver(_claims_and_stops(port)))
+        await asyncio.sleep(0.01)
+        task.cancel()
+        await asyncio.sleep(0.01)
+        port.gate.set()
+        return await task
+
+    # A port each, because `gate` binds to the loop that first waits on it.
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(cancel_during_the_claim(_Port(), adrive))
+
+    answer, held = asyncio.run(cancel_during_the_claim(_Port(), adrive_finished))
+
+    assert answer == "claimed"
+    assert isinstance(held, asyncio.CancelledError)
 
 
 def test_work_on_the_host_runs_inline_sync_and_on_the_pool_async():

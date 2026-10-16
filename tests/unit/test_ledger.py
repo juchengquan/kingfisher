@@ -749,6 +749,62 @@ def test_a_result_the_backend_will_not_keep_still_has_its_row(ledgered, caplog):
     assert "permission_denied" in caplog.text
 
 
+class _Raising(LocalSessions):
+    """Kingfisher's own backends, raising on a save under the tool results folder.
+
+    `_Refusing` above answers with an error, which is one of the two ways a save fails;
+    this is the other, and the one the recorder's `except Exception` is for -- a socket
+    closing on a remote store does not come back as a response.
+    """
+
+    def open(self, cfg, session_id, /, *, catalogue=None):
+        opened = super().open(cfg, session_id, catalogue=catalogue)
+        upload, aupload = opened.upload_files, opened.aupload_files
+        mine = f"/{SCRATCH}/{TOOL_RESULTS}/"
+
+        def raised(files):
+            if any(path.startswith(mine) for path, _ in files):
+                msg = "the store closed the connection"
+                raise RuntimeError(msg)
+            return upload(files)
+
+        async def araised(files):
+            if any(path.startswith(mine) for path, _ in files):
+                msg = "the store closed the connection"
+                raise RuntimeError(msg)
+            return await aupload(files)
+
+        opened.upload_files = raised
+        opened.aupload_files = araised
+        return opened
+
+
+@pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
+def test_a_save_that_raises_does_not_fail_the_call_the_model_is_about_to_read(
+    ledgered, caplog, awaited
+):
+    """The note on that `except` reads "a save must never fail the call", and narrowing
+    it away left the whole suite green on both halves: `_Refusing` drives the response
+    that carries an error, and nothing drove a backend that throws. The call has already
+    run, so a save failing the call is a tool the model may run a second time.
+    """
+    kf = Kingfisher(ledgered, sessions=_Raising())
+    request = Request("go", agent="only", session_id="s")
+    Scripted.script.extend(
+        [_calls(("web_search", {"query": "EV"}, "c1")), AIMessage(content="done")]
+    )
+
+    with caplog.at_level(logging.WARNING):
+        result = asyncio.run(kf.arun(request)) if awaited else kf.run(request)
+
+    assert result.answer == "done"
+    (entry,) = result.ledger
+    assert (entry.id, entry.path) == ("A-0001", None)
+    assert _rows(ledgered)[0]["path"] is None
+    assert "A-0001 was not kept" in caplog.text
+    assert "the store closed the connection" in caplog.text
+
+
 def test_a_graph_the_deployment_supplied_records_nothing(ledgered):
     """Kingfisher did not build it, so nothing of kingfisher's is on its stack to
     record with -- and a ledger of closing lines would claim turns recorded nothing.
