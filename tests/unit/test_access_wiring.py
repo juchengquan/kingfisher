@@ -263,7 +263,7 @@ def test_resolving_the_same_source_ids_twice_gives_the_same_grant(policied):
 
 def test_the_deployments_own_grants_still_bound_a_caller(policied):
     """Two ceilings, and the lower one wins."""
-    kf = Kingfisher(policied, sessions=LocalSessions(), grants=Capabilities(tools=()))
+    kf = Kingfisher(replace(policied, grants=Capabilities(tools=())), sessions=LocalSessions())
     assert kf._effective_grants(("A",)).tools == ()
 
 

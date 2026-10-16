@@ -182,54 +182,24 @@ class Definitions:
 #: The kinds, taken from the type that already has one field per kind.
 DEFINITION_KINDS: tuple[str, ...] = tuple(f.name for f in fields(Definitions))
 
-#: The kinds a *supplied* catalogue has to name and stage itself.
-#:
-#: `agents` and `middlewares` are both outside it, and for one reason: each
-#: arrived after this seam was published, so a deployment that spelled out the
-#: kinds it knew about must not stop starting because another exists. Left in,
-#: `middlewares` stopped every supplied catalogue in the tree loading at once.
-STAGED_KINDS: tuple[str, ...] = tuple(
-    k for k in DEFINITION_KINDS if k not in (AGENT_DIRECTORY, "middlewares")
-)
+def resolve_definitions(cfg: Config) -> Definitions:
+    """This deployment's definitions, read from the folder `cfg` names.
 
-
-def resolve_definitions(cfg: Config, supplied: Definitions | Path | None = None) -> Definitions:
-    """Where this deployment's definitions are read from, settled once.
-
-    * **A folder** -- the one `cfg` names, or one the caller staged -- read as it is.
-      The folder has to exist, and a kind folder missing inside it means none of that
-      kind. Nothing is created: the folder may be one several deployments read, and
-      making one would hide a mount or a staging that failed behind a catalogue that
-      is merely empty. An agent told about no skills at all is exactly the
-      silent-emptiness this module's neighbours keep refusing.
-    * **A `Definitions` the caller built** -- theirs, so every directory it names
-      must already be there.
+    The folder has to exist, and a kind folder missing inside it means none of that
+    kind. Nothing is created: the folder may be one several deployments read, and making
+    one would hide a mount or a staging that failed behind a catalogue that is merely
+    empty. An agent told about no skills at all is exactly the silent-emptiness this
+    module's neighbours keep refusing.
     """
-    if not isinstance(supplied, Definitions):
-        folder = cfg.definitions if supplied is None else Path(supplied)
-        if not folder.is_dir():
-            msg = (
-                f"KINGFISHER_DEFINITIONS_DIR is {folder}, which is not a directory. "
-                "`kingfisher seed` makes one and fills it"
-                if supplied is None
-                else f"catalogue {folder} is not a directory; a supplied catalogue is "
-                "staged by whoever supplies it, and kingfisher will not create one in "
-                "case the staging is what failed"
-            )
-            raise ConfigError(msg)
-        # The mounts are the deployment's, not the catalogue's: a staged folder
-        # replaces the directories kingfisher would have read, not what it mounts.
-        return Definitions.from_roots(definition_roots_for(folder), skills_mounts=cfg.skills_mounts)
-
-    roots = {kind: getattr(supplied, kind).root for kind in STAGED_KINDS}
-    if absent := tuple(f"{kind} ({path})" for kind, path in roots.items() if not path.is_dir()):
+    if not cfg.definitions.is_dir():
         msg = (
-            f"catalogue names {', '.join(absent)}, which is not a directory; "
-            "a supplied catalogue is staged by whoever supplies it, and kingfisher "
-            "will not create one in case the staging is what failed"
+            f"KINGFISHER_DEFINITIONS_DIR is {cfg.definitions}, which is not a directory. "
+            "`kingfisher seed` makes one and fills it"
         )
         raise ConfigError(msg)
-    return supplied
+    return Definitions.from_roots(
+        definition_roots_for(cfg.definitions), skills_mounts=cfg.skills_mounts
+    )
 
 
 def refuse_unmountable(root: Path, mounts: Mapping[str, Path]) -> None:
