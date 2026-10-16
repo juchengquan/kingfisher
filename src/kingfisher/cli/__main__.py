@@ -45,7 +45,7 @@ from kingfisher.core.access.source_ids import with_datazone
 
 # The names here the door does not carry. The command ships in the same
 # distribution as the library, so it may take one at the module defining it --
-# see *The front door* in `docs/decisions.md` -- and each of these is something
+# see *The core and its plugins* in `docs/decisions.md` -- and each of these is something
 # no caller outside the wheel has asked for: the kinds a catalogue holds,
 # used to say what a directory has none of; where a workspace keeps its
 # sessions; and the warning `doctor` says as a check instead.

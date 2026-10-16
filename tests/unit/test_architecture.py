@@ -575,12 +575,7 @@ NOT_A_MODULE = frozenset({
 #: in `domain/subagent.py` as a live pointer at where a spec is translated. One
 #: is the rule doing its job and the other is the defect it exists to catch, and
 #: a table keyed by name alone would have to excuse both.
-PROSE_GONE: dict[str, frozenset[str]] = {
-    # The entry recording which move consolidated three document readers names one
-    # that has since gone: its only caller was the upload path, and the reader went
-    # with it.
-    "docs/decisions.md": frozenset({"core.definitions.skills.reading.name_from"}),
-}
+PROSE_GONE: dict[str, frozenset[str]] = {}
 
 
 def _module_file(name: str) -> Path | None:
@@ -1878,9 +1873,8 @@ def test_no_module_in_the_package_can_reach_itself():
     Python resolves one by luck of ordering and the other by raising, and which is which
     depends on who imports first -- so the suite passes while a cold
     `import kingfisher.core.definitions.subagents.catalogue` fails outright, which is what happened
-    once and is recorded in *Two modules came up a directory, and an import cycle is
-    why*. The layering rules forbid most shapes this could take; this forbids the shape
-    itself, which is the one that does not need a layer to be crossed.
+    once, and is recorded under *The core and its plugins* in `docs/decisions.md`. This
+    forbids the shape itself, whichever folders it crosses.
     """
     found = _cycles(_package_graph())
 

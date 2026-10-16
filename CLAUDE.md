@@ -92,7 +92,7 @@ happened four times, once since before the prose was cut, with nothing red.
 guards a specific past bug, name the bug -- that sentence is often the only
 record of it, and it stays however short the rest gets.
 
-**Layering is enforced, not remembered.** `tests/unit/test_architecture.py` parses
+**Who may import what is enforced, not remembered.** `tests/unit/test_architecture.py` parses
 imports against `THIRD_PARTY`, one entry per area, deny by default: the flat
 modules of `core/` take only `yaml`, and the agent runtime is reachable from
 `core/agent/`, which builds the graph, from `core/session/`, which runs a turn on
@@ -105,12 +105,13 @@ dependency means editing that table, not working around it. No test reads this
 paragraph against that table, so this is the one place the two can drift apart --
 re-read it when the table moves.
 
-**The core imports nothing from `plugins/`.** Only the command and the front door
-may, and `test_the_core_imports_nothing_from_plugins` holds it. A default the core
-falls back to lives in the core beside its interface; a plugin is what the core never
-names. The layers above are being folded into `core/` one move at a time -- see
-`docs/design/2026-10-16-core-and-plugins.md` -- and each move drops the layer rules it
-breaks.
+**The core imports nothing from `plugins/`, and a plugin nothing from another.** Only
+the command may reach into `plugins/`; `test_the_core_imports_nothing_from_plugins` and
+`test_no_plugin_imports_another` hold the two. A default the core falls back to lives in
+the core beside its interface; a plugin is what the core never names. Two addresses are
+public -- `kingfisher` for embedding and tool files, `kingfisher.plugins` for writing a
+plugin -- and everything else may move. *The core and its plugins* in `decisions.md`
+says why.
 
 **Measure before building on a premise.** Several decisions in `docs/decisions.md`
 exist because a stated premise turned out to be false when someone checked. If a

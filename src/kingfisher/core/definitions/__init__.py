@@ -2,9 +2,10 @@
 
 One directory per kind, each holding the format's own vocabulary, the reader for
 it, and the registry built from what was found -- which is what earns a kind a
-package, stated in *Not a module: middleware*. `DEFINITION_KINDS` says which five
-exist, and `test_kinds_holds_exactly_the_kinds` holds this directory to it in
-both directions, so a sixth cannot arrive by being dropped here.
+package, as *The core and its plugins* in `docs/decisions.md` says.
+`DEFINITION_KINDS` says which five exist, and `test_kinds_holds_exactly_the_kinds`
+holds this directory to it in both directions, so a sixth cannot arrive by being
+dropped here.
 
 **Nothing is imported here, and that is the point rather than an omission.** This
 file runs before any kind's own `__init__`, so a convenience re-export is paid for
