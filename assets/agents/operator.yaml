@@ -1,12 +1,12 @@
 name: operator
 description: Runs commands on your behalf, stopping for a yes before each one.
-# The complement of `surveyor.yaml`, and the two are worth reading together.
+# The complement of `analyst.yaml`, and the two are worth reading together.
 # That one is safe because it was never granted anything dangerous: no shell, no
-# writes, and the absence is the whole definition. This one *is* granted the
-# shell, and is safe because a person says yes first.
+# writes, and the absence is the whole of its `builtin_tools:` line. This one
+# *is* granted the shell, and is safe because a person says yes first.
 #
-# Named explicitly rather than omitted, for the reason `surveyor` gives: leaving
-# this line out grants every built-in there is. `write_file` and `delete` are
+# Named explicitly rather than omitted, because leaving this line out grants
+# every built-in there is. `write_file` and `delete` are
 # absent because the shell already covers what this agent is for, and two ways
 # to change a file means two things to gate.
 builtin_tools: [read_file, ls, glob, grep, execute]
@@ -19,7 +19,7 @@ builtin_tools: [read_file, ls, glob, grep, execute]
 # the command cannot be made to hold: `rm -rf` and `x=rm; $x -rf` are the same
 # command, and a gate you can phrase around is worse than no gate at all,
 # because it reads as protection. If that is too coarse for what you are
-# building, what you want is `surveyor` -- an agent that never had the shell.
+# building, what you want is `analyst` -- an agent that never had the shell.
 #
 # Gate a tool this agent does not hold and nothing happens: a gate needs
 # something to fire on, and there is no error because a caller who was granted

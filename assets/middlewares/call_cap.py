@@ -41,14 +41,13 @@ entry may be a factory closing over a live object, which a file cannot be.
         },
     )
 
-and in `agents/researcher.yaml`, or any `subagents/*.yaml`:
+and in `agents/assistant.yaml`, or any `subagents/*.yaml`:
 
     middlewares: [call-cap-strict]
 
-Both halves of that are written out: `assets/agents/researcher.yaml` and
+Both halves of that are written out: `assets/agents/assistant.yaml` and
 `assets/subagents/sweeper.yaml` are an agent and its subagent, naming the
 registry entries above under two different ceilings.
-`assets/agents/assistant.yaml` names every example as well.
 
 They live under their own kinds, and `seed` is what keeps them out of a
 workspace that cannot build them: it reads the `middlewares:` field, leaves such

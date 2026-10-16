@@ -12,9 +12,9 @@ metadata:
   owner: platform-team
   sensitivity: internal
 # Every built-in, said on purpose. Omitting the field means the same set, and
-# `assistant.yaml` does; `general.yaml` lists all ten by name, which is the only
-# spelling that does not take an eleventh the day deepagents adds one. The star
-# is how a file says "all" was decided rather than never considered.
+# `assistant.yaml` does. Listing all ten by name is the only spelling that does
+# not take an eleventh the day deepagents adds one. The star is how a file says
+# "all" was decided rather than never considered.
 #
 # All, because the `timeline` skill's script runs in the shell, so this agent
 # holds `execute` -- and leaving file tools out of an agent with a shell narrows

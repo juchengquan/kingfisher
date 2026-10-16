@@ -852,7 +852,7 @@ def inventory(
     # `same` on both axes, and for one reason: a definition writes a grant and the
     # catalogue has its own name for the same thing. Skills have two legal spellings
     # and so have always had one; tools have two as well -- `formats.md` documents
-    # `where::what`, and the shipped `surveyor` is written that way -- and had none, so
+    # `where::what`, and the shipped `analyst` is written that way -- and had none, so
     # a caller whose agent granted the long form was told they reached no tools.
     spelt = set(workspace_tools)
     offers_tool = admitted(
