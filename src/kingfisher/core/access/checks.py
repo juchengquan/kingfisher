@@ -7,12 +7,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from kingfisher.core.access.capabilities import ALL
+from kingfisher.core.access.reach import stated
 from kingfisher.core.access.source_ids import (
     AccessError,
     AccessReport,
     Datazone,
     _Unscoped,
-    stated,
     zone_name,
 )
 

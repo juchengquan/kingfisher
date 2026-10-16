@@ -34,7 +34,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from kingfisher.core.access.capabilities import ALL, Capabilities, Selection
-from kingfisher.core.access.source_ids import Audience, narrowed_for
+from kingfisher.core.access.reach import narrowed_for
+from kingfisher.core.access.source_ids import Audience
 
 
 @dataclass(frozen=True, kw_only=True)

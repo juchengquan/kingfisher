@@ -1473,7 +1473,8 @@ def test_the_shipped_quarters_is_for_sales_db_callers_in_emea(shipped):
     name, and only the dict's own two lines decide who is handed it.
     """
     from kingfisher.core.access.checks import held_by
-    from kingfisher.core.access.source_ids import handed_work_by, with_datazone
+    from kingfisher.core.access.reach import handed_work_by
+    from kingfisher.core.access.source_ids import with_datazone
 
     agents = LocalAgentRepository(shipped / "agents").specs
     subagents = LocalSubagentRepository(shipped / "subagents").specs

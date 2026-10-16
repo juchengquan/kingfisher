@@ -38,13 +38,8 @@ from kingfisher.core.access.capabilities import (
     Capabilities,
     CapabilityError,
 )
-from kingfisher.core.access.source_ids import (
-    AccessReport,
-    Held,
-    SourceIds,
-    reaches,
-    with_datazone,
-)
+from kingfisher.core.access.reach import reaches
+from kingfisher.core.access.source_ids import AccessReport, Held, SourceIds, with_datazone
 from kingfisher.core.agent.activation import (
     defined_subagents,
     for_the_caller,

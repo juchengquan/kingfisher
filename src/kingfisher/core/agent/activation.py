@@ -15,7 +15,7 @@ from kingfisher.core.access.capabilities import (
     narrowed,
     refuse_unoffered,
 )
-from kingfisher.core.access.source_ids import handed_work_by, within_reach
+from kingfisher.core.access.reach import handed_work_by, within_reach
 from kingfisher.core.agent.backend import bundled_skill_mounts
 from kingfisher.core.agent.kinds.subagents import indistinct
 from kingfisher.core.config import ConfigError

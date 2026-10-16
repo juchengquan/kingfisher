@@ -12,7 +12,7 @@ from kingfisher.core.access.capabilities import (
     Selection,
     narrowed,
 )
-from kingfisher.core.access.source_ids import reaches
+from kingfisher.core.access.reach import reaches
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.definitions.tools.spec import Found, Offering, out_of_reach
