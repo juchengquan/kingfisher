@@ -1363,6 +1363,46 @@ def test_the_plugin_rule_sees_an_import_of_one(tmp_path):
     assert _reaches_a_plugin(written) == ["kingfisher.plugins.sessions.backend"]
 
 
+def _other_plugins(path: Path, own: str) -> list[str]:
+    """The plugins other than `own` that a module imports, the package's root included:
+    the root is the public address, and it names every plugin."""
+    return [
+        module
+        for module in _reaches_a_plugin(path)
+        if (module.split(".")[2] if module.count(".") >= 2 else "") != own
+    ]
+
+
+def test_no_plugin_imports_another():
+    """A plugin naming another can no longer be shipped or replaced without it -- the
+    reason the core names none, one level down."""
+    plugins = SRC / "plugins"
+    crossing = {
+        _module_id(path): found
+        for path in _every(sorted(plugins.rglob("*.py")), "the plugins")
+        if path != plugins / "__init__.py"
+        and (found := _other_plugins(path, path.relative_to(plugins).parts[0].removesuffix(".py")))
+    }
+
+    assert not crossing, f"{crossing} -- a plugin imports the core and never another plugin"
+
+
+def test_the_cross_plugin_rule_tells_its_own_from_another(tmp_path):
+    """Both directions, so a predicate refusing everything, or nothing, fails here."""
+    written = tmp_path / "probe.py"
+    written.write_text(
+        "from kingfisher.plugins.events import JsonlRunEvents\n"
+        "from kingfisher.plugins.sessions.folders import LocalSessionDirs\n"
+    )
+
+    assert _other_plugins(written, "sessions") == ["kingfisher.plugins.events"]
+    assert _other_plugins(written, "events") == ["kingfisher.plugins.sessions.folders"]
+    written.write_text("from kingfisher.plugins import LocalSessions\n")
+    assert _other_plugins(written, "sessions") == ["kingfisher.plugins"], (
+        "the address is not a back door"
+    )
+
+
 def test_the_agent_package_is_the_one_speaking_to_the_harness():
     """The runtime's entry in `THIRD_PARTY` is about a package that still uses it."""
     runtime = THIRD_PARTY["core/agent"]
@@ -2199,6 +2239,85 @@ def test_the_package_does_not_depend_on_the_eval_harness():
         assert not any(m.split(".")[0] == "evals" for m in modules), (
             f"{_module_id(path)} imports evals/ — the wheel does not ship it"
         )
+
+
+#: Calls that reach outside the process. Not exhaustive as a security measure --
+#: it is a design guard, and its job is to make the *easy* violation loud.
+WORLD_CALLS = frozenset({
+    "mkdir", "rmdir", "rmtree", "copytree", "copyfile", "copy", "move",
+    "write_text", "write_bytes", "read_text", "read_bytes", "open",
+    "unlink", "touch", "chmod", "rename", "replace",
+    "iterdir", "glob", "rglob", "walk", "exists", "is_dir", "is_file",
+    "stat", "resolve", "run", "check_output", "Popen",
+})
+
+WORLD_MODULES = frozenset({"subprocess", "shutil", "os", "tempfile", "io", "socket"})
+
+
+def _world_contact(path: Path) -> list[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found += [
+                f"L{node.lineno} import {a.name}"
+                for a in node.names
+                if a.name.split(".")[0] in WORLD_MODULES
+            ]
+        elif (
+            isinstance(node, ast.ImportFrom)
+            and node.module
+            and node.module.split(".")[0] in WORLD_MODULES
+        ):
+            found.append(f"L{node.lineno} from {node.module}")
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in WORLD_CALLS
+        ):
+            found.append(f"L{node.lineno} .{node.func.attr}()")
+    return found
+
+
+#: What a request is asked in and answered with, the interfaces a deployment implements,
+#: and the access vocabulary they are written in. Named rather than found by folder:
+#: they sit among modules that do touch the disk, and what they share is a property,
+#: not a place.
+RECORDS = (
+    "core/request.py",
+    "core/result.py",
+    "core/interfaces.py",
+    "core/access/capabilities.py",
+    "core/access/source_ids.py",
+    "core/access/reach.py",
+    "core/definitions/fields.py",
+)
+
+
+def test_the_records_touch_nothing_outside_the_process():
+    """A record that reads a file or runs a command cannot be built without a workspace
+    to stand behind it, in a test or in a deployment's own code."""
+    reaching = [
+        f"{_module_id(path)}: {contact}"
+        for path in _every([SRC / record for record in RECORDS], "the records")
+        if (contact := _world_contact(path))
+    ]
+
+    assert not reaching, (
+        f"the records reach the world: {reaching} -- have the caller do it and hand the "
+        "record the result"
+    )
+
+
+def test_the_world_rule_sees_a_read_and_an_import(tmp_path):
+    """The records pass today, so the rule has to be shown to bite."""
+    written = tmp_path / "record.py"
+    written.write_text("import subprocess\n\ndef load(p):\n    return p.read_text()\n")
+    clean = tmp_path / "clean.py"
+    clean.write_text("def load(text):\n    return text.strip()\n")
+
+    assert _world_contact(written) == ["L1 import subprocess", "L4 .read_text()"]
+    assert _world_contact(clean) == []
 
 
 #: Calls that *change* the filesystem, as opposed to reading it or the
