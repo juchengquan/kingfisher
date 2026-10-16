@@ -189,7 +189,7 @@ def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
         msg = "sweep ran despite the request being rejected"
         raise AssertionError(msg)
 
-    monkeypatch.setattr("kingfisher.domain.retention.apply", must_not_run)
+    monkeypatch.setattr("kingfisher.core.session.retention.apply", must_not_run)
 
     with pytest.raises(CapabilityError):
         run(

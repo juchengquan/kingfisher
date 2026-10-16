@@ -10,8 +10,8 @@ from kingfisher.application.service import Kingfisher
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.prompting import system_prompt
+from kingfisher.core.session.steps import drive
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.steps import drive
 from tests.conftest import FakeToolCallingModel, harness_in
 
 NARROW = """name: narrow
@@ -232,7 +232,7 @@ def test_a_snapshot_is_written_once_and_not_overwritten(cfg, tmp_path):
     would reintroduce exactly what the file exists to prevent, and every test above
     would still pass.
     """
-    from kingfisher.infrastructure.session_store import agent_started_with, remember_agent
+    from kingfisher.core.session.store import agent_started_with, remember_agent
 
     harness = harness_in(cfg, tmp_path)
     drive(remember_agent(harness, "name: first\ndescription: One.\n"))

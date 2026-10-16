@@ -332,7 +332,7 @@ def test_a_helper_below_a_subagent_is_guarded_too(cfg, session_dir):
 
 def test_a_converted_failure_still_reaches_the_run_log(cfg, session_dir):
     """Catching it for the model does not hide it from whoever reads afterwards."""
-    from kingfisher.infrastructure.harness.runlog import RunLogger
+    from kingfisher.core.session.runlog import RunLogger
     from tests.conftest import RecordedEvents
 
     sink = RecordedEvents()

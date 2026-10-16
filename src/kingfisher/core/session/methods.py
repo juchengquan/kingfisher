@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.core.access.checks import caller_holds
 from kingfisher.core.access.source_ids import reaches
 from kingfisher.core.definitions.agents.reading import read
-from kingfisher.domain.request import Request, Resume
-from kingfisher.domain.session import (
+from kingfisher.core.session.model import (
     DEFAULT_SESSION,
     QuotaExceededError,
     Session,
@@ -16,8 +15,9 @@ from kingfisher.domain.session import (
     known,
     unknown_session,
 )
-from kingfisher.infrastructure.session_store import HarnessFiles, agent_started_with
-from kingfisher.infrastructure.steps import Steps, adrive, drive, reading
+from kingfisher.core.session.steps import Steps, adrive, drive, reading
+from kingfisher.core.session.store import HarnessFiles, agent_started_with
+from kingfisher.domain.request import Request, Resume
 
 if TYPE_CHECKING:
     from collections.abc import Callable

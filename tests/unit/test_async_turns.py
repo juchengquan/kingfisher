@@ -15,9 +15,9 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import LocalSessions
 from kingfisher.application.service import Kingfisher
+from kingfisher.core.session import runtime
+from kingfisher.core.session.model import SessionBusyError
 from kingfisher.domain.request import Request
-from kingfisher.domain.session import SessionBusyError
-from kingfisher.infrastructure.harness import runtime
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 
@@ -489,7 +489,7 @@ def test_cancelling_at_any_step_of_setup_leaves_the_session_free(cfg, monkeypatc
     import yaml
 
     from kingfisher.core.access.source_ids import parse
-    from kingfisher.infrastructure import steps as steps_module
+    from kingfisher.core.session import steps as steps_module
     from tests.conftest import an_agent
 
     an_agent(cfg, "only_a", source_ids="[A]")
@@ -601,7 +601,7 @@ def test_the_turns_ending_runs_to_the_end_however_often_it_is_cancelled(cfg, mon
 
     Counted rather than listed, so a step added to the ending is cancelled at too.
     """
-    from kingfisher.infrastructure import steps as steps_module
+    from kingfisher.core.session import steps as steps_module
 
     session = start(cfg, "s")
     kf = service(cfg)

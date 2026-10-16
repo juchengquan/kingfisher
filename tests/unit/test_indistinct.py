@@ -11,8 +11,8 @@ from kingfisher.core.agent.activation import indistinct_subagents
 from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.definitions.subagents.rules import resolved_model
 from kingfisher.core.definitions.subagents.spec import RunOn
+from kingfisher.core.session.steps import drive
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.steps import drive
 from tests.conftest import a_subagent, an_agent, start, subagents_dir
 
 ASKED = """name: second-opinion

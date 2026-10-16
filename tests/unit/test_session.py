@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-from kingfisher.domain.session import Session, UnknownSessionError, session_dir
+from kingfisher.core.session.model import Session, UnknownSessionError, session_dir
 
 #: One of each form of id that cannot name a session's folder: not one visible entry.
 UNNAMABLE = ("", ".", "..", ".hidden", ".harness", "../../escaped", "/etc", "a/b", "a\x00b")
@@ -67,7 +67,7 @@ def test_the_turn_message_names_both_forms_of_the_scratch_path(workspace):
     now, which changes nothing about the measurement -- what was measured is the
     agent's handling of the two spellings.
     """
-    from kingfisher.application.turn import turn_message
+    from kingfisher.core.session.turn import turn_message
 
     message = turn_message("count the rows", ())
 

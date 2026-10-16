@@ -5948,7 +5948,7 @@ loop's default executor, `min(32, cpu+4)` workers -- 12 on the 8-CPU host this w
 measured on -- and a call that blocks for a round trip holds its worker for all of
 it. At a simulated 50ms round trip, 200 concurrent calls took 917ms on that pool,
 73ms on one of 256 threads and 56ms awaited natively. Setup and `arun`'s disposal
-go through `infrastructure.threads` now, which copies the caller's context as
+go through `core.session.threads` now, which copies the caller's context as
 `to_thread` does. One pool rather than one per `Kingfisher` because threads are the
 process's to spend; `KINGFISHER_THREAD_POOL_SIZE` is asked for when a service is
 built, so a second size is refused there, naming both, rather than queueing behind
@@ -6800,7 +6800,7 @@ three provider SDKs.
 Worth knowing before that scope changes: **nothing declares what a harness is.**
 The twelve Protocols in `domain/ports.py` abstract storage and the OS -- stores,
 repositories, a command runner -- and not one of them abstracts the runtime;
-`application/` reaches it as `infrastructure.harness.runtime`, a module rather
+`application/` reaches it as `core.session.runtime`, a module rather
 than a port. So a second harness does not begin by rewriting ten files, it begins
 by discovering the interface, which is not written down anywhere. That is the
 right order: an interface derived from a single implementation comes out shaped

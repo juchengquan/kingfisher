@@ -45,8 +45,8 @@ from kingfisher import (
 from kingfisher.config import Config
 from kingfisher.core.access.capabilities import ALL, CapabilityError, all_but
 from kingfisher.core.definitions import seeding
-from kingfisher.domain.session import sessions_root
-from kingfisher.infrastructure.harness.runlog import usage_of
+from kingfisher.core.session.model import sessions_root
+from kingfisher.core.session.runlog import usage_of
 from kingfisher.infrastructure.workspace import SEED_HINT, ensure_layout
 from kingfisher.layout import OUTPUTS
 from kingfisher.plugins.sessions.folders import ensure_session_layout

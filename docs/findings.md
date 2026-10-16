@@ -37,7 +37,7 @@ wrong.*
   subagent's chunks arrive under a `tools:<id>` namespace, each carrying
   `lc_agent_name`. Kingfisher has streamed that way since the day of the probe
   and tags a subagent's `model_call`, `tool_result` and `token` events with
-  `agent=<name>` -- `SubagentNames` in `infrastructure/harness/runtime.py`, held
+  `agent=<name>` -- `SubagentNames` in `core/session/runtime.py`, held
   by `tests/unit/test_stream_subagents.py`.
 - **An `updates` chunk carries a message written back under its own id as if it were
   new.** Clearing swaps an older result for its handle that way, and deepagents'
@@ -46,7 +46,7 @@ wrong.*
   every clearing pass re-announced each message it cleared, the replies with their old
   usage. `values` arrives after a step's writes and `updates` before them, so the ids
   the conversation held at the last `values` are what tell a rewrite apart --
-  `SeenMessages` in `infrastructure/harness/runtime.py`, held by
+  `SeenMessages` in `core/session/runtime.py`, held by
   `tests/unit/test_rewritten_events.py`. *(2026-10-16, langgraph 1.2.15.)*
 - **Tool results arrive on the `messages` stream untruncated.** They must be
   skipped explicitly, or preview protection is bypassed and a 50KB file read

@@ -18,9 +18,9 @@ import pytest
 import kingfisher
 from kingfisher import LocalSessions
 from kingfisher.application.plugins import Plugins
+from kingfisher.core.session.steps import drive
 from kingfisher.domain.result import AWAITING, RunResult
 from kingfisher.domain.result import PendingDecision as Pending
-from kingfisher.infrastructure.steps import drive
 from kingfisher.presentation.cli import __main__ as cli
 from tests.conftest import RecordedEvents, Through
 
@@ -213,7 +213,7 @@ def test_deciding_nothing_shows_what_is_waiting(cfg, monkeypatch, capsys):
     paused -- and it reads the mark rather than starting a turn, because every other
     way into the session is a turn and a turn is what discards the gate.
     """
-    from kingfisher.infrastructure.session_store import pending_as_mark, write_pause_mark
+    from kingfisher.core.session.store import pending_as_mark, write_pause_mark
     from tests.conftest import harness_of, start
 
     start(cfg, "s-1")
@@ -371,7 +371,7 @@ def _a_paused_session_only_a_reaches(cfg):
     import yaml
 
     from kingfisher.core.access.source_ids import parse
-    from kingfisher.infrastructure.session_store import pending_as_mark, write_pause_mark
+    from kingfisher.core.session.store import pending_as_mark, write_pause_mark
     from tests.conftest import an_agent, harness_of, pin, start
 
     an_agent(cfg, "only_a", source_ids="[A]")

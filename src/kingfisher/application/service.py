@@ -32,22 +32,11 @@ from time import monotonic
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.application import config as config_module
-from kingfisher.application.disposal import Disposal
 from kingfisher.application.origins import Origins
 from kingfisher.application.reporting import (
     opening_events,
     subagent_only,
     withheld_by_kind,
-)
-from kingfisher.application.sessions import SessionMethods
-from kingfisher.application.turn import (
-    Prepared,
-    consume,
-    decision_discarded,
-    decision_needed,
-    out_of_steps,
-    overrun,
-    turn_message,
 )
 from kingfisher.config import Config, ConfigError
 from kingfisher.core.access import checks as access
@@ -91,19 +80,8 @@ from kingfisher.core.agent.usable_backend import refuse_unusable_backend
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions, resolve_definitions
-from kingfisher.domain.request import DecisionError, Request, Resume
-from kingfisher.domain.result import (
-    AWAITING,
-    END_TURN,
-    LedgerEntry,
-    PendingDecision,
-    RunEvent,
-    RunResult,
-    normalize_answer,
-)
-from kingfisher.domain.session import Session, SessionBusyError, sessions_root, unknown_session
-from kingfisher.infrastructure.harness import runtime
-from kingfisher.infrastructure.harness.checkpointing import (
+from kingfisher.core.session import runtime
+from kingfisher.core.session.checkpointing import (
     SharedThreads,
     build_session_checkpointer,
     harness_mark,
@@ -111,14 +89,25 @@ from kingfisher.infrastructure.harness.checkpointing import (
     release_checkpointer,
     resumed_saver,
 )
-from kingfisher.infrastructure.harness.ledger import Ledger, keep_ledger
-from kingfisher.infrastructure.harness.runlog import LoggedRunEvents, RunLogger
-from kingfisher.infrastructure.session_files import (
+from kingfisher.core.session.disposal import Disposal
+from kingfisher.core.session.files import (
     collect_artifacts,
     place_inputs,
     read_artifact,
 )
-from kingfisher.infrastructure.session_store import (
+from kingfisher.core.session.ledger import Ledger, keep_ledger
+from kingfisher.core.session.methods import SessionMethods
+from kingfisher.core.session.model import Session, SessionBusyError, sessions_root, unknown_session
+from kingfisher.core.session.runlog import LoggedRunEvents, RunLogger
+from kingfisher.core.session.steps import (
+    Steps,
+    adrive,
+    adrive_finished,
+    changing,
+    drive,
+    on_host,
+)
+from kingfisher.core.session.store import (
     AGENT_MARK,
     PENDING_MARK,
     HarnessFiles,
@@ -134,15 +123,26 @@ from kingfisher.infrastructure.session_store import (
     write_pause_mark,
     write_transcript,
 )
-from kingfisher.infrastructure.steps import (
-    Steps,
-    adrive,
-    adrive_finished,
-    changing,
-    drive,
-    on_host,
+from kingfisher.core.session.threads import finished, thread_pool
+from kingfisher.core.session.turn import (
+    Prepared,
+    consume,
+    decision_discarded,
+    decision_needed,
+    out_of_steps,
+    overrun,
+    turn_message,
 )
-from kingfisher.infrastructure.threads import finished, thread_pool
+from kingfisher.domain.request import DecisionError, Request, Resume
+from kingfisher.domain.result import (
+    AWAITING,
+    END_TURN,
+    LedgerEntry,
+    PendingDecision,
+    RunEvent,
+    RunResult,
+    normalize_answer,
+)
 from kingfisher.infrastructure.workspace import (
     SEED_HINT,
     ensure_layout,

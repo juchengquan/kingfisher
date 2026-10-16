@@ -37,8 +37,8 @@ from kingfisher.core.agent.host_paths import reject_host_path
 from kingfisher.core.agent.prompting import ShellPrompt, kingfishers_shell
 from kingfisher.core.definitions.catalogue import Definitions, refuse_unmountable
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
+from kingfisher.core.session.model import session_dir, sessions_root, still_held
 from kingfisher.domain.ports import CommandRunner
-from kingfisher.domain.session import session_dir, sessions_root, still_held
 from kingfisher.layout import (
     CLAIM,
     HARNESS,

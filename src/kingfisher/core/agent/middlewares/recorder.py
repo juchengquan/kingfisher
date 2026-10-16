@@ -22,7 +22,7 @@ from kingfisher.domain.result import MAIN, WORKING, LedgerEntry, Listed
 from kingfisher.layout import TOOL_RESULTS_ROUTE
 
 if TYPE_CHECKING:
-    from kingfisher.infrastructure.harness.ledger import Ledger
+    from kingfisher.core.session.ledger import Ledger
 
 _log = logging.getLogger(__name__)
 

@@ -15,7 +15,7 @@ from langchain_core.language_models.fake_chat_models import FakeMessagesListChat
 
 from kingfisher.config import Config, Endpoint, Landing, ModelProfile, Models, WireFormat
 from kingfisher.core.agent.models import WIRE_FORMATS
-from kingfisher.infrastructure.steps import drive
+from kingfisher.core.session.steps import drive
 from kingfisher.infrastructure.workspace import ensure_definitions, ensure_layout
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.unit.scripted import Scripted
@@ -298,7 +298,7 @@ def harness_in(cfg, session_dir: Path):
     """The same, for a session directory a test already holds -- including one kept
     somewhere other than under the workspace.
     """
-    from kingfisher.infrastructure.session_store import HarnessFiles
+    from kingfisher.core.session.store import HarnessFiles
 
     return HarnessFiles(_backend_in(cfg, session_dir), Path(session_dir).name)
 
@@ -379,7 +379,7 @@ def pin(kf, session_id: str, name: str) -> None:
     resolves an agent at all, so a test whose subject is the pin cannot get one by
     running a turn.
     """
-    from kingfisher.infrastructure.session_store import remember_agent
+    from kingfisher.core.session.store import remember_agent
 
     document = kf.catalogue.agents.documents[name]
     drive(remember_agent(harness_of(kf.cfg, session_id), document))

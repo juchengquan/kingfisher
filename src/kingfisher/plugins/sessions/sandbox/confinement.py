@@ -30,7 +30,7 @@ from functools import partial
 from pathlib import Path, PurePosixPath
 
 from kingfisher.config import Config
-from kingfisher.domain.session import sessions_root
+from kingfisher.core.session.model import sessions_root
 from kingfisher.layout import HARNESS, HARNESS_OWNED, INPUTS, SANDBOX_PROFILE, SAVED_RESULTS
 
 #: `landlock_create_ruleset`, which is 444 on every architecture that has it --

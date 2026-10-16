@@ -27,7 +27,7 @@ domain with deepagents at the edge.
 
 **The harness quarantine protects one of its two things.** It was to keep a deepagents
 upgrade inside `infrastructure/harness/` and keep startup cheap. The last upgrade,
-*Upgrade deepagents to 0.7.22*, changed `infrastructure/session_files.py` and
+*Upgrade deepagents to 0.7.22*, changed `core/session/files.py` and
 `kinds/subagents/spec.py`, neither inside it. Startup cost is real and worth holding --
 `import deepagents` is about 1.4s where `kingfisher seed` is about 20ms -- and a check
 that imports for real in a fresh interpreter holds it without a folder rule.
@@ -218,7 +218,7 @@ One pull request each, off `main` once the one before it has merged.
 12. Move `core/access`, and the field reader into `core/definitions`. *(Landed.)*
 13. Move `core/agent`, `agent.py` renamed `assembly.py`, and the harness-edge table
     deleted with the boundary it drew. *(Landed.)*
-14. Move `core/session`.
+14. Move `core/session`, which empties `infrastructure/harness/`. *(Landed.)*
 15. Move the flat core.
 16. Move `cli/`.
 17. The new import rules, one `decisions.md` entry in place of the three this supersedes,

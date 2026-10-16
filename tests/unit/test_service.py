@@ -11,13 +11,13 @@ import pytest
 from kingfisher import Kingfisher, LocalSessions, backend_at
 from kingfisher.application.reporting import opening_events
 from kingfisher.application.service import refused_credentials
-from kingfisher.application.turn import turn_message
 from kingfisher.config import ConfigError
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
+from kingfisher.core.session.steps import drive
+from kingfisher.core.session.turn import turn_message
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.steps import drive
 from kingfisher.layout import HARNESS, PINNED_AGENT
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import (
@@ -282,8 +282,8 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how)
     until the claim went stale; refused after `run_start`, the run log held a turn that
     never ran.
     """
-    from kingfisher.domain.session import QuotaExceededError
-    from kingfisher.infrastructure.session_files import InputsError
+    from kingfisher.core.session.files import InputsError
+    from kingfisher.core.session.model import QuotaExceededError
     from tests.conftest import RecordedEvents, start
     from tests.unit.test_tenancy import _claim
 

@@ -9,8 +9,8 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request, UnknownSessionError
 from kingfisher.application import service as service_module
+from kingfisher.core.session.model import session_dir
 from kingfisher.domain.ports import CommandResult
-from kingfisher.domain.session import session_dir
 from kingfisher.plugins.sessions.backend import LocalSessions
 from tests.conftest import StubCheckpointer, Through, an_agent, start
 from tests.unit.scripted import Scripted

@@ -11,8 +11,8 @@ from kingfisher import LocalSessions
 from kingfisher.application.service import Kingfisher
 from kingfisher.core.access.capabilities import CapabilityError
 from kingfisher.core.access.source_ids import UNSCOPED, AccessError, parse
+from kingfisher.core.session.model import UnknownSessionError
 from kingfisher.domain.request import Request
-from kingfisher.domain.session import UnknownSessionError
 from tests.conftest import Through, an_agent, pin, start
 
 VOCABULARY = "source_ids: [A, B]\n"

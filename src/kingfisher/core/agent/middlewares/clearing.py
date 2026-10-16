@@ -19,8 +19,8 @@ from kingfisher.core.agent.models import summarizer_trigger
 from kingfisher.core.definitions.subagents import TASK_TOOL
 
 if TYPE_CHECKING:
+    from kingfisher.core.session.ledger import Ledger
     from kingfisher.domain.result import LedgerEntry
-    from kingfisher.infrastructure.harness.ledger import Ledger
 
 #: The high mark on a large window, in tokens: the conversation size a pass starts at.
 #: Each pass leaves it at half this, the low mark.

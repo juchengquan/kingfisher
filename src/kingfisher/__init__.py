@@ -35,8 +35,8 @@ _EXPORTS = {
     "UNSCOPED": "kingfisher.core.access.source_ids",
     "Capabilities": "kingfisher.core.access.capabilities",
     "CapabilityError": "kingfisher.core.access.capabilities",
-    "QuotaExceededError": "kingfisher.domain.session",
-    "SessionBusyError": "kingfisher.domain.session",
+    "QuotaExceededError": "kingfisher.core.session.model",
+    "SessionBusyError": "kingfisher.core.session.model",
     "SubagentError": "kingfisher.core.definitions.subagents.spec",
     "UnsafeReferenceError": "kingfisher.domain.references",
     "HostPathError": "kingfisher.core.agent.host_paths",
@@ -71,7 +71,7 @@ _EXPORTS = {
     # How a tool file says who may use its tool. Called inside a deployment's own
     # `tools/`, for the reason `ToolContext` is imported there.
     "tool": "kingfisher.core.agent.audienced_tool",
-    "UnknownSessionError": "kingfisher.domain.session",
+    "UnknownSessionError": "kingfisher.core.session.model",
     "Config": "kingfisher.config",
     "WorkspacePaths": "kingfisher.config",
     # What a `KINGFISHER_WIRE_FORMATS` returns rows of, so a deployment adding
@@ -94,7 +94,7 @@ _EXPORTS = {
     "RunOn": "kingfisher.core.definitions.subagents.spec",
     "RunEvent": "kingfisher.domain.result",
     "RunResult": "kingfisher.domain.result",
-    "SessionInfo": "kingfisher.domain.session",
+    "SessionInfo": "kingfisher.core.session.model",
     "definitions_source": "kingfisher.infrastructure.workspace",
     "ensure_definitions": "kingfisher.infrastructure.workspace",
     "kinds_at": "kingfisher.infrastructure.workspace",
@@ -198,6 +198,10 @@ if TYPE_CHECKING:
     from kingfisher.core.agent.tool_context import ToolContext as ToolContext
     from kingfisher.core.definitions.subagents.spec import RunOn as RunOn
     from kingfisher.core.definitions.subagents.spec import SubagentError as SubagentError
+    from kingfisher.core.session.model import QuotaExceededError as QuotaExceededError
+    from kingfisher.core.session.model import SessionBusyError as SessionBusyError
+    from kingfisher.core.session.model import SessionInfo as SessionInfo
+    from kingfisher.core.session.model import UnknownSessionError as UnknownSessionError
     from kingfisher.domain.ports import CommandResult as CommandResult
     from kingfisher.domain.references import UnsafeReferenceError as UnsafeReferenceError
     from kingfisher.domain.request import Decision as Decision
@@ -209,10 +213,6 @@ if TYPE_CHECKING:
     from kingfisher.domain.result import PendingDecision as PendingDecision
     from kingfisher.domain.result import RunEvent as RunEvent
     from kingfisher.domain.result import RunResult as RunResult
-    from kingfisher.domain.session import QuotaExceededError as QuotaExceededError
-    from kingfisher.domain.session import SessionBusyError as SessionBusyError
-    from kingfisher.domain.session import SessionInfo as SessionInfo
-    from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
     from kingfisher.infrastructure.workspace import Seeded as Seeded
     from kingfisher.infrastructure.workspace import (
         definitions_source as definitions_source,

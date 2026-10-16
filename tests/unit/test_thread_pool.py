@@ -9,7 +9,7 @@ import pytest
 from kingfisher import LocalSessions
 from kingfisher.application.service import Kingfisher
 from kingfisher.config import ConfigError
-from kingfisher.infrastructure import threads
+from kingfisher.core.session import threads
 from tests.conftest import StubCheckpointer
 from tests.unit.test_run import StubAgent
 

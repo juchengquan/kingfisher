@@ -9,8 +9,8 @@ from langchain_core.messages import AIMessage
 from langgraph.errors import GraphRecursionError
 
 from kingfisher import Kingfisher, LocalSessions
+from kingfisher.core.session.model import QuotaExceededError
 from kingfisher.domain.request import Request
-from kingfisher.domain.session import QuotaExceededError
 from kingfisher.plugins.sessions.folders import session_bytes
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
