@@ -26,9 +26,9 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.permitted_backend import PermittedBackend
 from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
+from kingfisher.core.session import runtime
 from kingfisher.domain.request import Decision, Request, Resume
 from kingfisher.domain.result import AWAITING
-from kingfisher.infrastructure.harness import runtime
 from tests.conftest import (
     FakeToolCallingModel,
     an_agent,

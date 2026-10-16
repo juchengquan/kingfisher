@@ -296,7 +296,7 @@ class Layout:
     leaving a prompt or a deny rule still spelling the old name.
 
     Fixed, and not here: the `sessions` root (the agent never addresses it, and
-    `domain.session` derives session paths without being able to import this module);
+    `core.session.model` derives session paths without being able to import this module);
     `.harness` and `skills`; and deepagents' own leaves under the scratchpad
     (`large_tool_results`, `conversation_history`, `blobs`), which deepagents builds from
     the scratchpad's name -- only the parent moves.

@@ -21,7 +21,7 @@ from kingfisher import Config, ConfigError, Inventory, inventory, kinds_at
 # everybody who runs `pip install kingfisher`. The command ships in this wheel, so it
 # takes each name where it lives.
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
-from kingfisher.domain.session import sessions_root
+from kingfisher.core.session.model import sessions_root
 from kingfisher.infrastructure.workspace import MemoryBacking, memory_backing
 from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.sandbox.bubblewrap import bubblewrap_available

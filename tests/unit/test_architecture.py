@@ -532,7 +532,7 @@ def test_the_dangling_import_rule_can_tell_a_gone_module_from_a_real_one():
     """
     assert _names_a_real_module("kingfisher")
     assert _names_a_real_module("kingfisher.core.definitions.tools.spec")
-    assert _names_a_real_module("kingfisher.infrastructure.harness")
+    assert _names_a_real_module("kingfisher.core.session")
     assert _names_a_real_module("kingfisher.core.agent.assembly")
 
     assert not _names_a_real_module("kingfisher.infrastructure.agent")
@@ -1002,7 +1002,7 @@ def test_a_nested_package_is_a_prose_root(tmp_path):
     Read one directory deep, the rule stops *matching* references to a package that
     moved down a level rather than failing them -- so the move buries every comment
     naming the old path and nothing goes red, which is the one failure this rule
-    cannot report about itself. `harness`, `sandbox` and `workspace` are nested
+    cannot report about itself. `session`, `sandbox` and `workspace` are nested
     packages here.
     """
     (tmp_path / "layer").mkdir()
@@ -1017,7 +1017,7 @@ def test_a_nested_package_is_a_prose_root(tmp_path):
     # And against the real tree, which is what the rule actually runs on. Backticks
     # are added here rather than written, so the rule scanning this file does not
     # read its own negatives as claims about the tree.
-    for missing in ("harness.nowhere", "workspace.nowhere", "sandbox.nowhere"):
+    for missing in ("session.nowhere", "workspace.nowhere", "sandbox.nowhere"):
         assert _prose_unresolved(f"`{missing}`") == [missing], (
             f"{missing} is rooted at a package that is not at the top level, and a "
             "reference the pattern never matches is one the rule cannot fail"
@@ -1230,7 +1230,7 @@ def test_the_domain_may_name_a_spec_but_not_a_catalogue():
 #: Measured, not declared -- every entry is a package some module imports today.
 THIRD_PARTY: dict[str, frozenset[str]] = {
     # The agent runtime, which building one request's graph speaks to throughout.
-    # `infrastructure/harness`, `core/definitions/skills` and
+    # `core/session`, `core/definitions/skills` and
     # `core/definitions/middlewares` reach it too, and their entries below say so --
     # an upgrade is still a list of files rather than a search, and the list spans
     # more than one directory.
@@ -1243,7 +1243,7 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     }),
     # Running a turn and keeping its conversation: the stream the graph emits and the
     # checkpointer it was built with.
-    "infrastructure/harness": frozenset({"deepagents", "langchain_core", "langgraph"}),
+    "core/session": frozenset({"deepagents", "langchain_core", "langgraph"}),
     # The rest of the layer adapts the disk and the environment, and needs one parser
     # to do it.
     "infrastructure": frozenset({"yaml"}),
@@ -1342,14 +1342,12 @@ def test_an_area_is_refused_another_areas_dependencies():
 
 
 def test_a_subpackage_is_judged_by_its_own_area():
-    """`infrastructure/harness/runtime.py` is not judged as `infrastructure/`."""
+    """`core/session/runtime.py` is judged as `core/session`, not the package root."""
     buried = SRC / "infrastructure" / "workspace" / "backing.py"
     for path in (buried, SRC / "domain" / "request.py", SRC / "config.py"):
         assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
 
-    assert _area_of(SRC / "infrastructure" / "harness" / "runtime.py") == (
-        "infrastructure/harness"
-    )
+    assert _area_of(SRC / "core" / "session" / "runtime.py") == "core/session"
     assert _area_of(SRC / "domain" / "request.py") == "domain"
     # A kind's module is its own area, which is what lets `core/definitions/skills/registry.py`
     # name the runtime without `domain/` or `kinds/` inheriting the permission.
@@ -2926,7 +2924,7 @@ def test_a_caller_facing_error_is_the_same_class_either_way():
     catching `kingfisher.SessionBusyError` catches what the domain raises.
     """
     import kingfisher
-    from kingfisher.domain.session import SessionBusyError
+    from kingfisher.core.session.model import SessionBusyError
 
     assert kingfisher.SessionBusyError is SessionBusyError
 
@@ -4117,4 +4115,4 @@ def test_the_class_attribute_rule_is_looking_at_something():
     assert PROSE_ATTR.findall("see `Config.resolve_model` for this") == [
         ("Config", "resolve_model")
     ]
-    assert PROSE_ATTR.findall("`models.yaml` and `infrastructure.harness`") == []
+    assert PROSE_ATTR.findall("`models.yaml` and `core.session`") == []

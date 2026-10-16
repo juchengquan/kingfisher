@@ -15,7 +15,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher import Kingfisher, LocalSessions, Request
-from kingfisher.infrastructure.harness import runtime
+from kingfisher.core.session import runtime
 from kingfisher.layout import HARNESS, TRANSCRIPT_FILE
 from tests.conftest import an_agent, start, tools_dir
 from tests.unit.scripted import Scripted

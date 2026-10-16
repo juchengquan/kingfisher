@@ -78,7 +78,7 @@ from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.spec import RunOn
 from kingfisher.core.definitions.tools.spec import Found, own_audiences
-from kingfisher.domain.session import sessions_root
+from kingfisher.core.session.model import sessions_root
 from kingfisher.layout import Layout
 
 if TYPE_CHECKING:
@@ -86,7 +86,7 @@ if TYPE_CHECKING:
 
     from langgraph.graph.state import CompiledStateGraph
 
-    from kingfisher.infrastructure.harness.ledger import Ledger
+    from kingfisher.core.session.ledger import Ledger
 
 
 @dataclass(frozen=True)

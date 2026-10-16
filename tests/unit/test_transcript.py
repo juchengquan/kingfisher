@@ -7,8 +7,8 @@ import json
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from kingfisher.domain.transcript import Message, ToolCall, as_json, from_json
-from kingfisher.infrastructure.harness.runtime import as_transcript, user_payload
+from kingfisher.core.session.runtime import as_transcript, user_payload
+from kingfisher.core.session.transcript import Message, ToolCall, as_json, from_json
 
 
 def a_conversation():

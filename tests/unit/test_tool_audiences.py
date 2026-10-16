@@ -292,8 +292,8 @@ def test_the_run_report_agrees_with_the_build(policied):
     """
     from kingfisher.application.reporting import withheld_by_kind
     from kingfisher.core.access.capabilities import Capabilities
+    from kingfisher.core.session.steps import drive
     from kingfisher.domain.request import Request
-    from kingfisher.infrastructure.steps import drive
     from tests.conftest import harness_in
 
     kf = Kingfisher(policied, sessions=LocalSessions())

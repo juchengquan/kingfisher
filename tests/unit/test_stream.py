@@ -277,7 +277,7 @@ def test_the_summarizer_is_not_streamed_as_the_answer(cfg):
 
 def test_the_adapter_owns_the_stream_modes(cfg):
     """`values` and `messages` are LangGraph's words, not orchestration's."""
-    from kingfisher.infrastructure.harness import runtime
+    from kingfisher.core.session import runtime
 
     values = {"messages": [AIMessage(content="42")]}
 

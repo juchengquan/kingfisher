@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
-from kingfisher.infrastructure.threads import off_loop, thread_pool
+from kingfisher.core.session.threads import off_loop, thread_pool
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver

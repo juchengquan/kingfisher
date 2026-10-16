@@ -12,15 +12,15 @@ from contextlib import suppress
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.domain import retention
-from kingfisher.domain.retention import SweepResult
-from kingfisher.infrastructure.steps import Steps, adrive, changing, drive
+from kingfisher.core.session import retention
+from kingfisher.core.session.retention import SweepResult
+from kingfisher.core.session.steps import Steps, adrive, changing, drive
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from kingfisher.config import Config
-    from kingfisher.infrastructure.harness.checkpointing import SharedThreads
+    from kingfisher.core.session.checkpointing import SharedThreads
 
 
 class Disposal:

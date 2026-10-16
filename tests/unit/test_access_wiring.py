@@ -18,8 +18,8 @@ from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.access.source_ids import UNSCOPED, AccessError, parse
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.narrowing import ToolAllowlist
+from kingfisher.core.session.steps import drive
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.steps import drive
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import (

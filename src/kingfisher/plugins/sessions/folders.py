@@ -6,7 +6,7 @@ import shutil
 from contextlib import suppress
 from pathlib import Path
 
-from kingfisher.domain.session import names_a_session
+from kingfisher.core.session.model import names_a_session
 from kingfisher.layout import (
     AGENTS_SCAFFOLD,
     HARNESS,

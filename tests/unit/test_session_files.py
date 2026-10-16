@@ -25,12 +25,12 @@ from kingfisher.core.agent.backend import (
     Sessions,
 )
 from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.infrastructure.session_files import (
+from kingfisher.core.session.files import (
     collect_artifacts,
     place_inputs,
     read_artifact,
 )
-from kingfisher.infrastructure.steps import drive
+from kingfisher.core.session.steps import drive
 from kingfisher.layout import (
     HARNESS,
     INPUTS,

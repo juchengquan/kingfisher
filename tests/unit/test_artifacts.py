@@ -8,9 +8,9 @@ import pytest
 
 from kingfisher import LocalSessions, backend_at
 from kingfisher.application.run import Request, run
+from kingfisher.core.session.files import collect_artifacts, read_artifact
+from kingfisher.core.session.steps import drive
 from kingfisher.domain.result import ArtifactError
-from kingfisher.infrastructure.session_files import collect_artifacts, read_artifact
-from kingfisher.infrastructure.steps import drive
 from kingfisher.layout import Layout
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent

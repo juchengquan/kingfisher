@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import LocalSessions
 from kingfisher.application.run import Request, stream
-from kingfisher.infrastructure.harness import runtime
+from kingfisher.core.session import runtime
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeToolCallingModel, StubCheckpointer, start
 from tests.unit.test_run import StubAgent

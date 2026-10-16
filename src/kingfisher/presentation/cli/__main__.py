@@ -51,7 +51,7 @@ from kingfisher.core.access.source_ids import with_datazone
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.definitions.seeding import REMEDY, UNCONSULTED
-from kingfisher.domain.session import sessions_root
+from kingfisher.core.session.model import sessions_root
 from kingfisher.presentation.cli.health import _retired, examine, worst
 from kingfisher.presentation.cli.listing import as_json, failed, origins_document, render
 from kingfisher.presentation.cli.progress import show

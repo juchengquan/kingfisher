@@ -264,7 +264,7 @@ a tool call. It halves the replay cost, and it keeps a framework-generated tool
 name out of a record whose whole purpose is to outlive the harness.
 
 Recording a marker instead of the document is not an option. That is the
-flattened transcript `domain/transcript.py` argues against in its opening
+flattened transcript `core/session/transcript.py` argues against in its opening
 paragraph, and an agent that cannot see the document it just emitted will
 contradict it on the next turn.
 
@@ -281,7 +281,7 @@ tells the operator to raise `KINGFISHER_RECURSION_LIMIT`, and they will, and
 they will pay for a longer failure.
 
 It is decided where `service.py` catches `runtime.OutOfSteps`, and needs its own
-`cut_short` text beside `out_of_steps` in `application/turn.py`, naming the
+`cut_short` text beside `out_of_steps` in `core/session/turn.py`, naming the
 schema rather than the limit. Nothing else has to learn it:
 `RunResult.completed` compares against `end_turn` alone, and
 `test_no_surface_decides_for_itself_what_a_finished_turn_is` holds every surface

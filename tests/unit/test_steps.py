@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.infrastructure.steps import (
+from kingfisher.core.session.steps import (
     adrive,
     adrive_finished,
     changing,

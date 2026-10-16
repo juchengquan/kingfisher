@@ -838,7 +838,7 @@ def _backing(monkeypatch, sessions=None, **fields):
     pass just as happily against a `_at_rest` that had stopped looking at the
     sessions tree, which is the thing these tests are here to hold.
     """
-    from kingfisher.domain.session import sessions_root
+    from kingfisher.core.session.model import sessions_root
     from kingfisher.infrastructure.workspace import MemoryBacking
 
     on_the_workspace = MemoryBacking(**fields)
@@ -937,7 +937,7 @@ def test_a_laid_out_workspace_is_measured_at_its_sessions(workspace):
     """The control for the fallback above: where the directory exists, that is what
     gets stat'd, or the mount would never be the thing measured.
     """
-    from kingfisher.domain.session import sessions_root
+    from kingfisher.core.session.model import sessions_root
 
     assert health._sessions_probe(workspace) == sessions_root(workspace)
 

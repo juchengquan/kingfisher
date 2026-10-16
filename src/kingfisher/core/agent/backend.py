@@ -18,7 +18,7 @@ from kingfisher.core.agent.host_paths import (
 from kingfisher.core.agent.prompting import ShellPrompt
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.spec import SubagentError
-from kingfisher.infrastructure.threads import off_loop, thread_pool
+from kingfisher.core.session.threads import off_loop, thread_pool
 from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
     RESERVED_SKILL_FOLDER,
