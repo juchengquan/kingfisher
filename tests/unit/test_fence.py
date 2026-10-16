@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from kingfisher import default_backends
+from kingfisher import LocalSessions
 from kingfisher.domain.ports import CommandResult
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.sandbox.confinement import (
@@ -56,7 +56,7 @@ def sandlock(monkeypatch):
 
 
 def a_policy(tmp_path, **kwargs: Any) -> StubSandbox:
-    """A policy for a session that exists, laid out as `default_backends` requires.
+    """A policy for a session that exists, laid out as `LocalSessions` requires.
 
     Through `ensure_session_layout` rather than a bare `mkdir`: the writable rules
     are one per directory in a session, so a session with none of them produces an
@@ -473,7 +473,7 @@ def test_every_directory_on_the_agent_s_path_is_reachable(cfg, tmp_path, monkeyp
     )
 
 
-# -- the Linux fences, as `default_backends` builds them -------------------
+# -- the Linux fences, as `LocalSessions` builds them -------------------
 
 
 def _fenced_by(monkeypatch, mechanism: str) -> None:
@@ -485,14 +485,14 @@ def _fenced_by(monkeypatch, mechanism: str) -> None:
 
 
 def test_bubblewrap_binds_an_opened_session_s_harness_read_only(cfg, monkeypatch):
-    """Driven through `default_backends`, which decides where a session is: its folder
+    """Driven through `LocalSessions`, which decides where a session is: its folder
     bind is writable over `.harness` too, and only a read-only bind laid after it takes
     that back."""
     _fenced_by(monkeypatch, confinement.BUBBLEWRAP)
     session = str(cfg.workspace.resolve() / "sessions" / "the-one")
     harness = f"{session}/{HARNESS}"
 
-    argv = default_backends.open(cfg, "the-one").default.runner.argv
+    argv = LocalSessions().open(cfg, "the-one").default.runner.argv
 
     bound = [(argv[i], argv[i + 1]) for i in range(len(argv) - 1)]
     assert ("--bind", session) in bound
@@ -502,12 +502,12 @@ def test_bubblewrap_binds_an_opened_session_s_harness_read_only(cfg, monkeypatch
 
 def test_landlock_grants_no_rule_above_an_opened_session_s_harness(cfg, monkeypatch, sandlock):
     """Landlock grants and never takes back, so a writable rule on the session's folder
-    would re-open `.harness` beneath it -- driven through `default_backends`, which
+    would re-open `.harness` beneath it -- driven through `LocalSessions`, which
     decides where that folder is."""
     _fenced_by(monkeypatch, confinement.LANDLOCK)
     harness = cfg.workspace.resolve() / "sessions" / "the-one" / HARNESS
 
-    policy = default_backends.open(cfg, "the-one").default.runner.policy
+    policy = LocalSessions().open(cfg, "the-one").default.runner.policy
 
     assert policy.fs_writable, "nothing granted -- this checks nothing"
     for granted in policy.fs_writable:

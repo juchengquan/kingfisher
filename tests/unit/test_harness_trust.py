@@ -12,7 +12,7 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import DefaultBackends, Kingfisher, Request, backend_at, default_backends
+from kingfisher import Kingfisher, LocalSessions, Request, backend_at
 from kingfisher.domain.request import Decision, DecisionError, Resume
 from kingfisher.infrastructure.harness.backend_contract import shell_denied
 from kingfisher.layout import HARNESS, PAUSED_STATE, PINNED_AGENT
@@ -35,24 +35,24 @@ def test_what_a_session_keeps_is_written_as_it_is(scripted):
     start(scripted, "s")
     Scripted.script.append(AIMessage(content="done"))
 
-    Kingfisher(scripted, backends=default_backends).run(Request("go", agent="only", session_id="s"))
+    Kingfisher(scripted, sessions=LocalSessions()).run(Request("go", agent="only", session_id="s"))
 
     held = sorted(p.name for p in (scripted.workspace / "sessions" / "s" / HARNESS).iterdir())
     assert PINNED_AGENT in held, "nothing was pinned, so there was nothing to leave unsigned"
     assert not [name for name in held if name.endswith(".sig")], held
 
 
-class _WrappingTheDefault(DefaultBackends):
+class _WrappingTheDefault(LocalSessions):
     """Returns exactly what the default does, and is still not the default."""
 
 
 @pytest.mark.parametrize(
     "wiring",
     [
-        lambda cfg: {"graph": StubAgent("ok"), "backends": default_backends},
-        lambda cfg: {"backends": _WrappingTheDefault()},
-        lambda cfg: {"backends": DefaultBackends(runner=lambda _d: Elsewhere())},
-        lambda cfg: {"backends": default_backends, "cfg": replace(cfg, shell_sandbox="off")},
+        lambda cfg: {"graph": StubAgent("ok"), "sessions": LocalSessions()},
+        lambda cfg: {"sessions": _WrappingTheDefault()},
+        lambda cfg: {"sessions": LocalSessions(runner=lambda _d: Elsewhere())},
+        lambda cfg: {"sessions": LocalSessions(), "cfg": replace(cfg, shell_sandbox="off")},
     ],
     ids=["graph", "wrapped-default", "runner", "sandbox-off"],
 )
@@ -71,7 +71,7 @@ def test_a_paused_turn_cut_short_is_refused_with_a_reason(cfg):
     and what the caller is told is that, rather than msgpack's own error.
     """
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
     paused = kf.run(Request("write it"))
     state = _harness_file(cfg, paused.session_id, PAUSED_STATE)

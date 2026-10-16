@@ -48,7 +48,7 @@ def two_sessions(tmp_path):
 
 @pytest.fixture
 def fenced(two_sessions):
-    """A runner confined to the second session, as `default_backends` builds one."""
+    """A runner confined to the second session, as `LocalSessions` builds one."""
     from kingfisher.infrastructure.sandbox.fence import LandlockRunner, policy_for
 
     _, theirs = two_sessions
@@ -217,13 +217,13 @@ def test_the_shell_cannot_write_the_sessions_own_harness(two_sessions):
 
 @needs_landlock
 def test_the_shell_cannot_write_the_harness_of_a_session_it_opened(cfg):
-    """Driven through `default_backends`, which decides where the session is, rather than
+    """Driven through `LocalSessions`, which decides where the session is, rather than
     handed a path.
     """
-    from kingfisher import default_backends
+    from kingfisher import LocalSessions
     from kingfisher.layout import HARNESS
 
-    shell = default_backends.open(cfg, "the-one")
+    shell = LocalSessions().open(cfg, "the-one")
     harness = cfg.workspace / "sessions" / "the-one" / HARNESS
     pinned = harness / "agent.yaml"
     pinned.write_text("name: pinned\n", encoding="utf-8")

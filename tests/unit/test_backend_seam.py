@@ -12,10 +12,9 @@ from kingfisher.domain.ports import CommandResult, CommandRunner
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import (
-    DefaultBackends,
+    LocalSessions,
     WorkspaceScopedBackend,
     backend_at,
-    default_backends,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
 from kingfisher.infrastructure.steps import drive
@@ -27,7 +26,7 @@ from tests.unit.test_session_files import Elsewhere as KeptElsewhere
 
 class Substitute(WorkspaceScopedBackend):
     """What a deployment returns when it adjusts what it built: its own type, over the
-    shell and the routes `default_backends` made.
+    shell and the routes `LocalSessions` made.
 
     A plain object will not do, and that is the seam's shape rather than this file's
     convenience -- `refuse_unusable_backend` runs on whatever an `open` returns, so a
@@ -72,7 +71,7 @@ def test_a_service_with_no_filesystem_named_is_refused(cfg):
     """Silence used to mean kingfisher picked, so a deployment could wire the entire
     service without learning there was a sandbox in it at all.
     """
-    with pytest.raises(TypeError, match="required keyword-only argument: 'backends'"):
+    with pytest.raises(TypeError, match="required keyword-only argument: 'sessions'"):
         Kingfisher(cfg, threads=StubCheckpointer())  # ty: ignore[missing-argument]
 
 
@@ -82,7 +81,7 @@ def test_a_pre_built_graph_is_refused_without_backends_named(cfg):
     and the files it collects -- somewhere a graph whose backend runs elsewhere never
     looks.
     """
-    with pytest.raises(TypeError, match="required keyword-only argument: 'backends'"):
+    with pytest.raises(TypeError, match="required keyword-only argument: 'sessions'"):
         Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())  # ty: ignore[missing-argument]
 
 
@@ -91,7 +90,7 @@ def test_a_pre_built_graph_is_refused_without_backends_named(cfg):
 def test_the_one_liners_refuse_to_run_without_backends_named(cfg, door, graph):
     """A default here would be the core picking what a deployment's agents run on, and
     beside a graph, a guess about the one thing only the graph's builder knows."""
-    with pytest.raises(TypeError, match="required keyword-only argument: 'backends'"):
+    with pytest.raises(TypeError, match="required keyword-only argument: 'sessions'"):
         door(Request("t"), cfg=cfg, graph=graph, checkpointer=StubCheckpointer())
 
 
@@ -103,7 +102,7 @@ def test_a_pre_built_graph_reaches_its_session_through_the_backends_named(cfg, t
     source.write_text("alpha\n")
     remote = tmp_path / "remote"
     kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=KeptElsewhere(remote), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=KeptElsewhere(remote), threads=StubCheckpointer()
     )
 
     session_id = kf.run(Request("t", inputs=(source,))).session_id
@@ -113,16 +112,16 @@ def test_a_pre_built_graph_reaches_its_session_through_the_backends_named(cfg, t
 
 
 def test_a_plain_factory_function_is_refused_with_the_way_forward(cfg):
-    """What a deployment written before `SessionBackends` passes. It makes a backend
+    """What a deployment written before `Sessions` passes. It makes a backend
     and answers nothing about which sessions there are, so it is refused where it is
     wired, naming the class to build on rather than failing at the first `reap`.
     """
 
     def mine(cfg_, session_id, /, *, catalogue=None):  # pragma: no cover
-        return default_backends.open(cfg_, session_id, catalogue=catalogue)
+        return LocalSessions().open(cfg_, session_id, catalogue=catalogue)
 
-    with pytest.raises(TypeError, match="subclass DefaultBackends"):
-        Kingfisher(cfg, backends=mine, threads=StubCheckpointer())  # ty: ignore[invalid-argument-type]
+    with pytest.raises(TypeError, match="subclass LocalSessions"):
+        Kingfisher(cfg, sessions=mine, threads=StubCheckpointer())  # ty: ignore[invalid-argument-type]
 
 
 def test_a_backend_instance_is_refused_where_session_backends_belong(cfg):
@@ -132,7 +131,7 @@ def test_a_backend_instance_is_refused_where_session_backends_belong(cfg):
     usually separating.
     """
     with pytest.raises(TypeError, match="rooted at a session"):
-        Kingfisher(cfg, backends=NotABackend(), threads=StubCheckpointer())  # ty: ignore[invalid-argument-type]
+        Kingfisher(cfg, sessions=NotABackend(), threads=StubCheckpointer())  # ty: ignore[invalid-argument-type]
 
 
 def test_a_backend_is_opened_per_turn_for_the_session_it_is_for(cfg, session_dir):
@@ -143,12 +142,12 @@ def test_a_backend_is_opened_per_turn_for_the_session_it_is_for(cfg, session_dir
     an_agent(cfg)
     seen: list[str] = []
 
-    class Mine(DefaultBackends):
+    class Mine(LocalSessions):
         def open(self, cfg_, session_id, /, *, catalogue=None):
             seen.append(session_id)
             return super().open(cfg_, session_id, catalogue=catalogue)
 
-    service = Kingfisher(cfg, backends=Mine())
+    service = Kingfisher(cfg, sessions=Mine())
     prepared = drive(service._prepare_steps(Request("go", agent="only")))
 
     assert seen == [prepared.session.id]
@@ -162,12 +161,12 @@ def test_open_is_handed_the_catalogue_this_deployment_resolved(cfg, session_dir)
     an_agent(cfg)
     seen: list[object] = []
 
-    class Mine(DefaultBackends):
+    class Mine(LocalSessions):
         def open(self, cfg_, session_id, /, *, catalogue=None):
             seen.append(catalogue)
             return super().open(cfg_, session_id, catalogue=catalogue)
 
-    service = Kingfisher(cfg, backends=Mine())
+    service = Kingfisher(cfg, sessions=Mine())
     drive(service._prepare_steps(Request("go", agent="only")))
 
     assert seen[0] is service.catalogue
@@ -180,7 +179,7 @@ def test_the_runner_the_session_backends_hold_runs_the_turns_commands(cfg, sessi
     """
     an_agent(cfg)
     runner = Elsewhere()
-    service = Kingfisher(cfg, backends=DefaultBackends(runner=lambda _where: runner))
+    service = Kingfisher(cfg, sessions=LocalSessions(runner=lambda _where: runner))
 
     prepared = drive(service._prepare_steps(Request("go", agent="only")))
 
@@ -196,7 +195,7 @@ def test_what_open_returns_is_what_the_agent_is_built_on(cfg, session_dir):
     an_agent(cfg)
     made: list[Substitute] = []
 
-    class Mine(DefaultBackends):
+    class Mine(LocalSessions):
         def open(self, cfg_, session_id, /, *, catalogue=None):
             made.append(
                 Substitute(super().open(cfg_, session_id, catalogue=catalogue))
@@ -204,7 +203,7 @@ def test_what_open_returns_is_what_the_agent_is_built_on(cfg, session_dir):
             return made[-1]
 
     asked = Request("go", agent="only")
-    service = Kingfisher(cfg, backends=Mine())
+    service = Kingfisher(cfg, sessions=Mine())
     built = service._graph_for(
         asked,
         service.grants,
@@ -249,11 +248,11 @@ def test_a_session_beside_a_pre_built_graph_is_refused_an_unusable_backend(cfg):
     calls on it and failed there, in words that named neither.
     """
 
-    class Mine(DefaultBackends):
+    class Mine(LocalSessions):
         def open(self, cfg_, session_id, /, *, catalogue=None):
             return NotABackend()
 
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=Mine(), threads=StubCheckpointer())
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=Mine(), threads=StubCheckpointer())
 
     with pytest.raises(ConfigError, match="not recognised by deepagents"):
         kf.run(Request("t"))

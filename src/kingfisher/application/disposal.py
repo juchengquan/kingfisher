@@ -32,7 +32,7 @@ class Disposal:
     #: contract nothing checks, which is the shape this repository distrusts.
     cfg: Config
     _shared: SharedThreads | None
-    _backends: Any
+    _sessions: Any
     _files_for: Callable[..., Steps[Any]]
     _known_steps: Callable[[], Steps[tuple[str, ...]]]
 
@@ -60,7 +60,7 @@ class Disposal:
         there, measured.
         """
         age = self.cfg.session_ttl_s if older_than_seconds is None else older_than_seconds
-        entries = self._backends.sessions(self.cfg)
+        entries = self._sessions.sessions(self.cfg)
         # Twice on purpose: the first answers which sessions are old enough to ask the
         # claim question of, and the second is the plan a running turn has been taken
         # out of. `plan.busy` is the difference, which is what `reap` needs to say why
@@ -82,7 +82,7 @@ class Disposal:
                 yield changing(self._shared, "forget", session_id)
             except Exception as exc:  # noqa: BLE001 -- reported, not swallowed
                 return f"{session_id}: thread not deleted ({type(exc).__name__})"
-        failure = yield changing(self._backends, "delete", self.cfg, session_id)
+        failure = yield changing(self._sessions, "delete", self.cfg, session_id)
         return f"{session_id}: {failure}" if failure else None
 
     def _busy(self, candidates: tuple[str, ...], *, now: float) -> tuple[str, ...]:

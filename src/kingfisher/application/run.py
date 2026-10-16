@@ -1,6 +1,6 @@
 """Module-level conveniences: one `Kingfisher`, built and driven in a single call.
 
-They take the session backends `Kingfisher` takes, and as it does, refuse to run
+They take the sessions `Kingfisher` takes, and as it does, refuse to run
 without them: Python that runs kingfisher says what it runs on.
 """
 
@@ -13,7 +13,7 @@ from kingfisher.application.service import Kingfisher
 from kingfisher.config import Config
 from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
-from kingfisher.infrastructure.harness.backend import SessionBackends, default_backends
+from kingfisher.infrastructure.harness.backend import LocalSessions, Sessions
 from kingfisher.infrastructure.wiring import store_named
 
 __all__ = [
@@ -21,7 +21,7 @@ __all__ = [
     "Request",
     "RunEvent",
     "RunResult",
-    "configured_backends",
+    "configured_sessions",
     "normalize_answer",
     "run",
     "stream",
@@ -32,14 +32,14 @@ def _service(
     cfg: Config | None,
     *,
     graph: Any,
-    backends: SessionBackends,
+    sessions: Sessions,
     checkpointer: Any,
     run_events: Any,
 ) -> Kingfisher:
     return Kingfisher(
         cfg,
         graph=graph,
-        backends=backends,
+        sessions=sessions,
         threads=checkpointer,
         run_events=run_events,
     )
@@ -50,7 +50,7 @@ def stream(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
     # whole constructor
     request: str | Request,
     *,
-    backends: SessionBackends,
+    sessions: Sessions,
     cfg: Config | None = None,
     graph: Any | None = None,
     checkpointer: Any | None = None,
@@ -61,7 +61,7 @@ def stream(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
     return _service(
         cfg,
         graph=graph,
-        backends=backends,
+        sessions=sessions,
         checkpointer=checkpointer,
         run_events=run_events,
     ).stream(request)
@@ -72,7 +72,7 @@ def run(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
     # whole constructor
     request: str | Request,
     *,
-    backends: SessionBackends,
+    sessions: Sessions,
     cfg: Config | None = None,
     graph: Any | None = None,
     checkpointer: Any | None = None,
@@ -83,23 +83,23 @@ def run(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
     return _service(
         cfg,
         graph=graph,
-        backends=backends,
+        sessions=sessions,
         checkpointer=checkpointer,
         run_events=run_events,
     ).run(request)
 
 
-def configured_backends(cfg: Config) -> SessionBackends:
-    """The session backends `KINGFISHER_SESSION_BACKENDS_FACTORY` names, or the default.
+def configured_sessions(cfg: Config) -> Sessions:
+    """The sessions `KINGFISHER_SESSION_BACKENDS_FACTORY` names, or `LocalSessions`.
 
     For the command line, which builds its own `Kingfisher` and has nowhere else to be
     told. Without it, `kingfisher sessions` and `reap` would list and delete a local
     `sessions/` while a deployment's own keep them somewhere else.
     """
     if cfg.session_backends_factory is None:
-        return default_backends
+        return LocalSessions()
     return store_named(
         cfg.session_backends_factory,
         setting="KINGFISHER_SESSION_BACKENDS_FACTORY",
-        port=SessionBackends,
+        port=Sessions,
     )

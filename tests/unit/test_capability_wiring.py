@@ -15,7 +15,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import Field
 from typing_extensions import TypedDict
 
-from kingfisher import default_backends
+from kingfisher import LocalSessions
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.activation import available_skills
 from kingfisher.infrastructure.harness.agent import (
@@ -251,12 +251,12 @@ def test_an_injected_graph_cannot_honour_capabilities(cfg, session_dir):
             Request(task="go", capabilities=Capabilities(builtin_tools=("read_file",))),
             cfg=cfg,
             graph=prebuilt,
-            backends=default_backends,
+            sessions=LocalSessions(),
         )
 
     # The unrestricted case still works, so the guard is not just "reject graph=".
     assert run(
-        Request(task="go"), cfg=cfg, graph=prebuilt, backends=default_backends
+        Request(task="go"), cfg=cfg, graph=prebuilt, sessions=LocalSessions()
     ).answer == "ok"
 
 
@@ -698,14 +698,14 @@ def test_a_turn_is_built_inside_the_deployments_ceiling(cfg, monkeypatch):
     withheld tool reached the graph and the whole suite stayed green, because every
     other fixture here leaves the deployment unrestricted, where the two are equal.
     """
-    from kingfisher import default_backends as backend
+    from kingfisher import LocalSessions
     from kingfisher.application.service import Kingfisher
     from kingfisher.domain.request import Request
     from tests.conftest import an_agent
 
     an_agent(cfg, "only")
     _two_tools(cfg)
-    kf = Kingfisher(cfg, backends=backend, grants=Capabilities(tools=("granted",)))
+    kf = Kingfisher(cfg, sessions=LocalSessions(), grants=Capabilities(tools=("granted",)))
     handed = _handed_to_the_build(monkeypatch)
 
     events = kf.stream(

@@ -11,7 +11,7 @@ import os
 
 import pytest
 
-from kingfisher import default_backends
+from kingfisher import LocalSessions
 from kingfisher.config import (
     Config,
     ConfigError,
@@ -300,7 +300,7 @@ def test_a_deployment_can_supply_models_without_a_file_at_all(tmp_path):
     cfg = Config(workspace=tmp_path / "ws", definitions=definitions, models=FAKE_CATALOGUE)
     assert not cfg.authored_files["models.yaml"].exists()
 
-    service = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends)
+    service = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
 
     assert service.run(Request("go")).answer == "ok"
     assert service.cfg.models.default == "fake-model"

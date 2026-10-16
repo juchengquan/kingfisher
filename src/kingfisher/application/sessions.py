@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from kingfisher.domain.access import Held, SourceIds
 
 
-class Sessions:
+class SessionMethods:
     """A session existing: naming one, making its directory, holding it, listing them."""
 
     #: What this half needs from the instance it is mixed into. Declared rather
@@ -35,7 +35,7 @@ class Sessions:
     cfg: Config
     access: SourceIds | None
     #: Where the sessions are: which there are, how big, when each was used.
-    _backends: Any
+    _sessions: Any
     #: The backend one session's files are reached through, as a sequence.
     _files_for: Callable[..., Steps[Any]]
 
@@ -79,14 +79,14 @@ class Sessions:
 
     def _known_steps(self) -> Steps[tuple[str, ...]]:
         """The id of every session the deployment's backends hold."""
-        listing = yield reading(self._backends, "sessions", self.cfg)
+        listing = yield reading(self._sessions, "sessions", self.cfg)
         return tuple(name for name, _ in listing)
 
     def _refuse_if_over_budget(self, session: Session) -> Steps[None]:
         """Stop a session that is already too large from growing further."""
         if self.cfg.session_max_bytes is None:
             return
-        held = yield reading(self._backends, "size", self.cfg, session.id)
+        held = yield reading(self._sessions, "size", self.cfg, session.id)
         if held > self.cfg.session_max_bytes:
             msg = (
                 f"session {session.id} holds {held} bytes, over the "
@@ -96,7 +96,7 @@ class Sessions:
 
     def session_size(self, session_id: str) -> int:
         """How many bytes one session holds, as its backend counts them."""
-        return self._backends.size(self.cfg, session_id)
+        return self._sessions.size(self.cfg, session_id)
 
     def sessions(self) -> tuple[SessionInfo, ...]:
         """Every session in this workspace, most recently used first.
@@ -104,7 +104,7 @@ class Sessions:
         One `listing` call, measured at 0.22ms for fifty sessions, because it is the
         same call `reap` already makes.
         """
-        return known(self._backends.sessions(self.cfg))
+        return known(self._sessions.sessions(self.cfg))
 
     def session(self, session_id: str, *, source_ids: Held | None = None) -> SessionInfo | None:
         """One session, or `None` when this caller has no such session.
@@ -146,7 +146,7 @@ class Sessions:
         than a cheaper stat.
         """
         held = caller_holds(self.access, source_ids)
-        listing = yield reading(self._backends, "sessions", self.cfg)
+        listing = yield reading(self._sessions, "sessions", self.cfg)
         found = next((s for s in known(listing) if s.id == session_id), None)
         if found is None:
             return None

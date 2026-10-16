@@ -36,7 +36,7 @@ def two_sessions(tmp_path):
 
 @pytest.fixture
 def fenced(two_sessions):
-    """A runner sandboxed to the second session, as `default_backends` builds one."""
+    """A runner sandboxed to the second session, as `LocalSessions` builds one."""
     _, theirs = two_sessions
     return BubblewrapRunner(
         argv_for(theirs, readable=toolchain_roots()),

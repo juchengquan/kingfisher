@@ -24,14 +24,14 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.types import Command
 
 from assets.middlewares.tool_note import ToolNote
-from kingfisher import Kingfisher, Request, default_backends
+from kingfisher import Kingfisher, LocalSessions, Request
 from kingfisher.application.turn import ledger_delta, ledger_index, turn_message
 from kingfisher.domain.access import parse
 from kingfisher.domain.request import Decision, Resume
 from kingfisher.domain.result import AWAITING, MAIN, WORKING, LedgerEntry
 from kingfisher.domain.transcript import from_json
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import DefaultBackends, backend_at
+from kingfisher.infrastructure.harness.backend import backend_at
 from kingfisher.infrastructure.harness.ledger import Ledger
 from kingfisher.infrastructure.harness.middlewares.recorder import Recorder
 from kingfisher.infrastructure.prompting import render_system_prompt
@@ -139,7 +139,7 @@ def _task(at: str, subagent: str = "researcher") -> AIMessage:
 
 def _run(cfg, *script: AIMessage, kf: Kingfisher | None = None, **request: Any):
     Scripted.script.extend(script)
-    service = kf or Kingfisher(cfg, backends=default_backends)
+    service = kf or Kingfisher(cfg, sessions=LocalSessions())
     return service.run(Request("go", agent="only", session_id="s", **request))
 
 
@@ -216,7 +216,7 @@ def test_a_renamed_layout_records_under_its_own_scratchpad(ledgered):
     Scripted.script.extend(
         [_calls(("web_search", {"query": "EV price war"}, "c1")), AIMessage(content="done")]
     )
-    service = Kingfisher(moved, backends=default_backends)
+    service = Kingfisher(moved, sessions=LocalSessions())
     result = service.run(Request("go", agent="only", session_id="s2"))
 
     (entry,) = result.ledger
@@ -314,7 +314,7 @@ def test_the_file_tools_are_not_recorded_and_the_shell_is(ledgered):
             ("web_search", {"query": "EV"}, "c9"),
         ),
         AIMessage(content="done"),
-        kf=Kingfisher(cfg, backends=default_backends),
+        kf=Kingfisher(cfg, sessions=LocalSessions()),
     )
 
     # The control: every file tool ran and succeeded, so absent means skipped.
@@ -408,7 +408,7 @@ def test_what_a_deployments_middleware_left_is_recorded(ledgered):
     anything else would be a record of a result nobody was shown.
     """
     an_agent(ledgered, subagents="[researcher]", middlewares="[tool-note]")
-    kf = Kingfisher(ledgered, backends=default_backends, middlewares={"tool-note": ToolNote})
+    kf = Kingfisher(ledgered, sessions=LocalSessions(), middlewares={"tool-note": ToolNote})
 
     result = _run(
         ledgered,
@@ -452,7 +452,7 @@ def test_an_offloaded_result_is_pointed_at_deepagents_copy(ledgered):
 # -- when and where it is kept -------------------------------------------------
 
 
-class _Ordered(DefaultBackends):
+class _Ordered(LocalSessions):
     """Kingfisher's own backends, noting every file written through one, in order."""
 
     def __init__(self) -> None:
@@ -485,7 +485,7 @@ def test_results_are_written_before_the_ledger_and_the_ledger_before_the_transcr
         ledgered,
         _calls(("web_search", {"query": "EV"}, "c1")),
         AIMessage(content="done"),
-        kf=Kingfisher(ledgered, backends=backends),
+        kf=Kingfisher(ledgered, sessions=backends),
     )
 
     assert backends.at("A-0001-web_search.txt") < backends.at(LEDGER_FILE)
@@ -498,7 +498,7 @@ def test_a_paused_turn_keeps_its_rows_before_its_state(ledgered):
     """
     an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
     backends = _Ordered()
-    kf = Kingfisher(ledgered, backends=backends)
+    kf = Kingfisher(ledgered, sessions=backends)
 
     paused = _run(
         ledgered,
@@ -713,7 +713,7 @@ def test_a_result_file_no_row_names_is_swept(ledgered):
     assert _kept(ledgered) == ["A-0001-web_search.txt"], "an earlier turn's file was swept"
 
 
-class _Refusing(DefaultBackends):
+class _Refusing(LocalSessions):
     """Kingfisher's own backends, refusing every file under the tool results folder."""
 
     def open(self, cfg, session_id, /, *, catalogue=None):
@@ -738,7 +738,7 @@ def test_a_result_the_backend_will_not_keep_still_has_its_row(ledgered, caplog):
             ledgered,
             _calls(("web_search", {"query": "EV"}, "c1")),
             AIMessage(content="done"),
-            kf=Kingfisher(ledgered, backends=_Refusing()),
+            kf=Kingfisher(ledgered, sessions=_Refusing()),
         )
 
     assert result.answer == "done"
@@ -761,7 +761,7 @@ def test_a_graph_the_deployment_supplied_records_nothing(ledgered):
         ),
     ).graph
 
-    result = Kingfisher(ledgered, graph=graph, backends=default_backends).run(
+    result = Kingfisher(ledgered, graph=graph, sessions=LocalSessions()).run(
         Request("go", session_id="s")
     )
 
@@ -787,7 +787,7 @@ def _delegated(cfg, *, awaited: bool = False):
             AIMessage(content="done"),
         ]
     )
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     request = Request("go", agent="only", session_id="s")
     return asyncio.run(kf.arun(request)) if awaited else kf.run(request)
 
@@ -959,7 +959,7 @@ def test_access_is_the_audience_each_result_was_offered_under(ledgered):
         ]
     )
 
-    result = Kingfisher(cfg, backends=default_backends).run(
+    result = Kingfisher(cfg, sessions=LocalSessions()).run(
         Request("go", agent="only", session_id="s"), source_ids=HOLDING
     )
 
@@ -984,7 +984,7 @@ def test_a_subagent_paused_at_a_gate_answers_under_everything_its_run_read(ledge
     would claim a wider audience than the work it repeats.
     """
     cfg = _audienced(ledgered, gated="sql_query")
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     Scripted.script.extend(
         [
             _task("t1"),
@@ -1181,7 +1181,7 @@ def test_a_result_the_backend_would_not_keep_is_stamped_all_the_same(ledgered):
         ledgered,
         _calls(("web_search", {"query": "EV"}, "c1")),
         AIMessage(content="done"),
-        kf=Kingfisher(ledgered, backends=_Refusing()),
+        kf=Kingfisher(ledgered, sessions=_Refusing()),
     )
 
     assert result.ledger[0].path is None, "the control: the file was kept after all"
@@ -1320,7 +1320,7 @@ def test_the_next_message_lists_what_was_recorded_since_the_last_one(ledgered):
     reaching further lists again what an earlier message already did.
     """
     an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
-    kf = Kingfisher(ledgered, backends=default_backends)
+    kf = Kingfisher(ledgered, sessions=LocalSessions())
     _run(ledgered, _calls(("web_search", {"query": "one"}, "c1")), AIMessage("done"), kf=kf)
     paused = _run(
         ledgered,
@@ -1351,7 +1351,7 @@ def test_a_resume_says_so_on_its_closing_line_and_an_asked_turn_does_not(ledgere
     hides the turn it paused, and an asked turn with it reaches into the one before.
     """
     an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
-    kf = Kingfisher(ledgered, backends=default_backends)
+    kf = Kingfisher(ledgered, sessions=LocalSessions())
     paused = _run(ledgered, _calls(("sql_query", {"query": "select 1"}, "c1")), kf=kf)
     Scripted.script.append(AIMessage(content="done"))
     resumed = kf.run(
@@ -1432,7 +1432,7 @@ def test_a_graph_the_deployment_supplied_is_handed_no_delta(ledgered):
     ).graph
     Scripted.script.append(AIMessage(content="supplied"))
 
-    result = Kingfisher(ledgered, graph=graph, backends=default_backends).run(
+    result = Kingfisher(ledgered, graph=graph, sessions=LocalSessions()).run(
         Request("again", session_id="s")
     )
 
@@ -1505,7 +1505,7 @@ def test_a_turn_says_on_its_closing_line_whether_it_ended_summarised(ledgered):
     key is called.
     """
     cfg = _windowed(ledgered)
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
 
     first = _say(kf, HALF, AIMessage(content="done"))
     assert Scripted.summaries == 0, "the control: a turn under the trigger was summarised"
@@ -1521,7 +1521,7 @@ def test_a_resume_of_a_summarised_turn_is_marked_summarised_too(ledgered):
     """
     an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
     cfg = _windowed(ledgered)
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     # Half before the paused turn, which its summary replaces.
     asked = _say(kf, HALF, AIMessage(content="done"))
     paused = _say(kf, HALF, _calls(("sql_query", {"query": "select 1"}, "c1")))
@@ -1554,7 +1554,7 @@ def test_once_a_turn_summarised_the_next_message_carries_the_index_and_not_the_d
     turn's message and nothing short of both turns shows it arriving.
     """
     cfg = _windowed(ledgered)
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     _say(kf, HALF, _calls(("web_search", {"query": "one"}, "c1")), AIMessage(content="done"))
     _say(kf, HALF, _calls(("web_search", {"query": "two"}, "c2")), AIMessage(content="done"))
     assert Scripted.summaries >= 1, "the summariser never fired on the second turn"
@@ -1697,7 +1697,7 @@ def test_a_resume_is_rolled_up_with_the_turn_it_answered(ledgered):
     """
     an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
     cfg = _windowed(ledgered)
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     paused = _say(
         kf,
         "go",

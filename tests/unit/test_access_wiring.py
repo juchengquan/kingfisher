@@ -12,7 +12,7 @@ import yaml
 from deepagents.middleware import SubAgentMiddleware
 from langchain_core.messages import AIMessage, ToolMessage
 
-from kingfisher import backend_at, default_backends
+from kingfisher import LocalSessions, backend_at
 from kingfisher.application.service import Kingfisher
 from kingfisher.domain.access import UNSCOPED, AccessError, parse
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
@@ -111,14 +111,14 @@ def test_a_call_that_does_not_say_who_is_calling_is_refused(policied):
     """The dangerous failure is a handler that forgot the boundary, so it is made loud
     rather than left to grant everything in silence.
     """
-    kf = Kingfisher(policied, backends=default_backends)
+    kf = Kingfisher(policied, sessions=LocalSessions())
     with pytest.raises(AccessError, match="source_ids="):
         kf.run("anything")
 
 
 def test_unscoped_runs_without_a_caller_and_says_so_at_the_call(policied):
     """The opt-out is a value someone typed, so a review can find it."""
-    kf = Kingfisher(policied, backends=default_backends)
+    kf = Kingfisher(policied, sessions=LocalSessions())
     assert kf.held_for(UNSCOPED) is None
 
 
@@ -126,7 +126,7 @@ def test_an_unknown_source_id_is_refused(policied):
     """The closed vocabulary, from the caller's end: a typo would otherwise reach
     nothing, which looks exactly like a caller who was denied.
     """
-    kf = Kingfisher(policied, backends=default_backends)
+    kf = Kingfisher(policied, sessions=LocalSessions())
     with pytest.raises(AccessError, match="unknown source id"):
         kf.held_for(("Q",))
 
@@ -142,7 +142,7 @@ def test_naming_source_ids_where_there_is_no_vocabulary_is_refused(cfg):
     over HTTP -- "a server somebody believes is locked down and is not" -- refused there
     at startup since 2026-09-01.
     """
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     with pytest.raises(AccessError, match="declares no source ids"):
         kf.held_for(("A",))
     # And still refused at the door a turn comes through, which is what moved.
@@ -152,7 +152,7 @@ def test_naming_source_ids_where_there_is_no_vocabulary_is_refused(cfg):
 
 def test_a_list_of_source_ids_narrows_exactly_as_a_tuple_does(policied):
     """The trap that folding `for_groups` in had to disarm."""
-    kf = Kingfisher(policied, backends=default_backends)
+    kf = Kingfisher(policied, sessions=LocalSessions())
 
     assert kf.held_for(["A"]) == kf.held_for(("A",))
     assert kf.held_for(["A"]) is not None, "a list read as no opinion at all"
@@ -162,7 +162,7 @@ def test_a_bare_string_of_source_ids_is_refused_rather_than_spelled_out(policied
     """`source_ids="sales_db"` is iterable, so coercing it yields eight one-letter source id
     names.
     """
-    kf = Kingfisher(policied, backends=default_backends)
+    kf = Kingfisher(policied, sessions=LocalSessions())
 
     with pytest.raises(AccessError, match="not a string"):
         kf.held_for("A")
@@ -173,7 +173,7 @@ def test_the_refusal_names_what_was_asked_for_and_what_to_do(cfg):
     ship: it names the ids that narrow nothing, the file that would declare them, and
     the value that means no caller.
     """
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(AccessError) as caught:
         kf.held_for(["marketing", "sales"])
@@ -192,7 +192,7 @@ def test_meaning_no_caller_is_still_how_you_say_it(cfg):
     `source_ids.yaml`, which is every workspace that has not adopted a policy. Driven
     through the turn's own door, because that is the one that refused.
     """
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
 
     assert kf.held_for(UNSCOPED) is None
     assert kf.held_for(None) is None
@@ -207,7 +207,7 @@ def test_a_declared_caller_is_still_expanded(cfg):
     """The other direction: a rule refusing on the names rather than on the absence of
     a vocabulary would pass every test above and break every policied deployment.
     """
-    kf = Kingfisher(replace(cfg, access=vocabulary()), backends=default_backends)
+    kf = Kingfisher(replace(cfg, access=vocabulary()), sessions=LocalSessions())
 
     assert kf.held_for(["A"]) is not None
 
@@ -248,7 +248,7 @@ def test_a_deployment_without_a_vocabulary_is_unchanged(cfg):
     """Everything that worked before this must still work untouched -- including calling
     `run` without saying anything about source ids.
     """
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     assert kf.access is None
     assert kf.held_for(None) is None
 
@@ -257,13 +257,13 @@ def test_resolving_the_same_source_ids_twice_gives_the_same_grant(policied):
     """It was a handle that could be bound once and reused; now the resolution happens
     per call, so the thing worth asserting is that it is stable.
     """
-    kf = Kingfisher(policied, backends=default_backends)
+    kf = Kingfisher(policied, sessions=LocalSessions())
     assert kf._effective_grants(("A",)) == kf._effective_grants(("A",))
 
 
 def test_the_deployments_own_grants_still_bound_a_caller(policied):
     """Two ceilings, and the lower one wins."""
-    kf = Kingfisher(policied, backends=default_backends, grants=Capabilities(tools=()))
+    kf = Kingfisher(policied, sessions=LocalSessions(), grants=Capabilities(tools=()))
     assert kf._effective_grants(("A",)).tools == ()
 
 
@@ -287,7 +287,7 @@ def test_unscoped_still_gets_everything(policied):
 
 
 def policied_kf(cfg):
-    return Kingfisher(cfg, backends=default_backends)
+    return Kingfisher(cfg, sessions=LocalSessions())
 
 
 # -- the report -------------------------------------------------------------
@@ -296,7 +296,7 @@ def policied_kf(cfg):
 def test_a_definition_with_no_source_ids_line_is_named(cfg):
     """Default-open must not also be silent."""
     an_agent(cfg, "assistant")
-    kf = Kingfisher(replace(cfg, access=vocabulary()), backends=default_backends)
+    kf = Kingfisher(replace(cfg, access=vocabulary()), sessions=LocalSessions())
     assert ("agent", "assistant") in kf.access_report.unrestricted
 
 
@@ -317,20 +317,20 @@ def test_a_subagent_with_no_source_ids_line_is_named_too(cfg):
         encoding="utf-8",
     )
 
-    kf = Kingfisher(replace(cfg, access=vocabulary()), backends=default_backends)
+    kf = Kingfisher(replace(cfg, access=vocabulary()), sessions=LocalSessions())
 
     assert ("subagent", "auditor") in kf.access_report.unrestricted
     assert "auditor" in "\n".join(kf.access_report.lines())
 
 
 def test_a_definition_that_restricts_is_not_named(policied):
-    kf = Kingfisher(policied, backends=default_backends)
+    kf = Kingfisher(policied, sessions=LocalSessions())
     assert kf.access_report.is_clean
 
 
 def test_the_report_reads_as_a_sentence(cfg):
     an_agent(cfg, "assistant")
-    kf = Kingfisher(replace(cfg, access=vocabulary()), backends=default_backends)
+    kf = Kingfisher(replace(cfg, access=vocabulary()), sessions=LocalSessions())
     rendered = "\n".join(kf.access_report.lines())
     assert "reachable by everyone" in rendered
     assert "assistant" in rendered
@@ -438,7 +438,7 @@ def test_a_caller_is_told_only_of_what_a_definition_they_reach_offers(policied_w
     the same function. The reachable tool is named beside it, because a filter that
     emptied the report would pass the first assertion on its own.
     """
-    kf = Kingfisher(policied_with_a_stranger, backends=default_backends)
+    kf = Kingfisher(policied_with_a_stranger, sessions=LocalSessions())
     declined = Capabilities(tools=())
 
     told = reported(kf, ["A"], "w1", asked_for=declined)
@@ -490,7 +490,7 @@ def test_a_subagent_no_agent_in_reach_activates_is_not_reported_as_withheld(
 
     `helper` is asserted beside it, so a filter that emptied the row would not pass.
     """
-    kf = Kingfisher(policied_with_one_helper, backends=default_backends)
+    kf = Kingfisher(policied_with_one_helper, sessions=LocalSessions())
 
     told = dict(reported(kf, ["A"], "w2", asked_for=Capabilities(subagents=())))
 
@@ -511,7 +511,7 @@ system_prompt: |
 
 def _refused_listing(cfg, source_ids):
     """What one real build's refusal of `line_counts` lists to this caller."""
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     session = session_at(kf, "w-refused")
     with pytest.raises(CapabilityError, match=r"unknown tool\(s\): line_counts;") as refused:
         build_agent(
@@ -568,7 +568,7 @@ A_GHOST_IS_NAMED_BY = {
 
 def _subagents_offered(cfg, source_ids) -> set[str]:
     """What one real build's refusal of `ghost` offers this caller instead."""
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     session = session_at(kf, "ghosted")
     with pytest.raises(CapabilityError, match=r"unknown subagent\(s\): ghost;") as refused:
         build_agent(
@@ -673,7 +673,7 @@ def test_a_definition_naming_a_real_tool_out_of_reach_is_not_refused(
     (subagents_dir(policied_with_a_stranger) / "helper.yaml").write_text(
         A_TYPO_IN_A_SUBAGENT.replace("line_counts", "secret_export"), encoding="utf-8"
     )
-    kf = Kingfisher(policied_with_a_stranger, backends=default_backends)
+    kf = Kingfisher(policied_with_a_stranger, sessions=LocalSessions())
     session = session_at(kf, "w-in-reach")
 
     built = build_agent(
@@ -721,7 +721,7 @@ def test_the_report_reads_a_grant_written_the_long_way(policied):
     """
     directory = policied.catalogue_roots["agents"]
     (directory / "surveyor.yaml").write_text(LONGHAND, encoding="utf-8")
-    kf = Kingfisher(replace(policied, access=vocabulary()), backends=default_backends)
+    kf = Kingfisher(replace(policied, access=vocabulary()), sessions=LocalSessions())
 
     told = dict(reported(kf, ["A"], "longhand", asked_for=Capabilities(tools=())))
 
@@ -733,7 +733,7 @@ def test_a_run_under_no_policy_is_still_told_of_everything_it_declined(policied_
     to filter and the report says what it always said. The control for the rule above:
     the filter answers a caller, not every reader.
     """
-    kf = Kingfisher(policied_with_a_stranger, backends=default_backends)
+    kf = Kingfisher(policied_with_a_stranger, sessions=LocalSessions())
 
     told = reported(kf, UNSCOPED, "w2", asked_for=Capabilities(tools=()))
 
@@ -755,7 +755,7 @@ def test_a_caller_is_not_told_about_what_their_source_ids_took_away(policied):
     says the axis can name it -- a filter that hid everything from everyone would pass
     the first assertion on its own.
     """
-    kf = Kingfisher(policied, backends=default_backends)
+    kf = Kingfisher(policied, sessions=LocalSessions())
     declined = Capabilities(tools=())
 
     reaches_it = reported(kf, ["A"], "w1", asked_for=declined)
@@ -769,7 +769,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
     """An axis no audience controls is unaffected, so the report keeps doing its
     original job.
     """
-    kf = Kingfisher(policied, backends=default_backends)
+    kf = Kingfisher(policied, sessions=LocalSessions())
     session = session_at(kf, "w2")
     held = ("A",)
     grants = replace(kf._effective_grants(held), builtin_tools=("read_file",))
@@ -834,7 +834,7 @@ def with_skills(cfg):
 
 
 def test_a_skill_audience_narrows_the_selection(with_skills):
-    kf = Kingfisher(with_skills, backends=default_backends)
+    kf = Kingfisher(with_skills, sessions=LocalSessions())
 
     assert kf.agent_named("skilled", source_ids=UNSCOPED).declares(
         kf.held_for(("A",))
@@ -846,7 +846,7 @@ def test_a_skill_audience_narrows_the_selection(with_skills):
 
 def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
     """The half a selection alone does not prove."""
-    kf = Kingfisher(with_skills, backends=default_backends)
+    kf = Kingfisher(with_skills, sessions=LocalSessions())
     held = ("B",)
     session = session_at(kf, "sk1")
     request = Request(task="t", agent="skilled")
@@ -897,7 +897,7 @@ def test_a_skill_out_of_reach_is_not_reported_as_withheld(with_skills):
     could not reach `audit` was told a run had withheld it -- naming the one skill their
     source ids exist to hide.
     """
-    kf = Kingfisher(with_skills, backends=default_backends)
+    kf = Kingfisher(with_skills, sessions=LocalSessions())
 
     assert "audit" not in skills_withheld(kf, ("B",), ("review",))
 
@@ -908,7 +908,7 @@ def test_a_skill_in_reach_is_still_reported_when_the_request_left_it_out(with_sk
     of a caller with something hidden, because for one who reaches everything the filter
     never runs, and a report that hid every skill would pass.
     """
-    kf = Kingfisher(with_skills, backends=default_backends)
+    kf = Kingfisher(with_skills, sessions=LocalSessions())
 
     assert skills_withheld(kf, ("B",), ()) == ("review",)
 
@@ -952,7 +952,7 @@ def test_a_skill_only_a_subagent_declares_is_not_reported_as_withheld(
     back in added nothing either rule would notice. `review` is asserted beside it, so a
     filter that emptied the row would not pass.
     """
-    kf = Kingfisher(with_a_subagents_own_skill, backends=default_backends)
+    kf = Kingfisher(with_a_subagents_own_skill, sessions=LocalSessions())
 
     told = skills_withheld(kf, ("B",), ())
 
@@ -969,7 +969,7 @@ def test_a_skill_audience_written_qualified_hides_the_bare_name_too(with_skills)
         agent.read_text(encoding="utf-8").replace("- name: audit", "- name: catalogue::audit"),
         encoding="utf-8",
     )
-    kf = Kingfisher(with_skills, backends=default_backends)
+    kf = Kingfisher(with_skills, sessions=LocalSessions())
 
     assert "audit" not in skills_withheld(kf, ("B",), ("review",))
     assert "audit" in skills_withheld(kf, ("A",), ("review",))
@@ -977,7 +977,7 @@ def test_a_skill_audience_written_qualified_hides_the_bare_name_too(with_skills)
 
 def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
     """So the assertion above is not passing because nothing was advertised."""
-    kf = Kingfisher(with_skills, backends=default_backends)
+    kf = Kingfisher(with_skills, sessions=LocalSessions())
     held = ("A",)
     session = session_at(kf, "sk2")
     request = Request(task="t", agent="skilled")
@@ -1111,7 +1111,7 @@ def delegating(cfg):
 
 def delegated(cfg, source_ids: tuple[str, ...]):
     """What `boss` is built with for one caller, as `create_deep_agent` received it."""
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     session = session_at(kf, "as-" + "".join(source_ids))
     return build_agent(
         kf.cfg,
@@ -1239,7 +1239,7 @@ def told(cfg, source_ids: tuple[str, ...], *, agent: str = "boss", **asked):
     """The subagents one real turn tells this caller were not granted, and that run on
     the main agent's host, read off the events before the model is reached.
     """
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     turn = kf.stream(
         Request("go", agent=agent, capabilities=Capabilities(**asked)), source_ids=source_ids
     )
@@ -1405,7 +1405,7 @@ def naming_a_ghost(cfg, where: str) -> tuple[str, Capabilities]:
 def offered_instead(cfg, source_ids: tuple[str, ...] | None, where: str) -> set[str]:
     """The subagents one real turn's refusal of `ghost` lists to this caller."""
     agent, asked = naming_a_ghost(cfg, where)
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     with pytest.raises(CapabilityError, match=r"unknown subagent\(s\): ghost;") as refused:
         turn = kf.stream(Request("go", agent=agent, capabilities=asked), source_ids=source_ids)
         try:
@@ -1451,7 +1451,7 @@ def test_refusing_an_unknown_subagent_lists_every_one_a_caller_reaches(
 
 def refusal(cfg, source_ids: tuple[str, ...] | None, agent: str, asked: Capabilities) -> str:
     """What one real turn refuses this caller with, or `""` when it reaches the model."""
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     try:
         turn = kf.stream(Request("go", agent=agent, capabilities=asked), source_ids=source_ids)
         try:
@@ -1727,7 +1727,7 @@ def test_a_task_out_of_reach_reads_what_a_task_to_a_typo_reads(delegating, scrip
         # rather than on a script it ran out of.
         *[AIMessage(content="spare")] * 4,
     ])
-    kf = Kingfisher(replace(delegating, models=scripted.models), backends=default_backends)
+    kf = Kingfisher(replace(delegating, models=scripted.models), sessions=LocalSessions())
 
     list(kf.stream(Request("go", agent="boss"), source_ids=("C",)))
     shown = results_shown()

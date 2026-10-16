@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import default_backends
+from kingfisher import LocalSessions
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
@@ -159,7 +159,7 @@ def test_the_pin_and_the_claim_go_with_the_session(cfg):
 
     _agent(cfg)
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
     session_id = start(cfg, "s")
     pin(service, session_id, "assistant")

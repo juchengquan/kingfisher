@@ -167,7 +167,7 @@ def test_a_turn_that_neither_paused_nor_resumed_deletes_nothing_at_its_end(cfg, 
     """
     from deepagents.backends import CompositeBackend
 
-    from kingfisher import Kingfisher, Request, default_backends
+    from kingfisher import Kingfisher, LocalSessions, Request
     from tests.conftest import StubCheckpointer
     from tests.unit.test_run import StubAgent
 
@@ -181,7 +181,7 @@ def test_a_turn_that_neither_paused_nor_resumed_deletes_nothing_at_its_end(cfg, 
     monkeypatch.setattr(CompositeBackend, "delete", recorded)
     start(cfg, "s")
     kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
 
     assert kf.run(Request("go", session_id="s")).completed

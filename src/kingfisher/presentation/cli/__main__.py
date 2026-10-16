@@ -44,7 +44,7 @@ from kingfisher import (
 # see *The front door* in `docs/decisions.md` -- and each of these is something
 # no caller outside the wheel has asked for: the kinds a catalogue holds,
 # used to say what a directory has none of; where a workspace keeps its
-# sessions; and the warning `doctor` says as a check instead. `configured_backends`
+# sessions; and the warning `doctor` says as a check instead. `configured_sessions`
 # is taken the same way, inside the commands that build a service, because only a
 # command has a setting and no argument to be told its session backends by.
 # Everything above is public and comes through the front door because it is.
@@ -542,10 +542,10 @@ def _run(args: argparse.Namespace) -> int:
     # `test_reaching_the_cli_stays_free_of_provider_sdks` holds every other verb
     # to not paying it. `seed`, `list` and `doctor` do not build one.
     from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_backends  # noqa: PLC0415
+    from kingfisher.application.run import configured_sessions  # noqa: PLC0415
 
     cfg = config_from_env()
-    kf = Kingfisher(cfg, backends=configured_backends(cfg), run_events=_kept_in(args.log))
+    kf = Kingfisher(cfg, sessions=configured_sessions(cfg), run_events=_kept_in(args.log))
     request = Request(
         task=args.task,
         agent=args.agent,
@@ -629,7 +629,7 @@ def _decide(args: argparse.Namespace) -> int:
     # `domain`, which importing this module already loads, so deferring them would
     # save nothing -- they are at module scope beside `Request`.
     from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_backends  # noqa: PLC0415
+    from kingfisher.application.run import configured_sessions  # noqa: PLC0415
 
     decisions: list[Decision] = [
         *(Decision(call_id=one, action="approve") for one in args.approve),
@@ -646,7 +646,7 @@ def _decide(args: argparse.Namespace) -> int:
         decisions.append(Decision(call_id=call_id, action="respond", message=text))
 
     cfg = config_from_env()
-    kf = Kingfisher(cfg, backends=configured_backends(cfg), run_events=_kept_in(args.log))
+    kf = Kingfisher(cfg, sessions=configured_sessions(cfg), run_events=_kept_in(args.log))
     if not decisions:
         return _show_pending(kf, args.session, args.held)
     return _drive(
@@ -817,10 +817,10 @@ def _count(sessions: int) -> str:
 def _sessions(*, as_document: bool = False) -> int:
     """What this workspace is holding, and what each session costs it."""
     from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_backends  # noqa: PLC0415
+    from kingfisher.application.run import configured_sessions  # noqa: PLC0415
 
     cfg = config_from_env()
-    kf = Kingfisher(cfg, backends=configured_backends(cfg))
+    kf = Kingfisher(cfg, sessions=configured_sessions(cfg))
     # Asked of `origins` rather than derived from the workspace. The listing below
     # already comes from the backends, and this line sat beside it saying
     # `<workspace>/sessions` whatever they were -- so the one deployment the setting
@@ -877,10 +877,10 @@ def _sessions(*, as_document: bool = False) -> int:
 def _reap(args: argparse.Namespace) -> int:
     """Delete sessions: one by name, or every one that has been idle too long."""
     from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_backends  # noqa: PLC0415
+    from kingfisher.application.run import configured_sessions  # noqa: PLC0415
 
     cfg = config_from_env()
-    kf = Kingfisher(cfg, backends=configured_backends(cfg))
+    kf = Kingfisher(cfg, sessions=configured_sessions(cfg))
     if args.session is not None:
         return _reap_one(kf, args.session)
 
@@ -944,10 +944,10 @@ def _nothing_reaped(kept: int, busy: int, age: float, *, from_config: bool) -> N
 def _artifact(args: argparse.Namespace) -> int:
     """Fetch one file a turn produced, to a file or to standard output."""
     from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import configured_backends  # noqa: PLC0415
+    from kingfisher.application.run import configured_sessions  # noqa: PLC0415
 
     cfg = config_from_env()
-    kf = Kingfisher(cfg, backends=configured_backends(cfg))
+    kf = Kingfisher(cfg, sessions=configured_sessions(cfg))
     content = kf.artifact(args.session, args.name, source_ids=args.held)
     if args.out is None:
         # The buffer, not `print`: an artifact is bytes, and a text stream would

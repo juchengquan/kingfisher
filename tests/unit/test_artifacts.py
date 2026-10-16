@@ -6,7 +6,7 @@ from dataclasses import replace
 
 import pytest
 
-from kingfisher import backend_at, default_backends
+from kingfisher import LocalSessions, backend_at
 from kingfisher.application.run import Request, run
 from kingfisher.domain.result import ArtifactError
 from kingfisher.infrastructure.session_files import collect_artifacts, read_artifact
@@ -37,12 +37,12 @@ def test_what_a_turn_produced_comes_back_under_the_layout_it_was_produced_in(
     cfg = replace(cfg, layout=layout)
     start(cfg, "s")
     run(Request("t", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
-        backends=default_backends, checkpointer=StubCheckpointer())
+        sessions=LocalSessions(), checkpointer=StubCheckpointer())
     session = cfg.workspace / "sessions" / "s"
     (session / layout.outputs / "report.md").write_text("the answer\n", encoding="utf-8")
 
     again = run(Request("t2", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
-                backends=default_backends, checkpointer=StubCheckpointer())
+                sessions=LocalSessions(), checkpointer=StubCheckpointer())
 
     assert f"{layout.outputs}/report.md" in again.artifacts
     assert f"{layout.memory}/AGENTS.md" in again.artifacts
@@ -73,7 +73,7 @@ def test_what_the_turn_left_in_derived_comes_back(cfg):
         Request("t", session_id="s"),
         cfg=cfg,
         graph=StubAgent("ok"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=StubCheckpointer(),
     )
     session = cfg.workspace / "sessions" / "s"
@@ -83,7 +83,7 @@ def test_what_the_turn_left_in_derived_comes_back(cfg):
         Request("t2", session_id="s"),
         cfg=cfg,
         graph=StubAgent("ok"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=StubCheckpointer(),
     )
 
@@ -98,7 +98,7 @@ def test_memory_is_reported_too(cfg):
         Request("t", session_id="s"),
         cfg=cfg,
         graph=StubAgent("ok"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=StubCheckpointer(),
     )
 
@@ -112,7 +112,7 @@ def test_run_scratch_is_not_reported(cfg):
         Request("t", session_id="s"),
         cfg=cfg,
         graph=StubAgent("ok"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=StubCheckpointer(),
     )
     session = cfg.workspace / "sessions" / result.session_id
@@ -122,7 +122,7 @@ def test_run_scratch_is_not_reported(cfg):
         Request("t2", session_id="s"),
         cfg=cfg,
         graph=StubAgent("ok"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=StubCheckpointer(),
     )
 
@@ -139,7 +139,7 @@ def test_inputs_are_not_reported(cfg):
         Request("t", session_id="s"),
         cfg=cfg,
         graph=StubAgent("ok"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=StubCheckpointer(),
     )
 

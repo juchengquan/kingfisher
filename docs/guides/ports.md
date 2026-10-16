@@ -1,10 +1,12 @@
 # Writing an adapter
 
-Kingfisher reaches the world through nine Protocols in
-[`domain/ports.py`](../../src/kingfisher/domain/ports.py), and through the
-`backends` every deployment names. Each has a default that works on one host with
-its own disk. This page is for a deployment that needs one of them to be
-something else — a sandbox, a bucket, another machine.
+Kingfisher reaches the world through the Protocols in
+[`domain/ports.py`](../../src/kingfisher/domain/ports.py) — what runs a shell
+command, and where each turn's record goes — and through the `sessions` every
+deployment names. The Protocols have defaults; the sessions have none to fall back
+on, and kingfisher's own, `LocalSessions`, works on one host with its own disk. This
+page is for a deployment that needs one of them to be something else — a sandbox, a
+bucket, another machine.
 
 A different question from *what can I set?* — [`configuration.md`](configuration.md)
 lists the variables, and `.env.example` argues each one where it is set. This
@@ -19,10 +21,10 @@ a dict.
 **As a constructor argument**, which every port accepts:
 
 ```python
-kingfisher = Kingfisher(cfg, backends=DefaultBackends(runner=my_runner), run_events=my_sink)
+kingfisher = Kingfisher(cfg, sessions=LocalSessions(runner=my_runner), run_events=my_sink)
 ```
 
-**As a setting**, which only the session backends have, and only for the command line. A
+**As a setting**, which only the sessions have, and only for the command line. A
 constructor argument reaches the construction site you control, and `kingfisher
 sessions`, `reap` and `artifact` build their own instance with nowhere to point
 it. `KINGFISHER_SESSION_BACKENDS_FACTORY` is where they are told:
@@ -54,7 +56,7 @@ from kingfisher import SESSION_BACKENDS_CONTRACT
 
 @pytest.mark.parametrize("check", SESSION_BACKENDS_CONTRACT, ids=lambda c: c.__name__)
 def test_my_backends_keep_the_contract(check, tmp_path):
-    check(lambda: (my_config(tmp_path), MyBackends()))
+    check(lambda: (my_config(tmp_path), MySessions()))
 ```
 
 No test framework comes with them — the checks are plain functions that raise
@@ -72,13 +74,13 @@ write, while each caller reads every other caller's files as their own.
 `run(command, timeout=None)` returning a `CommandResult`. For a deployment that
 runs commands somewhere else, or as another user, or with resource limits.
 
-Supplied to kingfisher's own session backends as a **callable taking the session
-directory**, not an instance: `DefaultBackends(runner=lambda session_dir:
-MyRunner(session_dir))`, passed as `backends=`. A runner is built for one session —
+Supplied to kingfisher's own sessions as a **callable taking the session
+directory**, not an instance: `LocalSessions(runner=lambda session_dir:
+MyRunner(session_dir))`, passed as `sessions=`. A runner is built for one session —
 kingfisher's own Landlock fence is, because its policy is generated from the session
 — and a shared instance could not know which session it was running for. It goes on
-the session backends rather than on `Kingfisher` because only they know where a
-session is on this host; session backends of your own run their commands however
+the sessions rather than on `Kingfisher` because only they know where a
+session is on this host; sessions of your own run their commands however
 their `open` builds the backend.
 
 Verified with `COMMAND_RUNNER_CONTRACT` — five checks, which run commands.
@@ -100,10 +102,10 @@ Things to know:
   told, neutrally, that the shell may not see the session's files. Say what yours
   sees with `shell_prompt=` beside the runner: see
   [`ShellPrompt`](#shellprompt--what-the-agent-is-told-about-your-shell).
-- **A subclass of `DefaultBackends` keeps the runner.** `super().open(...)` builds
+- **A subclass of `LocalSessions` keeps the runner.** `super().open(...)` builds
   the backend with the runner the instance was given, so an `open` that adjusts what
   it built still runs its commands where you chose. See
-  [`backends`](#backends--the-filesystem-the-agent-runs-against).
+  [`sessions`](#sessions--the-filesystem-the-agent-runs-against).
 - **A timeout is a result, not an exception**: `exit_code` 124, the shell's own,
   with output saying so. Raising would make your failure the model's problem
   rather than a tool result it can read and retry. This is the one the kit
@@ -129,7 +131,7 @@ other shell is described neutrally — it may not see a file-tool path under tha
 or any other, so check before relying on one — until it says what is true of it:
 
 ```python
-from kingfisher import DefaultBackends, ShellPrompt
+from kingfisher import LocalSessions, ShellPrompt
 
 SANDBOX = ShellPrompt(
     prompt="""## The shell
@@ -142,7 +144,7 @@ The shell (`execute`) runs in a sandbox holding this session at `/workspace`, so
     ),
 )
 
-backends = DefaultBackends(runner=lambda session_dir: MyRunner(session_dir), shell_prompt=SANDBOX)
+backends = LocalSessions(runner=lambda session_dir: MyRunner(session_dir), shell_prompt=SANDBOX)
 ```
 
 A shell of your own carries it instead — the object your backend runs `execute` on,
@@ -168,7 +170,7 @@ Things to know:
   are filled from `Config.layout`**, as kingfisher's own wording is, so renaming a
   folder cannot leave your sentence naming the old one. Any other `{{name}}` is refused
   when the `ShellPrompt` is made.
-- **It is read off the shell, not off your `DefaultBackends` subclass.** A subclass
+- **It is read off the shell, not off your `LocalSessions` subclass.** A subclass
   inherits everything the class has, so one that swapped in a sandbox would have
   inherited kingfisher's wording and its agents been told of a shell they do not have.
   A sandbox that says nothing is described neutrally.
@@ -193,7 +195,7 @@ class ShipToCollector:
     def record(self, event):
         collector.send(dict(event))
 
-kingfisher = Kingfisher(cfg, backends=default_backends, run_events=ShipToCollector())
+kingfisher = Kingfisher(cfg, sessions=LocalSessions(), run_events=ShipToCollector())
 ```
 
 Each event is a flat mapping. `event` names it — `run_start`, `run_end`,
@@ -237,17 +239,17 @@ kingfisher reads each kind from a directory. Definitions kept somewhere else are
 into one first, and `KINGFISHER_DEFINITIONS_DIR` in [configuration](configuration.md)
 says which.
 
-## `backends` — the filesystem the agent runs against
+## `sessions` — the filesystem the agent runs against
 
 Not optional. Every `Kingfisher` names them:
 
 ```python
-from kingfisher import Kingfisher, default_backends
+from kingfisher import Kingfisher, LocalSessions
 
-kingfisher = Kingfisher(cfg, backends=default_backends)
+kingfisher = Kingfisher(cfg, sessions=LocalSessions())
 ```
 
-Most deployments write exactly that and read no further. `default_backends` opens the
+Most deployments write exactly that and read no further. `LocalSessions` opens the
 backend kingfisher used to build for you without asking, unchanged — naming it
 costs you nothing and buys the rest of this section a reader.
 
@@ -264,18 +266,18 @@ option and still is, and requiring the parameter makes no deployment safer on it
 own. What it does is make sure nobody wires kingfisher without finding out there
 is a boundary here at all.
 
-**What it is: a `SessionBackends`.** One object whose `open` is called per turn
+**What it is: a `Sessions`.** One object whose `open` is called per turn
 with the id of the session it is for, and returns that session's backend — and which
 answers the questions
 only something that sees every session can: `sessions(cfg)` lists them with when
 each was last used, `mark_used`, `size` and `delete` do what they say. `reap`,
-`kingfisher sessions` and the session quota are answered by it. `default_backends`
+`kingfisher sessions` and the session quota are answered by it. `LocalSessions`
 keeps each session as a directory under `<workspace>/sessions`, named for its id, and
 refuses with `UnknownSessionError` an id that cannot name one there — empty, starting
 with `.`, or holding `/` or NUL. Which session a turn runs in is the request's to say:
 any id names a session, the first turn naming one starts it, and a request naming
 none runs in `default`. So `open` is handed ids nobody has used before, and makes
-them; your own session backends are too. That is why a service must derive the ids
+them; your own sessions are too. That is why a service must derive the ids
 it sends itself and never forward a user's: an id is no longer something kingfisher
 handed out, and naming one is reaching it, unless the access policy stops the
 caller at the session's pinned agent.
@@ -301,20 +303,20 @@ cannot be given one of its own, and every session ends up on one mount separated
 by a path prefix and nothing else. A deployment that forbids one caller's session
 from reaching another's needs the separation in the wiring instead.
 
-**Build on the default rather than from nothing.** Subclass `DefaultBackends`,
+**Build on the default rather than from nothing.** Subclass `LocalSessions`,
 override `open`, and change the one thing you came to change. Host-path
 refusal, the route table, the confinement and the housekeeping all survive without
 your thinking about them:
 
 ```python
-from kingfisher import DefaultBackends
+from kingfisher import LocalSessions
 
-class MyBackends(DefaultBackends):
+class MySessions(LocalSessions):
     def open(self, cfg, session_id, /, *, catalogue=None):
         mine = super().open(cfg, session_id, catalogue=catalogue)
         return MyScoped(default=MySandbox(session=session_id), routes=mine.routes)
 
-kingfisher = Kingfisher(cfg, backends=MyBackends())
+kingfisher = Kingfisher(cfg, sessions=MySessions())
 ```
 
 Where `MyScoped` is a `CompositeBackend` of your own, hand it
@@ -329,10 +331,10 @@ backend, and cannot say which sessions there are.
 `apending` and `aartifact` open a session with `aopen` and list them with
 `asessions`; `adelete_session` deletes one with `adelete`; and a turn on `astream`
 also records the session used with `amark_used` and checks its quota with `asize`.
-`SessionBackends` carries all five, running the sync method on kingfisher's thread
-pool, so a class that subclasses it — `DefaultBackends` does — has them already.
+`Sessions` carries all five, running the sync method on kingfisher's thread
+pool, so a class that subclasses it — `LocalSessions` does — has them already.
 Override one where it is a round trip you can await: the async path then holds no
-thread while it waits. A class that does not subclass `SessionBackends` has to write
+thread while it waits. A class that does not subclass `Sessions` has to write
 all five, because the type check asks for every method. The backend `open` returns is read through its own async methods,
 `adownload_files` and the rest, which deepagents' `BackendProtocol` already has.
 
@@ -344,7 +346,7 @@ that otherwise report nothing.
 **Take `catalogue` even if you ignore it.** It is what lets a session see the skills
 your bundles ship, and an `open` that quietly drops it gets a backend that is
 perfectly well-formed and sees none of them. Nothing at runtime can see that mistake,
-which is why `SessionBackends` is a typed protocol rather than a line of prose —
+which is why `Sessions` is a typed protocol rather than a line of prose —
 write the signature out and your type checker catches it.
 
 **What `open` returns is one session's, and only one.** A backend shared between
@@ -356,20 +358,20 @@ id handed the same storage.
 **The turn lock is on the backend.** It has to have `claim(name, *, stale_after)`,
 `aclaim` for the async path, `release(name)` and `held(name, *, stale_after)`: a claim
 that fails while another is live, which a `write` cannot be, because a `write`
-overwrites and two turns would both take it. `default_backends` does it with `mkdir`,
+overwrites and two turns would both take it. `LocalSessions` does it with `mkdir`,
 through `SessionClaims`, which also gives `aclaim` and `arelease`, running `claim`
 and `release` on kingfisher's pool. Override them where your lock is a round trip
 you can await. Two turns in one
 session share a conversation and the last write wins, so this is what refuses the
 second.
 
-**A pre-built graph names its session backends too.** `Kingfisher(cfg, graph=...)`
+**A pre-built graph names its sessions too.** `Kingfisher(cfg, graph=...)`
 runs its agent on the backend the graph was compiled with, but kingfisher still
 places a request's inputs, collects what a turn left and takes the turn lock through
-the session backends you pass — so a graph is refused without them, and one built on
-kingfisher's own passes `backends=default_backends`. Pass the ones that reach the
+the sessions you pass — so a graph is refused without them, and one built on
+kingfisher's own passes `sessions=LocalSessions()`. Pass the ones that reach the
 sessions your graph's backend keeps: nothing can check that from outside a compiled
-graph. `run()` and `stream()` take `backends=` too, and refuse to run without it,
+graph. `run()` and `stream()` take `sessions=` too, and refuse to run without it,
 with a graph or without.
 
 **What you return is also what a workspace tool is handed.** A tool that asks for
@@ -389,12 +391,12 @@ the end of the turn that folder and deepagents' offload folder are listed with `
 a result file no row of the ledger names is removed with `delete`. So all of those
 work on a backend that keeps the session somewhere other than the directory it was
 handed. `/inputs` has to take that upload
-while refusing the agent's own writes: `default_backends` routes it to
+while refusing the agent's own writes: `LocalSessions` routes it to
 `InputsBackend`, which lifts the permission bits for kingfisher's upload alone, and
 a backend of yours meets the same promise its own way.
 
 **Open it once if you use it around a turn.** `Kingfisher.files_for(session_id)`
-builds a session's backend the way a turn does, through your session backends,
+builds a session's backend the way a turn does, through your sessions,
 and `run`, `stream`, `arun` and `astream` take it back
 as `files=` and run the turn on it rather than opening another. Where each `open`
 is a sandbox, that is one sandbox rather than two. `afiles_for` is the same for a
@@ -411,7 +413,7 @@ unless your backend keeps it out. Nothing signs them, so what stands between the
 agent and rewriting its own pinned agent is that fence, and it is yours to get
 right: **`shell_denied`**, in the kit below, drives `execute` at `/.harness` and
 `/inputs` and fails if the shell can write either. `kingfisher doctor` warns when
-`KINGFISHER_SESSION_BACKENDS_FACTORY` names session backends of yours, because it
+`KINGFISHER_SESSION_BACKENDS_FACTORY` names sessions of yours, because it
 cannot look inside them.
 
 Nothing else is read from a directory on this host. A backend that keeps its
@@ -441,7 +443,7 @@ apply first: a path the file tools may not read, `/.harness` among them, is
 refused before your method is asked.
 
 For the command line, name it with `KINGFISHER_SESSION_BACKENDS_FACTORY`; without it,
-`kingfisher sessions`, `reap` and `artifact` run on `default_backends`.
+`kingfisher sessions`, `reap` and `artifact` run on `LocalSessions`.
 
 ### Checking what you returned
 
@@ -471,7 +473,7 @@ from kingfisher import BACKEND_CONTRACT
 
 @pytest.mark.parametrize("check", BACKEND_CONTRACT, ids=lambda c: c.__name__)
 def test_my_backend_keeps_the_contract(check, cfg):
-    check(lambda: MyBackends().open(cfg, "a-session"))
+    check(lambda: MySessions().open(cfg, "a-session"))
 ```
 
 Run all six. The automatic pair costs nothing twice, and your own suite is a
@@ -512,7 +514,7 @@ root: pass `artifacts_root="/scratchpad/"`. deepagents reads it only off a
 
 **The shell may not write under `/.harness` or `/inputs`.** `shell_denied` writes a
 file there through the backend, then has the shell try to overwrite it and to create
-another beside it. `default_backends` passes on the strength of its sandbox; with the
+another beside it. `LocalSessions` passes on the strength of its sandbox; with the
 sandbox off it fails on `/.harness`, which is exactly the deployment it is there
 to catch.
 

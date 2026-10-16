@@ -96,7 +96,7 @@ class Confinement:
     #: Wraps a command so it runs confined. Identity when nothing is applied.
     wrap: Callable[[str], str]
     #: Empty when the shell is confined, or when a deployment has said it is
-    #: confined elsewhere. Non-empty text is what `default_backends` warns with,
+    #: confined elsewhere. Non-empty text is what `LocalSessions` warns with,
     #: once per process, and what `doctor` reports.
     warning: str = ""
     #: The deployment asserted a boundary this code cannot see -- a container mounting

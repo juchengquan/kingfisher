@@ -481,7 +481,7 @@ def test_the_startup_probe_still_refuses_the_question_it_exists_to_ask(cfg, monk
     tool wear a built-in's name -- and answers it with `CapabilityError`. Only
     `ConfigError` is suppressed, so the answer it exists for still stops the service.
     """
-    from kingfisher import Kingfisher, default_backends
+    from kingfisher import Kingfisher, LocalSessions
     from kingfisher.domain.capabilities import CapabilityError
     from tests.conftest import tools_dir
 
@@ -490,7 +490,7 @@ def test_the_startup_probe_still_refuses_the_question_it_exists_to_ask(cfg, monk
     (tools_dir(cfg) / "shadow.py").write_text(SHADOWING_TOOL, encoding="utf-8")
 
     with pytest.raises(CapabilityError, match="read_file"):
-        Kingfisher(cfg, backends=default_backends)
+        Kingfisher(cfg, sessions=LocalSessions())
 
 
 def test_the_command_says_it_in_one_line_rather_than_a_traceback(

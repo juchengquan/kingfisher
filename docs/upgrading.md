@@ -31,12 +31,12 @@ only the first two items of the checklist, and the sections titled *after #667* 
 - **A shell kingfisher does not run is described neutrally.** The prompt and
   `execute`'s description told every agent that the shell runs on the host in the
   session root, with `$TMPDIR` the scratchpad and `$KINGFISHER_SKILLS` the catalogue.
-  That is told now only of kingfisher's own shell, which `default_backends` builds. A
-  deployment with `DefaultBackends(runner=...)`, or with a sandbox of its own running
+  That is told now only of kingfisher's own shell, which `LocalSessions` builds. A
+  deployment with `LocalSessions(runner=...)`, or with a sandbox of its own running
   `execute`, gets wording that claims none of it, and no correction when a command
   misses a file-tool path.
 - **Say what yours sees with a `ShellPrompt`**, from `kingfisher`: beside the runner as
-  `DefaultBackends(runner=..., shell_prompt=...)`, or as a `shell_prompt` attribute on
+  `LocalSessions(runner=..., shell_prompt=...)`, or as a `shell_prompt` attribute on
   your sandbox. `ports.md` has its three parts and who reads each. Passing one without
   a runner is refused.
 - **`render_system_prompt` and `system_prompt` take `shell=`**, and without it describe a
@@ -367,7 +367,7 @@ summarizer's history, with any user message too long to send, to
 `/large_tool_results/` and `/conversation_history/`. The system prompt names the new
 folders.
 
-- **Built on `backend_at`**, or on `DefaultBackends` returning what it opened, there is
+- **Built on `backend_at`**, or on `LocalSessions` returning what it opened, there is
   nothing to do.
 - **A `CompositeBackend` of your own** still has deepagents write both folders at `/`
   until you pass `artifacts_root="/scratchpad/"`. `BACKEND_CONTRACT` has a sixth check,
@@ -440,7 +440,7 @@ in `sessions/` itself rather than in `sessions/<id>/`.
   workspace whose `sessions/` holds sessions of their own is refused at startup, and
   so is turning it off for one laid out by it. Clear `sessions/`, or use another
   workspace.
-- **Session backends of your own** are handed the same `cfg`, and a request naming
+- **Sessions of your own** are handed the same `cfg`, and a request naming
   no id runs under `cfg.session_id`. List that id from `sessions(cfg)` if a first turn
   may name it, or the turn is refused. `SESSION_BACKENDS_CONTRACT` opens several ids,
   so it cannot pass against backends serving this mode.
@@ -530,24 +530,24 @@ and was never read.
 
 ## Session ids refused unless they are one path segment, after #664
 
-`DefaultBackends` refuses a session id that is not one path segment (empty, `.`,
+`LocalSessions` refuses a session id that is not one path segment (empty, `.`,
 `..`, or holding `/` or NUL) wherever it builds a path from one: `open`,
 `mark_used`, `size` and `delete` (#665). The refusal is the `UnknownSessionError` an
 id nobody issued gets. Such an id used to act on whatever path it formed:
 `files_for("..")` laid a session out in the workspace's own folder, an absolute id
-laid one out wherever it pointed, and `DefaultBackends.delete(cfg, "")` removed every
+laid one out wherever it pointed, and `LocalSessions.delete(cfg, "")` removed every
 session in the workspace and reported success.
 
 - **Every id kingfisher issued passes**, as does every folder under `sessions/`.
-- **Session backends of your own are not checked for you**, unless they subclass
-  `DefaultBackends` and call through to it. Kingfisher hands them only ids it issued
+- **Sessions of your own are not checked for you**, unless they subclass
+  `LocalSessions` and call through to it. Kingfisher hands them only ids it issued
   or they listed, except `Kingfisher.session_size`, which passes on the id it is given.
 
 ## `files_for` opens only a session a turn issued, after #663
 
 *Undone after #739: see The session is named in the request.*
 
-`Kingfisher.files_for(id)` and `afiles_for` refuse an id your session backends don't
+`Kingfisher.files_for(id)` and `afiles_for` refuse an id your sessions don't
 list, with the `UnknownSessionError` a turn naming it gets, and open nothing (#664).
 They used to open it through `open`, which makes a session it is asked for, so an id
 the caller made up became a session a later turn accepted.
@@ -572,53 +572,53 @@ was mirrored inside the session rather than reaching the path named.
   absolute paths into the workspace should use virtual paths, or the shell for host
   paths.
 
-## Session backends always given, after #639
+## Sessions always given, after #639
 
-Session backends are always passed now, so what kingfisher used to work out from a
+Sessions are always passed now, so what kingfisher used to work out from a
 session's directory on this host comes from them instead.
 
 | Before | Now |
 |---|---|
-| `Kingfisher(cfg, graph=my_graph)` | `Kingfisher(cfg, graph=my_graph, backends=default_backends)`, or the session backends that reach where your graph's backend keeps a session. A graph without `backends=` is **refused**. |
-| `run(...)`, `stream(...)`, with or without `graph=` | Name `backends=` here too. Neither fills it in. |
-| `Kingfisher(cfg, backends=default_backends, runner=my_runner)` | `Kingfisher(cfg, backends=DefaultBackends(runner=my_runner))`. `runner=` is gone from `Kingfisher`; `my_runner` is still a callable given the session's directory. |
-| `open(cfg, session_id, /, *, catalogue=None, runner=None)` and `aopen` on your `SessionBackends` | Drop `runner`. A subclass of `DefaultBackends` gets the runner it was built with from `super().open(...)`; session backends of your own decide how their commands run themselves. |
+| `Kingfisher(cfg, graph=my_graph)` | `Kingfisher(cfg, graph=my_graph, sessions=LocalSessions())`, or the sessions that reach where your graph's backend keeps a session. A graph without `sessions=` is **refused**. |
+| `run(...)`, `stream(...)`, with or without `graph=` | Name `sessions=` here too. Neither fills it in. |
+| `Kingfisher(cfg, backends=default_backends, runner=my_runner)` | `Kingfisher(cfg, sessions=LocalSessions(runner=my_runner))`. `runner=` is gone from `Kingfisher`; `my_runner` is still a callable given the session's directory. |
+| `open(cfg, session_id, /, *, catalogue=None, runner=None)` and `aopen` on your `SessionBackends` | Drop `runner`. A subclass of `LocalSessions` gets the runner it was built with from `super().open(...)`; sessions of your own decide how their commands run themselves. |
 | A factory passed as `threads=`, called with the session's directory, `<workspace>/sessions/<id>` | Called with the session's id. A factory that kept a file per session on this host builds that path itself, from its own configuration. A checkpointer passed as `threads=` rather than a factory is unaffected. |
-| `Kingfisher(cfg)` with no `backends=` | **Refused** by Python: `backends` has no default on the constructor (#657), nor on `run()` and `stream()`. Pass `backends=default_backends`. |
+| `Kingfisher(cfg)` with no `backends=` | **Refused** by Python: `sessions` has no default on the constructor (#657), nor on `run()` and `stream()`. Pass `sessions=LocalSessions()`. |
 
 Every session's backend is now checked when it is opened, beside a pre-built graph
 too: it has to run commands as deepagents recognises them, and route every path the
 agent is given. A backend that fails used to get as far as `claim` and stop there
-with an `AttributeError` naming neither it nor your session backends; now opening the
+with an `AttributeError` naming neither it nor your sessions; now opening the
 session raises a `ConfigError` that says which check it failed.
 
 ## Renamed after #617
 
 The object that opens each session's backend was called a backend, and its setting
-a backend factory. It is a `SessionBackends`, so the names say so now, and the
+a backend factory. It is a `Sessions`, so the names say so now, and the
 method that opens a session is named rather than being the object's `__call__`.
 
 | Before | Now |
 |---|---|
-| `Kingfisher(cfg, backend=...)`, and `backend=` on `run()` and `stream()` | `backends=` |
-| `default_backend`, `DefaultBackend` | `default_backends`, `DefaultBackends` |
+| `Kingfisher(cfg, backend=...)`, and `backend=` on `run()` and `stream()` | `sessions=` |
+| `default_backend`, `DefaultBackend` | `LocalSessions()`, `LocalSessions` |
 | `__call__(cfg, session_id, /, *, catalogue=None, runner=None)` on your `SessionBackends`, called as `backends(cfg, session_id)` | `open(...)`, with the same arguments, called as `backends.open(cfg, session_id)` |
 | `KINGFISHER_BACKEND_FACTORY` | `KINGFISHER_SESSION_BACKENDS_FACTORY`. The old name is **refused**: startup fails with `KINGFISHER_BACKEND_FACTORY was renamed KINGFISHER_SESSION_BACKENDS_FACTORY; set that instead`. |
-| `Config.backend_factory`, `configured_backend()` | `Config.session_backends_factory`, `configured_backends()` |
+| `Config.backend_factory`, `configured_backend()` | `Config.session_backends_factory`, `configured_sessions()` |
 
 ## Async reads after #617
 
 `Kingfisher` has `asession`, `apending`, `aartifact`, `adelete_session` and
 `afiles_for`, the async twins of `session`, `pending`, `artifact`, `delete_session` and
-`files_for`, for a caller already on an event loop. They reach a session through new methods on `SessionBackends` --
+`files_for`, for a caller already on an event loop. They reach a session through new methods on `Sessions` --
 `aopen`, `asessions`, `adelete`, and for a turn on `astream`, `amark_used` and `asize`
 -- and through `aclaim` on the backend `open` returns:
 
-- **If your session backends subclass `DefaultBackends` or `SessionBackends`**, there
+- **If your sessions subclass `LocalSessions` or `Sessions`**, there
   is nothing to do. All five are inherited, each running its sync method on
   kingfisher's thread pool. Override one where it is a round trip you can await.
 - **If yours subclass neither**, they are refused at construction until they have all
-  five. Subclassing `SessionBackends` is the shortest fix.
+  five. Subclassing `Sessions` is the shortest fix.
 - **The backend `open` returns needs `aclaim` and `arelease`** beside `claim` and
   `release`. One built on `SessionClaims`, as kingfisher's are, has them already.
 - `SESSION_BACKENDS_CONTRACT` has seven more checks, one for each async twin:
@@ -640,11 +640,11 @@ method that opens a session is named rather than being the object's `__call__`.
    a session keeps under `/.harness`, so the row says whether anything it can see
    keeps the agent's shell from rewriting it. With your own backend, that is the
    backend's `shell_denied` check (see *For backend authors*).
-3. **If you call `Kingfisher(...)` yourself**, pass `backends=` — it is required now —
-   and check the constructor changes in *Session backends always given* and below.
+3. **If you call `Kingfisher(...)` yourself**, pass `sessions=` — it is required now —
+   and check the constructor changes in *Sessions always given* and below.
 4. **If you read `RunResult.session_dir` or `RunResult.log_path`**, switch to
    `artifacts` with `Kingfisher.artifact`, and to `RunEvents`.
-5. **If you wrote your own backend**, it now has to be a `SessionBackends`. See
+5. **If you wrote your own backend**, it now has to be a `Sessions`. See
    *For backend authors*.
 6. **If you copied the shipped tools**, decide whether to re-seed them (see
    *Workspace tools*).
@@ -658,7 +658,7 @@ method that opens a session is named rather than being the object's `__call__`.
 |---|---|---|
 | `KINGFISHER_SESSION_STORE`, `KINGFISHER_SESSION_STORE_FACTORY` | **Removed and refused.** Startup fails with `KINGFISHER_SESSION_STORE was removed: a session's backend keeps it now…` | Unset them. For sessions that outlive the machine, mount durable storage at `<workspace>/sessions`, or use a backend that keeps sessions itself. |
 | `KINGFISHER_SESSION_KEY` | **Gone.** It was on `main` for a day after #610, signing the pin, the conversation and a paused turn; nothing signs them now. | Unset it if you set it; `kingfisher doctor` reports it as read by nothing. |
-| `KINGFISHER_SESSION_BACKENDS_FACTORY` | **New, for the command line only.** `module:name` of something callable with no arguments that returns your `SessionBackends`. | Set it (the name since *Renamed after #617*) if your session backends keep sessions anywhere but `<workspace>/sessions`, so `kingfisher sessions`, `reap`, `artifact` and `decide` see them. |
+| `KINGFISHER_SESSION_BACKENDS_FACTORY` | **New, for the command line only.** `module:name` of something callable with no arguments that returns your `Sessions`. | Set it (the name since *Renamed after #617*) if yours keep sessions anywhere but `<workspace>/sessions`, so `kingfisher sessions`, `reap`, `artifact` and `decide` see them. |
 
 ## Existing sessions
 
@@ -674,8 +674,8 @@ method that opens a session is named rather than being the object's `__call__`.
 
 | Before | Now |
 |---|---|
-| `Kingfisher(cfg, backend=my_factory)` where `my_factory(cfg, session_dir, ...)` is a function | `backends=` takes a **`SessionBackends`**. To build on the default, subclass `DefaultBackends` and override `open(cfg, session_id, /, *, catalogue=None)`. A plain function is refused with a `TypeError` saying so. |
-| `default_backend(cfg, session_dir)` called directly | `default_backends.open(cfg, session_id)` takes a session id now. For a folder of your choosing, call `backend_at(cfg, directory)`. |
+| `Kingfisher(cfg, backend=my_factory)` where `my_factory(cfg, session_dir, ...)` is a function | `sessions=` takes a **`Sessions`**. To build on the default, subclass `LocalSessions` and override `open(cfg, session_id, /, *, catalogue=None)`. A plain function is refused with a `TypeError` saying so. |
+| `default_backend(cfg, session_dir)` called directly | `LocalSessions().open(cfg, session_id)` takes a session id now. For a folder of your choosing, call `backend_at(cfg, directory)`. |
 | `dirs=`, `sessions=`, `session_root=` | **Removed.** A session's backend answers all three: where it is, what it holds, and the housekeeping. |
 | `run_events=` | **New.** A sink with `record(event)`. With none given, events go to the `kingfisher.run` logger at INFO. |
 | `delete_session(id, forget=...)`, `reap(..., forget=...)` | `forget=` is **removed**: there is no store to keep a copy in. |
@@ -698,7 +698,7 @@ method that opens a session is named rather than being the object's `__call__`.
 - **Removed from `kingfisher`:** `LocalSessionStore`, `SESSION_STORE_CONTRACT`,
   `SESSION_ROOT_CONTRACT`. The `SessionRoot`, `SessionStore` and `SessionDirs` ports
   are gone from `kingfisher.domain.ports`.
-- **Added:** `DefaultBackends`, `backend_at`, `SESSION_BACKENDS_CONTRACT`,
+- **Added:** `LocalSessions`, `backend_at`, `SESSION_BACKENDS_CONTRACT`,
   `ArtifactError`, and `Kingfisher.artifact` and
   `Kingfisher.pending` on the service.
 
@@ -775,7 +775,7 @@ does. `docs/guides/formats.md`, under *Tools and skills of its own*, has the det
 
 ## For backend authors
 
-A custom backend is now a **`SessionBackends`**: one object that opens a session's
+A custom backend is now a **`Sessions`**: one object that opens a session's
 backend per turn, and also answers for every session.
 
 - `open(cfg, session_id, /, *, catalogue=None)` returns that
@@ -812,8 +812,8 @@ backend* and *A tool's path is the backend's path*, explains why.
 | `KINGFISHER_SKILLS_DIR was removed: skills is read from KINGFISHER_DEFINITIONS_DIR now, …` (or any of its six siblings) | A setting that moved one kind is still set | Move what it named into the definitions folder and unset it; see *Definitions in a folder of their own* |
 | `KINGFISHER_DEFINITIONS_DIR is …, which is not a directory` | The folder is not there, or its mount failed | Run `kingfisher seed`, or fix the mount; a start never makes it |
 | `… neither may be inside the other …` | The definitions folder and the workspace are one folder, or one holds the other | Give each a folder of its own; see *Definitions in a folder of their own* |
-| `TypeError: backends= takes a SessionBackends …` | A plain factory function, or one backend, passed as `backends=` | Subclass `DefaultBackends` |
-| `TypeError: … missing 1 required keyword-only argument: 'backends'` | `Kingfisher(...)`, `run()` or `stream()` called without `backends=`, with or without a graph | Pass `backends=default_backends`, or session backends of your own; see *Session backends always given* |
+| `TypeError: sessions= takes a Sessions …` | A plain factory function, or one backend, passed as `sessions=` | Subclass `LocalSessions` |
+| `TypeError: … missing 1 required keyword-only argument: 'sessions'` | `Kingfisher(...)`, `run()` or `stream()` called without `sessions=`, with or without a graph | Pass `sessions=LocalSessions()`, or sessions of your own; see *Sessions always given* |
 | `ConfigError: … is not recognised by deepagents as running commands …` or `… routes nothing covering …` | A session backend your `open` returned has no shell, or leaves a path unrouted | Subclass `SandboxBackendProtocol`, or route the path; see *For backend authors* |
 | `KINGFISHER_BACKEND_FACTORY was renamed …` | The setting's old name is still set | Rename it; see *Renamed after #617* |
 | `… is not kept on this host by this session's backend …` | A `path` tool on a backend without local files | Read through `ToolContext`, or give the backend a `host_path` |

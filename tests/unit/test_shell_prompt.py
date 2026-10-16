@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from deepagents.backends import CompositeBackend, LocalShellBackend
 
-from kingfisher import CommandResult, DefaultBackends, ShellPrompt, backend_at
+from kingfisher import CommandResult, LocalSessions, ShellPrompt, backend_at
 from kingfisher.infrastructure.harness.backend import shell_prompt_of
 from kingfisher.infrastructure.prompting import kingfishers_shell, render_system_prompt
 from kingfisher.layout import Layout
@@ -75,7 +75,7 @@ def test_a_runner_s_shell_is_not_described_as_kingfishers_own(cfg):
     `KINGFISHER_SKILLS` its shell did not have. The runner here is the plainest one a
     deployment writes, and the premise is driven with it rather than assumed.
     """
-    backend = DefaultBackends(runner=lambda _where: Plain()).open(cfg, "s")
+    backend = LocalSessions(runner=lambda _where: Plain()).open(cfg, "s")
     seen = _seen(backend.execute(PROBE).output)
 
     assert Path(seen["pwd"]).resolve() != (cfg.workspace / "sessions" / "s").resolve()
@@ -91,7 +91,7 @@ def test_a_runner_s_own_wording_is_what_the_agent_is_told(cfg):
     """And it is filled from the layout as kingfisher's own is, so a renamed folder
     cannot leave the deployment's sentence naming the old one.
     """
-    backend = DefaultBackends(runner=lambda _where: Plain(), shell_prompt=THEIRS).open(cfg, "s")
+    backend = LocalSessions(runner=lambda _where: Plain(), shell_prompt=THEIRS).open(cfg, "s")
     told = _told(shell_prompt_of(backend), layout=Layout(inputs="in"))
 
     assert shell_prompt_of(backend) is THEIRS
@@ -105,7 +105,7 @@ def test_wording_without_a_runner_is_refused(cfg, session_dir):
     `deployment_prompt`, which the refusal names.
     """
     with pytest.raises(TypeError, match="deployment_prompt"):
-        DefaultBackends(shell_prompt=THEIRS)
+        LocalSessions(shell_prompt=THEIRS)
     with pytest.raises(TypeError, match="deployment_prompt"):
         backend_at(cfg, session_dir, shell_prompt=THEIRS)
 
@@ -122,13 +122,13 @@ class Silent(LocalShellBackend):
 
 def test_a_sandbox_of_a_deployment_s_own_is_read_for_what_it_says(cfg, session_dir):
     """Read off the shell, which is what knows: the sandbox that says something is
-    taken at its word, and the subclass of `DefaultBackends` that swaps in one saying
+    taken at its word, and the subclass of `LocalSessions` that swaps in one saying
     nothing is described neutrally -- on the session backends, it would have inherited
     kingfisher's wording and been told of a shell it does not have.
     """
     routes = backend_at(cfg, session_dir).routes
 
-    class Swapped(DefaultBackends):
+    class Swapped(LocalSessions):
         def open(self, cfg_, session_id, /, *, catalogue=None):
             mine = super().open(cfg_, session_id, catalogue=catalogue)
             return CompositeBackend(default=Silent(root_dir=str(session_dir)), routes=mine.routes)

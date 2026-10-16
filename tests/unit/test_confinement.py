@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher.domain.ports import CommandResult
-from kingfisher.infrastructure.harness.backend import backend_at, default_backends
+from kingfisher.infrastructure.harness.backend import LocalSessions, backend_at
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.sandbox.bubblewrap import BubblewrapRunner
 from kingfisher.infrastructure.sandbox.fence import LandlockRunner
@@ -243,7 +243,7 @@ def test_a_runner_that_says_nothing_keeps_the_fence(cfg, session_dir):
     """The default is the safe one on purpose.
 
     This half only: that `execute` wraps the command when the runner reads as local.
-    It replaces the confinement below, so it cannot see what `default_backends` decided
+    It replaces the confinement below, so it cannot see what `LocalSessions` decided
     about that runner -- which is the other half, and was held by nothing until
     `test_a_runner_that_says_nothing_is_confined_here` was written.
     """
@@ -925,7 +925,7 @@ def test_the_shell_cannot_rewrite_a_saved_result(cfg, layout):
     stays writable, both asserted, so a rule refusing everything would not pass this.
     """
     named = replace(cfg, layout=layout)
-    backend = default_backends.open(named, "results")
+    backend = LocalSessions().open(named, "results")
     scratch, kept = layout.scratchpad, layout.tool_results
     routes = (layout.tool_results_route, layout.offloads_route)
     backend.upload_files([(f"{route}A-0001.txt", b"as written") for route in routes])

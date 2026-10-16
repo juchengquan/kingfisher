@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import backend_at, default_backends
+from kingfisher import LocalSessions, backend_at
 from kingfisher.infrastructure.session_files import InputsError, place_inputs
 from kingfisher.infrastructure.steps import drive
 from kingfisher.infrastructure.workspace import (
@@ -105,7 +105,7 @@ def test_a_renamed_scratchpad_is_as_private_as_the_default_one(cfg):
         # Through `open`, which is what lays a session out in production -- the call
         # that was missing the leaf. A test making the directory itself would be
         # passing the argument production omits, which is how this hid.
-        default_backends.open(made, session_id)
+        LocalSessions().open(made, session_id)
         session = made.workspace / "sessions" / session_id
         mode = (session / layout.scratchpad).stat().st_mode & 0o777
 

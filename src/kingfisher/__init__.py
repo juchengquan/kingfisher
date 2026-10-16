@@ -17,7 +17,7 @@ __version__ = "0.1.0"
 #: and `__all__`, so the two cannot drift.
 #:
 #: **A caller means a caller outside this wheel**, which is the rule eleven names --
-#: `build_agent`, `default_backends`, `build_model` and the rest -- were removed under.
+#: `build_agent`, `build_model` and the rest -- were removed under.
 #: Every one is live, and every one of their callers already imports it from the module
 #: that defines it, so nothing had ever come through the front door for them. The
 #: command ships in this distribution and is family: it reaches such a name directly,
@@ -55,20 +55,14 @@ _EXPORTS = {
     # Its companion for the object that makes backends and answers for every session:
     # that two sessions never share a filesystem, and that a claim is exclusive.
     "SESSION_BACKENDS_CONTRACT": "kingfisher.infrastructure.harness.backend_contract",
-    # One of the eleven, back. The rule those left under still holds -- a caller
-    # means a caller outside this wheel -- and what changed is that every such
-    # caller now has to name this one: `Kingfisher` no longer picks the filesystem
-    # its agents run on, so a deployment keeping the one it always had writes
-    # `backends=default_backends` and has to be able to say it without reaching past
-    # the door for an infrastructure path.
-    "default_backends": "kingfisher.infrastructure.harness.backend",
-    # What `default_backends` builds for one session, for a directory of the caller's
-    # choosing. Public because `ports.md` tells a deployment replacing the backend to
-    # start from it rather than from nothing, and that has to be sayable from here.
+    # What `LocalSessions` builds for one session, for a directory of the caller's
+    # choosing. Public because `ports.md` tells a deployment writing its own sessions
+    # to start from it rather than from nothing, and that has to be sayable from here.
     "backend_at": "kingfisher.infrastructure.harness.backend",
-    # What a deployment subclasses to build on the default: its housekeeping, with its
-    # own `open`. `ports.md` shows it, and the refusal of a plain function names it.
-    "DefaultBackends": "kingfisher.infrastructure.harness.backend",
+    # Kingfisher's own sessions. Every `Kingfisher` is handed its sessions, so a
+    # deployment keeping these names them, and one building on them subclasses them:
+    # `ports.md` shows both, and the refusal of a plain function names it.
+    "LocalSessions": "kingfisher.infrastructure.harness.backend",
     # What a deployment's shell says of itself, which only the deployment knows: a
     # runner is handed the command and nothing else, so the agent is told neutrally
     # about any shell but kingfisher's own unless this says otherwise. Constructed by
@@ -150,13 +144,13 @@ __all__ = [
     "ConfigError",
     "Decision",
     "DecisionError",
-    "DefaultBackends",
     "Held",
     "HostPathError",
     "Inventory",
     "Kingfisher",
     "Landing",
     "LedgerEntry",
+    "LocalSessions",
     "Origin",
     "Origins",
     "PendingDecision",
@@ -177,7 +171,6 @@ __all__ = [
     "WorkspacePaths",
     "backend_at",
     "config_from_env",
-    "default_backends",
     "definitions_source",
     "ensure_definitions",
     "inventory",
@@ -229,13 +222,10 @@ if TYPE_CHECKING:
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
     from kingfisher.infrastructure.harness.audienced_tool import tool as tool
     from kingfisher.infrastructure.harness.backend import (
-        DefaultBackends as DefaultBackends,
+        LocalSessions as LocalSessions,
     )
     from kingfisher.infrastructure.harness.backend import (
         backend_at as backend_at,
-    )
-    from kingfisher.infrastructure.harness.backend import (
-        default_backends as default_backends,
     )
     from kingfisher.infrastructure.harness.backend_contract import (
         BACKEND_CONTRACT as BACKEND_CONTRACT,

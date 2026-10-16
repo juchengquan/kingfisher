@@ -20,7 +20,7 @@ from deepagents.backends.protocol import BackendProtocol, SandboxBackendProtocol
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage
 
-from kingfisher import Kingfisher, ToolContext, backend_at, default_backends
+from kingfisher import Kingfisher, LocalSessions, ToolContext, backend_at
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Decision, Request, Resume
 from kingfisher.domain.result import AWAITING
@@ -763,7 +763,7 @@ def test_a_turn_the_service_runs_hands_the_tool_its_sessions_backend(scripted):
     Scripted.script.extend(
         [_calls("first_line", file_path="/inputs/notes.txt"), AIMessage(content="done")]
     )
-    kf = Kingfisher(scripted, backends=default_backends)
+    kf = Kingfisher(scripted, sessions=LocalSessions())
 
     events = list(kf.stream(Request("go", agent="only", session_id=_session(scripted))))
 
@@ -780,7 +780,7 @@ def test_a_resumed_turn_is_handed_it_again(scripted):
     Scripted.script.extend(
         [_calls("first_line", file_path="/inputs/notes.txt"), AIMessage(content="done")]
     )
-    kf = Kingfisher(scripted, backends=default_backends)
+    kf = Kingfisher(scripted, sessions=LocalSessions())
     paused = kf.run(Request("go", agent="only", session_id=_session(scripted)))
     assert paused.stop_reason == AWAITING, "the turn never stopped, so nothing is resumed"
 
@@ -812,6 +812,6 @@ def test_a_graph_the_caller_built_is_driven_with_no_context_at_all(cfg):
 
     graph = Theirs()
 
-    Kingfisher(cfg, graph=graph, backends=default_backends).run(Request("go"))
+    Kingfisher(cfg, graph=graph, sessions=LocalSessions()).run(Request("go"))
 
     assert graph.driven == [{"config", "stream_mode", "subgraphs"}]

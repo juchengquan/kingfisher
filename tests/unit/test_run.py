@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import default_backends
+from kingfisher import LocalSessions
 from kingfisher.application.run import Request, RunResult, normalize_answer, run
 from kingfisher.application.service import Kingfisher
 from kingfisher.domain.result import END_TURN, STOP_REASONS
@@ -76,7 +76,7 @@ def test_run_creates_the_session_triple(cfg):
         Request("count things", session_id="sess123"),
         cfg=cfg,
         graph=agent,
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=StubCheckpointer(),
     )
 
@@ -98,7 +98,7 @@ def test_run_tells_the_agent_where_to_work_in_the_task(cfg):
         Request("do a thing", session_id="abc"),
         cfg=cfg,
         graph=agent,
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=StubCheckpointer(),
     )
 
@@ -116,7 +116,7 @@ def test_run_logs_usage_shaped_records(cfg):
         Request("t", session_id="logged"),
         cfg=cfg,
         graph=agent,
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=StubCheckpointer(),
         run_events=sink,
     )
@@ -142,7 +142,7 @@ def test_a_turn_disposes_of_nothing(cfg):
         start(cfg, name)
     start(cfg, "s4")
 
-    run(Request("t", session_id="s4"), cfg=cfg, graph=StubAgent("ok"), backends=default_backends,
+    run(Request("t", session_id="s4"), cfg=cfg, graph=StubAgent("ok"), sessions=LocalSessions(),
         checkpointer=StubCheckpointer())
 
     for name in ("s1", "s2", "s3", "s4"):
@@ -155,7 +155,7 @@ def test_a_bare_task_string_still_works(cfg):
         "just this",
         cfg=cfg,
         graph=StubAgent("ok"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=StubCheckpointer(),
     )
     assert result.answer == "ok"
@@ -195,7 +195,7 @@ def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
         run(
             Request("t", capabilities=Capabilities(subagents=("ghost",))),
             cfg=cfg,
-            backends=default_backends,
+            sessions=LocalSessions(),
             checkpointer=StubCheckpointer(),
         )
 
@@ -209,7 +209,7 @@ def test_the_framework_never_asks_for_files_of_its_own(cfg):
         Request("say hello"),
         cfg=cfg,
         graph=quiet,
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=StubCheckpointer(),
     )
     sent = quiet.state["messages"][0]["content"]
@@ -224,7 +224,7 @@ def test_the_framework_never_asks_for_files_of_its_own(cfg):
         Request("Analyse it and write findings.csv", session_id="asked"),
         cfg=cfg,
         graph=asked,
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=StubCheckpointer(),
     )
     # Whatever the caller names, verbatim and unembellished.
@@ -244,14 +244,14 @@ def test_supplied_inputs_are_still_there_on_the_next_turn(cfg):
         Request("look at it", session_id="keeps", inputs=(source,)),
         cfg=cfg,
         graph=StubAgent("ok"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=ck,
     )
     second = run(
         Request("and again", session_id="keeps"),
         cfg=cfg,
         graph=StubAgent("ok"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=ck,
     )
 
@@ -272,7 +272,7 @@ def test_the_agent_is_told_what_arrived_in_inputs(cfg):
         Request("go", session_id="told", inputs=(source,)),
         cfg=cfg,
         graph=agent,
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=StubCheckpointer(),
     )
 
@@ -295,7 +295,7 @@ def test_a_result_is_json_all_of_it(cfg):
     import dataclasses
 
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
     start(cfg, "s")
     result = service.run(Request("go", session_id="s"))
@@ -341,7 +341,7 @@ def test_the_loop_asks_for_what_a_subagent_does(cfg):
     """
     agent = RecordingAgent("ok")
     list(Kingfisher(
-        cfg, graph=agent, backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=agent, sessions=LocalSessions(), threads=StubCheckpointer()
     ).stream(Request("go")))
 
     assert agent.asked == [True]
