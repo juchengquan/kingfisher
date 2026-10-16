@@ -25,6 +25,7 @@ file about something else.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterable
 from contextlib import closing
 from pathlib import Path
 
@@ -38,6 +39,35 @@ DATABASE = Path("~/kingfisher-example.db").expanduser()
 #: A plan is short. This is a guard against a pathological one rather than a
 #: budget worth tuning.
 MAX_ROWS = 200
+
+#: How much the answer may carry. Rows are not characters, which is the lesson
+#: `docs/guides/tools.md` states under that heading and `sql_query` next door has a cap
+#: and a comment for: measured here, `SELECT a FROM t AS "<two million characters>"`
+#: obeyed the row cap and returned a 2,000,008-character answer in 0.01 seconds, and
+#: `verbose=True` a 500,020-character one. A plan names whatever the statement names,
+#: and the statement is the model's. The same number its neighbour answers with.
+MAX_ANSWER_CHARS = 200_000
+
+
+def _within(steps: Iterable[str]) -> str:
+    """The plan, stopped at `MAX_ANSWER_CHARS` and marked where it stopped.
+
+    Marked with a leading `--` and outside the numbered steps, as `sql_query` marks its
+    own cut, so a reader parsing the plan knows where it ends rather than reading the
+    note as a step.
+    """
+    out: list[str] = []
+    carried = 0
+    for step in steps:
+        if carried + len(step) + 1 > MAX_ANSWER_CHARS:
+            out.append(
+                f"-- cut at {MAX_ANSWER_CHARS} characters; the plan names something this "
+                f"statement spells at length"
+            )
+            break
+        carried += len(step) + 1
+        out.append(step)
+    return "\n".join(out)
 
 
 class ExplainInput(BaseModel):
@@ -100,11 +130,11 @@ class SqlExplain(BaseTool):
         if not rows:
             return "the database returned no plan for that statement"
         if verbose:
-            return "\n".join(str(row) for row in rows)
+            return _within(str(row) for row in rows)
         # The detail column is the readable one; the three before it are the
         # node ids a plan is a tree of, and a model reading a summary wants the
         # steps rather than the tree.
-        return "\n".join(f"{n + 1}. {row[-1]}" for n, row in enumerate(rows))
+        return _within(f"{n + 1}. {row[-1]}" for n, row in enumerate(rows))
 
 
 #: An *instance*. `SqlExplain` alone is refused, naming this line.

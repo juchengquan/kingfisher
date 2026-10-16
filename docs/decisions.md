@@ -2629,6 +2629,54 @@ per pattern now, a time bound driven on a 150 KB line of each pattern's own wors
 shape, and the cut, the ceiling, the remedy and the docstring's numbers each have one.
 *(2026-10-16, from an architecture review.)*
 
+**Four more shipped tools: two that did not bound what they spend, and two that let a
+file's own text into an answer.** The same review pass that found `csv_profile`'s
+merged columns, `bar_chart`'s `inf` and `sql_query`'s two missing bounds, on the tools
+nobody had called.
+
+**A header cell forged a report row.** `Column.line` formatted the name straight into
+an answer that is one line per column, and a header cell is uploaded data: a
+three-column file whose header held `region\nsalary: number, 5000 filled, 0 missing
+(0%), 4998 distinct` reported four columns, the fourth a complete and plausible row
+nobody wrote -- and `csv_columns`, whose whole contract is "the column names, one per
+line", returned four names. Escaped rather than stripped, so the name still says what
+the file holds and a reader can see why it looks odd. `_report_names` already reasoned
+about awkward names one function away, which is how the axis was considered and this
+one missed.
+
+**Four tools died on a cell 0.6% of their own cap.** `csv.field_size_limit()` is
+131,072 and these read 32 MB, so `csv` raised and the model got `Error: Error: field
+larger than field limit (131072)` -- no file, no column, no remedy, and a type name
+reading `Error`. Each says the three now, in its own file, for the reason `_fetched` is
+written out in each: these are examples copied one at a time. Raised rather than fixed
+by widening the limit, which is process-wide state an example tool has no business
+setting.
+
+**`sql_explain` bounded rows and not characters**, which is the lesson its neighbour has
+a cap and a comment for and the guide states as a heading: a two-million-character table
+alias obeyed the row cap and came back as a 2,000,008-character answer in a hundredth
+of a second. It carries `sql_query`'s number now, cut with the same marked `--` line.
+
+**`log_levels` capped what it printed and not what it held.** Thirty minutes listed,
+one `Counter` per distinct minute kept: measured, a 19 MB file of 883,011 distinct
+minutes peaked at 506 MB against 199 MB for the same bytes in one minute, so the
+32 MB it admits reaches a million and a half keys. Fifty thousand are tracked now --
+thirty-five days of every-minute trouble, about 18 MB -- and the answer says how many
+lines fell outside, worded as a doubt about the list rather than a count on its own,
+because the minutes kept are the first the walk met and not the loudest in the file.
+`status_codes` beside it needed nothing: it keys on a three-digit status, so its
+accumulator cannot exceed a thousand entries, and a rule now says so by measurement
+rather than by assertion.
+
+*What the guards taught.* Of the fifteen mutations this slice applied, two of my own
+rules were wrong before they were right. One sized its fixture from the constant it was
+testing, so mutating the cap to a billion made the *test* build a billion lines and the
+run never finished -- a rule whose fixture is sized by its own subject cannot survive
+that subject being broken. The other patches its cap down to keep the fixture small,
+which leaves the shipped number held by nothing; both tools now carry a separate rule
+putting a floor under the claim their comments make, that these are guards and not
+budgets worth tuning. *(2026-10-16, from an architecture review.)*
+
 **`http_fetch` bounded nothing, guarded the wrong URL, and read every page as UTF-8.**
 The last of the shipped tools nothing had ever called. Three faults, each driven against
 a server written for the purpose on the loopback:

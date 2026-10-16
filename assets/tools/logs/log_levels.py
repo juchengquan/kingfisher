@@ -32,6 +32,18 @@ LEVEL = re.compile(r"\b(CRITICAL|FATAL|ERROR|WARN(?:ING)?)\b")
 #: and the loudest are where to start reading.
 MAX_MINUTES = 30
 
+#: Minutes counted before the rest are only tallied. `MAX_MINUTES` above bounds what
+#: the answer *lists*; this bounds what the walk *holds*, which is the cost nobody had
+#: measured. One `Counter` per distinct minute is about 350 bytes: measured, a 19 MB
+#: file of 883,011 distinct minutes peaked at 506 MB of resident memory against 199 MB
+#: for the same bytes in one minute, and the 32 MB this tool admits reaches a million
+#: and a half. `docs/guides/tools.md` says to cap the bytes and then measure what the
+#: tool actually spends; for this one it is the number of keys.
+#:
+#: Fifty thousand is thirty-five days of every-minute trouble, past which a summary of
+#: the loudest thirty is not what anybody needs, and holds about 18 MB.
+MAX_TRACKED_MINUTES = 50_000
+
 
 #: What one call reads. A backend hands a file back whole, into kingfisher's own
 #: process, and nothing else bounds it: `docs/guides/tools.md` has the reason under
@@ -66,7 +78,7 @@ def log_levels(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     counts any other line as undated.
     """
     minutes: dict[str, Counter[str]] = {}
-    total = undated = 0
+    total = undated = untracked = 0
     for line in _fetched(runtime, file_path).decode("utf-8", errors="replace").splitlines():
         total += 1
         stamp = STAMP.match(line)
@@ -76,7 +88,11 @@ def log_levels(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
         level = LEVEL.search(line)
         if level is not None:
             word = "WARN" if level[1].startswith("WARN") else level[1]
-            minutes.setdefault(f"{stamp[1]} {stamp[2]}", Counter())[word] += 1
+            minute = f"{stamp[1]} {stamp[2]}"
+            if minute not in minutes and len(minutes) >= MAX_TRACKED_MINUTES:
+                untracked += 1
+                continue
+            minutes.setdefault(minute, Counter())[word] += 1
 
     head = f"{PurePosixPath(file_path).name}: {total} line(s), {undated} undated"
     if not minutes:
@@ -91,6 +107,14 @@ def log_levels(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
         lines.append(f"  {minute}  {counts}")
     if len(loudest) > MAX_MINUTES:
         lines.append(f"  -- {len(loudest) - MAX_MINUTES} quieter minute(s) not listed")
+    if untracked:
+        # Said rather than silently dropped, and said as a doubt about the list above
+        # rather than as a count on its own: the minutes kept are the first this walk
+        # met, not the loudest in the file, so a louder one may be among these.
+        lines.append(
+            f"  -- {untracked} line(s) in minutes past the first {MAX_TRACKED_MINUTES} "
+            f"were counted and not kept, so a louder minute may be among them"
+        )
     return "\n".join(lines)
 
 

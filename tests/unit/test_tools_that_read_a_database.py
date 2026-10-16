@@ -13,6 +13,8 @@ import csv
 import io
 import sqlite3
 import time
+from contextlib import closing
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -321,6 +323,80 @@ def test_the_verbose_plan_is_the_rows_as_they_came(tools, database):
 
     assert said != plain
     assert not said.startswith("1. ")
+
+
+def test_a_plan_naming_something_spelt_at_length_is_cut_and_marked(tools, database):
+    """Rows are not characters, which the guide states under that heading and
+    `sql_query` next door has a cap and a comment for. Measured here: a two-million
+    character table alias obeyed the row cap and came back as a 2,000,008-character
+    answer in a hundredth of a second, and `verbose=True` a 500,020-character one. A
+    plan names whatever the statement names, and the statement is the model's.
+    """
+    held = _globals(tools["sql_explain"])
+    wide = 'SELECT region FROM sales AS "' + "z" * 2_000_000 + '"'
+
+    for verbose in (False, True):
+        said = tools["sql_explain"].invoke({"statement": wide, "verbose": verbose})
+
+        assert len(said) <= held["MAX_ANSWER_CHARS"], f"verbose={verbose}: {len(said)}"
+        assert said.splitlines()[-1].startswith(f"-- cut at {held['MAX_ANSWER_CHARS']}")
+
+
+def test_a_plan_that_fits_carries_no_cut_and_no_mark(tools, database):
+    """The other half: a note on every plan tells a model something was dropped from
+    an answer that is whole, and the mark is what a reader uses to tell the steps from
+    the note.
+    """
+    said = tools["sql_explain"].invoke({"statement": "SELECT region FROM sales"})
+
+    assert "cut at" not in said
+    assert said.startswith("1. ")
+
+
+def test_the_plan_stops_at_the_rows_it_says_it_does(tools, database, monkeypatch):
+    """`MAX_ROWS` was the guard nothing reached: raising it to a billion left the whole
+    suite green, so the one bound this tool had was held by its own comment.
+
+    Patched down, so the fixture is a three-way join rather than a plan of two hundred
+    steps -- and the shipped number is then held by the rule below, because a rule that
+    patches the cap cannot see the cap change.
+    """
+    monkeypatch.setitem(_globals(tools["sql_explain"]), "MAX_ROWS", 1)
+
+    said = tools["sql_explain"].invoke(
+        {"statement": "SELECT region FROM sales a, sales b, sales c"}
+    )
+
+    assert len(said.splitlines()) == 1, said
+
+
+def test_the_row_cap_is_a_bound_rather_than_a_budget(tools):
+    """Its own comment says it is "a guard against a pathological one rather than a
+    budget worth tuning", and a guard set to a billion is not one. A floor under the
+    claim rather than a pin on the number, since the rule above patches it to drive it.
+    """
+    held = _globals(tools["sql_explain"])["MAX_ROWS"]
+
+    assert 10 <= held <= 1_000, held
+
+
+def test_the_plan_is_read_on_a_connection_that_refuses_a_write(tools, database):
+    """Its neighbour's identical guard is driven and this one was not: swapping the
+    read-only URI for a plain `connect` left the suite green. A plan is a read, and the
+    connection is what makes that true rather than assumed.
+    """
+    held = _globals(tools["sql_explain"])
+    opened = f"file:{held['DATABASE']}?mode=ro"
+
+    with closing(sqlite3.connect(opened, uri=True)) as db, pytest.raises(
+        sqlite3.OperationalError, match="readonly"
+    ):
+        db.execute("DELETE FROM sales")
+
+    # And the module opens exactly that, rather than this test opening its own: a rule
+    # asserting on a connection of its own making passes whatever the tool does.
+    source = Path(held["__file__"]).read_text(encoding="utf-8")
+    assert '?mode=ro", uri=True' in source
 
 
 def test_explaining_does_not_run_the_statement(tools, database):

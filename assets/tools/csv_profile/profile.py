@@ -23,7 +23,7 @@ from langchain_core.tools import tool
 
 from kingfisher import ToolContext
 
-from .columns import profile_column
+from .columns import profile_column, shown
 
 #: Rows read before stopping. A profile is a shape, not a census: the type and
 #: the missing-value pattern of a column settle long before the file ends, and
@@ -65,6 +65,28 @@ class _Read:
     ragged: int
 
 
+#: What the `csv` module refuses to parse: one field longer than this raises
+#: `_csv.Error`, and `csv.field_size_limit()` is 131,072 by default. A tool that reads
+#: 32 MB therefore dies on a cell that is 0.6% of its own cap -- measured, all four
+#: shipped CSV tools did, and through the failure guard the model was handed `Error:
+#: Error: field larger than field limit (131072)`: no file, no column, no remedy, and
+#: a type name reading `Error`. Raised deliberately rather than by widening the limit,
+#: which is process-wide state an example tool has no business setting.
+#:
+#: Said the same way in `csv_filter.py` and `bar_chart.py`, which read a CSV the same
+#: way and are copied one file at a time, for the reason `_fetched` is.
+MAX_FIELD_BYTES = csv.field_size_limit()
+
+
+def _refuse_wide(file_path: str, exc: csv.Error) -> ValueError:
+    """The one failure `csv` has, as an answer a model can act on."""
+    return ValueError(
+        f"{file_path}: one cell is longer than the {MAX_FIELD_BYTES} characters the CSV "
+        f"reader parses ({exc}) -- ask for a file whose cells are smaller, or read it "
+        f"with `read_file`"
+    )
+
+
 def _report_names(header: list[str]) -> list[str]:
     """Each column's name for the report, carrying its position where a name repeats.
 
@@ -88,6 +110,19 @@ def _read(runtime: ToolRuntime[ToolContext], file_path: str) -> _Read:
     and the same line was printed once per spelling with no way to tell them apart.
     """
     text = _fetched(runtime, file_path).decode("utf-8-sig")
+    try:
+        return _gathered(text)
+    except csv.Error as exc:
+        raise _refuse_wide(file_path, exc) from exc
+
+
+def _gathered(text: str) -> _Read:
+    """The walk itself, so the one `csv` failure is caught around the whole read.
+
+    Separate from `_read` above because `csv` raises on the row it is handed, which is
+    inside the loop: a `try` around `next(reader)` alone catches the header's cell and
+    not the body's.
+    """
     with io.StringIO(text, newline="") as handle:
         reader = csv.reader(handle)
         try:
@@ -149,4 +184,6 @@ def csv_columns(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     rooted at this session, read through the session's backend.
     """
     header = _read(runtime, file_path).header
-    return "\n".join(header) if header else f"{file_path}: empty"
+    # `shown`, because this answer is one name a line and a name may hold a newline:
+    # three columns came back as four names, one of them invented.
+    return "\n".join(shown(name) for name in header) if header else f"{file_path}: empty"

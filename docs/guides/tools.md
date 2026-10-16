@@ -626,6 +626,21 @@ at 64 KB with the same matches. Possessive quantifiers look like the answer and 
 nothing at all, and the cost stays n² regardless, because what repeats is the number of
 positions a match is attempted from.
 
+**Cap what the answer lists *and* what the walk holds — they are two numbers.**
+`log_levels` caps the minutes it prints at thirty, and held one counter per distinct
+minute while it worked: measured, a 19 MB file of 883,011 distinct minutes peaked at
+506 MB of resident memory against 199 MB for the same bytes in a single minute, about
+350 bytes a key, and the 32 MB it admits reaches a million and a half. `status_codes`
+beside it needs no such cap and that is the comparison worth having — it keys on a
+three-digit status, so its accumulator cannot exceed a thousand entries however long
+the file. The bytes do not tell you which of those two you wrote.
+
+**And the library you parse with has limits of its own.** `csv.field_size_limit()` is
+131,072, so four tools that read 32 MB died on a single cell 0.6% of their own cap --
+and the model was handed `Error: Error: field larger than field limit (131072)`, naming
+no file, no column and no remedy. Catch it and say the three; widening the limit is
+process-wide state a tool has no business setting.
+
 Whatever your tool talks to, the shape is the same: find what it actually spends, and
 then ask whether the library it spends it in gives you a way to stop.
 
