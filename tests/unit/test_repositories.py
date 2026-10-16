@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.kinds.agents import catalogue as agent_store
-from kingfisher.kinds.agents.catalogue import LocalAgentRepository
-from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository
-from kingfisher.kinds.skills.catalogue import LocalSkillRepository
-from kingfisher.kinds.subagents import catalogue as store
-from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
-from kingfisher.kinds.subagents.spec import SubagentError
-from kingfisher.kinds.tools.catalogue import CarriedTools, LocalToolRepository
-from kingfisher.kinds.tools.spec import Offering
+from kingfisher.core.definitions.agents import catalogue as agent_store
+from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
+from kingfisher.core.definitions.middlewares.catalogue import LocalMiddlewareRepository
+from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
+from kingfisher.core.definitions.subagents import catalogue as store
+from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
+from kingfisher.core.definitions.subagents.spec import SubagentError
+from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository
+from kingfisher.core.definitions.tools.spec import Offering
 
 NOISY = """
 import sys

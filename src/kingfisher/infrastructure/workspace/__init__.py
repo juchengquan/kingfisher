@@ -19,17 +19,17 @@ _EXPORTS = {
     "ensure_definitions": "kingfisher.infrastructure.workspace.layout",
     "ensure_layout": "kingfisher.infrastructure.workspace.layout",
     "is_new_workspace": "kingfisher.infrastructure.workspace.layout",
-    "SEED_HINT": "kingfisher.infrastructure.workspace.seeding",
-    "Destination": "kingfisher.infrastructure.workspace.seeding",
-    "Seeded": "kingfisher.infrastructure.workspace.seeding",
-    "Skipped": "kingfisher.infrastructure.workspace.seeding",
-    "Source": "kingfisher.infrastructure.workspace.seeding",
-    "definitions_source": "kingfisher.infrastructure.workspace.seeding",
-    "kinds_at": "kingfisher.infrastructure.workspace.seeding",
-    "middleware_named": "kingfisher.infrastructure.workspace.seeding",
-    "seed": "kingfisher.infrastructure.workspace.seeding",
-    "source_ids_named": "kingfisher.infrastructure.workspace.seeding",
-    "starter_agent": "kingfisher.infrastructure.workspace.seeding",
+    "SEED_HINT": "kingfisher.core.definitions.seeding",
+    "Destination": "kingfisher.core.definitions.seeding",
+    "Seeded": "kingfisher.core.definitions.seeding",
+    "Skipped": "kingfisher.core.definitions.seeding",
+    "Source": "kingfisher.core.definitions.seeding",
+    "definitions_source": "kingfisher.core.definitions.seeding",
+    "kinds_at": "kingfisher.core.definitions.seeding",
+    "middleware_named": "kingfisher.core.definitions.seeding",
+    "seed": "kingfisher.core.definitions.seeding",
+    "source_ids_named": "kingfisher.core.definitions.seeding",
+    "starter_agent": "kingfisher.core.definitions.seeding",
 }
 
 __all__ = [
@@ -55,6 +55,19 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:
+    from kingfisher.core.definitions.seeding import SEED_HINT as SEED_HINT
+    from kingfisher.core.definitions.seeding import Destination as Destination
+    from kingfisher.core.definitions.seeding import Seeded as Seeded
+    from kingfisher.core.definitions.seeding import Skipped as Skipped
+    from kingfisher.core.definitions.seeding import Source as Source
+    from kingfisher.core.definitions.seeding import (
+        definitions_source as definitions_source,
+    )
+    from kingfisher.core.definitions.seeding import kinds_at as kinds_at
+    from kingfisher.core.definitions.seeding import middleware_named as middleware_named
+    from kingfisher.core.definitions.seeding import seed as seed
+    from kingfisher.core.definitions.seeding import source_ids_named as source_ids_named
+    from kingfisher.core.definitions.seeding import starter_agent as starter_agent
     from kingfisher.infrastructure.workspace.backing import MemoryBacking as MemoryBacking
     from kingfisher.infrastructure.workspace.backing import memory_backing as memory_backing
     from kingfisher.infrastructure.workspace.layout import EXAMPLE as EXAMPLE
@@ -65,19 +78,6 @@ if TYPE_CHECKING:
     )
     from kingfisher.infrastructure.workspace.layout import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace.layout import is_new_workspace as is_new_workspace
-    from kingfisher.infrastructure.workspace.seeding import SEED_HINT as SEED_HINT
-    from kingfisher.infrastructure.workspace.seeding import Destination as Destination
-    from kingfisher.infrastructure.workspace.seeding import Seeded as Seeded
-    from kingfisher.infrastructure.workspace.seeding import Skipped as Skipped
-    from kingfisher.infrastructure.workspace.seeding import Source as Source
-    from kingfisher.infrastructure.workspace.seeding import (
-        definitions_source as definitions_source,
-    )
-    from kingfisher.infrastructure.workspace.seeding import kinds_at as kinds_at
-    from kingfisher.infrastructure.workspace.seeding import middleware_named as middleware_named
-    from kingfisher.infrastructure.workspace.seeding import seed as seed
-    from kingfisher.infrastructure.workspace.seeding import source_ids_named as source_ids_named
-    from kingfisher.infrastructure.workspace.seeding import starter_agent as starter_agent
 
 
 def __getattr__(name: str) -> Any:

@@ -10,13 +10,13 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
-from kingfisher.kinds.agents import reading
-from kingfisher.kinds.agents.spec import AgentError, AgentSpec
+from kingfisher.core.definitions.agents import reading
+from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 
 # The walk comes from the format that already names what a document is called,
 # rather than being restated here: both kinds read the same YAML out of the same
 # shape of directory, and a second copy is a second thing to keep in step.
-from kingfisher.kinds.documents import DefinitionText, documents_in
+from kingfisher.core.definitions.documents import DefinitionText, documents_in
 
 
 @dataclass(frozen=True)

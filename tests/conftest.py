@@ -24,8 +24,8 @@ if TYPE_CHECKING:
     # Type-only, and deliberately: naming the record at runtime would pull
     # deepagents into every collection of this file for one annotation, which is
     # the 1.4s the lazy front door exists to avoid paying.
+    from kingfisher.core.definitions.subagents.spec import SubagentSpec
     from kingfisher.infrastructure.harness.agent import Assembled
-    from kingfisher.kinds.subagents.spec import SubagentSpec
 
 
 class FakeToolCallingModel(FakeMessagesListChatModel):
@@ -387,8 +387,8 @@ def pin(kf, session_id: str, name: str) -> None:
 
 def a_subagent(text: str, name: str) -> SubagentSpec:
     """A subagent definition as if read from a file called `name`."""
-    from kingfisher.kinds.documents import DefinitionText
-    from kingfisher.kinds.subagents import reading
+    from kingfisher.core.definitions.documents import DefinitionText
+    from kingfisher.core.definitions.subagents import reading
 
     return reading.read(DefinitionText(text, Path(name)))
 

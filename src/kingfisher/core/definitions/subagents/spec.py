@@ -20,12 +20,12 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
+from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
+from kingfisher.core.definitions.tools.spec import claimed_sources
 from kingfisher.domain import fields
 from kingfisher.domain.access import AUDIENCED
 from kingfisher.domain.capabilities import ALL, Selection, bare_name
 from kingfisher.domain.definition import Definition
-from kingfisher.kinds.subagents import INTERPRETER_TOOL, TASK_TOOL
-from kingfisher.kinds.tools.spec import claimed_sources
 
 DIRECTORY = "subagents"
 

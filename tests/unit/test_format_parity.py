@@ -12,15 +12,15 @@ from pathlib import Path
 import pytest
 import yaml
 
+from kingfisher.core.definitions.agents import reading as agents
+from kingfisher.core.definitions.agents import spec as agent_spec
+from kingfisher.core.definitions.agents.spec import KNOWN as AGENT_KNOWN
+from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
+from kingfisher.core.definitions.documents import DefinitionText
+from kingfisher.core.definitions.subagents import spec as subagent_spec
+from kingfisher.core.definitions.subagents.spec import KNOWN as SUBAGENT_KNOWN
+from kingfisher.core.definitions.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.domain.fields import SOURCES
-from kingfisher.kinds.agents import reading as agents
-from kingfisher.kinds.agents import spec as agent_spec
-from kingfisher.kinds.agents.spec import KNOWN as AGENT_KNOWN
-from kingfisher.kinds.agents.spec import AgentError, AgentSpec
-from kingfisher.kinds.documents import DefinitionText
-from kingfisher.kinds.subagents import spec as subagent_spec
-from kingfisher.kinds.subagents.spec import KNOWN as SUBAGENT_KNOWN
-from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
 from tests.conftest import a_subagent
 
 #: Each format as a check needs it: its reader, the keys it defines, the spec it builds.
@@ -184,8 +184,8 @@ def test_neither_kind_can_be_built_without_saying_what_it_instructs_with(kind):
 @pytest.mark.parametrize("kind", sorted(FORMATS))
 def test_every_kind_keeps_its_vocabulary_beside_its_spec(kind):
     """One concept reachable by two paths, which is what this file exists to stop --
-    and it was true of this file. `AGENT_KNOWN` came from `kinds.agents.spec` while the
-    subagent's came from `kinds.subagents.reading`, so the two formats were held to each
+    and it was true of this file. `AGENT_KNOWN` came from `core.definitions.agents.spec` while the
+    subagent's came from `core.definitions.subagents.reading`, so the two formats were held to each
     other through modules that did not correspond.
 
     Asserted rather than merely achieved: a move with no behaviour change is held by
@@ -309,7 +309,7 @@ def test_the_documents_read_every_field_both_formats_define():
 
 
 #: Where the two formats part on purpose: a subagent refuses `*` for these, and
-#: each reason is written beside the field in `kinds.subagents.reading`.
+#: each reason is written beside the field in `core.definitions.subagents.reading`.
 PART_ON_THE_STAR = frozenset({"skills", "subagents"})
 
 

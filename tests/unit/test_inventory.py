@@ -278,7 +278,7 @@ def test_the_record_cannot_be_edited_after_it_is_handed_back(cfg):
 def test_a_resolved_catalogue_is_not_resolved_twice(cfg, monkeypatch):
     """A caller that already has one hands it over."""
     from kingfisher.application import inventory as module
-    from kingfisher.infrastructure.catalogue import resolve_definitions
+    from kingfisher.core.definitions.catalogue import resolve_definitions
 
     already = resolve_definitions(cfg)
     calls: list[object] = []

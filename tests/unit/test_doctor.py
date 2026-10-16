@@ -318,7 +318,7 @@ def test_the_empty_source_detail_names_every_kind_it_looked_for(cfg, tmp_path):
     """
     from dataclasses import replace
 
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 
     empty = tmp_path / "empty"
     empty.mkdir()
@@ -451,7 +451,7 @@ def test_an_empty_catalogue_where_it_belongs_says_nothing(cfg):
 def test_a_configuration_that_is_being_ignored_is_said_out_loud(cfg, tmp_path):
     """Otherwise somebody edits the setting and watches nothing change."""
     from kingfisher import inventory
-    from kingfisher.infrastructure.catalogue import Definitions
+    from kingfisher.core.definitions.catalogue import Definitions
 
     staged = {kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")}
     for path in staged.values():

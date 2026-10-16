@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher import Kingfisher, LocalSessions, Origin
-from kingfisher.kinds.skills.catalogue import reachable
+from kingfisher.core.definitions.skills.catalogue import reachable
 from kingfisher.presentation.cli.__main__ import build_parser, main
 from tests.conftest import repository_root, start, verbs
 
@@ -569,7 +569,7 @@ def test_seeding_never_makes_a_workspace(tmp_path, shipped, monkeypatch):
     """Not even one it is told about: seeding writes what people author, and the
     workspace is what a start lays out on the machine that serves sessions.
     """
-    from kingfisher.kinds.tools.catalogue import LocalToolRepository
+    from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 
     workspace = tmp_path / "fresh"
     definitions = tmp_path / "definitions"

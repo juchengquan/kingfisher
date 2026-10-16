@@ -7,14 +7,14 @@ import io
 import pytest
 
 from kingfisher.config import ConfigError
+from kingfisher.core.definitions.skills import spec as skill
+from kingfisher.core.definitions.skills.catalogue import reachable
+from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.result import RunEvent, RunResult
 from kingfisher.infrastructure.harness import agent as main_agent_module
 from kingfisher.infrastructure.workspace import SEED_HINT
 from kingfisher.infrastructure.workspace import layout as workspace_layout
-from kingfisher.kinds.skills import spec as skill
-from kingfisher.kinds.skills.catalogue import reachable
-from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.presentation.cli.progress import show
 from tests.conftest import subagents_dir, tools_dir
 from tests.integration import driver as main
@@ -478,7 +478,7 @@ def test_a_subtraction_becomes_the_enumerated_rest(cfg, shipped):
     execute,delete` -- the example the driver's own docstring gives -- came back as
     "those are builtin tools".
     """
-    from kingfisher.infrastructure.workspace import seeding
+    from kingfisher.core.definitions import seeding
 
     seeding.seed(cfg, shipped)
 
@@ -497,7 +497,7 @@ def test_a_subtraction_becomes_the_enumerated_rest(cfg, shipped):
 
 def test_the_two_tool_axes_subtract_independently(cfg, shipped):
     """A workspace tool is subtracted from the workspace set, and only that."""
-    from kingfisher.infrastructure.workspace import seeding
+    from kingfisher.core.definitions import seeding
 
     seeding.seed(cfg, shipped)
 
@@ -511,7 +511,7 @@ def test_the_two_tool_axes_subtract_independently(cfg, shipped):
 
 def test_subtracting_skills_and_subagents_too(cfg, shipped):
     """The rest is asked of the catalogue, not named here."""
-    from kingfisher.infrastructure.workspace import seeding
+    from kingfisher.core.definitions import seeding
 
     seeding.seed(cfg, shipped)
     # `_offered`, which is what the *registry* resolves -- including a skill in a
@@ -534,7 +534,7 @@ def test_subtracting_skills_and_subagents_too(cfg, shipped):
 
 def test_subtracting_on_the_wrong_tool_axis_names_the_right_flag(cfg, shipped):
     """The mistake someone arrives with, because it used to be the advice."""
-    from kingfisher.infrastructure.workspace import seeding
+    from kingfisher.core.definitions import seeding
 
     seeding.seed(cfg, shipped)
 

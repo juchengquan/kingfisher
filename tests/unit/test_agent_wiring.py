@@ -7,6 +7,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, LocalSessions, backend_at
+from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import skills_sources
@@ -16,7 +17,6 @@ from kingfisher.infrastructure.harness.kinds.declared_middleware import (
     declared_middleware,
 )
 from kingfisher.infrastructure.prompting import kingfishers_shell, system_prompt
-from kingfisher.kinds.agents.spec import AgentSpec
 from tests.conftest import (
     FakeToolCallingModel,
     declared_subagents,

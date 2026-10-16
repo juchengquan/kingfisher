@@ -7,12 +7,12 @@ from dataclasses import replace
 
 import pytest
 
+from kingfisher.core.definitions.skills import registry as skill_registry
+from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import skills_sources
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills
-from kingfisher.kinds.skills import registry as skill_registry
-from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeToolCallingModel
 

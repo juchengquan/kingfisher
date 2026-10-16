@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.tools.spec import Offering, admitted, out_of_reach, placed
 from kingfisher.domain.access import AUDIENCED, handed_work_by, offers
 from kingfisher.domain.capabilities import Capabilities, Selection, withheld
 from kingfisher.domain.result import RunEvent
-from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.activation import (
     activatable_skills,
     available_skills,
@@ -17,11 +18,10 @@ from kingfisher.infrastructure.harness.kinds.tools import (
     registered_tools,
     workspace_tool_names,
 )
-from kingfisher.kinds.tools.spec import Offering, admitted, out_of_reach, placed
 
 if TYPE_CHECKING:
     from kingfisher.config import Config
-    from kingfisher.kinds.agents.spec import AgentSpec
+    from kingfisher.core.definitions.agents.spec import AgentSpec
 
 
 def _named(selection: Selection) -> set[str]:

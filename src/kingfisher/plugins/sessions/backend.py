@@ -23,9 +23,10 @@ from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellB
 from deepagents.backends.protocol import ExecuteResponse
 
 from kingfisher.config import Config, ConfigError
+from kingfisher.core.definitions.catalogue import Definitions, refuse_unmountable
+from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
 from kingfisher.domain.ports import CommandRunner
 from kingfisher.domain.session import session_dir, sessions_root, still_held
-from kingfisher.infrastructure.catalogue import Definitions, refuse_unmountable
 from kingfisher.infrastructure.harness.backend import (
     Sessions,
     skill_mounts,
@@ -38,7 +39,6 @@ from kingfisher.infrastructure.harness.host_paths import (
 )
 from kingfisher.infrastructure.harness.host_paths import reject_host_path
 from kingfisher.infrastructure.prompting import ShellPrompt, kingfishers_shell
-from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from kingfisher.layout import (
     CLAIM,
     HARNESS,

@@ -1,19 +1,19 @@
 """Turning a subagent document into a spec.
 
 `spec` says what a definition means; this says how a file becomes one. Named `read`
-because the module says which kind, as `kinds.agents.reading.read` does.
+because the module says which kind, as `core.definitions.agents.reading.read` does.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from kingfisher.kinds import documents
-from kingfisher.kinds.subagents import spec as subagent
-from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
+from kingfisher.core.definitions import documents
+from kingfisher.core.definitions.subagents import spec as subagent
+from kingfisher.core.definitions.subagents.spec import SubagentError, SubagentSpec
 
 if TYPE_CHECKING:
-    from kingfisher.kinds.documents import DefinitionText
+    from kingfisher.core.definitions.documents import DefinitionText
 
 
 def read(definition: DefinitionText) -> SubagentSpec:

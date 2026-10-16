@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
+from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 
 MB = 1024 * 1024
 

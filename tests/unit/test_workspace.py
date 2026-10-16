@@ -4,7 +4,7 @@ import os
 import shutil
 
 from kingfisher import LocalSessions, WorkspacePaths
-from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.workspace import EXAMPLE, EXAMPLES, ensure_definitions, ensure_layout
 from kingfisher.layout import (
     HARNESS,

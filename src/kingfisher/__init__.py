@@ -37,7 +37,7 @@ _EXPORTS = {
     "CapabilityError": "kingfisher.domain.capabilities",
     "QuotaExceededError": "kingfisher.domain.session",
     "SessionBusyError": "kingfisher.domain.session",
-    "SubagentError": "kingfisher.kinds.subagents.spec",
+    "SubagentError": "kingfisher.core.definitions.subagents.spec",
     "UnsafeReferenceError": "kingfisher.domain.references",
     "HostPathError": "kingfisher.infrastructure.harness.host_paths",
     # What `LocalSessions` builds for one session, for a directory of the caller's
@@ -91,7 +91,7 @@ _EXPORTS = {
     "PendingDecision": "kingfisher.domain.result",
     # One row of `RunResult.ledger`, which a caller keeping them names.
     "LedgerEntry": "kingfisher.domain.result",
-    "RunOn": "kingfisher.kinds.subagents.spec",
+    "RunOn": "kingfisher.core.definitions.subagents.spec",
     "RunEvent": "kingfisher.domain.result",
     "RunResult": "kingfisher.domain.result",
     "SessionInfo": "kingfisher.domain.session",
@@ -187,6 +187,8 @@ if TYPE_CHECKING:
     from kingfisher.config import Landing as Landing
     from kingfisher.config import WireFormat as WireFormat
     from kingfisher.config import WorkspacePaths as WorkspacePaths
+    from kingfisher.core.definitions.subagents.spec import RunOn as RunOn
+    from kingfisher.core.definitions.subagents.spec import SubagentError as SubagentError
     from kingfisher.domain.access import UNSCOPED as UNSCOPED
     from kingfisher.domain.access import AccessError as AccessError
     from kingfisher.domain.access import Held as Held
@@ -218,8 +220,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace import ensure_definitions as ensure_definitions
     from kingfisher.infrastructure.workspace import kinds_at as kinds_at
     from kingfisher.infrastructure.workspace import seed as seed
-    from kingfisher.kinds.subagents.spec import RunOn as RunOn
-    from kingfisher.kinds.subagents.spec import SubagentError as SubagentError
     from kingfisher.plugins.sessions.backend import LocalSessions as LocalSessions
     from kingfisher.plugins.sessions.backend import backend_at as backend_at
 

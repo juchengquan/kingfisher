@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher import Kingfisher, LocalSessions, Origin, Origins
-from kingfisher.infrastructure.catalogue import Definitions
+from kingfisher.core.definitions.catalogue import Definitions
 from tests.unit.test_backend_seam import Elsewhere
 
 

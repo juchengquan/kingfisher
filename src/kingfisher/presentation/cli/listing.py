@@ -6,6 +6,8 @@ from collections.abc import Iterator
 from pathlib import PurePath
 
 from kingfisher import Inventory, Origins
+from kingfisher.core.definitions.skills.catalogue import SKILL_LAYOUT
+from kingfisher.core.definitions.tools.spec import offered, split_reference
 
 # The renderer's own vocabulary, taken where it lives. A listing prints audiences, tells
 # a bare name from a `where::what` reference, and quotes the sentence a refusal quotes
@@ -17,8 +19,6 @@ from kingfisher import Inventory, Origins
 from kingfisher.domain.access import AUDIENCED, Audience, spell
 from kingfisher.domain.capabilities import ALL
 from kingfisher.infrastructure.workspace import SEED_HINT
-from kingfisher.kinds.skills.catalogue import SKILL_LAYOUT
-from kingfisher.kinds.tools.spec import offered, split_reference
 
 
 def _from(source: str | None, expected: str) -> str:

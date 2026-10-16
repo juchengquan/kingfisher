@@ -22,7 +22,7 @@ from typing import Any
 
 import pytest
 
-from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
+from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 
 #: A body in an encoding that is not UTF-8, and what the response declares it as.
 #: `utf-16` is the one that reads as corruption rather than as mojibake -- a NUL

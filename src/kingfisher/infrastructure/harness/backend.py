@@ -9,7 +9,8 @@ from typing import Any, Protocol, runtime_checkable
 from deepagents.backends import CompositeBackend
 
 from kingfisher.config import DEFAULT_LAYOUT, Config, ConfigError
-from kingfisher.infrastructure.catalogue import Definitions
+from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.subagents.spec import SubagentError
 
 # Re-exported: `ports.md` has named this path to deployments writing their own
 # backend, which may import it from here.
@@ -18,7 +19,6 @@ from kingfisher.infrastructure.harness.host_paths import (
 )
 from kingfisher.infrastructure.prompting import ShellPrompt
 from kingfisher.infrastructure.threads import off_loop, thread_pool
-from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
     RESERVED_SKILL_FOLDER,

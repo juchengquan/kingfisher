@@ -21,6 +21,7 @@ from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher import Kingfisher, LocalSessions, ToolContext, backend_at
+from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Decision, Request, Resume
 from kingfisher.domain.result import AWAITING
@@ -28,7 +29,6 @@ from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
 from kingfisher.infrastructure.harness.tool_guards import guarded_tools
-from kingfisher.kinds.tools.catalogue import LocalToolRepository
 from tests.conftest import (
     FakeToolCallingModel,
     an_agent,

@@ -1648,8 +1648,8 @@ def test_an_entry_narrowing_past_its_definition_is_reported(cfg, at_the_command_
 def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, at_the_command_line):
     """The report is not the point -- this is."""
     from kingfisher import config_from_env
+    from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
     from kingfisher.domain.access import reaches
-    from kingfisher.kinds.agents.catalogue import LocalAgentRepository
 
     _workspace(cfg, NARROWED, vocabulary="source_ids: [A, B, C]\n")
     reach = config_from_env().access
@@ -1810,7 +1810,7 @@ def test_the_per_kind_view_covers_every_kind_there_is():
     errors it happened to know about. The view is what those two walk now, so the
     thing that has to be total is the view.
     """
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
     from tests.conftest import an_inventory
 
     named = {kind.name for kind in an_inventory().by_kind()}

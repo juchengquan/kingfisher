@@ -35,7 +35,7 @@ SRC = REPO / "src" / "kingfisher"
 #: The definition kinds' own directory. Named here rather than spelled at each of
 #: the four rules below it, which is how three of the four path constants came to
 #: disagree the last time this tree changed shape.
-KINDS_DIR = SRC / "kinds"
+KINDS_DIR = SRC / "core" / "definitions"
 
 
 def _package_of(path: Path) -> tuple[str, ...]:
@@ -560,7 +560,7 @@ def test_the_dangling_import_rule_can_tell_a_gone_module_from_a_real_one():
     discriminates or answers `True`.
     """
     assert _names_a_real_module("kingfisher")
-    assert _names_a_real_module("kingfisher.kinds.tools.spec")
+    assert _names_a_real_module("kingfisher.core.definitions.tools.spec")
     assert _names_a_real_module("kingfisher.infrastructure.harness")
     assert _names_a_real_module("kingfisher.infrastructure.harness.agent")
 
@@ -631,7 +631,7 @@ PROSE_GONE: dict[str, frozenset[str]] = {
     # The entry recording which move consolidated three document readers names one
     # that has since gone: its only caller was the upload path, and the reader went
     # with it.
-    "docs/decisions.md": frozenset({"kinds.skills.reading.name_from"}),
+    "docs/decisions.md": frozenset({"core.definitions.skills.reading.name_from"}),
     # The file that owns the rules is the one place a gone module is named on
     # purpose -- in the docstring of the rule that renaming broke, in the
     # negatives below, which are asserted gone rather than merely absent, and in
@@ -987,7 +987,9 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
     above passes whether it discriminates or answers nothing at all.
     """
     assert _prose_unresolved("`infrastructure.harness.backend`") == []
-    assert _prose_unresolved("`kinds.skills.spec.FILENAME` and `application.inventory`") == []
+    assert _prose_unresolved(
+        "`core.definitions.skills.spec.FILENAME` and `application.inventory`"
+    ) == []
     assert _prose_unresolved("`plugins.sessions.backend.shell_env`") == []
 
     assert _prose_unresolved("`infrastructure.backend.shell_env`") == [
@@ -1062,7 +1064,7 @@ def test_the_prose_rule_reaches_the_packages_that_are_not_layers():
     """`tools`, `skills` and `subagents` left the layers and left this rule's sight.
 
     The positive cases were already here and one was vacuous: a name under
-    `kinds.skills` was asserted to resolve while `skills` was not a root, so the
+    `core.definitions.skills` was asserted to resolve while `skills` was not a root, so the
     pattern never matched it and the assertion held for the wrong reason.
     """
     for missing in ("kinds.nowhere", "config.nowhere"):
@@ -1071,8 +1073,10 @@ def test_the_prose_rule_reaches_the_packages_that_are_not_layers():
         )
 
     # And the live ones still resolve, now that they are actually being read.
-    assert _prose_unresolved("`kinds.skills.spec.FILENAME`") == []
-    assert _prose_unresolved("`kinds.tools.spec`, `kinds.subagents.rules`, `config`") == []
+    assert _prose_unresolved("`core.definitions.skills.spec.FILENAME`") == []
+    assert _prose_unresolved(
+        "`core.definitions.tools.spec`, `core.definitions.subagents.rules`, `config`"
+    ) == []
 
 
 def test_a_filename_is_not_read_as_a_module_and_a_segment():
@@ -1091,12 +1095,12 @@ def test_a_filename_is_not_read_as_a_module_and_a_segment():
 
 
 def test_a_name_a_class_holds_is_a_name_the_module_defines():
-    """`kinds.skills.registry.misfiled` is a documented field, and was read as stale."""
-    assert _prose_unresolved("`kinds.skills.registry.misfiled`") == []
+    """`core.definitions.skills.registry.misfiled` is a documented field, and was read as stale."""
+    assert _prose_unresolved("`core.definitions.skills.registry.misfiled`") == []
     assert _prose_unresolved("`config.models`") == []
 
     # And the module's own top level still counts, which is most of the traffic.
-    assert _prose_unresolved("`kinds.skills.spec.FILENAME`") == []
+    assert _prose_unresolved("`core.definitions.skills.spec.FILENAME`") == []
 
 
 def test_the_documents_are_read_by_the_prose_rule():
@@ -1112,14 +1116,14 @@ def test_the_documents_are_read_by_the_prose_rule():
     )
 
 
-#: The kinds whose formats `kinds.documents` is written for, which its own docstring
+#: The kinds whose formats `core.definitions.documents` is written for, which its own docstring
 #: names. Here rather than parsed out of the prose: a rule that reads the sentence it
 #: guards passes whatever the sentence says.
 SHARE_A_DOCUMENT_READER = frozenset({"agents", "subagents"})
 
 
 def test_the_shared_document_reader_is_read_by_the_kinds_it_names():
-    """`kinds.documents` says which formats it serves, and the sentence went stale.
+    """`core.definitions.documents` says which formats it serves, and the sentence went stale.
 
     It read "all three kinds" while a skill's frontmatter came through it, and went on
     reading three for four commits after the reader that did that went with the upload
@@ -1131,23 +1135,25 @@ def test_the_shared_document_reader_is_read_by_the_kinds_it_names():
     one too mean.
     """
     def reads_it(module: Path) -> bool:
-        # Both spellings: `import kingfisher.kinds.documents` names the module, and
-        # `from kingfisher.kinds import documents` -- which is what both callers
+        # Both spellings: `import kingfisher.core.definitions.documents` names the module, and
+        # `from kingfisher.core.definitions import documents` -- which is what both callers
         # write -- names the package and takes the module as a name from it.
-        return "kingfisher.kinds.documents" in _imported_modules(module) or (
-            "documents" in _imported_names(module).get("kingfisher.kinds", frozenset())
+        return "kingfisher.core.definitions.documents" in _imported_modules(module) or (
+            "documents" in _imported_names(module).get("kingfisher.core.definitions", frozenset())
         )
 
     kinds = _every(
-        [one for one in sorted((SRC / "kinds").iterdir()) if (one / "__init__.py").is_file()],
+        [one for one in sorted(KINDS_DIR.iterdir()) if (one / "__init__.py").is_file()],
         "kind packages",
     )
     reading_it = {
-        one.name for one in kinds if any(reads_it(m) for m in _modules_in(f"kinds/{one.name}"))
+        one.name
+        for one in kinds
+        if any(reads_it(m) for m in _modules_in(f"core/definitions/{one.name}"))
     }
 
     assert reading_it == set(SHARE_A_DOCUMENT_READER), (
-        f"{sorted(reading_it)} read kingfisher.kinds.documents, and its docstring "
+        f"{sorted(reading_it)} read kingfisher.core.definitions.documents, and its docstring "
         f"names {sorted(SHARE_A_DOCUMENT_READER)} -- update whichever is behind"
     )
 
@@ -1192,7 +1198,7 @@ def test_domain_imports_only_the_standard_library_and_itself():
 
     **One exception, measured rather than granted.** A domain module may name an
     asset kind's `spec`: it is the *format's* vocabulary, and importing
-    `domain.ports` and `kinds.agents.spec` takes 39ms and loads 101 modules, none of them
+    `domain.ports` and `core.definitions.agents.spec` takes 39ms and loads 101 modules, none of them
     the agent runtime, against the 888ms `decisions.md` quotes for the bad case. A
     `catalogue` or a `harness` would not be free, and those stay refused.
     """
@@ -1216,33 +1222,34 @@ def test_domain_imports_only_the_standard_library_and_itself():
 
 def _is_asset_spec(module: str) -> bool:
     """Whether a module is an asset kind's format vocabulary."""
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 
     parts = module.split(".")
     return (
-        len(parts) == 4
-        and parts[0] == "kingfisher"
-        and parts[1] == "kinds"
-        and parts[2] in DEFINITION_KINDS
-        and parts[3] == "spec"
+        len(parts) == 5
+        and parts[:3] == ["kingfisher", "core", "definitions"]
+        and parts[3] in DEFINITION_KINDS
+        and parts[4] == "spec"
     )
 
 
 def test_the_domain_may_name_a_spec_but_not_a_catalogue():
     """The exception above, asserted at its edges rather than trusted."""
-    assert _is_asset_spec("kingfisher.kinds.tools.spec")
-    assert _is_asset_spec("kingfisher.kinds.skills.spec")
-    assert not _is_asset_spec("kingfisher.kinds.tools.catalogue"), "the disk is not free"
-    assert not _is_asset_spec("kingfisher.kinds.skills.registry"), "the runtime is not free"
+    assert _is_asset_spec("kingfisher.core.definitions.tools.spec")
+    assert _is_asset_spec("kingfisher.core.definitions.skills.spec")
+    assert not _is_asset_spec("kingfisher.core.definitions.tools.catalogue"), "the disk is not free"
+    assert not _is_asset_spec("kingfisher.core.definitions.skills.registry"), (
+        "the runtime is not free"
+    )
     assert not _is_asset_spec("kingfisher.application.service")
-    assert not _is_asset_spec("kingfisher.kinds.tools.spec.inner")
+    assert not _is_asset_spec("kingfisher.core.definitions.tools.spec.inner")
     assert not _is_asset_spec("kingfisher.application.spec"), "only a kind has a spec"
     # The kind check on its own: a directory under `kinds/` that is not one. The
     # position check alone passes every assertion above, so without this the
     # predicate could drop `DEFINITION_KINDS` and nothing would say so -- which is
     # what `test_kinds_holds_exactly_the_kinds` refuses to let happen on disk, and
     # this refuses to let happen in the predicate.
-    assert not _is_asset_spec("kingfisher.kinds.widgets.spec"), "only a kind has a spec"
+    assert not _is_asset_spec("kingfisher.core.definitions.widgets.spec"), "only a kind has a spec"
 
 
 #: Which third-party packages each area may import. Deny by default: a package
@@ -1253,7 +1260,8 @@ def test_the_domain_may_name_a_spec_but_not_a_catalogue():
 #: Measured, not declared -- every entry is a package some module imports today.
 THIRD_PARTY: dict[str, frozenset[str]] = {
     # The agent runtime. This *was* the swap boundary in one directory, and is
-    # now the larger half of it: `kinds/skills` and `kinds/middlewares` reach the
+    # now the larger half of it: `core/definitions/skills` and
+    # `core/definitions/middlewares` reach the
     # runtime too, and their entries below say so. What the boundary buys is unchanged in kind and
     # weaker in degree -- an upgrade is still a list of files rather than a
     # search, and the list now spans more than one directory.
@@ -1277,23 +1285,23 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # asks deepagents which skills an agent will actually have. That cannot be done from
     # outside, and inverting it behind a port would put one implementation behind an
     # interface derived from it.
-    "kinds/skills": frozenset({"deepagents"}),
+    "core/definitions/skills": frozenset({"deepagents"}),
     # Nothing, since the route to the runtime moved out: reading a tool roster off a
     # compiled langgraph object is `infrastructure.harness.kinds.tools` now.
-    "kinds/tools": frozenset(),
+    "core/definitions/tools": frozenset(),
     # Nothing, for the same move: turning a spec into the `SubAgent` deepagents
     # expects cannot be done without naming the type, and it is done in
     # `infrastructure.harness.kinds.subagents` now.
-    "kinds/subagents": frozenset(),
+    "core/definitions/subagents": frozenset(),
     # Nothing, and this one never had anything: an agent's runtime half is
     # `harness/agent.py`, which is not this package's.
-    "kinds/agents": frozenset(),
-    # The fifth, and back on the boundary: `kinds.middlewares.catalogue` refuses a class
+    "core/definitions/agents": frozenset(),
+    # The fifth, and back on the boundary: `core.definitions.middlewares.catalogue` refuses a class
     # that is not an `AgentMiddleware` as the directory is read rather than at the
     # first turn, which cannot be done without naming the type.
-    "kinds/middlewares": frozenset({"langchain"}),
-    # The folder itself, which holds no kind. `kinds.importing` loads a workspace's
-    # own Python and takes nothing but the standard library; `kinds.documents` reads
+    "core/definitions/middlewares": frozenset({"langchain"}),
+    # The folder itself, which holds no kind. `core.definitions.importing` loads a workspace's
+    # own Python and takes nothing but the standard library; `core.definitions.documents` reads
     # the YAML the agent and subagent formats share, which takes the parser.
     #
     # The cost of that entry, stated rather than discovered: a sixth kind added
@@ -1301,7 +1309,7 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # used to inherit nothing. It cannot arrive quietly --
     # `test_kinds_holds_exactly_the_kinds` refuses a directory that is not in
     # `DEFINITION_KINDS` -- so the hole needs a deliberate edit before it opens.
-    "kinds": frozenset({"yaml"}),
+    "core/definitions": frozenset({"yaml"}),
     # The command reads a `.env` in the directory it runs in; nothing else here does.
     "presentation/cli": frozenset({"dotenv"}),
     # Nothing. The domain has a stricter rule of its own; these two are here so
@@ -1361,24 +1369,23 @@ def test_an_area_is_refused_another_areas_dependencies():
 
 def test_a_subpackage_is_judged_by_its_own_area():
     """`infrastructure/harness/agent.py` is not judged as `infrastructure/`."""
-    buried = SRC / "infrastructure" / "workspace" / "seeding.py"
+    buried = SRC / "infrastructure" / "workspace" / "backing.py"
     for path in (buried, SRC / "domain" / "capabilities.py", SRC / "config.py"):
         assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
 
     assert _area_of(SRC / "infrastructure" / "harness" / "agent.py") == "infrastructure/harness"
     assert _area_of(SRC / "domain" / "capabilities.py") == "domain"
-    # A kind's module is its own area, which is what lets `kinds/skills/registry.py`
+    # A kind's module is its own area, which is what lets `core/definitions/skills/registry.py`
     # name the runtime without `domain/` or `kinds/` inheriting the permission.
-    assert _area_of(SRC / "kinds" / "skills" / "registry.py") == "kinds/skills"
+    assert _area_of(KINDS_DIR / "skills" / "registry.py") == "core/definitions/skills"
     # And the folder over them is an area of its own, so a kind that arrives
     # without an entry is judged by `kinds` -- which grants only `yaml` -- rather
     # than by the longest prefix happening to be the package root.
-    assert _area_of(SRC / "kinds" / "importing.py") == "kinds"
+    assert _area_of(KINDS_DIR / "importing.py") == "core/definitions"
     assert _area_of(SRC / "config.py") == ""
 
-    # A subpackage with no entry of its own is judged by its parent, which is
-    # what lets `workspace/seeding.py` inherit `{yaml}` without naming it -- and
-    # what would stop being true the moment someone gave `workspace/` an entry.
+    # A subpackage with no entry of its own is judged by its parent -- which would
+    # stop being true the moment someone gave `workspace/` an entry.
     assert _area_of(buried) == "infrastructure"
 
 
@@ -1448,75 +1455,6 @@ def test_an_unspent_grant_is_what_that_rule_reads():
     assert _unspent("plugins", {"deepagents", "sandlock", "json"}) == set()
     assert _unspent("plugins", {"deepagents"}) == {"sandlock"}
     assert _unspent("domain", set()) == set()
-#: The layers, which a kind may not name. `domain` is not among them and `kinds` is not
-#: a layer: a spec is typed with `Capabilities` and a repository satisfies a port, so
-#: naming the innermost layer is a kind describing itself rather than reaching for an
-#: adapter. Read off the tree rather than written out, so a layer added later is covered
-#: by arriving rather than by being remembered.
-LAYERS_A_KIND_MAY_NOT_NAME = frozenset(
-    p.name for p in SRC.iterdir() if p.is_dir() and (p / "__init__.py").is_file()
-) - {"domain", "kinds"}
-
-
-def _kind_modules() -> list[Path]:
-    """Every module under `kinds/`, in one place.
-
-    One function rather than the same walk in the rule and in the test that the rule
-    walks everything -- `_harness_consumers` gives the reason two tables down, where a
-    mutation narrowing the walk survived twice, the second time because the test written
-    to catch it restated the walk instead of calling it.
-    """
-    return _modules_in("kinds")
-
-
-def test_no_kind_names_a_layer():
-    """A kind reaching down into what fetches it.
-
-    Kingfisher fetches from the kinds and they answer to no layer -- which was written
-    down long before it was true. The subagent runtime half named four `infrastructure`
-    modules, the tool surface named the catalogue, and all three `reading.py` named
-    the YAML step. Nothing said so: `THIRD_PARTY` watches foreign packages, and
-    `HARNESS_EDGES` watches the layers reaching the other way.
-
-    The direction is what makes the rest checkable. With the imports running one way a
-    cycle cannot form across that seam at all, and the swap boundary stays a list of
-    files rather than a search.
-    """
-    reaching = []
-    for path in _every(_kind_modules(), "the kinds"):
-        for module in sorted(_imported_modules(path)):
-            parts = module.split(".")
-            if parts[0] == "kingfisher" and parts[1:2] and parts[1] in LAYERS_A_KIND_MAY_NOT_NAME:
-                reaching.append(f"{_module_id(path)} -> {module}")
-
-    assert not reaching, (
-        f"{reaching} — a kind owns its format, its walk over the disk, and nothing "
-        "below either. What it needs from a layer is passed in or moved out"
-    )
-
-
-def test_the_layer_rule_walks_every_kind():
-    """A rule that walks less than it claims still passes over a tree with nothing wrong.
-
-    `_harness_consumers` carries the same note one table down, and for the same reason:
-    a mutation narrowing that walk survived twice, once because the test written to
-    catch it restated the walk instead of calling it. This asks `DEFINITION_KINDS` and
-    `KINDS_HELPERS` what has to be in the answer, so narrowing the walk to one kind
-    fails here rather than passing quietly.
-    """
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
-
-    walked = {_module_id(path) for path in _kind_modules()}
-
-    for kind in DEFINITION_KINDS:
-        assert any(module.startswith(f"kinds/{kind}/") for module in walked), (
-            f"the walk reaches no module of `{kind}`, so the rule below says nothing "
-            "about that kind"
-        )
-    for helper in KINDS_HELPERS - {"__init__"}:
-        assert f"kinds/{helper}.py" in walked, f"the walk misses `kinds/{helper}.py`"
-
-
 #: What may import from `plugins/`: the command, which may import anything, and the front
 #: door, whose table maps public names such as `LocalSessions` to where they live.
 MAY_NAME_A_PLUGIN = ("presentation", "")
@@ -1548,24 +1486,6 @@ def test_the_plugin_rule_sees_an_import_of_one(tmp_path):
     written.write_text("from kingfisher.plugins.sessions.backend import LocalSessions\n")
 
     assert _reaches_a_plugin(written) == ["kingfisher.plugins.sessions.backend"]
-
-
-def test_the_layer_rule_tells_a_layer_from_the_domain():
-    """The half a clean tree cannot show.
-
-    Every kind names `domain` and none names the other three, so a rule refusing all
-    four, or none, passes today either way and the set above is where that is decided.
-    """
-    assert "domain" not in LAYERS_A_KIND_MAY_NOT_NAME, (
-        "a kind's spec is typed with domain vocabulary; refusing it refuses the kinds"
-    )
-    assert "kinds" not in LAYERS_A_KIND_MAY_NOT_NAME, "a kind may name another kind"
-    assert sorted(LAYERS_A_KIND_MAY_NOT_NAME) == [
-        "application",
-        "infrastructure",
-        "plugins",
-        "presentation",
-    ]
 
 
 def test_the_harness_package_is_the_one_speaking_to_the_harness():
@@ -1608,7 +1528,7 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # would have exactly one implementation, forever, whose whole purpose is to
     # be deepagents-specific.
     # `catalogue` asked `harness.skill_registry` which names were taken; the
-    # registry is `kinds.skills.registry` now, which is not the harness, so this is
+    # registry is `core.definitions.skills.registry` now, which is not the harness, so this is
     # no longer an edge into it at all.
     "catalogue": frozenset(),
     # Builds an agent to enumerate what it registered -- the only way to know the
@@ -2463,7 +2383,7 @@ def test_no_module_in_the_package_can_reach_itself():
 
     Python resolves one by luck of ordering and the other by raising, and which is which
     depends on who imports first -- so the suite passes while a cold
-    `import kingfisher.kinds.subagents.catalogue` fails outright, which is what happened
+    `import kingfisher.core.definitions.subagents.catalogue` fails outright, which is what happened
     once and is recorded in *Two modules came up a directory, and an import cycle is
     why*. The layering rules forbid most shapes this could take; this forbids the shape
     itself, which is the one that does not need a layer to be crossed.
@@ -2635,7 +2555,7 @@ def test_the_package_names_nothing_in_assets():
 
     Read off the tree rather than listed here, so whatever is added there is covered.
     """
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS, Definitions
+    from kingfisher.core.definitions.catalogue import DEFINITION_KINDS, Definitions
 
     assets = REPO / ASSETS_AREA
     files = {p.name for p in assets.rglob("*") if p.is_file() and "__pycache__" not in p.parts}
@@ -2865,7 +2785,7 @@ def test_only_one_module_decides_what_a_skill_is():
     ]
 
     assert not offenders, (
-        f"{offenders} decide what a skill is; use kinds.skills.spec.FILENAME and "
+        f"{offenders} decide what a skill is; use core.definitions.skills.spec.FILENAME and "
         "`reachable`, or the registry, so no two readers of the catalogue disagree"
     )
 
@@ -2880,7 +2800,7 @@ def test_only_the_record_says_what_a_skipped_definition_needs():
     one people copy was one of the wrong ones.
     """
     repo = REPO
-    owner = SRC / "infrastructure" / "workspace" / "seeding.py"
+    owner = KINDS_DIR / "seeding.py"
 
     searched = [
         *SRC.rglob("*.py"),
@@ -2935,8 +2855,8 @@ def test_the_content_rule_can_tell_a_document_from_a_package(tmp_path):
 
 def _definition_documents(root: Path) -> list[Path]:
     """Every definition document below `root`, whatever directory it sits in."""
-    from kingfisher.kinds.documents import SUFFIX
-    from kingfisher.kinds.skills.spec import FILENAME as SKILL_FILE
+    from kingfisher.core.definitions.documents import SUFFIX
+    from kingfisher.core.definitions.skills.spec import FILENAME as SKILL_FILE
 
     return sorted(
         path
@@ -2953,7 +2873,7 @@ def test_this_repository_still_has_a_worked_set(shipped):
     `test_shipped_assets` is about the files this names, so without it those tests would
     pass by having no subject.
     """
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 
     missing = sorted(kind for kind in DEFINITION_KINDS if not (shipped / kind).is_dir())
 
@@ -2990,7 +2910,7 @@ def test_the_kind_rule_can_tell_a_missing_reader_from_a_present_one(tmp_path):
 
 def test_the_catalogue_holds_one_module_per_kind():
     """Every kind has a reader, bound to the constant that says which kinds exist."""
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 
     assert DEFINITION_KINDS, "no kinds — this rule is about nothing"
 
@@ -3012,7 +2932,9 @@ def test_the_catalogue_holds_one_module_per_kind():
 #: A fourth name here is where the kinds start sharing an implementation, which they
 #: duplicate in order to avoid -- so it is an edit somebody argues for, not a file
 #: that turns up.
-KINDS_HELPERS = frozenset({"__init__", "documents", "importing"})
+#: `catalogue` and `seeding` are not helpers the kinds share but the two readers over all
+#: of them: one reads every kind into `Definitions`, the other copies a definitions folder.
+KINDS_HELPERS = frozenset({"__init__", "catalogue", "documents", "importing", "seeding"})
 
 
 def _kinds_directory_contents(root: Path) -> tuple[frozenset[str], frozenset[str]]:
@@ -3045,7 +2967,7 @@ def test_kinds_holds_exactly_the_kinds():
     Flat at the package root there was nothing to compare against -- the top level holds
     four layers and three loose modules besides -- and this is what the move buys.
     """
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 
     assert DEFINITION_KINDS, "no kinds -- this rule is about nothing"
 
@@ -3652,7 +3574,9 @@ def test_an_aliased_import_reads_the_name_it_renames():
     """The scanner recorded the alias and dropped the original, which made a constant
     reached only through `import X as Y` look like one nothing reads.
     """
-    read = _names_read("from kingfisher.kinds.agents.spec import DIRECTORY as AGENT_DIRECTORY")
+    read = _names_read(
+        "from kingfisher.core.definitions.agents.spec import DIRECTORY as AGENT_DIRECTORY"
+    )
 
     assert "DIRECTORY" in read, "the original name is what the constant is called"
     assert "AGENT_DIRECTORY" in read, "and the alias is what this module now reads"

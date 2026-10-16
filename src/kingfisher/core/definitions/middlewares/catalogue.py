@@ -7,7 +7,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any
 
-from kingfisher.kinds.importing import (
+from kingfisher.core.definitions.importing import (
     Export,
     LoadError,
     exported_from,

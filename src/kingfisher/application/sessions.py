@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.application.access import caller_holds
+from kingfisher.core.definitions.agents.reading import read
 from kingfisher.domain.access import reaches
 from kingfisher.domain.request import Request, Resume
 from kingfisher.domain.session import (
@@ -17,7 +18,6 @@ from kingfisher.domain.session import (
 )
 from kingfisher.infrastructure.session_store import HarnessFiles, agent_started_with
 from kingfisher.infrastructure.steps import Steps, adrive, drive, reading
-from kingfisher.kinds.agents.reading import read
 
 if TYPE_CHECKING:
     from collections.abc import Callable

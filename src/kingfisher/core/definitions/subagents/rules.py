@@ -5,9 +5,14 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath
 
+from kingfisher.core.definitions.subagents.spec import (
+    BUNDLE_KEYS,
+    RunOn,
+    SubagentError,
+    SubagentSpec,
+)
+from kingfisher.core.definitions.tools.spec import split_reference
 from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.kinds.subagents.spec import BUNDLE_KEYS, RunOn, SubagentError, SubagentSpec
-from kingfisher.kinds.tools.spec import split_reference
 
 
 def refuse_two_of_a_name(activated: Sequence[str], *, subject: str) -> None:

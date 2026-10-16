@@ -17,11 +17,11 @@ from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from kingfisher import backend_at
+from kingfisher.core.definitions.agents.reading import read
+from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.definitions.documents import DefinitionText
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.kinds.agents.reading import read
-from kingfisher.kinds.agents.spec import AgentError
-from kingfisher.kinds.documents import DefinitionText
 from tests.conftest import FakeToolCallingModel, tools_dir
 
 WRITES = [

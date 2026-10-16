@@ -12,6 +12,10 @@ import kingfisher
 from kingfisher import LocalSessions, backend_at
 from kingfisher.application.inventory import inventory
 from kingfisher.application.service import Kingfisher
+from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.definitions.subagents.spec import SubagentError, declared
+from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, ToolError
+from kingfisher.core.definitions.tools.spec import tool_name
 from kingfisher.domain.access import (
     UNSCOPED,
     AccessError,
@@ -21,10 +25,6 @@ from kingfisher.domain.access import (
 )
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.middlewares.recorder import Audiences
-from kingfisher.kinds.agents.spec import AgentError
-from kingfisher.kinds.subagents.spec import SubagentError, declared
-from kingfisher.kinds.tools.catalogue import LocalToolRepository, ToolError
-from kingfisher.kinds.tools.spec import tool_name
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import subagents_dir, tools_dir

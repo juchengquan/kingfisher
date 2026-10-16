@@ -14,12 +14,12 @@ import kingfisher
 from kingfisher import LocalSessions, backend_at
 from kingfisher.application.inventory import inventory
 from kingfisher.application.service import Kingfisher
+from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository, ToolError
+from kingfisher.core.definitions.tools.spec import own_audience
 from kingfisher.domain.access import AccessError, parse
 from kingfisher.domain.capabilities import ALL
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.middlewares.recorder import Audiences
-from kingfisher.kinds.tools.catalogue import CarriedTools, LocalToolRepository, ToolError
-from kingfisher.kinds.tools.spec import own_audience
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import tools_dir
 
@@ -253,9 +253,9 @@ def test_an_unrestricted_grant_still_gets_an_allowlist_without_the_tool():
     """An unrestricted request has no allowlist at all, so without one the only thing
     between a shut-out caller and the tool would be that nothing registered it.
     """
+    from kingfisher.core.definitions.tools.spec import Found, Offering
     from kingfisher.domain.capabilities import Capabilities
     from kingfisher.infrastructure.harness.kinds.tools import _ToolSurface
-    from kingfisher.kinds.tools.spec import Found, Offering
 
     found = (
         Found(tool=kingfisher.tool(count, source_ids=["A"]), source="count.py", source_ids=("A",)),

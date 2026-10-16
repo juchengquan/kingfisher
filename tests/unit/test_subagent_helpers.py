@@ -6,10 +6,10 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import backend_at
+from kingfisher.core.definitions.subagents.rules import refuse_cycles
+from kingfisher.core.definitions.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.kinds.subagents.rules import refuse_cycles
-from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
 from tests.conftest import FakeToolCallingModel, a_subagent, subagents_dir
 
 REVIEWER = """name: reviewer

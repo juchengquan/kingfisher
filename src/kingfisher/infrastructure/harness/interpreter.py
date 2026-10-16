@@ -6,7 +6,7 @@ import logging
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.kinds.subagents import INTERPRETER_TOOL, TASK_TOOL
+from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence

@@ -13,8 +13,8 @@ from typing import Any
 import pytest
 
 from kingfisher import backend_at
+from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
 from tests.conftest import a_pdf, on_backend
 
 

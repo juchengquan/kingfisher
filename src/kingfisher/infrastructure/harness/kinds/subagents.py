@@ -14,6 +14,10 @@ from urllib.parse import urlsplit
 from deepagents.middleware import SubAgentMiddleware
 from langchain_core.runnables import Runnable
 
+from kingfisher.core.definitions.agents.spec import AgentSpec
+from kingfisher.core.definitions.subagents.rules import resolved_model
+from kingfisher.core.definitions.subagents.spec import RunOn, SubagentError, SubagentSpec
+from kingfisher.core.definitions.tools.spec import Found, Offering, select, split_reference
 from kingfisher.domain.capabilities import (
     ALL,
     Selection,
@@ -26,17 +30,13 @@ from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.session_paths import SessionPaths
 from kingfisher.infrastructure.harness.tool_guards import guarded_tools, tool_guards
 from kingfisher.infrastructure.prompting import behind_instructions
-from kingfisher.kinds.agents.spec import AgentSpec
-from kingfisher.kinds.subagents.rules import resolved_model
-from kingfisher.kinds.subagents.spec import RunOn, SubagentError, SubagentSpec
-from kingfisher.kinds.tools.spec import Found, Offering, select, split_reference
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from kingfisher.config import Config
+    from kingfisher.core.definitions.skills.registry import SkillRegistry
     from kingfisher.infrastructure.harness.middlewares.recorder import Recorder
-    from kingfisher.kinds.skills.registry import SkillRegistry
 
 
 def _identities(registry: SkillRegistry, selection: Selection) -> Selection:

@@ -100,7 +100,7 @@ where it covers pre-built graphs.
   the grant was accepted. `NarrowedSkills.before_agent` returns early when the state
   already holds `skills_metadata`, and the state is checkpointed.
 - **Listing is cheap on this host:** about 2 ms for the five skills in
-  `assets/skills`, the median of twenty reads through `kinds.skills.registry`.
+  `assets/skills`, the median of twenty reads through `core.definitions.skills.registry`.
   The per-turn step costs one listing even for a session with no extras, which on a
   backend kept elsewhere is a round trip.
 - **The parent's skills list does not reach a subagent.** `skills_metadata` is private

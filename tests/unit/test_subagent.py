@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.domain.capabilities import ALL
-from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
-from kingfisher.kinds.subagents.rules import resolved_model
-from kingfisher.kinds.subagents.spec import (
+from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
+from kingfisher.core.definitions.subagents.rules import resolved_model
+from kingfisher.core.definitions.subagents.spec import (
     KNOWN,
     REFUSED,
     RunOn,
@@ -15,6 +14,7 @@ from kingfisher.kinds.subagents.spec import (
     SubagentSpec,
     declared,
 )
+from kingfisher.domain.capabilities import ALL
 from tests.conftest import a_subagent
 
 MINIMAL = """name: reviewer

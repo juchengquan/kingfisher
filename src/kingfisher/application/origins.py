@@ -6,11 +6,11 @@ from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 
 if TYPE_CHECKING:
     from kingfisher.config import Config
-    from kingfisher.infrastructure.catalogue import Definitions
+    from kingfisher.core.definitions.catalogue import Definitions
 
 __all__ = ["Kind", "Origin", "Origins"]
 

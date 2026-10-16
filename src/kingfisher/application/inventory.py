@@ -9,6 +9,25 @@ from types import MappingProxyType
 from kingfisher.application import access
 from kingfisher.application.origins import Origin, Origins
 from kingfisher.config import Config, ConfigError
+from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.definitions.catalogue import (
+    Definitions,
+    bundled_tool_names,
+    resolve_definitions,
+)
+from kingfisher.core.definitions.importing import defined_in_a_workspace
+from kingfisher.core.definitions.middlewares.catalogue import MiddlewareError
+from kingfisher.core.definitions.subagents.rules import miscounted, refuse_cycles
+from kingfisher.core.definitions.subagents.spec import SubagentError
+from kingfisher.core.definitions.tools.catalogue import ToolError
+from kingfisher.core.definitions.tools.spec import (
+    Found,
+    Offering,
+    admitted,
+    out_of_reach,
+    placed,
+    split_reference,
+)
 from kingfisher.domain.access import (
     AccessReport,
     SourceIds,
@@ -20,21 +39,6 @@ from kingfisher.domain.access import (
     with_datazone,
 )
 from kingfisher.domain.capabilities import CapabilityError, unoffered
-from kingfisher.infrastructure.catalogue import Definitions, bundled_tool_names, resolve_definitions
-from kingfisher.kinds.agents.spec import AgentError
-from kingfisher.kinds.importing import defined_in_a_workspace
-from kingfisher.kinds.middlewares.catalogue import MiddlewareError
-from kingfisher.kinds.subagents.rules import miscounted, refuse_cycles
-from kingfisher.kinds.subagents.spec import SubagentError
-from kingfisher.kinds.tools.catalogue import ToolError
-from kingfisher.kinds.tools.spec import (
-    Found,
-    Offering,
-    admitted,
-    out_of_reach,
-    placed,
-    split_reference,
-)
 
 #: An empty mapping that cannot be written to, so a default is shared safely.
 _NOTHING: Mapping[str, str] = MappingProxyType({})
