@@ -28,6 +28,12 @@ annotation, and you have `timestamps`.
 any of them does not load; nor does a `dict` in `tools`, which the TypedDict
 allows and which reads here as a tool named rather than carried. What is left is
 what a package can mean without having seen the deployment it lands in.
+
+**And kingfisher has two words it lacks.** `source_ids` and `datazone` say who
+reaches a subagent, and kingfisher reads them before deepagents sees anything. The
+TypedDict has neither, so a dict that says who reaches it -- `ledger.py` does --
+stops type-checking as a `SubAgent`. Drop the annotation there, as `timestamps`
+has.
 """
 
 from __future__ import annotations

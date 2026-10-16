@@ -1513,7 +1513,7 @@ def test_the_shipped_bundle_is_a_bundle(shipped):
     # written to deepagents' own type). A reader meets the two side by side, and
     # dropping either would leave the other looking like the only way a subagent can
     # own anything.
-    assert set(bundles) == {"redactor", "timestamps", "versions"}
+    assert set(bundles) == {"redactor", "timestamps", "versions", "ledger"}
     assert bundles["redactor"].tools is not None
     assert bundles["redactor"].skills
     assert bundles["redactor"].root is not None

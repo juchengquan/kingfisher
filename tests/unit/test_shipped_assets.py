@@ -27,7 +27,7 @@ from kingfisher.kinds.skills import spec as skill
 from kingfisher.kinds.skills.catalogue import reachable
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
-from kingfisher.kinds.tools.spec import Offering
+from kingfisher.kinds.tools.spec import Offering, out_of_reach
 from kingfisher.layout import SCRATCH
 from tests.conftest import FakeToolCallingModel, middleware_of, repository_root, subagent_of
 from tests.unit.test_subagent_helpers import _subagent, _tools_of
@@ -49,6 +49,7 @@ def test_every_preset_subagent_parses(shipped):
         "redactor",
         "show-your-work",
         "sweeper",
+        "ledger",
     }
     for spec in specs.values():
         assert spec.description.strip()
@@ -1456,22 +1457,47 @@ def test_the_source_id_presets_narrow_for_a_narrower_caller(shipped):
     subagent, and an auditor holds fewer tools than an analyst.
     """
     specs = LocalSubagentRepository(shipped / "subagents").specs
+    tools = LocalToolRepository(shipped / "tools").found
     source_ids = _vocabulary(shipped)
     auditor = specs["auditor"]
 
-    assert auditor.declares(source_ids.expand(["sales_db"])).tools == (
-        "sql_query",
-        "line_count",
-    )
+    def holds(*names: str) -> tuple[str, ...]:
+        """Both halves, as the build takes them: what the definition grants, less the
+        tools whose own audience shuts this caller out.
+        """
+        held = source_ids.expand(names)
+        shut = out_of_reach(tools, held)
+        return tuple(one for one in auditor.declares(held).tools or () if one not in shut)
+
+    assert holds("sales_db") == ("sql_query", "line_count")
     # Degraded, not empty: it still verifies what it can, and its prompt says so.
-    assert auditor.declares(source_ids.expand(["audit_log"])).tools == ("line_count",)
-    # And `contains` reaches an *entry* audience, not only the definition's own
-    # line: `warehouse` is written on nothing here, contains `sales_db`, and so
-    # gets the tool that entry restricts to sales_db.
-    assert auditor.declares(source_ids.expand(["warehouse"])).tools == (
-        "sql_query",
-        "line_count",
-    )
+    # `sql_query` goes by its own line now -- the auditor's entry for it is bare.
+    assert holds("audit_log") == ("line_count",)
+    # And covering reaches a tool's own audience as it reaches an entry's:
+    # `warehouse` is written on nothing here, covers `sales_db`, and so gets it.
+    assert holds("warehouse") == ("sql_query", "line_count")
+
+
+def test_the_shipped_ledger_is_for_sales_db_callers_in_emea(shipped):
+    """The datazone, asserted against the files: `analyst` grants `ledger` by its bare
+    name, and only the dict's own two lines decide who is handed it.
+    """
+    from kingfisher.application.access import held_by
+    from kingfisher.domain.access import handed_work_by, with_datazone
+
+    agents = LocalAgentRepository(shipped / "agents").specs
+    subagents = LocalSubagentRepository(shipped / "subagents").specs
+    vocabulary = _vocabulary(shipped)
+
+    def reached(source_ids: list[str], datazone: str | None) -> bool:
+        held = held_by(vocabulary, with_datazone(source_ids, datazone))
+        return "ledger" in handed_work_by([agents["analyst"]], subagents, held)
+
+    assert reached(["sales_db"], "emea")
+    assert reached(["warehouse"], "emea"), "covering `sales_db` is enough"
+    assert not reached(["sales_db"], "apac")
+    assert not reached(["sales_db"], None), "no datazone reaches nothing zoned"
+    assert not reached(["audit_log"], "emea")
 
 
 def test_an_entry_that_states_nothing_inherits(shipped):

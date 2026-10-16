@@ -4,21 +4,22 @@ description: Re-checks figures against their sources. Use before reporting numbe
 # example of the case the whole feature exists for: **one definition, different
 # tools per caller.**
 #
-# An audience is a property of *this definition's use* of a tool, not of the
-# tool. `analyst.yaml` restricts `sql_query` to `[sales_db]` and so does this;
-# a third definition could open it to everyone, and all three would be correct,
-# because they are different contexts. `kingfisher list` prints a roll-up by
-# tool for exactly that reason -- it is where a call site quietly wider than its
-# neighbours becomes visible.
+# A tool's audience lives in one of two places, and the difference is what it is
+# about. `sql_query` *is* the sales database, so it says `[sales_db]` in its own
+# file and holds wherever it is granted. `http_fetch` is not sensitive on its own
+# -- leaving the workspace is, from a subagent that holds sales figures -- so that
+# rule is this definition's, written on its entry below. `kingfisher list` prints a
+# roll-up by tool, which is where a call site quietly wider than its neighbours
+# becomes visible.
 source_ids: [sales_db, audit_log, warehouse]
 builtin_tools: [read_file, glob, grep]
 tools:
-  - name: sql_query
-    # The compounding case, in three lines. Reached on `audit_log` alone, this
-    # subagent holds `line_count` and not `sql_query`; reached on `sales_db` it
-    # holds both. Nothing is refused, nothing errors -- it simply runs with
-    # less, and the caller is not told: out of reach reads as not offered.
-    source_ids: [sales_db]
+  # The compounding case, and it needs no line here. Reached on `audit_log`
+  # alone, this subagent holds `line_count` and not `sql_query`, because the tool
+  # itself admits only `sales_db`; reached on `sales_db` it holds both. Nothing is
+  # refused, nothing errors -- it simply runs with less, and the caller is not
+  # told: out of reach reads as not offered.
+  - sql_query
   # The same requirement as `agents/analyst.yaml` writes, by the same name --
   # which is the whole argument for naming one. Two definitions, one place to
   # change it, and `kingfisher list` prints what it requires once above the
