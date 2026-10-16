@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+import asyncio
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import pytest
@@ -10,6 +11,7 @@ from deepagents.backends import LocalShellBackend
 from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langgraph.types import Command
 
 from kingfisher import Kingfisher, LocalSessions, Request, ShellPrompt
 from kingfisher.infrastructure.harness.middlewares.shell_paths import (
@@ -282,26 +284,44 @@ def test_deepagents_host_paths_reach_only_a_shell_on_this_host(shelled, backends
     assert "You are kingfisher" in systems[0]
     assert "You check." in systems[1]
 
-def _handed_on(system: SystemMessage) -> SystemMessage:
+def _asked(way: str, request: Any) -> Any:
+    """The request `ShellPaths` passes on, through whichever model hook `way` names.
+
+    Both ways, because the hook is two methods and the async one was reached by nothing:
+    making `awrap_model_call` pass the request on untold left the whole suite green,
+    while the same change to its sync twin reddened the rules above.
+    """
+    asked: list[Any] = []
+    middleware = ShellPaths(Layout(), kingfishers_shell(), here=False)
+    if way == "sync":
+        middleware.wrap_model_call(request, asked.append)
+        return asked[0]
+
+    async def noting(passed: Any) -> None:
+        asked.append(passed)
+
+    asyncio.run(middleware.awrap_model_call(request, noting))
+    return asked[0]
+
+
+def _handed_on(way: str, system: SystemMessage) -> SystemMessage:
     """The system message `ShellPaths` passes to a shell that is not on this host.
 
     Driven through the hook rather than the helper under it, because `here=False` is
     the whole of what the parametrized rule above covers and the branch is reached
     from nowhere else.
     """
-    asked: list[Any] = []
-    ShellPaths(Layout(), kingfishers_shell(), here=False).wrap_model_call(
+    return _asked(
+        way,
         ModelRequest(
             model=GenericFakeChatModel(messages=iter([])),
             messages=[HumanMessage("go")],
             system_message=system,
         ),
-        asked.append,
-    )
-    return asked[0].system_message
+    ).system_message
 
 
-def test_a_mappings_section_merged_into_other_prose_is_left_whole():
+def test_a_mappings_section_merged_into_other_prose_is_left_whole(way):
     """Cutting the text instead of dropping the block leaves nothing red: the section
     goes either way, so the rule above passes, while the prose deepagents merged it into
     silently loses its tail. The first half is the control -- without it, a middleware
@@ -310,18 +330,137 @@ def test_a_mappings_section_merged_into_other_prose_is_left_whole():
     section = f"{MAPPINGS}\n- /inputs -> /host/in\n"
 
     on_its_own = _handed_on(
+        way,
         SystemMessage(
             content_blocks=[
                 {"type": "text", "text": "You work."},
                 {"type": "text", "text": section},
             ]
-        )
+        ),
     )
     assert list(on_its_own.content_blocks) == [{"type": "text", "text": "You work."}]
 
     merged = _handed_on(
-        SystemMessage(content_blocks=[{"type": "text", "text": f"You work.\n\n{section}"}])
+        way,
+        SystemMessage(content_blocks=[{"type": "text", "text": f"You work.\n\n{section}"}]),
     )
     assert list(merged.content_blocks) == [
         {"type": "text", "text": f"You work.\n\n{section}"}
     ]
+
+
+# -- which tool the rule and the correction are for ------------------------
+
+
+@dataclass
+class Call:
+    """The shape `wrap_tool_call` receives, in the field this middleware reads."""
+
+    tool_call: dict[str, Any] = field(default_factory=dict)
+
+
+#: A shell miss of a path spelt the file tools' way, which is what `missed` looks for.
+MISSED = "tail: /inputs/api.log: No such file or directory"
+
+
+def _answered(way: str, name: str, result: Any) -> Any:
+    """What `ShellPaths` hands back for one tool's result, through the hook `way` names.
+
+    Both ways, because the correction is two methods and the async one was reached by
+    nothing: making `awrap_tool_call` return the result uncorrected left the whole suite
+    green, while the same change to its sync twin reddened the rules above.
+    """
+    middleware = ShellPaths(Layout(), kingfishers_shell())
+    request = Call(tool_call={"name": name, "args": {}, "id": "c1"})
+    if way == "sync":
+        return middleware.wrap_tool_call(request, lambda _: result)
+
+    async def answering(_: Any) -> Any:
+        return result
+
+    return asyncio.run(middleware.awrap_tool_call(request, answering))
+
+
+def _told_tools(way: str, tools: list[Any]) -> list[Any]:
+    """The tools `ShellPaths` passes on, through whichever model hook `way` names."""
+    return list(
+        _asked(
+            way,
+            ModelRequest(
+                model=GenericFakeChatModel(messages=iter([])),
+                messages=[HumanMessage("go")],
+                tools=tools,
+            ),
+        ).tools
+    )
+
+
+def test_the_shell_rule_reaches_execute_and_no_other_tool(shelled):
+    """Without the name gate the rule lands on every tool offered, and what it says --
+    that a path is the shell's spelling without its leading slash -- is wrong advice for
+    `read_file`, whose paths are the virtual ones. The rule asserting `execute` carries
+    it passes just as well when every tool does.
+    """
+    cfg, offered = shelled
+    rule = execute_line(kingfishers_shell())
+    assert rule is not None
+    _run(cfg, *_consulting("checker"))
+
+    every, carrying = set(), set()
+    for tools in offered:
+        every |= {getattr(tool, "name", None) for tool in tools}
+        carrying |= {
+            getattr(tool, "name", None)
+            for tool in tools
+            if rule in (getattr(tool, "description", "") or "")
+        }
+    # The control is only a control while the tool it names is on offer.
+    assert "read_file" in every
+    assert carrying == {"execute"}
+
+
+def test_a_tool_offered_as_a_mapping_is_told_the_rule_by_name(way):
+    """deepagents may offer a tool as a mapping rather than a `BaseTool`, and no graph
+    the suite builds offers one: mutating the mapping branch's name check away leaves
+    the whole suite green, so a file tool offered that way would carry the shell's rule.
+    """
+    rule = execute_line(kingfishers_shell())
+    assert rule is not None
+
+    told = _told_tools(
+        way,
+        [
+            {"name": "execute", "description": "Run a command."},
+            {"name": "read_file", "description": "Read a file."},
+        ],
+    )
+
+    assert told == [
+        {"name": "execute", "description": f"Run a command.\n\n{rule}"},
+        {"name": "read_file", "description": "Read a file."},
+    ]
+
+
+def test_a_correction_reaches_the_shells_result_and_no_other_tools(way):
+    """Without the name gate any tool's result gains the shell's advice: a workspace tool
+    printing a path it could not open had the model told about shell spellings on a tool
+    that is not a shell. The rule driving `execute` alone passes either way.
+    """
+    corrected = _answered(way, "execute", ToolMessage(MISSED, tool_call_id="c1"))
+    assert hint("/inputs/api.log") in corrected.text
+
+    left = _answered(way, "line_count", ToolMessage(MISSED, tool_call_id="c1"))
+    assert left.text == MISSED
+
+
+def test_a_result_the_shell_could_not_have_returned_is_handed_back_untouched(way):
+    """Two shape checks, each load-bearing and each reached by nothing. `missed` calls
+    `splitlines`, so content arriving as blocks raises `AttributeError`, and a `Command`
+    has no `.content` to read at all. Neither shape comes from `execute`, but a
+    deployment's own middleware runs below this one and may return either.
+    """
+    blocks = ToolMessage(content=[{"type": "text", "text": MISSED}], tool_call_id="c1")
+    assert _answered(way, "execute", blocks) is blocks
+
+    command = Command(update={"messages": []})
+    assert _answered(way, "execute", command) is command
