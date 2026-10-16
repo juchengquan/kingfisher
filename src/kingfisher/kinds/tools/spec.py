@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.domain.access import jointly, reaches
+from kingfisher.domain.access import jointly, reaches, zoned
 from kingfisher.domain.capabilities import (
     ALL,
     SEPARATOR,
@@ -71,9 +71,18 @@ def named(tool: Any) -> bool:
 AUDIENCE_ATTRIBUTE = "kingfisher_source_ids"
 
 
+#: Where `kingfisher.tool` keeps the one datazone a tool is for, read by name likewise.
+DATAZONE_ATTRIBUTE = "kingfisher_datazone"
+
+
 def own_audience(tool: Any) -> Audience:
     """Who this tool admits by itself: `"*"` for every tool `kingfisher.tool` did not make."""
     return getattr(tool, AUDIENCE_ATTRIBUTE, ALL)
+
+
+def own_datazone(tool: Any) -> str | None:
+    """The datazone this tool is for, or `None` for a tool any datazone may use."""
+    return getattr(tool, DATAZONE_ATTRIBUTE, None)
 
 
 @dataclass(frozen=True)
@@ -85,6 +94,13 @@ class Found:
     #: Who the tool admits by itself, whichever definition grants it -- an **and** on
     #: every grant, so an agent's entry can narrow it and never widen it.
     source_ids: Audience = ALL
+    #: The one datazone a caller must be in to use it, or `None` for any.
+    datazone: str | None = None
+
+    @property
+    def audience(self) -> Audience:
+        """Who the tool admits by itself: its source ids, and its datazone as well."""
+        return zoned(self.source_ids, self.datazone)
 
     @property
     def name(self) -> str:
@@ -132,7 +148,7 @@ def out_of_reach(found: Sequence[Found], held: frozenset[str] | None) -> frozens
         return frozenset()
     among = _by_name(found)
     return frozenset(
-        written_form(one, among=among) for one in found if not reaches(one.source_ids, held)
+        written_form(one, among=among) for one in found if not reaches(one.audience, held)
     )
 
 
@@ -149,8 +165,8 @@ def own_audiences(found: Iterable[Found]) -> dict[str, Audience]:
     """
     own: dict[str, Audience] = {}
     for one in found:
-        if one.source_ids != ALL:
-            own[one.name] = jointly((own.get(one.name, ALL), one.source_ids))
+        if one.audience != ALL:
+            own[one.name] = jointly((own.get(one.name, ALL), one.audience))
     return own
 
 

@@ -17,6 +17,7 @@ from kingfisher.domain.access import (
     handed_work_by,
     offers,
     reaches,
+    with_datazone,
 )
 from kingfisher.domain.capabilities import CapabilityError, unoffered
 from kingfisher.infrastructure.catalogue import Definitions, bundled_tool_names, resolve_definitions
@@ -597,7 +598,7 @@ def _reaching(
         return {
             name: value
             for name, value in names.items()
-            if reaches(stated.get(name, Stated()).source_ids, reachable)
+            if reaches(stated.get(name, Stated()).audience, reachable)
         }
 
     return keep
@@ -712,13 +713,17 @@ def _tools(
 
 
 def inventory(
-    cfg: Config, *, catalogue: Definitions | None = None, source_ids: Iterable[str] | None = None
+    cfg: Config,
+    *,
+    catalogue: Definitions | None = None,
+    source_ids: Iterable[str] | None = None,
+    datazone: str | None = None,
 ) -> Inventory:
     """Ask the workspace what it offers, through the catalogue a run would use."""
     resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
     # Whose view this is, before the agents are read: each one's chain is what it
     # activates for this caller.
-    held = access.held_by(cfg.access, source_ids)
+    held = access.held_by(cfg.access, with_datazone(source_ids, datazone))
 
     middlewares, middlewares_error = _middlewares(resolved)
     moved_tools = _moved_tools(resolved, held)

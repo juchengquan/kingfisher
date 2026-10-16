@@ -87,6 +87,9 @@ class SubagentSpec(Definition):
     #: YAML. Called with a model and the tools it was granted, and it returns a graph
     #: deepagents runs as given.
     build: Any = field(default=None, metadata={"derived": True})
+    #: The one datazone a caller must be in to reach it, or `None` for any. A subagent's
+    #: and never an agent's: an agent runs in whichever datazone its caller is in.
+    datazone: str | None = None
 
     def __post_init__(self) -> None:
         """Exactly one of `system_prompt` and `build`, and never two kinds of bundle."""
@@ -120,6 +123,7 @@ KNOWN: frozenset[str] = frozenset(
         "model",
         "metadata",
         "source_ids",
+        "datazone",
     }
 )
 
@@ -200,6 +204,7 @@ DECLARED: frozenset[str] = frozenset(
         "model",
         "metadata",
         "source_ids",
+        "datazone",
     }
 )
 
@@ -279,6 +284,9 @@ PORTABLE: frozenset[str] = frozenset(
         # at startup, naming the missing ids, and with no vocabulary the line is
         # inert. Both fail loudly or not at all -- never a subagent quietly open.
         "source_ids",
+        # For the same reason, and with the same check: a datazone the vocabulary
+        # does not declare stops the deployment.
+        "datazone",
     }
 )
 
@@ -428,6 +436,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         metadata=read.mapping(entry.get("metadata"), key="metadata"),
         source_ids=source_ids,
         audiences=audiences,
+        datazone=read.datazone(entry.get("datazone")),
     )
 
 
@@ -465,6 +474,7 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
         carried=_carried(entry, read),
         metadata=read.mapping(entry.get("metadata"), key="metadata"),
         source_ids=read.source_ids(entry.get("source_ids")),
+        datazone=read.datazone(entry.get("datazone")),
     )
 
 
@@ -699,6 +709,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         metadata=reader.mapping(document.get("metadata"), key="metadata"),
         source_ids=source_ids,
         audiences=audiences,
+        datazone=reader.datazone(document.get("datazone")),
     )
 
 

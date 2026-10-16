@@ -65,7 +65,7 @@ class Audiences:
         """The definition's own audience, and each `tools:` entry's where it wrote one."""
         said = stated(definition)
         return cls(
-            default=said.source_ids,
+            default=said.audience,
             tools={split_reference(name)[1]: who for name, who in said.of("tools").items()},
             own=own or {},
         )

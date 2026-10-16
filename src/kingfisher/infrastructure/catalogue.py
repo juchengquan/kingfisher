@@ -78,7 +78,7 @@ class Definitions:
             *self.tools.found,
             *(one for bundle in self.bundled_tools.values() for one in bundle.found),
         )
-        return {one.reference: one for one in found if one.source_ids != ALL}
+        return {one.reference: one for one in found if one.audience != ALL}
 
     @cached_property
     def bundled_skills(self) -> Mapping[str, SkillRegistry]:

@@ -64,6 +64,10 @@ REFUSED: Mapping[str, str] = MappingProxyType(
             "here would drop the rules an agent already has -- including the ones "
             "making /inputs and /skills read-only"
         ),
+        "datazone": (
+            "an agent runs in whichever datazone its caller names with each call; a "
+            "datazone belongs on the subagents and tools the agent holds"
+        ),
         "response_format": (
             "an agent answers a real caller who may well want a schema, and there is "
             "nowhere to ask for one yet -- it changes what a *run returns*, so the "
