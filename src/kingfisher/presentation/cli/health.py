@@ -838,7 +838,7 @@ def _session_files(cfg: Config) -> Iterator[Check]:
             "warn",
             f"KINGFISHER_SESSIONS names {cfg.sessions_factory}, "
             "and nothing here can see whether its shell is kept out of .harness",
-            "run BACKEND_CONTRACT from kingfisher against it: its shell_denied check "
+            "check it with shell_denied, in kingfisher's tests/checks/backend.py: it "
             "drives the shell at /.harness",
         )
     elif (why := harness_unfenced(cfg)) is not None:
@@ -847,8 +847,8 @@ def _session_files(cfg: Config) -> Iterator[Check]:
             "warn",
             f"{why}, so the agent's shell can rewrite the session's pinned agent, "
             "conversation and paused turn",
-            "turn the sandbox on, or confine the shell another way -- shell_denied in "
-            "BACKEND_CONTRACT says whether it holds",
+            "turn the sandbox on, or confine the shell another way -- shell_denied, in "
+            "kingfisher's tests/checks/backend.py, says whether it holds",
         )
     else:
         yield Check(

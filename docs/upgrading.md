@@ -34,6 +34,7 @@ The core-and-plugins work renamed what a deployment names and moved two things o
 | `Config.deployment_prompt`, and `PROMPT.md` in the workspace | `INSTRUCTIONS.md` beside the definitions, or `instructions=` on `Kingfisher`: an object with `text(cfg) -> str` |
 | The repository Protocols in `domain/ports.py` | Gone. Definitions are read from a directory; stage yours into one |
 | `catalogue=` and `grants=` on `Kingfisher` | `Config.definitions`, pointed at the folder you staged, and `Config.grants` |
+| `COMMAND_RUNNER_CONTRACT`, `BACKEND_CONTRACT`, `SESSION_BACKENDS_CONTRACT` from `kingfisher` | Gone from the package. The same checks are in this repository's `tests/checks/`, to copy; the promises they hold are on each interface's docstring |
 
 ## deepagents' host paths only where they are this host's, after #760
 

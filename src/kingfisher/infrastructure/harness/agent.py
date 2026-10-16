@@ -44,7 +44,6 @@ from kingfisher.infrastructure.harness.backend import (
     shell_prompt_of,
     skills_sources,
 )
-from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
 from kingfisher.infrastructure.harness.interpreter import _interpreter
 from kingfisher.infrastructure.harness.kinds.declared_middleware import (
     ByName,
@@ -75,6 +74,7 @@ from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend
 from kingfisher.infrastructure.harness.session_paths import SessionPaths
 from kingfisher.infrastructure.harness.tool_context import ToolContext
 from kingfisher.infrastructure.harness.tool_guards import guarded_tools, tool_guards
+from kingfisher.infrastructure.harness.usable_backend import refuse_unusable_backend
 from kingfisher.infrastructure.prompting import memory_guidelines, system_prompt
 from kingfisher.infrastructure.sandbox.confinement import EXTERNAL
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout

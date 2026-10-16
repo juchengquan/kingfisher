@@ -22,8 +22,8 @@ from kingfisher.domain.ports import CommandRunner
 from kingfisher.domain.session import session_dir, sessions_root, still_held
 from kingfisher.infrastructure.catalogue import Definitions, refuse_unmountable
 
-# Re-exported: `ports.md` and `BACKEND_CONTRACT` have named this path to adapter
-# authors, and a deployment's own backend may import it from here.
+# Re-exported: `ports.md` has named this path to deployments writing their own
+# backend, which may import it from here.
 from kingfisher.infrastructure.harness.host_paths import (
     HostPathError as HostPathError,  # noqa: PLC0414 -- the re-export above
 )
@@ -457,7 +457,7 @@ def skill_mounts(catalogue: Definitions) -> tuple[tuple[str, Path], ...]:
     Each bundle's, then each mount a deployment named. All under `/skills/`, because
     both things that keep the catalogue read-only -- the deny rule and the sandbox
     profile -- are scoped to that prefix. `backend_at` mounts this list and
-    `SESSION_BACKENDS_CONTRACT` checks a deployment's backends against it: a kind of
+    `a_session_serves_the_skills_kingfisher_read` checks a `Sessions` against it: a kind of
     skills directory mounted anywhere but here would escape the check.
     """
     return (
@@ -604,6 +604,24 @@ class Sessions(Protocol):
     Each takes the `Config` because the default is one object serving every
     workspace, and the workspace is where it keeps them. A deployment's own may
     ignore it.
+
+    What one has to keep, each held by a check in this repository's
+    `tests/checks/sessions.py`:
+
+    - two session ids never share storage;
+    - what one turn's backend wrote, the next `open` of that session finds;
+    - a session asked for is listed, and one deleted is gone;
+    - a claim is exclusive and one session's: a second claim on a held session fails,
+      and a claim on another does not;
+    - a host path a backend names for a file is that session's file;
+    - a session serves under `/skills/` the skills kingfisher read;
+    - every async twin answers as its sync one does.
+
+    And what `open` returns, held by `tests/checks/backend.py`: deepagents recognises it
+    as running commands and it routes every path kingfisher denies -- both refused at
+    startup by `refuse_unusable_backend` -- and it reads back what it was given, keeps
+    deepagents' offloads in the scratchpad, keeps the shell out of `/.harness` and
+    `/inputs`, and refuses a host path.
     """
 
     def open(

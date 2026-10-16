@@ -16,7 +16,7 @@ from kingfisher.infrastructure.harness.backend import (
     WorkspaceScopedBackend,
     backend_at,
 )
-from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
+from kingfisher.infrastructure.harness.usable_backend import refuse_unusable_backend
 from kingfisher.infrastructure.steps import drive
 from kingfisher.layout import INPUTS
 from tests.conftest import StubCheckpointer, an_agent, harness_in

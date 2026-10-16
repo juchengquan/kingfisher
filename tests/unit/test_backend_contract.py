@@ -14,15 +14,15 @@ from kingfisher.infrastructure.harness.backend import (
     WorkspaceScopedBackend,
     backend_at,
 )
-from kingfisher.infrastructure.harness.backend_contract import (
-    BACKEND_CONTRACT,
+from kingfisher.layout import SCRATCH_ROUTE
+from tests.checks.backend import (
+    BACKEND_CHECKS,
     execution_support,
     filesystem_consistency,
     host_path_refusal,
     offloads_in_the_scratchpad,
     route_coverage,
 )
-from kingfisher.layout import SCRATCH_ROUTE
 
 
 def test_kingfishers_own_backend_keeps_the_contract(cfg, session_dir):
@@ -32,14 +32,14 @@ def test_kingfishers_own_backend_keeps_the_contract(cfg, session_dir):
     `CompositeBackend` assembled here: a kit that checked a fixture of its own making
     would pass with every route wrong.
     """
-    for check in BACKEND_CONTRACT:
+    for check in BACKEND_CHECKS:
         check(lambda: backend_at(cfg, session_dir))
 
 
 def test_the_contract_is_not_quietly_empty():
     """A kit with no checks passes whatever it was meant to check."""
-    assert len(BACKEND_CONTRACT) >= 4
-    assert all(callable(check) for check in BACKEND_CONTRACT)
+    assert len(BACKEND_CHECKS) >= 4
+    assert all(callable(check) for check in BACKEND_CHECKS)
 
 
 class NotRecognised:
