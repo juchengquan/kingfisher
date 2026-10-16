@@ -442,6 +442,13 @@ into two sessions and reads back what your answer names. The turn's rules still
 apply first: a path the file tools may not read, `/.harness` among them, is
 refused before your method is asked.
 
+**Three more extras are read where you declare them.** `unprotected` on the backend,
+a tuple of what it could not make read-only, which a turn reports to its caller as
+`protect_failed`. `runs_here` on the shell, `True` when its commands run on this host,
+which keeps deepagents' own note of each folder's path here; a shell that does not say
+is taken to run elsewhere. And `where(cfg)` on your sessions, the folder they are kept
+in on this host, which the origins line reports; without it they are `<supplied>`.
+
 For the command line, name it with `KINGFISHER_SESSIONS`; without it,
 `kingfisher sessions`, `reap` and `artifact` run on `LocalSessions`.
 

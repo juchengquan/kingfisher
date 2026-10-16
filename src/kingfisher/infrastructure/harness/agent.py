@@ -9,11 +9,12 @@ and three provider SDKs. Resolving what a subagent runs with is
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from deepagents import FilesystemPermission, MemoryMiddleware, create_deep_agent
+from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
 from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 from langchain.agents.middleware import TodoListMiddleware
 
@@ -39,7 +40,6 @@ from kingfisher.infrastructure.harness.activation import (
     refuse_misnamed_by,
 )
 from kingfisher.infrastructure.harness.backend import (
-    backend_at,
     memory_sources,
     shell_prompt_of,
     skills_sources,
@@ -76,8 +76,6 @@ from kingfisher.infrastructure.harness.tool_context import ToolContext
 from kingfisher.infrastructure.harness.tool_guards import guarded_tools, tool_guards
 from kingfisher.infrastructure.harness.usable_backend import refuse_unusable_backend
 from kingfisher.infrastructure.prompting import memory_guidelines, system_prompt
-from kingfisher.infrastructure.sandbox.confinement import EXTERNAL
-from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.kinds.agents.spec import AgentError, AgentSpec
 from kingfisher.kinds.subagents.spec import RunOn
 from kingfisher.kinds.tools.spec import Found, own_audiences
@@ -310,6 +308,24 @@ def _deployment_middleware(
     )
 
 
+def _probe_backend(cfg: Config, scratch: Path) -> CompositeBackend:
+    """A backend nothing runs on, to read the built-in tool set off an assembled graph.
+
+    deepagents' own classes rather than a session's: a probe opens no session, and the
+    core names no sessions implementation. It executes, so `execute` is offered as it is
+    on a real one, and it routes every path the layout does, which is what lets a graph
+    carrying kingfisher's deny rules build at all.
+    """
+    routes = {}
+    for route in cfg.layout.routed_paths():
+        folder = scratch / route.strip("/")
+        folder.mkdir(parents=True, exist_ok=True)
+        routes[route] = FilesystemBackend(root_dir=folder, virtual_mode=True)
+    return CompositeBackend(
+        default=LocalShellBackend(root_dir=scratch, virtual_mode=True), routes=routes
+    )
+
+
 def builtin_tool_names(
     cfg: Config, catalogue: Definitions, workspace_tools: Sequence[Found] | None = None
 ) -> tuple[str, ...] | None:
@@ -328,25 +344,11 @@ def builtin_tool_names(
     """
     import tempfile  # noqa: PLC0415 -- one caller, and only on the branch that probes
 
-    # `EXTERNAL` because this shell never runs a command, and any other mode warns that
-    # it is unconfined -- which `doctor` and `list` would then print on top of their own
-    # report, for a shell nothing uses.
-    probing = replace(cfg, shell_sandbox=EXTERNAL)
     with tempfile.TemporaryDirectory(prefix="kingfisher-builtin-") as scratch:
         return registered_tools(
             build_agent(
-                probing,
-                backend=backend_at(
-                    probing,
-                    ensure_session_layout(
-                        Path(scratch),
-                        probing.layout.session_dirs,
-                        memory=probing.layout.memory,
-                        scratchpad=probing.layout.scratchpad,
-                        saved_results=probing.layout.saved_results,
-                    ),
-                    catalogue=catalogue,
-                ),
+                cfg,
+                backend=_probe_backend(cfg, Path(scratch)),
                 catalogue=catalogue,
                 workspace_tools=workspace_tools,
                 # No subagents. What a workspace *offers* is answered from the

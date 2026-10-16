@@ -73,7 +73,7 @@ from kingfisher.domain.result import (
     RunResult,
     normalize_answer,
 )
-from kingfisher.domain.session import Session, SessionBusyError, unknown_session
+from kingfisher.domain.session import Session, SessionBusyError, sessions_root, unknown_session
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.activation import (
@@ -88,9 +88,7 @@ from kingfisher.infrastructure.harness.agent import (
     builtin_tool_names,
 )
 from kingfisher.infrastructure.harness.backend import (
-    LocalSessions,
     Sessions,
-    WorkspaceScopedBackend,
 )
 from kingfisher.infrastructure.harness.checkpointing import (
     SharedThreads,
@@ -233,6 +231,12 @@ def refused_credentials(exc: BaseException, cfg: Config) -> ConfigError | None:
         f"{where} rejected the key{supplied} (401). A value exported in the shell "
         f"overrides the one in .env, so check the environment before the file"
     )
+
+
+def _kingfishers_own(sessions: Sessions, cfg: Config) -> bool:
+    """Whether `sessions` keep them where kingfisher's own would, in the workspace."""
+    where = getattr(sessions, "where", None)
+    return callable(where) and where(cfg) == sessions_root(cfg.workspace)
 
 
 class Kingfisher(SessionMethods, Disposal):
@@ -397,7 +401,7 @@ class Kingfisher(SessionMethods, Disposal):
         return Origins.of(
             self.cfg,
             catalogue=self.catalogue,
-            sessions=None if type(self._sessions) is LocalSessions else self._sessions,
+            sessions=None if _kingfishers_own(self._sessions, self.cfg) else self._sessions,
         )
 
     def held_for(self, source_ids: Held | None) -> frozenset[str] | None:
@@ -730,10 +734,10 @@ class Kingfisher(SessionMethods, Disposal):
         source_ids: Held | None = None,
     ) -> Steps[Prepared]:
         """The rest of setup, once the session is claimed."""
-        # What `LocalSessions` could not make read-only, reported rather than raised. Read
-        # off kingfisher's own backend only: it is that class's, and a deployment's own
-        # sessions are not asked for it.
-        unprotected = files.unprotected if isinstance(files, WorkspaceScopedBackend) else ()
+        # What the backend could not make read-only, reported rather than raised. An
+        # optional extra a backend declares, as `host_path` and `shell_prompt` are; a
+        # deployment's own need not have it.
+        unprotected = tuple(getattr(files, "unprotected", ()))
 
         # Before the inputs are placed, not after: placing them grows the session,
         # so checking afterwards would let a request that is already over

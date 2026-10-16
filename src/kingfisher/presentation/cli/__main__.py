@@ -44,9 +44,7 @@ from kingfisher import (
 # see *The front door* in `docs/decisions.md` -- and each of these is something
 # no caller outside the wheel has asked for: the kinds a catalogue holds,
 # used to say what a directory has none of; where a workspace keeps its
-# sessions; and the warning `doctor` says as a check instead. `configured_sessions`
-# is taken the same way, inside the commands that build a service, because only a
-# command has a setting and no argument to be told its sessions by.
+# sessions; and the warning `doctor` says as a check instead.
 # Everything above is public and comes through the front door because it is.
 from kingfisher.config import MissingCredentialsWarning
 from kingfisher.domain.access import with_datazone
@@ -565,7 +563,7 @@ def _configured(cfg: Config, *, log: Path | None = None) -> Kingfisher:
     # `test_the_command_starts_without_the_agent_runtime` holds every verb to not paying
     # it until it builds one. `seed`, `list` and `doctor` do not.
     from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.application.run import (  # noqa: PLC0415
+    from kingfisher.presentation.cli.configured import (  # noqa: PLC0415
         configured_plugins,
         configured_sessions,
     )
