@@ -27,7 +27,7 @@ from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, INPUTS_ROUTE, SAVED_
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
-from kingfisher.plugins.sessions.sandbox import confinement
+from kingfisher.plugins.sessions.sandbox import confinement, sandbox_exec
 from kingfisher.plugins.sessions.sandbox.bubblewrap import BubblewrapRunner
 from kingfisher.plugins.sessions.sandbox.fence import LandlockRunner
 
@@ -1023,7 +1023,7 @@ def test_every_pattern_in_the_profile_still_means_the_path_it_is_about(name, tmp
     workspace = ensure_layout(tmp_path / name)
     sessions = (workspace / "sessions").resolve()
 
-    text = confinement.profile(
+    text = sandbox_exec.profile(
         home=tmp_path / "home",
         workspace=workspace,
         readable=(),
@@ -1061,7 +1061,7 @@ def test_a_renamed_inputs_leaf_is_the_one_the_profile_denies(tmp_path):
     workspace = ensure_layout(tmp_path / "ws")
     sessions = (workspace / "sessions").resolve()
 
-    text = confinement.profile(
+    text = sandbox_exec.profile(
         home=tmp_path / "home",
         workspace=workspace,
         readable=(),
@@ -1092,7 +1092,7 @@ def test_a_renamed_layout_moves_the_saved_results_denies_with_it(tmp_path):
     workspace = ensure_layout(tmp_path / "ws")
     one = (workspace / "sessions").resolve() / "s1"
 
-    text = confinement.profile(
+    text = sandbox_exec.profile(
         home=tmp_path / "home",
         workspace=workspace,
         readable=(),
@@ -1122,7 +1122,7 @@ def test_what_stands_in_for_a_quote_cannot_reach_across_a_directory(tmp_path):
     """
     workspace = ensure_layout(tmp_path / 'a"b')
 
-    text = confinement.profile(
+    text = sandbox_exec.profile(
         home=tmp_path / "home",
         workspace=workspace,
         readable=(),
@@ -1177,7 +1177,7 @@ def test_an_authored_file_is_denied_by_its_exact_path(tmp_path):
     workspace = tmp_path / "ws"
     models = workspace / "config" / "models.yaml"
 
-    text = confinement.profile(
+    text = sandbox_exec.profile(
         home=tmp_path / "home",
         workspace=workspace,
         readable=(),
@@ -1282,7 +1282,7 @@ def test_the_profile_refuses_itself_last(tmp_path):
     allow that covers the directory it sits in."""
     written = tmp_path / "ws" / ".kingfisher" / "shell.sb"
 
-    lines = confinement.profile(
+    lines = sandbox_exec.profile(
         home=tmp_path / "home",
         workspace=tmp_path / "ws",
         readable=(tmp_path / "ws",),
@@ -1379,7 +1379,7 @@ def test_every_rule_reading_the_written_profile_is_marked_for_macos():
 
     def reads_the_written_profile(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         drives = reads = False
-        # The callees, so `confinement.profile(...)` -- which builds the text and writes
+        # The callees, so `sandbox_exec.profile(...)` -- which builds the text and writes
         # nothing -- is not taken for the field naming the written file.
         called = {
             id(inner.func) for inner in ast.walk(node) if isinstance(inner, ast.Call)
