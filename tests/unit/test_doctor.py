@@ -747,27 +747,6 @@ def test_the_catalogue_line_says_what_it_did_not_check(cfg):
     assert "not tested" in checks["catalogue"].detail
 
 
-def test_reaching_the_cli_stays_free_of_provider_sdks():
-    """`unrunnable_subagents` costs 868ms and 3,137 modules to import, so at the top of
-    `health` every verb would pay it -- `kingfisher help` would spend a second to
-    print text.
-    """
-    import subprocess
-    import sys
-
-    probe = (
-        "import sys\n"
-        "import kingfisher.presentation.cli.__main__\n"
-        "print(','.join(m for m in ('deepagents', 'langchain_openai',"
-        " 'langchain_anthropic') if m in sys.modules))"
-    )
-    out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
-        [sys.executable, "-c", probe], capture_output=True, text=True, check=True
-    )
-
-    assert out.stdout.strip() == ""
-
-
 def test_the_description_names_its_own_limit():
     """A command that never calls a model has to say so where it is read."""
     from kingfisher.presentation.cli.__main__ import build_parser

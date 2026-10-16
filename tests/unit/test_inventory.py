@@ -326,27 +326,3 @@ def test_the_whole_job_is_reachable_through_the_front_door(cfg, shipped):
     # And it did something, so this cannot pass by every call being a no-op.
     assert written.written
     assert found.builtin_tools
-
-
-def test_the_public_names_cost_no_provider_sdk_to_reach(cfg):
-    """Reaching them must stay cheap; *calling* `inventory` is another matter.
-
-    Answering builds an agent, so `infrastructure.harness.agent` is imported inside
-    the function rather than at module scope. Measured at 21-50ms and 148-192
-    modules against 3,100 for a provider -- the split that keeps `--help` from
-    paying for a model it will never build.
-    """
-    import subprocess
-    import sys
-
-    probe = (
-        "import sys\n"
-        "from kingfisher import seed, kinds_at, definitions_source, inventory, Inventory\n"
-        "print(','.join(m for m in ('deepagents', 'langchain_openai',"
-        " 'langchain_anthropic') if m in sys.modules))"
-    )
-    out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
-        [sys.executable, "-c", probe], capture_output=True, text=True, check=True
-    )
-
-    assert out.stdout.strip() == ""

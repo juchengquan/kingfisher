@@ -2475,393 +2475,131 @@ def test_the_cycle_finder_finds_one_in_this_tree():
     )
 
 
-#: Every module that loads a provider SDK when imported. Deny by default, like the
-#: tables above: a module that starts loading one and is not named here fails, and so
-#: does a name here that stops.
-#:
-#: `THIRD_PARTY` structurally cannot see this. It reads the imports one file writes, and
-#: this is what those imports drag in behind them. `application/reporting.py` is the case
-#: that makes it worth having: it names no foreign package at all, passes that table
-#: cleanly, and loads three provider SDKs through one import two hops away.
-SDK_LOADING: frozenset[str] = frozenset({
-    # The harness, where speaking to deepagents is the job. The rest of that package
-    # is not here: `models` and `interpreter` name their foreign classes as strings and
-    # resolve them on demand, `tools` reads a graph it is handed, `host_paths` and
-    # `session_paths` are plain path rules the middleware is built on, and
-    # `tool_context` is a record with one untyped field.
-    "kingfisher.infrastructure.harness.activation",
-    "kingfisher.infrastructure.harness.agent",
-    "kingfisher.infrastructure.harness.backend",
-    # And the kit for one a deployment supplied, which asks deepagents whether it
-    # will recognise the thing as running commands. That question has no light
-    # spelling: `SandboxBackendProtocol` is an abstract base class and the answer
-    # is `isinstance` against it.
-    "kingfisher.infrastructure.harness.backend_contract",
-    # What a caller's tool is handed in place of the backend, which has no light
-    # spelling either. It subclasses `BackendProtocol` so that it is a backend to
-    # whatever a tool passes it on to -- deepagents asks with `isinstance`.
-    # `tool_context` holds one and names nothing, and that split is what keeps
-    # `ToolContext` cheap for a tool file to import.
-    "kingfisher.infrastructure.harness.permitted_backend",
-    # Kingfisher's own middleware, each a subclass of a langchain or deepagents class,
-    # and `tool_guards`, which composes them. `host_paths` and `session_paths`
-    # are what those are built on and name no runtime class, which is what keeps
-    # `HostPathError` cheap for a backend author to import.
-    "kingfisher.infrastructure.harness.middlewares.clearing",
-    "kingfisher.infrastructure.harness.middlewares.host_path_guard",
-    "kingfisher.infrastructure.harness.middlewares.large_pdf_guard",
-    "kingfisher.infrastructure.harness.middlewares.narrowing",
-    "kingfisher.infrastructure.harness.middlewares.recorder",
-    "kingfisher.infrastructure.harness.middlewares.shell_paths",
-    "kingfisher.infrastructure.harness.middlewares.workspace_tools",
-    # The collector a turn's recorders share, and keeping what they recorded, which
-    # asks deepagents where it offloads a result and how it names the file.
-    "kingfisher.infrastructure.harness.ledger",
-    "kingfisher.infrastructure.harness.tool_guards",
-    "kingfisher.infrastructure.harness.checkpointing",
-    "kingfisher.infrastructure.harness.kinds.declared_middleware",
-    "kingfisher.infrastructure.harness.runlog",
-    "kingfisher.infrastructure.harness.runtime",
-    "kingfisher.infrastructure.harness.kinds.subagents",
-    # A subclass of langchain's `StructuredTool`, so langchain by definition -- but only
-    # `langchain_core`, none of the provider SDKs, which is what keeps `tool` light.
-    "kingfisher.infrastructure.harness.audienced_tool",
-    # The application layer's half: what a turn needs on the way to running one. Each
-    # is imported by `service` and by nothing else, so being heavy costs no caller that
-    # was not already paying -- which is why these are a fact recorded rather than a
-    # list to work down.
-    "kingfisher.application.reporting",
-    "kingfisher.application.run",
-    "kingfisher.application.service",
-    "kingfisher.application.turn",
-})
+#: What building or running an agent loads, and what makes it cost a second and about
+#: 3,100 modules to import. `langchain_core` is not here: `kingfisher.tool` subclasses
+#: its `StructuredTool`, and every tool file that says who may use it imports that name.
+AGENT_RUNTIME = ("deepagents", "langgraph", "langchain", "langchain_openai", "langchain_anthropic")
 
+#: The modules a deployment imports by name.
+PUBLIC = ("kingfisher",)
 
-def _runtime_loaded_by(module: str) -> frozenset[str]:
-    """Which of the agent runtime's packages `import <module>` pulls in.
-
-    The runtime is `THIRD_PARTY["infrastructure/harness"]` rather than a list of its
-    own, so a package added to the swap boundary is watched here by arriving there.
-    """
-    runtime = THIRD_PARTY["infrastructure/harness"]
-    found: set[str] = set()
-    for name in _module_closure(module):
-        at_import, _ = _imports_by_scope(_module_paths()[name])
-        found |= {dotted.split(".")[0] for dotted in at_import} & runtime
-    return frozenset(found)
-
-
-def test_only_the_named_modules_load_a_provider_sdk():
-    """A module that quietly starts costing a second and three SDKs to import.
-
-    The light and heavy export rules watch the front door, which is every name a
-    consumer reaches; this watches the other eighty-odd modules, where the same
-    regression is a module-scope import somebody added two files away.
-    """
-    loading = {module for module in _module_paths() if _runtime_loaded_by(module)}
-
-    started = sorted(loading - SDK_LOADING)
-    stopped = sorted(SDK_LOADING - loading)
-
-    assert not started, (
-        f"{started} load a provider SDK and are not in SDK_LOADING — either the import "
-        "that did it belongs inside a function, or add the name here and say why"
-    )
-    assert not stopped, (
-        f"{stopped} are in SDK_LOADING and load nothing — take them out; a table with a "
-        "dead name in it stops describing the tree"
-    )
-
-
-#: One module from each side of that rule, imported for real below. The skill registry is
-#: the negative that matters: it is the one kind module that names the runtime, and it
-#: touches deepagents only once one of its functions is called, deferring those imports
-#: to say so -- while the index that narrows skills imports it at the top.
-SDK_WITNESSES = {
-    "kingfisher.infrastructure.harness.middlewares.narrowing": True,
-    "kingfisher.kinds.skills.registry": False,
-}
-
-
-def test_what_the_sdk_rule_computes_is_what_an_import_does():
-    """Driven, because the rule above reads a graph and the claim is about a process.
-
-    Both directions, and the negative is the one that matters: a computation that
-    answered "yes" for everything would pass a rule checking only that the heavy ones
-    are heavy.
-    """
-    import json
-    import subprocess
-
-    runtime = sorted(THIRD_PARTY["infrastructure/harness"])
-    for module, expected in sorted(SDK_WITNESSES.items()):
-        assert module in _module_paths(), f"{module} is not a module, so this proves nothing"
-        probe = (
-            f"import json, sys, importlib; importlib.import_module({module!r}); "
-            f"print(json.dumps(sorted(set({runtime!r}) & {{m.split('.')[0] "
-            "for m in sys.modules})))"
-        )
-        out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
-            [sys.executable, "-c", probe], capture_output=True, text=True, check=True
-        )
-        real = bool(json.loads(out.stdout))
-
-        assert real == expected, (
-            f"importing {module} {'loads' if real else 'loads none of'} the agent "
-            f"runtime, and the rule above computes the opposite"
-        )
-        assert bool(_runtime_loaded_by(module)) == real, (
-            f"{module}: the graph and the interpreter disagree"
-        )
-
-
-def test_importing_kingfisher_does_not_pull_in_deepagents():
-    """The point of the lazy re-exports: a consumer that only touches domain types
-    should not pay a second for three provider SDKs.
-    """
-    import subprocess
-    import sys
-
-    probe = "import sys, kingfisher; print('deepagents' in sys.modules)"
-    out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
-        [sys.executable, "-c", probe], capture_output=True, text=True, check=True
-    )
-    assert out.stdout.strip() == "False"
-
-
-#: Exports that must stay reachable without loading a provider SDK. Measured,
-#: not guessed: each is 6-9ms and ~90 modules, against 817-1157ms and ~3100 for
-#: the heavy ones.
-LIGHT_EXPORTS = frozenset({
-    "Capabilities", "Config", "ConfigError", "Request", "RunEvent", "RunOn",
-    "RunResult", "SessionInfo",
-    # Answering an approval gate. Light, and it has to stay light for the reason
-    # the contracts below are: these are frozen dataclasses in `domain`, and a
-    # consumer deciding whether to approve a call should not load an agent runtime
-    # to read what the call was.
-    "PendingDecision", "Resume", "Decision",
-    # A recorded result, on the same result and as light, for the same reason.
-    "LedgerEntry",
-    # The errors a caller must tell apart. Public so a consumer outside the package can
-    # catch them by name -- the server being the first such consumer.
-    "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError",
-    "SessionBusyError", "SubagentError", "UnknownSessionError",
-    "UnsafeReferenceError",
-    # `AgentError` is the one of these the command takes at its own address rather than
-    # through the door, since no consumer outside the wheel has asked for it. Light
-    # where `SubagentError` is: `kinds.agents.spec` is 23ms and 103 modules with no
-    # deepagents, measured.
-    "AgentError",
-    # The runner's kit and the result type a runner builds. Light by the same
-    # route: `testing` reaches the standard library, and `CommandResult` is a
-    # frozen dataclass in `domain.ports`.
-    "COMMAND_RUNNER_CONTRACT", "CommandResult",
-    # What a runner's shell says of itself, built beside the runner. A frozen dataclass
-    # in `prompting`, which reaches `layout` and the standard library.
-    "ShellPrompt",
-    "ensure_definitions", "config_from_env",
-    # What a `KINGFISHER_ADAPTERS_FACTORY` returns. Light because the setting is read
-    # by `config_from_env`, and a row names its class as a string for exactly this.
-    "Adapter", "Landing",
-    # What `doctor` silences while it loads a configuration, because its own
-    # `credentials` check says the same thing. Beside `ConfigError` in
-    # `kingfisher.config`, and as light: a `UserWarning` subclass and nothing else.
-    "MissingCredentialsWarning",
-    # Asking the host what it can fence with, either way round.
-    "bubblewrap_available",
-    # The fence's own module, which `doctor` asks what the kernel can fence with
-    # rather than asking the kernel itself. `ctypes`, a syscall and the standard
-    # library, no dependency at all -- and it has to stay that way, because it
-    # runs on hosts where the fence is not installed to say whether installing
-    # one would help.
-    "confinement",
-    # The directory half of a configuration, and the record it returns. Light
-    # because seeding a fresh workspace runs on them before anything is loaded
-    # -- paying for three provider SDKs to find out where `skills/` goes would
-    # be the wrong shape entirely.
-    "paths_from_env", "WorkspacePaths",
-    # Seeding, and asking what a workspace offers. Measured at 21-50ms and 148-192
-    # modules with no SDK loaded -- heavier than `system_prompt` at 90, because `yaml`
-    # and `importlib.metadata` come with them, and nowhere near the 3,100 a provider
-    # costs.
-    "seed", "definitions_source", "kinds_at", "Seeded", "inventory", "Inventory",
-    # The two tables behind a skipped definition's sentence. Two dicts of strings,
-    # so light by construction. `Seeded.report` writes the sentence and three
-    # callers print it; the command reaches for the tables directly because it
-    # says one more thing with them -- what `nothing seeded` means.
-    "UNCONSULTED", "REMEDY",
-    # Where a deployment reads from. Light for the reason `paths_from_env` is:
-    # the question "which directories?" must not cost three provider SDKs, and
-    # this one is asked by `doctor`, by a listing, and by anybody debugging a
-    # definition that will not load.
-    "Origins", "Origin",
-    # Reads `/proc/mounts` and two cgroup files. Nothing imported, and
-    # all-`None` off Linux rather than an error.
-    "memory_backing",
-    # What it answers with. `doctor` reads two of these -- the sessions tree and
-    # the workspace -- and names the type to hold them, which a module of frozen
-    # dataclasses over the standard library costs nothing to reach.
-    "MemoryBacking",
-    # Where a workspace keeps its sessions, which is what `doctor` measures: the
-    # workspace's own device is the wrong answer the moment one is mounted at
-    # `<workspace>/sessions`. A `Path` join in `domain.session`, which reaches
-    # `domain.ports` and the standard library.
-    "sessions_root",
-    # A renderer and a sentence. Both are what a consumer needed and neither
-    # imports anything -- the cheapest names on this list.
-    "offered", "SKILL_LAYOUT", "DEFINITION_KINDS", "SEED_HINT", "split_reference",
-    # The access policy, its report, its error and the sentinel for running
-    # without a caller. `domain.access` imports `domain.fields` and
-    # `domain.capabilities` and nothing else, which is the point of it being a
-    # domain module: deciding who reaches what must not cost a provider SDK,
-    # because a deployment resolves a grant on every turn.
-    "AccessError", "UNSCOPED", "Held", "AUDIENCED", "Audience",
-    # Writing one out. Published for the same reason `ALL` below is: the command
-    # prints audiences, an audience entry may be a conjunction, and a second
-    # spelling in the printer is how a refusal quoting one stops matching the
-    # listing showing it.
-    "spell",
-    # The `"*"` sentinel itself, published because the command prints an
-    # audience and has to tell "everyone" from a list of names. Reaching into
-    # `domain.capabilities` for it is what the consumer rule forbids.
-    "ALL",
-    # Reaching it costs nothing; calling it may write a sandbox profile,
-    # which is the same light-to-reach / heavy-to-call split `inventory` has.
-    "shell_confinement", "Confinement",
-    # What `doctor` asks about `.harness`: whether this host's sandbox keeps the
-    # shell out of it. `doctor` is meant to run where a turn would not, so asking
-    # must not load the agent runtime -- which is why it lives beside
-    # `shell_confinement` rather than beside the backend it is about.
-    "harness_unfenced",
-    # The mechanisms `doctor` tells apart when it says whether the shell can read the
-    # keys file or a process's starting environment. Constants, so nothing to load.
-    "LINUX_FENCES", "SANDBOX_EXEC",
-    # Where the profile's rules say the sessions are, which `doctor` asks so its
-    # `session paths` row names the same root the rules do rather than a second
-    # spelling of it. `sessions_root` over `pathlib` and nothing else.
-    "fenced_sessions",
-    # Light only while `host_paths` names no runtime class. `HostPathGuard` is the
-    # langchain half of that mechanism and lives with the rest of the middleware;
-    # defined beside the error it catches, it made raising the error cost 250ms and
-    # ~970 modules.
-    "HostPathError",
-    # Light only while it is defined apart from the backend it carries. A tool file
-    # imports it for an annotation, and so does that tool's own test. Measured: 11ms
-    # and 82 modules where it is, against 1.1-1.3s and three provider SDKs beside
-    # `PermittedBackend`, which subclasses a deepagents class.
-    "ToolContext",
-    # Light for the reason `ToolContext` is, and it matters more: every tool file that
-    # says who may use it imports this, and `kingfisher list` loads every tool file.
-    "tool",
-    # How `--datazone` joins `--as`. A function over the domain's own types, and the
-    # command reaches it on every verb that takes a caller, `list` among them.
-    "with_datazone",
-})
-
-#: The rest, which genuinely need deepagents to do their job.
-HEAVY_EXPORTS = frozenset({
-    # Heavy to reach as well as to call: it lives beside `indistinct_subagents`
-    # in the harness, which imports deepagents at module scope. 868ms and 3,137
-    # modules, measured -- which is why `doctor` imports it inside the check
-    # rather than at the top of `health`, where every other verb would pay it.
-    "unrunnable_subagents",
-    # Its agent twin, beside it in the same module and heavy by the same route:
-    # 1,074ms and 3,162 modules, measured, which is why `doctor` imports both inside
-    # the check rather than at the top of `health`.
-    "unrunnable_agents",
+#: The public names whose job is building or running an agent, or checking an object
+#: deepagents has to accept -- the only ones that may load the runtime to be reached.
+RUNS_AN_AGENT = frozenset({
     "Kingfisher", "run", "stream",
-    # The default's class and its per-directory builder, and the command line's way to
-    # the backends a setting names: all three are the backend module, which is
-    # deepagents by definition, as `default_backends` below is.
-    "DefaultBackends", "backend_at", "configured_backends",
-    # Where `kingfisher run --log` keeps a turn's events: beside the logger sink it is
-    # the file twin of, in the harness module that turns callbacks into events.
-    "JsonlRunEvents",
-    # Its companion kit checks what a deployment's backends build, which are backends
-    # deepagents has to accept.
-    "SESSION_BACKENDS_CONTRACT",
-    # Heavy, and unavoidably: `COMMAND_RUNNER_CONTRACT` describes a port a
-    # deployment satisfies without knowing deepagents exists, and this one checks
-    # an object deepagents has to accept.
-    "BACKEND_CONTRACT",
-    # It builds a `CompositeBackend` over a confined shell, so it is deepagents by
-    # definition. Every consumer that names it was already paying for `Kingfisher`
-    # on the same line, so nothing new arrives with it.
-    "default_backends",
+    "DefaultBackends", "default_backends", "backend_at",
+    "BACKEND_CONTRACT", "SESSION_BACKENDS_CONTRACT",
 })
 
-PROVIDER_SDKS = ("deepagents", "langchain", "langchain_openai", "langchain_anthropic")
+#: What the command may load before it knows which verb it is running: it reads `.env`
+#: and YAML for every one of them.
+THE_COMMAND_LOADS = frozenset({"dotenv", "yaml"})
 
 
-def _cli_reaches() -> dict[str, str]:
-    """Names the command takes at their own address, and where each one lives."""
-    found: dict[str, str] = {}
-    for path in sorted(CONSUMERS["cli"].rglob("*.py")):
-        for module, names in _imported_names(path).items():
-            if _reaches_past_the_public_api(module):
-                found.update(dict.fromkeys(names, module))
-    return found
+def _installed_after(code: str) -> frozenset[str]:
+    """The installed packages a fresh interpreter holds once it has run `code`.
 
-
-def _watched() -> dict[str, str]:
-    """Every name a consumer pays to import, and the module that defines it."""
-    import kingfisher
-
-    return {**kingfisher._EXPORTS, **_cli_reaches()}
-
-
-def test_every_watched_name_is_classified_light_or_heavy():
-    """So a new export cannot slip past the rule below by not being listed."""
-    assert set(_watched()) == LIGHT_EXPORTS | HEAVY_EXPORTS, (
-        "a name a consumer imports must be in LIGHT_EXPORTS or HEAVY_EXPORTS — if "
-        "it needs deepagents it is heavy, otherwise keep it light and say so here"
-    )
-
-
-def test_a_name_the_command_took_private_is_still_watched():
-    """The half of the re-keying that a passing tree cannot show.
-
-    `set(_EXPORTS)` and `set(_watched())` agree on every name but the ones the command
-    took at their own address, so the rule above passes under either key and reverting
-    to the old one removes the coverage silently.
+    Installed rather than "outside the standard library": `sys.modules` also holds a
+    virtualenv's site hook and the names a Cython extension registers, and neither is a
+    package anything chose to import.
     """
-    import kingfisher
-
-    private = set(_watched()) - set(kingfisher._EXPORTS)
-
-    assert private, (
-        "no name is reached past the front door, so this rule is about nothing -- "
-        "if the last one came back on, the union in `_watched` can go too"
-    )
-    assert private <= LIGHT_EXPORTS | HEAVY_EXPORTS
-    assert "Confinement" in private, (
-        "`Confinement` is the worked example: private, still imported by `doctor`, "
-        "and light only for as long as something checks"
-    )
-
-
-def test_a_light_export_stays_light():
-    """Touching a light name must not load a provider SDK."""
     import subprocess
-    import sys
+    from importlib.metadata import packages_distributions
 
-    light = {name: module for name, module in _watched().items() if name in LIGHT_EXPORTS}
-    probe = (
-        "import sys, importlib, kingfisher\n"
-        f"for name, module in sorted({light!r}.items()):\n"
-        "    if name in kingfisher.__all__:\n"
-        "        getattr(kingfisher, name)\n"
-        "    else:\n"
-        "        getattr(importlib.import_module(module), name)\n"
-        f"print(','.join(m for m in {PROVIDER_SDKS!r} if m in sys.modules))"
-    )
+    probe = f"{code}\nimport sys\nprint('\\n'.join(sys.modules))"
     out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
         [sys.executable, "-c", probe], capture_output=True, text=True, check=True
     )
+    top = {line.split(".")[0] for line in out.stdout.splitlines()}
+    return frozenset(top & packages_distributions().keys()) - {"kingfisher"}
 
-    assert out.stdout.strip() == "", (
-        f"a light export pulled in {out.stdout.strip()} — find which name did it "
-        "and either move its module off the foreign import, or reclassify it heavy"
+
+def _touching(qualified: set[str]) -> str:
+    """Code that reaches each `module.name`, the way a consumer's import would."""
+    return "\n".join(f"import {q.rpartition('.')[0]}; {q}" for q in sorted(qualified))
+
+
+def _the_command() -> str:
+    """The module the `kingfisher` command starts in, as `pyproject.toml` names it.
+
+    Read from there rather than written here, so moving the command cannot leave this
+    rule importing a module that no longer starts anything.
+    """
+    import tomllib
+
+    project = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    return project["scripts"]["kingfisher"].partition(":")[0]
+
+
+def test_importing_kingfisher_loads_nothing_installed():
+    """A consumer that only touches a request or a result paying for packages it never uses."""
+    assert _installed_after("import kingfisher") == frozenset()
+
+
+def test_the_command_starts_without_the_agent_runtime():
+    """`kingfisher help` spending a second to print text, because one verb's import moved
+    to the top of a module every verb loads.
+    """
+    loaded = _installed_after(f"import {_the_command()}")
+
+    assert loaded <= THE_COMMAND_LOADS, (
+        f"starting the command loads {sorted(loaded - THE_COMMAND_LOADS)} before it knows "
+        "which verb it runs -- import it inside the verb that needs it"
+    )
+
+
+def test_a_public_name_that_runs_no_agent_loads_no_runtime():
+    """A config, request or result type that starts costing a second, because a module two
+    imports away gained a top-level import of the runtime.
+    """
+    import importlib
+
+    cheap = {
+        f"{module}.{name}"
+        for module in PUBLIC
+        for name in importlib.import_module(module).__all__
+        if name not in RUNS_AN_AGENT
+    }
+    assert cheap, "no public name is left to check, so this rule is about nothing"
+
+    loaded = set(AGENT_RUNTIME) & _installed_after(_touching(cheap))
+    # One process for all of them, and one each only once that is red: sixty fresh
+    # interpreters on every run would buy nothing but the name of a culprit there is not.
+    culprits = (
+        sorted(q for q in cheap if set(AGENT_RUNTIME) & _installed_after(_touching({q})))
+        if loaded
+        else []
+    )
+
+    assert not loaded, (
+        f"{culprits} load {sorted(loaded)} -- move the import that does it inside the "
+        "function that needs it, or, if the name's job is running an agent, add it to "
+        "RUNS_AN_AGENT"
+    )
+
+
+def test_every_name_allowed_the_runtime_is_public():
+    """A name left in `RUNS_AN_AGENT` after it was renamed or removed, excusing nothing."""
+    import importlib
+
+    public = {name for module in PUBLIC for name in importlib.import_module(module).__all__}
+    dead = sorted(RUNS_AN_AGENT - public)
+
+    assert not dead, f"{dead} are in RUNS_AN_AGENT and are not public -- take them out"
+
+
+def test_the_runtime_check_sees_the_runtime():
+    """A misspelt `AGENT_RUNTIME` entry, which the rules above could never see loaded.
+
+    Driven on a name that really builds an agent, and every entry asserted rather than any
+    one: a check that answered "nothing loaded" for everything would pass all three rules
+    above.
+    """
+    loaded = _installed_after(_touching({"kingfisher.Kingfisher"}))
+
+    assert set(AGENT_RUNTIME) <= loaded, (
+        f"reaching `Kingfisher` loads none of {sorted(set(AGENT_RUNTIME) - loaded)}, so "
+        "those entries are misspelt or no longer part of the runtime"
     )
 
 

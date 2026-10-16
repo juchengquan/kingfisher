@@ -71,6 +71,10 @@ slices land.
   bring skills of its own while the skills kingfisher read and the skills the agent
   sees stay one list. The check it rests on has landed; the feature waits for a
   deployment that needs it.
+- [Core and plugins](design/2026-10-16-core-and-plugins.md) — replacing the four layers
+  with a core, six plugins that each ship a default, and the command, so that what a
+  deployment may replace is one list. The startup check landed with it; the rest is
+  sixteen slices, renames first and moves after.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
