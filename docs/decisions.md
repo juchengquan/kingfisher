@@ -3205,6 +3205,31 @@ subagents holding the workspace's tools with the guard only on the parent.
 *(2026-08-18 as `a-tool-failure-is-not-a-crash.md`; shipped, and the file removed
 2026-08-31.)*
 
+**What a deployment's own middleware raises is not this guard's to convert, and it
+cannot tell.** `WorkspaceToolErrors` catches whatever `handler(request)` raises, and a
+deployment's middleware is below it -- appended last, so it sees the narrowing
+kingfisher applied. So the asymmetry above is reinstated for a deployment hook that
+falls over, pointing the other way: driven with a registered middleware whose
+`wrap_tool_call` raises, the call to a workspace tool came back as `status="error"` and
+the run finished, while the same middleware on `read_file` ended the turn with the raw
+`RuntimeError`. The surviving half carries the tool's name, so the deployment's fault
+reads as the tool's.
+
+Left as it is, and written down instead. Telling the two apart needs a marker across
+the boundary -- something below the deployment block to tag the tool's own exceptions,
+and this guard converting only what is tagged -- which means interleaving `tool_guards`
+with the deployment middleware in each of the three graphs whose stacks are pinned to
+its order. That carries a decision rather than a correction: whether a hook that falls
+over should end every turn or none of them. The middleware guide says what happens
+today.
+
+**The same placement hands a hook host paths.** Nearest the tool is below
+`WorkspaceToolPaths`, so a deployment's `wrap_tool_call` is handed the rewritten
+argument: driven, the model wrote `line_count(path="/inputs/n.txt")` and the middleware
+saw the absolute session path. The recorder states this question for itself and answers
+it by position; for a deployment hook the answer is the opposite one, and it was written
+nowhere. *(2026-10-16, from an architecture review.)*
+
 **A workspace tool is handed real paths, resolved against its own session.**
 `WorkspaceToolPaths` rewrites a `path` argument before the tool sees it, so
 `/data/config.ini` means the same thing to a workspace tool as it does to
@@ -7156,6 +7181,25 @@ siblings in that document carry one; `kingfisher seed` was said to need only
 contract kit's import cost was written as 103 modules against 3,104 measured,
 understating it thirtyfold. A measurement in prose rots one way -- the number that made
 the argument is the number nobody re-runs. *(2026-10-16, from an architecture review.)*
+
+*Two stated reasons corrected the same week, both found by mutation rather than by
+reading.* The recorder's docstring called its position first in `tool_guards` the source
+of three properties that position needed to give. Moved last, exactly one test notices:
+`test_the_arguments_recorded_are_the_ones_the_model_wrote`. Being inside deepagents'
+eviction comes from being custom middleware at all, since deepagents lands every custom
+entry after the last of its own core ones and the eviction is `FilesystemMiddleware`'s;
+recording what a deployment's middleware left comes from that middleware being appended
+after everything else, held by `test_what_a_deployments_middleware_left_is_recorded` --
+move the deployment block to the front and that test fails along with the one naming the
+narrowing, and nothing else does. Then `_unmapped` in `shell_paths` said that removing
+deepagents' host paths by block rather than by cutting text makes
+`test_deepagents_host_paths_reach_only_a_shell_on_this_host` fail on a section merged
+into other prose. Matched by substring instead, that test passes and so does every other
+one in its file: it asserts the section is absent, which holds whichever way the section
+is removed. The premise is sound -- the parts cannot merge while deepagents appends this
+one and builds `FilesystemMiddleware` with no prompt of its own -- so that reason got the
+rule it was missing rather than a correction alone, and the rule bites on all three ways
+of half-cutting. *(2026-10-16, from an architecture review.)*
 Sixty-one module paths appear in `src/` prose. Resolved the way a reader does --
 sibling first, then the package root, then the tree -- twelve do not exist:
 **seven are illustrative** (`vendor_a/fetch.py` is a *workspace's* layout, not

@@ -81,6 +81,14 @@ class WorkspaceToolErrors(AgentMiddleware):
     Measured, on one deployment: the same mistake through `read_file` cost nothing,
     and through a workspace tool cost the run. Which of the two happened depended on the
     tool the model reached for, which the deployment cannot predict.
+
+    It cannot tell a tool's exception from one raised below it, and a deployment's own
+    middleware is below it -- appended last, so it runs nearest the tool. So that
+    asymmetry is reinstated for a deployment hook that falls over, pointing the other
+    way: driven with a registered middleware whose `wrap_tool_call` raises, the call to
+    a workspace tool came back as a failed result and the run carried on, while the same
+    middleware on `read_file` ended the turn. The surviving half also reads as the
+    tool's fault, because a failed result carries the tool's name.
     """
 
     def __init__(self, names: frozenset[str]) -> None:
