@@ -274,6 +274,11 @@ PORTABLE: frozenset[str] = frozenset(
         "tools",
         "skills",
         "metadata",
+        # The one key here that names something only a deployment knows. It names it
+        # without depending on it: a name the deployment's vocabulary lacks stops it
+        # at startup, naming the missing ids, and with no vocabulary the line is
+        # inert. Both fail loudly or not at all -- never a subagent quietly open.
+        "source_ids",
     }
 )
 
@@ -304,10 +309,6 @@ NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
             "decides where the prompt goes and whose credentials pay. A request pins "
             "any subagent's model by name with 'run_on', which is where the choice "
             "belongs"
-        ),
-        "source_ids": (
-            "it names ids from the deployment's source_ids.yaml. The agent that "
-            "grants this subagent carries the audience deciding who reaches it"
         ),
         "permissions": REFUSED["permissions"],
         "interrupt_on": REFUSED["interrupt_on"],
@@ -463,6 +464,7 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
         tools=None,
         carried=_carried(entry, read),
         metadata=read.mapping(entry.get("metadata"), key="metadata"),
+        source_ids=read.source_ids(entry.get("source_ids")),
     )
 
 

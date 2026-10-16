@@ -111,6 +111,50 @@ def test_every_refused_key_says_why_it_cannot_travel(key):
     assert NOT_PORTABLE[key] in str(raised.value)
 
 
+def test_a_portable_declaration_says_who_reaches_it():
+    """It was refused, so a deployment that writes its subagents as dicts had to put
+    the audience on every agent naming one -- the line one of them forgets.
+    """
+    entry = {
+        "name": "s",
+        "description": "d",
+        "system_prompt": "Go.",
+        "source_ids": ["A", {"B", "C"}],
+    }
+
+    assert declared(entry, "acme.py").source_ids == ("A", frozenset({"B", "C"}))
+
+
+def test_a_portable_subagent_is_built_only_for_a_caller_it_admits(cfg, session_dir):
+    """Driven through the real builder, and the dict deepagents receives is checked
+    for the key as well: kingfisher reads the audience, and nothing below it should.
+    """
+    from dataclasses import replace
+
+    import yaml
+
+    from kingfisher.domain.access import parse
+
+    write_portable(cfg, extra='    "source_ids": ["A"],')
+    policied = replace(
+        cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="source_ids.yaml")
+    )
+
+    def handed(held: str) -> list:
+        assembled = build_agent(
+            policied,
+            backend=backend_at(policied, session_dir),
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            capabilities=Capabilities(subagents=("surveyor",), tools=("shared",)),
+            held=frozenset({held}),
+        )
+        return [s for s in assembled.subagents or () if s["name"] == "surveyor"]
+
+    (admitted,) = handed("A")
+    assert "source_ids" not in admitted, "the audience reached deepagents"
+    assert handed("B") == []
+
+
 def test_a_compiled_subagent_as_deepagents_types_it_is_sent_to_build():
     """`runnable` was refused as a key "this format does not define", beside a list
     of what a declaration without `build` takes -- which sent the author of a

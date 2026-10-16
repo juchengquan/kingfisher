@@ -898,9 +898,9 @@ with no `build` is a declaration kingfisher assembles, restricted to what a
 definition can answer without seeing the deployment it lands in: `name`,
 `description`, `system_prompt`, `builtin_tools`, `tools`, `skills`, `metadata`.
 `tools` holds the tool objects and `skills` an absolute directory, never names. The
-four it may not write -- `subagents`, `middlewares`, `model`, `source_ids` -- each
-name something only one deployment knows, and each is refused with that reason
-rather than as an unknown key.
+three it may not write -- `subagents`, `middlewares`, `model` -- each name something
+only one deployment knows, and each is refused with that reason rather than as an
+unknown key. `source_ids` was the fourth; see the reversal below.
 
 **What it carries goes in the plain fields, not under `bundle`.** It was written
 `bundle: {tools: [...], skills: ...}`, the same key a document used to describe its
@@ -955,6 +955,20 @@ blank name rather than the missing one because that is the refusal the fold adde
 what the table is for is proving `doctor` reports it. The defect that entry needed was
 already written and filed nowhere: `a_portable_subagent_naming_a_model` had been sitting
 unreferenced since it was added. *(2026-09-27, from an architecture review.)*
+
+**Reversed: a declaration without `build` may not say who reaches it.** Refused on
+the reason the other three are, that it names ids from one deployment's vocabulary,
+with the agent granting the subagent left to carry the audience. That made a
+deployment writing its subagents as dicts -- translated from its own records, which
+already say who may use each one -- write the audience again on every agent naming
+the subagent, which is the line one of them forgets. The reason was also weaker for
+this key than for the others: a name the vocabulary lacks stops the deployment at
+startup, naming it, and with no vocabulary the line does nothing, so a subagent
+shipped from elsewhere fails loudly or not at all. The other three have no such
+check to fall back on. Taken now, read as a document's `source_ids:` is, and never
+handed to deepagents -- the spec deepagents receives is built from kingfisher's
+record, not passed through. Tools a declaration carries may say who they admit as
+well, through `kingfisher.tool`. *(2026-09-23. Reversed 2026-10-16.)*
 
 **What it carries is its own, and `builtin_tools` is the exception.** Carried
 tools reach that subagent and nothing else -- they enter no catalogue, so nothing
