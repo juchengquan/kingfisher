@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from kingfisher import backend_at
 from kingfisher.core.agent.interpreter import quieten_expected_snapshot_drop
+from kingfisher.plugins import backend_at
 
 LOGGER = "langchain_quickjs.middleware"
 

@@ -10,12 +10,13 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import LocalSessions, seed
+from kingfisher import seed
 from kingfisher.cli import health, health_isolation
 from kingfisher.cli.__main__ import main
 from kingfisher.cli.health import examine, worst
 from kingfisher.core.inventory import inventory
 from kingfisher.core.service import Kingfisher
+from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.sandbox.confinement import LINUX_FENCES
 from tests.conftest import an_agent, middlewares_dir, subagents_dir, tools_dir, verbs
 

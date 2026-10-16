@@ -30,7 +30,8 @@ workspace catalogue, and what it says there is yours.
 A request then names what it wants:
 
 ```python
-from kingfisher import Capabilities, LocalSessions, Request, run
+from kingfisher import Capabilities, Request, run
+from kingfisher.plugins import LocalSessions
 
 run(Request(
     task="Review the diff in /inputs/change.patch",

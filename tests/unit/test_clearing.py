@@ -27,7 +27,7 @@ from langchain_anthropic.chat_models import _format_messages
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately
 
-from kingfisher import Kingfisher, LocalSessions, Request
+from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.clearing import (
     DEFAULT_MARK,
@@ -46,6 +46,7 @@ from kingfisher.core.result import MAIN, LedgerEntry
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
 from kingfisher.core.session.transcript import from_json
+from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeToolCallingModel, an_agent, start, subagents_dir, tools_dir
 from tests.unit.scripted import Scripted

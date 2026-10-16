@@ -12,7 +12,6 @@ import yaml
 from deepagents.middleware import SubAgentMiddleware
 from langchain_core.messages import AIMessage, ToolMessage
 
-from kingfisher import LocalSessions, backend_at
 from kingfisher.cli.__main__ import main
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.access.source_ids import UNSCOPED, AccessError, parse
@@ -21,6 +20,7 @@ from kingfisher.core.agent.middlewares.narrowing import ToolAllowlist
 from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
 from kingfisher.core.session.steps import drive
+from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import (
     an_agent,

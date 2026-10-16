@@ -15,7 +15,6 @@ from deepagents import CompiledSubAgent, SubAgent
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
-from kingfisher import backend_at
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills, ToolAllowlist
@@ -31,6 +30,7 @@ from kingfisher.core.definitions.subagents.spec import (
     declared,
 )
 from kingfisher.core.definitions.tools.spec import tool_name
+from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, subagent_of
 from tests.unit.test_bundles import TOOL
 

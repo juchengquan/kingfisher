@@ -12,14 +12,7 @@ import yaml
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
 from langchain_core.messages import AIMessage
 
-from kingfisher import (
-    ArtifactError,
-    Kingfisher,
-    LocalSessions,
-    Request,
-    UnknownSessionError,
-    backend_at,
-)
+from kingfisher import ArtifactError, Kingfisher, Request, UnknownSessionError
 from kingfisher.cli.__main__ import main
 from kingfisher.core.access.source_ids import parse
 from kingfisher.core.definitions.catalogue import Definitions
@@ -38,6 +31,7 @@ from kingfisher.core.session.files import (
     read_artifact,
 )
 from kingfisher.core.session.steps import drive
+from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import Through, an_agent, pin, start
 from tests.unit.scripted import Scripted
 

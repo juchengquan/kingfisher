@@ -39,29 +39,6 @@ _EXPORTS = {
     "SessionBusyError": "kingfisher.core.session.model",
     "SubagentError": "kingfisher.core.definitions.subagents.spec",
     "UnsafeReferenceError": "kingfisher.core.agent.references",
-    "HostPathError": "kingfisher.core.agent.host_paths",
-    # What `LocalSessions` builds for one session, for a directory of the caller's
-    # choosing. Public because `ports.md` tells a deployment writing its own sessions
-    # to start from it rather than from nothing, and that has to be sayable from here.
-    "backend_at": "kingfisher.plugins.sessions.backend",
-    # Kingfisher's own sessions. Every `Kingfisher` is handed its sessions, so a
-    # deployment keeping these names them, and one building on them subclasses them:
-    # `ports.md` shows both, and the refusal of a plain function names it.
-    "LocalSessions": "kingfisher.plugins.sessions.backend",
-    # What a deployment's shell says of itself, which only the deployment knows: a
-    # runner is handed the command and nothing else, so the agent is told neutrally
-    # about any shell but kingfisher's own unless this says otherwise. Constructed by
-    # the deployment, so it has to be sayable from here.
-    "ShellPrompt": "kingfisher.core.agent.prompting",
-    # The seventh name a consumer has forced public, and the plainest: a
-    # `CommandRunner` returns one of these, so a deployment writing a runner
-    # cannot write one without it. `docs/guides/ports.md` documents the port and
-    # the only way to satisfy it was `from kingfisher.core.interfaces import
-    # CommandResult` -- reaching past the front door, which the consumer rule
-    # forbids. Found by the kit: the reference runner in
-    # `tests/unit/test_confinement.py`'s reference runner had to import it from
-    # somewhere.
-    "CommandResult": "kingfisher.core.interfaces",
     # What a workspace tool annotates `runtime` with to be handed the turn's backend:
     # `runtime: ToolRuntime[ToolContext]`. A tool file is a caller outside this
     # wheel by construction -- it lives in a deployment's workspace -- and the bare
@@ -74,9 +51,6 @@ _EXPORTS = {
     "UnknownSessionError": "kingfisher.core.session.model",
     "Config": "kingfisher.core.config",
     "WorkspacePaths": "kingfisher.core.config",
-    # What a `KINGFISHER_WIRE_FORMATS` returns rows of, so a deployment adding
-    # a wire format cannot write one without both.
-    "WireFormat": "kingfisher.core.config",
     "Landing": "kingfisher.core.config",
     "Kingfisher": "kingfisher.core.service",
     "ConfigError": "kingfisher.core.config",
@@ -107,9 +81,6 @@ _EXPORTS = {
     # command printed four of eleven places, `doctor` printed one, and a
     # library caller had no way to ask at all.
     "Origin": "kingfisher.core.origins",
-    # What `KINGFISHER_PLUGINS` returns, so a deployment's own module builds one without
-    # reaching past the door: `docs/guides/configuration.md` shows it.
-    "Plugins": "kingfisher.core.plugins",
     "Origins": "kingfisher.core.origins",
     "config_from_env": "kingfisher.core.environment",
     "paths_from_env": "kingfisher.core.environment",
@@ -123,22 +94,18 @@ __all__ = [
     "ArtifactError",
     "Capabilities",
     "CapabilityError",
-    "CommandResult",
     "Config",
     "ConfigError",
     "Decision",
     "DecisionError",
     "Held",
-    "HostPathError",
     "Inventory",
     "Kingfisher",
     "Landing",
     "LedgerEntry",
-    "LocalSessions",
     "Origin",
     "Origins",
     "PendingDecision",
-    "Plugins",
     "QuotaExceededError",
     "Request",
     "Resume",
@@ -148,14 +115,11 @@ __all__ = [
     "Seeded",
     "SessionBusyError",
     "SessionInfo",
-    "ShellPrompt",
     "SubagentError",
     "ToolContext",
     "UnknownSessionError",
     "UnsafeReferenceError",
-    "WireFormat",
     "WorkspacePaths",
-    "backend_at",
     "config_from_env",
     "definitions_source",
     "ensure_definitions",
@@ -178,14 +142,11 @@ if TYPE_CHECKING:
     from kingfisher.core.access.source_ids import AccessError as AccessError
     from kingfisher.core.access.source_ids import Held as Held
     from kingfisher.core.agent.audienced_tool import tool as tool
-    from kingfisher.core.agent.host_paths import HostPathError as HostPathError
-    from kingfisher.core.agent.prompting import ShellPrompt as ShellPrompt
     from kingfisher.core.agent.references import UnsafeReferenceError as UnsafeReferenceError
     from kingfisher.core.agent.tool_context import ToolContext as ToolContext
     from kingfisher.core.config import Config as Config
     from kingfisher.core.config import ConfigError as ConfigError
     from kingfisher.core.config import Landing as Landing
-    from kingfisher.core.config import WireFormat as WireFormat
     from kingfisher.core.config import WorkspacePaths as WorkspacePaths
     from kingfisher.core.definitions.seeding import Seeded as Seeded
     from kingfisher.core.definitions.seeding import definitions_source as definitions_source
@@ -195,12 +156,10 @@ if TYPE_CHECKING:
     from kingfisher.core.definitions.subagents.spec import SubagentError as SubagentError
     from kingfisher.core.environment import config_from_env as config_from_env
     from kingfisher.core.environment import paths_from_env as paths_from_env
-    from kingfisher.core.interfaces import CommandResult as CommandResult
     from kingfisher.core.inventory import Inventory as Inventory
     from kingfisher.core.inventory import inventory as inventory
     from kingfisher.core.origins import Origin as Origin
     from kingfisher.core.origins import Origins as Origins
-    from kingfisher.core.plugins import Plugins as Plugins
     from kingfisher.core.request import Decision as Decision
     from kingfisher.core.request import DecisionError as DecisionError
     from kingfisher.core.request import Request as Request
@@ -218,8 +177,6 @@ if TYPE_CHECKING:
     from kingfisher.core.session.model import SessionInfo as SessionInfo
     from kingfisher.core.session.model import UnknownSessionError as UnknownSessionError
     from kingfisher.core.workspace import ensure_definitions as ensure_definitions
-    from kingfisher.plugins.sessions.backend import LocalSessions as LocalSessions
-    from kingfisher.plugins.sessions.backend import backend_at as backend_at
 
 
 def __getattr__(name: str) -> Any:

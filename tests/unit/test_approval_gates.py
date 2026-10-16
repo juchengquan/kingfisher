@@ -17,12 +17,13 @@ from deepagents import create_deep_agent
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from kingfisher import Kingfisher, LocalSessions, backend_at
+from kingfisher import Kingfisher
 from kingfisher.core.layout import HARNESS, PAUSED_MARK, PAUSED_STATE
 from kingfisher.core.request import Decision, DecisionError, Request, Resume
 from kingfisher.core.result import AWAITING, DECISIONS, END_TURN
 from kingfisher.core.session.steps import drive
 from kingfisher.core.session.store import read_pause_mark, write_pause_mark
+from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import session_bytes
 from tests.conftest import FakeToolCallingModel, Through, harness_of
 

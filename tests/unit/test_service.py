@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from kingfisher import Kingfisher, LocalSessions, backend_at
+from kingfisher import Kingfisher
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
@@ -19,6 +19,7 @@ from kingfisher.core.request import Request
 from kingfisher.core.service import refused_credentials
 from kingfisher.core.session.steps import drive
 from kingfisher.core.session.turn import turn_message
+from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import (
     FAKE_ENDPOINT,

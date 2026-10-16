@@ -9,8 +9,8 @@ import json
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
-from kingfisher import backend_at
 from kingfisher.core.agent.assembly import build_agent
+from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, tools_dir
 
 STRING = '''

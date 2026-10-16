@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import backend_at
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.kinds.subagents import as_subagent
@@ -18,6 +17,7 @@ from kingfisher.core.agent.prompting import (
 from kingfisher.core.layout import INPUTS, OUTPUTS, SCRATCH, TOOL_RESULTS_ROUTE, Layout
 from kingfisher.core.session.store import entry_id
 from kingfisher.core.session.turn import ledger_delta, ledger_index
+from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, a_subagent
 
 

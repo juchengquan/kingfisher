@@ -7,10 +7,10 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import backend_at
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, a_subagent, middleware_of
 
 

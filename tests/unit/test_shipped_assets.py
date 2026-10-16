@@ -16,7 +16,6 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from kingfisher import backend_at
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent, declared_middleware
 from kingfisher.core.agent.kinds.declared_middleware import ByName
@@ -29,6 +28,7 @@ from kingfisher.core.definitions.subagents.catalogue import LocalSubagentReposit
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.core.definitions.tools.spec import Offering, out_of_reach
 from kingfisher.core.layout import SCRATCH
+from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, middleware_of, repository_root, subagent_of
 from tests.unit.test_subagent_helpers import _subagent, _tools_of
 

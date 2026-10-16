@@ -20,7 +20,7 @@ from deepagents.backends.protocol import BackendProtocol, SandboxBackendProtocol
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage
 
-from kingfisher import Kingfisher, LocalSessions, ToolContext, backend_at
+from kingfisher import Kingfisher, ToolContext
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.permitted_backend import PermittedBackend
@@ -29,6 +29,7 @@ from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 from kingfisher.core.request import Decision, Request, Resume
 from kingfisher.core.result import AWAITING
 from kingfisher.core.session import runtime
+from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import (
     FakeToolCallingModel,
     an_agent,

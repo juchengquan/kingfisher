@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import backend_at
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
@@ -16,6 +15,7 @@ from kingfisher.core.definitions.subagents.spec import (
     SubagentError,
     declared,
 )
+from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, declared_subagents
 
 COMPILED = '''"""A subagent the workspace assembled."""

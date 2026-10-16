@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import LocalSessions
 from kingfisher.cli.configured import configured_sessions
 from kingfisher.core.config import REMOVED_SETTINGS, RENAMED_SETTINGS, ConfigError
 from kingfisher.core.environment import Environment
 from kingfisher.core.interfaces import Sessions
 from kingfisher.core.wiring import store_named
+from kingfisher.plugins import LocalSessions
 
 HERE = __name__
 

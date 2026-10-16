@@ -43,7 +43,7 @@ def shell_prompt_of(backend: Any) -> ShellPrompt | None:
     if said is not None and not isinstance(said, ShellPrompt):
         msg = (
             f"{type(shell).__name__}.shell_prompt is a {type(said).__name__}; it has to be "
-            "a kingfisher.ShellPrompt, whose parts say where each piece of wording goes"
+            "a kingfisher.plugins.ShellPrompt, whose parts say where each piece of wording goes"
         )
         raise TypeError(msg)
     return said

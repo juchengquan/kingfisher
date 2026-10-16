@@ -6,10 +6,10 @@ from types import SimpleNamespace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import LocalSessions
 from kingfisher.core.result import END_TURN, STOP_REASONS
 from kingfisher.core.run import Request, RunResult, normalize_answer, run
 from kingfisher.core.service import Kingfisher
+from kingfisher.plugins import LocalSessions
 from tests.conftest import RecordedEvents, StubCheckpointer, start
 
 

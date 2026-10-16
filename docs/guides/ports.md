@@ -28,7 +28,7 @@ kingfisher = Kingfisher(cfg, sessions=LocalSessions(runner=my_runner), run_event
 construction site you control, and `kingfisher run`, `sessions`, `reap` and
 `artifact` build their own instance with nowhere to point it. `KINGFISHER_SESSIONS`
 is where they are told the sessions, and `KINGFISHER_PLUGINS` the rest, as a
-`kingfisher.Plugins` whose fields are the keywords above:
+`kingfisher.plugins.Plugins` whose fields are the keywords above:
 
 ```
 KINGFISHER_SESSIONS=mycompany.sessions:build_sessions
@@ -129,7 +129,7 @@ other shell is described neutrally — it may not see a file-tool path under tha
 or any other, so check before relying on one — until it says what is true of it:
 
 ```python
-from kingfisher import LocalSessions, ShellPrompt
+from kingfisher.plugins import LocalSessions, ShellPrompt
 
 SANDBOX = ShellPrompt(
     prompt="""## The shell
@@ -243,7 +243,8 @@ says which.
 Not optional. Every `Kingfisher` names them:
 
 ```python
-from kingfisher import Kingfisher, LocalSessions
+from kingfisher import Kingfisher
+from kingfisher.plugins import LocalSessions
 
 kingfisher = Kingfisher(cfg, sessions=LocalSessions())
 ```
@@ -308,7 +309,7 @@ refusal, the route table, the confinement and the housekeeping all survive witho
 your thinking about them:
 
 ```python
-from kingfisher import LocalSessions
+from kingfisher.plugins import LocalSessions
 
 class MySessions(LocalSessions):
     def open(self, cfg, session_id, /, *, catalogue=None):

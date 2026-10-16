@@ -11,7 +11,6 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.tools import StructuredTool, tool
 
 import kingfisher
-from kingfisher import LocalSessions, backend_at
 from kingfisher.core.access.capabilities import ALL
 from kingfisher.core.access.source_ids import AccessError, parse
 from kingfisher.core.agent.assembly import build_agent
@@ -20,6 +19,7 @@ from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolR
 from kingfisher.core.definitions.tools.spec import own_audience
 from kingfisher.core.inventory import inventory
 from kingfisher.core.service import Kingfisher
+from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import tools_dir
 

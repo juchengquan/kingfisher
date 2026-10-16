@@ -20,9 +20,10 @@ from deepagents import create_deep_agent
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from kingfisher import Kingfisher, LocalSessions
+from kingfisher import Kingfisher
 from kingfisher.core.request import Decision, Request, Resume
 from kingfisher.core.result import AWAITING, END_TURN
+from kingfisher.plugins import LocalSessions
 from tests.conftest import FakeToolCallingModel
 
 
@@ -206,7 +207,7 @@ def test_a_subagents_gate_is_answered_the_same_way(cfg, session_dir):
     """Approving it has to run the subagent's call, not the parent's -- the resume
     re-enters a nested graph, which is the part a top-level test cannot show.
     """
-    from kingfisher import backend_at
+    from kingfisher.plugins import backend_at
 
     kf = Kingfisher(
         cfg,
@@ -231,7 +232,7 @@ def test_a_subagents_gate_is_answered_the_same_way(cfg, session_dir):
 
 def test_rejecting_a_subagents_call_leaves_it_unrun(cfg, session_dir):
     """The half a test asserting only on the turn's end would miss."""
-    from kingfisher import backend_at
+    from kingfisher.plugins import backend_at
 
     kf = Kingfisher(
         cfg,

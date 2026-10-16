@@ -7,12 +7,12 @@ from dataclasses import replace
 import pytest
 import yaml
 
-from kingfisher import LocalSessions
 from kingfisher.core.access.capabilities import CapabilityError
 from kingfisher.core.access.source_ids import UNSCOPED, AccessError, parse
 from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
 from kingfisher.core.session.model import UnknownSessionError
+from kingfisher.plugins import LocalSessions
 from tests.conftest import Through, an_agent, pin, start
 
 VOCABULARY = "source_ids: [A, B]\n"

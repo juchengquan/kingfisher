@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import backend_at
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.activation import available_skills
 from kingfisher.core.agent.assembly import (
@@ -16,6 +15,7 @@ from kingfisher.core.agent.assembly import (
 )
 from kingfisher.core.definitions import seeding
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository, reachable
+from kingfisher.plugins import backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import a_subagent, repository_root, subagents_dir, tools_dir
 

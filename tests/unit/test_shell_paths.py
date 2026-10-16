@@ -13,7 +13,7 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.types import Command
 
-from kingfisher import Kingfisher, LocalSessions, Request, ShellPrompt
+from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.middlewares.shell_paths import (
     ABSOLUTE,
     MAPPINGS,
@@ -23,6 +23,7 @@ from kingfisher.core.agent.middlewares.shell_paths import (
 )
 from kingfisher.core.agent.prompting import execute_line, kingfishers_shell
 from kingfisher.core.layout import Layout
+from kingfisher.plugins import LocalSessions, ShellPrompt
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from tests.conftest import an_agent, start, subagents_dir
 from tests.unit.scripted import Scripted

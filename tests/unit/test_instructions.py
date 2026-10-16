@@ -5,10 +5,11 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import Kingfisher, LocalSessions, Request, backend_at
+from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.prompting import INSTRUCTIONS_FILE, InstructionsFile
 from kingfisher.core.config import ConfigError
+from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import an_agent, subagent_of, subagents_dir
 from tests.unit.scripted import Scripted
 

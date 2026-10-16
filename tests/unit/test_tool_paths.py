@@ -10,11 +10,11 @@ from typing import Any
 import pytest
 from langchain_core.tools import ToolException
 
-from kingfisher import backend_at
 from kingfisher.core.agent.host_paths import HOST_ROOTS
 from kingfisher.core.agent.middlewares.workspace_tools import WorkspaceToolPaths
 from kingfisher.core.agent.session_paths import NOT_FOR_TOOLS
 from kingfisher.core.agent.tool_guards import guarded_tools
+from kingfisher.plugins import backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import paths_in
 

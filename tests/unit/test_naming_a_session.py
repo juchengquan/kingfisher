@@ -9,10 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import Kingfisher, LocalSessions, Request, UnknownSessionError, backend_at
+from kingfisher import Kingfisher, Request, UnknownSessionError
 from kingfisher.cli.__main__ import main
 from kingfisher.core.layout import HARNESS, PINNED_AGENT, SESSION_DIRS
 from kingfisher.core.request import Decision, Resume
+from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import StubCheckpointer
 from tests.unit.test_files_for import DOORS, _turn

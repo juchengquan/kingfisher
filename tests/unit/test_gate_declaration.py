@@ -16,12 +16,12 @@ import pytest
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from kingfisher import backend_at
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.documents import DefinitionText
+from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, tools_dir
 
 WRITES = [

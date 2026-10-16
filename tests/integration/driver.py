@@ -342,7 +342,8 @@ def main(argv: list[str]) -> int:
     # printed again after the summary -- it arrived as it was written.
     # Deferred: this is the first thing that needs deepagents, and paths
     # that never get here (--help, --list, a bad .env) should not pay for it.
-    from kingfisher import Kingfisher, LocalSessions
+    from kingfisher import Kingfisher
+    from kingfisher.plugins import LocalSessions
 
     result = None
     recorded = _Recorded()

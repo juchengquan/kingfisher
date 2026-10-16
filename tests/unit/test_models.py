@@ -483,8 +483,9 @@ def test_the_startup_probe_still_refuses_the_question_it_exists_to_ask(cfg, monk
     tool wear a built-in's name -- and answers it with `CapabilityError`. Only
     `ConfigError` is suppressed, so the answer it exists for still stops the service.
     """
-    from kingfisher import Kingfisher, LocalSessions
+    from kingfisher import Kingfisher
     from kingfisher.core.access.capabilities import CapabilityError
+    from kingfisher.plugins import LocalSessions
     from tests.conftest import tools_dir
 
     monkeypatch.setenv("GATEWAY_API_KEY", "sk-not-real")
