@@ -13,10 +13,10 @@ from kingfisher.plugins.sessions.sandbox.confinement import (
     LINUX_FENCES,
     SANDBOX_EXEC,
     Confinement,
-    fenced_sessions,
     harness_unfenced,
     shell_confinement,
 )
+from kingfisher.plugins.sessions.sandbox.sandbox_exec import fenced_sessions
 
 #: Appended to every answer this check gives, because it qualifies all of them.
 FROM_CONFIG = " (from configuration; an injected runner is not visible here)"
