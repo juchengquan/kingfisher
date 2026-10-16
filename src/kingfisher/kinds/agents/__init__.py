@@ -19,7 +19,7 @@ three files where it covers one.
 What the other three earned their packages with is stated in *Not a module:
 middleware*: "a file somebody authors, a reader for it, and a registry built
 from what was found". An agent has all three -- `agents/*.yaml`, this `reading`,
-and `LocalAgentRepository` behind `AgentRepository` -- which is why it is here.
+and `LocalAgentRepository` -- which is why it is here.
 
 **It reaches no framework at all**, and `THIRD_PARTY` says so with an empty
 set. That is a consequence of leaving `harness/agent.py` where it was: an
@@ -27,9 +27,7 @@ agent's runtime half is not a kind's to hold.
 
 `spec` is the one file outside this directory's business to import. It is the
 format's vocabulary and has no adapter behind it, which is why `domain/` may
-name it -- `domain/ports.py` types `AgentRepository.specs` with it, beside the
-two siblings it already imports for the same reason. `catalogue` walks the disk;
-the domain may not import that.
+name it. `catalogue` walks the disk; the domain may not import that.
 
 No re-exports, as next door: each module is imported by name, so `spec`
 answering for the values is a fact about `spec` rather than about this file.

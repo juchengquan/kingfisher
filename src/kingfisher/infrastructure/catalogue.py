@@ -3,29 +3,22 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 from functools import cached_property
 from pathlib import Path
 
 from kingfisher.config import NO_MOUNTS, Config, ConfigError, definition_roots_for
 from kingfisher.domain.capabilities import ALL, SEPARATOR
-from kingfisher.domain.ports import (
-    AgentRepository,
-    MiddlewareRepository,
-    SkillRepository,
-    SubagentRepository,
-    ToolRepository,
-)
 from kingfisher.kinds.agents.catalogue import LocalAgentRepository
 from kingfisher.kinds.agents.spec import DIRECTORY as AGENT_DIRECTORY
-from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository, NoMiddleware
+from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository
 from kingfisher.kinds.skills import registry as skill_registry
 from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from kingfisher.kinds.skills.registry import SkillRegistry
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.rules import refuse_miscounted
 from kingfisher.kinds.subagents.spec import SubagentError
-from kingfisher.kinds.tools.catalogue import LocalToolRepository, ToolError
+from kingfisher.kinds.tools.catalogue import CarriedTools, LocalToolRepository, ToolError
 from kingfisher.kinds.tools.spec import Found, Offering
 from kingfisher.layout import RESERVED_SKILL_FOLDER
 
@@ -34,16 +27,11 @@ from kingfisher.layout import RESERVED_SKILL_FOLDER
 class Definitions:
     """This deployment's definitions: one repository per kind."""
 
-    agents: AgentRepository
-    skills: SkillRepository
-    subagents: SubagentRepository
-    tools: ToolRepository
-    #: Last and defaulted, unlike its four siblings, because it arrived after
-    #: them. `NoMiddleware` says what a deployment that offers none is offering;
-    #: a required field would have made every caller spelling the other four out
-    #: stop working, which is the breakage `from_config` reads roots with `.get`
-    #: to avoid.
-    middlewares: MiddlewareRepository = field(default_factory=NoMiddleware)
+    agents: LocalAgentRepository
+    skills: LocalSkillRepository
+    subagents: LocalSubagentRepository
+    tools: LocalToolRepository
+    middlewares: LocalMiddlewareRepository
 
     @cached_property
     def registry(self) -> SkillRegistry:
@@ -52,7 +40,7 @@ class Definitions:
         return skill_registry.read(self.skills)
 
     @cached_property
-    def bundled_tools(self) -> Mapping[str, ToolRepository]:
+    def bundled_tools(self) -> Mapping[str, LocalToolRepository | CarriedTools]:
         """Each subagent's own tools, by the name a grant would use."""
         bundles = self.subagents.bundles
         if not bundles:
@@ -233,12 +221,8 @@ def resolve_definitions(cfg: Config, supplied: Definitions | Path | None = None)
         # replaces the directories kingfisher would have read, not what it mounts.
         return Definitions.from_roots(definition_roots_for(folder), skills_mounts=cfg.skills_mounts)
 
-    # Only where there is something to check: a repository with a `root` of `None`
-    # has no directory that could be missing.
     roots = {kind: getattr(supplied, kind).root for kind in STAGED_KINDS}
-    if absent := tuple(
-        f"{kind} ({path})" for kind, path in roots.items() if path is not None and not path.is_dir()
-    ):
+    if absent := tuple(f"{kind} ({path})" for kind, path in roots.items() if not path.is_dir()):
         msg = (
             f"catalogue names {', '.join(absent)}, which is not a directory; "
             "a supplied catalogue is staged by whoever supplies it, and kingfisher "
@@ -296,7 +280,9 @@ def _misplaced_in(directories: tuple[Path, ...]) -> tuple[str, ...]:
     )
 
 
-def bundled_tool_names(name: str, repository: ToolRepository) -> tuple[str, ...]:
+def bundled_tool_names(
+    name: str, repository: LocalToolRepository | CarriedTools
+) -> tuple[str, ...]:
     """One subagent's own tool names, with a failure named by whose folder it was in.
 
     `probe.py: ModuleNotFoundError ...` is a basename in somebody's folder, and which

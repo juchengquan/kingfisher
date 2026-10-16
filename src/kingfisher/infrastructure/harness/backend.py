@@ -18,7 +18,7 @@ from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellB
 from deepagents.backends.protocol import ExecuteResponse
 
 from kingfisher.config import DEFAULT_LAYOUT, Config, ConfigError
-from kingfisher.domain.ports import CommandRunner, SkillRepository
+from kingfisher.domain.ports import CommandRunner
 from kingfisher.domain.session import session_dir, sessions_root, still_held
 from kingfisher.infrastructure.catalogue import Definitions, refuse_unmountable
 
@@ -37,6 +37,7 @@ from kingfisher.infrastructure.workspace.sessions import (
     ensure_session_layout,
     session_bytes,
 )
+from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
@@ -83,7 +84,7 @@ def shell_env(
     return env
 
 
-def skills_view(skills: SkillRepository, workspace: Path) -> Path:
+def skills_view(skills: LocalSkillRepository, workspace: Path) -> Path:
     """Where the shell finds the catalogue, so `/skills/X` is `$KINGFISHER_SKILLS/X`.
 
     The catalogue itself when nothing is mounted. With mounts, a directory of

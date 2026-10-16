@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import platform
 import shutil
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -13,7 +13,6 @@ from kingfisher.application import service as service_module
 from kingfisher.application.service import Kingfisher
 from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
-from kingfisher.domain.ports import SubagentRepository
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness.activation import (
@@ -24,8 +23,7 @@ from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import backend_at, default_backends
 from kingfisher.infrastructure.harness.kinds.tools import workspace_tool_names
 from kingfisher.kinds.middlewares.catalogue import MiddlewareError
-from kingfisher.kinds.skills.catalogue import reachable
-from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
+from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import SKILLS_ROUTE
 from tests.conftest import (
     FakeToolCallingModel,
@@ -249,8 +247,9 @@ def test_a_broken_middleware_module_fails_at_startup_too(cfg):
 
 
 def test_a_workspace_with_no_middleware_still_warms(cfg):
-    """The control beside it: `NoMiddleware` answers an empty mapping rather than
-    raising, so the read above must not turn "none offered" into a failure.
+    """The control beside it: a definitions folder with no `middlewares/` answers an
+    empty mapping rather than raising, so the read above must not turn "none offered"
+    into a failure.
     """
     Definitions.from_config(cfg).warm()
 
@@ -451,99 +450,6 @@ def test_listing_still_survives_a_definition_that_will_not_load(cfg):
 
     with pytest.raises(SubagentError):
         _ = catalogue.subagents.specs
-
-
-# -- a repository with no directory behind it ----------------------------
-
-
-@dataclass(frozen=True)
-class InMemorySubagents:
-    """A subagent store with no directory anywhere behind it."""
-
-    held: dict
-
-    @property
-    def names(self):
-        return tuple(self.held)
-
-    @property
-    def specs(self):
-        return self.held
-
-    # Nothing to say about a folder, and said rather than left off: a member the
-    # port declares is read without a default, so leaving one off is an error at
-    # the first reader instead of an empty answer.
-    @property
-    def root(self):
-        return None
-
-    @property
-    def bundles(self):
-        return {}
-
-    @property
-    def sources(self):
-        return {}
-
-    @property
-    def orphaned_assets(self):
-        return ()
-
-
-def _spec(name):
-    return SubagentSpec(
-        name=name, description="Supplied from memory.", system_prompt="You are supplied."
-    )
-
-
-def test_one_kind_can_be_swapped_without_touching_the_other_two(tmp_path, cfg):
-    """What the object bought."""
-    staged = _staged(tmp_path / "staged", skill="staged-only")
-    swapped = replace(staged, subagents=InMemorySubagents({"from-memory": _spec("from-memory")}))
-
-    assert isinstance(swapped.subagents, SubagentRepository)
-    assert swapped.subagents.names == ("from-memory",)
-    # untouched, and still reading the directory they were staged in
-    assert swapped.skills is staged.skills
-    assert [one.name for one in reachable(swapped.skills.root)] == ["staged-only"]
-
-
-def test_a_supplied_repository_needs_no_directory_to_be_accepted(cfg):
-    """The check `resolve_definitions` makes is about *staging*, and staging is
-    something only a directory-backed store does.
-    """
-    handed = replace(
-        Definitions.from_config(cfg), subagents=InMemorySubagents({"x": _spec("x")})
-    )
-
-    assert resolve_definitions(cfg, handed) is handed
-
-
-def test_the_agent_is_built_from_a_supplied_repository(cfg, session_dir):
-    """End of the chain, and the assertion that matters: nothing between the port and
-    the graph knows which kind of store answered.
-    """
-    catalogue = replace(
-        Definitions.from_config(cfg), subagents=InMemorySubagents({"ghost": _spec("ghost")})
-    )
-
-    defined = defined_subagents(cfg, catalogue=catalogue)
-
-    assert "ghost" in defined
-    assert defined["ghost"].system_prompt == "You are supplied."
-
-
-def test_the_other_two_kinds_need_no_directory_at_all(cfg, session_dir):
-    """Skills need a directory, because deepagents reads them off one and the shell runs
-    their scripts from it. That is about skills specifically, and it would be a bad
-    outcome if it quietly generalised: subagents are documents kingfisher parses and
-    tools are modules it imports, so neither reaches the agent through a route.
-    """
-    catalogue = replace(
-        Definitions.from_config(cfg), subagents=InMemorySubagents({"x": _spec("x")})
-    )
-
-    assert backend_at(cfg, session_dir, catalogue=catalogue) is not None
 
 
 def test_a_definition_that_will_not_parse_fails_at_startup_too(cfg):

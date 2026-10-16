@@ -23,7 +23,7 @@ from kingfisher.domain.capabilities import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from kingfisher.domain.ports import MiddlewareRepository
+    from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository
 
 
 #: `defaults` plus whatever the definition was allowed to write.
@@ -53,7 +53,7 @@ class ByName:
 
 
 def offered_middleware(
-    registered: Mapping[str, Any], workspace: MiddlewareRepository
+    registered: Mapping[str, Any], workspace: LocalMiddlewareRepository
 ) -> dict[str, Any]:
     """Both sources of middleware, as the one mapping a definition selects from.
 

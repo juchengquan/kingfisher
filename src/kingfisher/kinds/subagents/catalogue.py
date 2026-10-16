@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from kingfisher.kinds.documents import DefinitionText, documents_in
 from kingfisher.kinds.importing import (
@@ -19,9 +19,6 @@ from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.spec import EXPORT, SubagentError, SubagentSpec, declared
 from kingfisher.kinds.tools.catalogue import CarriedTools, LocalToolRepository
 from kingfisher.kinds.tools.spec import SEPARATOR, reference
-
-if TYPE_CHECKING:
-    from kingfisher.domain.ports import ToolRepository
 
 #: What a bundle's own assets are kept in, and therefore the two directory names that
 #: are not organisation here. A folder under `subagents/` is normally free -- it groups
@@ -73,7 +70,7 @@ class Holdings:
     carried: Mapping[str, Any] = field(default_factory=dict)
 
     @property
-    def tools(self) -> ToolRepository | None:
+    def tools(self) -> LocalToolRepository | CarriedTools | None:
         """This subagent's own tools, as the repository everything downstream asks.
 
         A repository rather than the directory it used to be, because the two

@@ -232,12 +232,10 @@ it to delete that session's thread — `delete_thread`, or `adelete_thread` on t
 path where the saver has one and on kingfisher's thread pool where it does not — and
 `reap` asks it to `list` its threads where it can, to find any no session owns.
 
-The definition repositories in `domain/ports.py` — one per kind, from
-`SkillRepository` to `MiddlewareRepository` — are not covered here, because they are
-not for replacing. They are what kingfisher builds from a catalogue's
-directories. Definitions kept somewhere else are staged into directories first, and
-the `KINGFISHER_*_DIR` settings in [configuration](configuration.md) say where each
-kind is read from.
+Definitions are not covered here, because how they are read is not for replacing:
+kingfisher reads each kind from a directory. Definitions kept somewhere else are staged
+into one first, and `KINGFISHER_DEFINITIONS_DIR` in [configuration](configuration.md)
+says which.
 
 ## `backends` — the filesystem the agent runs against
 

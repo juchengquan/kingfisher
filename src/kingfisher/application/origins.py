@@ -171,8 +171,6 @@ def _catalogue(cfg: Config, kind: str, catalogue: Definitions | None) -> Origin:
         return Origin("default", configured)
 
     root = getattr(catalogue, kind).root
-    if root is None:
-        return Origin("supplied")
     if root != configured:
         return Origin("overridden", root)
     return Origin("default", root)

@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from types import MappingProxyType
 from typing import Any
 
 from kingfisher.kinds.importing import (
@@ -99,31 +97,7 @@ class LocalMiddlewareRepository:
 
     @property
     def names(self) -> tuple[str, ...]:
-        """`AssetRepository`'s one member, so this reads like its siblings."""
         return tuple(entry.name for entry in self.found)
-
-
-@dataclass(frozen=True)
-class NoMiddleware:
-    """A deployment that has not offered any, said rather than defaulted to.
-
-    So that adding a fifth kind is not a breaking change for every caller that
-    spelled the other four out -- the reason `from_config` reads its roots with
-    `.get`. A repository over a path that does not exist would do the same while
-    claiming to have looked somewhere.
-    """
-
-    @property
-    def classes(self) -> Mapping[str, type]:
-        return MappingProxyType({})
-
-    @property
-    def names(self) -> tuple[str, ...]:
-        return ()
-
-    @property
-    def root(self) -> None:
-        return None
 
 
 def _refuse_unless_buildable(entry: Any, *, where: str) -> None:
