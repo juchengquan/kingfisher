@@ -152,7 +152,7 @@ def _private_tools(
     # A bundle is held whatever the request granted, and that is the only grant it
     # skips: a carried tool's own audience still shuts out a caller it does not admit.
     owned = tuple(
-        one for one in repository.found if held is None or reaches(one.source_ids, held)
+        one for one in repository.found if held is None or reaches(one.audience, held)
     )
     spec = catalogue.subagents.specs.get(name)
     if spec is None or spec.carried:

@@ -1329,6 +1329,28 @@ there is in the trace of every call. Measured on a `StructuredTool` subclass: th
 private attribute reaches neither `model_dump` nor a callback. The loaders read it by
 name, `AUDIENCE_ATTRIBUTE`, because `kinds/tools` may not import langchain. *(2026-10-16.)*
 
+**A datazone is a second field, held as one more name.** A caller is in at most one
+datazone, and a subagent or tool may require one; an agent may not, because it runs in
+whichever datazone its caller names. Written as a prefixed source id -- `datazone:finance`
+in `source_ids:` -- it would have needed no new field at all, and was turned down for
+that reason: the deployment that asked models the two as separate fields, a caller has
+exactly one datazone and any number of source ids, and folding the first into the second
+would leave "exactly one" to whoever builds the caller's list.
+
+Inside, it is one more name after all, and that is deliberate. A caller's datazone joins
+their expanded source ids as `datazone=finance` in `held_by`, and a definition's becomes
+one more name its audience requires -- so every check that already asks whether a caller
+reaches something asks this too, and the ledger stamps a zoned result with no new column.
+The prefix is refused as a source id, so no vocabulary declares one and no caller presents
+one. On its way in it rides among the caller's source ids as a `Datazone`, a `str`: the
+dozen doors between the public method and `held_by` pass it on unread, where a second
+parameter would have been one more each of them had to remember.
+
+A caller in no datazone reaches only what names none -- the closed answer, for the reason a
+call naming no caller is refused. No startup refusal for an agent naming a tool from
+another datazone: the tool is left out of that caller's build, and for a caller in the
+tool's own datazone the same agent works. *(2026-10-16.)*
+
 **Reversed: a central `access.yaml` listing every asset by name.** Built in full
 -- vocabulary, per-asset audiences, reconciliation against the catalogue, two
 load reports -- then replaced within the same branch. What killed it was not

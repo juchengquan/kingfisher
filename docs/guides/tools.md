@@ -147,6 +147,9 @@ not get the tool, and is not shown it by `kingfisher list` or the run report. A
 result the tool produces is recorded in the session's ledger under the tool's
 audience as well as the agent's.
 
+`datazone="finance"` says the one datazone a caller must also be in — see
+*Datazones* in [`formats.md`](formats.md). Left out, it is any.
+
 What comes back is a LangChain `StructuredTool`, and `description`, `args_schema`
 and `name` mean what they mean to `StructuredTool.from_function`. The source ids
 are kept off it: not in `metadata`, which LangChain hands to every callback, so

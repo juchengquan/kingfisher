@@ -56,6 +56,7 @@ from kingfisher.domain.access import (
     Held,
     SourceIds,
     reaches,
+    with_datazone,
 )
 from kingfisher.domain.capabilities import (
     UNRESTRICTED,
@@ -1174,6 +1175,7 @@ class Kingfisher(Sessions, Disposal):
         request: str | Request | Resume,
         *,
         source_ids: Held | None = None,
+        datazone: str | None = None,
         files: Any = None,
     ) -> Iterator[RunEvent]:
         """Run one task, yielding progress as it happens.
@@ -1188,7 +1190,9 @@ class Kingfisher(Sessions, Disposal):
         """
         # Coerced here, because setup reads the request's session id first and a bare
         # task string has none to read.
-        yield from self._stream_turn(_asked(request), source_ids=source_ids, files=files)
+        yield from self._stream_turn(
+            _asked(request), source_ids=with_datazone(source_ids, datazone), files=files
+        )
 
     @contextmanager
     def _turn_outcome(self, turn: _Turn) -> Iterator[None]:
@@ -1408,6 +1412,7 @@ class Kingfisher(Sessions, Disposal):
         request: str | Request | Resume,
         *,
         source_ids: Held | None = None,
+        datazone: str | None = None,
         delete_session: bool = False,
         files: Any = None,
     ) -> RunResult:
@@ -1428,7 +1433,7 @@ class Kingfisher(Sessions, Disposal):
         deleted because somebody closed a loop early. A drain has an after.
         """
         result: RunResult | None = None
-        for event in self.stream(request, source_ids=source_ids, files=files):
+        for event in self.stream(request, source_ids=source_ids, datazone=datazone, files=files):
             if event.kind == "finished":
                 result = event.result
         return drive(self._drained_steps(result, delete_session=delete_session))
@@ -1451,6 +1456,7 @@ class Kingfisher(Sessions, Disposal):
         request: str | Request | Resume,
         *,
         source_ids: Held | None = None,
+        datazone: str | None = None,
         files: Any = None,
     ) -> AsyncIterator[RunEvent]:
         """`stream`, for a caller already on an event loop. Cancelling is immediate.
@@ -1461,7 +1467,9 @@ class Kingfisher(Sessions, Disposal):
         passed as `threads=` needs `aget_tuple` and `aput`. Both refusals are
         loud, and neither reaches a caller of `stream`.
         """
-        turn = self._astream_turn(_asked(request), source_ids=source_ids, files=files)
+        turn = self._astream_turn(
+            _asked(request), source_ids=with_datazone(source_ids, datazone), files=files
+        )
         try:
             async for event in turn:
                 yield event
@@ -1476,6 +1484,7 @@ class Kingfisher(Sessions, Disposal):
         request: str | Request | Resume,
         *,
         source_ids: Held | None = None,
+        datazone: str | None = None,
         delete_session: bool = False,
         files: Any = None,
     ) -> RunResult:
@@ -1489,7 +1498,7 @@ class Kingfisher(Sessions, Disposal):
         drain gives the claim back one turn of the loop later either way, so the
         close would be a line nothing can observe. `findings.md` has the numbers.
         """
-        events = self.astream(request, source_ids=source_ids, files=files)
+        events = self.astream(request, source_ids=source_ids, datazone=datazone, files=files)
         result: RunResult | None = None
         async for event in events:
             if event.kind == "finished":

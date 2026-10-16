@@ -6,7 +6,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from kingfisher.domain.access import AccessError, AccessReport, _Unscoped, stated
+from kingfisher.domain.access import (
+    AccessError,
+    AccessReport,
+    Datazone,
+    _Unscoped,
+    stated,
+    zone_name,
+)
 from kingfisher.domain.capabilities import ALL
 
 if TYPE_CHECKING:
@@ -35,7 +42,10 @@ def held_by(
     if isinstance(source_ids, str):
         msg = f"source ids is a sequence of names, not a string -- write [{source_ids!r}]"
         raise AccessError(msg)
-    named = tuple(source_ids)
+    named = tuple(one for one in source_ids if not isinstance(one, Datazone))
+    zones = tuple(one for one in source_ids if isinstance(one, Datazone))
+    if zones:
+        return _zoned(vocabulary, named, zones)
     if vocabulary is None:
         # A name where nothing narrows expanded to nobody and went through
         # unrestricted, so `list --as marketing` printed the whole catalogue and
@@ -55,6 +65,29 @@ def held_by(
             raise AccessError(msg)
         return None
     return vocabulary.expand(named)
+
+
+def _zoned(
+    vocabulary: SourceIds | None, named: tuple[str, ...], zones: tuple[Datazone, ...]
+) -> frozenset[str]:
+    """What a caller in a datazone holds: their source ids, expanded, and the zone."""
+    if vocabulary is None:
+        msg = (
+            f"this deployment declares no datazones, so {zones[0]!r} narrows nothing. "
+            f"Declare it under 'datazones:' in source_ids.yaml, or pass no datazone"
+        )
+        raise AccessError(msg)
+    if len(zones) > 1:
+        msg = f"a caller is in one datazone, and this one named {', '.join(map(repr, zones))}"
+        raise AccessError(msg)
+    (zone,) = zones
+    if zone not in vocabulary.datazones:
+        msg = (
+            f"unknown datazone {str(zone)!r}; this deployment defines "
+            f"{', '.join(sorted(vocabulary.datazones)) or 'none'}"
+        )
+        raise AccessError(msg)
+    return vocabulary.expand(named) | {zone_name(zone)}
 
 
 def caller_holds(
@@ -101,6 +134,11 @@ def walked(*kinds: Kind) -> Iterator[tuple[str, str, Stated]]:
 def undeclared_in(specs: Mapping[str, object], *, kind: str, vocabulary: SourceIds) -> str | None:
     """The first definition naming a source id this deployment does not declare."""
     for _kind, name, said in walked((kind, specs)):
+        if said.datazone is not None and said.datazone not in vocabulary.datazones:
+            return (
+                f"{kind} {name!r}: names undeclared datazone {said.datazone!r}; this "
+                f"deployment defines {', '.join(sorted(vocabulary.datazones)) or 'none'}"
+            )
         for where, audience in (
             (f"{kind} {name!r}", said.source_ids),
             *(
@@ -128,7 +166,7 @@ def audit(*kinds: Kind, vocabulary: SourceIds) -> AccessReport:
     unrestricted: list[tuple[str, str]] = []
     narrowed: list[tuple[str, str]] = []
     for kind, name, said in walked(*kinds):
-        if said.source_ids == ALL:
+        if said.source_ids == ALL and said.datazone is None:
             unrestricted.append((kind, name))
         narrowed.extend(
             vocabulary.narrowing_in(
