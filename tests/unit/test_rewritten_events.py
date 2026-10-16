@@ -47,6 +47,22 @@ def test_a_message_the_conversation_already_held_is_not_announced_again():
     assert [(e.kind, e.text) for e in events] == [("tool_result", "more")]
 
 
+def test_a_step_that_writes_twice_reports_its_reply_and_not_its_rewrite():
+    """Clearing inside the model call makes the model node write twice -- the cleared
+    result under its old id, and the reply -- and langgraph streams that as a list of
+    writes. Read as one mapping it carried nothing, so the turn lost the model call."""
+    result = ToolMessage("ten results", tool_call_id="c1", name="web_search", id="t1")
+    seen = runtime.SeenMessages()
+    _events((), "values", {"messages": [HumanMessage("go", id="h1"), result]}, seen)
+
+    reply = AIMessage("done", id="a2", usage_metadata=USAGE)
+    cleared = result.model_copy(update={"content": "handle"})
+    writes = [{"messages": [reply]}, {"messages": [cleared]}]
+    events = _events((), "updates", {"model": writes}, seen)
+
+    assert [e.kind for e in events] == ["model_call"]
+
+
 def test_each_graph_is_judged_by_its_own_conversation():
     """A subagent's conversation is another graph's, streamed under its namespace: what
     the main agent holds does not make a subagent's message a rewrite, nor the reverse."""

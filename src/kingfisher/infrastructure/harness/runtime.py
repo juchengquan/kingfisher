@@ -174,6 +174,11 @@ def _event_for(message: Any) -> RunEvent | None:
 
 def messages_in(update: Any) -> list[Any]:
     """Messages carried by a node update, tolerating shapes that carry none."""
+    # A node that writes twice in one step streams its update as a list of writes: the
+    # model node does when clearing runs inside the call, the cleared results beside
+    # the reply. Read as one mapping, the list carried nothing and the reply was lost.
+    if isinstance(update, (list, tuple)):
+        return [message for write in update for message in messages_in(write)]
     if not isinstance(update, Mapping):
         return []
     messages = update.get("messages")
