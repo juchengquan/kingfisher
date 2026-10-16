@@ -37,7 +37,13 @@ BASE_PROMPT = "system.md"
 #: another -- `/scratchpad` is a prefix of `/scratchpad/tool_results`, and a blind
 #: replace would reach the wrong one. The fixed sub-leaves (`large_tool_results`,
 #: `conversation_history`) stay literal: only their parent scratchpad moves.
-_PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
+#: Anything between a doubled brace, not just a name that could be a leaf. `(\w+)`
+#: saw neither a space, a hyphen nor a dot, so `{{ inputs }}`, `{{tool-results}}` and
+#: `{{inputs.dir}}` were refused by nothing *and* filled by nothing: they reached the
+#: model as braces, in a prompt a deployment had customised and been told nothing
+#: about. One pattern for both readers on purpose -- the refusal below and `_fill`
+#: above -- so a blank either is wrong about is a blank the other reports.
+_PLACEHOLDER = re.compile(r"\{\{([^{}]*)\}\}")
 
 #: Where optional capability sections are spliced in. An HTML comment, so
 #: `system.md` stays a plain Markdown document that renders and edits normally.

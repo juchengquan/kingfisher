@@ -3,7 +3,13 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+from langchain_core.messages import AIMessage
+
+from kingfisher import backend_at
 from kingfisher.application.turn import ledger_delta, ledger_index
+from kingfisher.domain.capabilities import Capabilities
+from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.kinds.subagents import as_subagent
 from kingfisher.infrastructure.prompting import (
     USER_PROMPT_FILE,
@@ -13,7 +19,7 @@ from kingfisher.infrastructure.prompting import (
 )
 from kingfisher.infrastructure.session_store import entry_id
 from kingfisher.layout import INPUTS, OUTPUTS, SCRATCH, TOOL_RESULTS_ROUTE, Layout
-from tests.conftest import a_subagent
+from tests.conftest import FakeToolCallingModel, a_subagent
 
 
 def test_base_prompt_names_no_dataset_and_no_domain():
@@ -317,6 +323,89 @@ def test_the_prompt_does_not_promise_other_sessions_are_out_of_reach():
         for memory in (False, True):
             text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
             assert "another session's files" not in text
+
+
+def test_the_prompt_claims_about_inputs_only_what_holds_with_no_fence():
+    """It said writes under the inputs folder are denied "at the tool level **and by
+    the filesystem itself**". The second half is a fence, and `off` and `external` are
+    supported settings: measured, with the sandbox off, `chmod u+w` and the same write
+    replaced the caller's file and `rm -rf` took the folder, both exit 0.
+
+    `harness/agent.py` records that exact measurement in the present tense a few lines
+    from the code that drops the bits -- so the prompt was contradicted by its own
+    repository. This is the fifth sighting of that sentence: #743 corrected it in the
+    permissions helper, a test docstring and the contract kit, and left it in the text
+    the model reads every turn.
+
+    The file-tool half holds on every run, and that is what the prompt says now. What
+    the fence does is the operator's to know, and `doctor` is where they hear it.
+    """
+    text = render_system_prompt()
+
+    assert "every file tool\n  refuses a write under it" in text
+    assert "by the filesystem itself" not in text
+
+
+@pytest.mark.parametrize("sandbox", ["auto", "off", "external"])
+def test_the_half_the_prompt_still_claims_holds_with_no_fence_at_all(
+    sandbox, cfg, session_dir
+):
+    """The other half of the rule above: the sentence was corrected rather than
+    deleted, so what it now claims has to be driven -- and driven in the settings the
+    old claim was false in, which is where a wording fix would otherwise just move the
+    untruth.
+
+    A real build, a real `write_file`, one confinement mode each. The file tools carry
+    the deny rule whatever runs the shell, because it is a rule on the backend and not
+    on the host.
+    """
+    made = replace(cfg, shell_sandbox=sandbox)
+    (session_dir / INPUTS / "given.csv").write_text("caller,data\n", encoding="utf-8")
+    call = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": "write_file",
+                "id": "1",
+                "args": {"file_path": f"/{INPUTS}/given.csv", "content": "forged"},
+            }
+        ],
+    )
+    graph = build_agent(
+        made,
+        backend=backend_at(made, session_dir),
+        capabilities=Capabilities(builtin_tools=("write_file",)),
+        model=FakeToolCallingModel(responses=[call, AIMessage(content="done")]),
+    ).graph
+
+    answered = graph.invoke(
+        {"messages": [("user", "go")]},
+        config={"configurable": {"thread_id": f"t-{sandbox}"}, "recursion_limit": 8},
+    )
+
+    said = " ".join(
+        str(m.content) for m in answered["messages"] if type(m).__name__ == "ToolMessage"
+    )
+    assert "denied" in said.lower() or "not allowed" in said.lower(), said
+    assert (session_dir / INPUTS / "given.csv").read_text(encoding="utf-8") == "caller,data\n"
+
+
+def test_the_prompt_does_not_count_the_places_a_turn_may_write():
+    """"One of two places, and never anywhere else" is false the moment memory is on:
+    the same composed prompt then tells the agent to record things, and
+    `write_file("/memory/AGENTS.md", ...)` succeeds and comes back as an artifact.
+
+    An absolute claim in the base document that an optional section contradicts is the
+    composition hazard #760 fixed for the shell's four claims. Named rather than
+    counted now -- what is *not* the agent's to write does not change with a
+    capability, and the sections that grant a place say so where they grant it.
+    """
+    for memory in (False, True):
+        text = render_system_prompt(memory_enabled=memory)
+
+        assert "never anywhere else" not in text
+        assert "Nothing else in the session is yours to write" in text
+        assert ("Record something when it would change" in text) is memory
 
 
 # -- a deployment's own house-rules prompt -----------------------------------

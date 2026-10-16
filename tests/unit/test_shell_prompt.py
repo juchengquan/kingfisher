@@ -152,16 +152,37 @@ def test_a_shell_prompt_that_is_not_one_is_refused(session_dir):
         shell_prompt_of(Mistaken(root_dir=str(session_dir)))
 
 
-def test_a_blank_no_layout_fills_is_refused_when_the_wording_is_made():
+#: Ways a deployment really writes a blank wrong. `inptus` is a letter out of place;
+#: the rest are the shapes the scan could not see at all -- a space inside the braces,
+#: a hyphen where the field has an underscore, and a name with a dot in it. The scan
+#: matched `\w+`, so those three were refused by nothing *and* filled by nothing: they
+#: reached the model as braces, in wording a deployment had customised and been told
+#: nothing about. Measured on all four before the pattern was widened.
+MISSPELT = ["{{inptus}}", "{{ inputs }}", "{{tool-results}}", "{{inputs.dir}}", "{{}}"]
+
+
+@pytest.mark.parametrize("blank", MISSPELT)
+@pytest.mark.parametrize("part", ["prompt", "skills", "execute"])
+def test_a_blank_no_layout_fills_is_refused_when_the_wording_is_made(part, blank):
     """At the deployment's start, where a typo is cheap, rather than on its first turn --
     and the refusal names the blanks there are.
-    """
-    with pytest.raises(ValueError, match=r"\{\{inptus\}\}.*\{\{inputs\}\}"):
-        ShellPrompt(execute="- `/{{inptus}}/x` is `x`.")
 
+    Every part, because each is read by a different reader and the scan runs per part:
+    held on `execute` alone, the same mistake in `prompt` reached the agent's own
+    section.
+    """
+    with pytest.raises(ValueError, match=r"which no layout fills"):
+        ShellPrompt(**{part: f"- `/{blank}/x` is `x`."})
+
+
+def test_every_blank_a_layout_fills_is_accepted_in_every_part():
+    """The control: a refusal that fired on everything would pass the rule above, and
+    the five names are the whole of what a deployment may write.
+    """
     every = "".join(
         f"{{{{{leaf}}}}}" for leaf in ("inputs", "outputs", "memory", "scratchpad", "tool_results")
     )
+
     ShellPrompt(prompt=every, skills=every, execute=every)
 
 
