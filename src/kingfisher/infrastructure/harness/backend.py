@@ -206,8 +206,8 @@ def _refuse_wording_without_runner(runner: Any, shell_prompt: ShellPrompt | None
     if runner is None and shell_prompt is not None:
         msg = (
             "shell_prompt describes the shell a runner provides, and none was given: "
-            "kingfisher's own shell describes itself. House rules for every agent go in "
-            "Config.deployment_prompt"
+            "kingfisher's own shell describes itself. Instructions for every agent go in "
+            "INSTRUCTIONS.md beside the definitions, or instructions= on Kingfisher"
         )
         raise TypeError(msg)
 

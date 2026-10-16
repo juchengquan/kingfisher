@@ -292,6 +292,7 @@ def test_every_kind_is_read_from_its_own_name_in_the_definitions_folder(env, tmp
     assert cfg.authored_files == {
         "models.yaml": definitions / "models.yaml",
         "source_ids.yaml": definitions / "source_ids.yaml",
+        "INSTRUCTIONS.md": definitions / "INSTRUCTIONS.md",
     }
 
 

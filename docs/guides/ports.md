@@ -177,7 +177,8 @@ Things to know:
   inherited kingfisher's wording and its agents been told of a shell they do not have.
   A sandbox that says nothing is described neutrally.
 - **Kingfisher's own shell describes itself**, so `shell_prompt=` without a runner is
-  refused. Standing instructions for every agent go in `Config.deployment_prompt`.
+  refused. Standing instructions for every agent go in `INSTRUCTIONS.md` beside the
+  definitions, or `instructions=` on `Kingfisher`.
 - **A miss is corrected only on kingfisher's own shell.** A command that fails on a
   file-tool path there is answered with the path's spelling in the shell, worked out
   from the session root it starts in; no other shell is known to start there.

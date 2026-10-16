@@ -376,6 +376,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     agent: AgentSpec | None = None,
     held: frozenset[str] | None = None,
     ledger: Ledger | None = None,
+    instructions: str = "",
 ) -> Assembled:
     """Wire model, backend and checkpointer into a deep agent, and say what was wired.
 
@@ -544,7 +545,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         attached: dict[str, Any] = {
             "model": running,
             "backend": backend,
-            "system_prompt": system_prompt(cfg, agent.system_prompt if agent else "", shell),
+            "system_prompt": system_prompt(
+                cfg, agent.system_prompt if agent else "", shell, instructions
+            ),
             "middleware": middleware,
             "permissions": permissions,
             "checkpointer": checkpointer,
@@ -658,6 +661,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             return as_subagent(
                 defined[name],
                 cfg,
+                instructions=instructions,
                 backend=backend,
                 endpoints=capabilities.endpoints,
                 builtin_tools=surface.granted_builtin,

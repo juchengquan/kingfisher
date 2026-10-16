@@ -15,7 +15,24 @@ only the first two items of the checklist, and the sections titled *after #667* 
 *after #668*, whose renames reach every deployment.
 
 **If you are already on #617 or later**, only the sections whose titles say *after
-#617* or later apply to you.
+#617* or later apply to you, and *after #784* names every change since the work that
+replaced the four layers began.
+
+## Sessions, plugins and instructions, after #784
+
+The core-and-plugins work renamed what a deployment names and moved two things out of
+`Config`. Every change refuses the old spelling rather than reading it.
+
+| Before | Now |
+|---|---|
+| `SessionBackends`, `DefaultBackends`, `default_backends` | `Sessions`, `LocalSessions`, `LocalSessions()` |
+| `backends=` on `Kingfisher`, `run()` and `stream()` | `sessions=`, required on all three, with a graph or without |
+| `claim(name, ...)`, `release(name)`, `held(name, ...)` on the backend `open` returns | `claim(cfg, session_id, ...)`, `release(cfg, session_id)`, `held(cfg, session_id, ...)` on your `Sessions`, one lock per session |
+| `KINGFISHER_SESSION_BACKENDS_FACTORY` | `KINGFISHER_SESSIONS` |
+| No way to hand the command its run events, conversation store or middleware | `KINGFISHER_PLUGINS`, naming something that returns a `kingfisher.Plugins` |
+| `Adapter`, `ADAPTERS`, `Endpoint.adapter`, `KINGFISHER_ADAPTERS_FACTORY` | `WireFormat`, `WIRE_FORMATS`, `Endpoint.wire_format`, `KINGFISHER_WIRE_FORMATS` |
+| `Config.deployment_prompt`, and `PROMPT.md` in the workspace | `INSTRUCTIONS.md` beside the definitions, or `instructions=` on `Kingfisher`: an object with `text(cfg) -> str` |
+| The repository Protocols in `domain/ports.py` | Gone. Definitions are read from a directory; stage yours into one |
 
 ## deepagents' host paths only where they are this host's, after #760
 

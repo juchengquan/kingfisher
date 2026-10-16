@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.ports import RunEvents
+
+if TYPE_CHECKING:
+    from kingfisher.infrastructure.prompting import Instructions
 
 
 @dataclass(frozen=True)
@@ -23,6 +26,7 @@ class Plugins:
     threads: Any = None
     run_events: RunEvents | None = None
     middlewares: Mapping[str, Callable[..., Any]] | None = None
+    instructions: Instructions | None = None
 
     def keywords(self) -> dict[str, Any]:
         """The fields that are set, as `Kingfisher`'s keywords."""

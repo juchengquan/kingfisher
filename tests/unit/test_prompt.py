@@ -12,7 +12,6 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.kinds.subagents import as_subagent
 from kingfisher.infrastructure.prompting import (
-    USER_PROMPT_FILE,
     kingfishers_shell,
     render_system_prompt,
     system_prompt,
@@ -151,17 +150,14 @@ def test_nothing_the_agent_is_told_sends_it_to_a_run_directory():
         assert "run directory" not in text
 
 
-def test_user_prompt_is_appended_when_the_workspace_has_one(cfg):
-    (cfg.workspace / USER_PROMPT_FILE).write_text(
-        "Prefer polars over pandas in this project.\n", encoding="utf-8"
-    )
-    text = system_prompt(cfg)
+def test_instructions_are_appended_to_the_harness_prompt(cfg):
+    text = system_prompt(cfg, instructions="Prefer polars over pandas in this project.")
     assert "Prefer polars over pandas" in text
     # Appended, not replacing the structural contract.
     assert "/outputs" in text
 
 
-def test_no_user_prompt_leaves_the_base_prompt_untouched(cfg):
+def test_no_instructions_leave_the_base_prompt_untouched(cfg):
     assert system_prompt(cfg) == render_system_prompt()
 
 
@@ -266,10 +262,9 @@ def test_the_skills_exception_is_still_an_exception(cfg, session_dir):
 
 # -- what a subagent's prompt carries -------------------------------------
 #
-# `PROMPT.md` is where a workspace writes what it wants said about its own
-# work. It reached the main agent and nothing the main agent delegated to, so a
-# house rule applied right up until the moment the work was handed on. Nothing
-# stated that as a decision; the asymmetry was just there.
+# A deployment's instructions once reached the main agent and nothing the main agent
+# delegated to, so a house rule applied right up until the moment the work was handed
+# on. Nothing stated that as a decision; the asymmetry was just there.
 
 
 SUBAGENT = """name: reviewer
@@ -279,26 +274,26 @@ system_prompt: |
 """
 
 
-def _subagent_prompt(cfg):
+def _subagent_prompt(cfg, instructions: str = ""):
     spec = a_subagent(SUBAGENT, "reviewer.yaml")
-    return as_subagent(spec, cfg)["system_prompt"]
+    return as_subagent(spec, cfg, instructions=instructions)["system_prompt"]
 
 
-def test_a_subagent_is_given_the_workspaces_own_instructions(cfg):
-    (cfg.workspace / USER_PROMPT_FILE).write_text("Always cite the file.", encoding="utf-8")
+def test_a_subagent_is_given_the_deployments_instructions(cfg):
+    """A subagent does not get the harness prompt, but it does get the house rules."""
+    prompt = _subagent_prompt(cfg, "Always cite the file.")
 
-    assert "Always cite the file." in _subagent_prompt(cfg)
+    assert prompt.index("Always cite the file.") < prompt.index("You review analyses")
 
 
-def test_a_workspace_that_wrote_none_changes_nothing(cfg):
+def test_a_deployment_with_no_instructions_changes_nothing(cfg):
     """The definition's own text, byte for byte -- no separator, no blank tail."""
     assert _subagent_prompt(cfg) == "You review analyses for arithmetic errors."
 
 
 def test_a_subagent_is_not_given_the_harnesss_own_prompt(cfg):
     """The part that must *not* be inherited."""
-    (cfg.workspace / USER_PROMPT_FILE).write_text("Always cite the file.", encoding="utf-8")
-    prompt = _subagent_prompt(cfg)
+    prompt = _subagent_prompt(cfg, "Always cite the file.")
 
     assert len(prompt) < 200
     assert "/inputs" not in prompt
@@ -306,13 +301,11 @@ def test_a_subagent_is_not_given_the_harnesss_own_prompt(cfg):
 
 def test_both_levels_separate_the_addition_the_same_way(cfg):
     """One joining rule."""
-    (cfg.workspace / USER_PROMPT_FILE).write_text("Always cite the file.", encoding="utf-8")
-
-    main = system_prompt(replace(cfg, skills_enabled=True))
-    subagent = _subagent_prompt(cfg)
+    main = system_prompt(replace(cfg, skills_enabled=True), instructions="Always cite the file.")
+    subagent = _subagent_prompt(cfg, "Always cite the file.")
 
     assert "\n\n---\n\nAlways cite the file." in main
-    assert "\n\n---\n\nAlways cite the file." in subagent
+    assert "Always cite the file.\n\n---\n\n" in subagent
 
 
 def test_the_prompt_does_not_promise_other_sessions_are_out_of_reach():
@@ -408,41 +401,29 @@ def test_the_prompt_does_not_count_the_places_a_turn_may_write():
         assert ("Record something when it would change" in text) is memory
 
 
-# -- a deployment's own house-rules prompt -----------------------------------
+# -- a deployment's own instructions ---------------------------------------------
 
 
-def test_the_deployment_prompt_is_appended_after_the_harness(cfg):
-    """A library integrator's standing instruction reaches the main agent, behind the
-    harness prompt rather than in place of it.
+def test_the_instructions_come_after_the_harness(cfg):
+    """A deployment's standing instruction reaches the main agent, behind the harness
+    prompt rather than in place of it.
     """
-    with_it = system_prompt(replace(cfg, deployment_prompt="House rule: cite every figure."))
+    with_it = system_prompt(cfg, instructions="House rule: cite every figure.")
 
-    assert "House rule: cite every figure." in with_it
     assert with_it.index("You are kingfisher") < with_it.index("House rule:")
     # The structural contract is still there -- the addition did not replace it.
     assert f"/{INPUTS}" in with_it
 
 
-def test_the_deployment_prompt_reaches_a_subagent_too(cfg):
-    """A subagent does not get the harness prompt, but it does get the house rules."""
-    prompt = _subagent_prompt(replace(cfg, deployment_prompt="House rule: cite every figure."))
-
-    assert "House rule: cite every figure." in prompt
-    assert "You are kingfisher" not in prompt, "still not the harness prompt"
+def test_no_instructions_change_nothing(cfg):
+    """Empty is byte-for-byte the prompt without them."""
+    assert system_prompt(cfg) == system_prompt(cfg, instructions="")
 
 
-def test_no_deployment_prompt_changes_nothing(cfg):
-    """The default is empty, and an empty one is byte-for-byte the prompt without it."""
-    assert system_prompt(cfg) == system_prompt(replace(cfg, deployment_prompt=""))
-    assert _subagent_prompt(cfg) == "You review analyses for arithmetic errors."
-
-
-def test_the_deployment_prompt_leads_the_workspace_and_agent_additions(cfg):
-    """Order: harness, then the deployment's house rules, then the workspace, then the
-    agent -- most general to most specific.
+def test_the_instructions_lead_the_agents_own_line(cfg):
+    """Order: harness, then the deployment's instructions, then the agent -- most
+    general to most specific.
     """
-    (cfg.workspace / USER_PROMPT_FILE).write_text("Workspace note.", encoding="utf-8")
-    prompt = system_prompt(replace(cfg, deployment_prompt="House rule."), "Agent note.")
+    prompt = system_prompt(cfg, "Agent note.", instructions="House rule.")
 
-    assert prompt.index("House rule.") < prompt.index("Workspace note.")
-    assert prompt.index("Workspace note.") < prompt.index("Agent note.")
+    assert prompt.index("House rule.") < prompt.index("Agent note.")

@@ -19,9 +19,9 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib import resources
-from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
+from kingfisher.config import ConfigError
 from kingfisher.layout import DEFAULT_LAYOUT, Layout
 
 if TYPE_CHECKING:
@@ -66,9 +66,10 @@ _HERE = ("shell_here.md", "shell_here_skills.md", "shell_here_execute.md")
 #: shell runs. No `execute` line: deepagents' own stands.
 _ELSEWHERE = ("shell_elsewhere.md", "shell_elsewhere_skills.md")
 
-#: Optional, user-authored, per-workspace prompt additions. Distinct from
-#: `/memory/AGENTS.md`, which the agent writes: this file is yours.
-USER_PROMPT_FILE = "PROMPT.md"
+#: A deployment's standing instructions for every agent and subagent, beside its
+#: definitions. Distinct from `/memory/AGENTS.md`, which the agent writes: this is
+#: what people write.
+INSTRUCTIONS_FILE = "INSTRUCTIONS.md"
 
 #: deepagents' `MEMORY_SYSTEM_PROMPT` with its lifetime claims corrected, and not to
 #: be re-synced from it on an upgrade: the library's own says memory lasts into
@@ -245,42 +246,72 @@ def _joined(prompt: str, extra: str) -> str:
     return f"{prompt.strip()}\n\n---\n\n{extra.strip()}"
 
 
-def user_prompt(workspace: Path | None) -> str:
-    """Read the workspace's optional `PROMPT.md`, if the user wrote one."""
-    if workspace is None:
-        return ""
-    path = Path(workspace) / USER_PROMPT_FILE
-    return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
+class Instructions(Protocol):
+    """A deployment's standing text for every agent and subagent it runs.
 
-
-def with_user_prompt(prompt: str, workspace: Path | None) -> str:
-    """`prompt`, plus whatever the workspace put in its own `PROMPT.md`."""
-    return _joined(prompt, user_prompt(workspace))
-
-
-def behind_deployment(prompt: str, cfg: Config | None) -> str:
-    """`prompt`, behind this deployment's house-rules prompt if it set one.
-
-    First, because it is the most general of the additions -- a standing instruction
-    for every agent -- and the agent's own line and the workspace's `PROMPT.md` are the
-    more specific ones that follow it. Empty when none is set, which leaves `prompt`
-    exactly as it was: `_joined` collapses an empty *trailing* part, and this one leads.
+    Asked once per agent built, so a change reaches the next turn without a restart,
+    and read after kingfisher's own prompt and before the agent's: it is the most
+    general of the additions, and the agent's own line the most specific. Empty for
+    none. What kingfisher tells every agent is not here and not replaceable.
     """
-    deployment = cfg.deployment_prompt if cfg else ""
-    return _joined(deployment, prompt) if deployment.strip() else prompt
+
+    def text(self, cfg: Config) -> str:
+        """The instructions, or an empty string for none."""
+        ...
+
+
+class InstructionsFile:
+    """Kingfisher's own `Instructions`: `INSTRUCTIONS.md` in the definitions folder.
+
+    Beside `models.yaml` and `source_ids.yaml`, because it is what people write and the
+    workspace is what sessions make -- and so it is one of the files the macOS fence
+    keeps the shell from editing.
+    """
+
+    def text(self, cfg: Config) -> str:
+        path = cfg.authored_files[INSTRUCTIONS_FILE]
+        return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
+
+
+def refuse_a_workspace_prompt(cfg: Config) -> None:
+    """Refuse a `PROMPT.md` left in the workspace, which nothing reads any more.
+
+    Ignored, the house rules it held would stop reaching every agent with nothing said:
+    the turn runs, and runs differently.
+    """
+    stale = cfg.workspace / "PROMPT.md"
+    if stale.is_file():
+        msg = (
+            f"{stale} is read by nothing now: move what it says to "
+            f"{cfg.authored_files[INSTRUCTIONS_FILE]}, beside the definitions, and delete it"
+        )
+        raise ConfigError(msg)
+
+
+def behind_instructions(prompt: str, instructions: str) -> str:
+    """`prompt`, behind the deployment's instructions if it has any.
+
+    Empty instructions leave `prompt` exactly as it was: `_joined` collapses an empty
+    *trailing* part, and this one leads.
+    """
+    return _joined(instructions, prompt) if instructions.strip() else prompt
 
 
 def system_prompt(
-    cfg: Config | None = None, agent: str = "", shell: ShellPrompt | None = None
+    cfg: Config | None = None,
+    agent: str = "",
+    shell: ShellPrompt | None = None,
+    instructions: str = "",
 ) -> str:
-    """The assembled prompt: the harness, then this deployment, this workspace, this agent.
+    """The assembled prompt: the harness, then the deployment's instructions, then the
+    agent's own line.
 
     `shell` is what the backend's shell says of itself, which only the backend knows.
     """
     return render_system_prompt(
         skills_enabled=bool(cfg and cfg.skills_enabled),
         memory_enabled=bool(cfg and cfg.memory_enabled),
-        extra=behind_deployment(_joined(user_prompt(cfg.workspace if cfg else None), agent), cfg),
+        extra=behind_instructions(agent, instructions),
         layout=cfg.layout if cfg else DEFAULT_LAYOUT,
         shell=shell,
     )
