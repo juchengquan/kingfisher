@@ -14,6 +14,8 @@ from kingfisher.infrastructure.sandbox.bubblewrap import (
     bubblewrap_available,
 )
 from kingfisher.infrastructure.sandbox.confinement import toolchain_roots
+from kingfisher.infrastructure.workspace import ensure_session_layout
+from kingfisher.layout import SAVED_RESULTS
 
 needs_bubblewrap = pytest.mark.skipif(
     not bubblewrap_available(),
@@ -97,6 +99,42 @@ def test_each_escape_works_when_nothing_is_sandboxing_it(two_sessions):
             blunt.append(f"the control cannot {what}, so it proves nothing")
 
     assert not blunt, "\n".join(blunt)
+
+
+@needs_bubblewrap
+def test_a_saved_result_is_the_shells_to_read_and_not_to_write(tmp_path):
+    """A ledger row names its file and a later turn reads it back as what the tool
+    returned, so a shell that can write there forges a result. Overwrite, add, link,
+    remove, and rename the scratchpad away and back -- the last beat a rule matched by position
+    on macOS, and here it asks whether the bind moves with the folder it sits in.
+
+    The control runs first, because the rename probe is the one that could leave the
+    scratchpad somewhere else if it got half-way.
+    """
+    session = ensure_session_layout(tmp_path / "sessions" / "s1")
+    for folder in SAVED_RESULTS:
+        (session / folder / "A-0001.txt").write_text("as written", encoding="utf-8")
+    runner = BubblewrapRunner(
+        argv_for(session, readable=toolchain_roots()),
+        env={"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin:/usr/local/bin"},
+    )
+
+    mine = runner.run("printf ok > scratchpad/mine.txt && cat scratchpad/mine.txt")
+    read = runner.run(f"cat {SAVED_RESULTS[0]}/A-0001.txt")
+    for folder in SAVED_RESULTS:
+        runner.run(f"printf FORGED > {folder}/A-0001.txt")
+        runner.run(f"printf FORGED > {folder}/A-0002.txt")
+        runner.run(f"ln {folder}/A-0001.txt linked && printf FORGED > linked; rm -f linked")
+        runner.run(f"rm -rf {folder}")
+    runner.run(
+        "mv scratchpad moved && printf FORGED > moved/tool_results/A-0001.txt; mv moved scratchpad"
+    )
+
+    assert mine.output.strip() == "ok", f"the scratchpad stopped being writable: {mine.output}"
+    assert read.output.strip() == "as written", f"a saved result stopped reading: {read.output}"
+    for folder in SAVED_RESULTS:
+        assert (session / folder / "A-0001.txt").read_text(encoding="utf-8") == "as written"
+        assert not (session / folder / "A-0002.txt").exists(), f"the shell added to {folder}"
 
 
 @needs_bubblewrap

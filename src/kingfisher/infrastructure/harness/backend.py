@@ -46,6 +46,7 @@ from kingfisher.layout import (
     INPUTS,
     OFFLOADS,
     RESERVED_SKILL_FOLDER,
+    SAVED_RESULTS,
     SCRATCH_ROUTE,
     SESSION_DIRS,
     SKILLS_ROUTE,
@@ -586,7 +587,11 @@ def _fence_for(
 
         return BubblewrapRunner(
             argv_for(
-                session_dir, readable=readable, writable=writable, inputs=cfg.layout.inputs
+                session_dir,
+                readable=readable,
+                writable=writable,
+                inputs=cfg.layout.inputs,
+                saved_results=cfg.layout.saved_results,
             ),
             env=env,
         )
@@ -610,12 +615,14 @@ def _fence_for(
 
 
 def _require_layout(
-    session_dir: Path, session_dirs: tuple[str, ...] = SESSION_DIRS
+    session_dir: Path,
+    session_dirs: tuple[str, ...] = SESSION_DIRS,
+    saved_results: tuple[str, ...] = SAVED_RESULTS,
 ) -> None:
     """Refuse a session directory that has not been made yet."""
     missing = [
         name
-        for name in (*session_dirs, HARNESS)
+        for name in (*session_dirs, HARNESS, *saved_results)
         if not (session_dir / name).is_dir()
     ]
     if missing:
@@ -741,7 +748,7 @@ def backend_at(
     # one would otherwise reach the composite as a path.
     refuse_unmountable(skills_dir, skills.mounts)
 
-    _require_layout(session_dir, cfg.layout.session_dirs)
+    _require_layout(session_dir, cfg.layout.session_dirs, cfg.layout.saved_results)
     # Not created where it is missing: it is in the definitions folder, which a
     # start only reads, and a missing one means no skills. Both Linux fences grant
     # only the paths that exist, and the route below answers a read with "not
@@ -894,6 +901,7 @@ class DefaultBackends(SessionBackends):
             # pick one directory out of it. Omitted, the configured scratchpad was laid
             # out `0o755` where the default one is `0o700` -- and TMPDIR points at it.
             scratchpad=cfg.layout.scratchpad,
+            saved_results=cfg.layout.saved_results,
         )
         # Kernel-level, because the deny rule covers only the file tools. What it
         # could not harden is reported by the turn rather than raised: raising here

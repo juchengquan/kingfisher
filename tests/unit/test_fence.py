@@ -385,13 +385,18 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
     from kingfisher.infrastructure.sandbox.confinement import _unwrapped
 
     seen: dict[str, tuple[Path, list[Path], list[Path], str | None]] = {}
+    saved: dict[str, object] = {}
 
     def recorder(mechanism, result):
-        # `inputs` reaches both fences and must be identical, so it is compared;
-        # `session_dirs` is Landlock's alone -- bubblewrap binds the session whole
-        # and overlays the inputs leaf, so it is accepted here and left uncompared.
-        def fake(session_dir, *, readable=(), writable=(), inputs=None, session_dirs=None):
+        # `inputs` reaches both fences and must be identical, so it is compared. The
+        # rest is one fence's alone: `session_dirs` is Landlock's -- bubblewrap binds
+        # the session whole and overlays the inputs leaf -- and `saved_results` is
+        # bubblewrap's, since Landlock cannot carve a folder out of the scratchpad it
+        # grants. Accepted here and left out of the comparison; the second is checked
+        # on its own below.
+        def fake(session_dir, *, readable=(), writable=(), inputs=None, **alone):
             seen[mechanism] = (session_dir, list(readable), list(writable), inputs)
+            saved[mechanism] = alone.get("saved_results")
             return result
 
         return fake
@@ -420,6 +425,10 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
     assert writable == [], (
         "$TMPDIR is inside the session both fences already grant, so naming it again "
         "would grant a subpath of what is granted"
+    )
+    assert saved["bubblewrap"] == cfg.layout.saved_results, (
+        "bubblewrap was not handed this layout's saved results, so the shell may write "
+        "the files a ledger row names"
     )
 
 

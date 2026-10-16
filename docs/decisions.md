@@ -2831,6 +2831,23 @@ in the four places this deny set is pinned. What would close it properly is
 `LAYOUT_VERSION`, which has not moved across three layout changes -- an open question
 recorded elsewhere, not one to settle here. *(2026-10-14, from an architecture review.)*
 
+**Two fences of three now refuse the shell both folders a row can name.** Clearing older
+results to handles in the replayed conversation leaves the saved file as the only copy of
+what a tool returned, so the half above stops being a forgery a turn might trip over and
+becomes the record itself. `sandbox-exec` refuses `tool_results/` and
+`large_tool_results/` with the regex it writes for `.harness`, and bubblewrap binds them
+read-only after the session, as it binds `inputs`. The macOS half took one rule more than
+`.harness` does: these folders sit under the scratchpad, which the shell may write, and a
+rule that finds them by position was beaten by renaming the scratchpad away, writing
+through the new name and renaming it back -- measured, the row's file held `FORGED` and
+every command exited 0. The scratchpad's own entry is refused writes now, the node and not
+what it holds, as `sessions/<id>` is for `.harness`; a hard link was tried as well and the
+profile already refused it. bubblewrap binds only what exists, so `ensure_session_layout`
+makes both folders before the first result and `backend_at` refuses a session without
+them. Landlock still cannot, for the reason above, which is also why `shell_denied` does
+not ask a deployment's backend for what kingfisher's own Linux fence cannot give.
+*(2026-10-16, before clearing results to handles.)*
+
 **The caller's inputs are refused the shell by each fence, not by their mode bits.**
 `/inputs` is read-only to the file tools by a deny rule and was read-only to the shell
 by nothing but dropped write bits -- and the shell runs as the uid that owns those

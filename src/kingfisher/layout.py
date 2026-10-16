@@ -79,6 +79,10 @@ TOOL_RESULTS = "tool_results"
 #: artifacts root -- there is no constant to read it off.
 OFFLOADS = "large_tool_results"
 
+#: The two folders a ledger row can name, as paths inside the session: what the fences
+#: refuse the shell, beside `.harness` and `inputs`.
+SAVED_RESULTS: tuple[str, ...] = (f"{SCRATCH}/{TOOL_RESULTS}", f"{SCRATCH}/{OFFLOADS}")
+
 #: Where skills live.
 SKILLS = "skills"
 
@@ -223,11 +227,11 @@ ROUTES: tuple[Route, ...] = (
     # overwrite at all. What the narrowing above it earns is that a draft a shell left
     # here is not deleted in the turn that wrote it, which is a different property.
     #
-    # Closing the shell's half belongs to the fences and is not done: `sandbox-exec`
-    # and bubblewrap can each refuse this folder the way they already refuse
-    # `.harness` -- measured -- while Landlock cannot while the folder sits inside a
-    # scratchpad it grants whole, since a read-only grant under a writable parent is
-    # stepped over. Two of three is not a boundary, so nothing here claims one.
+    # The shell's half belongs to the fences, which take it from `SAVED_RESULTS`:
+    # `sandbox-exec` and bubblewrap refuse this folder the way they refuse `.harness`,
+    # while Landlock cannot while the folder sits inside a scratchpad it grants whole,
+    # since a read-only grant under a writable parent is stepped over. Two of three is
+    # not a boundary, so nothing here claims one.
     Route(TOOL_RESULTS_ROUTE, deny_write_under=f"{TOOL_RESULTS_ROUTE}**"),
     # The same rule for the folder a row names once the result was too long to show
     # whole. Denying one and not the other refused the file tools a 32-byte result and
@@ -366,6 +370,10 @@ class Layout:
     def offloads_route(self) -> str:
         """deepagents' own, under this layout's scratchpad: the leaf is fixed, the parent moves."""
         return _route(self.scratchpad, OFFLOADS)
+
+    @property
+    def saved_results(self) -> tuple[str, ...]:
+        return (f"{self.scratchpad}/{self.tool_results}", f"{self.scratchpad}/{OFFLOADS}")
 
     @property
     def routes(self) -> tuple[Route, ...]:

@@ -12,6 +12,7 @@ from kingfisher.layout import (
     AGENTS_SCAFFOLD,
     HARNESS,
     MEMORY,
+    SAVED_RESULTS,
     SCRATCH,
     SESSION_DIRS,
 )
@@ -60,6 +61,7 @@ def ensure_session_layout(
     *,
     memory: str = MEMORY,
     scratchpad: str = SCRATCH,
+    saved_results: tuple[str, ...] = SAVED_RESULTS,
 ) -> Path:
     """Every directory a session holds, and its memory scaffolded. Idempotent.
 
@@ -70,7 +72,10 @@ def ensure_session_layout(
     name one directory each and cannot pick it out of the tuple.
     """
     session_dir = Path(session_dir).expanduser().resolve()
-    for name in (*session_dirs, HARNESS):
+    # `saved_results` before the first result is: bubblewrap binds them read-only only
+    # where they exist when its fence is built, so a folder the recorder made mid-turn
+    # would be the shell's to write until the next one.
+    for name in (*session_dirs, HARNESS, *saved_results):
         (session_dir / name).mkdir(parents=True, exist_ok=True)
 
     # Asked for rather than done here: `permissions` is the one module in this

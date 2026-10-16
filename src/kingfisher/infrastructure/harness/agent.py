@@ -166,7 +166,9 @@ def read_only_permissions(layout: Layout = DEFAULT_LAYOUT) -> list[FilesystemPer
     and `execute` bypasses them entirely. The other half of each rule is elsewhere
     and neither half is sufficient: `confinement.resolve` denies writes to the skills
     directory in the sandbox profile, which is macOS-only and can be switched off, and
-    the three fences each refuse `/inputs` and `.harness` in their own terms.
+    the three fences each refuse `/inputs` and `.harness` in their own terms. The saved
+    results are refused by two of them: Landlock cannot carve a folder out of the
+    scratchpad it grants whole.
 
     `infrastructure.workspace.permissions` drops the write bits under `/inputs` as
     well, and that is not the other half of this rule -- it is a layer below both. The
@@ -339,6 +341,7 @@ def builtin_tool_names(
                         probing.layout.session_dirs,
                         memory=probing.layout.memory,
                         scratchpad=probing.layout.scratchpad,
+                        saved_results=probing.layout.saved_results,
                     ),
                     catalogue=catalogue,
                 ),

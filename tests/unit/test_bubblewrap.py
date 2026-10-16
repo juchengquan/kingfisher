@@ -9,7 +9,7 @@ import pytest
 from kingfisher.infrastructure.sandbox.bubblewrap import SYSTEM_PATHS, BubblewrapRunner, argv_for
 from kingfisher.infrastructure.sandbox.linux import present
 from kingfisher.infrastructure.workspace import ensure_session_layout
-from kingfisher.layout import HARNESS, INPUTS
+from kingfisher.layout import HARNESS, INPUTS, SAVED_RESULTS, Layout
 
 
 @pytest.fixture
@@ -77,13 +77,35 @@ def test_the_harness_is_read_only_and_lands_over_the_session(session):
     again" -- each left the whole suite green.
     """
     argv = argv_for(session)
-    harness, inputs = str(session / HARNESS), str(session / INPUTS)
+    guarded = [str(session / p) for p in (HARNESS, INPUTS, *SAVED_RESULTS)]
 
-    # Both folders the shell may read and not write, as an exact set: one of them
-    # arriving without the other is the shape this is written against.
-    assert chosen(argv) == {(harness, harness), (inputs, inputs)}
-    for path in (harness, inputs):
+    # Every folder the shell may read and not write, as an exact set: one of them
+    # arriving without the others is the shape this is written against.
+    assert chosen(argv) == {(path, path) for path in guarded}
+    for path in guarded:
         assert index_of(argv, "--ro-bind", path) > index_of(argv, "--bind", str(session))
+
+
+def test_a_renamed_layout_binds_its_own_saved_results(tmp_path):
+    """The binds follow the configured names, so a renamed scratchpad is not left
+    writable while the default spelling, which no session has, is guarded instead.
+    Made by `ensure_session_layout` as the fixture above is, since `present` drops a
+    bind whose folder is not there.
+    """
+    moved = Layout(scratchpad="work", tool_results="kept")
+    session = ensure_session_layout(
+        tmp_path / "sessions" / "s1",
+        moved.session_dirs,
+        memory=moved.memory,
+        scratchpad=moved.scratchpad,
+        saved_results=moved.saved_results,
+    )
+
+    argv = argv_for(session, saved_results=moved.saved_results)
+
+    bound = {source for source, _ in chosen(argv)}
+    assert {str(session / "work" / "kept"), str(session / "work" / "large_tool_results")} <= bound
+    assert not (session / "scratchpad").exists(), "the default scratchpad was made beside it"
 
 
 def test_no_system_path_bound_here_holds_a_session(session):
