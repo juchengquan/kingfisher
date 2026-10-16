@@ -94,8 +94,9 @@ deployment's own backend has to carry `claim`, `aclaim`, `release`, `arelease` a
 deepagents backend, with `host_path` and `shell_prompt` as its only optional extras.
 `unprotected`, which the service reads with `getattr` off any backend, becomes
 `LocalSessions`' own: the core reads it only off a backend `LocalSessions` opened, and
-still reports it to the caller as `protect_failed`. `type(backends) is DefaultBackends`
-becomes `isinstance`.
+still reports it to the caller as `protect_failed`. Where the origins line asks whether
+the sessions are kingfisher's own, it keeps asking for exactly `LocalSessions` rather
+than `isinstance`: a subclass may keep its sessions anywhere.
 
 **Instructions replaces two settings with one plugin.** A deployment's standing text for
 every agent and subagent is read after kingfisher's own prompt and before the agent's.
@@ -179,10 +180,12 @@ One pull request each, off `main` once the one before it has merged.
 1. This document, and the startup check. *(Landed.)*
 2. Delete the repository Protocols. *(Landed.)*
 3. `run()` and `stream()` require session backends, as `Kingfisher` does. *(Landed.)*
-4. Sessions: `SessionBackends` becomes `Sessions` and `backends=` becomes `sessions=`;
-   `DefaultBackends` and `default_backends` become `LocalSessions`, with `backend_at`
-   kept as its private builder; the turn lock moves onto it; `unprotected` becomes its
-   own.
+4. Sessions, in two pull requests. First the names: `SessionBackends` becomes
+   `Sessions` and `backends=` becomes `sessions=`; `DefaultBackends` and the
+   `default_backends` instance become `LocalSessions`; `backend_at` keeps its name and
+   stays public, because `ports.md` tells a deployment's own sessions to build on it.
+   *(Landed.)* Then the turn lock moves onto `Sessions`, and `unprotected` becomes
+   `LocalSessions`' own.
 5. `Plugins`, `KINGFISHER_SESSIONS` and `KINGFISHER_PLUGINS`.
 6. `Adapter` becomes `WireFormat`.
 7. The Instructions plugin.

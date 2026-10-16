@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 import kingfisher
-from kingfisher import default_backends
+from kingfisher import LocalSessions
 from kingfisher.domain.result import AWAITING, RunResult
 from kingfisher.domain.result import PendingDecision as Pending
 from kingfisher.infrastructure.steps import drive
@@ -67,7 +67,7 @@ def _drive(monkeypatch, result: RunResult) -> None:
     # the module first -- so this patch worked in the full suite and failed alone.
     monkeypatch.setattr(
         importlib.import_module("kingfisher.application.run"),
-        "configured_backends",
+        "configured_sessions",
         lambda cfg: None,
     )
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Nothing())
@@ -184,7 +184,7 @@ def test_the_three_decisions_reach_the_library_as_written(monkeypatch):
     # the module first -- so this patch worked in the full suite and failed alone.
     monkeypatch.setattr(
         importlib.import_module("kingfisher.application.run"),
-        "configured_backends",
+        "configured_sessions",
         lambda cfg: None,
     )
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Recording())
@@ -341,7 +341,7 @@ def test_the_whole_loop_runs_through_the_command(cfg, session_dir, monkeypatch, 
         interrupt_on={"write_file": True},
         checkpointer=InMemorySaver(),
     )
-    service = Kingfisher(cfg, graph=graph, backends=default_backends)
+    service = Kingfisher(cfg, graph=graph, sessions=LocalSessions())
     monkeypatch.setattr(cli, "config_from_env", lambda: cfg)
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: service)
 
@@ -371,7 +371,7 @@ def _a_paused_session_only_a_reaches(cfg):
 
     an_agent(cfg, "only_a", source_ids="[A]")
     policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
-    kf = kingfisher.Kingfisher(policied, backends=kingfisher.default_backends)
+    kf = kingfisher.Kingfisher(policied, sessions=kingfisher.LocalSessions())
     start(policied, "s-1")
     pin(kf, "s-1", "only_a")
     mark = {"pending": pending_as_mark([PAUSED.pending[0]])}
@@ -428,7 +428,7 @@ def test_log_reaches_the_service_on_both_verbs_that_run_a_turn(verb, tmp_path, m
     monkeypatch.setattr(cli, "config_from_env", object)
     monkeypatch.setattr(
         importlib.import_module("kingfisher.application.run"),
-        "configured_backends",
+        "configured_sessions",
         lambda cfg: None,
     )
     monkeypatch.setattr(kingfisher, "Kingfisher", Recording)

@@ -1596,10 +1596,9 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # 1.2ms and two modules on top of `model_catalogue`, and pulls in no
     # provider SDK at all.
     "model_catalogue": frozenset({"models"}),
-    # Fills in `default_backends` where `Kingfisher` refuses to pick a filesystem: for
-    # `run` and `stream` without a graph, and in `configured_backends` for a command
-    # line with no factory set. Sparing a caller that choice is what the module is
-    # for, so the edge is the point of it.
+    # Names `LocalSessions` in `configured_sessions`, for a command line with no
+    # factory set: the command is kingfisher's own deployment, and that fallback is
+    # what spares a person at a terminal the choice, so the edge is the point of it.
     "run": frozenset({"backend"}),
     # The service is the harness's largest consumer, and was never in this table
     # because the rule only walked `infrastructure/`. Running a turn *is* driving
@@ -1615,7 +1614,7 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
         {
             "activation",
             "agent",
-            # `SessionBackends`, for the parameter a deployment now has to fill. The
+            # `Sessions`, for the parameter a deployment has to fill. The
             # type belongs beside the default that satisfies it rather than beside
             # the builder that consumes it, so naming the shape costs this edge --
             # which is the honest price. Re-exporting it through `agent` to keep the
@@ -2009,7 +2008,6 @@ WITNESSES: dict[str, str] = {
     # page says what is the part that moves.
     "Kingfisher": "document",
     "config_from_env": "document",
-    "default_backends": "document",
     "Request": "document",
     "Capabilities": "document",
     # `ports.md` tells an adapter to raise this one, imported from `kingfisher`,
@@ -2111,7 +2109,7 @@ WITNESSES: dict[str, str] = {
     # `guides/ports.md` shows a deployment building on the default by subclassing
     # it, and building a backend for a directory of its own with `backend_at`, and
     # checking what it wrote with the kit beside `BACKEND_CONTRACT`.
-    "DefaultBackends": "document",
+    "LocalSessions": "document",
     "backend_at": "document",
     "SESSION_BACKENDS_CONTRACT": "document",
     # The same page has a deployment whose shell is not kingfisher's say what it sees,
@@ -2487,7 +2485,7 @@ PUBLIC = ("kingfisher",)
 #: deepagents has to accept -- the only ones that may load the runtime to be reached.
 RUNS_AN_AGENT = frozenset({
     "Kingfisher", "run", "stream",
-    "DefaultBackends", "default_backends", "backend_at",
+    "LocalSessions", "backend_at",
     "BACKEND_CONTRACT", "SESSION_BACKENDS_CONTRACT",
 })
 
@@ -3687,7 +3685,7 @@ def test_a_mixin_of_an_exported_class_is_published_through_it():
 
     mixed = _mixed_into(frozenset(kingfisher.__all__))
 
-    assert {"Sessions", "Disposal"} <= mixed, "Kingfisher's mixins are not seen as bases"
+    assert {"SessionMethods", "Disposal"} <= mixed, "Kingfisher's mixins are not seen as bases"
 
 
 def test_nothing_is_defined_for_tests_alone():
@@ -3791,7 +3789,7 @@ def test_no_mixin_declares_what_it_does_not_read():
     something it never reads is either a requirement that moved or one that was never
     there -- and the second is worse than untidy.
 
-    `Sessions` declared `_claims: Path` and nothing anywhere set `_claims`, so
+    `SessionMethods` declared `_claims: Path` and nothing anywhere set `_claims`, so
     `self._claims.exists()` type-checked cleanly and raised `AttributeError` on every
     turn that reached it. Two rules already ask this of a module's own definitions
     and of its constants; neither can see a bare annotation in a class body, which is

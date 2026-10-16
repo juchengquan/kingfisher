@@ -171,7 +171,7 @@ def shell_prompt_of(backend: Any) -> ShellPrompt | None:
     """What the shell `backend` runs `execute` on says of itself, or `None` for nothing.
 
     Read off the shell rather than off the session backends that made it. A
-    `DefaultBackends` subclass that swaps in a sandbox of its own would inherit
+    `LocalSessions` subclass that swaps in a sandbox of its own would inherit
     kingfisher's wording from the class, and its agents be told about a shell they do not
     have; on the shell, a sandbox that says nothing is described neutrally until it does.
     """
@@ -636,7 +636,7 @@ def _require_layout(
 
 
 @runtime_checkable
-class SessionBackends(Protocol):
+class Sessions(Protocol):
     """How a deployment says where its sessions are, and what each one runs on.
 
     Asked per turn to `open` the session it is for, and asked the questions only
@@ -734,7 +734,7 @@ def backend_at(
 ) -> WorkspaceScopedBackend:
     """Kingfisher's own backend, rooted at one session directory on this host.
 
-    What `default_backends` builds for a session id, and what a deployment building
+    What `LocalSessions` builds for a session id, and what a deployment building
     on the default calls to get it for a directory of its choosing. `shell_prompt` is
     what the agent is told about the shell `runner` provides, and is refused without
     one.
@@ -847,11 +847,11 @@ def backend_at(
     )
 
 
-class DefaultBackends(SessionBackends):
-    """Kingfisher's own `SessionBackends`: each session a directory under
+class LocalSessions(Sessions):
+    """Kingfisher's own `Sessions`: each session a directory under
     `<workspace>/sessions`, named for its id, each backend `backend_at` that directory.
 
-    `default_backends` runs each session's commands here, under kingfisher's own
+    `LocalSessions` runs each session's commands here, under kingfisher's own
     fence. A deployment whose commands run somewhere else builds one with `runner=`,
     and its sessions are still kingfisher's own: `Kingfisher.origins` asks whether the
     backends are exactly this class rather than a subclass, because a subclass can
@@ -933,7 +933,4 @@ def _where(cfg: Config, session_id: str) -> Path:
     """Where kingfisher's own backends keep one session of this workspace."""
     return session_dir(cfg.workspace, session_id)
 
-
-#: Kingfisher's own sessions, with their commands run on this host.
-default_backends = DefaultBackends()
 

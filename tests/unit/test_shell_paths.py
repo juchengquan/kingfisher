@@ -11,7 +11,7 @@ from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from kingfisher import DefaultBackends, Kingfisher, Request, ShellPrompt, default_backends
+from kingfisher import Kingfisher, LocalSessions, Request, ShellPrompt
 from kingfisher.infrastructure.harness.backend import WorkspaceScopedBackend
 from kingfisher.infrastructure.harness.middlewares.shell_paths import (
     ABSOLUTE,
@@ -53,9 +53,11 @@ def shelled(scripted, monkeypatch):
     return scripted, offered
 
 
-def _run(cfg, *script: AIMessage, backends: Any = default_backends, session: str = "s") -> None:
+def _run(cfg, *script: AIMessage, backends: Any = None, session: str = "s") -> None:
     Scripted.script.extend(script)
-    Kingfisher(cfg, backends=backends).run(Request("go", agent="only", session_id=session))
+    Kingfisher(cfg, sessions=backends or LocalSessions()).run(
+        Request("go", agent="only", session_id=session)
+    )
 
 
 def _consulting(subagent: str) -> tuple[AIMessage, ...]:
@@ -161,7 +163,7 @@ def test_a_shell_that_says_nothing_keeps_deepagents_line_in_every_graph(shelled,
     nobody knew to be true.
     """
     cfg, offered = shelled
-    _run(cfg, *_consulting(subagent), backends=DefaultBackends(runner=lambda _where: Plain()))
+    _run(cfg, *_consulting(subagent), backends=LocalSessions(runner=lambda _where: Plain()))
 
     assert len(offered) == 3
     for tools in offered:
@@ -177,7 +179,7 @@ def test_a_shell_s_own_line_reaches_every_graph_holding_it(shelled, subagent):
     a deployment's shell can tell it how paths are spelt there.
     """
     cfg, offered = shelled
-    backends = DefaultBackends(runner=lambda _where: Plain(), shell_prompt=THEIRS)
+    backends = LocalSessions(runner=lambda _where: Plain(), shell_prompt=THEIRS)
     _run(cfg, *_consulting(subagent), backends=backends)
 
     assert len(offered) == 3
@@ -196,7 +198,7 @@ def test_a_miss_on_a_shell_kingfisher_does_not_run_is_left_as_it_was(shelled):
         cfg,
         _calls(("execute", {"command": "cat /inputs/cars.csv"}, "c1")),
         AIMessage(content="done"),
-        backends=DefaultBackends(runner=lambda _where: Plain()),
+        backends=LocalSessions(runner=lambda _where: Plain()),
     )
     (answer,) = [m.text for m in Scripted.heard[-1] if isinstance(m, ToolMessage)]
 
@@ -230,7 +232,7 @@ class Theirs(LocalShellBackend):
     """
 
 
-class Sandboxed(DefaultBackends):
+class Sandboxed(LocalSessions):
     """The adjustment `ports.md` shows: kingfisher's routes, over a shell of its own."""
 
     def open(self, cfg_, session_id, /, *, catalogue=None):
@@ -256,9 +258,9 @@ def _systems() -> list[str]:
 @pytest.mark.parametrize(
     ("backends", "here"),
     [
-        (default_backends, True),
-        (DefaultBackends(runner=lambda _where: Here()), True),
-        (DefaultBackends(runner=lambda _where: Plain()), False),
+        (LocalSessions(), True),
+        (LocalSessions(runner=lambda _where: Here()), True),
+        (LocalSessions(runner=lambda _where: Plain()), False),
         (Sandboxed(), False),
     ],
     ids=["kingfishers-own", "local-runner", "remote-runner", "their-own-shell"],

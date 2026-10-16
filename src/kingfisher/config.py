@@ -404,7 +404,7 @@ class Config:
     definitions: Path = field(kw_only=True)
     # The session backends the command line runs on, named rather than built here:
     # `module:name` for something callable with no arguments that returns a
-    # `SessionBackends`. Only the command line reads it -- `Kingfisher` takes them as
+    # `Sessions`. Only the command line reads it -- `Kingfisher` takes them as
     # `backends=` -- and it is what lets `kingfisher sessions` and `reap` see sessions
     # a deployment's own keep somewhere else.
     session_backends_factory: str | None = None

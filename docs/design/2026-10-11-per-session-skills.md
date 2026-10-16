@@ -56,9 +56,9 @@ becomes a name the catalogue may not use for a folder of its own, as
 refuse it as a mount label, so a clash between labels can only happen at startup. Everything under `/skills/` is already write-denied to the
 file tools, so the folder needs no rule of its own.
 
-**`default_backends` serves no extras.** Nothing routes `/skills/session/` on the
+**`LocalSessions` serves no extras.** Nothing routes `/skills/session/` on the
 default, so a single-company deployment is unchanged. A deployment that separates
-companies opts in by having its own session backends serve that folder from wherever
+companies opts in by having its own sessions serve that folder from wherever
 it keeps a session.
 
 **One read per turn, and everything from it.** A new step in `_prepare_steps` lists
@@ -78,7 +78,7 @@ only.
 
 **Reports.** A `skills_left_out` event in the turn's `RunEvents`, naming each skill
 and why, for whoever manages that company's storage. `kingfisher list --session <id>`
-shows one session's extras and what was left out, through `configured_backends`.
+shows one session's extras and what was left out, through `configured_sessions`.
 Plain `list` and `doctor` have no session, so they show the shared skills and one line
 saying a session may add more.
 
@@ -87,7 +87,7 @@ naming them. Agent and subagent definitions cannot name one, because a name a
 definition writes is checked at startup and a per-session name cannot be. Subagents
 name their skills explicitly and are refused the star, so they never get extras.
 
-**A pre-built graph skips the step.** `Kingfisher(cfg, graph=..., backends=...)`
+**A pre-built graph skips the step.** `Kingfisher(cfg, graph=..., sessions=...)`
 hands kingfisher an agent assembled once, with its own skills set up. There is no
 index for kingfisher to hand a list to, so the extras are not read. `ports.md` says so
 where it covers pre-built graphs.

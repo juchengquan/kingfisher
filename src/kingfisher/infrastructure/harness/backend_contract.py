@@ -606,7 +606,7 @@ def amark_used_moves_the_session_on(make: Callable[[], Any]) -> None:
         raise AssertionError(msg)
 
 
-#: Every check a deployment's `SessionBackends` must pass. `make` returns a fresh
+#: Every check a deployment's `Sessions` must pass. `make` returns a fresh
 #: `(Config, backends)` pair, because every question a backends object answers is
 #: about one deployment's sessions. These write files, as `filesystem_consistency`,
 #: `shell_denied` and `host_path_refusal` do.

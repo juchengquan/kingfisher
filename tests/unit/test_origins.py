@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import DefaultBackends, Kingfisher, Origin, Origins, default_backends
+from kingfisher import Kingfisher, LocalSessions, Origin, Origins
 from kingfisher.infrastructure.catalogue import Definitions
 from tests.unit.test_backend_seam import Elsewhere
 
@@ -135,7 +135,7 @@ def test_the_record_cannot_be_edited_after_it_is_handed_back(cfg):
 
 def test_a_running_kingfisher_reports_what_it_resolved(cfg):
     """Not what it was configured with."""
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
 
     assert kf.origins.workspace == cfg.workspace
     assert kf.origins.skills.kind == "default"
@@ -147,11 +147,11 @@ def test_kingfishers_own_backends_with_a_runner_still_keep_kingfishers_sessions(
     somewhere kingfisher cannot see, which a subclass may and this class cannot.
     """
 
-    class Theirs(DefaultBackends):
+    class Theirs(LocalSessions):
         pass
 
-    with_runner = Kingfisher(cfg, backends=DefaultBackends(runner=lambda _where: Elsewhere()))
-    subclassed = Kingfisher(cfg, backends=Theirs())
+    with_runner = Kingfisher(cfg, sessions=LocalSessions(runner=lambda _where: Elsewhere()))
+    subclassed = Kingfisher(cfg, sessions=Theirs())
 
     assert with_runner.origins.sessions == Origin("default", cfg.workspace / "sessions")
     assert subclassed.origins.sessions == Origin("supplied", None)
@@ -232,7 +232,7 @@ def test_starting_a_kingfisher_says_where_it_reads_from_once(cfg, caplog):
     """One record per construction, and that is the whole budget."""
     caplog.set_level(logging.INFO, logger="kingfisher.origins")
 
-    Kingfisher(cfg, backends=default_backends)
+    Kingfisher(cfg, sessions=LocalSessions())
 
     records = [r for r in caplog.records if r.name == "kingfisher.origins"]
     assert len(records) == 1
@@ -246,7 +246,7 @@ def test_nothing_is_emitted_or_even_built_when_logging_is_off(cfg, monkeypatch, 
         Origins, "line", lambda self: pytest.fail("the line was built with logging off")
     )
     try:
-        Kingfisher(cfg, backends=default_backends)
+        Kingfisher(cfg, sessions=LocalSessions())
     finally:
         logging.getLogger("kingfisher.origins").setLevel(logging.NOTSET)
 

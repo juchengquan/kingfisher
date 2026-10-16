@@ -45,7 +45,7 @@ def test_a_session_directory_is_the_default_backends_root(workspace):
 
 @pytest.mark.parametrize("session_id", UNNAMABLE)
 def test_an_id_that_cannot_name_a_folder_names_no_session(workspace, session_id):
-    """Joined as given, `""` named every session -- `DefaultBackends.delete(cfg, "")`
+    """Joined as given, `""` named every session -- `LocalSessions.delete(cfg, "")`
     removed them all and reported success -- and `..` or an absolute id named somewhere
     outside them. A hidden name is refused too: `.harness` is the folder the macOS rule
     guards in every session, so a session called that could not write its own files.

@@ -20,7 +20,7 @@ from kingfisher.layout import (
 
 class LocalSessionDirs:
     """The rules about session directories on this host: make one exclusively, mark
-    one used, list them, remove one. What `DefaultBackends` and the turn lock use.
+    one used, list them, remove one. What `LocalSessions` and the turn lock use.
     """
 
     def create_exclusive(self, path: Path) -> bool:

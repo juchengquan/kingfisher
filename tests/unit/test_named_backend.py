@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import default_backends
+from kingfisher import LocalSessions
 from kingfisher.application.config import Environment
-from kingfisher.application.run import configured_backends
+from kingfisher.application.run import configured_sessions
 from kingfisher.config import REMOVED_SETTINGS, RENAMED_SETTINGS, ConfigError
-from kingfisher.infrastructure.harness.backend import SessionBackends
+from kingfisher.infrastructure.harness.backend import Sessions
 from kingfisher.infrastructure.wiring import store_named
 
 HERE = __name__
@@ -23,12 +23,12 @@ SETTING = "KINGFISHER_SESSION_BACKENDS_FACTORY"
 
 
 def named(spec: str):
-    """`store_named` as `configured_backends` calls it."""
-    return store_named(spec, setting=SETTING, port=SessionBackends)
+    """`store_named` as `configured_sessions` calls it."""
+    return store_named(spec, setting=SETTING, port=Sessions)
 
 
-class Recording(SessionBackends):
-    """A `SessionBackends` that satisfies the port and keeps nothing."""
+class Recording(Sessions):
+    """A `Sessions` that satisfies the port and keeps nothing."""
 
     def open(self, cfg, session_id, /, *, catalogue=None):
         return None
@@ -140,13 +140,13 @@ def test_a_factory_that_raises_is_left_alone():
 
 
 def test_naming_nothing_is_the_default(cfg):
-    assert configured_backends(cfg) is default_backends
+    assert type(configured_sessions(cfg)) is LocalSessions
 
 
 def test_a_named_factory_is_what_the_command_line_runs_on(cfg):
     named = replace(cfg, session_backends_factory=f"{HERE}:make_backends")
 
-    assert isinstance(configured_backends(named), Recording)
+    assert isinstance(configured_sessions(named), Recording)
 
 
 def test_the_variable_reaches_the_config(tmp_path: Path):
@@ -185,4 +185,4 @@ def test_a_renamed_setting_is_refused_under_its_old_name(tmp_path: Path, old, ne
 
 
 def test_the_default_satisfies_the_port_it_is_the_default_for():
-    assert isinstance(default_backends, SessionBackends)
+    assert isinstance(LocalSessions(), Sessions)

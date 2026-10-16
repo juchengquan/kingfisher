@@ -9,7 +9,7 @@ import pytest
 import yaml
 from deepagents.backends import CompositeBackend, FilesystemBackend
 
-from kingfisher import DefaultBackends, Kingfisher, default_backends
+from kingfisher import Kingfisher, LocalSessions
 from kingfisher.domain.access import parse
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.backend import SessionClaims
@@ -18,7 +18,7 @@ from tests.unit.test_run import StubAgent
 
 #: Every sync method the async paths can reach, on the classes that answer them.
 PORT_METHODS = {
-    DefaultBackends: ("open", "sessions", "mark_used", "size", "delete"),
+    LocalSessions: ("open", "sessions", "mark_used", "size", "delete"),
     SessionClaims: ("claim", "release", "held"),
     CompositeBackend: ("download_files", "upload_files", "ls", "glob", "delete"),
     FilesystemBackend: ("download_files", "upload_files", "ls", "glob", "delete"),
@@ -67,10 +67,10 @@ def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wir
     policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
     kf = (
         Kingfisher(
-            policied, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+            policied, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
         )
         if wiring == "graph"
-        else Kingfisher(policied, backends=default_backends)
+        else Kingfisher(policied, sessions=LocalSessions())
     )
     start(policied, "s")
     produced = policied.workspace / "sessions" / "s" / "outputs" / "out.txt"
@@ -112,7 +112,7 @@ def test_an_async_turn_makes_no_sync_port_call_on_the_loop(cfg, sync_calls, tmp_
     supplied = tmp_path / "in.csv"
     supplied.write_text("a,b\n")
     kf = Kingfisher(
-        policied, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        policied, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
     start(policied, "s")
     sync_calls.clear()
@@ -130,7 +130,7 @@ def test_opening_a_sessions_files_makes_no_sync_port_call_on_the_loop(cfg, sync_
     """`files_for` on the loop is a session's backend -- a sandbox, on a remote one --
     opened while every other coroutine waits for it.
     """
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     start(cfg, "s")
     sync_calls.clear()
 
@@ -152,7 +152,7 @@ def test_a_turn_reads_the_pin_once(cfg, monkeypatch):
     an_agent(cfg, "only_a", source_ids="[A]")
     policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
     kf = Kingfisher(
-        policied, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        policied, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
     start(policied, "s")
     asked = Request("go", agent="only_a", session_id="s")
@@ -182,7 +182,7 @@ def test_an_async_turn_refused_after_its_claim_gives_it_back_off_the_loop(
     from kingfisher.infrastructure.session_files import InputsError
 
     kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
     start(cfg, "s")
     sync_calls.clear()

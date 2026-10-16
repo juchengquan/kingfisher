@@ -17,7 +17,7 @@ from deepagents import create_deep_agent
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from kingfisher import Kingfisher, backend_at, default_backends
+from kingfisher import Kingfisher, LocalSessions, backend_at
 from kingfisher.domain.request import Decision, DecisionError, Request, Resume
 from kingfisher.domain.result import AWAITING, DECISIONS, END_TURN
 from kingfisher.infrastructure.session_store import read_pause_mark, write_pause_mark
@@ -77,7 +77,7 @@ def test_a_gated_turn_stops_and_reports_what_it_is_waiting_on(cfg):
     `GraphInterrupt` is suppressed by the root graph and surfaces to nobody.
     """
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
 
     result = kf.run(Request("write it"))
@@ -95,7 +95,7 @@ def test_the_offered_decisions_exclude_edit(cfg):
     is the one that lets the answering caller author a call rather than judge one.
     """
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
 
     offered = kf.run(Request("write it")).pending[0].decisions
@@ -108,7 +108,7 @@ def test_the_offered_decisions_exclude_edit(cfg):
 def test_a_gated_turn_emits_the_event_before_it_finishes(cfg):
     """`run` drains the stream, so a caller watching one must hear it there too."""
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
 
     kinds = [event.kind for event in kf.stream(Request("write it"))]
@@ -123,7 +123,7 @@ def test_the_pause_is_kept_inside_the_session(cfg):
     tools are refused.
     """
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
 
     result = kf.run(Request("write it"))
@@ -138,7 +138,7 @@ def test_an_ordinary_turn_leaves_no_pause_behind(cfg):
     """The file's presence *is* the mark that a session is waiting, so a turn that
     ended on its own leaving one would make every later turn think it was gated.
     """
-    kf = Kingfisher(cfg, graph=_gated(calls=[], after="nothing to gate"), backends=default_backends)
+    kf = Kingfisher(cfg, graph=_gated(calls=[], after="nothing to gate"), sessions=LocalSessions())
 
     result = kf.run(Request("just answer"))
 
@@ -152,7 +152,7 @@ def test_a_paused_turn_keeps_its_session_even_when_asked_to_delete_it(cfg):
     thing the answer is for.
     """
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
 
     result = kf.run(Request("write it"), delete_session=True)
@@ -171,7 +171,7 @@ def test_approving_runs_the_call_and_finishes_the_turn(cfg, session_dir):
     kf = Kingfisher(
         cfg,
         graph=_gated_on_disk(cfg, session_dir, calls=[_write("/outputs/a.txt", "approved", "c1")]),
-        backends=default_backends,
+        sessions=LocalSessions(),
     )
     paused = kf.run(Request("write it", session_id=session_dir.name))
 
@@ -194,7 +194,7 @@ def test_rejecting_does_not_run_the_call(cfg, session_dir):
     kf = Kingfisher(
         cfg,
         graph=_gated_on_disk(cfg, session_dir, calls=[_write("/outputs/a.txt", "nope", "c1")]),
-        backends=default_backends,
+        sessions=LocalSessions(),
     )
     paused = kf.run(Request("write it", session_id=session_dir.name))
 
@@ -214,7 +214,7 @@ def test_rejecting_does_not_run_the_call(cfg, session_dir):
 def test_answering_clears_the_pause(cfg):
     """Or the next ordinary turn would think it was superseding a live gate."""
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
     paused = kf.run(Request("write it"))
 
@@ -246,7 +246,7 @@ def test_two_gated_calls_are_answered_one_each(cfg, session_dir, rejection_first
             session_dir,
             calls=[_write("/outputs/yes.txt", "kept", "c1"), _write("/outputs/no.txt", "x", "c2")],
         ),
-        backends=default_backends,
+        sessions=LocalSessions(),
     )
     paused = kf.run(Request("write both", session_id=session_dir.name))
     assert len(paused.pending) == 2, "the two calls did not arrive as two decisions"
@@ -272,7 +272,7 @@ def test_two_gated_calls_are_answered_one_each(cfg, session_dir, rejection_first
 
 
 def test_a_resume_for_a_session_that_is_not_waiting_is_refused(cfg):
-    kf = Kingfisher(cfg, graph=_gated(calls=[], after="ok"), backends=default_backends)
+    kf = Kingfisher(cfg, graph=_gated(calls=[], after="ok"), sessions=LocalSessions())
     ran = kf.run(Request("just answer"))
 
     with pytest.raises(DecisionError, match="not waiting"):
@@ -282,7 +282,7 @@ def test_a_resume_for_a_session_that_is_not_waiting_is_refused(cfg):
 def test_an_id_nothing_is_waiting_on_is_refused(cfg):
     """Named, rather than counted two frames later by langgraph as a length mismatch."""
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
     paused = kf.run(Request("write it"))
 
@@ -302,7 +302,7 @@ def test_a_decision_the_gate_did_not_offer_is_refused(cfg):
     action it does not recognise verbatim.
     """
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
     paused = kf.run(Request("write it"))
 
@@ -324,7 +324,7 @@ def test_leaving_a_gated_call_unanswered_is_refused(cfg):
         graph=_gated(
             calls=[_write("/outputs/a.txt", "x", "c1"), _write("/outputs/b.txt", "y", "c2")]
         ),
-        backends=default_backends,
+        sessions=LocalSessions(),
     )
     paused = kf.run(Request("write both"))
 
@@ -342,7 +342,7 @@ def test_responding_with_nothing_to_respond_is_refused(cfg):
     nothing rather than a decision.
     """
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
     paused = kf.run(Request("write it"))
 
@@ -392,11 +392,11 @@ def _paused_on_a_pinned_session(cfg, call_id: str):
             tools=None,
             checkpointer=InMemorySaver(),
         ),
-        backends=default_backends,
+        sessions=LocalSessions(),
     )
     first = opening.run(Request("say hi", agent="analyst"), source_ids=("A",))
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", call_id)]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", call_id)]), sessions=LocalSessions()
     )
     paused = kf.run(Request("write it", session_id=first.session_id), source_ids=("A",))
     return kf, paused
@@ -484,7 +484,7 @@ def test_an_injected_graph_under_no_policy_has_no_agent_to_disagree_with(cfg):
     which call carried it.
     """
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
     paused = kf.run(Request("write it", agent="whatever"))
 
@@ -506,7 +506,7 @@ def test_a_pause_that_did_not_survive_an_upgrade_is_refused(cfg):
     is one sentence rather than a deserialiser's traceback about an unknown node.
     """
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
     paused = kf.run(Request("write it"))
     kept = harness_of(cfg, paused.session_id)
@@ -528,7 +528,7 @@ def test_a_refused_resume_leaves_the_pause_answerable(cfg, session_dir):
     kf = Kingfisher(
         cfg,
         graph=_gated_on_disk(cfg, session_dir, calls=[_write("/outputs/a.txt", "kept", "c1")]),
-        backends=default_backends,
+        sessions=LocalSessions(),
     )
     paused = kf.run(Request("write it", session_id=session_dir.name))
     with pytest.raises(DecisionError):
@@ -553,7 +553,7 @@ def test_a_new_request_supersedes_the_pause_and_says_so(cfg):
     otherwise leave no trace anywhere.
     """
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
     paused = kf.run(Request("write it"))
 
@@ -569,7 +569,7 @@ def test_a_new_request_supersedes_the_pause_and_says_so(cfg):
 
 def test_superseding_is_silent_where_there_was_no_pause(cfg):
     """Every ordinary turn takes this path, so a false positive would be on all of them."""
-    kf = Kingfisher(cfg, graph=_gated(calls=[], after="ok"), backends=default_backends)
+    kf = Kingfisher(cfg, graph=_gated(calls=[], after="ok"), sessions=LocalSessions())
     first = kf.run(Request("one"))
 
     again = kf.run(Request("two", session_id=first.session_id))
@@ -589,7 +589,7 @@ def test_a_stateless_deployment_writes_no_pause(cfg):
     kf = Kingfisher(
         stateless,
         graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]),
-        backends=default_backends,
+        sessions=LocalSessions(),
     )
 
     result = kf.run(Request("write it"))
@@ -614,7 +614,7 @@ def test_a_pause_nobody_answers_is_swept_with_its_session(cfg):
     import time
 
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
     paused = kf.run(Request("write it"))
     directory = _session_dir(cfg, paused.session_id)
@@ -634,7 +634,7 @@ def test_deleting_a_waiting_session_takes_the_pause_with_it(cfg, way):
     somebody takes once they have decided not to answer after all.
     """
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), backends=default_backends
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
     )
     paused = kf.run(Request("write it"))
     directory = _session_dir(cfg, paused.session_id)

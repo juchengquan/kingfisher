@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import default_backends
+from kingfisher import LocalSessions
 from kingfisher.application.service import Kingfisher
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import SessionBusyError
@@ -24,7 +24,7 @@ from tests.unit.test_run import StubAgent
 
 def service(cfg, graph=None):
     return Kingfisher(
-        cfg, graph=graph or StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=graph or StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
 
 
@@ -194,7 +194,7 @@ def test_disposing_of_a_session_does_not_happen_on_the_event_loop(cfg, monkeypat
     """
     import threading
 
-    from kingfisher import DefaultBackends
+    from kingfisher import LocalSessions
 
     on_main: dict[str, bool] = {}
 
@@ -205,13 +205,13 @@ def test_disposing_of_a_session_does_not_happen_on_the_event_loop(cfg, monkeypat
 
         return recording
 
-    monkeypatch.setattr(DefaultBackends, "delete", watched("session", DefaultBackends.delete))
+    monkeypatch.setattr(LocalSessions, "delete", watched("session", LocalSessions.delete))
     monkeypatch.setattr(
         StubCheckpointer, "delete_thread", watched("thread", StubCheckpointer.delete_thread)
     )
     session = start(cfg, "s")
     kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
 
     asyncio.run(kf.arun(Request("go", session_id=session), delete_session=True))
@@ -502,7 +502,7 @@ def test_cancelling_at_any_step_of_setup_leaves_the_session_free(cfg, monkeypatc
     supplied.write_text("a,b\n")
     session = start(policied, "s")
     kf = Kingfisher(
-        policied, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        policied, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
     asked, held = Request("go", agent="only_a", session_id=session, inputs=(supplied,)), ("A",)
     real = steps_module._awaited

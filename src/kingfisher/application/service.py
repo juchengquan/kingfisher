@@ -40,7 +40,7 @@ from kingfisher.application.reporting import (
     subagent_only,
     withheld_by_kind,
 )
-from kingfisher.application.sessions import Sessions
+from kingfisher.application.sessions import SessionMethods
 from kingfisher.application.turn import (
     Prepared,
     consume,
@@ -88,8 +88,8 @@ from kingfisher.infrastructure.harness.agent import (
     builtin_tool_names,
 )
 from kingfisher.infrastructure.harness.backend import (
-    DefaultBackends,
-    SessionBackends,
+    LocalSessions,
+    Sessions,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
 from kingfisher.infrastructure.harness.checkpointing import (
@@ -229,7 +229,7 @@ def refused_credentials(exc: BaseException, cfg: Config) -> ConfigError | None:
     )
 
 
-class Kingfisher(Sessions, Disposal):
+class Kingfisher(SessionMethods, Disposal):
     """A configured kingfisher. Construct once; call `run` or `stream` per request."""
 
     def __init__(  # noqa: PLR0913 -- the composition root; each argument is one
@@ -251,7 +251,7 @@ class Kingfisher(Sessions, Disposal):
         # places a request's inputs, collects what a turn left and takes the turn lock
         # through them, and only the graph's builder knows where its backend keeps a
         # session.
-        backends: SessionBackends,
+        sessions: Sessions,
         catalogue: Definitions | Path | None = None,
         grants: Capabilities | None = None,
         middlewares: Mapping[str, MiddlewareFactory] | None = None,
@@ -304,20 +304,20 @@ class Kingfisher(Sessions, Disposal):
             with suppress(ConfigError):
                 builtin_tool_names(self.cfg, self.catalogue)
 
-        # Session backends and not a backend: one backend is rooted at one session,
+        # Sessions and not a backend: one backend is rooted at one session,
         # so a single instance shared by every session would be one filesystem for
         # every caller. A deployment separating its callers by *where their files
         # are* -- which is what replacing the backend is usually for -- would have
         # written the leak it was replacing the backend to avoid, and nothing about
         # the call site would look wrong.
-        if not isinstance(backends, SessionBackends):
+        if not isinstance(sessions, Sessions):
             msg = (
-                "backends= takes a SessionBackends, which opens each session's backend "
+                "sessions= takes a Sessions, which opens each session's backend "
                 "and answers for every session: which there are, how big, when each was "
                 "used, and deleting one. A backend is rooted at a session, so sharing one "
                 "is sharing a filesystem between callers. To build on kingfisher's own, "
-                "subclass DefaultBackends and override open; to build your own, subclass "
-                "SessionBackends, which brings aopen and asessions with it"
+                "subclass LocalSessions and override open; to build your own, subclass "
+                "Sessions, which brings aopen and asessions with it"
             )
             raise TypeError(msg)
         # Where each turn's record of itself goes. The default is the `kingfisher.run`
@@ -354,7 +354,7 @@ class Kingfisher(Sessions, Disposal):
         refuse_unbuildable_middleware(self.middlewares)
         # Where the sessions are: what each turn opens, and what answers the questions
         # no single session does -- which there are, how big, when each was used.
-        self._backends: SessionBackends = backends
+        self._sessions: Sessions = sessions
         self._graph = graph
         # There is nothing to reconcile, and that is the shape of the design rather than
         # an omission. Audiences live in the definitions, so a definition *is* the asset
@@ -392,7 +392,7 @@ class Kingfisher(Sessions, Disposal):
         return Origins.of(
             self.cfg,
             catalogue=self.catalogue,
-            sessions=None if type(self._backends) is DefaultBackends else self._backends,
+            sessions=None if type(self._sessions) is LocalSessions else self._sessions,
         )
 
     def held_for(self, source_ids: Held | None) -> frozenset[str] | None:
@@ -480,7 +480,7 @@ class Kingfisher(Sessions, Disposal):
         session backends know which host a session is on.
         """
         files = yield changing(
-            self._backends, "open", self.cfg, session_id, catalogue=self.catalogue
+            self._sessions, "open", self.cfg, session_id, catalogue=self.catalogue
         )
         # Here and not only where an agent is built: beside a pre-built graph none is,
         # and without one a turn reads the session through this backend before the
@@ -684,7 +684,7 @@ class Kingfisher(Sessions, Disposal):
         # timestamp `retention.expired` reads would still say "idle" for a
         # conversation in daily use. Recorded here, at the top of a turn, rather
         # than at the end: a turn that fails still happened.
-        yield changing(self._backends, "mark_used", cfg, session.id)
+        yield changing(self._sessions, "mark_used", cfg, session.id)
         # Before the other refusals rather than after: those read the session,
         # and a turn arriving halfway through would be reading it as it moved.
         if not (yield changing(files, "claim", CLAIM, stale_after=cfg.claim_stale_after)):
@@ -722,7 +722,7 @@ class Kingfisher(Sessions, Disposal):
     ) -> Steps[Prepared]:
         """The rest of setup, once the session is claimed."""
         # What the backend could not make read-only, where it is one that says. Reported
-        # rather than raised; see `DefaultBackends`.
+        # rather than raised; see `LocalSessions`.
         unprotected = tuple(getattr(files, "unprotected", ()))
 
         # Before the inputs are placed, not after: placing them grows the session,

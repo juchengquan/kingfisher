@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import Kingfisher, Request, UnknownSessionError, backend_at, default_backends
+from kingfisher import Kingfisher, LocalSessions, Request, UnknownSessionError, backend_at
 from kingfisher.domain.request import Decision, Resume
 from kingfisher.infrastructure.workspace import ensure_session_layout
 from kingfisher.layout import HARNESS, PINNED_AGENT, SESSION_DIRS
@@ -27,7 +27,7 @@ DEFAULT = "default"
 
 def _service(cfg) -> Kingfisher:
     return Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
 
 
@@ -177,7 +177,7 @@ def test_reaping_by_name_at_the_command_line_removes_it(at_the_command_line, cap
 def test_the_shell_cannot_write_or_remove_its_session_s_harness(cfg):
     """Catches a session's pinned agent, conversation and paused turn being left to its
     own shell."""
-    backend = default_backends.open(cfg, DEFAULT)
+    backend = LocalSessions().open(cfg, DEFAULT)
     harness = cfg.workspace / "sessions" / DEFAULT / HARNESS
     pinned = harness / PINNED_AGENT
     pinned.write_text("name: pinned\n", encoding="utf-8")
@@ -343,7 +343,7 @@ def test_the_shell_cannot_leave_a_folder_the_listing_would_read_as_a_session(nam
 def test_the_shell_can_still_write_the_rest_of_its_session(cfg):
     """The bound on the rule: `.harness` one level down is the session's own folder with
     a name, not the harness."""
-    backend = default_backends.open(cfg, DEFAULT)
+    backend = LocalSessions().open(cfg, DEFAULT)
 
     assert backend.execute("echo fine > outputs/ok.txt").exit_code == 0
     nested = "mkdir -p outputs/.harness && echo fine > outputs/.harness/ok"
@@ -354,7 +354,7 @@ def test_the_shell_can_still_write_the_rest_of_its_session(cfg):
 def test_a_shell_cannot_make_sessions_harness(cfg, session_dir):
     """Made, it is a folder sitting where sessions are, under the name the harness rule
     guards."""
-    backend = default_backends.open(cfg, session_dir.name)
+    backend = LocalSessions().open(cfg, session_dir.name)
 
     outcome = backend.execute(f'mkdir "{cfg.workspace / "sessions" / HARNESS}"')
 
@@ -378,7 +378,7 @@ def test_the_shell_cannot_relocate_sessions_to_reach_a_harness(cfg, session_dir)
     """The measured gap: the harness is denied by where it sits, so moving `sessions/`
     aside slid it out from under the rule, let the pin be rewritten, and moved it back.
     """
-    backend = default_backends.open(cfg, session_dir.name)
+    backend = LocalSessions().open(cfg, session_dir.name)
     pinned = _pin(cfg.workspace, "sessions", session_dir.name)
     ws = cfg.workspace
 
@@ -396,7 +396,7 @@ def test_moving_one_session_out_of_sessions_does_not_free_its_harness(cfg, sessi
     """A session folder carried out of `sessions/` would take its `.harness` to a path
     the rule no longer matches.
     """
-    backend = default_backends.open(cfg, session_dir.name)
+    backend = LocalSessions().open(cfg, session_dir.name)
     pinned = _pin(cfg.workspace, "sessions", session_dir.name)
     ws, sid = cfg.workspace, session_dir.name
 
@@ -414,7 +414,7 @@ def test_denying_the_move_leaves_the_session_s_own_work_writable(cfg, session_di
     """The bound: the node is denied, not its contents, so the session keeps all of its
     own folders to write in. A deny that stopped those would be a worse rule.
     """
-    backend = default_backends.open(cfg, session_dir.name)
+    backend = LocalSessions().open(cfg, session_dir.name)
 
     assert backend.execute("echo fine > outputs/ok.txt").exit_code == 0
     nested = backend.execute("mkdir -p outputs/nested && echo fine > outputs/nested/ok")
@@ -426,7 +426,7 @@ def test_the_shell_cannot_fabricate_a_sibling_session(cfg, session_dir):
     """Laying down a session folder is the harness's to do, unconfined, not the agent's
     -- and a shell that could would also be a shell that could move one.
     """
-    backend = default_backends.open(cfg, session_dir.name)
+    backend = LocalSessions().open(cfg, session_dir.name)
 
     assert backend.execute(f'mkdir "{cfg.workspace / "sessions" / "newcomer"}"').exit_code != 0
 
@@ -436,7 +436,7 @@ def test_a_link_from_a_writable_folder_does_not_reach_the_harness(cfg):
     """Measured closed, and pinned so it stays closed: a hard or soft link made in a
     writable folder is not a way to write the pin the `.harness` rule guards.
     """
-    backend = default_backends.open(cfg, DEFAULT)
+    backend = LocalSessions().open(cfg, DEFAULT)
     pinned = _pin(cfg.workspace, "sessions", DEFAULT)
     target = cfg.workspace / "sessions" / DEFAULT / HARNESS / PINNED_AGENT
 
@@ -451,7 +451,7 @@ def test_a_link_from_a_writable_folder_does_not_reach_the_harness(cfg):
 def test_a_session_can_reorganize_its_own_folders(cfg):
     """The rule names the session's folder node and not what it holds, so the session's
     own directories -- the harness aside -- can still be made, renamed and removed."""
-    backend = default_backends.open(cfg, DEFAULT)
+    backend = LocalSessions().open(cfg, DEFAULT)
 
     out = backend.execute("mkdir work && mv work renamed && rmdir renamed && echo ok")
 

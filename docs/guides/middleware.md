@@ -76,7 +76,7 @@ class Traced(AgentMiddleware):
         self._level = level
 
 
-kingfisher = Kingfisher(cfg, backends=default_backends, middlewares={"traced": Traced})
+kingfisher = Kingfisher(cfg, sessions=LocalSessions(), middlewares={"traced": Traced})
 ```
 
 A definition still writes `settings: {level: debug}`, because it is a class and

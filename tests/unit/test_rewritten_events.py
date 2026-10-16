@@ -14,7 +14,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from kingfisher import Kingfisher, Request, default_backends
+from kingfisher import Kingfisher, LocalSessions, Request
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.layout import HARNESS, TRANSCRIPT_FILE
 from tests.conftest import an_agent, start, tools_dir
@@ -117,7 +117,7 @@ def test_a_turn_with_a_clearing_pass_reports_each_call_and_result_once(scripted)
     Scripted.script.extend([*replies, AIMessage(content="done")])
 
     events = list(
-        Kingfisher(cfg, backends=default_backends).stream(
+        Kingfisher(cfg, sessions=LocalSessions()).stream(
             Request("go", agent="only", session_id="s")
         )
     )

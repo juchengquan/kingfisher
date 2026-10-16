@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from deepagents.backends import FilesystemBackend
 
-from kingfisher import SESSION_BACKENDS_CONTRACT, DefaultBackends, Kingfisher, default_backends
+from kingfisher import SESSION_BACKENDS_CONTRACT, Kingfisher, LocalSessions
 from kingfisher.infrastructure.harness.backend import (
     WorkspaceScopedBackend,
     backend_at,
@@ -27,7 +27,7 @@ from tests.unit.test_session_files import Elsewhere
 
 def test_the_default_keeps_the_contract(cfg):
     for check in SESSION_BACKENDS_CONTRACT:
-        check(lambda: (cfg, default_backends))
+        check(lambda: (cfg, LocalSessions()))
 
 
 def test_the_contract_is_not_quietly_empty():
@@ -37,14 +37,14 @@ def test_the_contract_is_not_quietly_empty():
     assert len(SESSION_BACKENDS_CONTRACT) >= 5
 
 
-class Shared(DefaultBackends):
+class Shared(LocalSessions):
     """Every session handed one directory: each works, and each reads the others."""
 
     def open(self, cfg, session_id, /, *, catalogue=None):
         return super().open(cfg, "everyone", catalogue=catalogue)
 
 
-class Overwriting(DefaultBackends):
+class Overwriting(LocalSessions):
     """A claim written the obvious way, with a write, which never fails."""
 
     def open(self, cfg, session_id, /, *, catalogue=None):
@@ -58,7 +58,7 @@ def _check(name):
     return check
 
 
-class AsyncElsewhere(DefaultBackends):
+class AsyncElsewhere(LocalSessions):
     """An `aopen` written beside `open` rather than through it, reaching a session of
     its own -- the async path's reads somewhere the sync path never looks.
     """
@@ -67,21 +67,21 @@ class AsyncElsewhere(DefaultBackends):
         return self.open(cfg, f"{session_id}-async", catalogue=catalogue)
 
 
-class ListsNothingAsync(DefaultBackends):
+class ListsNothingAsync(LocalSessions):
     """An `asessions` that forgot what `sessions` knows."""
 
     async def asessions(self, cfg):
         return ()
 
 
-class KeepsEverythingAsync(DefaultBackends):
+class KeepsEverythingAsync(LocalSessions):
     """An `adelete` that reports success and removes nothing."""
 
     async def adelete(self, cfg, session_id):
         return None
 
 
-class ClaimsBesideClaim(DefaultBackends):
+class ClaimsBesideClaim(LocalSessions):
     """An `aclaim` that keeps its own book rather than the one `claim` writes."""
 
     def open(self, cfg, session_id, /, *, catalogue=None):
@@ -94,7 +94,7 @@ class ClaimsBesideClaim(DefaultBackends):
         return built
 
 
-class KeepsTheClaimAsync(DefaultBackends):
+class KeepsTheClaimAsync(LocalSessions):
     """An `arelease` that gives nothing back."""
 
     def open(self, cfg, session_id, /, *, catalogue=None):
@@ -107,12 +107,12 @@ class KeepsTheClaimAsync(DefaultBackends):
         return built
 
 
-class WeighsNothingAsync(DefaultBackends):
+class WeighsNothingAsync(LocalSessions):
     async def asize(self, cfg, session_id):
         return 0
 
 
-class MarksNothingAsync(DefaultBackends):
+class MarksNothingAsync(LocalSessions):
     async def amark_used(self, cfg, session_id):
         return None
 
@@ -154,7 +154,7 @@ def test_the_kit_runs_from_a_test_already_on_an_event_loop(cfg):
 
     async def from_a_coroutine() -> None:
         for check in SESSION_BACKENDS_CONTRACT:
-            check(lambda: (cfg, default_backends))
+            check(lambda: (cfg, LocalSessions()))
 
     asyncio.run(from_a_coroutine())
 
@@ -177,7 +177,7 @@ def test_a_turn_refuses_while_the_backend_says_the_session_is_claimed(cfg):
     from kingfisher import Request, SessionBusyError
 
     kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
     session_id = kf.run(Request("first")).session_id
     assert backend_at(cfg, cfg.workspace / "sessions" / session_id).claim(
@@ -238,11 +238,11 @@ def test_building_a_session_s_backend_makes_its_inputs_read_only(cfg):
     next time a turn asks for its backend, which is before the agent can touch it.
     """
     directory = cfg.workspace / "sessions" / "s"
-    default_backends.open(cfg, "s")
+    LocalSessions().open(cfg, "s")
     (directory / "inputs").chmod(0o755)
     assert os.access(directory / "inputs", os.W_OK), "not left writable; test proves nothing"
 
-    built = default_backends.open(cfg, "s")
+    built = LocalSessions().open(cfg, "s")
 
     assert not os.access(directory / "inputs", os.W_OK)
     assert built.unprotected == ()
@@ -266,7 +266,7 @@ def test_deciding_nothing_finds_a_session_the_named_backend_keeps(
     assert "no such session: never-was" in said
 
 
-class Misdirected(DefaultBackends):
+class Misdirected(LocalSessions):
     """A backend whose own `host_path` answers from the wrong session: every file it
     serves is right, and every one it hands a tool by path is a neighbour's.
     """
@@ -279,7 +279,7 @@ class Misdirected(DefaultBackends):
         return built
 
 
-class NothingHere(DefaultBackends):
+class NothingHere(LocalSessions):
     """A backend that says none of its files are on this host."""
 
     def open(self, cfg, session_id, /, *, catalogue=None):
@@ -336,7 +336,7 @@ def skilled(cfg, tmp_path):
 def _rerouted(edit):
     """Kingfisher's own backends, with their routes edited after each is built."""
 
-    class Rerouted(DefaultBackends):
+    class Rerouted(LocalSessions):
         def open(self, cfg, session_id, /, *, catalogue=None):
             built = super().open(cfg, session_id, catalogue=catalogue)
             return WorkspaceScopedBackend(
@@ -371,7 +371,7 @@ def test_the_default_serves_every_skill_it_reads(skilled):
     """The control: each case below fails on the route it changes, not on a fixture
     the default could not pass either.
     """
-    _check("a_session_serves_the_skills_kingfisher_read")(lambda: (skilled, default_backends))
+    _check("a_session_serves_the_skills_kingfisher_read")(lambda: (skilled, LocalSessions()))
 
 
 @pytest.mark.parametrize(

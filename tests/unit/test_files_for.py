@@ -11,7 +11,7 @@ from kingfisher import Kingfisher, Request, UnknownSessionError
 from kingfisher.application import service as service_module
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.session import session_dir
-from kingfisher.infrastructure.harness.backend import DefaultBackends
+from kingfisher.infrastructure.harness.backend import LocalSessions
 from tests.conftest import StubCheckpointer, Through, an_agent, start
 from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
@@ -36,7 +36,7 @@ def _turn(kf, door: str, request: Request, **kwargs):
     return asyncio.run(drained())[-1].result
 
 
-class Counting(DefaultBackends):
+class Counting(LocalSessions):
     """The default backends, recording each session opened."""
 
     def __init__(self, *, runner=None) -> None:
@@ -85,7 +85,7 @@ def test_files_for_opens_the_session_with_the_deployments_runner(cfg, way):
         return built[-1][1]
 
     counting = Counting(runner=runner)
-    kf = Kingfisher(cfg, backends=counting)
+    kf = Kingfisher(cfg, sessions=counting)
     start(cfg, "s")
 
     files = Through(kf, way).files_for("s")
@@ -105,7 +105,7 @@ def test_files_for_an_id_that_cannot_name_a_folder_lays_nothing_out(
     # Under `tmp_path`, so an escape lands where this test looks rather than in `/etc`.
     if session_id.startswith("/"):
         session_id = str(tmp_path / "escaped")
-    kf = Kingfisher(cfg, backends=DefaultBackends())
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     before = sorted(tmp_path.rglob("*"))
 
     with pytest.raises(UnknownSessionError, match="cannot name a session"):
@@ -129,7 +129,7 @@ def test_a_turn_handed_its_files_opens_no_others(cfg, monkeypatch, door, way):
     monkeypatch.setattr(service_module, "build_agent", build)
     named = an_agent(cfg)
     counting = Counting()
-    kf = Kingfisher(cfg, backends=counting, threads=StubCheckpointer())
+    kf = Kingfisher(cfg, sessions=counting, threads=StubCheckpointer())
     start(cfg, "s")
     files = Through(kf, way).files_for("s")
 
@@ -152,7 +152,7 @@ def test_the_callers_backend_is_the_one_the_agent_works_in(scripted, tmp_path):
     ])
     sandboxes = Sandboxes(tmp_path / "remote")
     (sandboxes.root / "s").mkdir(parents=True)  # listed, as a turn would leave it
-    kf = Kingfisher(scripted, backends=sandboxes)
+    kf = Kingfisher(scripted, sessions=sandboxes)
     files = kf.files_for("s")
     files.upload_files([("/inputs/brief.md", b"the brief")])
 
@@ -174,7 +174,7 @@ def test_files_for_the_default_session_serve_a_request_naming_none(cfg, monkeypa
     monkeypatch.setattr(service_module, "build_agent", lambda *a, **kw: StubAgent("ok"))
     named = an_agent(cfg)
     counting = Counting()
-    kf = Kingfisher(cfg, backends=counting, threads=StubCheckpointer())
+    kf = Kingfisher(cfg, sessions=counting, threads=StubCheckpointer())
     files = kf.files_for("default")
 
     result = _turn(kf, door, Request("go", agent=named), files=files)
@@ -188,7 +188,7 @@ def test_files_for_a_session_no_turn_has_made_makes_it(cfg, way):
     no way to place its inputs before the first turn.
     """
     counting = Counting()
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=counting, threads=StubCheckpointer())
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=counting, threads=StubCheckpointer())
 
     files = Through(kf, way).files_for("q3-report")
     files.upload_files([("/outputs/placed.txt", b"placed")])
@@ -203,7 +203,7 @@ def test_files_for_a_session_a_turn_made_opens_it(cfg, way):
     would leave `files=` holding files the turn never sees.
     """
     counting = Counting()
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=counting, threads=StubCheckpointer())
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=counting, threads=StubCheckpointer())
     issued = kf.run(Request("go")).session_id
 
     files = Through(kf, way).files_for(issued)

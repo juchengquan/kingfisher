@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 
-from kingfisher import WorkspacePaths, default_backends
+from kingfisher import LocalSessions, WorkspacePaths
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.workspace import (
     EXAMPLE,
@@ -74,7 +74,7 @@ def test_a_start_makes_no_kind_folder(tmp_path):
     definitions.mkdir()
     cfg = Config(workspace=tmp_path / "ws", definitions=definitions, models=FAKE_CATALOGUE)
 
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
 
     assert not list(definitions.iterdir()), "a start wrote into the definitions folder"
     assert not set(DEFINITION_KINDS) & {p.name for p in kf.workspace.iterdir()}, (
@@ -167,7 +167,7 @@ def sweep(workspace, keep, checkpointer):
 
     definitions = ensure_definitions(workspace.parent / "definitions")
     cfg = Config(workspace=workspace, definitions=definitions, models=FAKE_CATALOGUE)
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends, threads=checkpointer)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=checkpointer)
     return kf.reap(older_than_seconds=keep, now=time.time())
 
 
@@ -274,7 +274,7 @@ def test_the_layout_names_no_genre_of_output():
 
 
 def test_one_pass_makes_a_whole_session(tmp_path):
-    """What `default_backends` used to finish off, and the reason this exists."""
+    """What `LocalSessions` used to finish off, and the reason this exists."""
     session = ensure_session_layout(tmp_path / "s")
 
     for name in (*SESSION_DIRS, HARNESS):

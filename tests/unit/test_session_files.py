@@ -15,17 +15,16 @@ from langchain_core.messages import AIMessage
 from kingfisher import (
     ArtifactError,
     Kingfisher,
+    LocalSessions,
     Request,
     UnknownSessionError,
     backend_at,
-    default_backends,
 )
 from kingfisher.domain.access import parse
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.backend import (
-    DefaultBackends,
-    SessionBackends,
     SessionClaims,
+    Sessions,
 )
 from kingfisher.infrastructure.session_files import (
     collect_artifacts,
@@ -66,8 +65,8 @@ class ElsewhereFiles(SessionClaims, CompositeBackend):
         self._session_dir = kept
 
 
-class Elsewhere(SessionBackends):
-    """`SessionBackends` keeping each session under `root`, never in its directory.
+class Elsewhere(Sessions):
+    """`Sessions` keeping each session under `root`, never in its directory.
 
     What a remote sandbox looks like from here: a working filesystem the agent can
     read, write and run commands in, sharing nothing with the workspace kingfisher
@@ -119,7 +118,7 @@ def test_a_backend_that_keeps_the_session_elsewhere_gets_the_inputs_and_gives_ba
         _calls("write_file", file_path="/outputs/report.txt", content="made elsewhere"),
         AIMessage(content="done"),
     ])
-    kf = Kingfisher(scripted, backends=Elsewhere(remote))
+    kf = Kingfisher(scripted, sessions=Elsewhere(remote))
 
     events = list(kf.stream(Request("go", agent="only", inputs=(source,))))
 
@@ -141,13 +140,13 @@ def test_a_backend_that_keeps_the_session_elsewhere_gets_the_inputs_and_gives_ba
 
 
 def _produced(
-    cfg, name: str = "outputs/out.txt", content: str = "result", *, backends=default_backends
+    cfg, name: str = "outputs/out.txt", content: str = "result", *, backends=None
 ) -> Kingfisher:
     start(cfg, "s")
     target = cfg.workspace / "sessions" / "s" / name
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content)
-    return Kingfisher(cfg, backends=backends)
+    return Kingfisher(cfg, sessions=backends or LocalSessions())
 
 
 def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg, way):
@@ -206,7 +205,7 @@ def test_a_name_that_is_not_there_is_refused_by_name(cfg, way):
 
 
 def test_a_session_that_is_not_there_is_the_same_error_as_ever(cfg, way):
-    kf = Kingfisher(cfg, backends=default_backends)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(UnknownSessionError):
         Through(kf, way).artifact("nobody", "outputs/out.txt")
@@ -230,7 +229,7 @@ def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg, way):
 # -- reading one -------------------------------------------------------------
 
 
-class Counting(DefaultBackends):
+class Counting(LocalSessions):
     """The default backend, recording each session it is asked for."""
 
     def __init__(self) -> None:

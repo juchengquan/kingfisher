@@ -284,7 +284,7 @@ class Through:
 
 def _backend_in(cfg, session_dir: Path):
     """Kingfisher's own backend for a session kept in this directory, laid out first as
-    `default_backends` lays out every session it opens.
+    `LocalSessions` lays out every session it opens.
     """
     from kingfisher.infrastructure.harness.backend import backend_at
     from kingfisher.infrastructure.workspace import ensure_session_layout

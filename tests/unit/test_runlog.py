@@ -7,7 +7,7 @@ import logging
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 
-from kingfisher import Kingfisher, default_backends
+from kingfisher import Kingfisher, LocalSessions
 from kingfisher.domain.ports import RunEvents
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.runlog import (
@@ -89,7 +89,7 @@ def test_a_sink_that_fails_does_not_fail_the_turn(cfg, caplog):
     kf = Kingfisher(
         cfg,
         graph=StubAgent("42"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         threads=StubCheckpointer(),
         run_events=Broken(),
     )
@@ -107,7 +107,7 @@ def test_a_turn_records_its_start_and_end(cfg):
     kf = Kingfisher(
         cfg,
         graph=StubAgent("42"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         threads=StubCheckpointer(),
         run_events=sink,
     )
@@ -133,7 +133,7 @@ def test_a_sink_that_is_empty_is_still_the_one_used(cfg):
     kf = Kingfisher(
         cfg,
         graph=StubAgent("42"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         threads=StubCheckpointer(),
         run_events=sink,
     )
@@ -150,7 +150,7 @@ def test_with_nothing_wired_the_events_go_to_the_run_logger(cfg, caplog):
     """
     start(cfg, "s")
     kf = Kingfisher(
-        cfg, graph=StubAgent("42"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=StubAgent("42"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
 
     with caplog.at_level(logging.INFO, logger=RUN_LOGGER):

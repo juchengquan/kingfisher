@@ -8,7 +8,7 @@ from deepagents.backends import CompositeBackend, FilesystemBackend
 from deepagents.backends.protocol import BackendProtocol
 from langchain_core.messages import AIMessage
 
-from kingfisher import Kingfisher, Request, default_backends
+from kingfisher import Kingfisher, LocalSessions, Request
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.references import UnsafeReferenceError
 from kingfisher.infrastructure.harness.agent import build_agent, read_only_permissions
@@ -58,7 +58,7 @@ def test_a_skills_file_reaches_a_tool_where_the_backend_keeps_it(scripted):
     Scripted.script.extend([_calls(path="/skills/report/template.md"), AIMessage("done")])
 
     events = list(
-        Kingfisher(scripted, backends=default_backends).stream(
+        Kingfisher(scripted, sessions=LocalSessions()).stream(
             Request("go", agent="only", session_id="s")
         )
     )
@@ -77,7 +77,7 @@ def test_the_pinned_agent_is_not_handed_to_a_tool(scripted):
     Scripted.script.extend([_calls(path="/.harness/agent.yaml"), AIMessage("done")])
 
     events = list(
-        Kingfisher(scripted, backends=default_backends).stream(
+        Kingfisher(scripted, sessions=LocalSessions()).stream(
             Request("go", agent="only", session_id="s")
         )
     )
@@ -97,7 +97,7 @@ def test_a_backend_keeping_sessions_elsewhere_on_this_host_still_serves_a_path(
     source = tmp_path / "notes.txt"
     source.write_text("alpha\n")
     Scripted.script.extend([_calls(path="/inputs/notes.txt"), AIMessage("done")])
-    kf = Kingfisher(scripted, backends=Elsewhere(tmp_path / "remote"))
+    kf = Kingfisher(scripted, sessions=Elsewhere(tmp_path / "remote"))
 
     events = list(kf.stream(Request("go", agent="only", inputs=(source,))))
 

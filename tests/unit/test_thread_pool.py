@@ -6,7 +6,7 @@ from dataclasses import replace
 
 import pytest
 
-from kingfisher import default_backends
+from kingfisher import LocalSessions
 from kingfisher.application.service import Kingfisher
 from kingfisher.config import ConfigError
 from kingfisher.infrastructure import threads
@@ -25,7 +25,7 @@ def _service(cfg, size: int) -> Kingfisher:
     return Kingfisher(
         replace(cfg, thread_pool_size=size),
         graph=StubAgent("ok"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         threads=StubCheckpointer(),
     )
 

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from kingfisher import DefaultBackends, Kingfisher, backend_at, default_backends
+from kingfisher import Kingfisher, LocalSessions, backend_at
 from kingfisher.application.reporting import opening_events
 from kingfisher.application.service import refused_credentials
 from kingfisher.application.turn import turn_message
@@ -57,7 +57,7 @@ def test_an_injected_thread_store_is_opened_once_and_reused(cfg):
     """
     CountingCheckpointer.built = 0
     store = CountingCheckpointer()
-    service = Kingfisher(cfg, graph=StubAgent("ok"), backends=default_backends, threads=store)
+    service = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=store)
 
     for _ in range(3):
         service.run(Request("go"))
@@ -70,7 +70,7 @@ def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
     """Wiring is shared; per-turn state is not."""
     start(cfg, "s")
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
 
     asked = Request("go", agent="only", session_id="s")
@@ -82,7 +82,7 @@ def test_construction_prepares_only_what_sessions_share(cfg):
     """Eagerly, so a broken workspace fails at startup rather than mid-turn -- but only
     the shared tier, and no definition kind, which nothing reads from the workspace.
     """
-    service = Kingfisher(cfg, backends=default_backends, threads=StubCheckpointer())
+    service = Kingfisher(cfg, sessions=LocalSessions(), threads=StubCheckpointer())
 
     assert service.workspace.is_dir()
     assert (service.workspace / "sessions").is_dir()
@@ -95,7 +95,7 @@ def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
     elsewhere cannot honour restrictions it never saw.
     """
     agent = StubAgent("ok")
-    service = Kingfisher(cfg, graph=agent, backends=default_backends, threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=agent, sessions=LocalSessions(), threads=StubCheckpointer())
 
     # No spec and no source ids: a supplied graph is handed back before either is
     # looked at, which is the thing this asserts.
@@ -118,7 +118,7 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     # A real checkpointer: this builds a real agent, and deepagents type-checks
     # the saver it is handed.
     an_agent(cfg)
-    service = Kingfisher(cfg, backends=default_backends)
+    service = Kingfisher(cfg, sessions=LocalSessions())
     asked = Request("go", agent="only")
 
     built = drive(service._agent_for(asked, harness_in(cfg, session_dir)))
@@ -139,7 +139,7 @@ def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
     """
     start(cfg, "s")
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
 
     real_chmod = Path.chmod
@@ -167,7 +167,7 @@ def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
         lambda _dir, _inputs=None: ("theirs.pdf: Operation not permitted",),
     )
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
 
     events = list(service.stream(Request("go", agent="only", session_id="s")))
@@ -187,7 +187,7 @@ def test_the_module_level_helpers_are_unchanged(cfg):
         "say hello",
         cfg=cfg,
         graph=StubAgent("hello"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         checkpointer=StubCheckpointer(),
     )
     assert result.answer == "hello"
@@ -303,7 +303,7 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how)
     kf = Kingfisher(
         budgeted,
         graph=StubAgent("ok"),
-        backends=default_backends,
+        sessions=LocalSessions(),
         threads=StubCheckpointer(),
         run_events=recorded,
     )
@@ -343,7 +343,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
-    service = Kingfisher(cfg, backends=default_backends)  # adds http_fetch, sql_query, sql_tables
+    service = Kingfisher(cfg, sessions=LocalSessions())  # adds http_fetch, sql_query, sql_tables
     start(cfg, "s")
     asked = Request(
         "go",
@@ -378,7 +378,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     # skills at all, so a report naming one "not granted" says the others were -- which
     # is the answer the switch exists to suppress, and what this asserted.
     wired = replace(cfg, skills_enabled=True)
-    service = Kingfisher(wired, backends=default_backends)
+    service = Kingfisher(wired, sessions=LocalSessions())
     start(cfg, "s")
     asked = Request(
         "go",
@@ -443,7 +443,7 @@ def test_nothing_is_withheld_from_the_skills_axis_when_the_switch_is_off(cfg, sh
         capabilities=Capabilities(skills=("code-review",)),
     )
 
-    prepared = drive(Kingfisher(off, backends=default_backends)._prepare_steps(asked))
+    prepared = drive(Kingfisher(off, sessions=LocalSessions())._prepare_steps(asked))
     withheld = dict(prepared.withheld)
 
     assert "skill" not in withheld, "a skill cannot be withheld where none is offered"
@@ -465,7 +465,7 @@ def test_the_skills_axis_is_still_reported_when_the_switch_is_on(cfg, shipped):
         capabilities=Capabilities(skills=("code-review",)),
     )
 
-    prepared = drive(Kingfisher(on, backends=default_backends)._prepare_steps(asked))
+    prepared = drive(Kingfisher(on, sessions=LocalSessions())._prepare_steps(asked))
     withheld = dict(prepared.withheld)
 
     assert withheld["skill"] == tuple(sorted(set(available_skills(on)) - {"code-review"}))
@@ -483,7 +483,7 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
-    service = Kingfisher(cfg, backends=default_backends)
+    service = Kingfisher(cfg, sessions=LocalSessions())
     start(cfg, "s")
     asked = Request(
         "go",
@@ -519,7 +519,7 @@ def test_a_caller_who_stops_reading_still_gives_the_session_back(cfg):
     slot went back.
     """
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
     opened = service.run(Request(task="anything"))
 
@@ -534,7 +534,7 @@ def test_a_caller_who_stops_reading_still_gives_the_session_back(cfg):
 def test_the_graph_is_sent_the_whole_conversation_not_only_the_question(cfg):
     """Where history comes from now."""
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
     first = service.run(Request(task="the number is forty"))
     service.run(Request(task="and now?", session_id=first.session_id))
@@ -571,7 +571,7 @@ def test_a_runner_is_built_for_each_turn_and_told_the_session(cfg, tmp_path, mon
         asked.append(session_dir)
         return Runner()
 
-    class Recording(DefaultBackends):
+    class Recording(LocalSessions):
         def open(self, cfg_, session_id, /, *, catalogue=None):
             opened = super().open(cfg_, session_id, catalogue=catalogue)
             handed.append(opened.default.runner)
@@ -579,7 +579,7 @@ def test_a_runner_is_built_for_each_turn_and_told_the_session(cfg, tmp_path, mon
 
     named = an_agent(cfg, "worker")
     monkeypatch.setattr(service_module, "build_agent", lambda *a, **kw: StubAgent("ok"))
-    service = Kingfisher(cfg, backends=Recording(runner=build), threads=StubCheckpointer())
+    service = Kingfisher(cfg, sessions=Recording(runner=build), threads=StubCheckpointer())
 
     first = service.run(Request(task="anything", agent=named))
     service.run(Request(task="again", agent=named, session_id=first.session_id))
@@ -601,7 +601,7 @@ def test_a_runner_that_is_not_a_callable_is_refused_at_wiring_time(cfg):
     with pytest.raises(TypeError, match="lambda session_dir"):
         # The type checker refuses this too, which is the point: the runtime
         # check is for callers who never run one.
-        DefaultBackends(runner=Runner())  # ty: ignore[invalid-argument-type]
+        LocalSessions(runner=Runner())  # ty: ignore[invalid-argument-type]
 
 
 def test_no_runner_leaves_the_platform_to_decide(cfg):
@@ -610,7 +610,7 @@ def test_no_runner_leaves_the_platform_to_decide(cfg):
     with `None`, which is the pick only where kingfisher has no fence of its own --
     on Linux it is the Landlock runner.
     """
-    opened = default_backends.open(cfg, "s")
+    opened = LocalSessions().open(cfg, "s")
     unwired = backend_at(cfg, cfg.workspace / "sessions" / "s")
 
     assert type(opened.default.runner) is type(unwired.default.runner)
@@ -706,7 +706,7 @@ def test_a_turn_translates_a_rejected_key_rather_than_raising_the_providers_erro
             return None
 
     service = Kingfisher(
-        cfg, graph=Rejects(), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=Rejects(), sessions=LocalSessions(), threads=StubCheckpointer()
     )
 
     with pytest.raises(ConfigError, match="rejected the key"):
@@ -750,7 +750,7 @@ def test_a_turn_resolves_its_agent_once(cfg, monkeypatch):
     """
     from kingfisher.application import service as service_module
 
-    service = Kingfisher(_policied(cfg), backends=default_backends)
+    service = Kingfisher(_policied(cfg), sessions=LocalSessions())
     reads = _snapshot_reads(monkeypatch)
     reported: list[object] = []
     real = service_module.withheld_by_kind
@@ -783,7 +783,7 @@ def test_a_supplied_graph_with_no_policy_is_never_asked_which_agent(cfg, monkeyp
     """
     an_agent(cfg, "only")
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
     reads = _snapshot_reads(monkeypatch)
 
@@ -801,7 +801,7 @@ def test_a_supplied_graph_under_a_policy_still_resolves_one(cfg, monkeypatch):
     from kingfisher.application import service as service_module
 
     service = Kingfisher(
-        _policied(cfg), graph=StubAgent("ok"), backends=default_backends, threads=StubCheckpointer()
+        _policied(cfg), graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
     reads = _snapshot_reads(monkeypatch)
     reported: list[object] = []
@@ -832,7 +832,7 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     an_agent(cfg, "other")
     # A session whose files are not under the workspace at all.
     elsewhere = ensure_session_layout(tmp_path / "for-one-turn" / "a-session")
-    service = Kingfisher(cfg, backends=default_backends)
+    service = Kingfisher(cfg, sessions=LocalSessions())
 
     drive(service._agent_for(Request("go", agent="only"), harness_in(cfg, elsewhere)))
 

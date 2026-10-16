@@ -6,7 +6,7 @@ from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
-from kingfisher import default_backends
+from kingfisher import LocalSessions
 from kingfisher.application.run import Request, stream
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.backend import backend_at
@@ -59,7 +59,7 @@ def _events(cfg, session_dir, name="s"):
             Request("go", session_id=name),
             cfg=cfg,
             graph=_two_level(cfg, session_dir),
-            backends=default_backends,
+            sessions=LocalSessions(),
             checkpointer=StubCheckpointer(),
         )
     )
@@ -126,7 +126,7 @@ def test_a_run_without_subagents_renders_exactly_as_before(cfg):
             Request("go", session_id="plain"),
             cfg=cfg,
             graph=StubAgent("42", updates=[{"agent": {"messages": [AIMessage(content="hi")]}}]),
-            backends=default_backends,
+            sessions=LocalSessions(),
             checkpointer=StubCheckpointer(),
         )
     )
@@ -165,7 +165,7 @@ def test_a_turn_cut_short_after_a_subagent_reports_no_subagent_answer(cfg):
             Request("go", session_id="cut"),
             cfg=replace(cfg, turn_timeout_s=0),
             graph=_SubagentSpeaksFirst(),
-            backends=default_backends,
+            sessions=LocalSessions(),
             checkpointer=StubCheckpointer(),
         )
     )
