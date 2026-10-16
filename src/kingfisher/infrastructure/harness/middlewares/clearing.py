@@ -9,10 +9,10 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from deepagents.middleware.summarization import SUMMARIZATION_EVENT_KEY
-from langchain.agents.middleware import AgentMiddleware
+from langchain.agents.middleware import AgentMiddleware, ExtendedModelResponse
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately
+from langgraph.types import Command
 
 from kingfisher.infrastructure.harness.middlewares.recorder import _arguments
 from kingfisher.infrastructure.harness.models import summarizer_trigger
@@ -101,13 +101,17 @@ class _Item:
 
 
 class ResultClearing(AgentMiddleware):
-    """Before each model call, swap older results and file text for handles in the
-    conversation itself, once it has grown past the high mark.
+    """Swap older results and file text for handles in the conversation itself, once it
+    has grown past the high mark, from inside each model call.
 
-    `before_model`, because the conversation it rewrites is the one deepagents'
-    summariser counts on the same call and the one the turn writes to the transcript.
-    The summariser's count happens inside `wrap_model_call`, so anything done there
-    lands after it has decided, and changes only what one request sends.
+    Inside the call rather than in a hook of its own, because a `before_model` hook is a
+    graph step and the recursion limit counts it: measured, one cut a turn's 150 steps
+    from 50 model calls to 37. A pass clears the request this call sends and, through
+    the state update it returns, the conversation every later call is built from and
+    the transcript is written from. What that gives up is the summariser's count on the
+    one call a pass starts on, which is taken outside this and first; with the default
+    mark at most half its trigger, only a batch adding more than that between two calls
+    gets there first.
 
     A message keeps its id and its place, and only its content changes. The summariser's
     cut is a position in this list, and a message removed would move it.
@@ -124,58 +128,54 @@ class ResultClearing(AgentMiddleware):
         self._low = high // 2
         #: This layout's `/scratchpad/large_tool_results/`, as the model addresses it.
         self._offloads = offloads_route
-        # What the system prompt and the tools add to the summariser's count, read off
-        # the last request. Zero until a model call has passed, so the first call of a
-        # turn counts the conversation alone and may start a pass a little later.
-        self._fixed = 0
-
-    def before_model(self, state: Any, runtime: Any) -> dict[str, Any] | None:  # noqa: ARG002
-        return self._cleared(state)
-
-    async def abefore_model(
-        self, state: Any, runtime: Any  # noqa: ARG002
-    ) -> dict[str, Any] | None:
-        return self._cleared(state)
 
     def wrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
-        self._measured(request)
-        return handler(request)
+        request, update = self._cleared(request)
+        return _with(handler(request), update)
 
     async def awrap_model_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        self._measured(request)
-        return await handler(request)
+        request, update = self._cleared(request)
+        return _with(await handler(request), update)
 
-    def _measured(self, request: Any) -> None:
+    def _cleared(self, request: Any) -> tuple[Any, Command[Any] | None]:
+        """The request with this pass's handles in it, and the state update carrying them,
+        or the request as it came and `None` where no pass runs."""
+        sent = list(request.messages)
         fixed = [] if request.system_message is None else [request.system_message]
-        self._fixed = count_tokens_approximately(fixed, tools=request.tools)
-
-    def _cleared(self, state: Any) -> dict[str, Any] | None:
-        messages = list(state.get("messages") or ())
-        start, summary = _summarised(state, len(messages))
-        total = self._fixed + count_tokens_approximately([*summary, *messages[start:]])
+        total = count_tokens_approximately([*fixed, *sent], tools=request.tools)
         if total < self.high:
-            return None
-        items = self._items(messages, start)
+            return request, None
+        messages = list(request.state.get("messages") or ())
+        # What this call sends of the conversation, by id. The summariser's view leaves
+        # out what its summary stands for, and can hold a message whose arguments it
+        # shortened, so a handle is made from the message in state and counted against
+        # the one sent.
+        as_sent = {one.id: one for one in sent if one.id is not None}
+        items = self._items(messages, as_sent)
         if sum(item.frees for item in items) < self.high * WORTH:
-            return None
+            return request, None
         changed: dict[int, Any] = {}
         for item in items:
             if total <= self._low:
                 break
-            before = changed.get(item.at, messages[item.at])
-            after = item.clear(before)
-            total -= _tokens(before) - _tokens(after)
+            counted = changed[item.at] if item.at in changed else as_sent[messages[item.at].id]
+            after = item.clear(changed.get(item.at, messages[item.at]))
+            total -= _tokens(counted) - _tokens(after)
             changed[item.at] = after
-        return {"messages": list(changed.values())} if changed else None
+        if not changed:
+            return request, None
+        replaced = {messages[at].id: one for at, one in changed.items()}
+        cleared = request.override(messages=[replaced.get(one.id, one) for one in sent])
+        return cleared, Command(update={"messages": list(replaced.values())})
 
-    def _items(self, messages: list[Any], start: int) -> list[_Item]:
+    def _items(self, messages: list[Any], as_sent: Mapping[str, Any]) -> list[_Item]:
         """Everything a pass may clear, oldest first, each freeing something.
 
         Spared: the latest batch of calls with its results, the `KEEP_RECENT` most
         recent clearable results with the text of the calls that made them, and what
-        the summariser no longer sends.
+        this call no longer sends.
         """
         latest = max(
             (at for at, one in enumerate(messages) if isinstance(one, AIMessage)),
@@ -200,24 +200,29 @@ class ResultClearing(AgentMiddleware):
                 results.append((at, one.tool_call_id, handle))
         kept = {call for _, call, _ in results[-KEEP_RECENT:]}
 
+        # A message with no id would be appended by the reducer rather than replaced, and
+        # is in `as_sent` under none.
+        def sending(at: int) -> Any:
+            return as_sent.get(messages[at].id) if messages[at].id is not None else None
+
         items = [
-            _item(messages[at], at, 0, _replaced(handle))
+            _item(messages[at], sending(at), at, 0, _replaced(handle))
             for at, call, handle in results
-            if at >= start and call not in kept
+            if sending(at) is not None and call not in kept
         ]
-        for at in range(start, latest):
+        for at in range(latest):
             one = messages[at]
-            if not isinstance(one, AIMessage):
+            if not isinstance(one, AIMessage) or sending(at) is None:
                 continue
             for order, call in enumerate(one.tool_calls):
                 if call["id"] in succeeded and call["id"] not in kept:
                     cleared = _file_text_cleared(call)
                     if cleared:
-                        items.append(_item(one, at, order, _rewritten(call["id"], cleared)))
-        # A message with no id would be appended by the reducer rather than replaced.
+                        items.append(
+                            _item(one, sending(at), at, order, _rewritten(call["id"], cleared))
+                        )
         return sorted(
-            (item for item in items if item.frees > 0 and messages[item.at].id is not None),
-            key=lambda item: (item.at, item.order),
+            (item for item in items if item.frees > 0), key=lambda item: (item.at, item.order)
         )
 
     def _handle(
@@ -262,16 +267,15 @@ class ResultClearing(AgentMiddleware):
         return f"{row.summary}\n({row.size:,} bytes, cleared; {where})\n[{row.id}]"
 
 
-def _summarised(state: Any, count: int) -> tuple[int, list[Any]]:
-    """Where the summariser's view of the conversation starts, and the summary ahead of
-    it, as `_apply_event_to_messages` builds that view."""
-    event = state.get(SUMMARIZATION_EVENT_KEY)
-    if not isinstance(event, Mapping):
-        return 0, []
-    cutoff, summary = event.get("cutoff_index"), event.get("summary_message")
-    if not isinstance(cutoff, int) or summary is None:
-        return 0, []
-    return min(cutoff, count), [summary]
+def _with(response: Any, update: Command[Any] | None) -> Any:
+    """The model's response, carrying the pass's state update where there was a pass.
+
+    The handler hands back a plain response: langchain keeps what layers inside this one
+    returned apart, and applies every layer's update with the model's reply.
+    """
+    if update is None:
+        return response
+    return ExtendedModelResponse(model_response=response, command=update)
 
 
 def _tokens(message: Any) -> int:
@@ -293,8 +297,9 @@ def _size(result: ToolMessage) -> int | None:
     return None
 
 
-def _item(message: Any, at: int, order: int, clear: Callable[[Any], Any]) -> _Item:
-    return _Item(at=at, order=order, clear=clear, frees=_tokens(message) - _tokens(clear(message)))
+def _item(message: Any, sent: Any, at: int, order: int, clear: Callable[[Any], Any]) -> _Item:
+    """One item, freeing what its handle saves against the message as this call sends it."""
+    return _Item(at=at, order=order, clear=clear, frees=_tokens(sent) - _tokens(clear(message)))
 
 
 def _replaced(handle: str) -> Callable[[Any], Any]:

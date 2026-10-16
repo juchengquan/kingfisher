@@ -183,10 +183,9 @@ def _refuse_a_clearing_mark_the_summarizer_reaches_first(
 ) -> None:
     """Refuse a `clear_results_at` at or past where this model's conversation is summarised.
 
-    Clearing runs before each model call and the summariser inside it, so a mark it
-    reaches first would never clear anything and say nothing. The highest mark this
-    lets through clears only just before summarising, which is the nearest thing to
-    off there is.
+    The summariser counts each call before clearing does, so a mark it reaches first
+    would never clear anything and say nothing. The highest mark this lets through
+    almost never clears, which is the nearest thing to off there is.
     """
     mark = profile.clear_results_at
     if mark is None or mark < (trigger := summarizer_trigger(model)):

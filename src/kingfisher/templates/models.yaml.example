@@ -105,7 +105,7 @@ default: MiniMax-M3
 #                summarizes this model's conversation. Written, it is used as
 #                written, and one at or past that point is refused when the model
 #                is built, since clearing would never come first. There is no off:
-#                the highest it may be clears only just before summarizing.
+#                the highest it may be almost never clears.
 #   extra        forwarded as kwargs, for settings peculiar to one endpoint.
 #                Additive only -- it may not name any of the above.
 #

@@ -13,7 +13,6 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import replace
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -22,6 +21,7 @@ from deepagents.middleware._message_eviction import (
     _create_content_preview,
     _render_preview_stub,
 )
+from langchain.agents.middleware import ExtendedModelResponse, ModelRequest, ModelResponse
 from langchain_anthropic import ChatAnthropic
 from langchain_anthropic.chat_models import _format_messages
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -125,12 +125,39 @@ class Talk:
         args = {"file_path": path, "content": content}
         return self.call("write_file", args, f"Updated file {path}")
 
-    def cleared(self, high: int = 1_000, **state: Any) -> list[Any]:
-        """The conversation after one `before_model` at this high mark."""
-        update = ResultClearing(self.ledger, high, OFFLOADS_ROUTE).before_model(
-            {"messages": self.messages, **state}, None
+    def passed(
+        self, high: int = 1_000, sent: list[Any] | None = None, system: str | None = None
+    ) -> tuple[list[Any], dict[str, Any] | None]:
+        """What one model call at this high mark sent, and the state update it returned.
+
+        `sent` is the conversation as deepagents' summariser hands it on, the whole of it
+        unless a test says otherwise; the state is the whole conversation either way.
+        """
+        request = ModelRequest(
+            model=FakeToolCallingModel(responses=[]),
+            messages=list(self.messages if sent is None else sent),
+            system_message=None if system is None else SystemMessage(system),
+            tools=[],
+            state={"messages": list(self.messages)},
         )
-        return _applied(self.messages, update)
+        heard: list[Any] = []
+
+        def model(request: Any) -> ModelResponse:
+            heard.append(request)
+            return ModelResponse(result=[AIMessage("ok")])
+
+        returned = ResultClearing(self.ledger, high, OFFLOADS_ROUTE).wrap_model_call(
+            request, model
+        )
+        (asked,) = heard
+        if isinstance(returned, ExtendedModelResponse):
+            assert returned.command is not None
+            return asked.messages, returned.command.update
+        return asked.messages, None
+
+    def cleared(self, high: int = 1_000, sent: list[Any] | None = None) -> list[Any]:
+        """The conversation after one model call at this high mark."""
+        return _applied(self.messages, self.passed(high, sent)[1])
 
 
 def _stub(call: str, path: str, content: str) -> str:
@@ -217,22 +244,101 @@ def test_a_pass_that_could_free_less_than_a_quarter_of_the_mark_does_not_run():
     assert small
 
 
-def test_the_count_includes_the_prompt_and_tools_the_last_call_was_sent():
+def test_the_count_includes_the_prompt_and_tools_the_call_sends():
     """The summariser counts the system prompt and the tools with the conversation, so a
-    mark counted on the conversation alone would let a mark just under its trigger lose
-    to it. Read off the request the last call was sent, since `before_model` has none.
-    """
+    mark counted on the conversation alone would be reached later than the one it is
+    measured against."""
     talk = Talk()
     talk.call("web_search", {"query": "one"}, _text("one"))
     talk.pad()
-    total = count_tokens_approximately(talk.messages)
-    clearing = ResultClearing(talk.ledger, total + 500, OFFLOADS_ROUTE)
-    assert clearing.before_model({"messages": talk.messages}, None) is None
+    high = count_tokens_approximately(talk.messages) + 500
 
-    sent = SimpleNamespace(system_message=SystemMessage("p" * 4_000), tools=[])
-    clearing.wrap_model_call(sent, lambda request: None)
+    assert talk.passed(high)[1] is None
+    assert talk.passed(high, system="p" * 4_000)[1] is not None
 
-    assert clearing.before_model({"messages": talk.messages}, None) is not None
+
+def test_the_call_a_pass_runs_on_sends_the_handles():
+    """The pass runs inside the call, so the request that call sends is already the
+    cleared one: a pass that only updated the state would pay for the whole conversation
+    once more."""
+    talk = Talk()
+    call = talk.call("web_search", {"query": "one"}, _text("one"))
+    talk.pad()
+
+    sent, update = talk.passed()
+
+    assert update is not None
+    assert _of(sent, call) == _of(_applied(talk.messages, update), call) != talk.result(call)
+
+
+def test_a_handle_is_made_from_the_message_in_state_not_the_one_sent():
+    """deepagents' summariser shortens older write and edit arguments in what it sends
+    on, past its own trigger -- and, on a model with no window, once twenty messages
+    precede them. A handle made from that copy would name the length of the shortened
+    text, and write it into the conversation for good."""
+    talk = Talk()
+    wrote = talk.write("/outputs/r.md")
+    talk.pad()
+    at = talk.messages.index(talk.result(wrote)) - 1
+    (call,) = talk.messages[at].tool_calls
+    short = {"file_path": "/outputs/r.md", "content": "x" * 2_000 + "...(argument truncated)"}
+    shortened = talk.messages[at].model_copy(update={"tool_calls": [{**call, "args": short}]})
+    sent = [*talk.messages[:at], shortened, *talk.messages[at + 1 :]]
+
+    after = talk.cleared(high=500, sent=sent)
+
+    assert _call_in(after, wrote)["args"]["content"].startswith("8,000 chars written")
+
+
+SHORTENED = "x" * 2_000 + "...(argument truncated)"
+
+
+def _shortened(message: AIMessage, call: str) -> AIMessage:
+    """`message` as deepagents' summariser sends it on, `call`'s file text shortened."""
+    calls = [
+        {**one, "args": {**one["args"], "content": SHORTENED}} if one["id"] == call else one
+        for one in message.tool_calls
+    ]
+    return message.model_copy(update={"tool_calls": calls})
+
+
+def test_what_the_summariser_shortened_in_another_call_stays_out_of_the_conversation():
+    """A message cleared is written back whole, so one built from the copy sent would
+    carry the summariser's shortened text for the other call in it into the conversation
+    for good, where until then it shortened only what one request sent."""
+    talk = Talk()
+    old, recent = talk.batch(
+        *(
+            ("write_file", {"file_path": path, "content": BIG}, f"Updated file {path}")
+            for path in ("/outputs/a.md", "/outputs/b.md")
+        )
+    )
+    # Three more results, so that `recent` is among the most recent kept and `old` is not.
+    for n in range(2):
+        talk.call("web_search", {"query": f"r{n}"}, f"r{n}")
+    talk.call("web_search", {"query": "latest"}, "latest")
+    at = talk.messages.index(talk.result(old)) - 1
+    sent = [*talk.messages[:at], _shortened(talk.messages[at], recent), *talk.messages[at + 1 :]]
+
+    after = talk.cleared(high=500, sent=sent)
+
+    assert _call_in(after, old)["args"]["content"].startswith("8,000 chars written")
+    assert _call_in(after, recent)["args"]["content"] == BIG
+
+
+def test_what_a_pass_frees_is_counted_on_what_the_call_sends():
+    """Where the summariser already sends a shortened copy, clearing it frees only that
+    much on this call; counting the whole would start a pass the quarter-mark guard is
+    there to stop, re-caching everything after it for a few hundred tokens."""
+    talk = Talk()
+    talk.ask("y" * 16_000)
+    wrote = talk.write("/outputs/r.md")
+    talk.pad()
+    at = talk.messages.index(talk.result(wrote)) - 1
+    sent = [*talk.messages[:at], _shortened(talk.messages[at], wrote), *talk.messages[at + 1 :]]
+
+    assert talk.passed(high=4_000, sent=sent)[1] is None
+    assert talk.passed(high=4_000)[1] is not None, "the control: the whole text is worth it"
 
 
 def test_a_message_with_no_id_is_left_alone():
@@ -245,9 +351,7 @@ def test_a_message_with_no_id_is_left_alone():
     talk.messages[at] = talk.messages[at].model_copy(update={"id": None})
     talk.pad()
 
-    update = ResultClearing(talk.ledger, 1_000, OFFLOADS_ROUTE).before_model(
-        {"messages": talk.messages}, None
-    )
+    _, update = talk.passed()
 
     assert update is not None
     assert [m.tool_call_id for m in update["messages"]] == [other]
@@ -542,14 +646,14 @@ def test_after_a_summary_only_what_is_still_sent_is_counted_or_cleared():
     cut = len(talk.messages)
     kept = talk.call("web_search", {"query": "k"}, _text("k"))
     talk.pad()
-    event = {"cutoff_index": cut, "summary_message": HumanMessage("a summary", id="s")}
-    sent = count_tokens_approximately([event["summary_message"], *talk.messages[cut:]])
+    view = [HumanMessage("a summary"), *talk.messages[cut:]]
+    size = count_tokens_approximately(view)
 
-    after = talk.cleared(high=sent, _summarization_event=event)
+    after = talk.cleared(high=size, sent=view)
 
     assert [_of(after, call) for call in gone] == [talk.result(call) for call in gone]
     assert _of(after, kept) != talk.result(kept)
-    assert talk.cleared(high=sent + 1, _summarization_event=event) == talk.messages
+    assert talk.cleared(high=size + 1, sent=view) == talk.messages
 
 
 # -- the marks -----------------------------------------------------------------------
@@ -672,9 +776,9 @@ def test_an_offloaded_results_handle_finds_it_after_the_turn(bulky):
 
 
 def test_the_summariser_counts_the_cleared_conversation(bulky, way):
-    """The reason for `before_model`: the summariser counts the conversation the hook has
-    already rewritten. Fifteen results that would have tripped it on a 60,000-token
-    window go through without a summary."""
+    """What clearing is for: from the call after a pass, the summariser counts the
+    conversation it rewrote. Fifteen results that would have tripped it on a
+    60,000-token window go through without a summary."""
     window = {"profile": {"max_input_tokens": 60_000}}
     cfg = _marked(bulky, extra=window)
     trigger = int(60_000 * 0.85)
@@ -687,6 +791,18 @@ def test_the_summariser_counts_the_cleared_conversation(bulky, way):
     assert Scripted.summaries == 0
     cleared = [one for one in _transcript(cfg) if "bytes, cleared;" in one.content]
     assert cleared, "nothing was cleared, so nothing here kept the summariser off"
+
+
+def test_clearing_adds_no_step_to_the_agents_loop(bulky):
+    """langgraph's recursion limit counts graph steps, and a `before_model` hook is one:
+    measured, it cut a turn's 150 steps from 50 model calls to 37, and a writing turn in
+    the acceptance run stopped there."""
+    backend = backend_at(bulky, bulky.workspace / "sessions" / "s")
+
+    def steps(ledger: Ledger | None) -> set[str]:
+        return set(build_agent(bulky, backend=backend, ledger=ledger).graph.get_graph().nodes)
+
+    assert steps(Ledger("t", KeptLedger())) == steps(None)
 
 
 def _clearing(middleware: Any) -> list[Any]:
