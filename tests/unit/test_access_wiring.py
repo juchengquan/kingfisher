@@ -1480,6 +1480,56 @@ def naming_none_hidden(*messages: str) -> bool:
     return not [name for name in HIDDEN_FROM_C for one in messages if name in one]
 
 
+#: What an agent may say about its subagents, and whether a request's own name then
+#: reaches the build to be refused. Only the star lets it through: a list and an absent
+#: line both narrow a request's name away silently, which the rule below this one
+#: holds for one agent and this holds for the three shapes.
+NAMES_REACH_THE_BUILD = {
+    "no subagents line": ("", False),
+    "a list": ("subagents: [mine]\n", False),
+    "the star": ('subagents: ["*"]\n', True),
+}
+
+
+@pytest.mark.parametrize("shape", sorted(NAMES_REACH_THE_BUILD))
+def test_a_request_is_refused_a_name_only_by_an_agent_that_offers_every_subagent(
+    shape, policied
+):
+    """Which is the premise a narrower answer at that refusal rests on, and the reason
+    no rule can assert the narrower answer itself.
+
+    `_activated_subagents` lists what the agent the build *opened* hands work to,
+    rather than what every agent this caller can open does, because
+    `Capabilities.subagents` may only narrow what that agent declares. Measured, the
+    two answers cannot differ: a refusal there needs the request's name to survive the
+    agent's ceiling, only `"*"` lets it through, and `"*"` is every subagent in reach
+    -- a superset of what any other agent activates, so the union equals it. The
+    other branch of that call, for a build that resolved no agent, is unreachable: a
+    workspace offering no agent refuses the turn before this.
+
+    So this pins the premise instead. Widen the refusal -- let a listing agent refuse
+    a name it does not declare -- and this rule goes red, which is the moment the
+    narrower listing becomes something a rule can see.
+    """
+    line, refused = NAMES_REACH_THE_BUILD[shape]
+    (policied.catalogue_roots["agents"] / "surveyor.yaml").write_text(
+        AGENT + line, encoding="utf-8"
+    )
+    helpers = subagents_dir(policied)
+    helpers.mkdir(parents=True, exist_ok=True)
+    for name in ("mine", "nobodys"):
+        (helpers / f"{name}.yaml").write_text(
+            A_PLAIN_SUBAGENT.format(name=name), encoding="utf-8"
+        )
+
+    said = refusal(policied, ("A",), "surveyor", Capabilities(subagents=("ghost",)))
+
+    assert bool(said) is refused, said or "nothing was refused"
+    if refused:
+        # Everything in reach, which is what makes the narrower answer the same answer.
+        assert "offered: ('mine', 'nobodys')" in said
+
+
 @pytest.mark.parametrize("name", ["insider", "ledger"])
 def test_a_request_naming_a_subagent_out_of_reach_reads_what_a_typo_reads(delegating, name):
     """Under an agent offering every subagent, `C` naming `insider` ran without it and was

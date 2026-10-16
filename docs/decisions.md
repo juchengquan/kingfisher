@@ -6732,6 +6732,58 @@ architecture review.)*
 stopped working silently. *(2026-08-18, `mutating-the-architecture-rules.md`.)*
 
 
+**Six guards that could not fail, and one that cannot be made to.** A review mutated
+every branch the last ten slices added -- 104 of them, 97 biting -- and the survivors
+were all in rules written days earlier, which is where they always are. Each is fixed
+by reaching the subject, not by changing behaviour: every one of these six was correct
+and held by nothing.
+
+  - **`bar_chart` scrubs three cells and the rule reached one.** The fixture put the
+    forbidden character in the *label* on every case, so dropping the scrub from the
+    *title* -- the header row, which is the half a caller does not choose row by row --
+    left 137 tests green while the title came out `n by na\x00me` and the SVG stopped
+    parsing. Parametrized over both places now.
+  - **Two of the three characters XML admits were reached by nothing**, in the rule
+    whose own docstring says it exists for "the reason the three are named rather than
+    the range": it drove the tab alone, so narrowing the set to `(0x09,)` was green.
+    All three, and asserted on the file's bytes, because XML normalises a carriage
+    return to a newline on the way *in* -- the parser handing back `al\npha` for it is
+    the standard working rather than the tool having changed anything.
+  - **`doctor` has to answer on a workspace nothing has laid out**, which is the state
+    you run it in. Its session scan guards that and nothing reached the guard: removing
+    it left the whole suite green while `examine` raised `FileNotFoundError`, and
+    `examine` catches `ConfigError` only. That is the shape of the entry this check was
+    added beside, one slice later.
+  - **And the scan's `is_dir` filter was indistinguishable from `True`**, because no
+    fixture put a non-directory in `sessions/`. A link to a file would have been
+    reported as a strayed session.
+  - **The traversal refusal was driven on one half.** `test_a_path_that_climbs_out_is_
+    an_error_on_the_result` was the one rule in its file taking `backend` without
+    `way`, so making `adelete` hand a malformed path to the backend instead of
+    refusing it left the suite green. Its neighbour covers the async halves with
+    well-formed paths only, which is how the deny rule was driven on both and the
+    traversal branch on one.
+
+**The sixth cannot be given a rule, and that is the finding.** `_activated_subagents`
+lists what the agent the build *opened* hands work to, rather than what every agent the
+caller can open does, because `Capabilities.subagents` may only narrow what that agent
+declares. Collapsing it into the broader answer left 243 tests green, and measuring says
+why: a refusal there needs the request's name to survive the agent's ceiling, and of the
+three things an agent can say about its subagents -- nothing, a list, `"*"` -- only
+`"*"` lets a name through. `"*"` is every subagent in reach, a superset of what any
+other agent activates, so the union equals it. The other branch, for a build that
+resolved no agent, is unreachable: a workspace offering no agent refuses the turn
+earlier.
+
+So the narrower answer is kept, because it is right by the rule the whole of #751
+argues rather than by coincidence, and what is pinned is the premise instead:
+`test_a_request_is_refused_a_name_only_by_an_agent_that_offers_every_subagent` drives
+all three shapes. Widen the refusal and that rule reddens, which is the moment the
+narrower listing becomes something a rule can see. A guard that cannot be distinguished
+is usually one to delete -- three were deleted in the last month for exactly that -- and
+this is the case where recording why beats both deleting it and pretending a rule exists.
+*(2026-10-16, from an architecture review.)*
+
 **A rule matching one spelling of a reach matches one spelling.**
 `test_only_the_confinement_module_calls_resolve_directly` required an `ast.Name` reading
 exactly `confinement`, so it saw two of the six ways a file can reach that `resolve`:

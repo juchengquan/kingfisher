@@ -356,6 +356,16 @@ def _activated_subagents(
         offered=defined,
         kind="subagent",
         subject="this request",
+        # The agent this build opened, not every agent the caller can open: a request
+        # may only narrow what that agent declares, so a name it does not activate is
+        # advice that cannot be taken. Measured, the two cannot differ here -- a
+        # refusal needs the name to survive the agent's ceiling, only `"*"` lets one
+        # through, and `"*"` is every subagent in reach; and `agent is None` is
+        # unreachable, a workspace offering no agent refusing the turn earlier. Kept
+        # because it is the right answer rather than a coincidence, and
+        # `test_a_request_is_refused_a_name_only_by_an_agent_that_offers_every_subagent`
+        # pins the premise, so widening the refusal reddens there and sends a reader
+        # here.
         listing=offered_to(defined, held, by=() if agent is None else (agent,)),
     )
     # After the unknown-name check, not before: naming one that does not exist
