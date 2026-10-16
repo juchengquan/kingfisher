@@ -199,16 +199,35 @@ def test_a_number_a_bar_cannot_be_as_long_as_is_refused(written, tools, handed, 
     assert _saved(handed, "/outputs/chart.svg") is None, "refused, so nothing was written"
 
 
+#: Where a cell holding one of these ends up in the drawing. Both, because the tool
+#: scrubs three cells and the rule covered one: with the character only ever in the
+#: label, dropping the scrub from the *title* left 137 tests green -- and the title is
+#: the header row, which is the half a caller does not choose row by row.
+IN_THE_CHART = {
+    "a label": ("name,n\nal{bad}pha,5\n", "alpha"),
+    "the title": ("na{bad}me,n\nalpha,5\n", "n by name"),
+}
+
+
 @pytest.mark.parametrize("control", ["\x00", "\x0b", "\x1f"])
-def test_a_cell_holding_what_xml_forbids_is_drawn_without_it(control, tools, handed, session_dir):
+@pytest.mark.parametrize("where", sorted(IN_THE_CHART))
+def test_a_cell_holding_what_xml_forbids_is_drawn_without_it(
+    where, control, tools, handed, session_dir
+):
     """XML 1.0 admits a tab, a newline and a carriage return below a space and nothing
-    else at all -- not escaped, not as a character reference -- so a label holding one
+    else at all -- not escaped, not as a character reference -- so a cell holding one
     of the others left a file no viewer can open, `not well-formed (invalid token)`,
     while the answer said `Saved chart.svg (SVG image, 335 B)`. `escape` does not touch
     them: it handles the markup characters and no more.
+
+    Every cell that reaches the drawing, not just the one a row supplies. The tool
+    scrubs the two header cells as well, and nothing reached them: mutating that call
+    away left this file green while the title came out `n by na\x00me` and the SVG
+    stopped parsing.
     """
+    shape, expected = IN_THE_CHART[where]
     (session_dir / "inputs" / "odd.csv").write_text(
-        f"name,n\nal{control}pha,5\n", encoding="utf-8"
+        shape.format(bad=control), encoding="utf-8"
     )
 
     said = on_backend(tools["bar_chart"], handed, file_path="/inputs/odd.csv")
@@ -216,27 +235,39 @@ def test_a_cell_holding_what_xml_forbids_is_drawn_without_it(control, tools, han
     data = _saved(handed, "/outputs/chart.svg")
     assert data is not None
     root = ElementTree.fromstring(data)  # noqa: S314 -- our own tool's output
-    assert "alpha" in [one.text for one in root.iter("{http://www.w3.org/2000/svg}text")]
+    assert expected in [one.text for one in root.iter("{http://www.w3.org/2000/svg}text")]
     assert "1 cell(s) drawn without a character an SVG cannot carry" in said
 
 
-def test_a_cell_holding_a_character_xml_admits_keeps_it(tools, handed, session_dir):
+@pytest.mark.parametrize("control", ["\t", "\n", "\r"])
+def test_a_cell_holding_a_character_xml_admits_keeps_it(control, tools, handed, session_dir):
     """The other half, and the reason the three are named rather than the range: a rule
     stripping every control character would pass the one above and quietly rewrite a
     label a file is entitled to hold.
+
+    All three, because this drove the tab alone and the three are the whole claim:
+    narrowing the set to `(0x09,)` left the file green while a legal label holding a
+    newline was rewritten and counted as scrubbed.
+
+    Quoted, which is how a CSV carries a newline inside one field -- unquoted it is a
+    row boundary and the tool never sees one cell.
+
+    Asserted on the file's bytes rather than on what the parser hands back, because XML
+    normalises a carriage return to a newline on the way in: the character is in the
+    document, and `ElementTree` returning `al\npha` for it is the standard working
+    rather than the tool having changed anything. The parse is asserted separately,
+    which is the half that would fail if the character were not admitted.
     """
     (session_dir / "inputs" / "odd.csv").write_text(
-        "name,n\nal\tpha,5\n", encoding="utf-8"
+        f'name,n\n"al{control}pha",5\n', encoding="utf-8"
     )
 
     said = on_backend(tools["bar_chart"], handed, file_path="/inputs/odd.csv")
 
     data = _saved(handed, "/outputs/chart.svg")
     assert data is not None
-    labels = [one.text for one in ElementTree.fromstring(data).iter(  # noqa: S314
-        "{http://www.w3.org/2000/svg}text"
-    )]
-    assert "al\tpha" in labels
+    assert f"al{control}pha".encode() in data, "a character XML admits was taken out"
+    ElementTree.fromstring(data)  # noqa: S314 -- our own tool's output
     assert "cannot carry" not in said
 
 

@@ -361,15 +361,31 @@ def test_the_backend_is_asked_for_the_spelling_the_rules_were(cfg, backend, way)
     assert "in the catalogue" in got.file_data["content"]
 
 
-def test_a_path_that_climbs_out_is_an_error_on_the_result(backend):
+def test_a_path_that_climbs_out_is_an_error_on_the_result(backend, way):
     """Raised, it would reach the model as whatever the tool's exception reads like
     rather than as the refusal every other path gets.
+
+    Over both halves, like the rest of this file. It was the one rule here that took
+    `backend` alone, and the async refusals were reached by nothing: making `adelete`
+    hand a malformed path to the backend instead of refusing it left the whole suite
+    green. `test_the_async_calls_keep_the_same_rules` next door covers the async
+    halves with well-formed paths only, so the deny rule was driven on both and the
+    traversal branch on one.
     """
     handed = PermittedBackend(backend, [PRIVATE])
+    read, write, delete = (
+        (handed.read, handed.write, handed.delete)
+        if way == "sync"
+        else (
+            lambda path: asyncio.run(handed.aread(path)),
+            lambda path, text: asyncio.run(handed.awrite(path, text)),
+            lambda path: asyncio.run(handed.adelete(path)),
+        )
+    )
 
-    assert "traversal" in _refusal(handed.read("/outputs/../../etc/passwd"))
-    assert "traversal" in _refusal(handed.write("../outside.txt", "x"))
-    assert "traversal" in _refusal(handed.delete("/outputs/../.."))
+    assert "traversal" in _refusal(read("/outputs/../../etc/passwd"))
+    assert "traversal" in _refusal(write("../outside.txt", "x"))
+    assert "traversal" in _refusal(delete("/outputs/../.."))
 
 
 def test_the_async_calls_keep_the_same_rules(backend, session_dir):

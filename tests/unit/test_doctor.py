@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import platform
 import re
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -1496,6 +1497,44 @@ def test_a_session_reached_through_a_link_of_its_own_is_named(cfg, tmp_path, mon
     assert check is not None and check.verdict == "warn"
     assert "strayed" in check.detail
     assert "sessions" in check.remedy
+
+
+def test_doctor_answers_on_a_workspace_nothing_has_laid_out_yet(cfg, tmp_path, monkeypatch):
+    """`doctor` is the command you run *because* a deployment is not working, so it has
+    to answer on a workspace that does not exist yet. The session scan guards against
+    that, and nothing reached the guard: removing it left all 3,041 tests green while
+    `examine` raised `FileNotFoundError` on the sessions directory -- and `examine`
+    catches `ConfigError` only, so the traceback is what the operator gets.
+
+    That is the shape of the entry this check was added beside: one bad row took
+    `doctor`, `list`, `sessions` and `reap` down together, a slice earlier.
+    """
+    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+
+    _fenced_by(monkeypatch, SANDBOX_EXEC)
+    nowhere = replace(cfg, workspace=tmp_path / "never-made")
+
+    checks = examine(nowhere)
+
+    assert checks, "no rows at all, so this says nothing about the scan"
+    assert _row(checks, "session paths") is None
+
+
+def test_a_link_to_something_that_is_not_a_session_is_not_named(cfg, tmp_path, monkeypatch):
+    """The row names *sessions* reached through a link, and the only thing in
+    `sessions/` that can be one is a directory. A link to a file outside the workspace
+    would otherwise be reported as a strayed session, sending an operator to move
+    something that is not one -- and no fixture put a non-directory there, so the
+    filter was indistinguishable from `True`.
+    """
+    from kingfisher.infrastructure.sandbox.confinement import SANDBOX_EXEC
+
+    _fenced_by(monkeypatch, SANDBOX_EXEC)
+    beside = tmp_path / "notes.txt"
+    beside.write_text("not a session", encoding="utf-8")
+    (cfg.workspace / "sessions" / "notes.txt").symlink_to(beside)
+
+    assert _row(examine(cfg), "session paths") is None
 
 
 def test_a_session_inside_the_sessions_directory_is_not_named(cfg, tmp_path, monkeypatch):
