@@ -21,8 +21,8 @@ from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher import Kingfisher, LocalSessions, ToolContext, backend_at
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
-from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Decision, Request, Resume
 from kingfisher.domain.result import AWAITING
 from kingfisher.infrastructure.harness import runtime

@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 
 from kingfisher import backend_at
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.definitions import seeding
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository, reachable
-from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.activation import available_skills
 from kingfisher.infrastructure.harness.agent import (
     CapabilityError,

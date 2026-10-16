@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from kingfisher.core.access.capabilities import ALL
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.definitions.subagents.rules import resolved_model
 from kingfisher.core.definitions.subagents.spec import (
@@ -14,7 +15,6 @@ from kingfisher.core.definitions.subagents.spec import (
     SubagentSpec,
     declared,
 )
-from kingfisher.domain.capabilities import ALL
 from tests.conftest import a_subagent
 
 MINIMAL = """name: reviewer

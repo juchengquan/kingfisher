@@ -8,15 +8,15 @@ from difflib import get_close_matches
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from kingfisher.domain.capabilities import ALL, SEPARATOR, Selection
+from kingfisher.core.access.capabilities import ALL, SEPARATOR, Selection
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable
 
-    # Type-only, and it has to be: `domain.access` imports this module to read
+    # Type-only, and it has to be: `core.access.source_ids` imports this module to read
     # its vocabulary document, so a runtime import here would close the loop.
     # `from __future__ import annotations` is what makes that affordable.
-    from kingfisher.domain.access import Audience
+    from kingfisher.core.access.source_ids import Audience
 
 #: How alike two names must look before one is called a typo of the other. Only
 #: ever used to *word* a refusal, never to decide one: a guess that changed
@@ -473,7 +473,7 @@ class Reader:
         chosen = self.selection(written, absent=absent, key=key, refuse_all=refuse_all)
         # Every name is selected; only the ones that stated an audience carry
         # one. An entry that wrote the long form and left `source_ids` out falls
-        # back to the definition's own in `access.reaching`, which is the same
+        # back to the definition's own in `source_ids.reaching`, which is the same
         # fallback a plain name gets -- so the two spellings agree about an
         # unrestricted name.
         return chosen, {n: a for n, a in stated.items() if a is not None}

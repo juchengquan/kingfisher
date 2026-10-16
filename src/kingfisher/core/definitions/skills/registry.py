@@ -12,9 +12,9 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.core.access.capabilities import SEPARATOR, CapabilityError
 from kingfisher.core.definitions.skills import spec as skill
 from kingfisher.core.definitions.skills.catalogue import DEEPEST, MOUNT_DEEPEST, reachable
-from kingfisher.domain.capabilities import SEPARATOR, CapabilityError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

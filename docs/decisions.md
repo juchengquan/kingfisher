@@ -1734,7 +1734,7 @@ policy leaves open, `undeclared_in` returns the first definition naming a source
 id nobody declared, and a listing prints what each one says. All three began by
 asking `stated` for the same spec, so the specs -- a directory read -- were walked
 three times per listing and twice at every startup, where the comment beside it
-already claimed one walk. `access.walked` yields `(kind, name, said)` and the
+already claimed one walk. `checks.walked` yields `(kind, name, said)` and the
 three questions consume it.
 
 Shared and not merged, which is the whole of the care here: a report that stopped
@@ -1755,7 +1755,7 @@ audienced fields to one caller was written out six times -- three fields, in eac
 of the two `declares` bodies, with the subagent listing its own fields a second
 time for the no-caller case. `AUDIENCED` already named those three fields and
 already drove five other loops, so the enumeration was the duplicated part rather
-than the rule. `domain.access.stated` and `narrowed_for` are the one of each now,
+than the rule. `core.access.source_ids.stated` and `narrowed_for` are the one of each now,
 and they live beside `reaching` because a kind may not hold a helper the kinds
 share.
 
@@ -6592,7 +6592,7 @@ trailing slash. Written once and shared, a change for one kind would have to be
 argued past the other two. *(Subagents have since taken the tools' `split_reference`,
 so two ways remain.)* The duplication is the price of each kind changing on
 its own, and it is the point rather than an oversight. What stays shared is the
-vocabulary of *grants* -- `SEPARATOR` and `bare_name` in `domain.capabilities` --
+vocabulary of *grants* -- `SEPARATOR` and `bare_name` in `core.access.capabilities` --
 because a grant is spelled the same way whatever it names.
 
 **Reversed to get there: "the domain imports only the standard library and
@@ -6628,10 +6628,10 @@ the tools and subagents halves moved into `harness/`.)*
 lived quietly because the two halves shared a directory and nothing had to
 choose: `SKILLS` and `UPLOADED_SKILL_DIR` were declared by the skill format and
 used by `kingfisher.layout`, which *is* the layout; `ceiling` sat in the tool module
-and touches no registry, so it went to `domain.capabilities` with the rest of
+and touches no registry, so it went to `core.access.capabilities` with the rest of
 that arithmetic; and `wanted_model` was in the subagent format while
 `core.definitions.agents.spec` imported it to read its own `model:` line, so it went to
-`domain.fields`, which is the field readers. A helper two formats need belongs
+`core.definitions.fields`, which is the field readers. A helper two formats need belongs
 to neither of them.
 
 **When a kind should be a module, and it is not "always".** `skills` fitted

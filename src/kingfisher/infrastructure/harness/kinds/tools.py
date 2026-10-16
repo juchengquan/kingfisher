@@ -5,17 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
-from kingfisher.core.definitions.tools.spec import Found, Offering, out_of_reach
-from kingfisher.domain.access import reaches
-from kingfisher.domain.capabilities import (
+from kingfisher.core.access.capabilities import (
     ALL,
     Capabilities,
     CapabilityError,
     Selection,
     narrowed,
 )
+from kingfisher.core.access.source_ids import reaches
+from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
+from kingfisher.core.definitions.tools.spec import Found, Offering, out_of_reach
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence

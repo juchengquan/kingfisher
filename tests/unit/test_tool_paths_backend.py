@@ -9,7 +9,7 @@ from deepagents.backends.protocol import BackendProtocol
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, LocalSessions, Request
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.domain.references import UnsafeReferenceError
 from kingfisher.infrastructure.harness.agent import build_agent, read_only_permissions
 from kingfisher.infrastructure.harness.permitted_backend import PermittedBackend, host_path

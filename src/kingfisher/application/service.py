@@ -31,7 +31,6 @@ from pathlib import Path
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.application import access
 from kingfisher.application import config as config_module
 from kingfisher.application.disposal import Disposal
 from kingfisher.application.origins import Origins
@@ -51,21 +50,22 @@ from kingfisher.application.turn import (
     turn_message,
 )
 from kingfisher.config import Config, ConfigError
-from kingfisher.core.definitions.agents.reading import read
-from kingfisher.core.definitions.agents.spec import AgentSpec
-from kingfisher.core.definitions.catalogue import Definitions, resolve_definitions
-from kingfisher.domain.access import (
+from kingfisher.core.access import checks as access
+from kingfisher.core.access.capabilities import (
+    UNRESTRICTED,
+    Capabilities,
+    CapabilityError,
+)
+from kingfisher.core.access.source_ids import (
     AccessReport,
     Held,
     SourceIds,
     reaches,
     with_datazone,
 )
-from kingfisher.domain.capabilities import (
-    UNRESTRICTED,
-    Capabilities,
-    CapabilityError,
-)
+from kingfisher.core.definitions.agents.reading import read
+from kingfisher.core.definitions.agents.spec import AgentSpec
+from kingfisher.core.definitions.catalogue import Definitions, resolve_definitions
 from kingfisher.domain.request import DecisionError, Request, Resume
 from kingfisher.domain.result import (
     AWAITING,

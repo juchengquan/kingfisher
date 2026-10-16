@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from kingfisher import backend_at
+from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
-from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel, subagents_dir
 
@@ -161,7 +161,7 @@ def test_the_activated_subagent_keeps_its_plain_name(cfg, session_dir):
 
 def test_subtracting_something_else_still_hits_the_clash(cfg, session_dir):
     """The reachable path the CLI actually has."""
-    from kingfisher.domain.capabilities import all_but
+    from kingfisher.core.access.capabilities import all_but
 
     _two_vendors(cfg)
     (subagents_dir(cfg) / "other.yaml").write_text(
@@ -175,7 +175,7 @@ def test_subtracting_something_else_still_hits_the_clash(cfg, session_dir):
 
 def test_subtracting_one_of_the_pair_leaves_a_workable_roster(cfg, session_dir):
     """And the way out: name which one to drop, and the rest activates."""
-    from kingfisher.domain.capabilities import all_but
+    from kingfisher.core.access.capabilities import all_but
 
     _two_vendors(cfg)
     offered = tuple(LocalSubagentRepository(subagents_dir(cfg)).specs)

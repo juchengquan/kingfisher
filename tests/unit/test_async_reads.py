@@ -10,7 +10,7 @@ import yaml
 from deepagents.backends import CompositeBackend, FilesystemBackend
 
 from kingfisher import Kingfisher, LocalSessions
-from kingfisher.domain.access import parse
+from kingfisher.core.access.source_ids import parse
 from kingfisher.domain.request import Request
 from tests.conftest import StubCheckpointer, an_agent, pin, start
 from tests.unit.test_run import StubAgent

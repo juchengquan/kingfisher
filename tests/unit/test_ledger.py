@@ -26,7 +26,7 @@ from langgraph.types import Command
 from assets.middlewares.tool_note import ToolNote
 from kingfisher import Kingfisher, LocalSessions, Request
 from kingfisher.application.turn import ledger_delta, ledger_index, turn_message
-from kingfisher.domain.access import parse
+from kingfisher.core.access.source_ids import parse
 from kingfisher.domain.request import Decision, Resume
 from kingfisher.domain.result import AWAITING, MAIN, WORKING, LedgerEntry
 from kingfisher.domain.transcript import from_json

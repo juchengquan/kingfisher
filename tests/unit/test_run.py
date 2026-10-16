@@ -178,7 +178,7 @@ def test_coerce_is_idempotent():
 
 def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
     """A typo in a capability name must not be destructive."""
-    from kingfisher.domain.capabilities import Capabilities, CapabilityError
+    from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 
     workspace = cfg.workspace
     old = workspace / "scratch" / "ancient"

@@ -24,6 +24,11 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "kingfisher"
 #: a request being narrowed, a port being wired -- and is not what `doctor` promises.
 AREAS = ("core/definitions",)
 
+#: `fields.Reader` raises the error class its caller hands it, so what it refuses is
+#: the caller's refusal: an agent's or a subagent's is that kind's, and the model
+#: catalogue's is not a definition being read at all.
+NOT_WALKED = frozenset({"core/definitions/fields.py"})
+
 #: The errors a kind raises. `load` and `require_literal_prompt` raise neither: they
 #: take the error class from the caller, which is how two refusals hid from the first
 #: version of this rule -- it looked for `raise <Kind>Error` and they raise a parameter.
@@ -383,7 +388,8 @@ def _refusals_in_the_code() -> dict[str, int]:
         # out of the count and "delete them" is what the failure then advises.
         assert root.exists(), f"{area} is not in the tree, so nothing in it is read"
         for path in [root] if root.is_file() else sorted(root.rglob("*.py")):
-            _refusals_in(path, found)
+            if path.relative_to(SRC).as_posix() not in NOT_WALKED:
+                _refusals_in(path, found)
     return found
 
 

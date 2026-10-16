@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.core.access.capabilities import Capabilities, Selection, withheld
+from kingfisher.core.access.source_ids import AUDIENCED, handed_work_by, offers
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.tools.spec import Offering, admitted, out_of_reach, placed
-from kingfisher.domain.access import AUDIENCED, handed_work_by, offers
-from kingfisher.domain.capabilities import Capabilities, Selection, withheld
 from kingfisher.domain.result import RunEvent
 from kingfisher.infrastructure.harness.activation import (
     activatable_skills,

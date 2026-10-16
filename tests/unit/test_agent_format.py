@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
+from kingfisher.core.access.capabilities import ALL, CapabilityError
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.documents import DefinitionText
 from kingfisher.core.definitions.subagents.spec import SubagentError
-from kingfisher.domain.capabilities import ALL, CapabilityError
 from tests.conftest import a_subagent
 
 WHOLE = """name: surveyor
@@ -398,9 +398,9 @@ def test_builtin_tools_takes_no_audience():
 
 def test_only_the_audienced_fields_take_a_mapping():
     """Pins the prose in `fields.selection` against `AUDIENCED`, which it cannot import
-    -- `domain.access` imports `fields`, so naming it there is a cycle.
+    -- `core.access.source_ids` imports `fields`, so naming it there is a cycle.
     """
-    from kingfisher.domain.access import AUDIENCED
+    from kingfisher.core.access.source_ids import AUDIENCED
 
     with pytest.raises(AgentError) as raised:
         _read(

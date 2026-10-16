@@ -15,10 +15,10 @@ import pytest
 from deepagents import SubAgent
 from langchain_core.messages import AIMessage
 
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.definitions.subagents.spec import SubagentError
-from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.middlewares.narrowing import NarrowedSkills
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE

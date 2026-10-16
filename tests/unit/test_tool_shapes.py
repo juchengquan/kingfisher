@@ -8,9 +8,9 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher import backend_at
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, ToolError
 from kingfisher.core.definitions.tools.spec import named, tool_name
-from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.kinds.tools import registered_tools
 from tests.conftest import FakeToolCallingModel, tools_dir

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+from kingfisher.core.access.capabilities import ALL, CapabilityError, ceiling
 from kingfisher.core.definitions.tools.spec import Found, Offering
-from kingfisher.domain.capabilities import ALL, CapabilityError, ceiling
 
 WORKSPACE = Offering(
     builtin=("read_file", "execute"),

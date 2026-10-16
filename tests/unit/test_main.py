@@ -7,10 +7,10 @@ import io
 import pytest
 
 from kingfisher.config import ConfigError
+from kingfisher.core.access.capabilities import CapabilityError
 from kingfisher.core.definitions.skills import spec as skill
 from kingfisher.core.definitions.skills.catalogue import reachable
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
-from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.result import RunEvent, RunResult
 from kingfisher.infrastructure.harness import agent as main_agent_module
 from kingfisher.infrastructure.workspace import SEED_HINT

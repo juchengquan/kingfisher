@@ -33,8 +33,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from kingfisher.domain.access import Audience, narrowed_for
-from kingfisher.domain.capabilities import ALL, Capabilities, Selection
+from kingfisher.core.access.capabilities import ALL, Capabilities, Selection
+from kingfisher.core.access.source_ids import Audience, narrowed_for
 
 
 @dataclass(frozen=True, kw_only=True)

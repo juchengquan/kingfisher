@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.tools import tool
 
+from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.definitions import seeding
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
@@ -15,7 +16,6 @@ from kingfisher.core.definitions.tools.spec import (
     split_reference,
     tool_name,
 )
-from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.kinds.subagents import as_subagent
 from kingfisher.infrastructure.harness.kinds.tools import _ToolSurface
 from kingfisher.infrastructure.harness.middlewares.narrowing import ToolAllowlist

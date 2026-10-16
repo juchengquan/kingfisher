@@ -6,8 +6,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.domain.access import jointly, reaches, zoned
-from kingfisher.domain.capabilities import (
+from kingfisher.core.access.capabilities import (
     ALL,
     SEPARATOR,
     CapabilityError,
@@ -16,11 +15,12 @@ from kingfisher.domain.capabilities import (
     narrowed,
     refuse_unoffered,
 )
+from kingfisher.core.access.source_ids import jointly, reaches, zoned
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
-    from kingfisher.domain.access import Audience
+    from kingfisher.core.access.source_ids import Audience
 
 # `SEPARATOR` is imported above rather than defined here, where it started:
 # skills spell a source the same way, and one separator both kinds import

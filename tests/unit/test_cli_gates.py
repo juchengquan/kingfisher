@@ -370,7 +370,7 @@ def _a_paused_session_only_a_reaches(cfg):
 
     import yaml
 
-    from kingfisher.domain.access import parse
+    from kingfisher.core.access.source_ids import parse
     from kingfisher.infrastructure.session_store import pending_as_mark, write_pause_mark
     from tests.conftest import an_agent, harness_of, pin, start
 

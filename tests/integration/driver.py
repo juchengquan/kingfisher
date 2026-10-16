@@ -43,8 +43,8 @@ from kingfisher import (
     paths_from_env,
 )
 from kingfisher.config import Config
+from kingfisher.core.access.capabilities import ALL, CapabilityError, all_but
 from kingfisher.core.definitions import seeding
-from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
 from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.harness.runlog import usage_of
 from kingfisher.infrastructure.workspace import SEED_HINT, ensure_layout

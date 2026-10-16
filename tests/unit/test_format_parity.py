@@ -17,10 +17,10 @@ from kingfisher.core.definitions.agents import spec as agent_spec
 from kingfisher.core.definitions.agents.spec import KNOWN as AGENT_KNOWN
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.documents import DefinitionText
+from kingfisher.core.definitions.fields import SOURCES
 from kingfisher.core.definitions.subagents import spec as subagent_spec
 from kingfisher.core.definitions.subagents.spec import KNOWN as SUBAGENT_KNOWN
 from kingfisher.core.definitions.subagents.spec import SubagentError, SubagentSpec
-from kingfisher.domain.fields import SOURCES
 from tests.conftest import a_subagent
 
 #: Each format as a check needs it: its reader, the keys it defines, the spec it builds.

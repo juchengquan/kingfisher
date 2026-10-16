@@ -29,12 +29,12 @@ __version__ = "0.1.0"
 #: this repository cannot see -- accepted at 0.1.0, and noted here rather than
 #: discovered later.
 _EXPORTS = {
-    "Held": "kingfisher.domain.access",
-    "AccessError": "kingfisher.domain.access",
+    "Held": "kingfisher.core.access.source_ids",
+    "AccessError": "kingfisher.core.access.source_ids",
     "ArtifactError": "kingfisher.domain.result",
-    "UNSCOPED": "kingfisher.domain.access",
-    "Capabilities": "kingfisher.domain.capabilities",
-    "CapabilityError": "kingfisher.domain.capabilities",
+    "UNSCOPED": "kingfisher.core.access.source_ids",
+    "Capabilities": "kingfisher.core.access.capabilities",
+    "CapabilityError": "kingfisher.core.access.capabilities",
     "QuotaExceededError": "kingfisher.domain.session",
     "SessionBusyError": "kingfisher.domain.session",
     "SubagentError": "kingfisher.core.definitions.subagents.spec",
@@ -187,13 +187,13 @@ if TYPE_CHECKING:
     from kingfisher.config import Landing as Landing
     from kingfisher.config import WireFormat as WireFormat
     from kingfisher.config import WorkspacePaths as WorkspacePaths
+    from kingfisher.core.access.capabilities import Capabilities as Capabilities
+    from kingfisher.core.access.capabilities import CapabilityError as CapabilityError
+    from kingfisher.core.access.source_ids import UNSCOPED as UNSCOPED
+    from kingfisher.core.access.source_ids import AccessError as AccessError
+    from kingfisher.core.access.source_ids import Held as Held
     from kingfisher.core.definitions.subagents.spec import RunOn as RunOn
     from kingfisher.core.definitions.subagents.spec import SubagentError as SubagentError
-    from kingfisher.domain.access import UNSCOPED as UNSCOPED
-    from kingfisher.domain.access import AccessError as AccessError
-    from kingfisher.domain.access import Held as Held
-    from kingfisher.domain.capabilities import Capabilities as Capabilities
-    from kingfisher.domain.capabilities import CapabilityError as CapabilityError
     from kingfisher.domain.ports import CommandResult as CommandResult
     from kingfisher.domain.references import UnsafeReferenceError as UnsafeReferenceError
     from kingfisher.domain.request import Decision as Decision

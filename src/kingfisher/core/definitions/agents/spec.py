@@ -13,15 +13,16 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 
+from kingfisher.core.access.capabilities import ALL, Capabilities, bare_name
+from kingfisher.core.access.source_ids import AUDIENCED
+from kingfisher.core.definitions import fields
+
 # A `tools:` entry may be written `where::what`, so reading this format means
 # parsing a tool reference -- the format referring to itself, which is why the
 # domain may name an asset kind's `spec` at all. See the exception stated and
 # measured in `test_domain_imports_only_the_standard_library_and_itself`.
 from kingfisher.core.definitions.subagents.spec import uncallable_helpers
 from kingfisher.core.definitions.tools.spec import claimed_sources
-from kingfisher.domain import fields
-from kingfisher.domain.access import AUDIENCED
-from kingfisher.domain.capabilities import ALL, Capabilities, bare_name
 from kingfisher.domain.definition import Definition
 
 DIRECTORY = "agents"

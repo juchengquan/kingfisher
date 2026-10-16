@@ -6,8 +6,8 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal
 
-from kingfisher.domain import fields
-from kingfisher.domain.capabilities import ALL, Selection
+from kingfisher.core.access.capabilities import ALL, Selection
+from kingfisher.core.definitions.fields import text, unrecognised
 from kingfisher.domain.result import Listed
 
 #: The selection fields that may be written as a mapping of name to audience.
@@ -680,7 +680,7 @@ def _closed(declared: Mapping[str, tuple[str, ...]], source: str) -> dict[str, t
 
 def parse(document: Mapping[str, object], source: str) -> SourceIds:
     """One vocabulary document, from its decoded fields."""
-    complaint = fields.unrecognised(
+    complaint = unrecognised(
         document, known={"source_ids", "datazones"}, declined=MOVED, noun="section"
     )
     if complaint is not None:
@@ -710,7 +710,7 @@ def _datazones(raw: object, source: str) -> frozenset[str]:
     if isinstance(raw, str) or not isinstance(raw, list):
         msg = f"{source}: 'datazones' is a list of names -- write datazones: [finance, hr]"
         raise AccessError(msg)
-    named = [fields.text(one) for one in raw]
+    named = [text(one) for one in raw]
     if "" in named:
         msg = f"{source}: 'datazones' holds an empty name"
         raise AccessError(msg)

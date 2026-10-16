@@ -9,8 +9,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from kingfisher.domain.access import SourceIds
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.core.access.capabilities import Capabilities
+from kingfisher.core.access.source_ids import SourceIds
 from kingfisher.layout import DEFAULT_LAYOUT, Layout
 
 #: The frozen default for an `extra` mapping. Shared with `WireFormat.extra`

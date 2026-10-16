@@ -6,8 +6,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.definitions.subagents.spec import RunOn
-from kingfisher.domain.capabilities import Capabilities
 
 
 @dataclass(frozen=True)

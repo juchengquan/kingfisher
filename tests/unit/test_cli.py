@@ -318,7 +318,7 @@ def test_as_unscoped_is_spelled_out_rather_than_implied():
     """An empty `--as` is far more likely to be a shell variable that did not expand
     than a considered decision to run with no caller.
     """
-    from kingfisher.domain.access import UNSCOPED
+    from kingfisher.core.access.source_ids import UNSCOPED
     from kingfisher.presentation.cli.__main__ import _held
 
     assert _held("UNSCOPED") is UNSCOPED
