@@ -612,15 +612,13 @@ method that opens a session is named rather than being the object's `__call__`.
 `afiles_for`, the async twins of `session`, `pending`, `artifact`, `delete_session` and
 `files_for`, for a caller already on an event loop. They reach a session through new methods on `Sessions` --
 `aopen`, `asessions`, `adelete`, and for a turn on `astream`, `amark_used` and `asize`
--- and through `aclaim` on the backend `open` returns:
+and for a turn, `aclaim` and `arelease`:
 
 - **If your sessions subclass `LocalSessions` or `Sessions`**, there
-  is nothing to do. All five are inherited, each running its sync method on
+  is nothing to do. All seven are inherited, each running its sync method on
   kingfisher's thread pool. Override one where it is a round trip you can await.
 - **If yours subclass neither**, they are refused at construction until they have all
-  five. Subclassing `Sessions` is the shortest fix.
-- **The backend `open` returns needs `aclaim` and `arelease`** beside `claim` and
-  `release`. One built on `SessionClaims`, as kingfisher's are, has them already.
+  seven. Subclassing `Sessions` is the shortest fix.
 - `SESSION_BACKENDS_CONTRACT` has seven more checks, one for each async twin:
   `aopen_reaches_the_session_open_does`, `asessions_lists_what_sessions_does`,
   `adelete_removes_the_session`, `aclaim_and_claim_exclude_each_other`,
@@ -782,9 +780,10 @@ backend per turn, and also answers for every session.
   session's backend, creating the session if it's new.
 - `sessions(cfg)` returns `(session_id, last_used)` pairs. `mark_used(cfg, id)`,
   `size(cfg, id)` and `delete(cfg, id)` do what they say.
-- **The backend you return holds the turn lock:** `claim(name, *, stale_after)`
-  (which must fail while a live claim holds the name), `release(name)` and
-  `held(name, *, stale_after)`. `SessionClaims` implements these over a local folder.
+- **The sessions hold the turn lock, one per session:** `claim(cfg, session_id, /, *,
+  stale_after)` (which must fail while a live claim holds that session),
+  `release(cfg, session_id)` and `held(cfg, session_id, *, stale_after)`.
+  `LocalSessions` implements these over a folder under the session's `.harness`.
 - **Kingfisher reads and writes the session through it:** it places `/inputs` with
   `upload_files`, lists `/outputs` and `/memory` with `glob`, fetches artifacts with
   `download_files`, and reads and writes `/.harness` for the pin, conversation and

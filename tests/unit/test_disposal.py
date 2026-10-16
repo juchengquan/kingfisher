@@ -6,11 +6,10 @@ import asyncio
 
 import pytest
 
-from kingfisher import Kingfisher, LocalSessions, backend_at
+from kingfisher import Kingfisher, LocalSessions
 from kingfisher.domain import retention
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import still_held
-from kingfisher.layout import CLAIM
 from tests.conftest import StubCheckpointer, Through, start
 from tests.unit.test_run import StubAgent
 
@@ -249,7 +248,7 @@ def test_a_sweep_keeps_a_session_that_has_a_turn_running(cfg):
     session = start(cfg, "s")
     directory = cfg.workspace / "sessions" / session
 
-    assert backend_at(cfg, directory).claim(CLAIM, stale_after=3600)
+    assert LocalSessions().claim(cfg, session, stale_after=3600)
     stale = time.time() - 10_000
     os.utime(directory, (stale, stale))
 
@@ -270,7 +269,7 @@ def test_a_busy_session_does_not_shelter_an_idle_one(cfg):
     busy = start(cfg, "busy")
     idle = start(cfg, "idle")
 
-    assert backend_at(cfg, cfg.workspace / "sessions" / busy).claim(CLAIM, stale_after=3600)
+    assert LocalSessions().claim(cfg, busy, stale_after=3600)
     stale = time.time() - 10_000
     for name in (busy, idle):
         os.utime(cfg.workspace / "sessions" / name, (stale, stale))
@@ -355,16 +354,14 @@ def test_a_turns_claim_is_taken_with_the_grace_period_not_the_deadline(cfg, monk
     `test_retention_and_claim_agree_on_when_a_claim_went_stale`. One of the two readers
     of this constant was held and the other was not.
     """
-    from kingfisher.infrastructure.harness.backend import SessionClaims
-
     taken: list[float] = []
-    claiming = SessionClaims.claim
+    claiming = LocalSessions.claim
 
-    def watched(self, name, *, stale_after, now=None):
+    def watched(self, cfg, session_id, /, *, stale_after, now=None):
         taken.append(stale_after)
-        return claiming(self, name, stale_after=stale_after, now=now)
+        return claiming(self, cfg, session_id, stale_after=stale_after, now=now)
 
-    monkeypatch.setattr(SessionClaims, "claim", watched)
+    monkeypatch.setattr(LocalSessions, "claim", watched)
     service(cfg).run(Request("go"))
 
     # Not vacuous, and this is the assertion that makes it so: the two numbers were the
@@ -378,9 +375,8 @@ def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
     import time
 
     held = start(cfg, "held")
-    backend = backend_at(cfg, cfg.workspace / "sessions" / held)
     taken = time.time()
-    assert backend.claim(CLAIM, stale_after=cfg.claim_stale_after, now=taken)
+    assert LocalSessions().claim(cfg, held, stale_after=cfg.claim_stale_after, now=taken)
 
     # The instant the turn runs out of time, and a little after.
     at_deadline = taken + cfg.turn_timeout_s
@@ -389,8 +385,9 @@ def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
     ) == (held,)
 
     # And a second caller is refused for the whole of that window.
-    second = backend_at(cfg, cfg.workspace / "sessions" / held)
-    assert not second.claim(CLAIM, stale_after=cfg.claim_stale_after, now=at_deadline)
+    assert not LocalSessions().claim(
+        cfg, held, stale_after=cfg.claim_stale_after, now=at_deadline
+    )
 
     # Long enough after, the slot is takeable again -- a holder that died must
     # not lock the session out for good.

@@ -23,7 +23,6 @@ from kingfisher import (
 from kingfisher.domain.access import parse
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.backend import (
-    SessionClaims,
     Sessions,
 )
 from kingfisher.infrastructure.session_files import (
@@ -49,7 +48,7 @@ def _calls(name: str, **args: str) -> AIMessage:
     return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"call-{name}"}])
 
 
-class ElsewhereFiles(SessionClaims, CompositeBackend):
+class ElsewhereFiles(CompositeBackend):
     """One session's filesystem in a directory kingfisher is never told about."""
 
     def __init__(self, kept: Path, skills: Path) -> None:
@@ -62,7 +61,6 @@ class ElsewhereFiles(SessionClaims, CompositeBackend):
                 for route in routed_paths()
             },
         )
-        self._session_dir = kept
 
 
 class Elsewhere(Sessions):
@@ -97,6 +95,22 @@ class Elsewhere(Sessions):
 
     def delete(self, cfg, session_id):
         shutil.rmtree(self.root / session_id, ignore_errors=True)
+
+    # A lock that never goes stale, which is all a test double needs.
+    def claim(self, cfg, session_id, /, *, stale_after, now=None):
+        lock = self.root / session_id / HARNESS / "claim"
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            lock.mkdir()
+        except FileExistsError:
+            return False
+        return True
+
+    def release(self, cfg, session_id, /):
+        shutil.rmtree(self.root / session_id / HARNESS / "claim", ignore_errors=True)
+
+    def held(self, cfg, session_id, /, *, stale_after, now=None):
+        return (self.root / session_id / HARNESS / "claim").is_dir()
 
 
 # -- a turn ------------------------------------------------------------------

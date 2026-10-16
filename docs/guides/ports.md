@@ -355,15 +355,16 @@ the backend to avoid. Passing a backend itself is a `TypeError`, and
 `two_sessions_are_kept_apart` in the kit below catches the subtler version: every
 id handed the same storage.
 
-**The turn lock is on the backend.** It has to have `claim(name, *, stale_after)`,
-`aclaim` for the async path, `release(name)` and `held(name, *, stale_after)`: a claim
-that fails while another is live, which a `write` cannot be, because a `write`
-overwrites and two turns would both take it. `LocalSessions` does it with `mkdir`,
-through `SessionClaims`, which also gives `aclaim` and `arelease`, running `claim`
-and `release` on kingfisher's pool. Override them where your lock is a round trip
-you can await. Two turns in one
-session share a conversation and the last write wins, so this is what refuses the
-second.
+**The turn lock is on the sessions.** They have `claim(cfg, session_id, /, *,
+stale_after, now=None)`, `release(cfg, session_id, /)` and `held(cfg, session_id, /, *,
+stale_after, now=None)`: a claim that fails while another is live, which a `write`
+cannot be, because a `write` overwrites and two turns would both take it. One lock per
+session, not one for the object: a turn in one session must not refuse a turn in
+another. `LocalSessions` does it with `mkdir` under the session's `.harness`. Subclass
+`Sessions` and `aclaim` and `arelease` run them on kingfisher's pool; override them
+where your lock is a round trip you can await. Two turns in one session share a
+conversation and the last write wins, so this is what refuses the second. The backend
+`open` returns carries none of this.
 
 **A pre-built graph names its sessions too.** `Kingfisher(cfg, graph=...)`
 runs its agent on the backend the graph was compiled with, but kingfisher still

@@ -15,10 +15,9 @@ from deepagents.backends import FilesystemBackend
 from kingfisher import SESSION_BACKENDS_CONTRACT, Kingfisher, LocalSessions
 from kingfisher.infrastructure.harness.backend import (
     WorkspaceScopedBackend,
-    backend_at,
     bundled_skills_route,
 )
-from kingfisher.layout import CLAIM, SKILLS_ROUTE
+from kingfisher.layout import SKILLS_ROUTE
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import StubCheckpointer
 from tests.unit.test_run import StubAgent
@@ -47,10 +46,8 @@ class Shared(LocalSessions):
 class Overwriting(LocalSessions):
     """A claim written the obvious way, with a write, which never fails."""
 
-    def open(self, cfg, session_id, /, *, catalogue=None):
-        built = super().open(cfg, session_id, catalogue=catalogue)
-        built.claim = lambda name, *, stale_after, now=None: True
-        return built
+    def claim(self, cfg, session_id, /, *, stale_after, now=None):
+        return True
 
 
 def _check(name):
@@ -84,27 +81,15 @@ class KeepsEverythingAsync(LocalSessions):
 class ClaimsBesideClaim(LocalSessions):
     """An `aclaim` that keeps its own book rather than the one `claim` writes."""
 
-    def open(self, cfg, session_id, /, *, catalogue=None):
-        built = super().open(cfg, session_id, catalogue=catalogue)
-
-        async def aclaim(name, *, stale_after, now=None):
-            return True
-
-        built.aclaim = aclaim
-        return built
+    async def aclaim(self, cfg, session_id, /, *, stale_after, now=None):
+        return True
 
 
 class KeepsTheClaimAsync(LocalSessions):
     """An `arelease` that gives nothing back."""
 
-    def open(self, cfg, session_id, /, *, catalogue=None):
-        built = super().open(cfg, session_id, catalogue=catalogue)
-
-        async def arelease(name):
-            return None
-
-        built.arelease = arelease
-        return built
+    async def arelease(self, cfg, session_id, /):
+        return None
 
 
 class WeighsNothingAsync(LocalSessions):
@@ -170,9 +155,9 @@ def test_the_kit_catches_a_claim_that_is_not_exclusive(cfg):
         _check("a_claim_is_exclusive")(lambda: (cfg, Overwriting()))
 
 
-def test_a_turn_refuses_while_the_backend_says_the_session_is_claimed(cfg):
-    """The lock is the backend's, so a claim taken through any backend for the session
-    is one the next turn meets.
+def test_a_turn_refuses_while_the_sessions_say_it_is_claimed(cfg):
+    """The lock is the sessions', so a claim taken through any `LocalSessions` for the
+    session is one the next turn meets.
     """
     from kingfisher import Request, SessionBusyError
 
@@ -180,9 +165,7 @@ def test_a_turn_refuses_while_the_backend_says_the_session_is_claimed(cfg):
         cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
     )
     session_id = kf.run(Request("first")).session_id
-    assert backend_at(cfg, cfg.workspace / "sessions" / session_id).claim(
-        CLAIM, stale_after=3600
-    )
+    assert LocalSessions().claim(cfg, session_id, stale_after=3600)
 
     with pytest.raises(SessionBusyError):
         kf.run(Request("second", session_id=session_id))

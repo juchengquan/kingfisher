@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.domain import retention
 from kingfisher.domain.retention import SweepResult
 from kingfisher.infrastructure.steps import Steps, adrive, changing, drive
-from kingfisher.layout import CLAIM
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -28,12 +27,11 @@ class Disposal:
     """Getting rid of a session, and everything it left in other places."""
 
     #: What this half needs from the instance it is mixed into. Declared rather
-    #: than assumed: a mixin that read `self._backends` without saying so would be a
+    #: than assumed: a mixin that read `self._sessions` without saying so would be a
     #: contract nothing checks, which is the shape this repository distrusts.
     cfg: Config
     _shared: SharedThreads | None
     _sessions: Any
-    _files_for: Callable[..., Steps[Any]]
     _known_steps: Callable[[], Steps[tuple[str, ...]]]
 
     def delete_session(self, session_id: str) -> str | None:
@@ -88,14 +86,15 @@ class Disposal:
     def _busy(self, candidates: tuple[str, ...], *, now: float) -> tuple[str, ...]:
         """Which of these a turn is still running in, so a sweep spares them.
 
-        Asked only of the sessions old enough to go, because the question is asked of
-        each one's backend: a lock is the backend's, and only it knows who holds one.
+        Asked of the sessions, because the lock is theirs and only they know who holds
+        one; and only of the ones old enough to go, because a deployment's own may answer
+        it with a round trip each.
         """
         return tuple(
             session_id
             for session_id in candidates
-            if drive(self._files_for(session_id)).held(
-                CLAIM, stale_after=self.cfg.claim_stale_after, now=now
+            if self._sessions.held(
+                self.cfg, session_id, stale_after=self.cfg.claim_stale_after, now=now
             )
         )
 

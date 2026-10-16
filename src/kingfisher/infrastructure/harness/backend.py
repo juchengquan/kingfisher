@@ -41,6 +41,7 @@ from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
+    CLAIM,
     HARNESS,
     HARNESS_OWNED,
     HARNESS_ROUTE,
@@ -302,58 +303,7 @@ def _listing(result: Any, path: str, routes: Iterable[tuple[str, Any]]) -> Any:
     return _once(replace(result, entries=kept), key=lambda one: one.get("path"), field="entries")
 
 
-class SessionClaims:
-    """A session's turn lock, held on this host: a directory under its `.harness`.
-
-    `mkdir` because it is the one operation that fails when the name is taken, which
-    is what a lock is -- `write` overwrites, and two turns would both "take" it. A
-    claim older than `stale_after` belongs to a turn that died and is taken over.
-    """
-
-    _session_dir: Path
-
-    def _claim_path(self, name: str) -> Path:
-        return self._session_dir / HARNESS / name
-
-    def claim(self, name: str, *, stale_after: float, now: float | None = None) -> bool:
-        """Take `name`, or answer False because a live claim holds it."""
-        dirs, path = LocalSessionDirs(), self._claim_path(name)
-        if dirs.create_exclusive(path):
-            return True
-        if self.held(name, stale_after=stale_after, now=now):
-            return False
-        dirs.remove_tree(path)
-        return dirs.create_exclusive(path)
-
-    async def aclaim(self, name: str, *, stale_after: float, now: float | None = None) -> bool:
-        """`claim`, for the async path."""
-        return await off_loop(thread_pool(), self.claim, name, stale_after=stale_after, now=now)
-
-    def release(self, name: str) -> None:
-        """Give `name` back. Safe where it was never taken."""
-        LocalSessionDirs().remove_tree(self._claim_path(name))
-
-    async def arelease(self, name: str) -> None:
-        """`release`, for the async path."""
-        return await off_loop(thread_pool(), self.release, name)
-
-    def held(self, name: str, *, stale_after: float, now: float | None = None) -> bool:
-        """Whether a claim on `name` is young enough that its turn may be running.
-
-        One vanishing between the two looks counts as held: its age is zero, so a
-        race resolves toward refusing rather than toward taking a slot whose owner
-        may be about to write.
-        """
-        path = self._claim_path(name)
-        at = time.time() if now is None else now
-        try:
-            taken = path.stat().st_mtime
-        except FileNotFoundError:
-            return False
-        return bool(still_held(((name, taken),), stale_after=stale_after, now=at))
-
-
-class WorkspaceScopedBackend(SessionClaims, CompositeBackend):
+class WorkspaceScopedBackend(CompositeBackend):
     """A `CompositeBackend` that refuses host paths instead of re-rooting them.
 
     `ls`, `glob` and `grep` are deduplicated, on both paths. They merge every
@@ -692,6 +642,27 @@ class Sessions(Protocol):
         """Remove this session and everything in it. A reason on failure, or `None`."""
         ...
 
+    def claim(
+        self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
+    ) -> bool:
+        """Take this session's turn lock, or answer False because a live turn holds it.
+
+        Two turns in one session share a conversation and the last write wins, so this
+        is what refuses the second. A claim older than `stale_after` seconds belongs to
+        a turn that died, and is taken over; `now` is the clock that is judged by.
+        """
+        ...
+
+    def release(self, cfg: Config, session_id: str, /) -> None:
+        """Give the lock back. Safe where it was never taken."""
+        ...
+
+    def held(
+        self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
+    ) -> bool:
+        """Whether a claim on this session is young enough that its turn may be running."""
+        ...
+
     # The async twins. Written out here, so that a class subclassing this protocol has
     # them as `open` and `sessions` on kingfisher's pool, and overrides one only where
     # its own is a round trip it can await.
@@ -722,6 +693,18 @@ class Sessions(Protocol):
     async def asize(self, cfg: Config, session_id: str) -> int:
         """`size`, for the async path."""
         return await off_loop(thread_pool(), self.size, cfg, session_id)
+
+    async def aclaim(
+        self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
+    ) -> bool:
+        """`claim`, for the async path."""
+        return await off_loop(
+            thread_pool(), self.claim, cfg, session_id, stale_after=stale_after, now=now
+        )
+
+    async def arelease(self, cfg: Config, session_id: str, /) -> None:
+        """`release`, for the async path."""
+        return await off_loop(thread_pool(), self.release, cfg, session_id)
 
 
 def backend_at(
@@ -928,9 +911,45 @@ class LocalSessions(Sessions):
     def delete(self, cfg: Config, session_id: str) -> str | None:
         return LocalSessionDirs().remove_tree(_where(cfg, session_id))
 
+    # The turn lock is a directory under the session's `.harness`. `mkdir` because it is
+    # the one operation that fails when the name is taken, which is what a lock is --
+    # `write` overwrites, and two turns would both take it.
+
+    def claim(
+        self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
+    ) -> bool:
+        dirs, path = LocalSessionDirs(), _claim_at(cfg, session_id)
+        if dirs.create_exclusive(path):
+            return True
+        if self.held(cfg, session_id, stale_after=stale_after, now=now):
+            return False
+        dirs.remove_tree(path)
+        return dirs.create_exclusive(path)
+
+    def release(self, cfg: Config, session_id: str, /) -> None:
+        LocalSessionDirs().remove_tree(_claim_at(cfg, session_id))
+
+    def held(
+        self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
+    ) -> bool:
+        # One vanishing between the two looks counts as held: its age is zero, so a race
+        # resolves toward refusing rather than toward taking a slot whose owner may be
+        # about to write.
+        at = time.time() if now is None else now
+        try:
+            taken = _claim_at(cfg, session_id).stat().st_mtime
+        except FileNotFoundError:
+            return False
+        return bool(still_held(((CLAIM, taken),), stale_after=stale_after, now=at))
+
 
 def _where(cfg: Config, session_id: str) -> Path:
     """Where kingfisher's own backends keep one session of this workspace."""
     return session_dir(cfg.workspace, session_id)
+
+
+def _claim_at(cfg: Config, session_id: str) -> Path:
+    """Where kingfisher's own sessions keep one session's turn lock."""
+    return _where(cfg, session_id) / HARNESS / CLAIM
 
 
