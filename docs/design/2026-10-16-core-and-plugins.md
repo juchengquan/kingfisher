@@ -149,7 +149,7 @@ the result types, `Capabilities`, the errors, `run` and `stream`, seeding and
 move. The command may import anything.
 
 The contract kits leave the wheel for `tests/checks/`. What each one checks is written
-on the interface it checks, as a promise, and `ports.md`'s *Checking what you wrote*
+on the interface it checks, as a promise, and `ports.md`'s *Checking what you wrote*, now *What yours has to promise*,
 becomes that list of promises. Two of the checks are refusals the core makes of every
 backend at startup rather than tests, and stay in the core: that deepagents recognises
 the backend as one with a shell, and that the routes cover the layout.
@@ -198,7 +198,7 @@ One pull request each, off `main` once the one before it has merged.
 8. `catalogue` and `grants` onto `Config`: the catalogue is `Config.definitions`, which a
    deployment staging its own points at its folder. *(Landed.)*
 9. The contract kits to `tests/checks/`; the two refusals into the core; the promises
-   onto the interfaces and into `ports.md`.
+   onto the interfaces and into `ports.md`. *(Landed.)*
 10. Move `plugins/`, splitting the prompts between it and the core.
 11. Move `core/definitions`.
 12. Move `core/access`.

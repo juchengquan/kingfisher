@@ -92,7 +92,6 @@ from kingfisher.infrastructure.harness.backend import (
     Sessions,
     WorkspaceScopedBackend,
 )
-from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
 from kingfisher.infrastructure.harness.checkpointing import (
     SharedThreads,
     build_session_checkpointer,
@@ -108,6 +107,7 @@ from kingfisher.infrastructure.harness.kinds.declared_middleware import (
 )
 from kingfisher.infrastructure.harness.ledger import Ledger, keep_ledger
 from kingfisher.infrastructure.harness.runlog import LoggedRunEvents, RunLogger
+from kingfisher.infrastructure.harness.usable_backend import refuse_unusable_backend
 from kingfisher.infrastructure.prompting import (
     Instructions,
     InstructionsFile,

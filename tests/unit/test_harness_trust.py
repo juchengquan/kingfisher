@@ -14,8 +14,8 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, LocalSessions, Request, backend_at
 from kingfisher.domain.request import Decision, DecisionError, Resume
-from kingfisher.infrastructure.harness.backend_contract import shell_denied
 from kingfisher.layout import HARNESS, PAUSED_STATE, PINNED_AGENT
+from tests.checks.backend import shell_denied
 from tests.conftest import an_agent, start
 from tests.unit.scripted import Scripted
 from tests.unit.test_approval_gates import _gated, _write

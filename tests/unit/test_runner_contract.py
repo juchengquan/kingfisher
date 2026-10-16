@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import pytest
 
 from kingfisher.domain.ports import CommandResult, CommandRunner
-from kingfisher.testing import COMMAND_RUNNER_CONTRACT
+from tests.checks.runner import RUNNER_CHECKS
 
 
 @dataclass(frozen=True)
@@ -63,7 +63,7 @@ def test_a_reference_runner_keeps_the_port_contract():
     what it always read, and `test_the_reference_runner_satisfies_the_port_it_was_written_from`
     asks the question directly rather than leaving it to this loop.
     """
-    for check in COMMAND_RUNNER_CONTRACT:
+    for check in RUNNER_CHECKS:
         check(ReferenceRunner)
 
 
@@ -75,7 +75,7 @@ def _built_by(make: Callable[[], CommandRunner]) -> CommandRunner:
 def test_the_reference_runner_satisfies_the_port_it_was_written_from() -> None:
     """Asked of the type checker, because the suite cannot ask it.
 
-    `COMMAND_RUNNER_CONTRACT` takes a factory, and every check here is handed
+    `RUNNER_CHECKS` takes a factory, and every check here is handed
     `ReferenceRunner` -- but through `pytest.mark.parametrize` the argument is
     effectively `Any`, so nothing has ever asked whether the reference implementation
     of this port implements it. It did not: `local` was declared `local: bool` on the
@@ -93,8 +93,8 @@ def test_the_contracts_are_not_quietly_empty():
     """A hand-maintained tuple, and a rule walking an empty one passes having checked
     nothing.
     """
-    assert len(COMMAND_RUNNER_CONTRACT) >= 5
-    assert all(callable(check) for check in COMMAND_RUNNER_CONTRACT)
+    assert len(RUNNER_CHECKS) >= 5
+    assert all(callable(check) for check in RUNNER_CHECKS)
 
 
 # -- what the checks refuse -------------------------------------------------
@@ -130,7 +130,7 @@ def test_a_timeout_that_raises_is_caught():
     """
     with pytest.raises(AssertionError, match="timeout is a result"):
         _run(
-            COMMAND_RUNNER_CONTRACT,
+            RUNNER_CHECKS,
             "a_timeout_is_a_result_and_not_an_exception",
             RaisingRunner,
         )

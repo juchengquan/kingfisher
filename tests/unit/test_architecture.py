@@ -1307,12 +1307,7 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     "domain": frozenset(),
     "application": frozenset(),
     # The modules at the package root, which belong to no layer: `__init__.py`,
-    # `config.py`, `layout.py` -- the workspace layout as data -- and
-    # `testing.py`, the port contracts a deployment runs against its own
-    # adapter. Nothing, and `testing.py` is the one that has to stay that way on
-    # purpose rather than by luck: a kit importing pytest would put a test
-    # framework in the runtime wheel, which is why it raises `AssertionError` by
-    # hand instead.
+    # `config.py` and `layout.py` -- the workspace layout as data. Nothing.
     "": frozenset(),
 }
 
@@ -1624,7 +1619,7 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
             # `refuse_unusable_backend`, on every backend a session opens. `agent`
             # runs it on the ones it builds on, which beside a pre-built graph is
             # none of them.
-            "backend_contract",
+            "usable_backend",
             "checkpointing",
             "interpreter",
             "kinds.declared_middleware",
@@ -2066,16 +2061,9 @@ WITNESSES: dict[str, str] = {
     # that page was edited.
     "UNSCOPED": "document",
     "RunOn": "document",
-    # The runner's kit, and the type a runner returns. `guides/ports.md` writes
-    # both; `CommandResult` is the one that would have been missed, because
-    # nothing *imports* it in a snippet -- a runner's `run` returns one, so a
-    # deployment cannot write the port without it and had no public spelling.
-    "COMMAND_RUNNER_CONTRACT": "document",
-    # The same page writes `from kingfisher import BACKEND_CONTRACT`, beside the
-    # seam it is the way to check. Nothing in this repository runs it against a
-    # deployment's backend, which is the point: it exists for the one this
-    # repository cannot see.
-    "BACKEND_CONTRACT": "document",
+    # The type a runner returns. Nothing *imports* it in a snippet -- a runner's `run`
+    # returns one, so a deployment cannot write the interface without it and had no
+    # public spelling.
     "CommandResult": "document",
     # `tools.md` writes `from kingfisher import ToolContext` for the annotation that
     # hands a tool the turn's backend. A tool file is in a deployment's workspace,
@@ -2107,14 +2095,12 @@ WITNESSES: dict[str, str] = {
     # The streaming half of `run`, which is documented; the two are one decision.
     "stream": "embedder",
     # `guides/ports.md` shows a deployment building on the default by subclassing
-    # it, and building a backend for a directory of its own with `backend_at`, and
-    # checking what it wrote with the kit beside `BACKEND_CONTRACT`.
+    # it, and building a backend for a directory of its own with `backend_at`.
     "LocalSessions": "document",
     # What `KINGFISHER_PLUGINS` returns, which `configuration.md` tells a deployment to
     # build in a module of its own.
     "Plugins": "document",
     "backend_at": "document",
-    "SESSION_BACKENDS_CONTRACT": "document",
     # The same page has a deployment whose shell is not kingfisher's say what it sees,
     # on its runner or on its own sandbox; nothing here has a shell of that kind.
     "ShellPrompt": "document",
@@ -2489,7 +2475,6 @@ PUBLIC = ("kingfisher",)
 RUNS_AN_AGENT = frozenset({
     "Kingfisher", "run", "stream",
     "LocalSessions", "backend_at",
-    "BACKEND_CONTRACT", "SESSION_BACKENDS_CONTRACT",
 })
 
 #: What the command may load before it knows which verb it is running: it reads `.env`

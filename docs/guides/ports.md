@@ -1,4 +1,4 @@
-# Writing an adapter
+# Writing your own
 
 Kingfisher reaches the world through the Protocols in
 [`domain/ports.py`](../../src/kingfisher/domain/ports.py) — what runs a shell
@@ -12,7 +12,7 @@ A different question from *what can I set?* — [`configuration.md`](configurati
 lists the variables, and `.env.example` argues each one where it is set. This
 page is about writing the thing a setting names.
 
-Satisfaction is by shape. A port is a Protocol, not a base class, so an adapter
+Satisfaction is by shape. An interface is a Protocol, not a base class, so yours
 implements the methods and inherits nothing — a test satisfies most of them with
 a dict.
 
@@ -36,7 +36,7 @@ KINGFISHER_PLUGINS=mycompany.plugins:build_plugins
 ```
 
 It names `module:name` — something **callable with no arguments** that returns
-the adapter. Zero arguments is the whole convention: kingfisher does not know
+yours. Zero arguments is the whole convention: kingfisher does not know
 whether yours wants a bucket, a region, a DSN or a pool, so it asks for none of
 them and your factory reads its own configuration. A class with a no-argument
 `__init__` satisfies it as readily as a function.
@@ -48,28 +48,24 @@ its own exception is left alone: that is your code failing at your job, its type
 may be one your own error handling knows, and the traceback already says which
 setting reached it.
 
-## Checking what you wrote
+## What yours has to promise
 
-The runner and the backend ship their contracts as runnable checks. Import them
-and point them at your adapter:
+Each interface says what an implementation has to keep, in its own docstring, and
+this page says why each promise matters where it describes the interface. Two of them
+kingfisher checks itself, on every backend a session opens; see *Checking what you
+returned* below. The rest are yours to test.
 
-```python
-from kingfisher import SESSION_BACKENDS_CONTRACT
+Kingfisher holds its own implementations to every promise with plain functions that
+raise `AssertionError`, in this repository's `tests/checks/`: `runner.py` for a
+`CommandRunner`, `sessions.py` for a `Sessions`, and `backend.py` for what its `open`
+returns. They ship with no wheel, and copying them is the shortest way to hold yours to
+the same. Most do more than read: a backend is checked by writing files through it, and
+a runner by running commands, one of which waits a second for a timeout. Run those
+where you would run an integration test.
 
-@pytest.mark.parametrize("check", SESSION_BACKENDS_CONTRACT, ids=lambda c: c.__name__)
-def test_my_backends_keep_the_contract(check, tmp_path):
-    check(lambda: (my_config(tmp_path), MySessions()))
-```
-
-No test framework comes with them — the checks are plain functions that raise
-`AssertionError` — so unittest or a loop works as well as pytest. Most do more than
-read, and that is the ports rather than the kits: a backend is checked by writing
-files through it, and `COMMAND_RUNNER_CONTRACT` runs commands — one of them waits a
-second for a timeout. Run those where you would run an integration test.
-
-They are worth running even if your adapter looks obviously correct. Backends that
-hand every session the same storage pass every functional test you are likely to
-write, while each caller reads every other caller's files as their own.
+They are worth running even if yours looks obviously correct. Sessions that hand
+every session the same storage pass every functional test you are likely to write,
+while each caller reads every other caller's files as their own.
 
 ## `CommandRunner` — what runs a shell command
 
@@ -85,7 +81,7 @@ the sessions rather than on `Kingfisher` because only they know where a
 session is on this host; sessions of your own run their commands however
 their `open` builds the backend.
 
-Verified with `COMMAND_RUNNER_CONTRACT` — five checks, which run commands.
+Held by `tests/checks/runner.py` — five checks, which run commands.
 Things to know:
 
 - **`local` decides whether the fence is applied.** The command arrives already
@@ -110,8 +106,8 @@ Things to know:
   [`sessions`](#sessions--the-filesystem-the-agent-runs-against).
 - **A timeout is a result, not an exception**: `exit_code` 124, the shell's own,
   with output saying so. Raising would make your failure the model's problem
-  rather than a tool result it can read and retry. This is the one the kit
-  exists for: every timeout API in Python raises, `subprocess.run(timeout=...)`
+  rather than a tool result it can read and retry. This is the one the checks
+  exist for: every timeout API in Python raises, `subprocess.run(timeout=...)`
   included, so the obvious implementation gets it wrong and nothing else would
   say so.
 
@@ -355,7 +351,7 @@ write the signature out and your type checker catches it.
 **What `open` returns is one session's, and only one.** A backend shared between
 sessions is one filesystem for every caller — usually the thing you are replacing
 the backend to avoid. Passing a backend itself is a `TypeError`, and
-`two_sessions_are_kept_apart` in the kit below catches the subtler version: every
+`two_sessions_are_kept_apart` in `tests/checks/sessions.py` catches the subtler version: every
 id handed the same storage.
 
 **The turn lock is on the sessions.** They have `claim(cfg, session_id, /, *,
@@ -415,7 +411,7 @@ pinned to, its conversation, and a turn paused at an approval gate are all writt
 and read through your backend — which means your agent's shell can reach them too,
 unless your backend keeps it out. Nothing signs them, so what stands between the
 agent and rewriting its own pinned agent is that fence, and it is yours to get
-right: **`shell_denied`**, in the kit below, drives `execute` at `/.harness` and
+right: **`shell_denied`**, in `tests/checks/backend.py`, drives `execute` at `/.harness` and
 `/inputs` and fails if the shell can write either. `kingfisher doctor` warns when
 `KINGFISHER_SESSIONS` names sessions of yours, because it
 cannot look inside them.
@@ -441,7 +437,7 @@ Return `None` for a path that is not on this host; the tool is refused with a
 message saying to read through `runtime.context.backend`, which works anywhere.
 What you return is taken at your word: it is handed to a tool running in
 kingfisher's own process, outside every sandbox. So it must never name another
-session's file — `a_host_path_stays_in_its_session` in the kit below writes a file
+session's file — `a_host_path_stays_in_its_session` in `tests/checks/sessions.py` writes a file
 into two sessions and reads back what your answer names. The turn's rules still
 apply first: a path the file tools may not read, `/.harness` among them, is
 refused before your method is asked.
@@ -467,22 +463,16 @@ implements the file operations in terms of `execute`, or register with the ABC.
 or the graph will not build: deepagents refuses `permissions=` outright on a
 backend that executes unless every rule is scoped to a route.
 
-**The other four stay yours.** Three write files and run shell commands, and a
-library should not do either at a build. The fourth only looks, and finds a folder
-in the wrong place rather than an agent that cannot work, which is not worth
-refusing a turn over:
+**The other four stay yours**, in `tests/checks/backend.py`: that the backend reads
+back what it was given, keeps deepagents' offloads in the scratchpad, keeps the shell
+out of `/.harness` and `/inputs`, and refuses a host path. Three write files and run
+shell commands, and a library should not do either at a build. The fourth only looks,
+and finds a folder in the wrong place rather than an agent that cannot work, which is
+not worth refusing a turn over.
 
-```python
-from kingfisher import BACKEND_CONTRACT
-
-@pytest.mark.parametrize("check", BACKEND_CONTRACT, ids=lambda c: c.__name__)
-def test_my_backend_keeps_the_contract(check, cfg):
-    check(lambda: MySessions().open(cfg, "a-session"))
-```
-
-Run all six. The automatic pair costs nothing twice, and your own suite is a
-better place to read a failure than a turn is. And run
-`SESSION_BACKENDS_CONTRACT`, above, against the object that makes them: that two
+Run all six. The automatic pair costs nothing twice, and your own suite is a better
+place to read a failure than a turn is. And hold the object that makes them to
+`tests/checks/sessions.py`: that two
 sessions are kept apart, that a session is there on the next turn, that the claim
 is exclusive, that what is listed and deleted is what exists, that where you say
 a file is on this host it is that session's file, that a session serves under

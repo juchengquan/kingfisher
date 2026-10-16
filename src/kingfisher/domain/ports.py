@@ -26,6 +26,11 @@ class CommandRunner(Protocol):
     forget to -- but the confinement names paths on *this* host, so a runner shipping
     the command elsewhere must set `local` to False, and then receives the command as
     the model wrote it.
+
+    What one has to keep, held by this repository's `tests/checks/runner.py`: it says
+    whether it runs here; a command that works says so; a command that fails, or runs
+    out of time, is a result and not an exception; and the result is shaped the way a
+    caller reads it.
     """
 
     @property

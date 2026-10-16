@@ -40,21 +40,6 @@ _EXPORTS = {
     "SubagentError": "kingfisher.kinds.subagents.spec",
     "UnsafeReferenceError": "kingfisher.domain.references",
     "HostPathError": "kingfisher.infrastructure.harness.host_paths",
-    # The runner's contract, for a deployment checking its own adapter against it.
-    # Public here rather than left to `import kingfisher.testing`, because
-    # `READ_ELSEWHERE` says a name this package publishes belongs in `__all__`. It
-    # does more than read, which is a property of the port rather than of the kit:
-    # there is no way to check that a runner runs things without running things.
-    "COMMAND_RUNNER_CONTRACT": "kingfisher.testing",
-    # The other kit, and the one not in `testing`. Its sharpest check asks whether
-    # deepagents will recognise a backend as running commands, which needs the
-    # package -- and `testing` is permitted nothing foreign, an entry covering
-    # `config` and `layout` too. So it lives where the backend it describes is
-    # built, and comes through the front door from there.
-    "BACKEND_CONTRACT": "kingfisher.infrastructure.harness.backend_contract",
-    # Its companion for the object that makes backends and answers for every session:
-    # that two sessions never share a filesystem, and that a claim is exclusive.
-    "SESSION_BACKENDS_CONTRACT": "kingfisher.infrastructure.harness.backend_contract",
     # What `LocalSessions` builds for one session, for a directory of the caller's
     # choosing. Public because `ports.md` tells a deployment writing its own sessions
     # to start from it rather than from nothing, and that has to be sayable from here.
@@ -133,9 +118,6 @@ _EXPORTS = {
 }
 
 __all__ = [
-    "BACKEND_CONTRACT",
-    "COMMAND_RUNNER_CONTRACT",
-    "SESSION_BACKENDS_CONTRACT",
     "UNSCOPED",
     "AccessError",
     "ArtifactError",
@@ -232,12 +214,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.harness.backend import (
         backend_at as backend_at,
     )
-    from kingfisher.infrastructure.harness.backend_contract import (
-        BACKEND_CONTRACT as BACKEND_CONTRACT,
-    )
-    from kingfisher.infrastructure.harness.backend_contract import (
-        SESSION_BACKENDS_CONTRACT as SESSION_BACKENDS_CONTRACT,
-    )
     from kingfisher.infrastructure.harness.host_paths import HostPathError as HostPathError
     from kingfisher.infrastructure.harness.tool_context import ToolContext as ToolContext
     from kingfisher.infrastructure.prompting import ShellPrompt as ShellPrompt
@@ -250,7 +226,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace import seed as seed
     from kingfisher.kinds.subagents.spec import RunOn as RunOn
     from kingfisher.kinds.subagents.spec import SubagentError as SubagentError
-    from kingfisher.testing import COMMAND_RUNNER_CONTRACT as COMMAND_RUNNER_CONTRACT
 
 
 def __getattr__(name: str) -> Any:

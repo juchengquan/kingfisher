@@ -12,21 +12,21 @@ from pathlib import Path
 import pytest
 from deepagents.backends import FilesystemBackend
 
-from kingfisher import SESSION_BACKENDS_CONTRACT, Kingfisher, LocalSessions
+from kingfisher import Kingfisher, LocalSessions
 from kingfisher.infrastructure.harness.backend import (
     WorkspaceScopedBackend,
     bundled_skills_route,
 )
-from kingfisher.infrastructure.harness.backend_contract import CONTRACT_SESSIONS
 from kingfisher.layout import SKILLS_ROUTE
 from kingfisher.presentation.cli.__main__ import main
+from tests.checks.sessions import CONTRACT_SESSIONS, SESSIONS_CHECKS
 from tests.conftest import StubCheckpointer
 from tests.unit.test_run import StubAgent
 from tests.unit.test_session_files import Elsewhere
 
 
 def test_the_default_keeps_the_contract(cfg):
-    for check in SESSION_BACKENDS_CONTRACT:
+    for check in SESSIONS_CHECKS:
         check(lambda: (cfg, LocalSessions()))
 
 
@@ -34,7 +34,7 @@ def test_the_contract_is_not_quietly_empty():
     """A hand-maintained tuple, and a rule walking an empty one passes having checked
     nothing.
     """
-    assert len(SESSION_BACKENDS_CONTRACT) >= 5
+    assert len(SESSIONS_CHECKS) >= 5
 
 
 class Shared(LocalSessions):
@@ -62,7 +62,7 @@ class OneLockForAll(LocalSessions):
 
 
 def _check(name):
-    (check,) = [c for c in SESSION_BACKENDS_CONTRACT if c.__name__ == name]
+    (check,) = [c for c in SESSIONS_CHECKS if c.__name__ == name]
     return check
 
 
@@ -149,7 +149,7 @@ def test_the_kit_runs_from_a_test_already_on_an_event_loop(cfg):
     """
 
     async def from_a_coroutine() -> None:
-        for check in SESSION_BACKENDS_CONTRACT:
+        for check in SESSIONS_CHECKS:
             check(lambda: (cfg, LocalSessions()))
 
     asyncio.run(from_a_coroutine())

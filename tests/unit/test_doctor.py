@@ -1689,7 +1689,7 @@ def test_a_linux_fence_keeps_sessions_apart_and_is_not_warned_about(cfg, monkeyp
 
 
 def test_session_backends_doctor_cannot_see_into_are_left_to_their_contract(cfg, monkeypatch):
-    """Whether they keep sessions apart is theirs to show, and `SESSION_BACKENDS_CONTRACT`
+    """Whether they keep sessions apart is theirs to show, and `tests/checks/sessions.py`
     asks them; a third "cannot see" line on every check of such a deployment is noise.
     """
     from dataclasses import replace

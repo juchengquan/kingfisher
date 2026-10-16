@@ -1,4 +1,8 @@
-"""The port contracts, as checks a deployment can run against its own adapter."""
+"""What a `CommandRunner` promises, as checks.
+
+Not shipped: kingfisher holds its own runners to these, and a deployment writing its own
+copies them. Plain functions raising `AssertionError` and no pytest.
+"""
 
 from __future__ import annotations
 
@@ -125,7 +129,7 @@ def a_timeout_is_a_result_and_not_an_exception(make: Callable[[], CommandRunner]
 
 #: Every check a `CommandRunner` must pass. These run commands, and one waits
 #: for a timeout.
-COMMAND_RUNNER_CONTRACT: tuple[Callable[[Callable[[], CommandRunner]], None], ...] = (
+RUNNER_CHECKS: tuple[Callable[[Callable[[], CommandRunner]], None], ...] = (
     a_runner_says_where_it_runs,
     a_command_that_works_reports_that_it_worked,
     a_command_that_fails_is_a_result_and_not_an_exception,
