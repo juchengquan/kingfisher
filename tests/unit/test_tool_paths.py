@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from langchain_core.tools import ToolException
 
 from kingfisher import backend_at
 from kingfisher.core.agent.host_paths import HOST_ROOTS
@@ -502,6 +503,26 @@ def test_a_tool_that_raises_answers_instead_of_ending_the_run(paths, session):
 
     assert answer.status == "error"
     assert "FileNotFoundError" in answer.content
+
+
+def test_a_tools_own_tool_exception_is_not_rewrapped(paths, session, way):
+    """`except ToolException: raise` sits ahead of the catch-all in both methods and was
+    reached by neither. Without it the one exception a tool writes *for* a model comes
+    back framed as `Error: ToolException: ...`, with the wrapper's prefix around a
+    message that already reads as advice.
+    """
+    from langchain_core.tools import tool
+
+    @tool
+    def picky(path: str) -> str:
+        """Raise the way a tool speaks to a model."""
+        msg = "name a file under /inputs/, not the folder"
+        raise ToolException(msg)
+
+    answer = answered(guarded(picky, paths), way, path="/inputs/notes.txt")
+
+    assert answer.status == "error"
+    assert answer.content == "name a file under /inputs/, not the folder"
 
 
 def test_climbing_out_is_refused_as_an_answer_rather_than_an_exception(paths, session):
