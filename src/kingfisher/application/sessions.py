@@ -54,7 +54,7 @@ class SessionMethods:
         return Session(id=request.session_id or DEFAULT_SESSION)
 
     def _refuse_if_absent(self, session_id: str) -> Steps[None]:
-        """Refuse an id the session backends do not list, before anything opens it."""
+        """Refuse an id the sessions do not list, before anything opens it."""
         if session_id not in (yield from self._known_steps()):
             raise unknown_session(session_id)
 
@@ -135,7 +135,7 @@ class SessionMethods:
         neither the check nor the caller needed one.
 
         Handed back for a caller that goes on to read the session: opening another
-        asks the session backends a second time, which for a remote backend is a
+        asks the sessions a second time, which for a remote backend is a
         second sandbox per query. Not opened where nothing narrows the caller and the
         caller reads nothing, for the same reason: a remote backend would be a sandbox
         opened to say a session exists.

@@ -57,7 +57,7 @@ def _recorded(made: list[tuple[str, bool]], cls: type, name: str):
     return recorded
 
 
-@pytest.mark.parametrize("wiring", ["graph", "session backends"])
+@pytest.mark.parametrize("wiring", ["graph", "sessions"])
 def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wiring):
     """Driven with `drive` rather than `adrive`, or with a sync call between two steps,
     they still return the right answer -- and hold every coroutine on the loop for the

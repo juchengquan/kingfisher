@@ -201,6 +201,6 @@ def _sessions(cfg: Config, sessions: object | None) -> Origin:
     which reads this same setting and knew better. Both now answer `<supplied>`, which
     is what the library answers for the same deployment.
     """
-    if sessions is not None or cfg.session_backends_factory is not None:
+    if sessions is not None or cfg.sessions_factory is not None:
         return Origin("supplied")
     return Origin("default", cfg.workspace / "sessions")

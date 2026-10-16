@@ -122,6 +122,9 @@ _EXPORTS = {
     # command printed four of eleven places, `doctor` printed one, and a
     # library caller had no way to ask at all.
     "Origin": "kingfisher.application.origins",
+    # What `KINGFISHER_PLUGINS` returns, so a deployment's own module builds one without
+    # reaching past the door: `docs/guides/configuration.md` shows it.
+    "Plugins": "kingfisher.application.plugins",
     "Origins": "kingfisher.application.origins",
     "config_from_env": "kingfisher.application.config",
     "paths_from_env": "kingfisher.application.config",
@@ -154,6 +157,7 @@ __all__ = [
     "Origin",
     "Origins",
     "PendingDecision",
+    "Plugins",
     "QuotaExceededError",
     "Request",
     "Resume",
@@ -192,6 +196,7 @@ if TYPE_CHECKING:
     from kingfisher.application.inventory import inventory as inventory
     from kingfisher.application.origins import Origin as Origin
     from kingfisher.application.origins import Origins as Origins
+    from kingfisher.application.plugins import Plugins as Plugins
     from kingfisher.application.run import run as run
     from kingfisher.application.run import stream as stream
     from kingfisher.application.service import Kingfisher as Kingfisher

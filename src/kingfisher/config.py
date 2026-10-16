@@ -194,7 +194,7 @@ class ConfigError(RuntimeError):
 #: kept here rather than beside that reader because they are refusals, not knobs.
 #: The size of the process's thread pool when nothing configured one. A turn hands
 #: it only short work on this host -- building the agent, writing a pause, closing up
-#: -- but session backends whose async methods are the protocol's defaults run every
+#: -- but sessions whose async methods are the protocol's defaults run every
 #: sync call on it too, each a whole round trip on a remote one, and those are what a
 #: smaller pool would queue.
 DEFAULT_THREAD_POOL_SIZE = 16
@@ -205,7 +205,7 @@ DEFAULT_THREAD_POOL_SIZE = 16
 #: session would run in `default` rather than the one the deployment chose.
 _STORE = (
     "a session's backend keeps it now. Mount durable storage at <workspace>/sessions, or "
-    "set KINGFISHER_SESSION_BACKENDS_FACTORY to session backends that keep them"
+    "set KINGFISHER_SESSIONS to sessions that keep them"
 )
 REMOVED_SETTINGS: Mapping[str, str] = MappingProxyType({
     "KINGFISHER_SESSION_STORE": _STORE,
@@ -222,7 +222,10 @@ REMOVED_SETTINGS: Mapping[str, str] = MappingProxyType({
 #: of the deployment's own. `RETIRED` names are reported rather than refused because
 #: their default may well be what was wanted.
 RENAMED_SETTINGS: Mapping[str, str] = MappingProxyType(
-    {"KINGFISHER_BACKEND_FACTORY": "KINGFISHER_SESSION_BACKENDS_FACTORY"}
+    {
+        "KINGFISHER_BACKEND_FACTORY": "KINGFISHER_SESSIONS",
+        "KINGFISHER_SESSION_BACKENDS_FACTORY": "KINGFISHER_SESSIONS",
+    }
 )
 
 #: Settings that each moved one thing out of the workspace, refused where they are
@@ -402,12 +405,15 @@ class Config:
     # inheriting a folder inside the workspace. One folder rather than one per kind:
     # several deployments point at it, and one path is what they agree on.
     definitions: Path = field(kw_only=True)
-    # The session backends the command line runs on, named rather than built here:
+    # The sessions the command line runs on, named rather than built here:
     # `module:name` for something callable with no arguments that returns a
     # `Sessions`. Only the command line reads it -- `Kingfisher` takes them as
-    # `backends=` -- and it is what lets `kingfisher sessions` and `reap` see sessions
+    # `sessions=` -- and it is what lets `kingfisher sessions` and `reap` see sessions
     # a deployment's own keep somewhere else.
-    session_backends_factory: str | None = None
+    sessions_factory: str | None = None
+    # The other plugins the command line hands every `Kingfisher` it builds, named the
+    # same way: something returning a `Plugins`. Unset, each is kingfisher's own.
+    plugins_factory: str | None = None
     # What this deployment *wires*. Distinct from `Capabilities`, which is what a single
     # request may *use* of it -- and the distinction is not stylistic: these two flags
     # shape `render_system_prompt`, which is the cached prefix every turn is compared

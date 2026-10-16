@@ -17,11 +17,12 @@ import pytest
 
 import kingfisher
 from kingfisher import LocalSessions
+from kingfisher.application.plugins import Plugins
 from kingfisher.domain.result import AWAITING, RunResult
 from kingfisher.domain.result import PendingDecision as Pending
 from kingfisher.infrastructure.steps import drive
 from kingfisher.presentation.cli import __main__ as cli
-from tests.conftest import Through
+from tests.conftest import RecordedEvents, Through
 
 PAUSED = RunResult(
     session_id="s-1",
@@ -69,6 +70,11 @@ def _drive(monkeypatch, result: RunResult) -> None:
         importlib.import_module("kingfisher.application.run"),
         "configured_sessions",
         lambda cfg: None,
+    )
+    monkeypatch.setattr(
+        importlib.import_module("kingfisher.application.run"),
+        "configured_plugins",
+        lambda cfg: Plugins(),
     )
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Nothing())
     monkeypatch.setattr(cli, "show", lambda *a, **k: result)
@@ -186,6 +192,11 @@ def test_the_three_decisions_reach_the_library_as_written(monkeypatch):
         importlib.import_module("kingfisher.application.run"),
         "configured_sessions",
         lambda cfg: None,
+    )
+    monkeypatch.setattr(
+        importlib.import_module("kingfisher.application.run"),
+        "configured_plugins",
+        lambda cfg: Plugins(),
     )
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Recording())
 
@@ -431,6 +442,11 @@ def test_log_reaches_the_service_on_both_verbs_that_run_a_turn(verb, tmp_path, m
         "configured_sessions",
         lambda cfg: None,
     )
+    monkeypatch.setattr(
+        importlib.import_module("kingfisher.application.run"),
+        "configured_plugins",
+        lambda cfg: Plugins(),
+    )
     monkeypatch.setattr(kingfisher, "Kingfisher", Recording)
     monkeypatch.setattr(cli, "show", lambda *a, **k: None)
     log = tmp_path / "turns.jsonl"
@@ -443,3 +459,34 @@ def test_log_reaches_the_service_on_both_verbs_that_run_a_turn(verb, tmp_path, m
     (sink,) = handed
     assert isinstance(sink, JsonlRunEvents)
     assert sink.path == log
+
+
+def test_the_plugins_reach_the_service_and_log_replaces_their_run_events(tmp_path, monkeypatch):
+    """What `KINGFISHER_PLUGINS` names is handed to every `Kingfisher` the command builds,
+    and `--log`, the narrower ask, takes the place of the run events it names."""
+    from kingfisher.infrastructure.harness.runlog import JsonlRunEvents
+
+    handed: list[dict[str, object]] = []
+    events, threads = RecordedEvents(), object()
+
+    class Recording(_Nothing):
+        def __init__(self, *args, **kwargs) -> None:
+            handed.append(kwargs)
+
+    monkeypatch.setattr(cli, "config_from_env", object)
+    run = importlib.import_module("kingfisher.application.run")
+    monkeypatch.setattr(run, "configured_sessions", lambda cfg: None)
+    monkeypatch.setattr(
+        run, "configured_plugins", lambda cfg: Plugins(run_events=events, threads=threads)
+    )
+    monkeypatch.setattr(kingfisher, "Kingfisher", Recording)
+    monkeypatch.setattr(cli, "show", lambda *a, **k: None)
+
+    cli._run(_args())
+    cli._run(_args(log=tmp_path / "turns.jsonl"))
+
+    plain, logged = handed
+    assert plain["run_events"] is events
+    assert plain["threads"] is threads
+    assert isinstance(logged["run_events"], JsonlRunEvents)
+    assert logged["threads"] is threads

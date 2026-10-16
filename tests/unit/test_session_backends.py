@@ -178,14 +178,14 @@ REMOTE: list[Path] = []
 
 
 def remote_backends() -> Elsewhere:
-    """What `KINGFISHER_SESSION_BACKENDS_FACTORY` names in the tests below."""
+    """What `KINGFISHER_SESSIONS` names in the tests below."""
     return Elsewhere(REMOTE[-1])
 
 
 @pytest.fixture
 def told_about_a_remote_backend(at_the_command_line, monkeypatch, tmp_path):
     REMOTE.append(tmp_path / "remote")
-    monkeypatch.setenv("KINGFISHER_SESSION_BACKENDS_FACTORY", f"{__name__}:remote_backends")
+    monkeypatch.setenv("KINGFISHER_SESSIONS", f"{__name__}:remote_backends")
     yield at_the_command_line
     REMOTE.pop()
 

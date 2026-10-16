@@ -66,7 +66,7 @@ kingfisher/
     config.py layout.py request.py result.py service.py run.py inventory.py
     origins.py reporting.py
   plugins/
-    __init__.py        Plugins: the five that have a default
+    __init__.py        Plugins: what KINGFISHER_PLUGINS returns for the command
     sessions/          LocalSessions: session folders, backend, sandbox, runner,
                        the turn lock, and prompts/ -- what the shell says of itself
     events.py conversations.py wire_formats.py instructions.py
@@ -116,8 +116,12 @@ a deployment's own. Leaving them out is refused, and so is a pre-built graph wit
 them. `graph=` stays, and a graph never stands in for sessions: kingfisher places a
 request's inputs, collects what a turn left and takes the turn lock through them, whatever
 runs the agent. `kingfisher.run()` and `kingfisher.stream()` require them the same way,
-so Python that runs kingfisher always says what it runs on. The other five come in one
-object, every field defaulted: `Kingfisher(cfg, sessions=..., plugins=Plugins(...))`.
+so Python that runs kingfisher always says what it runs on. The others are keywords
+beside it, each left out for kingfisher's own: `Kingfisher(cfg, sessions=...,
+threads=..., run_events=..., middlewares=...)`. One `Plugins` object holding them was
+proposed and not built: it would have changed more than a hundred calls to say the same
+thing one level down, and wire formats are not among them -- they are applied as the
+configuration loads, where `doctor` checks every endpoint's `api:`.
 
 **The core never picks a sessions implementation, so it never imports one.**
 `LocalSessions` is the one kingfisher ships, named by a deployment exactly as its own
@@ -128,8 +132,9 @@ be loaded by name like the definitions in `assets/`, without the core changing.
 them on. `KINGFISHER_SESSIONS=module:callable` names a callable returning the sessions,
 and where it is unset the command runs on `LocalSessions`: the command is outside the
 core, and is kingfisher's own deployment naming its own. `KINGFISHER_PLUGINS` names one
-returning `Plugins`. The two replace both `*_FACTORY` settings, one per argument the
-command cannot be given.
+returning a `Plugins`, a record of the keywords above that the command hands every
+`Kingfisher` it builds; `--log` replaces the run events it names. Wire formats keep a
+setting of their own, read as the configuration loads.
 
 `catalogue` and `grants` move onto `Config`, which is otherwise left as it is.
 `Kingfisher`'s methods keep their names and signatures.
@@ -151,8 +156,7 @@ the backend as one with a shell, and that the routes cover the layout.
 
 ## The rules
 
-- The core imports no plugin, except `core/service.py` importing `Plugins`, and names no
-  sessions implementation at all.
+- The core imports no plugin, and names no sessions implementation at all.
 - A plugin imports the core and never another plugin.
 - deepagents is part of the core.
 - `import kingfisher` loads no installed package. The command loads nothing but `dotenv`
@@ -168,8 +172,8 @@ move that breaks it; the rest stay, and the last slice adds the rules above.
 
 ## What goes
 
-The six repository Protocols. Both `*_FACTORY` settings, for `KINGFISHER_SESSIONS` and
-`KINGFISHER_PLUGINS`. `Config.deployment_prompt` and the workspace's `PROMPT.md`. The
+The six repository Protocols. `KINGFISHER_SESSION_BACKENDS_FACTORY`, for
+`KINGFISHER_SESSIONS`. `Config.deployment_prompt` and the workspace's `PROMPT.md`. The
 shipped contract kits and their `*_CONTRACT` names. The table that justifies each public
 name. The rules tied to today's folders.
 
@@ -186,7 +190,8 @@ One pull request each, off `main` once the one before it has merged.
    stays public, because `ports.md` tells a deployment's own sessions to build on it.
    *(Landed.)* Then the turn lock moves onto `Sessions`, and `unprotected` becomes
    `LocalSessions`' own. *(Landed.)*
-5. `Plugins`, `KINGFISHER_SESSIONS` and `KINGFISHER_PLUGINS`.
+5. `KINGFISHER_SESSIONS` and `KINGFISHER_PLUGINS`, and the `Plugins` record the second
+   returns. *(Landed.)*
 6. `Adapter` becomes `WireFormat`.
 7. The Instructions plugin.
 8. `catalogue` and `grants` onto `Config`.

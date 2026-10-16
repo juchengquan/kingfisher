@@ -123,7 +123,7 @@ class Silent(LocalShellBackend):
 def test_a_sandbox_of_a_deployment_s_own_is_read_for_what_it_says(cfg, session_dir):
     """Read off the shell, which is what knows: the sandbox that says something is
     taken at its word, and the subclass of `LocalSessions` that swaps in one saying
-    nothing is described neutrally -- on the session backends, it would have inherited
+    nothing is described neutrally -- on the sessions, it would have inherited
     kingfisher's wording and been told of a shell it does not have.
     """
     routes = backend_at(cfg, session_dir).routes

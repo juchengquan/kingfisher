@@ -476,9 +476,9 @@ class Kingfisher(SessionMethods, Disposal):
     def _files_for(self, session_id: str) -> Steps[Any]:
         """The backend a session's files are reached through, by kingfisher and any agent it builds.
 
-        What runs its commands is the session backends' to decide, not this
+        What runs its commands is the sessions' to decide, not this
         service's: a runner is about where commands run on a host, and only the
-        session backends know which host a session is on.
+        sessions know which host a session is on.
         """
         files = yield changing(
             self._sessions, "open", self.cfg, session_id, catalogue=self.catalogue

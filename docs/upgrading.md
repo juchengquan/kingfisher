@@ -603,7 +603,7 @@ method that opens a session is named rather than being the object's `__call__`.
 | `Kingfisher(cfg, backend=...)`, and `backend=` on `run()` and `stream()` | `sessions=` |
 | `default_backend`, `DefaultBackend` | `LocalSessions()`, `LocalSessions` |
 | `__call__(cfg, session_id, /, *, catalogue=None, runner=None)` on your `SessionBackends`, called as `backends(cfg, session_id)` | `open(...)`, with the same arguments, called as `backends.open(cfg, session_id)` |
-| `KINGFISHER_BACKEND_FACTORY` | `KINGFISHER_SESSION_BACKENDS_FACTORY`. The old name is **refused**: startup fails with `KINGFISHER_BACKEND_FACTORY was renamed KINGFISHER_SESSION_BACKENDS_FACTORY; set that instead`. |
+| `KINGFISHER_BACKEND_FACTORY` | `KINGFISHER_SESSIONS`. The old name is **refused**: startup fails with `KINGFISHER_BACKEND_FACTORY was renamed KINGFISHER_SESSIONS; set that instead`, and so is `KINGFISHER_SESSION_BACKENDS_FACTORY`, the name in between. |
 | `Config.backend_factory`, `configured_backend()` | `Config.session_backends_factory`, `configured_sessions()` |
 
 ## Async reads after #617
@@ -656,7 +656,7 @@ and for a turn, `aclaim` and `arelease`:
 |---|---|---|
 | `KINGFISHER_SESSION_STORE`, `KINGFISHER_SESSION_STORE_FACTORY` | **Removed and refused.** Startup fails with `KINGFISHER_SESSION_STORE was removed: a session's backend keeps it now…` | Unset them. For sessions that outlive the machine, mount durable storage at `<workspace>/sessions`, or use a backend that keeps sessions itself. |
 | `KINGFISHER_SESSION_KEY` | **Gone.** It was on `main` for a day after #610, signing the pin, the conversation and a paused turn; nothing signs them now. | Unset it if you set it; `kingfisher doctor` reports it as read by nothing. |
-| `KINGFISHER_SESSION_BACKENDS_FACTORY` | **New, for the command line only.** `module:name` of something callable with no arguments that returns your `Sessions`. | Set it (the name since *Renamed after #617*) if yours keep sessions anywhere but `<workspace>/sessions`, so `kingfisher sessions`, `reap`, `artifact` and `decide` see them. |
+| `KINGFISHER_SESSIONS` | **New, for the command line only.** `module:name` of something callable with no arguments that returns your `Sessions`. | Set it (the name since *Renamed after #617*) if yours keep sessions anywhere but `<workspace>/sessions`, so `kingfisher sessions`, `reap`, `artifact` and `decide` see them. |
 
 ## Existing sessions
 
@@ -761,7 +761,7 @@ does. `docs/guides/formats.md`, under *Tools and skills of its own*, has the det
 - **New:** `kingfisher artifact --session ID NAME [--out PATH]` fetches a file a turn
   produced.
 - **Changed:** `sessions`, `reap`, `artifact` and `decide` run on
-  `KINGFISHER_SESSION_BACKENDS_FACTORY` when it's set. `decide --session ID` with no decisions
+  `KINGFISHER_SESSIONS` when it's set. `decide --session ID` with no decisions
   now finds a session a backend keeps elsewhere, and asks as the caller `--as` names:
   in a workspace with source ids it needs `--as`, and a caller who can't reach the
   session is told it doesn't exist. `artifact` takes `--as` the same way, and
@@ -769,7 +769,7 @@ does. `docs/guides/formats.md`, under *Tools and skills of its own*, has the det
   `doctor` gains a `session files` row, saying whether anything keeps the agent's
   shell out of `.harness`, and reports `KINGFISHER_SESSION_KEY` as read by nothing. Its
   advice for a memory-backed workspace points at a durable mount or
-  `KINGFISHER_SESSION_BACKENDS_FACTORY`.
+  `KINGFISHER_SESSIONS`.
 
 ## For backend authors
 
