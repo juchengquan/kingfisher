@@ -3632,6 +3632,41 @@ neutrally -- only what holds wherever a shell runs, and deepagents' own `execute
 rather than refused: the neutral wording misleads nobody, and a refusal would stop a
 deployment until it wrote prose. A part left `None` is neutral, and `""` says nothing.
 
+**Two sentences the base prompt stated unconditionally, and a blank nobody could
+misspell loudly enough.** Making the shell's four claims conditional left three things
+of the same kind behind, each found by driving rather than reading.
+
+*The inputs folder is not read-only "by the filesystem itself".* `system.md` said writes
+under it are denied "at the tool level **and** by the filesystem itself". The second half
+is a fence, and `off` and `external` are supported settings: measured, with the sandbox
+off, `chmod u+w` and the same write replaced the caller's file and `rm -rf` took the
+folder, both exit 0. `harness/agent.py` records that exact measurement in the present
+tense a few lines from the code that drops the bits, so the prompt was contradicted by
+its own repository -- and this was the *fifth* sighting of that sentence: #743 corrected
+it in the permissions helper, in a test docstring and in the contract kit, and left it in
+the text the model reads every turn. The prompt claims the file-tool half now, which
+holds on every run, and a rule drives a real `write_file` under all three confinement
+settings rather than asserting the new wording alone. What the fence does is the
+operator's to know, and `doctor` is where they hear it.
+
+*"One of two places, and never anywhere else" is false the moment memory is on.* The
+same composed prompt then tells the agent to record things, and
+`write_file("/memory/AGENTS.md", ...)` succeeds and comes back as an artifact. The
+sentence names what is *not* the agent's to write now, rather than counting what is: a
+count is a claim an optional section can break, and the absolute form is the composition
+hazard this section already fixed once for the shell.
+
+*And a blank spelt wrong three ways was neither refused nor filled.* The scan for a
+`{{leaf}}` matched `\w+`, so it saw neither a space, a hyphen nor a dot: `{{ inputs }}`,
+`{{tool-results}}` and `{{inputs.dir}}` passed the refusal and then passed the fill,
+reaching the model as braces in wording a deployment had customised and been told
+nothing about -- while `{{inptus}}` was refused, which is what made the gate read as
+working. One pattern serves the refusal and the fill on purpose, so a blank either is
+wrong about is one the other reports; widening it to anything between doubled braces
+fixed both, and the rule drives all four misspellings across all three parts. Every
+doubled brace in the shipped prompts was checked against the leaves first: all five are
+real. *(2026-10-16, from an architecture review.)*
+
 **On the shell, not on the session backends.** The session backends are what a deployment
 subclasses, and the subclass `ports.md` shows swaps in a sandbox of its own. On the class,
 the wording would be inherited, and that sandbox's agents told it was kingfisher's. On the
