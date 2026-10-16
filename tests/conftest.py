@@ -243,6 +243,7 @@ def start(cfg, session_id: str) -> str:
         cfg.layout.session_dirs,
         memory=cfg.layout.memory,
         scratchpad=cfg.layout.scratchpad,
+        saved_results=cfg.layout.saved_results,
     )
     return session_id
 

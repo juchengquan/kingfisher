@@ -21,6 +21,7 @@ from kingfisher.layout import (
     MEMORY,
     OUTPUTS,
     ROUTES,
+    SAVED_RESULTS,
     SESSION_DIRS,
     Layout,
     denied_read_scopes,
@@ -42,6 +43,7 @@ def _laid_out(cfg, layout: Layout, session_id: str = "m") -> Path:
         layout.session_dirs,
         memory=layout.memory,
         scratchpad=layout.scratchpad,
+        saved_results=layout.saved_results,
     )
 
 
@@ -67,6 +69,7 @@ def test_the_default_layout_is_the_module_constants():
         "/scratchpad/tool_results/",
         "/scratchpad/large_tool_results/",
     )
+    assert default.saved_results == SAVED_RESULTS
 
 
 # -- a renamed layout derives everything from its leaves ------------------------
@@ -80,6 +83,7 @@ def test_a_renamed_layout_spells_every_route_from_its_leaves():
     assert MOVED.tool_results_route == "/scratch/results/"
     # `large_tool_results` is deepagents' own leaf: only the parent scratchpad moves.
     assert MOVED.offloads_route == "/scratch/large_tool_results/"
+    assert MOVED.saved_results == ("scratch/results", "scratch/large_tool_results")
     assert MOVED.session_dirs == ("in", "out", "mem", "scratch")
     assert MOVED.artifact_dirs == ("out", "mem")
 

@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kingfisher.infrastructure.sandbox.linux import MAX_OUTPUT_BYTES, outcome, present
-from kingfisher.layout import HARNESS, INPUTS
+from kingfisher.layout import HARNESS, INPUTS, SAVED_RESULTS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -83,6 +83,7 @@ def argv_for(
     readable: Iterable[Path | str] = (),
     writable: Iterable[Path | str] = (),
     inputs: str = INPUTS,
+    saved_results: Iterable[str] = SAVED_RESULTS,
 ) -> list[str]:
     """The sandbox one session's commands run in, generated from it."""
     argv = ["bwrap"]
@@ -100,7 +101,11 @@ def argv_for(
     # `inputs` beside it, and for the same reason: it is the caller's and the agent is
     # promised it cannot change it. Dropping its write bits was not enough, since the
     # shell owns those files and can lift them.
-    for path in present([Path(session_dir) / HARNESS, Path(session_dir) / inputs]):
+    # The saved results as well, because a ledger row names its file and a later turn
+    # reads that file back as what the tool returned.
+    session = Path(session_dir)
+    guarded = [session / HARNESS, session / inputs, *(session / p for p in saved_results)]
+    for path in present(guarded):
         argv += ["--ro-bind", str(path), str(path)]
     argv += [
         # A fresh minimal /dev rather than the container's.

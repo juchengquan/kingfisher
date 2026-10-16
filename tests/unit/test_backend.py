@@ -69,7 +69,10 @@ def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
     bare.mkdir()
     (bare / "inputs").mkdir()
 
-    wanted = r"missing outputs, memory, scratchpad, \.harness"
+    wanted = (
+        r"missing outputs, memory, scratchpad, \.harness, "
+        r"scratchpad/tool_results, scratchpad/large_tool_results;"
+    )
     with pytest.raises(ValueError, match=wanted):
         backend_at(cfg, bare)
 

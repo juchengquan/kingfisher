@@ -23,12 +23,12 @@ from pathlib import Path
 import pytest
 
 from kingfisher.domain.ports import CommandResult
-from kingfisher.infrastructure.harness.backend import backend_at
+from kingfisher.infrastructure.harness.backend import backend_at, default_backends
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.sandbox.bubblewrap import BubblewrapRunner
 from kingfisher.infrastructure.sandbox.fence import LandlockRunner
 from kingfisher.infrastructure.workspace import ensure_layout, ensure_session_layout
-from kingfisher.layout import HARNESS, INPUTS_ROUTE
+from kingfisher.layout import DEFAULT_LAYOUT, HARNESS, INPUTS_ROUTE, SAVED_RESULTS, Layout
 
 macos = pytest.mark.skipif(
     platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
@@ -909,6 +909,50 @@ def test_the_shell_cannot_lift_the_bits_on_the_callers_inputs(cfg, session_dir):
 
 
 @macos
+@pytest.mark.parametrize(
+    "layout", [DEFAULT_LAYOUT, Layout(scratchpad="work", tool_results="kept")],
+    ids=["default", "renamed"],
+)
+def test_the_shell_cannot_rewrite_a_saved_result(cfg, layout):
+    """A ledger row names its file and a later turn reads the file back as what the tool
+    returned, so a shell that can write there forges a result. Tried by overwriting, by
+    adding a file, through a hard link, by removing the folder, and by renaming the
+    scratchpad away and back --
+    which beat a rule on the two folders alone: measured, the row's file held `FORGED`.
+
+    Through `open`, as a turn gets its backend, so the renamed case also catches a
+    layout that reaches the folders but not the fence. Reads stay and the scratchpad
+    stays writable, both asserted, so a rule refusing everything would not pass this.
+    """
+    named = replace(cfg, layout=layout)
+    backend = default_backends.open(named, "results")
+    scratch, kept = layout.scratchpad, layout.tool_results
+    routes = (layout.tool_results_route, layout.offloads_route)
+    backend.upload_files([(f"{route}A-0001.txt", b"as written") for route in routes])
+
+    for folder in layout.saved_results:
+        backend.execute(f"printf FORGED > {folder}/A-0001.txt")
+        backend.execute(f"printf FORGED > {folder}/A-0002.txt")
+        backend.execute(f"ln {folder}/A-0001.txt linked && printf FORGED > linked; rm -f linked")
+        backend.execute(f"rm -rf {folder}")
+    moved = backend.execute(
+        f"mv {scratch} moved && printf FORGED > moved/{kept}/A-0001.txt; mv moved {scratch}"
+    )
+
+    held = backend.download_files([f"{route}A-0001.txt" for route in routes])
+    added = backend.download_files([f"{route}A-0002.txt" for route in routes])
+    assert [h.content for h in held] == [b"as written", b"as written"]
+    assert all(a.error is not None for a in added), "the shell added a result"
+    assert moved.exit_code != 0
+    # The controls: the results still read, and the agent's own scratch still writes.
+    assert backend.execute(f"cat {layout.saved_results[0]}/A-0001.txt").output == "as written"
+    made = backend.execute(
+        f"printf ok > {scratch}/mine.txt && mkdir -p {scratch}/d/e && rm -rf {scratch}/d"
+    )
+    assert made.exit_code == 0, made.output
+
+
+@macos
 def test_the_shell_cannot_change_the_keys_file(cfg, session_dir):
     """A keys file was writable where `models.yaml` beside it was not, and on no
     argument: the reason `profile` gives for protecting an authored file is that a shell
@@ -987,14 +1031,22 @@ def test_every_pattern_in_the_profile_still_means_the_path_it_is_about(name, tmp
     )
 
     read = [_as_sbpl_reads_it(line) for line in text.splitlines() if "(regex " in line]
-    assert len(read) == 3, f"three rules are written as patterns; this found {len(read)}"
+    assert len(read) == 6, f"six rules are written as patterns; this found {len(read)}"
     for _, after in read:
         assert after == "))", f"the literal ends early, and sbpl reads {after!r} as code"
     denied = [re.compile(pattern) for pattern, _ in read]
-    for path in (sessions, sessions / "s1" / "inputs" / "given.txt", sessions / "s1" / HARNESS):
-        assert any(one.match(str(path)) for one in denied), f"{path} is denied by nothing"
-    own = sessions / "s1" / "outputs" / "mine.txt"
-    assert not any(one.match(str(own)) for one in denied), "the session's own work is denied"
+    one = sessions / "s1"
+    for path in (
+        sessions,
+        one / "inputs" / "given.txt",
+        one / HARNESS,
+        one / "scratchpad",
+        one / "scratchpad" / "tool_results" / "A-0001-execute.txt",
+        one / "scratchpad" / "large_tool_results" / "c1",
+    ):
+        assert any(rule.match(str(path)) for rule in denied), f"{path} is denied by nothing"
+    for own in (one / "outputs" / "mine.txt", one / "scratchpad" / "mine.txt"):
+        assert not any(rule.match(str(own)) for rule in denied), f"{own} is denied"
 
 
 def test_a_renamed_inputs_leaf_is_the_one_the_profile_denies(tmp_path):
@@ -1028,6 +1080,36 @@ def test_a_renamed_inputs_leaf_is_the_one_the_profile_denies(tmp_path):
     assert not any(one.match(str(sessions / "s1" / "inputs" / "given.txt")) for one in denied), (
         "the default name is denied though no session has it, and the renamed one is not"
     )
+
+
+def test_a_renamed_layout_moves_the_saved_results_denies_with_it(tmp_path):
+    """The saved-results rules are spelled from the configured scratchpad and
+    `tool_results`, for the reason the renamed inputs leaf above gives -- and the
+    scratchpad rule with them, or a renamed one could be moved away from under its
+    results as the default could before it was denied.
+    """
+    workspace = ensure_layout(tmp_path / "ws")
+    one = (workspace / "sessions").resolve() / "s1"
+
+    text = confinement.profile(
+        home=tmp_path / "home",
+        workspace=workspace,
+        readable=(),
+        writable=(workspace,),
+        itself=workspace / ".kingfisher" / "shell.sb",
+        saved_results=Layout(scratchpad="work", tool_results="kept").saved_results,
+    )
+
+    denied = [
+        re.compile(_as_sbpl_reads_it(line)[0])
+        for line in text.splitlines()
+        if "(regex " in line
+    ]
+    work = one / "work"
+    for path in (work, work / "kept" / "A.txt", work / "large_tool_results" / "c1"):
+        assert any(rule.match(str(path)) for rule in denied), f"{path} is denied by nothing"
+    for path in (one / "scratchpad" / "tool_results" / "A.txt", work / "mine.txt"):
+        assert not any(rule.match(str(path)) for rule in denied), f"{path} is denied"
 
 
 def test_what_stands_in_for_a_quote_cannot_reach_across_a_directory(tmp_path):
@@ -1210,10 +1292,11 @@ def test_the_profile_refuses_itself_last(tmp_path):
 
     # The session-folder denials that follow it are the same kind of rule over
     # different paths, so all of them have to sit after the allows. One per folder
-    # refused that way, and the profile ends with them.
-    assert f'(deny file-write* (path "{written}"))' in lines[-3:]
-    assert all("deny file-write*" in line for line in lines[-3:]), lines[-3:]
-    assert all(not line.startswith("(allow file-write*") for line in lines[-2:])
+    # refused that way -- `inputs`, `.harness` and the saved results -- and the profile
+    # ends with them.
+    tail = lines[-(3 + len(SAVED_RESULTS)) :]
+    assert f'(deny file-write* (path "{written}"))' in tail
+    assert all("deny file-write*" in line for line in tail), tail
 
 
 @macos

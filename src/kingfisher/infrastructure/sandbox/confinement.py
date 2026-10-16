@@ -27,11 +27,11 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from functools import partial
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from kingfisher.config import Config
 from kingfisher.domain.session import sessions_root
-from kingfisher.layout import HARNESS, HARNESS_OWNED, INPUTS, SANDBOX_PROFILE
+from kingfisher.layout import HARNESS, HARNESS_OWNED, INPUTS, SANDBOX_PROFILE, SAVED_RESULTS
 
 #: `landlock_create_ruleset`, which is 444 on every architecture that has it --
 #: the three Landlock calls were added to the syscall table in one go rather
@@ -271,6 +271,7 @@ def shell_confinement(cfg: Config, *, skills: tuple[Path, ...] | None = None) ->
         # The one renamable leaf this profile names: `sessions/*/<inputs>` is denied
         # writes, so a renamed inputs folder is the one the kernel protects.
         session_inputs=cfg.layout.inputs,
+        saved_results=cfg.layout.saved_results,
     )
 
 
@@ -302,6 +303,7 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     protected: tuple[Path, ...] = (),
     protected_files: tuple[Path, ...] = (),
     session_inputs: str = INPUTS,
+    saved_results: tuple[str, ...] = SAVED_RESULTS,
 ) -> str:
     """A `sandbox-exec` profile denying the operator's home, minus what runs code.
 
@@ -400,8 +402,9 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     # measured doing exactly that before this line. It denies the node and not its
     # contents, so the session's own work stays writable.
     lines.append(_sessions_denial(workspace))
+    lines += [_enclosing_denial(workspace, folder) for folder in _enclosing(saved_results)]
     lines.append(f"(deny file-write* (path {_sb(itself)}))")
-    for folder in (session_inputs, HARNESS):
+    for folder in (session_inputs, HARNESS, *saved_results):
         lines.append(_session_folder_denial(workspace, folder))
     return "\n".join(lines) + "\n"
 
@@ -447,6 +450,30 @@ def _sessions_denial(workspace: Path) -> str:
     return f"(deny file-write* (regex {_sb_regex(f'^{root}(/[^/]+)?$')}))"
 
 
+def _enclosing(saved_results: tuple[str, ...]) -> tuple[str, ...]:
+    """The folders inside a session that a saved-results folder sits in, once each."""
+    found: dict[str, None] = {}
+    for folder in saved_results:
+        for parent in reversed(PurePosixPath(folder).parents[:-1]):
+            found.setdefault(str(parent), None)
+    return tuple(found)
+
+
+def _enclosing_denial(workspace: Path, folder: str) -> str:
+    """Deny writes to every session's `folder` itself and not to what it holds.
+
+    `folder` is the scratchpad, which the shell may write and the saved results sit in.
+    `_session_folder_denial` finds those by their position under it, so without this
+    the shell renamed the scratchpad away, wrote through the new name and renamed it
+    back -- measured, a row's file held `FORGED` and every command exited 0. The node
+    and not its contents, as `_sessions_denial` leaves a session's own folders: `$`
+    stops it reaching the files and folders the agent makes there.
+    """
+    root = re.escape(f"{fenced_sessions(workspace)}/")
+    written = f"^{root}[^/]+/{re.escape(folder)}$"
+    return f"(deny file-write* (regex {_sb_regex(written)}))"
+
+
 
 def _session_folder_denial(workspace: Path, folder: str) -> str:
     """Refuse every session's `folder` at once: `sessions/*/<folder>`.
@@ -470,11 +497,13 @@ def _session_folder_denial(workspace: Path, folder: str) -> str:
     it refuses a dot-name because `.harness` is one of these folders. One of the two
     names was guarded there and the other was not.
 
-    Two folders ask for this. `.harness` is what kingfisher reads back and trusts, and
+    Four folders ask for this. `.harness` is what kingfisher reads back and trusts, and
     `inputs` is the caller's, which `layout.py` calls never re-derivable from the
     workspace and which nothing versions. `inputs` had only its write bits dropped,
     and the shell owns those files -- measured, `chmod u+w` then a write replaced the
-    caller's file, and `rm -rf inputs` took the folder.
+    caller's file, and `rm -rf inputs` took the folder. The other two are the folders a
+    ledger row can name, which a later turn reads back as what a tool returned; they
+    sit a folder deeper, under the scratchpad, which is what `_enclosing_denial` holds.
     """
     root = re.escape(f"{fenced_sessions(workspace)}/")
     written = f"^{root}[^/]+/{re.escape(folder)}(/|$)"
@@ -664,6 +693,7 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
     definitions: tuple[Path, ...] = (),
     authored: tuple[Path, ...] = (),
     session_inputs: str = INPUTS,
+    saved_results: tuple[str, ...] = SAVED_RESULTS,
 ) -> Confinement:
     """Choose a confinement for this deployment, writing any profile it needs."""
     if mode == BUBBLEWRAP:
@@ -714,6 +744,7 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
         # yet is named anyway: the shell must not be the one to create it.
         protected_files=tuple(dict.fromkeys(Path(p).resolve() for p in authored)),
         session_inputs=session_inputs,
+        saved_results=saved_results,
     )
     # Named for every rule but the one naming the file itself, which cannot be known
     # before the name is; the profile then refuses writes to itself, so the rules

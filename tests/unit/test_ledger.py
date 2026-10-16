@@ -211,6 +211,7 @@ def test_a_renamed_layout_records_under_its_own_scratchpad(ledgered):
         moved.layout.session_dirs,
         memory=moved.layout.memory,
         scratchpad=moved.layout.scratchpad,
+        saved_results=moved.layout.saved_results,
     )
     Scripted.script.extend(
         [_calls(("web_search", {"query": "EV price war"}, "c1")), AIMessage(content="done")]
@@ -524,16 +525,16 @@ def test_a_paused_turn_keeps_its_rows_before_its_state(ledgered):
 
 def test_what_the_shell_writes_beside_the_results_is_left_alone(ledgered):
     """The sweep removed what it found in this folder that no row named, and the agent
-    writes here too. The file tools are refused the folder now; the shell is not --
-    filesystem permissions are deepagents' and `execute` bypasses them entirely, which
-    `read_only_permissions` says in as many words.
+    writes here too. The file tools are refused the folder; the shell is refused it only
+    by `sandbox-exec` and bubblewrap -- filesystem permissions are deepagents' and
+    `execute` bypasses them, and Landlock cannot carve the folder out of the scratchpad.
 
-    Driven through `execute` for that reason. It was `write_file` until the route made
-    the folder read-only to the tools: that closed the half a route can close, and this
-    is the half it cannot.
+    Driven through `execute` for that reason, with the shell unfenced to stand for
+    Landlock and for a deployment's own shell: under the two fences that refuse it the
+    write never lands, and this is about what the sweep does with one that did.
     """
     _run(
-        ledgered,
+        replace(ledgered, shell_sandbox="off"),
         _calls(
             ("web_search", {"query": "EV"}, "c1"),
             ("execute", {"command": "printf mine > scratchpad/tool_results/notes.md"}, "c2"),
@@ -700,7 +701,7 @@ def test_a_result_file_no_row_names_is_swept(ledgered):
     else would ever remove them.
     """
     stray = _session(ledgered) / SCRATCH / TOOL_RESULTS / "A-0007-web_search.txt"
-    stray.parent.mkdir(parents=True)
+    stray.parent.mkdir(parents=True, exist_ok=True)
     stray.write_text("from a turn that died", encoding="utf-8")
     _run(ledgered, _calls(("web_search", {"query": "EV"}, "c1")), AIMessage(content="done"))
 
