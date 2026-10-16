@@ -38,7 +38,7 @@ def keep_tmp_private(session_dir: Path, *, scratchpad: str = SCRATCH) -> None:
 
     Here rather than in `sessions`, which creates the directory, because this
     package has one module that changes a mode and
-    `test_only_one_workspace_module_changes_a_mode` enforces it.
+    `test_only_one_module_changes_a_mode` enforces it.
 
     `mkdir(mode=)` cannot do this at creation: it is masked by the umask, and
     ignored outright when the directory already exists -- which it does for
