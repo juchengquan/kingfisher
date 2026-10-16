@@ -1,9 +1,38 @@
+# The agent a reader runs first, and the agent half of the middleware pairing: this
+# agent and its subagent `sweeper` run under two ceilings over one behaviour.
+#
+# `kingfisher seed` will not copy it, and that is what the `middlewares:` line
+# below costs. A definition naming `call-cap-strict` is refused when the agent
+# is built -- `names unregistered middleware` -- on every deployment that has
+# not written the factory behind that name, so seeding one into a fresh
+# workspace hands somebody a file that cannot run and no reason why.
+#
+# It lives here anyway, under the kind it *is*. The rule is `seed`'s rather
+# than the folder's: seeding reads this field and says what it left behind, so
+# an agent can be filed as an agent and still be kept out of a workspace that
+# cannot build it. `seed --all` takes it once you have registered the names,
+# which is the whole of the setup:
+#
+#     from assets.middlewares.call_cap import CallCap, CallCapGenerous
+#     from assets.middlewares.compaction import Compact
+#     from assets.middlewares.tool_note import ToolNote
+#
+#     kingfisher = Kingfisher(
+#         cfg,
+#         middlewares={
+#             "call-cap-strict":   CallCap,
+#             "call-cap-generous": CallCapGenerous,
+#             "tool-note":         ToolNote,
+#             "compact":           Compact,
+#         },
+#     )
 name: assistant
 description: General-purpose agent for a workspace with no particular specialism.
 # No `builtin_tools:` and no `tools:`, which is how this format says *all of
-# them* -- every tool deepagents brings, and every tool this workspace defines.
-# Leaving them out is the one place omission grants rather than withholds, and
-# the reason is that an agent can do nothing at all without tools.
+# them* -- every tool deepagents brings, and every tool this workspace defines,
+# `web_search` and `http_fetch` among them. Leaving them out is the one place
+# omission grants rather than withholds, and the reason is that an agent can do
+# nothing at all without tools.
 #
 # The other two fields work the other way: omit `skills` or `subagents` and you
 # get none. So this file names them, and that asymmetry is the whole of the
@@ -25,27 +54,45 @@ skills: ["*"]
 # exactly like the others -- that is the whole of what "atomic" costs a caller.
 # What each brought with it arrives too, and cannot be named separately: its
 # tool is in no catalogue and no agent can ask for it alone.
-subagents: [extractor, reviewer, profiler, timestamps, versions]
+#
+# `sweeper` is the other half of the pairing, and it runs under
+# `call-cap-generous` while this agent runs under `call-cap-strict`. That is not
+# an inconsistency: **a subagent inherits none of its parent's middleware.** Each
+# definition names its own and gets its own instance, so a cap here bounds this
+# agent's tool calls and not one call its subagent makes -- a ceiling on the agent
+# that thinks, and a looser one on the subagent that reads.
+subagents: [extractor, reviewer, profiler, timestamps, versions, sweeper]
 # Every example middleware this repository ships, each by name. Named rather
 # than `["*"]`: a star takes whatever the workspace offers, so on a seeded one it
 # would also take anything added later for another agent, and a name says
 # exactly what this agent runs under. The prompt below tells it the same.
 #
-# The price of a name is `seed`'s rule. `seed` cannot see what a deployment
-# registered, so it leaves behind any definition naming middleware -- this one
-# arrives with `kingfisher seed --all`, which copies the `middlewares/` these
-# names resolve to in the same run.
-#
-# Both caps, which is `researcher`'s shape: the stricter decides, so a turn
-# stops at twenty calls. `call-cap-generous` is here so a subagent may name it,
-# since this line is what its subagents are clamped by. `tool-note` bare carries
-# the deployment's own wording, where `researcher` and `sweeper` each write
-# theirs; `compact` summarises on the model this agent already runs, in place
-# of deepagents' own summarizer.
+# The names select code the *deployment* registered -- not files, not anything a
+# workspace holds -- which is why the ceiling is `call-cap-strict` rather than a
+# number written here: a cap a definition can set is not a cap.
 middlewares:
+  # Bare, because `CallCap` opens nothing: its `yaml_settable` is empty, so there
+  # is no spelling of this file that raises its own ceiling.
   - call-cap-strict
+  # Listed and *not the ceiling this agent runs under*, which reads as a mistake.
+  # An agent's `middlewares:` is also the grant its subagents are clamped by, so a
+  # name absent here is one no subagent may reach -- and `sweeper` names this one.
+  # The stricter cap decides, so this agent still stops at twenty.
   - call-cap-generous
-  - tool-note
+  # Written long because `ToolNote` opens `text`, and what is worth reminding an
+  # agent about depends on the agent. `sweeper.yaml` names the same registry entry
+  # with a different sentence: one registered class, two configurations, which is
+  # exactly what the cap must not have and this may. `max_length` is not writable,
+  # and the refusal says so: a ceiling on how much a definition may inject into
+  # every tool result is not one the definition may set.
+  - name: tool-note
+    settings:
+      text: Cite the path and line for anything you assert.
+  # The one that needs something no line of this file could hold. `compact`
+  # summarises a long conversation, and a summariser needs a *model* -- a client
+  # with an endpoint, a key and a timeout behind it, which `settings:` cannot
+  # carry. It is filled in where the agent is assembled, as the model this agent
+  # is already running; `middlewares/compaction.py` is the argument.
   - compact
 # No `model:`, so this runs the `default:` in your models.yaml.
 # That is the right answer for a general agent -- and for a file that ships
@@ -73,18 +120,26 @@ system_prompt: |
 
   Delegate the reading. `extractor` exists so that a hundred files can be
   turned into a short answer without a hundred files landing in your context,
-  and `profiler` exists so nobody computes a figure from a column they have not
-  looked at. What either of them reads stays with it; only its answer comes
-  back to you.
+  `sweeper` so that bulk reading is paid for out of its budget rather than
+  yours, and `profiler` so nobody computes a figure from a column they have not
+  looked at. What any of them reads stays with it; only its answer comes back
+  to you.
 
   You work under a budget. A middleware caps how many tool calls you may make
-  in one turn; when it runs out, the next call comes back as an error saying
-  so, and you answer from what you have and say where you stopped. A subagent's
-  calls are its own, so a hundred files read through `extractor` cost you one.
+  in one turn; you will not be told the number and you cannot raise it. When it
+  runs out, the next call comes back as an error saying so, and you answer from
+  what you have and say where you stopped. A subagent's calls are its own, so a
+  hundred files read through `sweeper` cost you one.
 
   In a long conversation the older part is summarised for you, and the summary
   says which file holds what it replaced; read that file when the summary is not
   enough.
+
+  `web_search` may be a placeholder. Its results say so when it is, and when
+  they do, no search happened: report that you could not look the thing up,
+  rather than passing sample text off as a finding. When the search is real,
+  treat a result as a lead and not a fact -- fetch the page before relying on
+  what a summary said about it, and cite the URL you actually read.
 
   Check what you would report. `reviewer` recomputes a figure from the file
   rather than from your working, which is the only kind of check worth having.

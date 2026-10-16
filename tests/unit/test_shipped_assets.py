@@ -384,34 +384,26 @@ def test_every_preset_agent_parses(shipped):
     """
     specs = LocalAgentRepository(shipped / "agents").specs
 
-    # `researcher` names middleware and `analyst` names source ids, so `seed`
+    # `assistant` names middleware and `analyst` names source ids, so `seed`
     # leaves both behind -- see
     # `test_seed_leaves_behind_a_definition_that_names_middleware`. Left behind
     # is not unread: they are definitions of this kind, in this kind's folder,
     # and they parse like the rest.
-    assert set(specs) == {
-        "analyst",
-        "assistant",
-        "general",
-        "operator",
-        "researcher",
-        "scribe",
-        "surveyor",
-    }
+    assert set(specs) == {"analyst", "assistant", "operator", "scribe"}
     for spec in specs.values():
         assert spec.description.strip()
         assert len(spec.system_prompt) > 200  # a real prompt, not a stub
 
 
-def test_the_lookup_agent_keeps_nothing_between_sessions(shipped):
-    """`general.yaml` argued for memory off and wrote `memory: true`, which means what
-    an absent line means -- so the line did nothing and the argument above it described
-    a file that was not there.
+def test_the_data_agent_keeps_nothing_between_sessions(shipped):
+    """A shipped agent once argued for memory off and wrote `memory: true`, which means
+    what an absent line means -- so the line did nothing and the argument above it
+    described a file that was not there. `analyst` is the one that turns it off now.
 
     Pinned because the two can only disagree in silence: nothing refuses `true`, and an
     agent quietly keeping a memory file is not a failure anything reports.
     """
-    spec = LocalAgentRepository(shipped / "agents").specs["general"]
+    spec = LocalAgentRepository(shipped / "agents").specs["analyst"]
 
     assert spec.memory is False, "the only value on this axis that subtracts"
 
@@ -488,6 +480,8 @@ def test_the_shipped_subagent_consults_its_helper_under_the_agent_that_ships_it(
     reviewer's own allowlist and arrives only when the call is made.
     """
     declared = LocalAgentRepository(shipped / "agents").specs["assistant"].subagents
+    assert isinstance(declared, tuple), "assistant names its subagents one by one"
+    assert {"reviewer", "profiler"} <= set(declared), "the file dropped half the pair"
     wired = replace(workspace_with_presets, skills_enabled=True)
 
     def calls(who: str) -> AIMessage:
@@ -510,7 +504,9 @@ def test_the_shipped_subagent_consults_its_helper_under_the_agent_that_ships_it(
                 AIMessage(content="done"),
             ]
         ),
-        capabilities=Capabilities(subagents=declared),
+        # The pair alone: `sweeper`, also named there, needs a middleware registry
+        # this deployment never wired, and has nothing to do with consulting.
+        capabilities=Capabilities(subagents=("reviewer", "profiler")),
     ).graph
 
     out = graph.invoke(
@@ -926,7 +922,7 @@ def test_the_wiring_block_names_classes_the_examples_actually_define(shipped):
 
 
 def test_the_block_the_agent_file_prints_registers_what_the_agent_names(shipped):
-    """`researcher.yaml` prints its own copy of the wiring block, and nothing read it.
+    """`assistant.yaml` prints its own copy of the wiring block, and nothing read it.
 
     There are four copies of one registry: three module docstrings, held equal to
     each other and to what the directory offers, and this header, held to nothing.
@@ -934,7 +930,7 @@ def test_the_block_the_agent_file_prints_registers_what_the_agent_names(shipped)
     pasting its block would have left `compact` unregistered, with the refusal
     naming a name the block never mentions.
     """
-    printed = dict(WIRING.findall((shipped / "agents" / "researcher.yaml").read_text("utf-8")))
+    printed = dict(WIRING.findall((shipped / "agents" / "assistant.yaml").read_text("utf-8")))
 
     assert printed, "the block moved out of the header or changed shape"
     assert set(printed) == set(_documented_registry(shipped)), (
@@ -1015,12 +1011,11 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
 
     assert {left.label for left in done.skipped} == {
         "agents/assistant.yaml",
-        "agents/researcher.yaml",
         "subagents/sweeper.yaml",
         "agents/analyst.yaml",
         "subagents/auditor.yaml",
     }
-    for left in ("agents/assistant.yaml", "agents/researcher.yaml", "subagents/sweeper.yaml"):
+    for left in ("agents/assistant.yaml", "subagents/sweeper.yaml"):
         assert left not in done.written
         assert not (tmp_path / left).exists()
 
@@ -1030,10 +1025,6 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     # its readers to the wrong place.
     assert {left.label: (left.wants, left.names) for left in done.skipped} == {
         "agents/assistant.yaml": (
-            "middlewares",
-            ("call-cap-strict", "call-cap-generous", "tool-note", "compact"),
-        ),
-        "agents/researcher.yaml": (
             "middlewares",
             ("call-cap-strict", "call-cap-generous", "tool-note", "compact"),
         ),
@@ -1047,7 +1038,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
 
     # And everything else still arrives, which is the half that would break
     # quietly if the rule were ever widened by accident.
-    assert "agents/general.yaml" in done.written
+    assert "agents/operator.yaml" in done.written
     assert "subagents/reviewer.yaml" in done.written
 
 
@@ -1063,10 +1054,9 @@ def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_pa
     done = seed(Destination(), shipped, everything=True)
 
     assert not done.skipped
-    assert "agents/researcher.yaml" in done.written
     assert "subagents/sweeper.yaml" in done.written
     assert "agents/assistant.yaml" in done.written, "the agent a reader runs first"
-    assert (tmp_path / "agents" / "researcher.yaml").is_file()
+    assert (tmp_path / "agents" / "assistant.yaml").is_file()
     assert (tmp_path / "subagents" / "sweeper.yaml").is_file()
 
 
@@ -1093,7 +1083,7 @@ def test_seed_copies_the_middleware_examples_into_a_definitions_folder(shipped, 
     assert (tmp_path / "middlewares" / "call_cap.py").is_file()
     # Left behind for naming middleware, which is a different rule and still
     # holds: a workspace that can *offer* one has not thereby registered it.
-    assert "agents/researcher.yaml" not in done.written
+    assert "agents/assistant.yaml" not in done.written
 
 
 def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_path):
@@ -1234,7 +1224,7 @@ def test_the_middleware_example_refuses_a_cap_that_refuses_everything(shipped):
 def _example_definitions(shipped):
     """The agent-and-subagent pair that name middleware, from the kinds they belong to."""
     return (
-        LocalAgentRepository(shipped / "agents").specs["researcher"],
+        LocalAgentRepository(shipped / "agents").specs["assistant"],
         LocalSubagentRepository(shipped / "subagents").specs["sweeper"],
     )
 
@@ -1243,7 +1233,7 @@ def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
     """Unseeded is not unchecked."""
     agent, subagent = _example_definitions(shipped)
 
-    assert agent.name == "researcher"
+    assert agent.name == "assistant"
     # `call-cap-generous` is granted here so `sweeper` may name it, since an
     # agent's `middlewares:` is the ceiling its subagents are clamped by. The
     # agent runs under both caps and the stricter one decides.
@@ -1255,7 +1245,7 @@ def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
     )
     assert subagent.name == "sweeper"
     assert subagent.middlewares == ("call-cap-generous", "tool-note")
-    assert agent.subagents == ("sweeper",), "the agent half has to name the subagent half"
+    assert "sweeper" in agent.subagents, "the agent half has to name the subagent half"
 
     # Both spellings in one list, which is what these two files are now for.
     # The cap is bare because `CallCap` opens nothing; the note is written long
@@ -1624,11 +1614,8 @@ def test_the_other_presets_still_restrict_nobody(shipped):
 
     assert {name for name, spec in agents.items() if spec.source_ids == ALL} == {
         "assistant",
-        "general",
         "operator",
-        "researcher",
         "scribe",
-        "surveyor",
     }
 
 
@@ -1697,14 +1684,14 @@ def test_the_operator_stops_before_running_a_command(cfg, session_dir, shipped):
 def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir, shipped):
     """The shipped set, run rather than read.
 
-    `researcher` and `sweeper` are the shipped pair that show two ceilings over one
+    `assistant` and `sweeper` are the shipped pair that show two ceilings over one
     behaviour.
     Nothing had ever built them together. With no registry wired anywhere they
     failed for want of one, and every test that touched them either replaced the
     spec or supplied a registry of its own -- so the mismatch underneath was
     invisible for as long as the example existed.
 
-    It was real: `researcher` granted `call-cap-strict` and `tool-note`, and
+    It was real: the agent granted `call-cap-strict` and `tool-note`, and
     `sweeper` named `call-cap-generous`, which its parent therefore refused. An
     agent's `middlewares:` is the ceiling its subagents are clamped by, so a
     subagent can only name what the agent granted.
@@ -1720,7 +1707,7 @@ def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir
     roots = Definitions.from_roots(
         {kind: shipped / kind for kind in ("agents", "skills", "subagents", "tools", "middlewares")}
     )
-    spec = LocalAgentRepository(shipped / "agents").specs["researcher"]
+    spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
 
     wired = replace(cfg, skills_enabled=True)
     graph = build_agent(

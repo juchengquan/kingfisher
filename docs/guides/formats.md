@@ -181,7 +181,7 @@ model you have not set up.
 ### Approval gates
 
 `assets/agents/operator.yaml` is this section as a working file, and is
-worth reading beside `surveyor.yaml`: one is safe because it was never granted
+worth reading beside `analyst.yaml`: one is safe because it was never granted
 the shell, the other because a person says yes before each command.
 
 `interrupt_on` names tools whose every call stops and waits for whoever is

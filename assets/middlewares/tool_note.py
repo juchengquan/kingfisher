@@ -31,7 +31,7 @@ registry that grows every time somebody writes a sentence.
     )
 
 One entry for this one, where the cap needed two. That difference is the whole
-point of the pair: `researcher.yaml` and `sweeper.yaml` both name `tool-note`
+point of the pair: `assistant.yaml` and `sweeper.yaml` both name `tool-note`
 and each writes its own `text`, so one registered class serves two definitions
 that want different things from it. Two names, each its own class, is what you
 write when the variants must not be the definition's to choose; one name and a

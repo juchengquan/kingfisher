@@ -1,11 +1,11 @@
 # The subagent half, and the reason the example is two files rather than one.
 #
-# Left behind by `seed` for the same reason `researcher.yaml` is: `middlewares:`
+# Left behind by `seed` for the same reason `assistant.yaml` is: `middlewares:`
 # below names a registry entry, and a subagent naming `call-cap-generous` on a
 # deployment that never registered it is refused when the subagent is built.
 #
 # Which is why they are skipped as a pair rather than one at a time --
-# `researcher` names this one under `subagents:`, so a workspace with one and
+# `assistant` names this one under `subagents:`, so a workspace with one and
 # not the other has an agent pointing at a subagent that is not there. Both
 # name middleware, so both are left; `seed --all` takes both.
 name: sweeper
@@ -30,7 +30,7 @@ description: Reads many files and returns only what was asked for. Use to keep b
 # mean running without the audit hook it was written to have.
 middlewares:
   - call-cap-generous
-  # The same registry entry `researcher.yaml` names, written with a different
+  # The same registry entry `assistant.yaml` names, written with a different
   # sentence. That is the half of the axis a cap cannot demonstrate: one class
   # the deployment registered once, configured per definition, because the
   # useful reminder for a subagent that discards is not the useful reminder for

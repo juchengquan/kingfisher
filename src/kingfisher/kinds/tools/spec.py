@@ -187,7 +187,7 @@ def placed(entry: str, offered: Iterable[str]) -> str:
     Public because two readers compare a written grant against the catalogue's own
     names: `spelt` below, over a whole selection on its way into a build, and `offers`
     in the domain, one name at a time. `offers` compared them unspelt, so the long form
-    `formats.md` documents -- `csv_profile::csv_profile`, which the shipped `surveyor`
+    `formats.md` documents -- `csv_profile::csv_profile`, which the shipped `analyst`
     is written with -- matched nothing, and a scoped caller was told they reached no
     tools at all while the build handed them one.
 
@@ -233,8 +233,8 @@ class Offering:
     def spelt(self, selection: Selection) -> Selection:
         """A written grant in the spelling this offering uses.
 
-        Measured: `surveyor.yaml` and `analysis/profiler.yaml` both ship writing the
-        long form, and neither could be run. The short form works, which is why a
+        Measured: before this, a shipped agent and `analysis/profiler.yaml` both wrote
+        the long form and neither could be run. The short form works, which is why a
         suite full of it stayed green.
         """
         if selection in (ALL, None):

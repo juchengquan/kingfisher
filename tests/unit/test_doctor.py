@@ -181,15 +181,19 @@ TOOLS = [probe_one]
 
 
 def test_doctor_names_every_definition_whose_tool_moved(cfg, shipped):
-    """One rename, both kinds, because the shipped presets name it from each."""
-    seed(cfg, shipped)
+    """One rename, both kinds, because the shipped presets name it from each.
+
+    `everything=True` because the agent that names it, `analyst`, also names source
+    ids, which a plain seed leaves behind.
+    """
+    seed(cfg, shipped, everything=True)
     (tools_dir(cfg) / "csv_profile").rename(tools_dir(cfg) / "analysis")
 
     checks = [c for c in examine(cfg) if c.name == "tool references"]
 
     assert checks and all(c.verdict == "fail" for c in checks)
     said = " | ".join(c.detail for c in checks)
-    assert "agent 'surveyor'" in said
+    assert "agent 'analyst'" in said
     assert "subagent 'profiler'" in said
 
 

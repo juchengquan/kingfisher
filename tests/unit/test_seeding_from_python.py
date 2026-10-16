@@ -37,9 +37,9 @@ def test_the_readme_flow_seeds_a_definitions_folder(tmp_path, assets):
     assert not done.overwritten, "a fresh folder has nothing to overwrite"
     # What landed is loadable, which is the half `test_seeding.py` cannot see:
     # it asserts on what `seed` reported, and this asserts on what is on disk.
-    # `general` rather than `assistant`, which names middleware and so arrives
+    # `operator` rather than `assistant`, which names middleware and so arrives
     # only with `everything=True`.
-    assert (paths.definitions / "agents" / "general.yaml").is_file()
+    assert (paths.definitions / "agents" / "operator.yaml").is_file()
     assert (paths.definitions / "skills").is_dir()
 
 
@@ -140,7 +140,7 @@ def test_the_example_script_seeds_a_definitions_folder(tmp_path, assets):
     done = seed_definitions(tmp_path / "definitions", assets)
 
     assert done.written
-    assert (tmp_path / "definitions" / "agents" / "general.yaml").is_file()
+    assert (tmp_path / "definitions" / "agents" / "operator.yaml").is_file()
     assert (tmp_path / "definitions" / "models.yaml.example").is_file(), (
         "the example stopped laying the folder out before seeding it"
     )
@@ -162,7 +162,7 @@ def test_the_example_script_reports_what_it_left(tmp_path, assets, capsys):
     printed = capsys.readouterr().out
 
     assert code == 0
-    assert "seeded agents/general.yaml" in printed
+    assert "seeded agents/operator.yaml" in printed
     assert "skipped " in printed, "the example stopped reporting what it left behind"
     assert "seed again with --all" in printed, "a skip with no remedy is half a message"
     # The remedy this script used to get wrong, and the reason it prints the
