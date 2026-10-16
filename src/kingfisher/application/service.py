@@ -166,6 +166,7 @@ class _Turn:
     stop_reason: str = END_TURN
     kept: tuple[str, ...] = ()
     subagent_names: runtime.SubagentNames = field(default_factory=runtime.SubagentNames)
+    seen: runtime.SeenMessages = field(default_factory=runtime.SeenMessages)
     #: What the lifecycle produced and the loop still owes its caller: a context
     #: manager cannot yield into the generator around it.
     pending: list[RunEvent] = field(default_factory=list)
@@ -1284,7 +1285,9 @@ class Kingfisher(Sessions, Disposal):
 
     def _read(self, turn: _Turn, namespace: Any, mode: Any, chunk: Any) -> tuple[RunEvent, ...]:
         """One stream chunk, read as events. The answer accumulates on `turn`."""
-        turn.answer, events = consume(namespace, mode, chunk, turn.answer, turn.subagent_names)
+        turn.answer, events = consume(
+            namespace, mode, chunk, turn.answer, turn.subagent_names, seen=turn.seen
+        )
         return events
 
     def _payload(self, turn: _Turn) -> Any:
