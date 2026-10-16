@@ -207,7 +207,7 @@ for the next reader who reaches for one.*
   `_apply_event_to_messages` slices by it as stored. A second summarizer that
   rewrites the messages leaves the index stale -- past the end, the model sees only
   the old summary -- and two deepagents summarizers side by side break the same
-  way. *(2026-10-01.)*
+  way. *(2026-10-01; re-read at deepagents 0.7.22, 2026-10-16.)*
 - **A subclass of deepagents' summarizer runs beside the original unless it says
   otherwise.** Its `name` answers `SummarizationMiddleware` only for the exact
   class and the subclass's own class name otherwise, so replacing it is something
@@ -230,7 +230,12 @@ for the next reader who reaches for one.*
   backend is a `CompositeBackend`: anything else is `/` whatever it carries. The
   `grep` tool's description says offloaded results are under `/large_tool_results/`
   "by default", and does not change with the root. `tests/unit/test_offloads.py`
-  drives both evictions. *(2026-10-11, deepagents 0.7.6.)*
+  drives both evictions. *(2026-10-11, deepagents 0.7.6.)* The limits are the same at
+  0.7.22, which adds a third way in: `execute` writes its output to
+  `large_tool_results/<call id>` as it runs, and hands back the stub itself, when the
+  backend's default is a `BaseSandbox` and that path is not routed. The stub is then what
+  a `wrap_tool_call` inside eviction sees, so the file holds no id. Kingfisher routes the
+  folder, so its commands take the ordinary eviction. *(2026-10-16, deepagents 0.7.22.)*
 - **Eviction joins a block list's text with newlines, and keeps what it was handed.**
   `_extract_text_from_message` joins every text block with `\n`, for the size check
   and for the file, where langchain's `.text` and kingfisher's transcript join them
@@ -245,7 +250,21 @@ for the next reader who reaches for one.*
   window small enough that those approach three quarters of it, a profile-based
   trigger fires before every call: the stock prompt (about 2.4k tokens) at a 3.2k
   window summarized before seven of nine calls. At 8k it fired once in sixteen.
-  *(2026-09-30.)*
+  *(2026-09-30; the count re-read at deepagents 0.7.22, 2026-10-16.)*
+- **A message written back under its id replaces that message where it stands.**
+  deepagents' reducer for `messages` keeps the position and swaps the message, and
+  appends one with no id as a new message; langgraph stamps an id on every message
+  before it reaches the reducer. That is how the summariser's overflow clip writes a
+  shortened result back, and how clearing writes a handle. *(2026-10-16, deepagents
+  0.7.22.)*
+- **A reply's tool call is sent from one copy and counted from another.** A reply from
+  `ChatAnthropic` carries each call in `tool_calls` and again as a `tool_use` block in
+  its content, streamed with `partial_json`. langchain-anthropic sends the arguments in
+  `tool_calls` where both exist; `count_tokens_approximately` counts the block and skips
+  `tool_calls` for a reply whose content is a list. A middleware changing one copy
+  changes what is sent or what is counted, not both. langchain-openai's Responses path
+  sends a `function_call` block over `tool_calls` the same way. *(2026-10-16,
+  langchain-anthropic 1.7.6, langchain-core 1.6.10.)*
 - **Its event is in the final state of a turn that summarised, and of no other.**
   Driven through `build_agent`'s stack by the service's own turn loop, a fresh graph
   each turn: at a 6,000-token window the first three short turns did not summarise and

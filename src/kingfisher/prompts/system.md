@@ -67,6 +67,11 @@ in `/{{scratchpad}}/{{tool_results}}/`; a result too long to show you whole is n
 call instead, and ends in its `[A-0042]` line, so `grep` for that in
 `/{{scratchpad}}/large_tool_results/`.
 
+Once the conversation is long, an older result may be cleared to a short handle saying
+what it was, how long it was and where the whole of it is, and the text of a file you
+wrote or edited to a line saying the file holds it. Read that file, `grep` for the id
+where the handle says to, or call the tool again; a file may have changed since.
+
 <!-- capabilities -->
 
 ## Deciding when to act

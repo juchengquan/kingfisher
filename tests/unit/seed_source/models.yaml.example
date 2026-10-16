@@ -87,6 +87,8 @@ default: MiniMax-M3
 #                streams, and the read clock resets on every chunk.
 #   temperature  unset
 #   top_p        unset
+#   clear_results_at
+#                unset
 #   extra        forwarded as kwargs, for settings peculiar to one endpoint.
 #                Additive only -- it may not name any of the above.
 #

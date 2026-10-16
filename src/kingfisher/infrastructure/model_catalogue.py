@@ -44,7 +44,7 @@ KEYS_SETTING = "KINGFISHER_MODEL_KEYS_FILE"
 #: `endpoint`; see `ModelProfile` for why omitted means "not passed at all"
 #: rather than "passed as a default we chose".
 KNOWN_MODEL: frozenset[str] = frozenset(
-    {"endpoint", "max_tokens", "timeout_s", "temperature", "top_p", "extra"}
+    {"endpoint", "max_tokens", "timeout_s", "temperature", "top_p", "clear_results_at", "extra"}
 )
 
 
@@ -249,6 +249,20 @@ def _endpoints(  # noqa: PLR0913 -- one argument per source a key can come from
     return resolved, dropped
 
 
+def _mark(written: Any, subject: str) -> int | None:
+    """A `clear_results_at` as tokens, refusing what cannot be a count of them.
+
+    Whether it clears before the summariser does is a question about the built model,
+    whose window is its own, so `build_model` asks it.
+    """
+    if written is None:
+        return None
+    if isinstance(written, bool) or not isinstance(written, int) or written < 1:
+        msg = f"{subject}: clear_results_at is {written!r}, and must be a number of tokens"
+        raise ConfigError(msg)
+    return written
+
+
 def _models(
     document: Mapping[str, Any],
     endpoints: Mapping[str, Endpoint],
@@ -282,6 +296,7 @@ def _models(
             temperature=entry.get("temperature"),
             top_p=entry.get("top_p"),
             extra=dict(extra),
+            clear_results_at=_mark(entry.get("clear_results_at"), f"{source}: model {name!r}"),
         )
 
     # An endpoint that does not exist *at all* is a mistake in the file and is

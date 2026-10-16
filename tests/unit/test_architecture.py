@@ -2507,6 +2507,7 @@ SDK_LOADING: frozenset[str] = frozenset({
     # and `tool_guards`, which composes them. `host_paths` and `session_paths`
     # are what those are built on and name no runtime class, which is what keeps
     # `HostPathError` cheap for a backend author to import.
+    "kingfisher.infrastructure.harness.middlewares.clearing",
     "kingfisher.infrastructure.harness.middlewares.host_path_guard",
     "kingfisher.infrastructure.harness.middlewares.large_pdf_guard",
     "kingfisher.infrastructure.harness.middlewares.narrowing",

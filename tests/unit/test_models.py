@@ -11,7 +11,12 @@ import pytest
 from deepagents.middleware.summarization import compute_summarization_defaults
 
 from kingfisher.config import Adapter, ConfigError, Endpoint, ModelProfile
-from kingfisher.infrastructure.harness.models import ADAPTERS, FILLABLE, build_model
+from kingfisher.infrastructure.harness.models import (
+    ADAPTERS,
+    FILLABLE,
+    build_model,
+    summarizer_trigger,
+)
 from kingfisher.infrastructure.model_catalogue import load
 from tests.conftest import repository_root
 
@@ -235,6 +240,72 @@ def test_a_window_the_row_declares_itself_is_the_one_checked():
 
     with pytest.raises(ConfigError, match="advertised 20000-token"):
         build_model(row, ANTHROPIC)
+
+
+def test_a_clearing_mark_the_summarizer_reaches_first_is_refused():
+    """Clearing runs before each call and the summariser inside it, so a mark at or past
+    the summariser's trigger would never clear anything, and the setting would read as
+    working. Checked against the window the row declares."""
+    window = {"profile": {"max_input_tokens": 1_000_000}}
+
+    with pytest.raises(ConfigError, match=r"clear_results_at: 850000.* at 850000 tokens"):
+        build_model(
+            _row("a-gateway-model", max_tokens=32_768, clear_results_at=850_000, extra=window),
+            ANTHROPIC,
+        )
+    built = build_model(
+        _row("a-gateway-model", max_tokens=32_768, clear_results_at=849_999, extra=window),
+        ANTHROPIC,
+    )
+    assert built.max_tokens == 32_768, "the control: one token under is the highest there is"
+
+
+def test_without_a_window_a_clearing_mark_is_held_to_170000():
+    """A model with no profile -- every gateway row naming its own model -- summarises at
+    deepagents' fixed 170,000 tokens, so that is the line, and the refusal says why."""
+    with pytest.raises(ConfigError, match="no advertised input window"):
+        build_model(_row("a-gateway-model", clear_results_at=170_000), ANTHROPIC)
+    build_model(_row("a-gateway-model", clear_results_at=169_999), ANTHROPIC)
+
+
+@dataclass
+class _Asked:
+    """The two things `_input_budget` reads off a request."""
+
+    model: Any
+    model_settings: dict[str, Any]
+
+
+def test_the_summarizer_trigger_is_where_deepagents_summarizes():
+    """`summarizer_trigger` mirrors two rules inside deepagents' summariser -- a fraction of
+    the window, and the input budget -- and a mirror nobody drives goes stale quietly: the
+    refusal above would then pass a mark the summariser reaches first, and the default
+    mark would sit somewhere else than half of it.
+
+    Driven through their own checks, at the trigger and one token short, across the rows
+    that make each rule the one in force: no window, a window, and a window whose output
+    reservation brings the budget under the fraction.
+    """
+    from deepagents.middleware.summarization import create_summarization_middleware
+    from langchain_anthropic import ChatAnthropic
+
+    rows = ((None, 4_096), (1_000_000, 32_768), (1_000_000, 131_072), (128_000, 4_096))
+    for window, output in rows:
+        model = ChatAnthropic(
+            model="a-gateway-model",
+            api_key="sk-not-real",
+            max_tokens=output,
+            profile=None if window is None else {"max_input_tokens": window},
+        )
+        theirs = create_summarization_middleware(model, backend=None)  # ty: ignore[invalid-argument-type]
+        asked = _Asked(model=model, model_settings={})
+
+        def fires(total: int) -> bool:
+            return theirs._should_summarize([], total) or theirs._over_budget(asked, total)  # ty: ignore[invalid-argument-type]  # noqa: B023
+
+        trigger = summarizer_trigger(model)
+        assert fires(trigger), (window, output, trigger)
+        assert not fires(trigger - 1), (window, output, trigger)
 
 
 def test_the_share_a_request_may_fill_is_the_one_deepagents_applies():
