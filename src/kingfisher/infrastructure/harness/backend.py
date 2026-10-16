@@ -226,7 +226,8 @@ def runs_locally(runner: Any) -> bool:
 
     `testing.a_runner_says_where_it_runs` keeps its own reading on purpose. It is the
     kit a deployment checks its own adapter with, and importing this module would take
-    it from 75 loaded modules to 103 -- measured -- to share one `getattr`.
+    it from 70 loaded modules to 3,104 -- measured -- to share one `getattr`, because it
+    reaches deepagents and deepagents reaches the provider SDKs.
     """
     return getattr(runner, "local", True)
 

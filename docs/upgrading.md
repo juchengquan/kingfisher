@@ -110,8 +110,9 @@ request.*
   What each one named goes under its own name in the definitions folder.
 - **A start reads the definitions folder and writes nothing there.** One that does not
   exist is refused rather than made, and a kind folder missing inside it means none of
-  that kind. `kingfisher seed` makes and fills one, and needs only
-  `KINGFISHER_DEFINITIONS_DIR`.
+  that kind. `kingfisher seed` makes and fills one, and needs somewhere to fill it
+  from as well: `KINGFISHER_ASSETS`, or `--from DIR`. Given neither, it lays the empty
+  folder out and then refuses.
 - **Definitions left in a workspace are read by nothing**, and nothing checks for them.
   Delete them once they are moved.
 - **In Python**, `Config` takes `definitions=` (keyword, required) and has lost
@@ -466,7 +467,7 @@ until it is changed.
 ## Session folders named for which way files go, after #667
 
 A session's `data/` is `inputs/` and its `derived/` is `outputs/`, on disk and in
-the paths the agent is given. `memory/` keeps its name. The workspace layout is 3.
+the paths the agent is given. `memory/` keeps its name.
 
 | Before | Now |
 |---|---|
@@ -475,13 +476,14 @@ the paths the agent is given. `memory/` keeps its name. The workspace layout is 
 | Artifact names such as `derived/report.md`, in `RunResult.artifacts` and for `Kingfisher.artifact` and `kingfisher artifact` | `outputs/report.md`. A name under `derived/` is refused as not an artifact. |
 | Agent and subagent prompts, skills and tool descriptions that say `/data/...` or `/derived/...` | Say `/inputs/...` and `/outputs/...`. Nothing translates the old paths: a read under `/data/` finds nothing, and a file written under `/derived/` is not returned to the caller. |
 
-- **Delete what an older workspace holds before starting on it.** A workspace with
-  sessions in it from layout 2 or earlier is refused at startup, and the message
-  lists exactly what to delete: everything in `sessions/`, and for a workspace from
-  layout 1, whichever of `.kingfisher/agents`, `runs`, `claims` and `tmp` are still
-  there. The marker is brought up to date on the next start. Or point
-  `KINGFISHER_WORKSPACE` at a new workspace. There is no migration, so copy anything
-  you want to keep out of a session's `derived/` first.
+- **Delete what an older workspace holds before starting on it. Nothing checks.**
+  The workspace marker carried a layout number and a start refused a workspace laid out
+  by an older one, naming what to delete; #756 dropped both, so a workspace still
+  holding sessions from before this rename now starts without complaint and keeps
+  whatever line its marker already has. Delete everything in `sessions/`, and whichever
+  of `.kingfisher/agents`, `runs`, `claims` and `tmp` an older workspace still has --
+  nothing reads any of it. Or point `KINGFISHER_WORKSPACE` at a new workspace. There is
+  no migration, so copy anything you want to keep out of a session's `derived/` first.
 - **If you wrote your own backend**, route `/inputs/` where you routed `/data/`.
   `route_coverage` in `BACKEND_CONTRACT` names a route your backend leaves out, and
   `shell_denied` now checks that the shell cannot write under `/inputs`.
@@ -542,6 +544,8 @@ session in the workspace and reported success.
   or they listed, except `Kingfisher.session_size`, which passes on the id it is given.
 
 ## `files_for` opens only a session a turn issued, after #663
+
+*Undone after #739: see The session is named in the request.*
 
 `Kingfisher.files_for(id)` and `afiles_for` refuse an id your session backends don't
 list, with the `UnknownSessionError` a turn naming it gets, and open nothing (#664).
@@ -800,8 +804,7 @@ backend* and *A tool's path is the backend's path*, explains why.
 
 | Message | Cause | Fix |
 |---|---|---|
-| `… was laid out by kingfisher layout 2, and this is layout 3 …` | The workspace still holds sessions from before `data/` and `derived/` were renamed | Delete what the message lists, or use a new workspace; see *Session folders named for which way files go* |
-| `UnknownSessionError: no session '…'; omit session_id to start one`, from `files_for` | An id no turn issued, such as one made up to start a session, or one that is not a single path segment | Run the session's first turn without `files=`, then open the id its result carries; see *`files_for` opens only a session a turn issued* |
+| `UnknownSessionError: '…' cannot name a session: a session id is one name, …` | An id that is not one visible path segment: `..`, the empty string, one holding `/`, or one starting with `.` | Name the session in one segment; see *Session ids refused unless they are one path segment*. An id nobody has used is no longer refused — it starts that session |
 | `HostPathError: '…' is a host path, and file tools take virtual paths rooted at the workspace — …` | A file tool given an absolute path under the workspace but outside this session, such as another session's file or `models.yaml` | Use a virtual path, or the shell for host paths; see *Host paths refused anywhere under the workspace* |
 | `KINGFISHER_SESSION_STORE was removed: …` | The old store setting is still set | Unset it; see *Settings* |
 | `KINGFISHER_SESSION_ID was removed: name the session in each request instead; …` | The setting is still set | Delete it; see *The session is named in the request* |
