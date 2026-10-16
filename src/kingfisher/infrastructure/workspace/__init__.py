@@ -22,7 +22,6 @@ _EXPORTS = {
     "protect_inputs": "kingfisher.infrastructure.workspace.permissions",
     "writable_inputs": "kingfisher.infrastructure.workspace.permissions",
     "SEED_HINT": "kingfisher.infrastructure.workspace.seeding",
-    "SUGGESTION": "kingfisher.infrastructure.workspace.seeding",
     "Destination": "kingfisher.infrastructure.workspace.seeding",
     "Seeded": "kingfisher.infrastructure.workspace.seeding",
     "Skipped": "kingfisher.infrastructure.workspace.seeding",
@@ -43,7 +42,6 @@ __all__ = [
     "EXAMPLE",
     "EXAMPLES",
     "SEED_HINT",
-    "SUGGESTION",
     "TEMPLATES",
     "Destination",
     "LocalSessionDirs",
@@ -82,7 +80,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.permissions import protect_inputs as protect_inputs
     from kingfisher.infrastructure.workspace.permissions import writable_inputs as writable_inputs
     from kingfisher.infrastructure.workspace.seeding import SEED_HINT as SEED_HINT
-    from kingfisher.infrastructure.workspace.seeding import SUGGESTION as SUGGESTION
     from kingfisher.infrastructure.workspace.seeding import Destination as Destination
     from kingfisher.infrastructure.workspace.seeding import Seeded as Seeded
     from kingfisher.infrastructure.workspace.seeding import Skipped as Skipped

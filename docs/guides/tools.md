@@ -185,6 +185,11 @@ whole, it would go out again with every model call after it, and can end the tur
 Return a PDF that large as a path, the way
 [a tool that creates a file](#a-tool-that-creates-a-file) does.
 
+**`pdf_text` is a name kingfisher looks for.** When the model holds a tool called
+`pdf_text`, that line also tells it to call `pdf_text` and read the saved text a
+range at a time. Name a tool of your own that way to get the recommendation;
+called anything else, the line advises without naming a tool.
+
 Two shapes escape the coercion: a `ToolMessage` or a langgraph `Command` is
 returned as-is and never wrapped, so a tool can write its own result or update
 graph state. That is LangChain's door rather than one kingfisher holds, and two

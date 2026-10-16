@@ -15,7 +15,7 @@ def refuse_two_of_a_name(activated: Sequence[str], *, subject: str) -> None:
 
     An agent picks a subagent out of a dictionary keyed by name, so two of a name is
     not a conflict it reports -- it is one subagent that quietly never exists.
-    Measured: handing deepagents two subagents called `profiler` compiles one, with
+    Measured: handing deepagents two subagents called `probe` compiles one, with
     no error and nothing to say which survived.
     """
     seen: dict[str, list[str]] = {}

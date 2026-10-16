@@ -101,7 +101,7 @@ def names(value: object) -> tuple[str, ...] | None:
 class Reader:
     """One format's field readers, bound to the file and the error it raises."""
 
-    #: What a message calls the file -- `reviewer.yaml`, not its whole path.
+    #: What a message calls the file -- `probe.yaml`, not its whole path.
     source: str
     #: The format's own exception. This is the one thing that cannot be shared:
     #: a subagent's mistakes are `SubagentError` and an agent's are `AgentError`,

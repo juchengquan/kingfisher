@@ -89,7 +89,7 @@ source_ids:
 #
 # The datazones a caller may be in, and a subagent or tool may require. A caller
 # is in one at most -- `datazone="emea"` beside `source_ids=` -- and reaches what
-# names that one or none. `subagents/ledger.py` is the one that names `emea`.
+# names that one or none. `subagents/quarters.py` is the one that names `emea`.
 #
 # Not source ids, and not listed among them: a caller holds any number of source
 # ids and is in exactly one datazone, which is the difference worth a second field.

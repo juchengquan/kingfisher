@@ -153,7 +153,7 @@ models:
 #
 # A subagent or an agent names a model from this table:
 #
-#     # subagents/extractor.yaml
+#     # subagents/summariser.yaml
 #     model: MiniMax-M2.5
 #
 # The endpoint follows from the model, so there is no second line to keep in
@@ -161,6 +161,6 @@ models:
 # the file that asked for it.
 #
 # This is where cost routing lives: reading-heavy delegation on a cheap model,
-# and the work that matters on a better one. The presets ship without `model:`
-# lines because a file inside the wheel cannot portably name a vendor's model
-# id -- see presets/README.md.
+# and the work that matters on a better one. A definition meant to travel
+# between deployments leaves `model:` out, since no vendor's model id means the
+# same thing everywhere.

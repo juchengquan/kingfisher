@@ -31,7 +31,7 @@ what a package can mean without having seen the deployment it lands in.
 
 **And kingfisher has two words it lacks.** `source_ids` and `datazone` say who
 reaches a subagent, and kingfisher reads them before deepagents sees anything. The
-TypedDict has neither, so a dict that says who reaches it -- `ledger.py` does --
+TypedDict has neither, so a dict that says who reaches it -- `quarters.py` does --
 stops type-checking as a `SubAgent`. Drop the annotation there, as `timestamps`
 has.
 """

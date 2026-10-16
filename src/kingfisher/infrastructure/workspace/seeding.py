@@ -15,15 +15,6 @@ from kingfisher.domain.access import AUDIENCED
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.workspace.layout import ensure_definitions
 
-#: Named in the refusal below, and only when it is really there.
-#:
-#: A path inside this repository is true for someone standing in a checkout and
-#: false for everyone else, and the reader most likely to hit that refusal is the
-#: one who installed the package -- who has no `assets/` anywhere. Advice that
-#: fails the way the thing it is advising about failed is the fault four other
-#: messages here were rewritten to stop making.
-SUGGESTION = Path("assets")
-
 #: How the four "this workspace is empty" messages tell a reader to fill it.
 SEED_HINT = "`kingfisher seed --from DIR`"
 
@@ -38,8 +29,8 @@ def starter_agent(agents: Path) -> str:
     return f"""\
 An agent is a file in {agents}/, and three fields are required. A minimal one:
 
-    # {agents / "assistant.yaml"}
-    name: assistant
+    # {agents / "helper.yaml"}
+    name: helper
     description: General-purpose agent.
     system_prompt: |
       You work in this workspace, on whatever the caller asks for.
@@ -108,11 +99,9 @@ UNCONSULTED = {
 #: counts as registered, which `middleware.md` says in as many words.
 REMEDY = {
     "middlewares": "Seed or write the middlewares first",
-    # No file named here any more. It used to say `groups.yaml.example is beside
-    # it`, and that example could not be the one you wanted: it shipped one
-    # vocabulary and a workspace needs whichever names its own definitions ask for.
-    # Seeding this repository's own set named three source ids and pointed at a file
-    # declaring five others, none of them the same. `Seeded.report` prints what to
+    # No file named here: an example vocabulary holds one deployment's names, and a
+    # workspace needs whichever names its own definitions ask for. `Seeded.report`
+    # prints what to
     # write instead, using the names that are actually missing.
     "source_ids": "Declare the source ids in source_ids.yaml",
 }
@@ -311,8 +300,6 @@ def definitions_source(paths: Source, override: str | Path | None = None) -> Pat
         "no definitions to seed from: set KINGFISHER_ASSETS to a directory "
         "holding agents/, middlewares/, skills/, subagents/ or tools/, or pass --from DIR"
     )
-    if SUGGESTION.is_dir():
-        msg += f" -- ./{SUGGESTION} is one"
     raise ConfigError(msg)
 
 

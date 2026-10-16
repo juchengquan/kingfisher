@@ -27,7 +27,7 @@ policy.
 
 What this does not cover is worth saying in the same breath. **The network is
 open**: a fenced shell that cannot read another tenant's file can still open any
-socket, and `http_fetch` is a registered tool, so reading and sending are one
+socket, and a workspace tool may fetch a URL, so reading and sending are one
 turn apart for anything that takes an injection. **Registered tools run in
 kingfisher's own process** and are not fenced by this at all -- a fence there
 would confine kingfisher. This makes a shared container safer. It is not the

@@ -11,7 +11,7 @@ ruleset needs" and the shell runs unfenced. bubblewrap needs only user namespace
 
 **It closes the shell's network.** `--unshare-all` includes the network namespace: a
 socket that connects unfenced fails fenced. Nothing kingfisher ships needs the shell
-to reach the network -- `http_fetch` is a registered tool and runs in this process,
+to reach the network -- a workspace tool that fetches a URL runs in this process,
 untouched by any of this.
 
 Which is also the honest limit. The exfiltration path the fence design names --

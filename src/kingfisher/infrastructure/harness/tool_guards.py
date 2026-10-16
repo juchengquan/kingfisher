@@ -75,8 +75,8 @@ class GuardedTool(BaseTool):
 
     There is a fourth graph holding workspace tools, and `tool_guards` cannot reach
     it: a subagent the workspace compiled itself. deepagents runs that graph as
-    given, so no middleware of kingfisher's is in front of its tools. Measured:
-    `show-your-work` called `log_levels('/inputs/api.log')` and the tool raised
+    given, so no middleware of kingfisher's is in front of its tools. Measured: a
+    compiled subagent called `count_lines('/inputs/api.log')` and the tool raised
     `FileNotFoundError` on a path nothing had translated, ending the run. What
     kingfisher still owns is the list of objects handed to `build`, so the guards
     travel on the tools.

@@ -2,7 +2,7 @@
 
 **The shape a deployment's own records translate into.** A deployment that keeps who
 may use each subagent beside the subagent writes it here, in the dict, and nowhere
-else: `analyst.yaml` grants `ledger` by its bare name and says nothing about who it is
+else: `analyst.yaml` grants `quarters` by its bare name and says nothing about who it is
 for. A caller reaches it only by passing both checks below, and an agent naming it
 cannot widen either.
 
@@ -41,7 +41,7 @@ def fiscal_quarter(day: str) -> str:
 
 SUBAGENTS = [
     {
-        "name": "ledger",
+        "name": "quarters",
         "description": (
             "Totals dated figures by EMEA fiscal quarter, where the year starts on "
             "1 April. Use when a report states EMEA figures by quarter."

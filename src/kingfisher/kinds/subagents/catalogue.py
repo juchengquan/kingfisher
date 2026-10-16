@@ -112,7 +112,7 @@ def _bundle_of(spec: SubagentSpec, where: str, root: Path, key: str) -> Holdings
     """What a definition owns: what it carried, or the folder named after it."""
     if spec.carried:
         # Keyed as a grant names it, because that is the one label guaranteed unique
-        # -- two packages may each ship a `reviewer`, and the catalogue has already
+        # -- two packages may each ship a `probe`, and the catalogue has already
         # told those apart by the file each came through. A route may not hold the
         # separator, so it travels as a dash.
         return Holdings(
@@ -139,7 +139,7 @@ class LocalSubagentRepository:
         if not directory.is_dir():
             return {}
 
-        # Two folders may each hold a `profiler.yaml`, and this used to refuse
+        # Two folders may each hold a `probe.yaml`, and this used to refuse
         # the pair -- which stopped the whole catalogue loading over a clash no
         # single agent had yet asked for, and was unfixable by anyone who owned
         # neither file. The catalogue keeps both now, under the reference a
@@ -147,17 +147,17 @@ class LocalSubagentRepository:
         # agent's roster is keyed by name, so an *agent* holding two is refused.
         #
         # Measured, because it is the reason any of this is needed: handing
-        # deepagents two subagents called `profiler` compiles one. No error, and
+        # deepagents two subagents called `probe` compiles one. No error, and
         # the other simply never exists.
         read: list[tuple[SubagentSpec, str]] = []
         for path in documents_in(directory, error=SubagentError, skipping=ASSET_DIRECTORIES):
-            # Relative to the catalogue: `reviewer.yaml` stops identifying a
+            # Relative to the catalogue: `probe.yaml` stops identifying a
             # file once two folders may each hold one.
             where = str(path.relative_to(directory))
             read.append((reading.read(DefinitionText.at(path)), where))
         # The Python half, keyed and counted with the documents rather than
         # beside them: the two kinds share one namespace, so two definitions
-        # claiming `reviewer` are told apart the same way whichever formats they
+        # claiming `probe` are told apart the same way whichever formats they
         # were written in.
         read.extend(_declared_in(directory))
 

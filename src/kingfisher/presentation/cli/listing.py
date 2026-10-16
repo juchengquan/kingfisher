@@ -79,7 +79,7 @@ def _tools(found: Inventory) -> Iterator[str]:
         yield ""
         return
 
-    # Printed as one pile, this listing advertised `read_file` beside `csv_profile` and
+    # Printed as one pile, this listing advertised `read_file` beside `count_rows` and
     # left a reader to guess which flag took which -- and guessing wrong is the "that is
     # a builtin tool" refusal.
     yield "builtin tools — grant with builtin_tools: in an agent file"

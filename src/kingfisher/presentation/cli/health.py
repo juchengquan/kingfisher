@@ -586,8 +586,8 @@ def _subagent_tools(found: Inventory) -> Iterator[Check]:
         )
 
     # A warning rather than a failure for the reason the catalogue refuses
-    # nothing here: a folder naming no definition is legal organisation, and
-    # `analysis/` next to the shipped bundle is one. It is worth saying anyway
+    # nothing here: a folder naming no definition is legal organisation, and a
+    # folder grouping definitions by theme is one. It is worth saying anyway
     # because the likeliest cause is the other thing entirely -- a definition
     # renamed out from under its own folder, whose subagent then holds none of
     # what is in it and says nothing about that at any point in a run.

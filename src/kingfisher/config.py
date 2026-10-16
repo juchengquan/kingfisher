@@ -386,8 +386,8 @@ class Config:
     # `external` says a container already does it, `off` opts out and is warned
     # about on every start. On by default because an exposure nobody opted into
     # is one nobody knows they have: measured unconfined, the shell could read
-    # this deployment's own API keys, `~/.aws` and the GitHub CLI's token, and
-    # `http_fetch` is one tool call away from sending them.
+    # this deployment's own API keys, `~/.aws` and the GitHub CLI's token, and a
+    # workspace tool that fetches a URL is one call away from sending them.
     shell_sandbox: str = "auto"
     skills_mounts: Mapping[str, Path] = NO_MOUNTS
     # Where definitions are copied *from*, which is the opposite direction to

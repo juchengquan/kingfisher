@@ -487,9 +487,9 @@ def test_the_starter_agent_the_refusal_prints_actually_loads(cfg):
     block = printed.split("A minimal one:\n\n", 1)[1].split("\n\nOmitting", 1)[0]
     document = yaml.safe_load(textwrap.dedent(block))
 
-    spec = parse(document, Path("agents/assistant.yaml"))
+    spec = parse(document, Path("agents/helper.yaml"))
 
-    assert spec.name == "assistant"
+    assert spec.name == "helper"
     assert spec.system_prompt.strip()
 
 
@@ -506,7 +506,7 @@ def test_a_workspace_with_no_agents_is_told_how_to_write_one(cfg):
 
     said = str(refused.value)
     assert "offers none" in said
-    assert "name: assistant" in said, "the starter is not in the refusal"
+    assert "name: helper" in said, "the starter is not in the refusal"
     assert "system_prompt" in said
 
 
@@ -527,7 +527,7 @@ def test_the_starter_names_where_agents_are_read_from(cfg, tmp_path):
 
     said = str(refused.value)
     assert f"a file in {elsewhere}/" in said
-    assert f"# {elsewhere / 'assistant.yaml'}" in said
+    assert f"# {elsewhere / 'helper.yaml'}" in said
 
 
 def test_a_workspace_that_has_agents_is_not_lectured(cfg):

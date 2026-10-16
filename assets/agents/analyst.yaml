@@ -118,11 +118,11 @@ subagents:
   # wider than its neighbours is what the roll-up exists to show.
   - name: auditor
     source_ids: [sales_db]
-  # Bare, and still the narrowest subagent here: `subagents/ledger.py` says itself
+  # Bare, and still the narrowest subagent here: `subagents/quarters.py` says itself
   # that it is for `sales_db` callers in the `emea` datazone. Nothing written on
   # this line could widen that -- an entry is an **and** with what the subagent
   # says -- so there is nothing for this agent to repeat.
-  - ledger
+  - quarters
 memory: false
 system_prompt: |
   You answer questions about the data in this workspace.

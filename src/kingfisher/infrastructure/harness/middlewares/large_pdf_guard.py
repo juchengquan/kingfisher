@@ -15,7 +15,10 @@ from langchain_core.messages import ToolMessage
 #: Half of that.
 MAX_PDF_BYTES = 256 * 1024
 
-#: The shipped tool that reads a PDF a range at a time.
+#: The name this guard recommends to a model holding a PDF too large to read whole:
+#: a tool that saves a PDF's text a range at a time. A convention `tools.md` documents,
+#: so a deployment whose tool takes this name gets the recommendation, and one whose
+#: tool is called anything else does not.
 PDF_TEXT = "pdf_text"
 
 KB = 1024
@@ -47,8 +50,8 @@ class LargePdfGuard(AgentMiddleware):
 
     def _seen(self, request: Any) -> Any:
         # Read before `ToolAllowlist` narrows the list, which is right here: a graph is
-        # built from its granted workspace tools only, so a `pdf_text` in it is one the
-        # model is offered. The catalogue's names would not do -- `tool_guards` is
+        # built from its granted workspace tools only, so a tool named `PDF_TEXT` in it
+        # is one the model is offered. The catalogue's names would not do -- `tool_guards` is
         # handed every tool the workspace defines, granted or not.
         self._offered = frozenset(
             name for tool in request.tools if isinstance(name := getattr(tool, "name", None), str)

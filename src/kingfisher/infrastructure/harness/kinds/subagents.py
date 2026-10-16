@@ -76,7 +76,7 @@ def subagent_skills(
         )
     # Both sides in the registry's vocabulary before they meet. `narrowed`
     # intersects strings, and one skill has two legal spellings -- so a subagent
-    # granted `incident::postmortem` under a ceiling of `postmortem` kept
+    # granted `team::audit` under a ceiling of `audit` kept
     # neither. The identity is also what `NarrowedSkills` filters its index by,
     # so a name left as written reached the subagent as an empty index: every
     # `skills:` a subagent declared was inert, silently, whichever way it was
@@ -235,9 +235,9 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     granted = [one.tool for one in (*private, *(o for o in shared if o.name not in owned))]
 
     # Wrapped rather than handed over bare: this graph gets no middleware of
-    # kingfisher's, so its tools carry their guards or have none. The shipped
-    # `scribe` is what found that -- it handed `show-your-work` three path-taking
-    # tools and the first call died on a path nothing had translated.
+    # kingfisher's, so its tools carry their guards or have none. Handed three
+    # path-taking tools bare, a compiled subagent died on its first call, on a path
+    # nothing had translated.
     runnable = spec.build(model, guarded_tools(granted, paths))
     # Against `Runnable`, which is what `CompiledSubAgent` declares this field to be --
     # the same reason `test_the_compiled_shape_is_deepagents_own` pins the *keys*
