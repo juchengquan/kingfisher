@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from kingfisher.core.interfaces import CommandRunner
+    from kingfisher.plugins import CommandRunner
 
 
 def _equal(got: object, want: object, *, doing: str) -> None:

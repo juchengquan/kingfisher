@@ -1397,6 +1397,174 @@ def test_the_cross_plugin_rule_tells_its_own_from_another(tmp_path):
     )
 
 
+# -- a plugin has of kingfisher what an outsider has --------------------------
+
+
+#: Code held to what a plugin written elsewhere could import, and whether it is held as
+#: written. The kit under `tests/checks/` is copied out of this repository, so its
+#: imports leave with it and must name a door. Kingfisher's own plugins may not import
+#: their door (`test_no_plugin_imports_another`), so each takes a name a door carries
+#: from the module that door takes it from -- the object an outsider gets.
+OUTSIDERS: dict[Path, bool] = {SRC / "plugins": False, REPO / "tests" / "checks": True}
+
+#: What each file still takes that no door carries, as `module:name`. It only shrinks:
+#: the change that stops an import removes its line, and the table goes once it is empty.
+NOT_YET: dict[str, frozenset[str]] = {
+    "src/kingfisher/plugins/sessions/backend.py": frozenset({
+        "kingfisher.core.agent.backend:skill_mounts",
+        "kingfisher.core.agent.host_paths:reject_host_path",
+        "kingfisher.core.agent.prompting:kingfishers_shell",
+        "kingfisher.core.definitions.catalogue:Definitions",
+        "kingfisher.core.definitions.catalogue:refuse_unmountable",
+        "kingfisher.core.layout:CLAIM",
+        "kingfisher.core.layout:HARNESS",
+        "kingfisher.core.layout:HARNESS_ROUTE",
+        "kingfisher.core.layout:INPUTS",
+        "kingfisher.core.layout:OFFLOADS",
+        "kingfisher.core.layout:SAVED_RESULTS",
+        "kingfisher.core.layout:SCRATCH_ROUTE",
+        "kingfisher.core.layout:SESSION_DIRS",
+        "kingfisher.core.layout:SKILLS_ROUTE",
+        "kingfisher.core.session.model:session_dir",
+        "kingfisher.core.session.model:sessions_root",
+        "kingfisher.core.session.model:still_held",
+    }),
+    "src/kingfisher/plugins/sessions/folders.py": frozenset({
+        "kingfisher.core.layout:AGENTS_SCAFFOLD",
+        "kingfisher.core.layout:HARNESS",
+        "kingfisher.core.layout:MEMORY",
+        "kingfisher.core.layout:SAVED_RESULTS",
+        "kingfisher.core.layout:SCRATCH",
+        "kingfisher.core.layout:SESSION_DIRS",
+        "kingfisher.core.session.model:names_a_session",
+    }),
+    "src/kingfisher/plugins/sessions/permissions.py": frozenset({
+        "kingfisher.core.layout:INPUTS",
+        "kingfisher.core.layout:SCRATCH",
+    }),
+    "src/kingfisher/plugins/sessions/sandbox/bubblewrap.py": frozenset({
+        "kingfisher.core.layout:HARNESS",
+        "kingfisher.core.layout:INPUTS",
+        "kingfisher.core.layout:SAVED_RESULTS",
+    }),
+    "src/kingfisher/plugins/sessions/sandbox/confinement.py": frozenset({
+        "kingfisher.core.layout:HARNESS_OWNED",
+        "kingfisher.core.layout:INPUTS",
+        "kingfisher.core.layout:SANDBOX_PROFILE",
+        "kingfisher.core.layout:SAVED_RESULTS",
+    }),
+    "src/kingfisher/plugins/sessions/sandbox/fence.py": frozenset({
+        "kingfisher.core.layout:INPUTS",
+        "kingfisher.core.layout:SESSION_DIRS",
+    }),
+    "src/kingfisher/plugins/sessions/sandbox/sandbox_exec.py": frozenset({
+        "kingfisher.core.layout:HARNESS",
+        "kingfisher.core.layout:HARNESS_OWNED",
+        "kingfisher.core.layout:INPUTS",
+        "kingfisher.core.layout:SANDBOX_PROFILE",
+        "kingfisher.core.layout:SAVED_RESULTS",
+        "kingfisher.core.session.model:sessions_root",
+    }),
+    "src/kingfisher/plugins/sessions/shell.py": frozenset({
+        "kingfisher.core.definitions.catalogue:Definitions",
+        "kingfisher.core.definitions.skills.catalogue:LocalSkillRepository",
+        "kingfisher.core.layout:HARNESS_OWNED",
+        "kingfisher.core.layout:SKILLS_VIEW",
+    }),
+    "tests/checks/backend.py": frozenset({
+        "kingfisher.core.agent.usable_backend:executes",
+        "kingfisher.core.agent.usable_backend:not_executing",
+        "kingfisher.core.agent.usable_backend:uncovered",
+        "kingfisher.core.layout:HARNESS_ROUTE",
+        "kingfisher.core.layout:INPUTS_ROUTE",
+        "kingfisher.core.layout:OUTPUTS_ROUTE",
+        "kingfisher.core.layout:SCRATCH_ROUTE",
+    }),
+    "tests/checks/sessions.py": frozenset({
+        "kingfisher.core.agent.backend:skill_mounts",
+        "kingfisher.core.agent.permitted_backend:host_path",
+        "kingfisher.core.definitions.catalogue:Definitions",
+        "kingfisher.core.definitions.skills:registry",
+        "kingfisher.core.layout:OUTPUTS_ROUTE",
+        "kingfisher.core.layout:SKILLS_ROUTE",
+    }),
+}
+
+
+def _past_the_doors(path: Path, *, as_written: bool) -> frozenset[str]:
+    """What this file takes of kingfisher that no door carries: `module:name`, or the
+    module alone where the import names nothing."""
+    doors = [_lazy_tables()[door] for door in PUBLIC]
+    taken: set[str] = set()
+    for module, names in _imported_names(path).items():
+        if module.split(".", maxsplit=1)[0] != "kingfisher" or module in PUBLIC:
+            continue
+        if not as_written and module.startswith("kingfisher.plugins."):
+            continue
+        if not names:
+            taken.add(module)
+            continue
+        taken |= {
+            f"{module}:{name}"
+            for name in names
+            if as_written or not any(door.get(name) == module for door in doors)
+        }
+    return frozenset(taken)
+
+
+def test_a_plugin_has_of_kingfisher_only_what_an_outsider_has():
+    """A plugin of kingfisher's own taking a name no door carries is one an outside author
+    cannot write -- `LocalSessions` took the folder names every deployment's sessions must
+    honour that way -- and the kit doing it breaks the day it is copied out."""
+    found = {
+        path.relative_to(REPO).as_posix(): taken
+        for root, as_written in OUTSIDERS.items()
+        for path in _every(sorted(root.rglob("*.py")), root.relative_to(REPO).as_posix())
+        if (taken := _past_the_doors(path, as_written=as_written))
+    }
+
+    new = {
+        path: sorted(more)
+        for path, taken in found.items()
+        if (more := taken - NOT_YET.get(path, frozenset()))
+    }
+    assert not new, (
+        f"{new} -- no door carries these: import a name a door carries, or make one public "
+        "on purpose, with a witness"
+    )
+    stopped = {
+        path: sorted(gone)
+        for path, names in NOT_YET.items()
+        if (gone := names - found.get(path, frozenset()))
+    }
+    assert not stopped, f"{stopped} are no longer taken -- remove them from NOT_YET"
+
+
+def test_the_outsider_rule_tells_a_door_s_name_from_a_private_one(tmp_path):
+    """Both ways, for both kinds of outsider, so a predicate passing everything or
+    nothing fails here."""
+    written = tmp_path / "probe.py"
+    written.write_text(
+        "import kingfisher.core.workspace\n"
+        "from kingfisher import Config\n"
+        "from kingfisher.core.interfaces import Sessions\n"
+        "from kingfisher.core.layout import HARNESS\n"
+        "from kingfisher.plugins import CommandRunner\n"
+        "from kingfisher.plugins.sessions.folders import LocalSessionDirs\n"
+    )
+
+    assert _past_the_doors(written, as_written=False) == {
+        "kingfisher.core.workspace",
+        "kingfisher.core.layout:HARNESS",
+    }
+    assert _past_the_doors(written, as_written=True) == {
+        "kingfisher.core.workspace",
+        "kingfisher.core.layout:HARNESS",
+        "kingfisher.core.interfaces:Sessions",
+        "kingfisher.plugins.sessions.folders:LocalSessionDirs",
+    }
+
+
 def test_the_agent_package_is_the_one_speaking_to_the_harness():
     """The runtime's entry in `THIRD_PARTY` is about a package that still uses it."""
     runtime = THIRD_PARTY["core/agent"]

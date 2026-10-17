@@ -14,13 +14,13 @@ from uuid import uuid4
 
 from deepagents.backends import CompositeBackend
 
-from kingfisher.core.agent.host_paths import HostPathError
 from kingfisher.core.layout import (
     HARNESS_ROUTE,
     INPUTS_ROUTE,
     OUTPUTS_ROUTE,
     SCRATCH_ROUTE,
 )
+from kingfisher.plugins import HostPathError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
