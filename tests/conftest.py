@@ -23,7 +23,7 @@ from tests.unit.scripted import Scripted
 if TYPE_CHECKING:
     # Type-only, and deliberately: naming the record at runtime would pull
     # deepagents into every collection of this file for one annotation, which is
-    # the 1.4s the lazy front door exists to avoid paying.
+    # the second the lazy front door exists to avoid paying.
     from kingfisher.core.agent.assembly import Assembled
     from kingfisher.core.definitions.subagents.spec import SubagentSpec
 

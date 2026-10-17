@@ -1,11 +1,11 @@
 """kingfisher — a personal, local, general-purpose agent built on deepagents.
 
-Names resolve lazily, through `__getattr__` below. `import deepagents` costs about
-1.4s, most of it langchain-anthropic, langchain-openai and langchain-google-genai,
-which it imports at module level and which most deployments never call; this front
-door is about 1ms. Eager re-exports would put the 1.4s on every consumer --
-`kingfisher --help`, a config check, a test that only touches `Request`. *(Measured
-2026-09-08.)*
+Names resolve lazily, through `__getattr__` below. `import deepagents` takes most of a
+second and about three thousand modules, most of it the provider SDKs it imports at
+module level and most deployments never call; this front door takes a few
+milliseconds. Eager re-exports would put that second on every consumer --
+`kingfisher --help`, a config check, a test that only touches `Request`.
+`test_a_public_name_that_runs_no_agent_loads_no_runtime` holds every light name to it.
 """
 
 from importlib import import_module
