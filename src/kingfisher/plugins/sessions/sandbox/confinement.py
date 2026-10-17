@@ -26,7 +26,7 @@ from functools import partial
 from pathlib import Path
 
 from kingfisher.core.config import Config
-from kingfisher.core.layout import HARNESS_OWNED, INPUTS, SANDBOX_PROFILE, SAVED_RESULTS
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS_OWNED, SANDBOX_PROFILE
 from kingfisher.plugins.sessions.sandbox.sandbox_exec import (
     fenced_sessions,
     profile,
@@ -432,8 +432,8 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
     extra: tuple[str, ...] = (), skills: tuple[Path, ...] = (),
     definitions: tuple[Path, ...] = (),
     authored: tuple[Path, ...] = (),
-    session_inputs: str = INPUTS,
-    saved_results: tuple[str, ...] = SAVED_RESULTS,
+    session_inputs: str = DEFAULT_LAYOUT.inputs,
+    saved_results: tuple[str, ...] = DEFAULT_LAYOUT.saved_results,
 ) -> Confinement:
     """Choose a confinement for this deployment, writing any profile it needs."""
     if mode == BUBBLEWRAP:

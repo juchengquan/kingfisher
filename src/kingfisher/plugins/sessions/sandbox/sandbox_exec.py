@@ -11,7 +11,7 @@ import threading
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
-from kingfisher.core.layout import HARNESS, HARNESS_OWNED, INPUTS, SANDBOX_PROFILE, SAVED_RESULTS
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS_OWNED, SANDBOX_PROFILE
 from kingfisher.core.session.model import sessions_root
 
 
@@ -26,8 +26,8 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     itself: Path,
     protected: tuple[Path, ...] = (),
     protected_files: tuple[Path, ...] = (),
-    session_inputs: str = INPUTS,
-    saved_results: tuple[str, ...] = SAVED_RESULTS,
+    session_inputs: str = DEFAULT_LAYOUT.inputs,
+    saved_results: tuple[str, ...] = DEFAULT_LAYOUT.saved_results,
 ) -> str:
     """A `sandbox-exec` profile denying the operator's home, minus what runs code.
 
@@ -128,7 +128,7 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     lines.append(_sessions_denial(workspace))
     lines += [_enclosing_denial(workspace, folder) for folder in _enclosing(saved_results)]
     lines.append(f"(deny file-write* (path {_sb(itself)}))")
-    for folder in (session_inputs, HARNESS, *saved_results):
+    for folder in (session_inputs, DEFAULT_LAYOUT.harness, *saved_results):
         lines.append(_session_folder_denial(workspace, folder))
     return "\n".join(lines) + "\n"
 

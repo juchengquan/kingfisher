@@ -6,14 +6,7 @@ import shutil
 from contextlib import suppress
 from pathlib import Path
 
-from kingfisher.core.layout import (
-    AGENTS_SCAFFOLD,
-    HARNESS,
-    MEMORY,
-    SAVED_RESULTS,
-    SCRATCH,
-    SESSION_DIRS,
-)
+from kingfisher.core.layout import AGENTS_SCAFFOLD, DEFAULT_LAYOUT
 from kingfisher.core.session.model import names_a_session
 from kingfisher.plugins.sessions.permissions import keep_tmp_private, unlock_and_retry
 
@@ -57,15 +50,15 @@ class LocalSessionDirs:
 
 def ensure_session_layout(
     session_dir: Path,
-    session_dirs: tuple[str, ...] = SESSION_DIRS,
+    session_dirs: tuple[str, ...] = DEFAULT_LAYOUT.session_dirs,
     *,
-    memory: str = MEMORY,
-    scratchpad: str = SCRATCH,
-    saved_results: tuple[str, ...] = SAVED_RESULTS,
+    memory: str = DEFAULT_LAYOUT.memory,
+    scratchpad: str = DEFAULT_LAYOUT.scratchpad,
+    saved_results: tuple[str, ...] = DEFAULT_LAYOUT.saved_results,
 ) -> Path:
     """Every directory a session holds, and its memory scaffolded. Idempotent.
 
-    The leaves default to the module constants, so the call with no layout lays out
+    The leaves default to `DEFAULT_LAYOUT`'s, so the call with no layout lays out
     the names kingfisher has always used; `backend_at` passes the configured layout's
     leaves so a renamed session is made under its own names. `memory` and `scratchpad`
     are passed on their own as well as in `session_dirs` because the two steps below
@@ -75,7 +68,7 @@ def ensure_session_layout(
     # `saved_results` before the first result is: bubblewrap binds them read-only only
     # where they exist when its fence is built, so a folder the recorder made mid-turn
     # would be the shell's to write until the next one.
-    for name in (*session_dirs, HARNESS, *saved_results):
+    for name in (*session_dirs, DEFAULT_LAYOUT.harness, *saved_results):
         (session_dir / name).mkdir(parents=True, exist_ok=True)
 
     # Asked for rather than done here: `permissions` is the one module in this
@@ -86,7 +79,7 @@ def ensure_session_layout(
     return session_dir
 
 
-def scaffold_memory(session_dir: Path, *, memory: str = MEMORY) -> None:
+def scaffold_memory(session_dir: Path, *, memory: str = DEFAULT_LAYOUT.memory) -> None:
     """Give `/memory/AGENTS.md` something for an edit to anchor against.
 
     Scaffolded rather than empty: the memory prompt directs the agent to save

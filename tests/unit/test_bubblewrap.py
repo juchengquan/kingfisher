@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from kingfisher.core.layout import HARNESS, INPUTS, SAVED_RESULTS, Layout
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, INPUTS, Layout
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.sandbox.bubblewrap import SYSTEM_PATHS, BubblewrapRunner, argv_for
 from kingfisher.plugins.sessions.sandbox.linux import present
@@ -77,7 +77,7 @@ def test_the_harness_is_read_only_and_lands_over_the_session(session):
     again" -- each left the whole suite green.
     """
     argv = argv_for(session)
-    guarded = [str(session / p) for p in (HARNESS, INPUTS, *SAVED_RESULTS)]
+    guarded = [str(session / p) for p in (HARNESS, INPUTS, *DEFAULT_LAYOUT.saved_results)]
 
     # Every folder the shell may read and not write, as an exact set: one of them
     # arriving without the others is the shape this is written against.

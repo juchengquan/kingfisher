@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.core.layout import SAVED_RESULTS
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.sandbox.bubblewrap import (
     BubblewrapRunner,
@@ -112,7 +112,7 @@ def test_a_saved_result_is_the_shells_to_read_and_not_to_write(tmp_path):
     scratchpad somewhere else if it got half-way.
     """
     session = ensure_session_layout(tmp_path / "sessions" / "s1")
-    for folder in SAVED_RESULTS:
+    for folder in DEFAULT_LAYOUT.saved_results:
         (session / folder / "A-0001.txt").write_text("as written", encoding="utf-8")
     runner = BubblewrapRunner(
         argv_for(session, readable=toolchain_roots()),
@@ -120,8 +120,8 @@ def test_a_saved_result_is_the_shells_to_read_and_not_to_write(tmp_path):
     )
 
     mine = runner.run("printf ok > scratchpad/mine.txt && cat scratchpad/mine.txt")
-    read = runner.run(f"cat {SAVED_RESULTS[0]}/A-0001.txt")
-    for folder in SAVED_RESULTS:
+    read = runner.run(f"cat {DEFAULT_LAYOUT.saved_results[0]}/A-0001.txt")
+    for folder in DEFAULT_LAYOUT.saved_results:
         runner.run(f"printf FORGED > {folder}/A-0001.txt")
         runner.run(f"printf FORGED > {folder}/A-0002.txt")
         runner.run(f"ln {folder}/A-0001.txt linked && printf FORGED > linked; rm -f linked")
@@ -132,7 +132,7 @@ def test_a_saved_result_is_the_shells_to_read_and_not_to_write(tmp_path):
 
     assert mine.output.strip() == "ok", f"the scratchpad stopped being writable: {mine.output}"
     assert read.output.strip() == "as written", f"a saved result stopped reading: {read.output}"
-    for folder in SAVED_RESULTS:
+    for folder in DEFAULT_LAYOUT.saved_results:
         assert (session / folder / "A-0001.txt").read_text(encoding="utf-8") == "as written"
         assert not (session / folder / "A-0002.txt").exists(), f"the shell added to {folder}"
 
