@@ -10,7 +10,6 @@ from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.kinds.subagents import as_subagent
 from kingfisher.core.agent.prompting import (
-    kingfishers_shell,
     render_system_prompt,
     system_prompt,
 )
@@ -18,6 +17,7 @@ from kingfisher.core.layout import INPUTS, OUTPUTS, SCRATCH, TOOL_RESULTS_ROUTE,
 from kingfisher.core.session.store import entry_id
 from kingfisher.core.session.turn import ledger_delta, ledger_index
 from kingfisher.plugins import ShellSettings, backend_at
+from kingfisher.plugins.sessions.shell import kingfishers_shell
 from tests.conftest import FakeToolCallingModel, a_subagent
 
 

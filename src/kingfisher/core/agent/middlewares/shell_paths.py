@@ -11,7 +11,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
-from kingfisher.core.agent.prompting import ShellPrompt, execute_line, kingfishers_shell
+from kingfisher.core.agent.prompting import ShellPrompt, execute_line
 from kingfisher.core.layout import DEFAULT_LAYOUT, SESSION_DIRS, Layout
 
 EXECUTE = "execute"
@@ -149,9 +149,9 @@ class ShellPaths(AgentMiddleware):
         # From the layout, so the line names the configured inputs leaf and the
         # miss-matcher recognises the configured session folders.
         self._rule = execute_line(shell, layout)
-        # Kingfisher's own shell only. The correction spells the path the way a shell
-        # starting in the session root reads it, and no other shell is known to.
-        self._corrects = shell is kingfishers_shell()
+        # Only where the shell says it starts in the session root: the correction spells
+        # the path the way such a shell reads it.
+        self._corrects = shell is not None and shell.starts_in_session
         self._virtual = _virtual(layout.session_dirs)
 
     def _told(self, request: Any) -> Any:

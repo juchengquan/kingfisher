@@ -17,7 +17,7 @@ from typing import Any
 from deepagents.backends import CompositeBackend, FilesystemBackend
 
 from kingfisher.core.agent.host_paths import reject_host_path
-from kingfisher.core.agent.prompting import ShellPrompt, kingfishers_shell
+from kingfisher.core.agent.prompting import ShellPrompt
 from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import CommandRunner, Sessions
@@ -33,6 +33,7 @@ from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.shell import (
     ConfinedLocalShellBackend,
     fence_for,
+    kingfishers_shell,
     runs_locally,
     shell_env,
     skills_view,

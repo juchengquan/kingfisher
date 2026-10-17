@@ -1410,9 +1410,6 @@ OUTSIDERS: dict[Path, bool] = {SRC / "plugins": False, REPO / "tests" / "checks"
 #: What each file still takes that no door carries, as `module:name`. It only shrinks:
 #: the change that stops an import removes its line, and the table goes once it is empty.
 NOT_YET: dict[str, frozenset[str]] = {
-    "src/kingfisher/plugins/sessions/backend.py": frozenset({
-        "kingfisher.core.agent.prompting:kingfishers_shell",
-    }),
     "tests/checks/sessions.py": frozenset({
         "kingfisher.core.definitions.skills:registry",
     }),

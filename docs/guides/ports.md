@@ -160,7 +160,7 @@ Things to know:
   so it is shown only where skills are on. `execute` replaces deepagents' "Use absolute
   paths…" line in the tool's description, and is the only part a subagent sees: a
   subagent is built without the system prompt. Kingfisher's own are
-  `src/kingfisher/core/agent/prompts/shell_here.md`, `shell_here_skills.md` and
+  `src/kingfisher/plugins/sessions/prompts/shell_here.md`, `shell_here_skills.md` and
   `shell_here_execute.md`.
 - **A part left `None` is said the neutral way**, claiming only what holds wherever a
   shell runs — for `execute`, deepagents' own line stays — and `""` says nothing there.
@@ -175,9 +175,10 @@ Things to know:
 - **Kingfisher's own shell describes itself**, so `shell_prompt=` without a runner is
   refused. Standing instructions for every agent go in `INSTRUCTIONS.md` beside the
   definitions, or `instructions=` on `Kingfisher`.
-- **A miss is corrected only on kingfisher's own shell.** A command that fails on a
-  file-tool path there is answered with the path's spelling in the shell, worked out
-  from the session root it starts in; no other shell is known to start there.
+- **A miss is corrected where the shell says it starts in the session.**
+  `starts_in_session=True` says so, and a command that fails on a file-tool path is
+  then answered with the path's spelling in the shell, worked out from the session
+  root. Kingfisher's own shell says it; a shell that does not is not corrected.
 - **deepagents' list of this host's paths is kept only for a shell on this host.**
   deepagents adds a "Shell paths vs. virtual paths" section giving each routed folder's
   path here. It stays for kingfisher's own shell and for a runner whose `local` is

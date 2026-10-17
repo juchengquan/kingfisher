@@ -21,10 +21,11 @@ from kingfisher.core.agent.middlewares.shell_paths import (
     hint,
     missed,
 )
-from kingfisher.core.agent.prompting import execute_line, kingfishers_shell
+from kingfisher.core.agent.prompting import execute_line
 from kingfisher.core.layout import Layout
 from kingfisher.plugins import LocalSessions, ShellPrompt
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
+from kingfisher.plugins.sessions.shell import kingfishers_shell
 from tests.conftest import an_agent, start, subagents_dir
 from tests.unit.scripted import Scripted
 from tests.unit.test_shell_prompt import Plain
@@ -451,6 +452,24 @@ def test_a_correction_reaches_the_shells_result_and_no_other_tools(way):
     assert hint("/inputs/api.log") in corrected.text
 
     left = _answered(way, "line_count", ToolMessage(MISSED, tool_call_id="c1"))
+    assert left.text == MISSED
+
+
+def test_a_shell_that_says_it_starts_in_the_session_is_corrected_whoever_said_it():
+    """The correction went to kingfisher's own shell by identity, so a shell of a
+    deployment's own that starts in the session root was never offered it."""
+    request = Call(tool_call={"name": "execute", "args": {}, "id": "c1"})
+    starts_there = replace(THEIRS, starts_in_session=True)
+
+    corrected = ShellPaths(Layout(), starts_there).wrap_tool_call(
+        request, lambda _: ToolMessage(MISSED, tool_call_id="c1")
+    )
+    # The control: the same shell, not saying it.
+    left = ShellPaths(Layout(), THEIRS).wrap_tool_call(
+        request, lambda _: ToolMessage(MISSED, tool_call_id="c1")
+    )
+
+    assert hint("/inputs/api.log") in corrected.text
     assert left.text == MISSED
 
 

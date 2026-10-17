@@ -9,6 +9,8 @@ import shutil
 import sys
 import uuid
 from collections.abc import Mapping
+from functools import lru_cache
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +54,27 @@ def shell_env(
     skills = (catalogue or Definitions.from_config(cfg)).skills
     env["KINGFISHER_SKILLS"] = str(skills_view(skills.root, skills.mounts, cfg.kingfisher_dir))
     return env
+
+
+#: What kingfisher's own shell says of itself: its section, its paragraph under skills,
+#: and its line in `execute`'s description.
+_HERE = ("shell_here.md", "shell_here_skills.md", "shell_here_execute.md")
+
+
+@lru_cache(maxsize=1)
+def kingfishers_shell() -> ShellPrompt:
+    """What kingfisher's own shell says of itself.
+
+    It runs on this host in the session root, with `TMPDIR` the scratchpad and
+    `KINGFISHER_SKILLS` the catalogue -- true of no other shell, a runner a deployment
+    supplies included: that is handed the command and nothing else, and starts wherever
+    it was started.
+    """
+    prompts = resources.files("kingfisher.plugins.sessions.prompts")
+    prompt, skills, execute = (
+        prompts.joinpath(name).read_text(encoding="utf-8").strip() for name in _HERE
+    )
+    return ShellPrompt(prompt=prompt, skills=skills, execute=execute, starts_in_session=True)
 
 
 #: Where the shell's view of a catalogue with mounts is built, one directory per
