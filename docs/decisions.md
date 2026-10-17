@@ -1018,7 +1018,7 @@ shipped from elsewhere fails loudly or not at all. The other three have no such
 check to fall back on. Taken now, read as a document's `source_ids:` is, and never
 handed to deepagents -- the spec deepagents receives is built from kingfisher's
 record, not passed through. Tools a declaration carries may say who they admit as
-well, through `kingfisher.tool`. *(2026-09-23. Reversed 2026-10-16.)*
+well, through a `ToolSpec`. *(2026-09-23. Reversed 2026-10-16.)*
 
 **What it carries is its own, and `builtin_tools` is the exception.** Carried
 tools reach that subagent and nothing else -- they enter no catalogue, so nothing
@@ -1366,8 +1366,8 @@ outside that line adds a second requirement rather than replacing the first. A d
 every such definition is built at startup -- default-open must not also be silent.
 It is `kingfisher list` that prints it; a plain start says nothing.
 
-**A tool may say who may use it, through `kingfisher.tool`.** A tool built by
-`kingfisher.tool(fn, source_ids=[...])` carries an audience of its own, and it is an
+**A tool may say who may use it, in its own file.** A tool its file writes as
+`ToolSpec(tool, source_ids=[...])` carries an audience of its own, and it is an
 **and** on every grant of that tool: an agent's entry can narrow it, and nothing an
 agent writes can widen it. It is the rule a definition's entries already follow --
 the only way to reach an entry is through the definition holding it -- carried one
@@ -1387,11 +1387,16 @@ under its subagent regardless until 2026-10-17: the build's filter was written f
 bundles, and the listing's kept bundles to the subagents the caller reaches and
 nothing finer.
 
-**The audience is a private attribute, not `metadata`.** `BaseTool.metadata` was the
-obvious home and is wrong: LangChain passes it to every callback, so an audience kept
-there is in the trace of every call. Measured on a `StructuredTool` subclass: the
-private attribute reaches neither `model_dump` nor a callback. The loaders read it by
-name, `AUDIENCE_ATTRIBUTE`, because `kinds/tools` may not import langchain. *(2026-10-16.)*
+It was written through `kingfisher.tool`, which took only a plain function, until
+2026-10-18; *Taken: a `ToolSpec` a tool is declared as* says why that gave way.
+
+**The audience is kingfisher's record, not the tool's `metadata`.** `BaseTool.metadata`
+was the obvious home and is wrong: LangChain passes it to every callback, so an audience
+kept there is in the trace of every call. It lives on the `FoundTool` the loader makes
+and never on the LangChain object, so no callback can see it. *(2026-10-16. Until
+2026-10-18 it was a private attribute of a `StructuredTool` subclass -- measured to reach
+neither `model_dump` nor a callback -- which the loaders read back by attribute name
+because the tools kind could not import langchain.)*
 
 **A datazone is a second field, held as one more name.** A caller is in at most one
 datazone, and a subagent or tool may require one; an agent may not, because it runs in
@@ -6772,8 +6777,9 @@ nothing: each kind is 5.2ms and 71 modules and `core.environment` 34ms, where
     total. `test_importing_kingfisher_loads_nothing_installed`;
     `test_the_command_starts_without_the_agent_runtime`, which allows `dotenv` and `yaml`;
     `test_a_public_name_that_runs_no_agent_loads_no_runtime`, for every name but the five
-    in `RUNS_AN_AGENT`. `langchain_core` is outside the runtime on purpose, since
-    `kingfisher.tool` subclasses its `StructuredTool`.
+    in `RUNS_AN_AGENT`. `langchain_core` counts as the runtime there: it was left out
+    while `kingfisher.tool` subclassed its `StructuredTool`, and `ToolSpec` names no
+    langchain type.
   - **`RECORDS` touch nothing outside the process**: the request, the result, the
     interfaces, the access vocabulary and the field reader. A record that reads a file
     cannot be built without a workspace behind it, in a test or in a deployment's code.
@@ -7740,41 +7746,42 @@ of two; and `AgentDefinition`, the first name proposed, would have made a subage
 of agent beside an `AgentSpec` that already names one. `SpecBase` sits next to the two
 `*Spec` classes it is the parent of and claims nothing more. (2026-10-17.)*
 
-**Left for now: a `ToolSpec` a tool could be declared as.** Asked after the entry
-above, about the kind that has no spec at all. A tool is exported as an object and
-`FoundTool` pairs it with where it came from; agents, subagents and skills each read a
-document into one. Feasible was checked by running it rather than reasoned about:
-`StructuredTool.from_function(fn, name=, description=, metadata=, args_schema=)`
-builds a real `BaseTool`, so a declared form translates in one call.
+**Taken: a `ToolSpec` a tool is declared as.** Left for now on 2026-09-18, with its
+trigger named: the first field kingfisher wants to read off a tool. That fired on
+2026-10-16, when a tool could say who may use it -- `source_ids` and `datazone` are
+fields kingfisher reads off a tool, and nothing else does. They were built as
+`kingfisher.tool(fn, source_ids=...)`, which took only a plain function: a `@tool`
+object, an instantiated `BaseTool` subclass or a third-party LangChain tool raised
+`AttributeError` on `__name__`, so most tools had no way to carry a lock at all. And
+the lock was a workaround in its own right, kept as a private attribute of a
+`StructuredTool` subclass and read back by attribute name, because the tools kind could
+not import langchain to ask what it was looking at.
 
-It has nothing to carry. `BaseTool` already holds `name`, `description`,
-`args_schema`, `tags` and `metadata`, so a spec would restate the object. The one
-thing it could hold that the object cannot is an audience, and that is settled the
-other way: a tool's audience is a property of the use rather than of the tool, with
-the cost named in `docs/guides/formats.md` and mitigated by the roll-up in
-`kingfisher list`. What is left is `name`, `description` and the callable, which
-`@tool` handles.
+`ToolSpec(tool, *, name=None, description=None, source_ids=["*"], datazone=None)` is a
+plain frozen record, and `TOOLS` -- a module's, or a Python subagent's carried tools --
+holds it or a bare tool, which is `ToolSpec(tool)`. It wraps any form, so the lock
+holds on every one, and it is read where the tool is loaded: the loader knows the file
+to name in a refusal, reads `source_ids` with the reader a definition's own line goes
+through, and puts the lock on the `FoundTool` it makes, never on the tool.
 
-It is not a rename of `FoundTool` either. `FoundTool.source` is the one fact the object
-cannot know, and it is the whole of what `FoundTool` adds.
+`name` and `description` are applied at load, not at the first turn, so a bad one is
+refused at startup. Measured feasible with a real `create_agent` run: a `BaseTool` is
+copied with `model_copy` and a plain function made into a `StructuredTool`, the author's
+object is unchanged, the schema shows the new values, an injected `ToolRuntime` stays
+hidden, and calls dispatch. A class computing either field -- a property inherited ahead
+of `BaseTool` -- answers with its own whatever a copy holds, so the loader checks the
+copy and refuses one that did not take. Naming `BaseTool` and building a
+`StructuredTool` is why the tools kind imports `langchain_core` now, inside the one
+function that renames, so the command does not load it before it knows its verb.
 
-The ergonomics are genuinely bad and that is the argument for building it later:
-`@tool` refuses `metadata=`, `extras=` lands on a different attribute and leaves
-`metadata` as `None`, and the working route is assigning after the decorator. The
-first time kingfisher reads `.metadata`, a workspace that wrote `extras` gets no
-error and no value.
-
-**The trigger is the first field kingfisher wants to read off a tool** -- whether one
-writes rather than reads, what it costs, a timeout of its own. None is designed and
-none is asked for. Before that, a spec is a second way to spell `@tool` and every
-`FoundTool` consumer pays for it; after it, the need says what shape the field is and
-there is a caller. Whoever builds it should pick one of `metadata` and `extras` and
-refuse the other, so the trap is decided once rather than by every workspace.
-*(2026-09-18.)*
+It carries no `metadata` or `extras`. The trap the deferral named -- `@tool` refusing
+`metadata=`, and `extras=` landing on an attribute a reader of `metadata` never looks
+at -- stays shut: nothing kingfisher reads is on the tool, so there is no attribute for
+a workspace to spell wrong. *(2026-10-18.)*
 
 *Renamed `FoundTool` from `Found`, which said nothing about what was found. It pairs
-with `ToolSpec`, the record a tool file will write: the spec is what the author wrote,
-and a `FoundTool` is what the loader made of it. (2026-10-18.)*
+with `ToolSpec`, the record a tool file writes: the spec is what the author wrote, and a
+`FoundTool` is what the loader made of it. (2026-10-18.)*
 
 **Left for now: a `TypedDict` for a package writing `SUBAGENTS`.** A portable
 definition is a plain mapping on purpose -- it pins no kingfisher version -- and the
@@ -7790,7 +7797,8 @@ and `NOT_PORTABLE` already state three times, so it needs a line in the drift te
 stay honest.
 
 **Accepting `SubagentSpec` instances is refused rather than deferred**, which is the
-difference between this entry and the `ToolSpec` one above it. Six of its fields are `derived`
+difference between this entry and the `ToolSpec` one above it, deferred when this was
+written and taken since. Six of its fields are `derived`
 and the reader fills them: a hand-built spec writing `tools=("csv_profile::profile",)`
 gets an empty `tool_sources`, so `Offering.refuse_moved` checks nothing and a stale
 path claim that a mapping would have caught passes in silence. Publishing the type

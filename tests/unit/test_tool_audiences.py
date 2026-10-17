@@ -8,15 +8,20 @@ from typing import Any
 import pytest
 import yaml
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.tools import StructuredTool, tool
+from langchain_core.tools import tool
 
-import kingfisher
+from kingfisher import ToolSpec
 from kingfisher.core.access.capabilities import ALL
 from kingfisher.core.access.source_ids import AccessError, parse
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.recorder import Audiences
-from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository, ToolError
-from kingfisher.core.definitions.tools.spec import own_audience
+from kingfisher.core.definitions.tools.catalogue import (
+    CarriedTools,
+    LocalToolRepository,
+    ToolError,
+    found_in,
+)
+from kingfisher.core.definitions.tools.spec import tool_name
 from kingfisher.core.inventory import inventory
 from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.service import Kingfisher
@@ -26,7 +31,7 @@ from tests.conftest import tools_dir
 
 #: `line_count` admits A by itself, and nothing in an agent file says so.
 TOOL = '''
-import kingfisher
+from kingfisher import ToolSpec
 
 
 def line_count(path: str) -> str:
@@ -34,8 +39,42 @@ def line_count(path: str) -> str:
     return "0"
 
 
-TOOLS = [kingfisher.tool(line_count, source_ids=["A"])]
+TOOLS = [ToolSpec(line_count, source_ids=["A"])]
 '''
+
+#: The same lock on a `@tool` object and on a `BaseTool` instance.
+OTHER_FORMS = {
+    "decorated": '''
+from langchain_core.tools import tool
+
+from kingfisher import ToolSpec
+
+
+@tool
+def line_count(path: str) -> str:
+    """Count the lines in a text file."""
+    return "0"
+
+
+TOOLS = [ToolSpec(line_count, source_ids=["A"])]
+''',
+    "class": '''
+from langchain_core.tools import BaseTool
+
+from kingfisher import ToolSpec
+
+
+class LineCount(BaseTool):
+    name: str = "line_count"
+    description: str = "Count the lines in a text file."
+
+    def _run(self, path: str) -> str:
+        return "0"
+
+
+TOOLS = [ToolSpec(LineCount(), source_ids=["A"])]
+''',
+}
 
 #: Open to A and B, granting the tool by its bare name.
 AGENT = """name: surveyor
@@ -78,46 +117,75 @@ def built(kf: Kingfisher, held: tuple[str, ...]) -> list[str]:
         catalogue=kf.catalogue,
         checkpointer=None,
     )
-    return [getattr(t, "name", "") for t in assembled.tools or ()]
+    return [tool_name(t) for t in assembled.tools or ()]
 
 
-# -- what `kingfisher.tool` makes ------------------------------------------------
+# -- what the loader makes of a `ToolSpec` ---------------------------------------------
 
 
-def test_the_tool_is_a_langchain_tool_whose_audience_is_not_in_its_metadata():
-    """Kept in `metadata`, the audience would ride along into every callback."""
-    made = kingfisher.tool(count, source_ids=["A", {"B", "Q"}])
+def found(entry: Any) -> Any:
+    """One `TOOLS` entry as the loader records it."""
+    return found_in(entry, where="count.py", holder="TOOLS")
 
-    assert isinstance(made, StructuredTool)
-    assert made.name == "count"
-    assert made.metadata is None
-    assert own_audience(made) == ("A", frozenset({"B", "Q"}))
+
+def test_the_audience_is_on_the_record_and_never_on_the_tool():
+    """Kept on the tool, in `metadata` or beside it, the audience would ride along into
+    every callback.
+    """
+    decorated = tool(count)
+    one = found(ToolSpec(decorated, source_ids=["A", {"B", "Q"}]))
+
+    assert one.tool is decorated
+    assert one.source_ids == ("A", frozenset({"B", "Q"}))
+    assert decorated.metadata is None
+    assert "Q" not in repr(vars(decorated))
 
 
 def test_the_audience_never_reaches_a_callback():
-    """A source id is who may reach data, and a trace is somewhere else entirely."""
+    """A source id is who may reach data, and a trace is somewhere else entirely. Renamed,
+    so the tool that runs is the one the loader made rather than the author's.
+    """
     seen: list[Any] = []
 
     class Spy(BaseCallbackHandler):
         def on_tool_start(self, serialized: Any, input_str: str, **kwargs: Any) -> None:
             seen.append((serialized, input_str, kwargs))
 
-    made = kingfisher.tool(count, source_ids=["payroll_zone"])
+    made = found(ToolSpec(count, name="tally", source_ids=["payroll_zone"])).tool
     made.invoke({"path": "x"}, config={"callbacks": [Spy()]})
 
     assert seen, "the spy saw no call, so it asserts nothing"
     assert "payroll_zone" not in repr(seen)
 
 
-def test_a_tool_kingfisher_did_not_make_admits_whoever_its_agent_admits():
-    assert own_audience(tool(count)) == ALL
-    assert own_audience(count) == ALL
+@pytest.mark.parametrize("entry", [count, tool(count), ToolSpec(count, source_ids=["*"])],
+                         ids=["plain", "decorated", "star"])
+def test_a_bare_tool_admits_whoever_its_agent_admits(entry):
+    """A bare entry read as shut to someone would close every tool written before
+    `ToolSpec` existed the moment `source_ids.yaml` appeared.
+    """
+    one = found(entry)
+
+    assert one.source_ids == ALL
+    assert one.datazone is None
 
 
-def test_an_audience_that_cannot_be_read_is_refused_naming_the_tool():
+def test_an_audience_that_cannot_be_read_is_refused_naming_the_file(tmp_path):
     """The reader a definition's own line goes through, so the two cannot drift."""
-    with pytest.raises(ToolError, match=r"tool 'count'.*write \{a, b\}"):
-        kingfisher.tool(count, source_ids=[["a", "b"]])
+    (tmp_path / "count.py").write_text(
+        TOOL.replace('source_ids=["A"]', 'source_ids=[["a", "b"]]'), encoding="utf-8"
+    )
+
+    with pytest.raises(ToolError, match=r"^count\.py: tool 'line_count'.*write \{a, b\}"):
+        _ = LocalToolRepository(tmp_path).found
+
+
+def test_an_empty_audience_is_refused_rather_than_read_as_nobody():
+    """`[]` read as nobody is a tool nobody can use and nothing reports, the way YAML
+    refuses `source_ids: []` on a definition.
+    """
+    with pytest.raises(ToolError, match=r"count\.py: tool 'count'.*empty, which would mean nobody"):
+        found(ToolSpec(count, source_ids=[]))
 
 
 # -- read off the catalogue --------------------------------------------------------
@@ -126,16 +194,16 @@ def test_an_audience_that_cannot_be_read_is_refused_naming_the_tool():
 def test_the_loader_copies_the_audience_into_the_catalogue(tmp_path):
     (tmp_path / "line_count.py").write_text(TOOL, encoding="utf-8")
 
-    (found,) = LocalToolRepository(tmp_path).found
+    (one,) = LocalToolRepository(tmp_path).found
 
-    assert found.source_ids == ("A",)
+    assert one.source_ids == ("A",)
 
 
 def test_a_tool_a_subagent_carries_keeps_its_audience_too():
     """The second loader: a portable declaration's tools arrive as objects, not files."""
-    (found,) = CarriedTools(tools=(kingfisher.tool(count, source_ids=["A"]),), source="x").found
+    (one,) = CarriedTools(tools=(ToolSpec(count, source_ids=["A"]),), source="x").found
 
-    assert found.source_ids == ("A",)
+    assert one.source_ids == ("A",)
 
 
 # -- honoured wherever a grant is ---------------------------------------------------
@@ -147,6 +215,18 @@ def test_a_caller_the_tool_shuts_out_does_not_get_it_from_an_agent_that_grants_i
     """Driven through the real builder: B opens `surveyor`, which names the tool, and
     the tool itself admits only A.
     """
+    kf = Kingfisher(policied, sessions=LocalSessions())
+
+    assert "line_count" in built(kf, ("A",)), "the control: A is admitted"
+    assert "line_count" not in built(kf, ("B",))
+
+
+@pytest.mark.parametrize("form", sorted(OTHER_FORMS))
+def test_a_lock_on_a_decorated_or_class_tool_holds_like_one_on_a_function(policied, form):
+    """`kingfisher.tool` took only a plain function, so a `@tool` object or a `BaseTool`
+    instance had no way to say who may use it and reached every caller its agent did.
+    """
+    (tools_dir(policied) / "line_count.py").write_text(OTHER_FORMS[form], encoding="utf-8")
     kf = Kingfisher(policied, sessions=LocalSessions())
 
     assert "line_count" in built(kf, ("A",)), "the control: A is admitted"
@@ -216,7 +296,7 @@ def test_a_saved_result_is_stamped_no_wider_than_its_tool():
 
 #: A portable subagent carrying the tool itself, so it arrives as an object, not a file.
 CARRIER = '''
-import kingfisher
+from kingfisher import ToolSpec
 
 
 def count(path: str) -> str:
@@ -228,7 +308,7 @@ SUBAGENTS = [{
     "name": "counter",
     "description": "Counts lines.",
     "system_prompt": "You count.",
-    "tools": [kingfisher.tool(count, source_ids=["A"])],
+    "tools": [ToolSpec(count, source_ids=["A"])],
 }]
 '''
 
@@ -279,11 +359,7 @@ def test_an_unrestricted_grant_still_gets_an_allowlist_without_the_tool():
     from kingfisher.core.agent.kinds.tools import _ToolSurface
     from kingfisher.core.definitions.tools.spec import FoundTool, Offering
 
-    found = (
-        FoundTool(
-            tool=kingfisher.tool(count, source_ids=["A"]), source="count.py", source_ids=("A",)
-        ),
-    )
+    found = (FoundTool(tool=count, source="count.py", source_ids=("A",)),)
     surface = _ToolSurface(
         offering=Offering.of(found, builtin=("read_file",)),
         asked=Capabilities(),
@@ -307,7 +383,7 @@ def test_a_callers_listing_names_no_own_tool_the_build_holds_back(policied, tool
     subagents = policied.catalogue_roots["subagents"]
     subagents.mkdir(parents=True, exist_ok=True)
     (subagents / "counter.py").write_text(
-        CARRIER.replace("def count(", f"def {tool}(").replace("tool(count,", f"tool({tool},"),
+        CARRIER.replace("def count(", f"def {tool}(").replace("Spec(count,", f"Spec({tool},"),
         encoding="utf-8",
     )
     (policied.catalogue_roots["agents"] / "surveyor.yaml").write_text(

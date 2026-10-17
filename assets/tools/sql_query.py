@@ -25,7 +25,7 @@ from pathlib import Path
 
 from langchain_core.tools import tool
 
-import kingfisher
+from kingfisher import ToolSpec
 
 #: The one database this deployment exposes. Point it wherever yours lives --
 #: an absolute host path, and still a host path after tool *arguments* stopped
@@ -190,7 +190,8 @@ def sql_query(statement: str) -> str:
     return (out.getvalue() + note).rstrip("\n")
 
 
-# The database is `sales_db`, so the tool says so rather than every agent that grants
-# it: an agent that forgot the line would hand the database to whoever opened it. An
-# agent's own entry can still narrow this further; nothing it writes can widen it.
-TOOLS = [sql_tables, kingfisher.tool(sql_query, source_ids=["sales_db"])]
+# The database is `sales_db`, so the tool's own `ToolSpec` says so rather than every
+# agent that grants it: an agent that forgot the line would hand the database to whoever
+# opened it. An agent's own entry can still narrow this further; nothing it writes can
+# widen it.
+TOOLS = [sql_tables, ToolSpec(sql_query, source_ids=["sales_db"])]

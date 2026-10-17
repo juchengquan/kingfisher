@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from langchain_core.tools import BaseTool, tool
 
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 
@@ -32,7 +33,11 @@ AWKWARD = [
 
 @pytest.fixture
 def tools(shipped):
-    return {tool_name(t): t for t in LocalToolRepository(shipped / "tools").tools}
+    # A plain function is made a tool as the graph makes one, so all three are invoked alike.
+    return {
+        tool_name(t): t if isinstance(t, BaseTool) else tool(t)
+        for t in LocalToolRepository(shipped / "tools").tools
+    }
 
 
 def _globals(tool: Any) -> dict[str, Any]:

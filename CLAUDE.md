@@ -98,11 +98,12 @@ record of it, and it stays however short the rest gets.
 imports against `THIRD_PARTY`, one entry per area, deny by default: the flat
 modules of `core/` take only `yaml`, and the agent runtime is reachable from
 `core/agent/`, which builds the graph, from `core/session/`, which runs a turn on
-it, from `plugins/`, which builds kingfisher's own sessions on it, and from the two
+it, from `plugins/`, which builds kingfisher's own sessions on it, and from the three
 kinds that must name its types --
-`core/definitions/skills`, which hands a repository to the lister that reads it, and
+`core/definitions/skills`, which hands a repository to the lister that reads it,
+`core/definitions/tools`, which gives a tool the name its `ToolSpec` writes, and
 `core/definitions/middlewares`, which refuses a class that is not an
-`AgentMiddleware`. The other three kinds grant nothing. Adding a foreign
+`AgentMiddleware`. The other two kinds grant nothing. Adding a foreign
 dependency means editing that table, not working around it. No test reads this
 paragraph against that table, so this is the one place the two can drift apart --
 re-read it when the table moves.

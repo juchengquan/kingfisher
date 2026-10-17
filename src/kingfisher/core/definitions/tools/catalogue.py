@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.core.definitions.fields import Reader
 from kingfisher.core.definitions.importing import (
     PACKAGE_MARKER,
     Export,
@@ -14,13 +16,7 @@ from kingfisher.core.definitions.importing import (
     exported_from,
     modules_in,
 )
-from kingfisher.core.definitions.tools.spec import (
-    FoundTool,
-    named,
-    own_audience,
-    own_datazone,
-    tool_name,
-)
+from kingfisher.core.definitions.tools.spec import FoundTool, ToolSpec, named, tool_name
 
 if TYPE_CHECKING:
     pass
@@ -75,10 +71,77 @@ def refuse_untoollike(tool: Any, *, where: str, holder: str) -> None:
         raise ToolError(msg)
 
 
+def found_in(entry: Any, *, where: str, holder: str) -> FoundTool:
+    """One entry of `TOOLS`, or of a definition's carried tools, as the catalogue keeps it.
+
+    A bare tool is read as `ToolSpec(tool)`, open to everyone.
+    """
+    spec = entry if isinstance(entry, ToolSpec) else ToolSpec(entry)
+    refuse_untoollike(spec.tool, where=where, holder=holder)
+    tool = _as_named(spec, where=where)
+    read = Reader(source=f"{where}: tool {tool_name(tool)!r}", error=ToolError)
+    return FoundTool(
+        tool=tool,
+        source=where,
+        source_ids=read.source_ids(spec.source_ids),
+        datazone=read.datazone(spec.datazone),
+    )
+
+
+def _as_named(spec: ToolSpec, *, where: str) -> Any:
+    """The tool under the name and description its spec gives, or as it was written."""
+    wanted = {
+        key: value
+        for key, value in (("name", spec.name), ("description", spec.description))
+        if value is not None
+    }
+    if not wanted:
+        return spec.tool
+    original = tool_name(spec.tool)
+    for key, value in wanted.items():
+        if not isinstance(value, str) or not value.strip():
+            msg = (
+                f"{where}: the ToolSpec for {original!r} gives {key}={value!r} -- write "
+                f"the {key} itself, or leave it out to keep the tool's own"
+            )
+            raise ToolError(msg)
+
+    # Deferred: the command imports this module before it knows which verb it runs.
+    from langchain_core.tools import BaseTool, StructuredTool  # noqa: PLC0415
+
+    tool = spec.tool
+    try:
+        if isinstance(tool, BaseTool):
+            # A copy, so the object keeps its own name wherever else its author uses it.
+            made = tool.model_copy(update=wanted)
+        else:
+            asynchronous = inspect.iscoroutinefunction(tool)
+            made = StructuredTool.from_function(
+                func=None if asynchronous else tool,
+                coroutine=tool if asynchronous else None,
+                name=spec.name,
+                description=spec.description,
+            )
+    except ValueError as exc:
+        changed = " and ".join(wanted)
+        msg = f"{where}: tool {original!r} cannot take its ToolSpec's {changed} -- {exc}"
+        raise ToolError(msg) from exc
+    # Not redundant: a property inherited ahead of `BaseTool` wins over what a copy holds.
+    if kept := [key for key, value in wanted.items() if getattr(made, key) != value]:
+        msg = (
+            f"{where}: tool {original!r} still answers with its own {' and '.join(kept)} "
+            f"after its ToolSpec gave another -- {type(tool).__name__} computes it, as a "
+            f"property does, so a copy cannot change it. Set it on the class instead"
+        )
+        raise ToolError(msg)
+    return made
+
+
 @dataclass(frozen=True)
 class CarriedTools:
     """Tools a definition brought with it, offered as a repository like any other."""
 
+    #: Each a `ToolSpec` or a bare tool, as a module's `TOOLS` holds them.
     tools: tuple[Any, ...]
     #: What a `where::what` reference names these by: a label, never a path, since there
     #: is no file to open.
@@ -89,22 +152,14 @@ class CarriedTools:
         """Every tool carried here, checked the way a module's are."""
         seen: set[str] = set()
         entries: list[FoundTool] = []
-        for tool in self.tools:
-            refuse_untoollike(tool, where=self.source, holder="bundle tools")
-            name = tool_name(tool)
-            if name in seen:
+        for entry in self.tools:
+            one = found_in(entry, where=self.source, holder="bundle tools")
+            if one.name in seen:
                 # Two tools of one name here have no second source to tell them apart.
-                msg = f"{self.source}: tool {name!r} is carried twice by this definition"
+                msg = f"{self.source}: tool {one.name!r} is carried twice by this definition"
                 raise ToolError(msg)
-            seen.add(name)
-            entries.append(
-                FoundTool(
-                    tool=tool,
-                    source=self.source,
-                    source_ids=own_audience(tool),
-                    datazone=own_datazone(tool),
-                )
-            )
+            seen.add(one.name)
+            entries.append(one)
         return tuple(entries)
 
     @property
@@ -138,22 +193,14 @@ class LocalToolRepository:
             # package keeps its trailing slash so it does not read as a missing file.
             where = str(path.relative_to(directory)) + ("/" if path.is_dir() else "")
 
-            for tool in exported_from(path, where=where, declares=DECLARES):
-                refuse_untoollike(tool, where=where, holder=EXPORT)
-                name = tool_name(tool)
-                if name in claimed and claimed[name] == where:
+            for entry in exported_from(path, where=where, declares=DECLARES):
+                one = found_in(entry, where=where, holder=EXPORT)
+                if claimed.get(one.name) == where:
                     # Only within one file: across files, the source tells them apart.
-                    msg = f"{where}: tool {name!r} is defined twice in this file"
+                    msg = f"{where}: tool {one.name!r} is defined twice in this file"
                     raise ToolError(msg)
-                claimed[name] = where
-                found.append(
-                    FoundTool(
-                        tool=tool,
-                        source=where,
-                        source_ids=own_audience(tool),
-                        datazone=own_datazone(tool),
-                    )
-                )
+                claimed[one.name] = where
+                found.append(one)
 
         return tuple(found)
 
