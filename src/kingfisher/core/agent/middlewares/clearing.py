@@ -14,6 +14,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately
 from langgraph.types import Command
 
+from kingfisher.core.agent.middlewares.cut_replies import NOT_RUN
 from kingfisher.core.agent.middlewares.recorder import _arguments
 from kingfisher.core.agent.models import summarizer_trigger
 from kingfisher.core.definitions.subagents import TASK_TOOL
@@ -66,11 +67,13 @@ _TEXT_HANDLE = re.compile(
 
 #: The ways a result says it failed once the transcript has dropped its status, which a
 #: replayed result has: a file tool's error, a call that never finished or never ran
-#: (deepagents' `PatchToolCallsMiddleware`), and a command that exited non-zero.
+#: (deepagents' `PatchToolCallsMiddleware`), a command that exited non-zero, and a call
+#: refused because the reply was cut off writing it.
 _FAILED = re.compile(
     r"\AError"
     r"|\ATool call \S+ with id \S+ (did not complete|could not be executed)"
-    r"|^\[Command failed with exit code -?\d+\]$",
+    r"|^\[Command failed with exit code -?\d+\]$"
+    rf"|\A{re.escape(NOT_RUN)}",
     re.MULTILINE,
 )
 

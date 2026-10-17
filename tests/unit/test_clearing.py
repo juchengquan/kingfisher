@@ -34,6 +34,7 @@ from kingfisher.core.agent.middlewares.clearing import (
     ResultClearing,
     high_mark,
 )
+from kingfisher.core.agent.middlewares.cut_replies import _refusal
 from kingfisher.core.agent.middlewares.recorder import (
     UNRECORDED,
     _arguments,
@@ -534,6 +535,13 @@ def test_text_a_reply_carries_twice_is_cleared_in_both():
 # -- what is never cleared -----------------------------------------------------------
 
 
+def _refused() -> str:
+    """The text of a call refused for being cut off, as `CutReplies` writes it."""
+    spent = {"input_tokens": 1, "output_tokens": 2_000, "total_tokens": 2_001}
+    cut = AIMessage(content="", usage_metadata=spent)
+    return _refusal(cut, {"id": "x", "name": "write_file"}).text
+
+
 def test_what_exists_nowhere_else_or_says_it_failed_is_never_cleared():
     """An inline script, a subagent's answer and what was said exist nowhere else, and a
     failure is what stops the same call being made again. A failed write's text was
@@ -555,6 +563,9 @@ def test_what_exists_nowhere_else_or_says_it_failed_is_never_cleared():
             "Tool call write_file with id x did not complete - no result was recorded.",
         ),
         talk.call("execute", {"command": "pytest"}, BIG + "\n[Command failed with exit code 1]"),
+        # Measured: a turn later, a refusal read as a file tool's result was cleared to a
+        # handle telling the agent to call `write_file` again to see the file.
+        talk.call("write_file", {"file_path": "/outputs/r.md", "content": BIG}, _refused()),
     ]
     clearable = talk.call("web_search", {"query": "fine"}, _text("fine"))
     talk.pad()
