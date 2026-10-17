@@ -280,7 +280,7 @@ What decides it is that the existing message does not merely under-inform: it
 tells the operator to raise `KINGFISHER_RECURSION_LIMIT`, and they will, and
 they will pay for a longer failure.
 
-It is decided where `service.py` catches `runtime.OutOfSteps`, and needs its own
+It is decided where `core/session/running.py` catches `runtime.OutOfSteps`, and needs its own
 `cut_short` text beside `out_of_steps` in `core/session/turn.py`, naming the
 schema rather than the limit. Nothing else has to learn it:
 `RunResult.completed` compares against `end_turn` alone, and

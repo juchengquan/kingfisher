@@ -16,7 +16,7 @@ from kingfisher.core.interfaces import CommandResult
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT
 from kingfisher.core.reporting import opening_events
 from kingfisher.core.request import Request
-from kingfisher.core.service import refused_credentials
+from kingfisher.core.session.running import refused_credentials
 from kingfisher.core.session.steps import drive
 from kingfisher.core.session.turn import turn_message
 from kingfisher.plugins import LocalSessions, backend_at
@@ -686,6 +686,7 @@ def test_a_turn_translates_a_rejected_key_rather_than_raising_the_providers_erro
 def _snapshot_reads(monkeypatch) -> list[Path]:
     """Every read of a session's pinned agent, as they happen."""
     from kingfisher.core import service as service_module
+    from kingfisher.core.session import preparation
 
     seen: list[Path] = []
     real = service_module.agent_started_with
@@ -694,7 +695,9 @@ def _snapshot_reads(monkeypatch) -> list[Path]:
         seen.append(session_dir)
         return real(session_dir)
 
+    # Both readers: `_agent_for` on `Kingfisher`, and `_prepare_steps` on `Preparation`.
     monkeypatch.setattr(service_module, "agent_started_with", counting)
+    monkeypatch.setattr(preparation, "agent_started_with", counting)
     return seen
 
 
@@ -718,18 +721,18 @@ def test_a_turn_resolves_its_agent_once(cfg, monkeypatch):
     the withheld report -- asks for the spec at all. Without one it never did, so a
     turn here would count one either way and this would pass against the defect.
     """
-    from kingfisher.core import service as service_module
+    from kingfisher.core.session import preparation
 
     service = Kingfisher(_policied(cfg), sessions=LocalSessions())
     reads = _snapshot_reads(monkeypatch)
     reported: list[object] = []
-    real = service_module.withheld_by_kind
+    real = preparation.withheld_by_kind
 
     def spying(*args, **kwargs):
         reported.append(kwargs.get("agent"))
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(service_module, "withheld_by_kind", spying)
+    monkeypatch.setattr(preparation, "withheld_by_kind", spying)
 
     # The first event is everything before the model is reached, which is where
     # admission happens and the only part of a turn this is about.
@@ -768,20 +771,20 @@ def test_a_supplied_graph_under_a_policy_still_resolves_one(cfg, monkeypatch):
     still filters by what the agent declares, so under a policy the spec is asked for
     even though no build wanted it.
     """
-    from kingfisher.core import service as service_module
+    from kingfisher.core.session import preparation
 
     service = Kingfisher(
         _policied(cfg), graph=StubAgent("ok"), sessions=LocalSessions()
     )
     reads = _snapshot_reads(monkeypatch)
     reported: list[object] = []
-    real = service_module.withheld_by_kind
+    real = preparation.withheld_by_kind
 
     def spying(*args, **kwargs):
         reported.append(kwargs.get("agent"))
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(service_module, "withheld_by_kind", spying)
+    monkeypatch.setattr(preparation, "withheld_by_kind", spying)
 
     service.run(Request("go", agent="only"), source_ids=("A",))
 

@@ -6728,10 +6728,17 @@ Left whole after measuring:
   - `core/definitions/subagents/spec.py`: a new field lands in three of its lists in one
     commit, and an earlier change kept them together on purpose.
 
-**`core/service.py` is left whole for now, to revisit.** Since `Kingfisher` was split into
-mixins, the two there are, `SessionMethods` and `Disposal`, still change with `service.py`
-in about three commits of four. The best full cut, `Opening` and `Driving` mixins in
-`core/session/`, would have made 22 of the last 83 commits open two or three files.
+**`core/service.py` is three files, on the maintainer's call.** `Kingfisher` keeps setting
+up and building the agent. `Preparation`, in `core/session/preparation.py`, is everything a
+turn does before its agent runs; `Running`, in `core/session/running.py`, is `run`, `stream`
+and their async twins, and the settling after. History did not ask for it: of the last 69
+commits on `service.py`, moves left out, 28 stayed inside one of its parts, and 19 of the 27
+touching the opening half touched another part too -- about where `cli/__main__.py` and
+`core/inventory.py` were left whole. What decided it is parallel work. Of 11 pairs of pull
+requests open at once on `service.py`, 6 edited places apart in the one file; cut this way,
+9 would have edited separate files. The cost is that most changes to a turn open two files,
+and that each mixin declares what it borrows from `Kingfisher`, which `ty` holds. A move and
+not an edit: each of the 43 definitions has the tree it had in `service.py`. *(2026-10-17.)*
 
 **Grouped by what a class is, for whoever is looking.** "What does kingfisher wrap an agent
 in" is one package, `core/agent/middlewares/`, held through bases by
