@@ -542,7 +542,8 @@ def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session
     # asserted an empty list, which was the defect: deepagents hands this subagent the
     # agent's own tools, and it held them with nothing wrapped around them.
     assert kinds == [
-        "CutReplies", "ModelUnavailableGuard", "HostPathGuard", "LargePdfGuard", "ShellPaths"
+        "CutReplies", "ModelUnavailableGuard", "HostPathGuard", "LargePdfGuard", "ShellPaths",
+        "FileTools",
     ], kinds
 
 
@@ -788,6 +789,7 @@ def test_every_graph_holding_the_workspace_tools_carries_the_same_guards(
         "HostPathGuard",
         "LargePdfGuard",
         "ShellPaths",
+        "FileTools",
         "WorkspaceToolErrors",
         "WorkspaceToolPaths",
     ]

@@ -18,6 +18,13 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `read_file` reads 1,000 lines unless told otherwise, after #856
+
+- **A `read_file` call naming no `limit` reads up to 1,000 lines**, where deepagents
+  reads 100, and every graph's model is told so and shown 1,000 as the default. A limit
+  the model names is unchanged. A deployment's middleware reading `read_file`'s
+  arguments sees `limit` filled in.
+
 ## A model that cannot answer now, after #853
 
 - **A turn can end with `stop_reason: model_unavailable`.** The provider could not serve
