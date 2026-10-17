@@ -6454,9 +6454,22 @@ nothing: each kind is 5.2ms and 71 modules and `core.environment` 34ms, where
     folder, it went on passing over one that no longer held the owner.
   - The two plugin rules above.
 
-  Gone with what they described: the layer rules, `HARNESS_EDGES`, `WITNESSES`, and the
-  domain rule, whose guarantee that the records touch nothing outside the process is
-  `RECORDS` now.
+  Gone with what they described: the layer rules, `HARNESS_EDGES`, and the domain rule,
+  whose guarantee that the records touch nothing outside the process is `RECORDS` now.
+
+  *`WITNESSES` went with them and should not have.* It was filed beside the layer rules
+  and had nothing to do with them: it keyed on bare public names -- `Kingfisher`,
+  `Request` -- with a reason each, held `_EXPORTS` against that table in both
+  directions, and would have survived this move untouched. Two entries here go on
+  stating the policy, that a new name in `__all__` needs a witness and that a `Runnable`
+  adapter needs one first, so for a week the record asked for a witness and nothing
+  checked. Nothing had slipped through -- measured, the root door *shrank* by the seven
+  names that moved to `kingfisher.plugins`, and nothing was added -- so what was lost was
+  the next name rather than any name. Restored on 2026-10-17, keyed by `LAZY_TABLES` so
+  that a third door cannot open without a table of its own, and with a third witness
+  beside `document` and `embedder`: `interface`, for the five a plugin implements, which
+  a second rule holds to `core/interfaces.py` so the word is a claim about the tree and
+  not a label. *(2026-10-17, from an architecture review.)*
 
 **Not a portability claim.** Kingfisher is an adapter over deepagents, and supporting
 another framework is out of scope rather than scheduled. Nothing declares what a runtime
