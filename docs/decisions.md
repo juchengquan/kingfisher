@@ -4708,6 +4708,21 @@ reads back trusts them, so that is accepted rather than fenced.
 and `conversation_history/` until it is reaped. A stub from before names the old path,
 and the file is still there to read. *(2026-10-11.)*
 
+**Not built: refusing a save outside the session's folders.** A file tool handed a bare
+`result.json` saves it at the top of the session, where nothing is returned, and the
+turn reports success. A guard refusing such a save, and naming `/outputs` instead, was
+built once beside a layout change that was closed unmerged, and was to be rebuilt. It
+was measured first, on 2026-10-17: two tasks that never said where to save, 21 turns on
+the default model, 68 file-tool saves -- 16 in `/outputs`, 51 in `/scratchpad`, one host
+path refused and corrected, none anywhere else -- and nothing at the top of any session
+from the shell either. The one turn that delivered nothing ran out of tool calls with
+its result still in `/scratchpad`, which no guard on saves would have changed. The
+occurrence that prompted the guard predated `system.md` saying nothing else in the
+session is the agent's to write. And the reason it had been a middleware rather than a
+refusal in the backend is gone: deepagents' own files are in the scratchpad now, so
+nothing kingfisher runs writes the session's top. Reopen it on a turn that strays, not
+on the argument.
+
 ## Wiring a store
 
 *Much of this was reversed on 2026-09-30: `SessionStore` and `SessionRoot` are gone,
