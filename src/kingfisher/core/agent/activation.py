@@ -16,10 +16,9 @@ from kingfisher.core.access.capabilities import (
     refuse_unoffered,
 )
 from kingfisher.core.access.reach import handed_work_by, within_reach
-from kingfisher.core.agent.backend import bundled_skill_mounts
 from kingfisher.core.agent.kinds.subagents import indistinct
 from kingfisher.core.config import ConfigError
-from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.catalogue import Definitions, bundled_skill_mounts
 from kingfisher.core.definitions.skills import registry as skill_registry
 from kingfisher.core.definitions.skills.registry import SkillRegistry
 from kingfisher.core.definitions.subagents.rules import (

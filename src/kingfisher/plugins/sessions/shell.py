@@ -18,7 +18,6 @@ from deepagents.backends.protocol import ExecuteResponse
 from kingfisher.core.agent.prompting import ShellPrompt
 from kingfisher.core.config import Config
 from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
 from kingfisher.core.interfaces import CommandRunner
 from kingfisher.plugins.sessions.sandbox import confinement
 
@@ -51,7 +50,7 @@ def shell_env(
         "TMPDIR": str(session_dir / cfg.layout.scratchpad),
     }
     skills = (catalogue or Definitions.from_config(cfg)).skills
-    env["KINGFISHER_SKILLS"] = str(skills_view(skills, cfg.kingfisher_dir))
+    env["KINGFISHER_SKILLS"] = str(skills_view(skills.root, skills.mounts, cfg.kingfisher_dir))
     return env
 
 
@@ -61,18 +60,17 @@ def shell_env(
 SKILLS_VIEW = "skills-view"
 
 
-def skills_view(skills: LocalSkillRepository, kingfisher_dir: Path) -> Path:
+def skills_view(root: Path, mounts: Mapping[str, Path], kingfisher_dir: Path) -> Path:
     """Where the shell finds the catalogue, so `/skills/X` is `$KINGFISHER_SKILLS/X`.
 
     The catalogue itself when nothing is mounted. With mounts, a directory of
     symlinks: one per entry of the catalogue and one per mount under its label,
-    which `refuse_unmountable` has already made sure cannot collide.
+    which a `Definitions` refuses to let collide when it is built.
     """
-    if not skills.mounts:
-        return skills.root
-    root = skills.root
+    if not mounts:
+        return root
     links = {e.name: e.absolute() for e in sorted(root.iterdir())} if root.is_dir() else {}
-    links.update({label: mount.absolute() for label, mount in skills.mounts.items()})
+    links.update({label: mount.absolute() for label, mount in mounts.items()})
     # Named for what it holds, so a catalogue that gained a skill gets a new view
     # rather than a stale one, and two turns building the same view build one.
     listing = "\n".join(f"{name}\t{target}" for name, target in sorted(links.items()))

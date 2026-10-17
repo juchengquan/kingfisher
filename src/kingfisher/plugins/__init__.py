@@ -19,6 +19,7 @@ _EXPORTS = {
     "Instructions": "kingfisher.core.interfaces",
     "CommandRunner": "kingfisher.core.interfaces",
     "CommandResult": "kingfisher.core.interfaces",
+    "Definitions": "kingfisher.core.definitions.catalogue",
     "WireFormat": "kingfisher.core.config",
     "Plugins": "kingfisher.core.plugins",
     "ShellPrompt": "kingfisher.core.agent.prompting",
@@ -39,6 +40,7 @@ __all__ = [
     "WIRE_FORMATS",
     "CommandResult",
     "CommandRunner",
+    "Definitions",
     "HostPathError",
     "Instructions",
     "InstructionsFile",
@@ -62,6 +64,7 @@ if TYPE_CHECKING:
     from kingfisher.core.agent.prompting import InstructionsFile as InstructionsFile
     from kingfisher.core.agent.prompting import ShellPrompt as ShellPrompt
     from kingfisher.core.config import WireFormat as WireFormat
+    from kingfisher.core.definitions.catalogue import Definitions as Definitions
     from kingfisher.core.interfaces import CommandResult as CommandResult
     from kingfisher.core.interfaces import CommandRunner as CommandRunner
     from kingfisher.core.interfaces import Instructions as Instructions
