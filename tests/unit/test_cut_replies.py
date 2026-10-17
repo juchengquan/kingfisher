@@ -145,7 +145,9 @@ def _said(cfg: Any) -> dict[str, str]:
 
 ASKED = (
     "Your answer reached the 32,768-token output limit and was cut off. Answer again, "
-    "shorter. Put anything long in a file under /outputs and say where it is."
+    "shorter. If it needs the length, first write the long part to a file under /outputs, "
+    "then answer with a summary and the file's path. Name a file only after you have "
+    "written it."
 )
 
 
@@ -294,7 +296,7 @@ def test_the_file_a_cut_answer_is_pointed_at_is_under_this_deployments_outputs(w
     _turn(cfg, reply(text="The three findings are"), AIMessage("done"))
 
     told = Scripted.heard[1][-1].content
-    assert told.endswith("in a file under /deliverables and say where it is.")
+    assert "to a file under /deliverables, then answer" in told
 
 
 def test_a_subagent_that_gives_up_hands_back_its_cut_answer_marked_and_the_turn_goes_on(

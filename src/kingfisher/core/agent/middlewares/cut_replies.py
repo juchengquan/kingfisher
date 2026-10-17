@@ -145,9 +145,14 @@ class CutReplies(AgentMiddleware):
         write = getattr(first.runtime, "stream_writer", None)
         if write is not None:
             write(cut_off_mark(reply))
+        # The file first, then its path, and no path without the file: told only to put the
+        # long part in a file and say where, a live turn named a file it never wrote, and
+        # told to write it first, one whose question forbade files still named one.
         note = (
             f"Your answer reached {output_limit(reply)} and was cut off. Answer again, "
-            f"shorter. Put anything long in a file under {self.outputs} and say where it is."
+            f"shorter. If it needs the length, first write the long part to a file under "
+            f"{self.outputs}, then answer with a summary and the file's path. Name a file "
+            "only after you have written it."
         )
         return first.override(messages=[*first.messages, _text_of(reply), HumanMessage(note)])
 
