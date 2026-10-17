@@ -26,6 +26,18 @@ The implementation kingfisher uses for an interface when a deployment names none
 have none: a deployment always names them, kingfisher's own included.
 _Avoid_: reference implementation, built-in
 
+### Sessions and turns
+
+**Session**:
+One continuing conversation and the files it keeps, named by its id. Whoever holds the id
+may continue it.
+_Avoid_: thread, conversation id
+
+**Turn**:
+One request carried out in one session, from start to finish. A session runs one turn at a
+time, and a turn may stop partway to wait for an approval.
+_Avoid_: run, step, call
+
 ### The plugins
 
 **Sessions**:
