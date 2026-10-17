@@ -12,7 +12,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+from deepagents import create_deep_agent
 from langchain_core.messages import AIMessage
+from langgraph.checkpoint.memory import InMemorySaver
 
 from kingfisher import Kingfisher
 from kingfisher.core.config import Config
@@ -20,7 +23,7 @@ from kingfisher.core.layout import HARNESS, TRANSCRIPT_FILE
 from kingfisher.core.request import Request
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import session_bytes
-from tests.conftest import Through, an_agent
+from tests.conftest import FakeToolCallingModel, Through, an_agent
 from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
 
@@ -263,5 +266,35 @@ def test_a_follow_up_turn_hands_the_model_the_earlier_exchange_once(scripted):
     kf.run(Request("second question", agent="plain", session_id="p"))
 
     said = [str(message.content) for message in Scripted.heard[-1]]
+    assert sum("first question" in text for text in said) == 1, said
+    assert said.count("first answer") == 1, said
+
+
+class _Hearing(FakeToolCallingModel):
+    """A scripted model that keeps what each of its calls was shown."""
+
+    heard: list[list[str]] = []
+
+    def _generate(self, messages, *args, **kwargs):
+        type(self).heard.append([str(message.content) for message in messages])
+        return super()._generate(messages, *args, **kwargs)
+
+
+@pytest.mark.parametrize("saver", [InMemorySaver, None], ids=["its own saver", "no saver"])
+def test_a_pre_built_graph_hands_the_model_the_earlier_exchange_once(cfg, saver):
+    """Compiled with a saver of its own, a supplied graph showed the model every earlier
+    exchange twice; compiled with none, it left no state to write the transcript from and
+    showed it nothing -- both measured."""
+    _Hearing.heard = []
+    model = _Hearing(responses=[AIMessage(content="first answer"), AIMessage(content="second")])
+    graph = create_deep_agent(
+        model=model, tools=None, checkpointer=saver() if saver is not None else None
+    )
+    kf = Kingfisher(cfg, graph=graph, sessions=LocalSessions())
+    kf.run(Request("first question", session_id="g"))
+
+    kf.run(Request("second question", session_id="g"))
+
+    said = _Hearing.heard[-1]
     assert sum("first question" in text for text in said) == 1, said
     assert said.count("first answer") == 1, said

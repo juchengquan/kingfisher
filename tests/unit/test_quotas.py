@@ -13,11 +13,11 @@ from kingfisher.core.request import Request
 from kingfisher.core.session.model import QuotaExceededError
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.folders import session_bytes
-from tests.conftest import start
+from tests.conftest import FakeGraph, start
 from tests.unit.test_run import StubAgent
 
 
-class SlowAgent:
+class SlowAgent(FakeGraph):
     """A turn that keeps taking steps, as a real one can for hours."""
 
     def __init__(self, steps: int = 50) -> None:
@@ -98,7 +98,7 @@ def test_an_ordinary_turn_is_untouched(cfg):
 # -- the step bound -------------------------------------------------------
 
 
-class RunawayAgent:
+class RunawayAgent(FakeGraph):
     """A graph that never stops, as langgraph reports it: by raising."""
 
     def stream(self, state, config, stream_mode=None, subgraphs=False):

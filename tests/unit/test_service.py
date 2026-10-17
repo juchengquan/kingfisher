@@ -24,6 +24,7 @@ from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import (
     FAKE_ENDPOINT,
     OTHER_ENDPOINT,
+    FakeGraph,
     an_agent,
     harness_in,
     start,
@@ -665,7 +666,7 @@ def test_a_turn_translates_a_rejected_key_rather_than_raising_the_providers_erro
     deleted.
     """
 
-    class Rejects:
+    class Rejects(FakeGraph):
         def stream(self, state, config, stream_mode=None, subgraphs=False):
             yield ((), "values", {"messages": []})
             where = f"{FAKE_ENDPOINT.base_url}/v1/messages"

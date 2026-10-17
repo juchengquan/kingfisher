@@ -10,7 +10,7 @@ from kingfisher.core.run import Request, stream
 from kingfisher.core.session import runtime
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
-from tests.conftest import FakeToolCallingModel, start
+from tests.conftest import FakeGraph, FakeToolCallingModel, start
 from tests.unit.test_run import StubAgent
 
 
@@ -144,7 +144,7 @@ def test_a_subagents_values_chunk_is_not_the_runs_answer():
     assert runtime.answer_in((), "values", theirs) == "SUBAGENT PROSE"
 
 
-class _SubagentSpeaksFirst:
+class _SubagentSpeaksFirst(FakeGraph):
     """A subagent finishes, and the turn is cut short before anything else."""
 
     def stream(self, state, config, stream_mode=None, subgraphs=False):

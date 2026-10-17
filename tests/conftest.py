@@ -28,6 +28,17 @@ if TYPE_CHECKING:
     from kingfisher.core.definitions.subagents.spec import SubagentSpec
 
 
+class FakeGraph:
+    """What a stand-in for a compiled graph answers before it is driven.
+
+    The service runs a deployment's graph as a copy on the turn's own saver. A stand-in
+    keeps no saver, so it is its own copy.
+    """
+
+    def copy(self, update=None):
+        return self
+
+
 class FakeToolCallingModel(FakeMessagesListChatModel):
     """A fake model that can be handed to `create_agent`."""
 

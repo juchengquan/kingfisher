@@ -2159,11 +2159,11 @@ def test_the_world_rule_sees_a_read_and_an_import(tmp_path):
 
 
 #: Calls that *change* the filesystem, as opposed to reading it or the
-#: environment. `open` and `replace` are left out because `Session.open` and
-#: `dataclasses.replace` are named the same, and both are legitimate where this
-#: rule runs.
+#: environment. `open`, `replace` and `copy` are left out because `Session.open`,
+#: `dataclasses.replace` and a compiled graph's `copy` are named the same, and all three
+#: are legitimate where this rule runs; `shutil.copy` is refused by its import instead.
 MUTATING_CALLS = frozenset({
-    "mkdir", "rmdir", "rmtree", "copytree", "copyfile", "copy", "move",
+    "mkdir", "rmdir", "rmtree", "copytree", "copyfile", "move",
     "write_text", "write_bytes", "unlink", "touch", "chmod", "rename",
 })
 

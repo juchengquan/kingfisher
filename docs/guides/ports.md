@@ -370,7 +370,8 @@ places a request's inputs, collects what a turn left and takes the turn lock thr
 the sessions you pass — so a graph is refused without them, and one built on
 kingfisher's own passes `sessions=LocalSessions()`. Pass the ones that reach the
 sessions your graph's backend keeps: nothing can check that from outside a compiled
-graph. `run()` and `stream()` take `sessions=` too, and refuse to run without it,
+graph. Whatever saver it was compiled with, each turn runs a copy of it on kingfisher's
+own, empty one: the conversation comes from the transcript, as it does for every agent. `run()` and `stream()` take `sessions=` too, and refuse to run without it,
 with a graph or without.
 
 **What you return is also what a workspace tool is handed.** A tool that asks for
