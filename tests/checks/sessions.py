@@ -15,9 +15,8 @@ from typing import TYPE_CHECKING, Any
 
 from deepagents.backends import FilesystemBackend
 
-from kingfisher.core.agent.permitted_backend import host_path
 from kingfisher.core.definitions.skills import registry as skill_registry
-from kingfisher.plugins import DEFAULT_LAYOUT, Definitions
+from kingfisher.plugins import DEFAULT_LAYOUT, Definitions, host_path
 
 if TYPE_CHECKING:
     from collections.abc import Callable
