@@ -277,10 +277,12 @@ def test_an_unrestricted_grant_still_gets_an_allowlist_without_the_tool():
     """
     from kingfisher.core.access.capabilities import Capabilities
     from kingfisher.core.agent.kinds.tools import _ToolSurface
-    from kingfisher.core.definitions.tools.spec import Found, Offering
+    from kingfisher.core.definitions.tools.spec import FoundTool, Offering
 
     found = (
-        Found(tool=kingfisher.tool(count, source_ids=["A"]), source="count.py", source_ids=("A",)),
+        FoundTool(
+            tool=kingfisher.tool(count, source_ids=["A"]), source="count.py", source_ids=("A",)
+        ),
     )
     surface = _ToolSurface(
         offering=Offering.of(found, builtin=("read_file",)),

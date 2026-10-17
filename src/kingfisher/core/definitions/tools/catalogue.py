@@ -15,7 +15,7 @@ from kingfisher.core.definitions.importing import (
     modules_in,
 )
 from kingfisher.core.definitions.tools.spec import (
-    Found,
+    FoundTool,
     named,
     own_audience,
     own_datazone,
@@ -29,7 +29,7 @@ __all__ = [
     "EXPORT",
     "PACKAGE_MARKER",
     "CarriedTools",
-    "Found",
+    "FoundTool",
     "LocalToolRepository",
     "ToolError",
     "refuse_untoollike",
@@ -85,10 +85,10 @@ class CarriedTools:
     source: str
 
     @cached_property
-    def found(self) -> tuple[Found, ...]:
+    def found(self) -> tuple[FoundTool, ...]:
         """Every tool carried here, checked the way a module's are."""
         seen: set[str] = set()
-        entries: list[Found] = []
+        entries: list[FoundTool] = []
         for tool in self.tools:
             refuse_untoollike(tool, where=self.source, holder="bundle tools")
             name = tool_name(tool)
@@ -98,7 +98,7 @@ class CarriedTools:
                 raise ToolError(msg)
             seen.add(name)
             entries.append(
-                Found(
+                FoundTool(
                     tool=tool,
                     source=self.source,
                     source_ids=own_audience(tool),
@@ -125,13 +125,13 @@ class LocalToolRepository:
     root: Path
 
     @cached_property
-    def found(self) -> tuple[Found, ...]:
+    def found(self) -> tuple[FoundTool, ...]:
         """Every tool this directory defines, with its origin, in a stable order."""
         directory = Path(self.root)
         if not directory.is_dir():
             return ()
 
-        found: list[Found] = []
+        found: list[FoundTool] = []
         claimed: dict[str, str] = {}
         for path in modules_in(directory):
             # Relative to the catalogue, so an error names a file a reader can open; a
@@ -147,7 +147,7 @@ class LocalToolRepository:
                     raise ToolError(msg)
                 claimed[name] = where
                 found.append(
-                    Found(
+                    FoundTool(
                         tool=tool,
                         source=where,
                         source_ids=own_audience(tool),

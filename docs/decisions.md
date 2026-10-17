@@ -1282,7 +1282,7 @@ it spells one in the workspace `./<name>`. *(2026-10-13.)*
 ## Capabilities
 
 **One refusal, with the caller naming itself.** Tool-name rules live in a value
-object, `Offering`, beside `Found` -- not a `Tool` entity. Both were in the domain
+object, `Offering`, beside `FoundTool` -- not a `Tool` entity. Both were in the domain
 when this was written and are in `core.definitions.tools.spec` now, with the tools format. Offered
 names and sources are stored; grants are derived. There is a test that fails when
 a function has no caller outside tests.
@@ -7742,7 +7742,7 @@ of agent beside an `AgentSpec` that already names one. `SpecBase` sits next to t
 
 **Left for now: a `ToolSpec` a tool could be declared as.** Asked after the entry
 above, about the kind that has no spec at all. A tool is exported as an object and
-`Found` pairs it with where it came from; agents, subagents and skills each read a
+`FoundTool` pairs it with where it came from; agents, subagents and skills each read a
 document into one. Feasible was checked by running it rather than reasoned about:
 `StructuredTool.from_function(fn, name=, description=, metadata=, args_schema=)`
 builds a real `BaseTool`, so a declared form translates in one call.
@@ -7755,8 +7755,8 @@ the cost named in `docs/guides/formats.md` and mitigated by the roll-up in
 `kingfisher list`. What is left is `name`, `description` and the callable, which
 `@tool` handles.
 
-It is not a rename of `Found` either. `Found.source` is the one fact the object
-cannot know, and it is the whole of what `Found` adds.
+It is not a rename of `FoundTool` either. `FoundTool.source` is the one fact the object
+cannot know, and it is the whole of what `FoundTool` adds.
 
 The ergonomics are genuinely bad and that is the argument for building it later:
 `@tool` refuses `metadata=`, `extras=` lands on a different attribute and leaves
@@ -7767,10 +7767,14 @@ error and no value.
 **The trigger is the first field kingfisher wants to read off a tool** -- whether one
 writes rather than reads, what it costs, a timeout of its own. None is designed and
 none is asked for. Before that, a spec is a second way to spell `@tool` and every
-`Found` consumer pays for it; after it, the need says what shape the field is and
+`FoundTool` consumer pays for it; after it, the need says what shape the field is and
 there is a caller. Whoever builds it should pick one of `metadata` and `extras` and
 refuse the other, so the trap is decided once rather than by every workspace.
 *(2026-09-18.)*
+
+*Renamed `FoundTool` from `Found`, which said nothing about what was found. It pairs
+with `ToolSpec`, the record a tool file will write: the spec is what the author wrote,
+and a `FoundTool` is what the loader made of it. (2026-10-18.)*
 
 **Left for now: a `TypedDict` for a package writing `SUBAGENTS`.** A portable
 definition is a plain mapping on purpose -- it pins no kingfisher version -- and the

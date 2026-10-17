@@ -24,7 +24,7 @@ from kingfisher.core.definitions.subagents.rules import miscounted, refuse_cycle
 from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.core.definitions.tools.catalogue import ToolError
 from kingfisher.core.definitions.tools.spec import (
-    Found,
+    FoundTool,
     Offering,
     admitted,
     audienced,
@@ -463,7 +463,7 @@ def _access(
     agents: Mapping[str, object],
     subagents: Mapping[str, object],
     tools: Mapping[str, object],
-    named_tools: Mapping[str, Found],
+    named_tools: Mapping[str, FoundTool],
 ) -> tuple[dict[str, Mapping[str, Stated]], AccessReport, dict[str, str]]:
     """What the definitions say, and what restricts nobody."""
     stated = {
@@ -507,7 +507,7 @@ def _reaching(
     return keep
 
 
-def _audienced_tools(resolved: Definitions) -> Mapping[str, Found]:
+def _audienced_tools(resolved: Definitions) -> Mapping[str, FoundTool]:
     """The tools that say who they admit, or none where the catalogue would not walk."""
     try:
         return resolved.audienced_tools
@@ -515,13 +515,13 @@ def _audienced_tools(resolved: Definitions) -> Mapping[str, Found]:
         return {}
 
 
-def _named_tools(resolved: Definitions) -> dict[str, Found]:
+def _named_tools(resolved: Definitions) -> dict[str, FoundTool]:
     """The tools that say who they admit, named as the rest of a listing names them.
 
     A subagent's own under its subagent's name: `audienced_tools` keys it by a file the
     key's folder does not name, which sends a reader to `tools/`.
     """
-    named: dict[str, Found] = {}
+    named: dict[str, FoundTool] = {}
     # Apart, so a bundle that will not load still leaves the catalogue's tools said.
     with suppress(ToolError, CapabilityError):
         named.update(audienced(resolved.tools.found))
@@ -545,7 +545,7 @@ def _shut_out(resolved: Definitions, held: frozenset[str] | None) -> frozenset[s
 
 
 def _builtin_tools(
-    cfg: Config, resolved: Definitions, found: Sequence[Found] | None
+    cfg: Config, resolved: Definitions, found: Sequence[FoundTool] | None
 ) -> tuple[str, ...] | None:
     """The built-in set, asked of the harness that knows how to assemble one."""
     from kingfisher.core.agent.assembly import builtin_tool_names  # noqa: PLC0415

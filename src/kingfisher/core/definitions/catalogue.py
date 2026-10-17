@@ -20,7 +20,7 @@ from kingfisher.core.definitions.subagents.catalogue import LocalSubagentReposit
 from kingfisher.core.definitions.subagents.rules import refuse_miscounted
 from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository, ToolError
-from kingfisher.core.definitions.tools.spec import Found, Offering
+from kingfisher.core.definitions.tools.spec import FoundTool, Offering
 from kingfisher.core.layout import BUNDLED_SKILLS_ROUTE, RESERVED_SKILL_FOLDER, SKILLS_ROUTE
 
 
@@ -110,7 +110,7 @@ class Definitions:
         }
 
     @property
-    def audienced_tools(self) -> Mapping[str, Found]:
+    def audienced_tools(self) -> Mapping[str, FoundTool]:
         """Every tool that says who it admits, the catalogue's and each bundle's.
 
         Keyed by where each lives, so a refusal names the file, not a name two may share.
