@@ -88,7 +88,8 @@ def test_a_subagent_s_evicted_results_land_in_the_scratchpad_too(cfg, session_di
     _with_loud(cfg)
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "lister.yaml").write_text(
-        "name: lister\ndescription: Lists things.\nsystem_prompt: |\n  You list things.\n",
+        'name: lister\ndescription: Lists things.\nbuiltin_tools: ["*"]\ntools: ["*"]\n'
+        "system_prompt: |\n  You list things.\n",
         encoding="utf-8",
     )
     model = _calls_loud()

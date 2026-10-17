@@ -54,15 +54,15 @@ def test_an_agent_taking_every_subagent_lists_every_subagent(cfg):
     character, none of them is a definition, and the agent that reaches the most
     is listed as reaching nothing.
     """
-    from tests.conftest import an_agent
+    from tests.conftest import EVERY_TOOL, an_agent
 
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     for name in ("alpha", "beta"):
         (subagents_dir(cfg) / f"{name}.yaml").write_text(
             f"name: {name}\ndescription: d\nsystem_prompt: |\n  Work.\n", encoding="utf-8"
         )
-    an_agent(cfg, "everything", subagents="['*']")
-    an_agent(cfg, "one", subagents="[alpha]")
+    an_agent(cfg, "everything", subagents="['*']", **EVERY_TOOL)
+    an_agent(cfg, "one", subagents="[alpha]", **EVERY_TOOL)
 
     found = inventory(cfg)
 
@@ -78,20 +78,20 @@ def test_an_agent_lists_the_subagents_it_activates_and_not_their_helpers(cfg):
     narrows a subagent's helpers by what the agent declared. So an agent naming only
     the parent got a subagent with no `task` tool, while the listing said otherwise.
     """
-    from tests.conftest import an_agent
+    from tests.conftest import EVERY_TOOL, an_agent
 
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "reviewer.yaml").write_text(
-        "name: reviewer\ndescription: d\nsubagents: [second-opinion]\n"
-        "system_prompt: |\n  You check figures.\n",
+        'name: reviewer\ndescription: d\nbuiltin_tools: ["*"]\ntools: ["*"]\n'
+        "subagents: [second-opinion]\nsystem_prompt: |\n  You check figures.\n",
         encoding="utf-8",
     )
     (subagents_dir(cfg) / "second-opinion.yaml").write_text(
         "name: second-opinion\ndescription: d\nsystem_prompt: |\n  You answer again.\n",
         encoding="utf-8",
     )
-    an_agent(cfg, "one", subagents="[reviewer]")
-    an_agent(cfg, "both", subagents="[reviewer, second-opinion]")
+    an_agent(cfg, "one", subagents="[reviewer]", **EVERY_TOOL)
+    an_agent(cfg, "both", subagents="[reviewer, second-opinion]", **EVERY_TOOL)
 
     found = inventory(cfg)
 
@@ -191,6 +191,10 @@ def test_a_subagent_catalogue_that_will_not_load_is_carried_too(cfg):
     assert found.builtin_tools  # the build still happened
 
 
+#: Both tool lines at `["*"]`, which a subagent naming a helper needs for `task`.
+STARS = 'builtin_tools: ["*"]\ntools: ["*"]\n'
+
+
 def test_a_delegation_cycle_is_carried_like_any_other_failure(cfg):
     """An inventory that says a workspace is fine while a run refuses it is the failure
     this whole file exists to prevent, and a cycle was exactly that: it is checked
@@ -199,7 +203,7 @@ def test_a_delegation_cycle_is_carried_like_any_other_failure(cfg):
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     for name, helper in (("a", "b"), ("b", "a")):
         (subagents_dir(cfg) / f"{name}.yaml").write_text(
-            f"name: {name}\ndescription: d\nsubagents: [{helper}]\n"
+            f"name: {name}\ndescription: d\n{STARS}subagents: [{helper}]\n"
             f"system_prompt: |\n  Go.\n",
             encoding="utf-8",
         )
@@ -216,7 +220,7 @@ def test_a_workspace_with_no_cycle_reports_none(cfg):
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     for name, helper in (("a", "b"), ("b", "c")):
         (subagents_dir(cfg) / f"{name}.yaml").write_text(
-            f"name: {name}\ndescription: d\nsubagents: [{helper}]\n"
+            f"name: {name}\ndescription: d\n{STARS}subagents: [{helper}]\n"
             f"system_prompt: |\n  Go.\n",
             encoding="utf-8",
         )

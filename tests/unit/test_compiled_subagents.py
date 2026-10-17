@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.core.access.capabilities import Capabilities
+from kingfisher.core.access.capabilities import ALL, Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.definitions.subagents.spec import (
@@ -259,6 +259,18 @@ def test_the_two_required_keys_are_required():
 
         with pytest.raises(SubagentError, match=missing):
             declared(entry, "researcher.py")
+
+
+def test_a_compiled_declaration_naming_no_tools_is_granted_none():
+    """Read as the request's every tool, a forgotten `tools` hands a graph kingfisher
+    never wraps in an allowlist every tool the workspace holds or gains later.
+    """
+    assert declared(_entry(), "researcher.py").tools is None
+
+
+def test_a_compiled_declaration_asks_for_every_tool_with_the_star():
+    """The control: a reader granting nothing whatever was written passes the test above."""
+    assert declared(_entry(tools=["*"]), "researcher.py").tools == ALL
 
 
 def test_the_model_fields_mean_what_they_mean_in_yaml():

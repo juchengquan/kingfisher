@@ -20,10 +20,10 @@ wrong in a way a YAML parser will not catch. Five fields are refused here for
 reasons `NOT_COMPILED` states one by one, and every one of them is a capability
 being given up.
 
-**No `tools:` line, which is the other half of the example.** A compiled
-definition omitting it means `absent=ALL` -- whatever the request granted. This
-subagent reports on what it was handed rather than on a fixed pair, so it is
-useful against any tool set.
+**`tools: ["*"]`, which is the other half of the example.** A compiled
+definition writing it is handed whatever the request granted; leaving the line
+out would hand it nothing. This subagent reports on what it was handed rather
+than on a fixed pair, so it is useful against any tool set.
 
 **The record joins the answer rather than following it.** deepagents returns a
 subagent's result by walking back to the last `AIMessage` with non-empty text,
@@ -148,7 +148,8 @@ SUBAGENTS = [
             "their arguments and whether any failed. Use when the answer will be "
             "checked, or when you need to know whether a check actually happened."
         ),
-        # No `tools:` line on purpose: it reports on whatever the request granted.
+        # Every tool, not a fixed pair: it reports on whatever the request granted.
+        "tools": ["*"],
         #
         # No `model` key, so this runs whatever summoned it. Reporting is
         # cheap work: add `"model": "<one your models.yaml defines>"` to pin it,

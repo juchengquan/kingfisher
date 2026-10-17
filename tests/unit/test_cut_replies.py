@@ -26,7 +26,7 @@ from kingfisher.core.session.runtime import cut_off, output_limit, with_call_arg
 from kingfisher.core.session.transcript import from_json
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
-from tests.conftest import RecordedEvents, an_agent, start, subagents_dir
+from tests.conftest import EVERY_TOOL, RecordedEvents, an_agent, start, subagents_dir
 from tests.unit.scripted import Scripted
 
 #: The output reservation each cut reply here spent, which is what it reached.
@@ -177,7 +177,7 @@ def test_the_limit_is_named_from_what_the_reply_spent():
 
 @pytest.fixture
 def writing(scripted):
-    an_agent(scripted)
+    an_agent(scripted, **EVERY_TOOL)
     start(scripted, "s")
     return scripted
 
@@ -397,9 +397,12 @@ def test_a_subagent_that_gives_up_hands_back_its_cut_answer_marked_and_the_turn_
     ending the turn for it would throw away what the rest of the turn did."""
     subagents_dir(writing).mkdir(parents=True, exist_ok=True)
     (subagents_dir(writing) / "helper.yaml").write_text(
-        "name: helper\ndescription: Helps.\nsystem_prompt: |\n  You help.\n", encoding="utf-8"
+        "name: helper\ndescription: Helps.\n"
+        'builtin_tools: ["*"]\ntools: ["*"]\n'
+        "system_prompt: |\n  You help.\n",
+        encoding="utf-8",
     )
-    an_agent(writing, subagents="[helper]")
+    an_agent(writing, subagents="[helper]", **EVERY_TOOL)
     asked = {"description": "go", "subagent_type": "helper"}
     to_helper = AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}])
 
@@ -449,9 +452,12 @@ def test_a_subagents_cut_answer_is_asked_again_and_marked_as_its_own(writing):
     answer started over."""
     subagents_dir(writing).mkdir(parents=True, exist_ok=True)
     (subagents_dir(writing) / "helper.yaml").write_text(
-        "name: helper\ndescription: Helps.\nsystem_prompt: |\n  You help.\n", encoding="utf-8"
+        "name: helper\ndescription: Helps.\n"
+        'builtin_tools: ["*"]\ntools: ["*"]\n'
+        "system_prompt: |\n  You help.\n",
+        encoding="utf-8",
     )
-    an_agent(writing, subagents="[helper]")
+    an_agent(writing, subagents="[helper]", **EVERY_TOOL)
     asked = {"description": "go", "subagent_type": "helper"}
     to_helper = AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}])
     Scripted.script.extend(
@@ -494,9 +500,12 @@ def test_every_graph_kingfisher_builds_has_it_and_only_a_subagent_marks_its_answ
     would mark the agent's own answer as a subagent's, or leave a subagent's unmarked."""
     subagents_dir(writing).mkdir(parents=True, exist_ok=True)
     (subagents_dir(writing) / "helper.yaml").write_text(
-        "name: helper\ndescription: Helps.\nsystem_prompt: |\n  You help.\n", encoding="utf-8"
+        "name: helper\ndescription: Helps.\n"
+        'builtin_tools: ["*"]\ntools: ["*"]\n'
+        "system_prompt: |\n  You help.\n",
+        encoding="utf-8",
     )
-    an_agent(writing, subagents="[helper]")
+    an_agent(writing, subagents="[helper]", **EVERY_TOOL)
     backend = backend_at(writing, writing.workspace / "sessions" / "s")
 
     built = build_agent(writing, backend=backend, agent=_spec(writing, "only"))

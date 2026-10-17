@@ -32,7 +32,7 @@ from kingfisher.core.session.files import (
 )
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions, backend_at
-from tests.conftest import Through, an_agent, pin, start
+from tests.conftest import EVERY_TOOL, Through, an_agent, pin, start
 from tests.unit.scripted import Scripted
 
 
@@ -115,7 +115,7 @@ def test_a_backend_that_keeps_the_session_elsewhere_gets_the_inputs_and_gives_ba
     in a directory the agent never saw and the report it wrote came back as nothing, on a
     turn that said it had worked.
     """
-    an_agent(scripted)
+    an_agent(scripted, **EVERY_TOOL)
     source = tmp_path / "in.csv"
     source.write_text("alpha\n")
     remote = tmp_path / "remote"
@@ -221,7 +221,7 @@ def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg, way):
     """Checked as reading a session is. Holding only the id of a session pinned to an
     agent you cannot reach buys nothing, including its outputs.
     """
-    an_agent(cfg, "only_a", source_ids="[A]")
+    an_agent(cfg, "only_a", source_ids="[A]", **EVERY_TOOL)
     policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
     kf = _produced(policied)
     pin(kf, "s", "only_a")
@@ -279,7 +279,7 @@ def test_a_session_is_opened_once_where_its_pinned_agent_decides(cfg, way):
     """The control beside the one above: under a policy the pin decides, and reading it
     takes the session's backend -- once.
     """
-    an_agent(cfg, "only_a", source_ids="[A]")
+    an_agent(cfg, "only_a", source_ids="[A]", **EVERY_TOOL)
     policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
     counting = Counting()
     kf = _produced(policied, backends=counting)

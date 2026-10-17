@@ -31,6 +31,7 @@ from kingfisher.core.result import AWAITING
 from kingfisher.core.session import runtime
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import (
+    EVERY_TOOL,
     FakeGraph,
     FakeToolCallingModel,
     an_agent,
@@ -761,7 +762,7 @@ def test_a_turn_the_service_runs_hands_the_tool_its_sessions_backend(scripted):
     carried one nothing drove the graph with would hand every tool `None`.
     """
     _a_tool(scripted)
-    an_agent(scripted)
+    an_agent(scripted, **EVERY_TOOL)
     Scripted.script.extend(
         [_calls("first_line", file_path="/inputs/notes.txt"), AIMessage(content="done")]
     )
@@ -778,7 +779,7 @@ def test_a_resumed_turn_is_handed_it_again(scripted):
     approval buys an `AttributeError`.
     """
     _a_tool(scripted)
-    an_agent(scripted, interrupt_on="[first_line]")
+    an_agent(scripted, interrupt_on="[first_line]", **EVERY_TOOL)
     Scripted.script.extend(
         [_calls("first_line", file_path="/inputs/notes.txt"), AIMessage(content="done")]
     )

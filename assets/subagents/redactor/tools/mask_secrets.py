@@ -13,9 +13,9 @@ like the careful option, and the masking says nothing about whether that file
 should have been read at all. It is only the right tool inside the procedure
 next door in `skills/redaction/`, and the folder is what keeps the two together.
 
-A catalogue tool could not express that. An agent that omits `tools:` holds
-every tool there is, so anything in `tools/` is something the top-level agent
-can call; a bundle is the only place a capability can sit that it cannot.
+A catalogue tool could not express that. An agent writing `tools: ["*"]`
+holds every tool there is, so anything in `tools/` is something the top-level
+agent can call; a bundle is the only place a capability can sit that it cannot.
 
 Written as a plain function for the reason `line_count` gives: the docstring is
 the description the model reads, the annotations are the argument schema, and

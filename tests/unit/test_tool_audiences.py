@@ -80,6 +80,7 @@ TOOLS = [ToolSpec(LineCount(), source_ids=["A"])]
 AGENT = """name: surveyor
 description: An agent.
 source_ids: [A, B]
+builtin_tools: ["*"]
 tools: [line_count]
 system_prompt: |
   You do the task.
@@ -234,12 +235,12 @@ def test_a_lock_on_a_decorated_or_class_tool_holds_like_one_on_a_function(polici
 
 
 def test_an_agent_granting_every_tool_still_leaves_it_out(policied):
-    """`tools:` omitted means every tool, which is a grant no per-name list ever saw --
-    so this is the branch a filter over written names would miss.
+    """`tools: ["*"]` is every tool, which is a grant no per-name list ever saw -- so
+    this is the branch a filter over written names would miss.
     """
     agents = policied.catalogue_roots["agents"]
     (agents / "surveyor.yaml").write_text(
-        AGENT.replace("tools: [line_count]\n", ""), encoding="utf-8"
+        AGENT.replace("tools: [line_count]\n", 'tools: ["*"]\n'), encoding="utf-8"
     )
     kf = Kingfisher(policied, sessions=LocalSessions())
 

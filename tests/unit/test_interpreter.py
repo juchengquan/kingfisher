@@ -17,6 +17,7 @@ from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.request import Request
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import (
+    EVERY_TOOL,
     FakeToolCallingModel,
     an_agent,
     dispatched,
@@ -381,8 +382,8 @@ def test_a_gated_tool_is_out_of_reach_from_code(cfg, session_dir, gated, spelled
     """
     wired = replace(cfg, interpreter_enabled=True)
     _with_code_tools(wired, session_dir)
-    an_agent(wired, "gated", interrupt_on=f"[{gated}]")
-    an_agent(wired, "ungated", interrupt_on="[execute]")
+    an_agent(wired, "gated", interrupt_on=f"[{gated}]", **EVERY_TOOL)
+    an_agent(wired, "ungated", interrupt_on="[execute]", **EVERY_TOOL)
     agents = LocalAgentRepository(wired.catalogue_roots["agents"]).specs
     program = f"(async () => typeof tools.{spelled})()"
 
@@ -406,8 +407,8 @@ def test_a_gate_on_task_takes_task_out_of_code_on_an_unrestricted_request(
         "name: kept\ndescription: Answers.\nsystem_prompt: |\n  You answer.\n",
         encoding="utf-8",
     )
-    an_agent(wired, "gated", interrupt_on="[task]", subagents="[kept]")
-    an_agent(wired, "ungated", interrupt_on="[execute]", subagents="[kept]")
+    an_agent(wired, "gated", interrupt_on="[task]", subagents="[kept]", **EVERY_TOOL)
+    an_agent(wired, "ungated", interrupt_on="[execute]", subagents="[kept]", **EVERY_TOOL)
     agents = LocalAgentRepository(wired.catalogue_roots["agents"]).specs
     program = "(async () => typeof task)()"
 
@@ -429,14 +430,15 @@ def test_a_nested_helper_is_handed_no_sandbox(cfg, session_dir):
     wired = replace(cfg, interpreter_enabled=True)
     subagents_dir(wired).mkdir(parents=True, exist_ok=True)
     (subagents_dir(wired) / "outer.yaml").write_text(
-        "name: outer\ndescription: Consults.\nsubagents: [helper]\n"
+        'name: outer\ndescription: Consults.\nbuiltin_tools: ["*"]\nsubagents: [helper]\n'
         "system_prompt: |\n  You ask.\n",
         encoding="utf-8",
     )
-    # No `builtin_tools`, which is every built-in and `eval` among them, so the
-    # helper's own grant is not what keeps it away. Listing it is refused at load.
+    # `["*"]`, which is every built-in and `eval` among them, so the helper's own grant
+    # is not what keeps it away. Listing it is refused at load.
     (subagents_dir(wired) / "helper.yaml").write_text(
-        "name: helper\ndescription: Computes.\nsystem_prompt: |\n  You compute.\n",
+        'name: helper\ndescription: Computes.\nbuiltin_tools: ["*"]\n'
+        "system_prompt: |\n  You compute.\n",
         encoding="utf-8",
     )
 
@@ -599,15 +601,16 @@ def test_no_sandbox_outlives_a_turn_in_which_a_helper_reached_for_it(scripted):
     wired = replace(scripted, interpreter_enabled=True)
     subagents_dir(wired).mkdir(parents=True, exist_ok=True)
     (subagents_dir(wired) / "outer.yaml").write_text(
-        "name: outer\ndescription: Consults.\nsubagents: [inner]\n"
+        'name: outer\ndescription: Consults.\nbuiltin_tools: ["*"]\nsubagents: [inner]\n'
         "system_prompt: |\n  You ask.\n",
         encoding="utf-8",
     )
     (subagents_dir(wired) / "inner.yaml").write_text(
-        "name: inner\ndescription: Computes.\nsystem_prompt: |\n  You compute.\n",
+        'name: inner\ndescription: Computes.\nbuiltin_tools: ["*"]\n'
+        "system_prompt: |\n  You compute.\n",
         encoding="utf-8",
     )
-    an_agent(wired, "only", subagents="[outer, inner]")
+    an_agent(wired, "only", subagents="[outer, inner]", **EVERY_TOOL)
     start(wired, "s")
 
     def calls(name, args, call_id):

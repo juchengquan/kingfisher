@@ -40,8 +40,8 @@ def test_minimal_definition_parses():
     assert spec.name == "reviewer"
     assert spec.description == "Checks an analysis for arithmetic errors."
     assert spec.system_prompt.startswith("You review analyses.")
-    # Unset, not empty: the subagent inherits the parent's tools.
-    assert spec.tools == ALL  # declared nothing, so whatever its caller has
+    # Left out, so none: read as the caller's, a forgotten line would hand over the shell.
+    assert (spec.builtin_tools, spec.tools) == (None, None)
     assert spec.wanted is None
 
 
