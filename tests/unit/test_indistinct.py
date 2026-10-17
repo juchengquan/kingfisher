@@ -10,8 +10,8 @@ from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.config import Endpoint, ModelProfile
 from kingfisher.core.definitions.subagents.rules import resolved_model
 from kingfisher.core.definitions.subagents.spec import RunOn
+from kingfisher.core.reporting import opening_events
 from kingfisher.core.request import Request
-from kingfisher.core.service import opening_events
 from kingfisher.core.session.steps import drive
 from tests.conftest import a_subagent, an_agent, start, subagents_dir
 
