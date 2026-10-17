@@ -37,9 +37,7 @@ from kingfisher.core.origins import Origin, Origins
 
 #: An empty mapping that cannot be written to, so a default is shared safely.
 _NOTHING: Mapping[str, str] = MappingProxyType({})
-#: The same emptiness for the one field whose values are name tuples. Two
-#: constants rather than one untyped: an empty mapping cannot drift in value,
-#: so what this buys is the type staying honest at the field it defaults.
+#: The same, typed for the fields whose values are name tuples.
 _NO_NAMES: Mapping[str, tuple[str, ...]] = MappingProxyType({})
 #: The same, for the nested audience record.
 _NO_AUDIENCES: Mapping[str, Mapping[str, Stated]] = MappingProxyType({})
@@ -49,33 +47,18 @@ _NO_AUDIENCES: Mapping[str, Mapping[str, Stated]] = MappingProxyType({})
 class Catalogued:
     """One definition kind's catalogue, as this walk found it.
 
-    Named away from `kind` because `origins.Kind` is already a word here and means
-    what sort of *place* something was read from.
-
-    Every consumer used to spell the kinds out: four near-identical blocks in
-    `doctor`, the same errors again in the listing's `failed`, and the two that
-    remained were reached by `getattr(found, kind)` where a type checker cannot see
-    them. The record kept a note of the drift twice -- `doctor` read three of the
-    five kinds, then four -- which is what a hand-written list of a growing set does.
+    Not `Kind`: `origins.Kind` already means what sort of *place* something was read from.
     """
 
     name: str
-    #: What stopped the directory being read, or `None`. `skills` has none and that
-    #: is not an omission: a skill fails one at a time, and which ones is
-    #: `skills_unloadable`, `skills_misplaced` and `skills_misfiled` -- so `doctor`
-    #: gives them a check of their own rather than a line saying the catalogue
-    #: loaded.
+    #: What stopped the directory being read, or `None`. Never set for `skills`, which fail
+    #: one at a time, into `skills_unloadable`, `skills_misplaced` and `skills_misfiled`.
     error: str | None
-    #: How many the agent can reach. Zero is a fact about the workspace rather than
-    #: a failure, which is why it is a count and not a second error.
+    #: How many the agent can reach. Zero is a fact about the workspace, not a failure.
     defined: int
-    #: Where this kind was read from, and whether that is where the configuration
-    #: says. Carried here so a consumer walking the kinds does not reach for it by
-    #: name off a second record.
+    #: Where this kind was read from, and whether that is where the configuration says.
     origin: Origin
-    #: What one of these is on disk, for a message telling somebody to go and fix
-    #: it: a document for the kinds written in YAML, a module for the two that are
-    #: Python. The same split `documents.py` and `importing.py` draw.
+    #: What one of these is on disk, for a message saying what to fix: a file or a module.
     written_as: str
 
 
@@ -83,68 +66,47 @@ class Catalogued:
 class Inventory:
     """What this workspace offers right now, per kind, with where each came from."""
 
-    #: Where every part of this deployment was read from, including every catalogue
-    #: directory. One record rather than the three loose strings that were here --
-    #: `skills_source`, `subagents_source`, `agents_source` -- which named three of the
-    #: four kinds and left `tools` out, because a fourth field is a thing somebody has
-    #: to remember to add and nobody did.
+    #: Where every part of this deployment was read from, every catalogue directory included.
     origins: Origins
 
-    #: Agent name -> its description. First in the record because it is first in
-    #: the listing: an agent is what a request names, and the kinds below
-    #: are what it selects from.
+    #: Agent name -> its description. First, as in the listing: an agent is what a request
+    #: names, and the other kinds are what it selects from.
     agents: Mapping[str, str] = _NOTHING
     #: Agent name -> the file it came from.
     agent_sources: Mapping[str, str] = _NOTHING
-    #: The subagents each agent activates: the ones its own file names, and no
-    #: further. Their helpers are deliberately not walked -- `activated` says why,
-    #: and walking the chain here once printed a subagent the build would drop.
+    #: The subagents each agent activates: the ones its own file names, and no further.
+    #: Walking their helpers would list a subagent the build drops.
     agent_subagents: Mapping[str, tuple[str, ...]] = _NO_NAMES
     agents_error: str | None = None
 
-    #: The agent's own tools, granted with `builtin_tools:`. Empty where the build
-    #: failed, which `tools_error` says -- and empty where it could not be read at
-    #: all, which only `builtin_tools_checked` says. A reader taking `()` with no
-    #: `tools_error` as "this deployment has none" was reading the second case as
-    #: the one the comment here used to describe.
+    #: The agent's own tools, granted with `builtin_tools:`. Empty where the build failed,
+    #: which `tools_error` says, and where it could not be read, which only
+    #: `builtin_tools_checked` says.
     builtin_tools: tuple[str, ...] = ()
-    #: Whether the built-in set was read at all. `False` only where a middleware
-    #: that will not import took the probe down with it: the tool catalogue is fine
-    #: and `middlewares_error` carries that fault with the file to open, so
-    #: `tools_error` is deliberately left alone and this is what says the count is
-    #: unknown rather than zero. Beside `shadowed_checked` and
-    #: `moved_tools_checked`, which are the same distinction for their own fields.
+    #: Whether the built-in set was read at all: `False` where a middleware that will not
+    #: import took the probe down. That fault is `middlewares_error`'s, so `tools_error`
+    #: stays clear and this says the count is unknown rather than zero.
     builtin_tools_checked: bool = True
-    #: What the workspace defined, granted with `tools:`. A separate axis, not
-    #: a second pile: a subtraction taken from the union produced a grant of
-    #: built-in names on the workspace axis.
+    #: What the workspace defined, granted with `tools:`. A separate axis from
+    #: `builtin_tools`: a subtraction from their union grants built-in names on this one.
     tools: tuple[str, ...] = ()
     #: Tool name -> the module or package that defined it.
     tool_sources: Mapping[str, str] = _NOTHING
     tools_error: str | None = None
-    #: Why a graph could not be assembled at all: a `models.yaml` row that cannot
-    #: start a turn, a backend that refuses to be made, a mount that cannot be
-    #: mounted. Not a kind's error, so it is not in `by_kind` -- the probe is a built
-    #: graph rather than a catalogue -- and carried rather than raised for the reason
-    #: every other error here is. Left to escape, one bad row took `doctor`, `list`,
-    #: `sessions` and `reap` down together, over a deployment whose only fault was in
-    #: a file those three verbs are how you find.
+    #: Why a graph could not be assembled at all: a `models.yaml` row that cannot start a
+    #: turn, a backend or a mount that refuses. Not a kind's error, so not in `by_kind`;
+    #: carried, so the commands that find such a fault still run.
     build_error: str | None = None
 
-    #: Skill name -> its description, which is what the model is shown. From
-    #: the registry rather than the directory listing: a directory that looks
-    #: like a skill and will not parse used to be advertised here and then be
-    #: absent from an agent that reported nothing wrong.
+    #: Skill name -> its description, as the model is shown it. From the registry, not the
+    #: directory listing, so a skill that will not parse is not advertised.
     skills: Mapping[str, str | None] = _NOTHING
     #: Present on disk, and the agent will never see them.
     skills_unloadable: tuple[str, ...] = ()
-    #: Nested past the one level skills are read at. Reported separately because
-    #: the fix is different: these parse, they are simply in the wrong place.
+    #: Nested past the one level skills are read at: these parse, and are in the wrong place.
     skills_misplaced: tuple[str, ...] = ()
-    #: Skills the agent *can* read, under a name their directory does not have,
-    #: as `(directory, name)`. Neither missing nor broken: present under a name
-    #: nobody typed, which is why it is its own field rather than folded into
-    #: `skills_unloadable` or `skills_misplaced`.
+    #: Skills the agent *can* read, under a name their directory does not have, as
+    #: `(directory, name)`: neither missing nor broken, so a field of their own.
     skills_misfiled: tuple[tuple[str, str], ...] = ()
 
     #: Subagent name -> its description.
@@ -153,137 +115,87 @@ class Inventory:
     subagent_sources: Mapping[str, str] = _NOTHING
     subagents_error: str | None = None
 
-    #: Definition -> the tools it names by a path they have moved from, keyed
-    #: `"agent 'analyst'"` the way the refusal words its subject. Both kinds, and
-    #: they differ in what happens next rather than in being wrong: a subagent's
-    #: stops the deployment at startup, an agent's stops nothing at all and the
-    #: agent simply runs without the tool it was granted.
+    #: Definition -> the tools it names by a path they have moved from, keyed as a refusal
+    #: words its subject. A subagent's stops startup; an agent's runs without the tool.
     moved_tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
-    #: Whether `moved_tools` was asked at all. `False` when a catalogue it reads did
-    #: not load, which is not the answer "nothing moved" and must not be reported as
-    #: one -- an empty mapping cannot tell the two apart.
+    #: Whether `moved_tools` was asked at all: `False` when a catalogue it reads did not
+    #: load, which an empty mapping would report as "nothing moved".
     moved_tools_checked: bool = True
 
-    #: Definition -> the subagents it names that the catalogue has no key for, keyed
-    #: as `moved_tools` is: one nobody defines, or a bare name two files share, which
-    #: the catalogue keys by file. A run reaching the name refuses it.
+    #: Definition -> the subagents it names that the catalogue has no key for, keyed as
+    #: `moved_tools` is: one nobody defines, or a bare name two files share. A run refuses it.
     unresolved_subagents: Mapping[str, tuple[str, ...]] = _NO_NAMES
-    #: Whether `unresolved_subagents` was asked at all, for the reason
-    #: `moved_tools_checked` gives.
+    #: Whether `unresolved_subagents` was asked at all; `False` is not "none".
     unresolved_subagents_checked: bool = True
 
-    #: Definitions whose `source: bundled` entries and own folder disagree, by the
-    #: name a grant uses, each with how the two differ.
-    #: Carried for the reason `moved_tools` is: startup refuses this, and `doctor`
-    #: promises to say in advance what startup will refuse.
+    #: Definitions whose `source: bundled` entries and own folder disagree, with how.
+    #: Startup refuses this, and `doctor` promises to say in advance what startup refuses.
     miscounted_bundles: Mapping[str, str] = _NOTHING
-    #: Whether `miscounted_bundles` was asked at all, for the reason
-    #: `moved_tools_checked` gives.
+    #: Whether `miscounted_bundles` was asked at all; `False` is not "none".
     miscounted_bundles_checked: bool = True
 
-    #: Middleware class name -> the installed module it came from, or `""` where a
-    #: workspace file defined it. Not the raw `__module__`: for a class written in
-    #: `middlewares/*.py` that is a dynamic name made unique and nothing more, and the
-    #: directory it lives in is in the origins block already.
+    #: Middleware class name -> the installed module it came from, or `""` for a workspace
+    #: file, whose `__module__` is only a name made unique.
     middlewares: Mapping[str, str] = _NOTHING
-    #: A middleware module that will not import, or offering something that is
-    #: not an `AgentMiddleware`. Carried like the others, for the same reason:
-    #: a listing is where somebody goes *because* something is broken.
+    #: A middleware module that will not import, or offers something not an
+    #: `AgentMiddleware`. Carried, as every error here is: a listing is where somebody
+    #: goes *because* something is broken.
     middlewares_error: str | None = None
 
-    #: What each subagent brings itself, by name: the tools and skills in the
-    #: folder named after it, which it lists as `source: bundled`. Reported
-    #: because they are the one capability a listing could not otherwise reveal
-    #: -- an agent omitting `tools:` holds every tool there is, so a bundled one
-    #: is the only kind the top-level agent does *not* get, and a reader has no
-    #: other way to find that out.
+    #: What each subagent brings itself, by name: the tools and skills in its own folder,
+    #: listed as `source: bundled`. The one kind the top-level agent never gets, so shown.
     bundled_tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
     bundled_skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
-    #: Skills in a bundle whose owner is a compiled subagent, by subagent. A skills
-    #: index arrives through middleware and deepagents gives a compiled graph none,
-    #: so such a subagent cannot list them and the folder is refused as unlisted.
-    #: Carried so the listing can say *why* beside that refusal: the unlisted-file
-    #: message alone sends a reader to add a `source: bundled` line that a compiled
-    #: declaration refuses.
+    #: Skills in a compiled subagent's bundle, which it cannot list: deepagents gives a
+    #: compiled graph no skills index. Carried so the listing says *why* the folder is refused
+    #: as unlisted, or a reader adds a `source: bundled` line a compiled declaration refuses.
     stranded_skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
-    #: Skills too deep in a subagent's own folder to load, by subagent, relative to
-    #: the folder. A subagent is given its folder as one source, so a folder of
-    #: grouping inside it reaches nothing -- and a skill simply absent from what a
-    #: subagent holds is the one thing a reader cannot see.
+    #: Skills too deep in a subagent's own folder to load, by subagent, relative to the
+    #: folder: a skill absent from what a subagent holds is otherwise invisible.
     bundled_misplaced: Mapping[str, tuple[str, ...]] = _NO_NAMES
-    #: Catalogue tools a bundle answers for instead, by subagent. Printed
-    #: because shadowing is only acceptable while it is visible: the subagent
-    #: gets its own and the shared one never reaches it, and nothing else in
-    #: this output would say so.
+    #: Catalogue tools a bundle answers for instead, by subagent: shadowing is acceptable
+    #: only while visible, and nothing else says the shared one never reaches it.
     shadowed: Mapping[str, tuple[str, ...]] = _NO_NAMES
-    #: Whether `shadowed` was asked at all, for the reason `moved_tools_checked`
-    #: gives: the comparison needs the workspace catalogue, and a catalogue that did
-    #: not load is not the answer "nothing shadows".
+    #: Whether `shadowed` was asked at all: it needs the workspace catalogue, and one that
+    #: did not load is not "nothing shadows".
     shadowed_checked: bool = True
-    #: Subagents whose bundle arrived with the definition rather than sitting in a
-    #: folder under the catalogue. What that changes for a reader is where the code
-    #: is: a folder's tools are files in this workspace, and a carried bundle's were
-    #: installed -- so the names below print the same and one set is reviewable here
-    #: while the other is not.
+    #: Subagents whose bundle arrived with the definition rather than in a folder under the
+    #: catalogue: its tools were installed, so they print alike but are not reviewable here.
     carried_bundles: tuple[str, ...] = ()
-    #: A bundle this deployment cannot read: tools that will not import, or a
-    #: folder that is one subagent's and holds two definitions. Its own field
-    #: rather than `tools_error`, so a listing says which subagent to go and open.
+    #: A bundle this deployment cannot read: tools that will not import, or one subagent's
+    #: folder holding two definitions. Not `tools_error`, so a listing says which to open.
     bundles_error: str | None = None
-    #: Folders under `subagents/` holding `tools/` or `skills/` that no definition
-    #: is named for. Legal, and nine times in ten a bundle whose definition was
-    #: renamed -- which is why it is carried rather than left to the repository that
-    #: computes it: a subagent that lost its bundle has no other symptom, at any
-    #: point in a run, than holding nothing.
+    #: Folders under `subagents/` holding `tools/` or `skills/` that no definition is named
+    #: for. Legal, but usually a renamed definition, whose subagent shows no other symptom
+    #: than holding nothing.
     orphaned_assets: tuple[str, ...] = ()
 
-    #: Which of them are graphs the workspace built rather than definitions kingfisher
-    #: assembles. Carried because it changes what the rest of the listing *means* for
-    #: them: deepagents runs a compiled graph as given and never applies a tool
-    #: allowlist to it, so a `tools:` grant is not a limit on one.
+    #: Subagents that are graphs the workspace built: deepagents runs one as given, so a
+    #: `tools:` grant is no limit on it.
     compiled_subagents: tuple[str, ...] = ()
 
-    #: Kept so a caller does not have to reach for `cfg` to know whether an
-    #: empty skills list means "none" or "switched off".
+    #: Whether an empty `skills` means "none" or "switched off".
     skills_enabled: bool = True
 
-    #: The reconciled policy, or `None` where this deployment has none.
-    #:
-    #: Carried rather than looked up by the printer, for the reason the sources
-    #: above are: a listing is assembled once and formatted by whoever asked,
-    #: and a renderer that had to reach for `Config` would be a second place
-    #: deciding what a workspace offers.
+    #: The reconciled policy, or `None` where there is none. Carried, not looked up by the
+    #: printer: a renderer reaching for `Config` would be a second place deciding what is offered.
     access: SourceIds | None = None
     #: What the policy and the catalogue disagree about. Empty when they agree.
     access_report: AccessReport = field(default_factory=AccessReport)
-    #: Definition kind -> name -> {"source_ids": ..., "tools": {...}, ...}, for
-    #: every definition that says anything about who reaches what. A tool that says who
-    #: it admits is one, named as a grant writes it, and a subagent's own as
-    #: `subagent::tool`.
-    #:
-    #: Carried rather than looked up by the printer: a renderer that reached for
-    #: the specs would be a second place deciding what a workspace offers, and
-    #: the roll-up below is inverted from exactly this.
+    #: Definition kind -> name -> {"source_ids": ..., "tools": {...}, ...}, for every
+    #: definition saying who reaches what, a tool named as a grant writes it and a
+    #: subagent's own as `subagent::tool`. Carried so no renderer reads the specs itself.
     audiences: Mapping[str, Mapping[str, Stated]] = _NO_AUDIENCES
-    #: Whose view this is, expanded, or `None` for the operator's view of
-    #: everything. Set, every field above has been answered for this caller here,
-    #: so the printer never filters and the two views cannot come apart. The
-    #: filtering is not all one shape, and the differences are the point: a field
-    #: naming a definition is kept to what the caller reaches, a catalogue that
-    #: audiences nothing itself is kept to what those definitions offer, and the
-    #: policy and the faults that reach nobody are dropped outright. This said the
-    #: names had *already* been filtered, which is the claim the record logged as
-    #: false on 2026-09-26 and which was false again for four fields below it.
+    #: Whose view this is, expanded, or `None` for the operator's view of everything. Set,
+    #: every field is answered for this caller here, so the printer never filters: a field
+    #: naming a definition keeps what the caller reaches, a catalogue keeps what those
+    #: definitions offer, and the policy and faults reaching nobody are dropped.
     held: frozenset[str] | None = None
 
     def by_kind(self) -> tuple[Catalogued, ...]:
         """Every definition kind, in the order a listing shows them.
 
-        Spelled out rather than read off this record by name: the fields are then
-        ones a type checker follows, and a kind that loses its error field fails
-        here rather than at whichever consumer got to it first.
-        `test_the_per_kind_view_covers_every_kind_there_is` holds the list total
-        against `DEFINITION_KINDS`, which is the half a reader cannot check.
+        Spelled out rather than read by name, so a type checker follows the fields.
         """
         return (
             Catalogued("agents", self.agents_error, len(self.agents), self.origins.agents, "file"),
@@ -326,11 +238,9 @@ def _bundled(
     tuple[str, ...],
     tuple[str, ...],
 ]:
-    """What each subagent brings itself, for a listing: tools, skills, shadowed.
+    """What each subagent brings itself, for a listing, and the folders that bring it to nobody.
 
-    And the folders that bring it to nobody, which belong here rather than in a
-    function of their own: an orphan is decided by the same `bundles` read, so
-    asking separately means a second `try` around the failure this one returns on.
+    Orphans are decided by the same `bundles` read, so asking apart needs a second `try`.
     """
     tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
     skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
@@ -340,13 +250,8 @@ def _bundled(
     carried: tuple[str, ...] = ()
     reasons: list[str] = []
     try:
-        # Imported here for the reason `tools` is: a listing is where someone
-        # goes *because* something is broken, so the error is carried and
-        # printed over the rest of the output rather than raised through it.
-        #
-        # One subagent at a time, so a failure arrives named by whose folder it was in
-        # and the others still answer. A comprehension over the whole walk gave up at
-        # the first one, which emptied every subagent's section to report one of them.
+        # One subagent at a time, so a failure is named by whose folder it was in and the
+        # others still answer.
         own: dict[str, tuple[str, ...]] = {}
         for name, repository in resolved.bundled_tools.items():
             try:
@@ -354,17 +259,12 @@ def _bundled(
             except (ToolError, SubagentError) as exc:
                 reasons.append(str(exc))
         tools = MappingProxyType(own)
-        # Its own `try`, and the whole reason this one is narrow: reading the
-        # *workspace* catalogue here put a `tools/` failure into `bundles_error`, so
-        # one unparseable module was reported twice -- once as `tools` and once as
-        # `subagent tools`, on a workspace with no subagents at all. The second row
-        # sends a reader to the wrong directory.
+        # Its own `try`: a `tools/` failure is `tools_error`'s, and in `bundles_error` too
+        # it would send a reader to the wrong directory.
         try:
             catalogue = {one.name for one in resolved.tools.found}
         except (ToolError, CapabilityError):
-            # Not an error of this function's: `tools_error` already names the file.
-            # `None` rather than empty, because "nothing shadows" is a different
-            # answer from "the catalogue it would be compared against did not load".
+            # `tools_error` names the file. `None`, not empty: this is not "nothing shadows".
             shadowed = None
         else:
             shadowed = MappingProxyType(
@@ -374,8 +274,7 @@ def _bundled(
                     if (found := tuple(sorted(catalogue.intersection(names))))
                 }
             )
-        # Inside the `try` too: a subagent carrying two skills of one name is
-        # refused as its directories are read, which is here.
+        # Inside the `try`: a subagent carrying two skills of one name is refused here.
         skills = MappingProxyType(
             {
                 name: tuple(sorted(registry.names))
@@ -383,21 +282,15 @@ def _bundled(
             }
         )
     except (ToolError, SubagentError) as exc:
-        # `SubagentError` because reaching a bundle's tools reads the bundles first,
-        # and a folder that is one subagent's and holds two definitions is refused
-        # there. Uncaught it escaped `inventory` and took `doctor` down with it --
-        # the same shape as a workspace tool wearing a built-in's name, found the
-        # same way, by a rule that drove the refusal rather than reading about it.
-        # With whatever the walk above already named, so a broken bundle beside a
-        # folder holding two definitions reports both rather than the second alone.
+        # `SubagentError`: reaching a bundle's tools reads the bundles first, which refuses
+        # one subagent's folder holding two definitions. Joined to `reasons`, so both report.
         error = "; ".join([*reasons, str(exc)])
         return tools, skills, shadowed, error, orphans, carried
 
     error = "; ".join(reasons) or None
     orphans = tuple(resolved.subagents.orphaned_assets)
-    # Read off the same bundles, and asked of the backing rather than of the file
-    # extension: a `.py` under `subagents/` may own a folder like any document, so
-    # the honest question is whether there is a root, not how it was written.
+    # Asked of the backing, not the file extension: a `.py` under `subagents/` may own a
+    # folder like any document.
     bundles = resolved.subagents.bundles
     carried = tuple(sorted(name for name, one in bundles.items() if one.root is None))
     return tools, skills, shadowed, error, orphans, carried
@@ -413,14 +306,12 @@ def _shut_out_of_bundles(
 ) -> Mapping[str, frozenset[str]]:
     """Each subagent's own tools whose own audience shuts this caller out.
 
-    The build holds them back whatever the grant says, so a listing naming one under its
-    subagent tells the caller their run would hold a tool it will not.
+    The build holds them back whatever the grant says, so a listing must not name them.
     """
     if held is None:
         return {}
     shut: dict[str, frozenset[str]] = {}
-    # One subagent at a time, as `_bundled` reads them: a bundle that will not load
-    # lists no tools to hold back, and must not stop the others' being held back.
+    # One subagent at a time: a bundle that will not load must not stop the others'.
     with suppress(SubagentError):
         for owner, bundle in resolved.bundled_tools.items():
             with suppress(ToolError, SubagentError):
@@ -453,24 +344,15 @@ def _kept[V](by_name: Mapping[str, V], reached: Container[str]) -> Mapping[str, 
 def _claimed_by(spec: object, held: frozenset[str] | None) -> Mapping[str, str]:
     """The `source:` each entry claims, of the entries this caller reaches.
 
-    The two readers below were the only ones here that read a spec as written rather
-    than through `declares(held)`, and it showed in their values: the keys were kept to
-    the caller's reach and the names inside were not, so a listing that correctly
-    withheld `secret_export` from `tools` named it three sections down -- and exited 1
-    over a row that caller cannot act on. `decisions.md` logs that shape twice: the
-    field that leaked is the one whose filter was somewhere else.
-
-    A field that is not a list of entries cannot have narrowed, so there is nothing to
-    narrow by and the claims stand as they are.
+    Through `declares(held)`, or a listing withholding a tool from `tools` names it here.
+    A field that is not a list of entries cannot have narrowed, so its claims stand.
     """
     claimed = spec.tool_sources  # ty: ignore[unresolved-attribute]
     reached = spec.declares(held).tools  # ty: ignore[unresolved-attribute]
     if not isinstance(reached, tuple):
         return claimed
-    # By the bare name, which is what `claimed_sources` keys on while the selection
-    # holds the reference as written -- `moved/elsewhere.py::probe_one` against
-    # `probe_one`. Compared as written this matched nothing and emptied the field for
-    # every caller, scoped or not; four rules caught it.
+    # By the bare name, which `claimed_sources` keys on, where the selection holds the
+    # reference as written: `moved/elsewhere.py::probe_one` against `probe_one`.
     named = {split_reference(one)[1] for one in reached}
     return {one: where for one, where in claimed.items() if one in named}
 
@@ -481,10 +363,8 @@ def _moved_tools(
     """Definitions naming a tool by a path it no longer lives at, or `None` when that
     could not be asked.
 
-    Both kinds, through the same `Offering` the refusal uses. A catalogue that will
-    not walk answers `None` rather than raising: whichever of `tools`, `agents` or
-    `subagents` failed is already reported on its own line, and a second copy of
-    that error here would say nothing new.
+    Through the same `Offering` the refusal uses. `None` rather than raising: whichever
+    kind failed already reports it on its own line.
     """
     try:
         offers = Offering.of(resolved.tools.found)
@@ -511,7 +391,7 @@ def _unresolved_subagents(
     resolved: Definitions, held: frozenset[str] | None
 ) -> Mapping[str, tuple[str, ...]] | None:
     """Definitions naming a subagent the catalogue has no key for, or `None` when
-    that could not be asked, for the reason `_moved_tools` gives.
+    that could not be asked.
     """
     try:
         defined = resolved.subagents.specs
@@ -519,9 +399,8 @@ def _unresolved_subagents(
             _subject(kind, name): missing
             for kind, specs in (("agent", resolved.agents.specs), ("subagent", defined))
             for name, spec in specs.items()
-            # As this caller reaches them, for the reason `_claimed_by` gives: a
-            # name an entry audience keeps from them is not theirs to be told about.
-            # `*` is every key, so it cannot name one that is not.
+            # As this caller reaches them: a name an entry audience keeps from them is not
+            # theirs to be told. `*` is every key, so it cannot name a missing one.
             if isinstance(written := spec.declares(held).subagents, tuple)
             and (missing := unoffered(written, offered=defined))
         })
@@ -533,12 +412,8 @@ def _miscounted_bundles(resolved: Definitions) -> Mapping[str, str] | None:
     """Definitions whose bundled entries no longer match their own folder, or `None`
     when that could not be asked.
 
-    Through the same rule `warm` refuses with, not a second reading of the same
-    fields: two walks that can disagree would let a listing call a catalogue fine
-    that the constructor then refuses, which is the whole failure this reports.
-
-    A catalogue that will not walk answers `None` rather than raising, the way
-    `_moved_tools` does -- whichever kind failed is already on its own line.
+    Through the rule `warm` refuses with, so a listing cannot call fine what startup
+    refuses. `None` rather than raising: whichever kind failed is already on its own line.
     """
     found: dict[str, str] = {}
     try:
@@ -559,12 +434,7 @@ def _miscounted_bundles(resolved: Definitions) -> Mapping[str, str] | None:
 
 
 def _middlewares(resolved: Definitions) -> tuple[Mapping[str, str], str | None]:
-    """What the workspace registers, and why it could not be read.
-
-    Carried rather than raised, for the reason `_bundled` gives one function up: a
-    listing is where somebody goes *because* something is broken, so the error is
-    printed over the rest of the output rather than through it.
-    """
+    """What the workspace registers, and why it could not be read."""
     try:
         return MappingProxyType({
             name: "" if defined_in_a_workspace(cls.__module__) else cls.__module__
@@ -577,9 +447,8 @@ def _middlewares(resolved: Definitions) -> tuple[Mapping[str, str], str | None]:
 def _audiences(specs: Mapping[str, object], *, kind: str) -> dict[str, Stated]:
     """What each definition of one kind says about who reaches what.
 
-    The `says_nothing` filter is here rather than in the walk: a listing shows the
-    definitions that restrict somebody, and the other two callers want what a
-    definition says whether or not that is anything.
+    Only those restricting somebody. Filtered here, not in the walk, whose other callers
+    want what a definition says whether or not that is anything.
     """
     return {
         name: said
@@ -604,10 +473,8 @@ def _access(
     }
     if cfg.access is None:
         return stated, AccessReport(), {}
-    # The same walk `Kingfisher` runs at construction, and the same functions -- which
-    # is the point. A listing that disagreed with startup about who reaches what would
-    # be worse than neither saying anything, and until these were shared nothing but a
-    # docstring held them together.
+    # The walk `Kingfisher` runs at construction, by the same functions, so a listing
+    # cannot disagree with startup about who reaches what.
     kinds = (("agent", agents), ("subagent", subagents))
     report = access.audit(*kinds, vocabulary=cfg.access)
     broken = {
@@ -626,11 +493,7 @@ def _reaching(
     if held is None:
         return lambda _kind, names: names
 
-    # Bound once, rather than re-tested inside the closure. The comprehension used
-    # to carry its own `held is None`, which could never be true -- this closure is
-    # only built on the branch where it is not -- but removing it left the checker
-    # with nothing to narrow the optional by, since the guard above is a statement
-    # away across a closure. A name the guard has already settled says it to both.
+    # Rebound so the type checker sees it narrowed inside the closure.
     reachable = held
 
     def keep(kind: str, names: Mapping[str, str]) -> Mapping[str, str]:
@@ -655,8 +518,8 @@ def _audienced_tools(resolved: Definitions) -> Mapping[str, Found]:
 def _named_tools(resolved: Definitions) -> dict[str, Found]:
     """The tools that say who they admit, named as the rest of a listing names them.
 
-    A subagent's own under its subagent's name: `audienced_tools` keys it by a file
-    inside a folder the key does not name, which sends a reader to look in `tools/`.
+    A subagent's own under its subagent's name: `audienced_tools` keys it by a file the
+    key's folder does not name, which sends a reader to `tools/`.
     """
     named: dict[str, Found] = {}
     # Apart, so a bundle that will not load still leaves the catalogue's tools said.
@@ -673,8 +536,7 @@ def _named_tools(resolved: Definitions) -> dict[str, Found]:
 def _shut_out(resolved: Definitions, held: frozenset[str] | None) -> frozenset[str]:
     """The tools whose own audience shuts this caller out, as the build would leave them.
 
-    Nothing where the catalogue would not walk: `_tools` carries that failure, and a
-    listing that could not read the tools lists none of them anyway.
+    Nothing where the catalogue would not walk: `_tools` carries that failure.
     """
     try:
         return out_of_reach(resolved.tools.found, held)
@@ -696,10 +558,6 @@ def _tools(
 ) -> tuple[tuple[str, ...], tuple[str, ...], Mapping[str, str], str | None, bool, str | None]:
     """The built-in set, what the workspace adds, where each one lives, why not,
     whether the built-in set was read at all, and why no graph could be built.
-
-    Lifted out of `inventory` for the reason `_bundled` and `_middlewares` are: one
-    kind read, its failure carried rather than raised, and the answers handed back
-    together.
     """
     builtin: tuple[str, ...] = ()
     workspace_tools: tuple[str, ...] = ()
@@ -707,36 +565,22 @@ def _tools(
     tools_error: str | None = None
     checked = True
     try:
-        # Inside the `try`, not before it. Walking the catalogue is what raises
-        # -- two modules claiming one tool name, a module that will not import
-        # -- so reading `.found` outside meant the error escaped this function
-        # and `--list` printed a traceback over the rest of the inventory.
+        # Inside the `try`: walking the catalogue is what raises, on two modules claiming
+        # one tool name or a module that will not import.
         found = resolved.tools.found
         on_offer = Offering.of(found)
         workspace_tools = tuple(sorted(on_offer.workspace))
         sources = MappingProxyType(dict(on_offer.sources))
-        # Walked once and handed to the build. This needs two things that were
-        # once fetched apart -- where each workspace tool is defined, and the
-        # built-in set, which is only knowable from an assembled graph -- and a
-        # tool module is Python, so fetching them apart ran every one twice.
-        #
+        # Walked once and handed to the build: a tool module is Python, and a second walk
+        # runs every one twice.
         try:
             introspected = _builtin_tools(cfg, resolved, found)
         except ConfigError as exc:
-            # Its own `try` around the probe, and the narrowest one here. Assembling a
-            # graph builds this deployment's default model and its backend, and either
-            # may refuse the deployment -- a `max_tokens` that leaves no room for the
-            # conversation, a session that cannot be made. That is not a fact about
-            # `tools/`, so it is not `tools_error`, and `middlewares_error` is the
-            # precedent for saying it apart rather than blaming the directory a reader
-            # would then go and open.
+            # The probe builds the default model and its backend, either of which may refuse
+            # the deployment: not a fact about `tools/`, so not `tools_error`.
             return (), workspace_tools, sources, tools_error, False, str(exc)
         if introspected is None:
-            # The graph compiled and then could not be read, which means the
-            # built-in set is unknown rather than empty. Carried as an error for
-            # the same reason the others are: a listing is where someone goes
-            # *because* something is broken, and printing "(none)" here would
-            # answer a question we did not manage to ask.
+            # Compiled and then unreadable: the built-in set is unknown, not empty.
             tools_error = (
                 "built-in tools could not be read from the compiled agent -- the graph "
                 "has no shape this version recognises, so what it dispatches is unknown"
@@ -745,28 +589,14 @@ def _tools(
             defined = {entry.name for entry in found}
             builtin = tuple(name for name in introspected if name not in defined)
     except (ToolError, CapabilityError) as exc:
-        # `CapabilityError` for the same reason as `ToolError`, and it arrives from
-        # one line further on: assembling the probe refuses a workspace tool that
-        # would replace a built-in of the same name. That is a fact about this
-        # deployment's tools, which is what this field carries -- and left to
-        # escape it took `doctor` and `list` down with a traceback over a
-        # deployment that starts perfectly well, since nothing refuses the clash
-        # until the first request that touches tools.
+        # `CapabilityError` too: the probe refuses a workspace tool replacing a built-in of
+        # the same name, a fact about this deployment's tools.
         tools_error = str(exc)
     except MiddlewareError:
-        # Assembling the probe reads the middleware directory too, so a module that
-        # will not import arrives here rather than at the read above. Deliberately
-        # not `tools_error`: the tool catalogue walked fine, and `middlewares_error`
-        # already carries this one with the file to go and open. What is lost is the
-        # built-in set, which no longer has a graph to be read off -- and saying
-        # "tools failed" about that would send a reader to the wrong directory.
-        #
-        # Said as its own answer instead, because the silence here is what let
-        # `doctor` print `0 built in` with an `ok` beside it over a deployment with
-        # ten of them, and `--json` hand a script `[]` with `tools_error: null`.
+        # The probe reads the middleware directory too. Not `tools_error`: the tool catalogue
+        # walked fine and `middlewares_error` names the file. Unchecked, not silently empty.
         checked = False
-    # `None` for the build: the only way out with one is the early return above, where
-    # there is no graph and so nothing else to report either.
+    # `None` for the build: only the early return above has a build error.
     return builtin, workspace_tools, sources, tools_error, checked, None
 
 
@@ -798,22 +628,14 @@ def inventory(
     subagent_sources: Mapping[str, str] = _NOTHING
     subagents_error: str | None = None
     compiled_subagents: tuple[str, ...] = ()
-    # Bound before the `try`, because the audience walk below reads them and a
-    # catalogue that will not load must still produce a listing -- that is the
-    # whole reason these errors are carried rather than raised.
+    # Bound before the `try`: the audience walk reads it even when the catalogue will not load.
     specs: Mapping[str, object] = _NOTHING
     try:
-        # Both reads, in one `try`. `sources` parses the same files `specs`
-        # does, so reading it outside let the error escape from the line that
-        # was only asking which file each definition came from -- and `getattr`
-        # with a default does not help, because the property raises rather than
-        # being absent.
+        # `sources` in the same `try`: it parses the files `specs` does, and the property
+        # raises rather than being absent.
         specs = resolved.subagents.specs
-        # Asked here as well as at `build_agent`, and that is the point rather than
-        # duplication. A cycle is a property of the catalogue, so an inventory that
-        # reports the catalogue has to report it: this said a workspace was fine while a
-        # run refused it, which is the same shape as `--list` advertising a skill the
-        # agent would not load.
+        # As at `build_agent`, not a duplicate: a cycle is the catalogue's, so a listing of it
+        # must report what a run would refuse.
         refuse_cycles(specs)
         subagents = {name: spec.description for name, spec in specs.items()}
         compiled_subagents = tuple(
@@ -839,8 +661,7 @@ def inventory(
     agent_subagents: Mapping[str, tuple[str, ...]] = _NO_NAMES
     agents_error: str | None = None
     try:
-        # The same shape as the subagent read below it, and in one `try` for the
-        # same reason: `sources` parses the files `specs` does.
+        # One `try`, as for subagents: `sources` parses the files `specs` does.
         defined_agents = resolved.agents.specs
         agents = {name: spec.description for name, spec in defined_agents.items()}
         agent_sources = MappingProxyType(dict(resolved.agents.sources))
@@ -853,10 +674,7 @@ def inventory(
             }
         )
     except (AgentError, SubagentError) as exc:
-        # `SubagentError` too: resolving the chain reads the subagent catalogue,
-        # so a broken subagent makes the *agents* half unanswerable. Reported
-        # here rather than raised, like its neighbours -- a listing is where
-        # somebody goes because something is broken.
+        # `SubagentError` too: resolving the chain reads the subagent catalogue.
         agents_error = str(exc)
 
     stated, report, broken = _access(
@@ -868,21 +686,12 @@ def inventory(
     )
     reaching = _reaching(held, stated)
     scoped = held is not None
-    # A scoped view carries only what that caller reaches, and the policy itself is
-    # not theirs to read. Decided here rather than at each renderer: the text form
-    # already skipped the access sections for a scoped view and the JSON form did
-    # not, so one caller holding a source id was handed the name, the file and the
-    # subagent chain of every definition out of their reach -- measured through the
-    # real command -- along with the vocabulary and every definition's audience.
-    #
-    # One computed answer, which the companion maps are filtered against rather than
-    # each asking again: the field that leaked is the one whose filter was somewhere
-    # else, and two answers to what a caller reaches is how they came apart.
+    # A scoped view carries only what that caller reaches, and none of the policy. Decided
+    # here, not per renderer, and computed once for every map to filter against: two
+    # answers to what a caller reaches is how a field leaks.
     for_caller = reaching("agents", agents)
-    # Both conditions, and a subagent needs both: its own line has to admit this
-    # caller, and an agent they can open has to name it. Filtered by the first alone,
-    # a subagent nothing activates was listed to a caller who could reach it by no
-    # path -- measured, and a request naming it wires nothing.
+    # A subagent needs both: its own line admits this caller, and an agent they can open
+    # names it. By the first alone, one nothing activates is listed, reachable by no path.
     reachable = handed_work_by(
         (spec for name, spec in defined_agents.items() if name in for_caller),
         specs,
@@ -893,30 +702,20 @@ def inventory(
         for name, description in reaching("subagents", subagents).items()
         if name in reachable
     }
-    # Every field naming a subagent is kept to the same answer. One left whole names a
-    # subagent this caller cannot open, in `--json` and in the text form alike.
+    # Every field naming a subagent is kept to the same answer, or one names a subagent
+    # this caller cannot open.
     reached_subjects = {
         *(_subject("agent", name) for name in for_caller),
         *(_subject("subagent", name) for name in for_caller_subagents),
     }
-    # The catalogues, filtered by what the definitions this caller reaches offer them.
-    # A tool's own audience is the `shut=` below, and `reaching("tools", ...)` would ask
-    # only that half: a tool no definition in reach offers passes it.
-    #
-    # Reachable definitions rather than all of them, which is the load-bearing half: an
-    # entry may be written `["*"]`, meaning anyone who reaches *this definition*, and at
-    # run time the `and` with the definition's own line is held by the caller never
-    # opening it. A listing has no such gate, so this is where that `and` is.
-    #
-    # Agents, and not the subagents they reach: a subagent can only narrow what reached
-    # it, so one declaring a tool no reachable agent grants contributes a name this
-    # caller gets by no path. `offers` says what the ceiling does with it.
+    # The catalogues, kept to what the definitions this caller reaches offer, not only by a
+    # tool's own audience, which is `shut=`. Reachable definitions only: an entry written
+    # `["*"]` means anyone reaching *this definition*, which a run gates by the caller
+    # opening it and a listing must gate here. Agents, not the subagents they reach: a
+    # subagent only narrows what reached it.
     reached_agents = [spec for name, spec in defined_agents.items() if name in for_caller]
-    # `same` on both axes, and for one reason: a definition writes a grant and the
-    # catalogue has its own name for the same thing. Skills have two legal spellings
-    # and so have always had one; tools have two as well -- `formats.md` documents
-    # `where::what` -- and had none, so a caller whose agent granted the long form was
-    # told they reached no tools.
+    # `same` on both axes: a grant may spell a tool or a skill the long way, `where::what`,
+    # where the catalogue has its own name for it.
     spelt = set(workspace_tools)
     offers_tool = admitted(
         offers("tools", held, reached_agents, same=lambda one: placed(one, spelt)),
@@ -925,18 +724,13 @@ def inventory(
     offers_skill = offers("skills", held, reached_agents, same=registry.identity)
 
     return Inventory(
-        # The resolved catalogue, not `cfg` -- so a deployment that staged its
-        # definitions somewhere is listed as it is rather than as it was
-        # configured, which is the difference the record was built for.
+        # The resolved catalogue, not `cfg`, so staged definitions are listed where they are.
         origins=Origins.of(cfg, catalogue=resolved, sessions=sessions),
         agents=MappingProxyType(dict(for_caller)),
         agent_sources=reaching("agents", agent_sources),
-        # Membership in the names above, in both views -- the chains are keyed from
-        # the same walk as the names, so an unscoped listing keeps all of them
-        # without a branch of its own. Key these off a different walk and the
-        # unscoped view starts silently dropping chains. A chain's own names are kept
-        # to `for_caller_subagents` too: the build drops a subagent its own line keeps
-        # from this caller, whichever agent names it.
+        # Keyed from the same walk as the names, so an unscoped view keeps every chain with
+        # no branch of its own; another walk would silently drop some. A chain's names are
+        # kept to `for_caller_subagents`: the build drops what a subagent's line withholds.
         agent_subagents=MappingProxyType(
             {
                 name: tuple(one for one in chain if one in for_caller_subagents)
@@ -944,17 +738,9 @@ def inventory(
                 if name in for_caller
             }
         ),
-        # `or`, not replace: a kind that already failed to load has the more
-        # fundamental problem, and saying the second one instead would send a
-        # reader to a source id in a file that does not parse.
-        #
-        # `broken` is withheld from a scoped view along with the rest of the policy
-        # below. It names a definition this caller cannot open, the source id that
-        # definition named, and every source id the deployment declares -- so a caller
-        # was handed the whole vocabulary beside the `access: null` that withholds it,
-        # and their listing failed for a fault in a file out of their reach. The
-        # catalogue-read half stays: a kind that will not load is a kind nobody gets,
-        # and an empty list with no reason given is worse than the reason.
+        # `or`, not replace: a kind that failed to load has the more fundamental problem.
+        # `broken` is policy, so withheld from a scoped view; a load error stays, since a
+        # kind that will not load is one nobody gets, and an unexplained empty list is worse.
         agents_error=agents_error or (None if scoped else broken.get("agents")),
         builtin_tools=builtin,
         builtin_tools_checked=builtin_checked,
@@ -967,22 +753,17 @@ def inventory(
         skills={
             name: registry.description(name) for name in registry.names if offers_skill(name)
         },
-        # A misfiled skill is loaded and offered, so it filters as `skills` above does,
-        # by what a definition this caller reaches offers them: unfiltered, the fault
-        # named a skill and its directory where `skills` itself had correctly kept both
-        # out. The other two never loaded, so no definition offers them by name and
-        # there is nothing to filter against -- the operator's diagnostic, like an
-        # orphan below, and a scoped view carries none of those.
+        # A misfiled skill is loaded and offered, so it filters as `skills` does. The
+        # unloadable and misplaced never loaded, so nothing offers them by name: they are
+        # the operator's diagnostics, which a scoped view carries none of.
         skills_unloadable=() if scoped else tuple(registry.unloadable),
         skills_misplaced=() if scoped else tuple(resolved.skills.misplaced),
         skills_misfiled=tuple(
             (where, name) for where, name in registry.misfiled if offers_skill(name)
         ),
         subagents=MappingProxyType(dict(for_caller_subagents)),
-        # Keyed off the names above and not off `reaching` again, which is what the
-        # chains below already do and for the same reason: a second walk answers a
-        # second question, and this one kept naming a subagent no agent in reach hands
-        # work to -- in `--json`, where the text form had already dropped it.
+        # Keyed off the names above, not `reaching` again: a second walk answers a second
+        # question, naming subagents no agent in reach hands work to.
         subagent_sources=_kept(subagent_sources, for_caller_subagents),
         subagents_error=subagents_error or (None if scoped else broken.get("subagents")),
         middlewares=middlewares,
@@ -1003,8 +784,7 @@ def inventory(
         miscounted_bundles_checked=miscounted_bundles is not None,
         bundled_tools=_kept(_without(bundled_tools, held_back), for_caller_subagents),
         bundled_skills=_kept(bundled_skills, for_caller_subagents),
-        # Computed here rather than in `_bundled`, which is the only place that
-        # knows what is in a bundle and not which definitions carry a graph.
+        # Here, not in `_bundled`, which does not know which definitions carry a graph.
         stranded_skills=MappingProxyType(
             {
                 name: bundled_skills[name]
@@ -1021,25 +801,17 @@ def inventory(
         shadowed_checked=shadowed is not None,
         carried_bundles=tuple(name for name in carried if name in for_caller_subagents),
         bundles_error=bundles_error,
-        # Empty for a scoped view. An orphan is a folder no definition is named for, so
-        # it reaches nobody to filter it against; it is the operator's diagnostic, and
-        # a caller's view carries none of those, as it carries none of the policy.
+        # Empty for a scoped view: an orphan reaches nobody, so it is the operator's diagnostic.
         orphaned_assets=() if scoped else orphaned_assets,
         compiled_subagents=tuple(
             name for name in compiled_subagents if name in for_caller_subagents
         ),
         skills_enabled=cfg.skills_enabled,
-        # `None` and empty for a scoped view: the vocabulary, the per-definition
-        # audiences and the report of what restricts nobody are all the policy, and
-        # a caller reading their own view is not the operator checking it.
+        # The policy, so `None` and empty for a scoped view.
         access=None if scoped else cfg.access,
         access_report=AccessReport() if scoped else report,
         held=held,
-        # And empty with no vocabulary at all: a `source_ids:` line is inert until a
-        # `source_ids.yaml` declares the names, which `formats.md` says, and the
-        # human form prints no access section in that state.
-        # `--json` carried every definition's lines, so the form a script reads
-        # reported a policy that is not in force. Here rather than in the renderer,
-        # because the record is what both forms are handed.
+        # And empty with no vocabulary: a `source_ids:` line is inert until `source_ids.yaml`
+        # declares the names. Here, not in a renderer, because both forms are handed this.
         audiences=_NO_AUDIENCES if scoped or cfg.access is None else stated,
     )

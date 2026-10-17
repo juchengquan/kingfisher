@@ -1,8 +1,7 @@
-"""Kingfisher's own sessions: a folder per session on this host, and the backend over
-it. The shell that backend runs, and the fences around it, are `shell`'s.
+"""Kingfisher's own sessions: a folder per session on this host, and the backend over it.
 
-The core never names anything here. A deployment hands `LocalSessions` to
-`Kingfisher` as it would its own.
+The core never names anything here; a deployment hands `LocalSessions` to `Kingfisher` as
+it would its own.
 """
 
 from __future__ import annotations
@@ -54,9 +53,8 @@ def _refuse_wording_without_runner(runner: Any, shell_prompt: ShellPrompt | None
 def _once(result: Any, *, key: Callable[[Any], Any], field: str = "matches") -> Any:
     """A result with its repeated rows dropped, first occurrence kept.
 
-    First and not last, which decides what a reader sees: the row a real directory
-    produced carries its modification time, and the route's own row is a stand-in with
-    an empty one.
+    First, not last: a real directory's row carries its modification time, and a route's
+    stand-in row an empty one.
     """
     rows = getattr(result, field)
     if rows is None:
@@ -73,7 +71,6 @@ def _once(result: Any, *, key: Callable[[Any], Any], field: str = "matches") -> 
 
 
 def _by_path(one: Mapping[str, Any]) -> Any:
-    """A match's identity: the file it names."""
     return one.get("path")
 
 
@@ -83,12 +80,10 @@ def _by_line(one: Mapping[str, Any]) -> Any:
 
 
 def _directly_under(path: str, here: str) -> bool:
-    """Whether `path` names something `here` holds, rather than itself or something
-    deeper.
+    """Whether `path` names something `here` holds, rather than itself or something deeper.
 
-    The empty remainder is the directory asked about. Left in, a route listed its own
-    stand-in row among its contents -- `ls /inputs` answered `/inputs/` and the file
-    beside it -- which is how this was found.
+    The empty remainder is `here` itself, which a route would otherwise list among its
+    contents.
     """
     if not path.startswith(here):
         return False
@@ -99,12 +94,9 @@ def _directly_under(path: str, here: str) -> bool:
 def _listing(result: Any, path: str, routes: Iterable[tuple[str, Any]]) -> Any:
     """One directory's own entries: what it holds, each named once.
 
-    `ls` is non-recursive by deepagents' own documentation, and at the root it appends
-    a stand-in row for every route -- so a route nested two deep arrived as a top-level
-    entry of `/`, next to the folder that holds it. The stand-in is kept and moved to
-    the directory it belongs under, rather than dropped: with nothing written there yet
-    the real folder does not exist, so that row is the only place the model hears the
-    route is reachable at all.
+    At the root deepagents appends a stand-in row for every route, nested ones included.
+    Each is moved under the directory it belongs to rather than dropped: before anything
+    is written there, that row is the only sign the route is reachable.
     """
     if result.entries is None:
         return result
@@ -123,33 +115,22 @@ def _listing(result: Any, path: str, routes: Iterable[tuple[str, Any]]) -> Any:
 class WorkspaceScopedBackend(CompositeBackend):
     """A `CompositeBackend` that refuses host paths instead of re-rooting them.
 
-    `ls`, `glob` and `grep` are deduplicated, on both paths. They merge every
-    backend's answer, and two of the routes here point *inside* the default backend's
-    own root -- `/inputs` and `/memory` are real directories under the session -- so
-    each saw the same file twice: measured, one file supplied with `--input` came back
-    as two matches with one path between them, on every pattern.
-
-    Each override is written twice because deepagents offers each tool twice, and an
-    async turn goes through the second one. The sync three were deduplicated for a
-    release while `aglob`, `agrep` and `als` were not -- so the same session answered
-    one way through `run` and another through the async path, which no suite asking
-    only the sync half can see.
+    `ls`, `glob` and `grep` are deduplicated: they merge every backend's answer, and
+    `/inputs` and `/memory` are routes *inside* the default backend's root, so each file
+    there came back twice. Each override is written for the async tool too, which an async
+    turn goes through and a suite asking only the sync half cannot see.
     """
 
     def ls(self, path: str) -> Any:
-        """What this directory holds, each named once."""
         return _listing(super().ls(path), path, self.sorted_routes)
 
     async def als(self, path: str) -> Any:
-        """The same, for an async turn."""
         return _listing(await super().als(path), path, self.sorted_routes)
 
     def glob(self, pattern: str, path: str | None = None) -> Any:
-        """Every match, minus the ones a second backend already gave."""
         return _once(super().glob(pattern, path), key=_by_path)
 
     async def aglob(self, pattern: str, path: str | None = None) -> Any:
-        """The same, for an async turn."""
         return _once(await super().aglob(pattern, path), key=_by_path)
 
     def grep(
@@ -160,7 +141,6 @@ class WorkspaceScopedBackend(CompositeBackend):
         *,
         max_count: int | None = None,
     ) -> Any:
-        """The same, keyed by the line rather than the file."""
         return _once(super().grep(pattern, path, glob, max_count=max_count), key=_by_line)
 
     async def agrep(
@@ -171,7 +151,6 @@ class WorkspaceScopedBackend(CompositeBackend):
         *,
         max_count: int | None = None,
     ) -> Any:
-        """The same, for an async turn."""
         return _once(
             await super().agrep(pattern, path, glob, max_count=max_count), key=_by_line
         )
@@ -185,19 +164,14 @@ class WorkspaceScopedBackend(CompositeBackend):
         workspace: Path,
         artifacts_root: str = DEFAULT_LAYOUT.scratch_route,
     ) -> None:
-        # Where deepagents writes on its own -- a tool result too long to send, the
-        # history its summarizer keeps. They are the agent's working material: returned
-        # to nobody, swept with the session, and where `system.md` tells it to look.
-        # `/outputs` would hand each one to the caller as an artifact, and the default,
-        # `/`, puts both folders at the session root, in none the layout names. Under
-        # Landlock the shell can rewrite them here, and may: nothing kingfisher reads
-        # back trusts them. deepagents reads this only off a `CompositeBackend`, so it
-        # is set here, and a subclass calling this `__init__` keeps it. The default is
-        # the module's scratch route; `backend_at` passes the configured layout's.
+        # Where deepagents writes on its own: a tool result too long to send, the history
+        # its summarizer keeps. Working material, so not `/outputs`, which would hand each
+        # to the caller as an artifact, nor the default `/`, outside every folder the layout
+        # names. The shell may rewrite them: nothing kingfisher reads back trusts them.
+        # deepagents reads this only off a `CompositeBackend`, so it is set here.
         super().__init__(default=default, routes=routes, artifacts_root=artifacts_root)
-        #: The deployment's workspace, which is what a host path is refused against.
-        #: Separate from the session below, and they were one value: see
-        #: `reject_host_path`, where the session is what the suggestion needs.
+        #: What a host path is refused against; not the session, which the refusal's
+        #: suggestion needs separately.
         self.workspace = Path(workspace)
         self._session_dir = Path(session_dir)
         #: What `protect_inputs` could not harden, for the turn to report.
@@ -213,12 +187,9 @@ class WorkspaceScopedBackend(CompositeBackend):
 class InputsBackend(FilesystemBackend):
     """A session's `/inputs`, which is read-only on disk and opened only for an upload.
 
-    `upload_files` is how kingfisher places a caller's files, and the only way in.
-    The agent never reaches it: its file tools write through `write` and `edit`,
-    which the permission bits still refuse, and a tool's backend refuses `/inputs`
-    before the call arrives here. Unlocking inside the backend rather than around
-    the call is what lets `place_inputs` work on any backend -- a remote one has no
-    permission bits to lift, and meets the same promise its own way.
+    `upload_files` is the only way in, and the agent's file tools never reach it. Unlocked
+    inside the backend rather than around the call, so `place_inputs` works on any
+    backend: a remote one has no permission bits to lift.
     """
 
     def __init__(self, session_dir: Path, inputs: str = DEFAULT_LAYOUT.inputs) -> None:
@@ -261,14 +232,9 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
 ) -> WorkspaceScopedBackend:
     """Kingfisher's own backend, rooted at one session directory on this host.
 
-    What `LocalSessions` builds for a session id, and what a deployment building
-    on the default calls to get it for a directory of its choosing. `shell_prompt` is
-    what the agent is told about the shell `runner` provides, and is refused without
-    one.
-
-    Typed to the class rather than to deepagents' protocol because a deployment
-    adjusting what this built reads `default` and `routes` off it, and the protocol
-    carries neither.
+    `shell_prompt` describes the shell `runner` provides, and is refused without one.
+    Typed to the class rather than deepagents' protocol: a deployment adjusting what this
+    built reads `default` and `routes` off it, and the protocol carries neither.
     """
     _refuse_wording_without_runner(runner, shell_prompt)
     found = catalogue or Definitions.from_config(cfg)
@@ -276,13 +242,9 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     skills_dir = skills.root
 
     _require_layout(session_dir, cfg.layout.session_dirs, cfg.layout.saved_results)
-    # Not created where it is missing: it is in the definitions folder, which a
-    # start only reads, and a missing one means no skills. Both Linux fences grant
-    # only the paths that exist, and the route below answers a read with "not
-    # found" either way.
-    # The view as well as what it points at: every fence checks the resolved path,
-    # so the targets need their grant, and the Linux one also has to reach the
-    # links themselves.
+    # The skills folder is not created where missing: a start only reads the definitions
+    # folder, and a missing one means no skills. The view as well as its targets: every
+    # fence checks the resolved path, and the Linux ones also have to reach the links.
     view = skills_view(skills_dir, skills.mounts, cfg.kingfisher_dir) if skills.mounts else None
     every_skills_dir = (skills_dir, *skills.mounts.values(), *((view,) if view else ()))
 
@@ -294,20 +256,14 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
             cfg, session_dir, confined, every_skills_dir, env, path_extra=settings.path_extra
         )
     else:
-        # Said once, here, rather than left for a reader to work out from two
-        # places. What confines the shell depends on what runs the command, and
-        # a supplied runner that is not local receives nothing this process
-        # applied -- so the confinement has to stop claiming otherwise.
+        # A supplied runner that is not local receives nothing this process applied, so
+        # the confinement must stop claiming it.
         chosen = runner
         confined = confinement.with_supplied_runner(confined, local=runs_locally(runner))
     if confined.warning:
-        # After the runner is settled, not beside `shell_confinement`: a runner that
-        # is not local withdraws the warning, and saying it earlier would tell that
-        # deployment its host is exposed when nothing runs on it. This line rather
-        # than the caller's, so the default filter says it once per process instead
-        # of once per place that builds a backend.
-        # What it means for the people one workspace serves, said where a program
-        # running kingfisher sees it: most never run `doctor`.
+        # After the runner is settled: one that is not local withdraws the warning.
+        # `stacklevel=1` so the default filter says it once per process. The sessions
+        # sentence is here because most programs running kingfisher never run `doctor`.
         said = confined.warning + (
             " A workspace may hold many sessions, and each session's agent can then also "
             "read and change the other sessions' files."
@@ -316,18 +272,16 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     confined_shell = ConfinedLocalShellBackend(
         confined,
         runner=chosen,
-        # The deployment's runner and not `chosen`, which is kingfisher's own fence on
-        # Linux: that one is handed `env` and the session directory, and the
-        # deployment's is handed the command and nothing else.
+        # The deployment's runner, not `chosen`, which on Linux is kingfisher's own fence:
+        # that one is handed `env` and the session directory, a deployment's only the
+        # command.
         shell_prompt=kingfishers_shell() if runner is None else shell_prompt,
         root_dir=str(session_dir),
         env=env,
         timeout=cfg.execution_timeout_s,
     )
-    # What backs each path. Keyed by the table rather than written as one dict
-    # so that a route declared in `kingfisher.core.layout` and forgotten here raises when
-    # the backend is built, instead of reaching a turn as a path that resolves
-    # to the default backend and quietly ignores its own deny rule.
+    # Checked against the layout's routes so one forgotten here raises at build, rather
+    # than resolving to the default backend and ignoring its own deny rule.
     layout = cfg.layout
     backing = {
         layout.inputs_route: lambda: InputsBackend(session_dir, layout.inputs),
@@ -335,15 +289,11 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
         layout.memory_route: lambda: FilesystemBackend(
             root_dir=str(session_dir / layout.memory)
         ),
-        # Mounted so it can be refused. Every operation through it is denied by
-        # `read_only_permissions`, and a rule is only expressible against a path
-        # the composite routes -- so the mount is what makes the refusal legal,
-        # not a way in.
+        # Mounted so it can be refused, not as a way in: `read_only_permissions` denies
+        # every operation, and a rule is expressible only against a routed path.
         layout.harness_route: lambda: FilesystemBackend(root_dir=str(session_dir / layout.harness)),
-        # Mounted for the reason `.harness` is: a rule is only expressible against a
-        # path the composite routes, so the mount is what makes the refusal legal.
-        # Unlike `.harness` it is readable -- the agent is told to read a result back
-        # out of it -- and only writing is denied.
+        # Mounted for the same reason, but readable: the agent reads a result back from
+        # it, and only writing is denied.
         layout.tool_results_route: lambda: FilesystemBackend(
             root_dir=str(session_dir / layout.scratchpad / layout.tool_results)
         ),
@@ -357,10 +307,8 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
         raise ConfigError(msg)
 
     routes: dict[str, Any] = {path: backing[path]() for path in layout.routed_paths()}
-    # One per bundle and per mount, so a subagent's own skills and a mounted party's
-    # are readable by the file tools that read every other skill. Generated rather
-    # than declared: the names are not known until a catalogue is read, which is
-    # what `family=True` marks.
+    # One per bundle and per mount, so the file tools read a subagent's or a mounted
+    # party's skills too. Generated: the names are not known until a catalogue is read.
     routes.update({
         route: FilesystemBackend(root_dir=str(directory))
         for route, directory in found.skill_mounts()
@@ -376,22 +324,14 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
 
 
 class LocalSessions(Sessions):
-    """Kingfisher's own `Sessions`: each session a directory under
-    `<workspace>/sessions`, named for its id, each backend `backend_at` that directory.
+    """Kingfisher's own `Sessions`: a directory per session under `<workspace>/sessions`,
+    each backend `backend_at` that directory."""
 
-    `LocalSessions` runs each session's commands here, under kingfisher's own
-    fence. A deployment whose commands run somewhere else builds one with `runner=`,
-    and its sessions are still kingfisher's own: `Kingfisher.origins` asks whether the
-    backends are exactly this class rather than a subclass, because a subclass can
-    return its backend with anything changed.
-    """
-
-    #: On the class as well as set in `__init__`, so a subclass that writes its own
-    #: `__init__` without calling this one still opens sessions.
+    #: On the class as well, so a subclass whose `__init__` skips this one still opens
+    #: sessions.
     _runner: Callable[[Path], CommandRunner] | None = None
     _shell_prompt: ShellPrompt | None = None
-    #: How this shell is fenced. `None` reads the environment at each opening, which is
-    #: what a subclass that skips `__init__` gets.
+    #: How this shell is fenced. `None` reads the environment at each opening.
     shell: confinement.ShellSettings | None = None
 
     def __init__(
@@ -401,20 +341,16 @@ class LocalSessions(Sessions):
         shell_prompt: ShellPrompt | None = None,
         shell: confinement.ShellSettings | None = None,
     ) -> None:
-        # A callable, and only a callable. A runner is built for one session --
-        # kingfisher's own Landlock fence is, because its policy is generated from
-        # the session -- and a shared instance could not know which session it was
-        # running for, would be one fence for every tenant where the runner *is* the
-        # isolation, and would be called from several threads at once because turns
-        # overlap. A deployment with one to share writes `lambda session_dir: shared`.
+        # A callable only: a runner is built per session, as kingfisher's own fence is. A
+        # shared instance would not know its session, would be one fence for every tenant
+        # where the runner *is* the isolation, and would be called from overlapping turns.
         if runner is not None and not callable(runner):
             msg = (
                 "runner is built per session, so it takes a callable: pass "
                 "`lambda session_dir: your_runner` if you have one to share"
             )
             raise TypeError(msg)
-        # Here as well as in `backend_at`, so a deployment hears it at startup rather
-        # than on its first turn.
+        # As well as in `backend_at`, so a deployment hears it at startup, not first turn.
         _refuse_wording_without_runner(runner, shell_prompt)
         self._runner = runner
         self._shell_prompt = shell_prompt
@@ -432,15 +368,13 @@ class LocalSessions(Sessions):
             _where(cfg, session_id),
             cfg.layout.session_dirs,
             memory=cfg.layout.memory,
-            # Named as well as being in the tuple, because `keep_tmp_private` cannot
-            # pick one directory out of it. Omitted, the configured scratchpad was laid
-            # out `0o755` where the default one is `0o700` -- and TMPDIR points at it.
+            # Named as well as in the tuple: omitted, a renamed scratchpad, which is
+            # `TMPDIR`, is laid out without its `0o700`.
             scratchpad=cfg.layout.scratchpad,
             saved_results=cfg.layout.saved_results,
         )
-        # Kernel-level, because the deny rule covers only the file tools. What it
-        # could not harden is reported by the turn rather than raised: raising here
-        # used to make one file owned by another user a session unusable for good.
+        # Kernel-level, because the deny rule covers only the file tools. Reported by the
+        # turn, not raised: one file owned by another user would end the session for good.
         unprotected = protect_inputs(directory, cfg.layout.inputs)
         runner = self._runner(directory) if self._runner is not None else None
         built = backend_at(
@@ -469,14 +403,13 @@ class LocalSessions(Sessions):
     def where(self, cfg: Config) -> Path | None:
         """Where this keeps its sessions on this host, for the origins line.
 
-        Only for exactly this class: a subclass can return its backend with anything
-        changed, so it is answered as somewhere this cannot see.
+        Exactly this class, not `isinstance`: a subclass can return its backend with
+        anything changed.
         """
         return cfg.sessions_root if type(self) is LocalSessions else None
 
-    # The turn lock is a directory under the session's `.harness`. `mkdir` because it is
-    # the one operation that fails when the name is taken, which is what a lock is --
-    # `write` overwrites, and two turns would both take it.
+    # The turn lock is a directory: `mkdir` fails when the name is taken, where `write`
+    # overwrites and two turns would both take it.
 
     def claim(
         self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
@@ -495,9 +428,6 @@ class LocalSessions(Sessions):
     def held(
         self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
     ) -> bool:
-        # One vanishing between the two looks counts as held: its age is zero, so a race
-        # resolves toward refusing rather than toward taking a slot whose owner may be
-        # about to write.
         at = time.time() if now is None else now
         try:
             taken = _claim_at(cfg, session_id).stat().st_mtime
@@ -520,9 +450,8 @@ def still_held(
 ) -> tuple[str, ...]:
     """Which of these claims somebody could still be holding.
 
-    Treating every claim as a turn in progress is what let a claim left behind by a
-    dead process exempt its session from retention permanently -- measured at ten
-    years idle, still there.
+    Not every claim: one left by a dead process would exempt its session from retention
+    for good.
     """
     return tuple(name for name, taken in entries if now - taken < stale_after)
 

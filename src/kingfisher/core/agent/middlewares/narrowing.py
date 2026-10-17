@@ -37,8 +37,7 @@ class ToolAllowlist(AgentMiddleware):
             for tool in request.tools
             if (name := _tool_name(tool)) is None or name in self._allowed
         ]
-        # `override` rather than assigning `request.tools`: langchain deprecated
-        # mutating a ModelRequest in place.
+        # `override`: langchain deprecated mutating a ModelRequest in place.
         return request.override(tools=kept)
 
     def wrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
@@ -98,18 +97,11 @@ class NarrowedSkills(SkillsMiddleware):
                 found.append({**one, KEY: qualified(label, one["name"])})
         return found
 
-    # `config` is annotated rather than left as `Any`, and langchain is why: it
-    # inspects every hook's signature at construction and warns when this
-    # parameter is not a `RunnableConfig`. Nothing here reads it -- deepagents'
-    # own hooks carry the same unused argument -- but a warning per agent built
-    # is a warning nobody reads by the tenth one.
-    # Asked as deepagents asks it, `is not None` rather than `in`: the channel is in
-    # the graph's input schema and `None` there *requests a reload*, which the library
-    # documents as the way to pick up a skill added since the last turn. Read as
-    # "already loaded", a reload request skipped the load and `modify_request`'s
-    # `state.get(...) or []` then handed a request that activated skills an empty
-    # index. Not reachable through `Kingfisher.run`, which builds its own input --
-    # reachable by a deployment driving the graph, which is what `graph=` is for.
+    # `config` is unread but annotated: langchain warns, per agent built, on a hook whose
+    # parameter is not a `RunnableConfig`.
+    # `is not None`, as deepagents asks, not `in`: `None` in this input channel requests a
+    # reload, and read as "already loaded" it hands an empty index to a deployment driving
+    # the graph itself.
     def before_agent(self, state: Any, runtime: Any, config: RunnableConfig) -> Any:  # noqa: ARG002
         if state.get("skills_metadata") is not None:
             return None
@@ -141,12 +133,8 @@ class DeclaredSubagentsOnly(AgentMiddleware):
         if wanted in self._declared:
             return None
         offered = ", ".join(sorted(self._declared)) or "none"
-        # A missing argument is a different mistake from a refused name, and
-        # saying the wrong one costs the whole turn. Observed live: a model
-        # sent `subagentType`, read back "None is not a subagent this request
-        # may use. Available: ..., reviewer, ...", reported the tool as broken
-        # "despite listing reviewer as available", and answered around it
-        # rather than retrying. The name it could not find was its own typo.
+        # A missing argument is a different mistake from a refused name: told the name was
+        # refused, a live model that had sent `subagentType` called the tool broken and gave up.
         detail = (
             "no subagent_type was given -- the argument is `subagent_type`"
             if wanted is None

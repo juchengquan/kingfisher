@@ -25,20 +25,16 @@ __all__ = [
 #: it states its exports once, in there, and nothing inside it is scanned.
 PACKAGE_MARKER = "__init__.py"
 
-#: The namespace every workspace module is imported under. Never registered and
-#: never on `sys.path`: it exists to make a module name unique, nothing more. A
-#: package resolves its own relative imports against *itself*, so no parent has
-#: to exist -- measured, after writing one that turned out to do nothing.
+#: The namespace every workspace module is imported under, only to make its name unique.
+#: No parent package is registered: a package resolves relative imports against itself.
 _NAMESPACE = "kingfisher_workspace"
 
 
 def defined_in_a_workspace(module: str) -> bool:
     """Whether a class with this `__module__` was written in a workspace file.
 
-    Asked because the answer is the only thing that name is good for. It is unique and
-    nothing else -- `cap_3107351676692534586` -- so a listing that printed it beside a
-    middleware would look like it was saying where the code is. A class *imported* into
-    a workspace module keeps its own package there, and that one is worth printing.
+    Such a name is unique and meaningless, so a listing must not print it as where the
+    code is; a class imported into a workspace module keeps its own package.
     """
     return module == _NAMESPACE or module.startswith(f"{_NAMESPACE}.")
 
@@ -53,15 +49,10 @@ def skipped(name: str) -> bool:
 
 
 def modules_in(directory: Path) -> list[Path]:
-    """Every module a directory contributes, deepest layout first resolved.
+    """Every module a directory contributes, walking into folders.
 
-    * a folder holding one is a **package** -- one unit, imported whole, its
-      exports declared once in `__init__.py`. The walk stops there, because
-      descending would scan the helper modules it exists to hold as though each
-      were a module of its own.
-    * anything else is **organisation** -- files are independent, nested as deep
-      as you like, and each declares its own exports exactly as a flat one
-      always did.
+    A folder holding `__init__.py` is one package, imported whole; the walk stops there,
+    or it would scan the package's helpers as modules of their own.
     """
     found: list[Path] = []
     for entry in sorted(directory.iterdir()):
@@ -69,7 +60,7 @@ def modules_in(directory: Path) -> list[Path]:
             continue
         if entry.is_dir():
             if (entry / PACKAGE_MARKER).is_file():
-                found.append(entry)  # a package: one module, not a directory to walk
+                found.append(entry)
             else:
                 found.extend(modules_in(entry))
         elif entry.suffix == ".py" and not entry.name.startswith("_"):
@@ -100,10 +91,8 @@ def load(path: Path, *, declares: str, error: type[ValueError] = LoadError) -> A
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     try:
-        # Importing writes `__pycache__` beside the source, which here means inside the
-        # catalogue -- a directory holding what a person authored, and the one an
-        # operator is most likely to keep under version control. Bytecode there is noise
-        # in `git status` at best and something committed at worst.
+        # No bytecode: it would land in the catalogue, beside what a person authored and
+        # keeps under version control.
         written = sys.dont_write_bytecode
         sys.dont_write_bytecode = True
         try:
@@ -112,8 +101,7 @@ def load(path: Path, *, declares: str, error: type[ValueError] = LoadError) -> A
             sys.dont_write_bytecode = written
     except Exception as exc:
         del sys.modules[module_name]
-        # The file name matters more than the traceback here: the reader is
-        # someone who just added a file, not someone debugging kingfisher.
+        # Named by file: the reader just added one, and is not debugging kingfisher.
         advice = _relative_import_advice(path, exc, declares=declares)
         msg = advice or f"{path.name}: {type(exc).__name__}: {exc}"
         raise error(msg) from exc
@@ -146,22 +134,15 @@ class Export:
 
 
 def exported_from(path: Path, *, where: str, declares: Export) -> Sequence[Any]:
-    """The sequence one workspace module declares, or a refusal an author can act on.
-
-    Here rather than in each catalogue because it was written out three times and the
-    third copy had already drifted: middleware named the type it got where the other
-    two also said what to write instead.
-    """
+    """The sequence one workspace module declares, or a refusal an author can act on."""
     module = load(path, declares=declares.name, error=declares.error)
     exported = getattr(module, declares.name, None)
     if exported is None:
         declared_in = f"{where}{PACKAGE_MARKER}" if path.is_dir() else where
         msg = f"{declared_in}: must define {declares.name}, the {declares.holding} it contributes"
         raise declares.error(msg)
-    # A list or a tuple, and nothing looser. Two of the three things that get
-    # declared here are iterable for reasons of their own -- a `BaseTool` is a
-    # pydantic model, a compiled subagent is a `dict` -- so a duck test would take
-    # `TOOLS = add` or `SUBAGENTS = {...}` and quietly loop over field or key names.
+    # A list or tuple, not any iterable: a `BaseTool` and a compiled subagent's `dict` are
+    # iterable, so `TOOLS = add` would quietly loop over field names.
     if not isinstance(exported, (list, tuple)):
         msg = (
             f"{where}: {declares.name} must be a list or tuple of {declares.holding}, "

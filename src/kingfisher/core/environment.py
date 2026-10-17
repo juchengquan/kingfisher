@@ -19,9 +19,8 @@ from kingfisher.core.config import (
     WorkspacePaths,
 )
 
-# Deliberately narrow: `Config` and friends are imported here to do the work,
-# not re-exported. One blessed import path for the record — `kingfisher.core.config`
-# — is the whole point of it sitting where it does.
+# `Config` and the rest are imported to use, not re-exported: their one import path is
+# `kingfisher.core.config`.
 __all__ = ["config_from_env", "enforce_local_only_tracing"]
 
 
@@ -47,12 +46,8 @@ class Environment:
     def flag(self, key: str, default: bool = False) -> bool:
         """One capability switch, under the only name that means it.
 
-        The bare names these four replaced were read here for a deprecation and
-        are not any more, so this reader has no second name to weigh and a stale
-        line has nothing to win or lose against. Which names those were is in
-        `health.RETIRED`, and deliberately not here: a rule reads this module's
-        text to decide which variables it reads, so spelling a dead one would
-        make it look alive.
+        The names these replaced are in `health.RETIRED`, never here: a rule reads this
+        module's text for the variables it reads, so spelling a dead one makes it look alive.
         """
         raw = (self.values.get(key) or "").strip().lower()
         if not raw:
@@ -96,8 +91,7 @@ class Environment:
             if not equals or not label or not raw:
                 msg = f"{key} takes label=path pairs separated by ':', got {part!r}"
                 raise ConfigError(msg)
-            # Refused rather than letting the later one win: the earlier is a
-            # directory somebody meant to mount, and it would vanish unreported.
+            # Refused rather than letting the later win: the earlier would vanish unreported.
             if label in found:
                 msg = f"{key} names {label!r} twice"
                 raise ConfigError(msg)
@@ -112,11 +106,11 @@ class Environment:
     def paths(self) -> WorkspacePaths:
         """Where this deployment keeps things, without reading the model catalogue.
 
-        The workspace is optional here and required by `config`: seeding reads this
-        and nothing else, and it writes into the definitions folder alone.
+        The workspace is optional here, for seeding, which writes only into the
+        definitions folder.
         """
-        # Here rather than in `config`, so that seeding refuses them too: each one
-        # named the folder a deployment's definitions were copied into as well as read.
+        # Here rather than in `config`, so that seeding, which copied into these, refuses
+        # them too.
         for old, now in FOLDED_SETTINGS.items():
             if self.optional_text(old):
                 msg = (
@@ -128,9 +122,8 @@ class Environment:
             definitions=Path(self.require("KINGFISHER_DEFINITIONS_DIR")).expanduser().resolve(),
             workspace=self.optional_path("KINGFISHER_WORKSPACE"),
             skills_mounts=self.mounts("KINGFISHER_SKILLS_MOUNTS"),
-            # Read here rather than at the command that uses it, so that a rule
-            # scanning this module can see it: one read at a CLI edge would go
-            # undocumented with nothing to notice.
+            # Here, not at the command that uses it, so the rule scanning this module
+            # sees it and holds it to being documented.
             assets=self.optional_path("KINGFISHER_ASSETS"),
         )
 
@@ -147,30 +140,26 @@ class Environment:
         paths = self.paths()
         # `require` only ever raises here, in the words every required setting gets.
         workspace = paths.workspace or Path(self.require("KINGFISHER_WORKSPACE"))
-        # Before the catalogue is read out of it, which would otherwise say only that
-        # `models.yaml` is missing. Never created here: the folder may be one several
-        # deployments read, and a start that made one would be one deployment writing
-        # into all of theirs -- or hiding a mount that failed behind an empty folder.
+        # Before the catalogue is read, which would say only that `models.yaml` is
+        # missing. Never created here: several deployments may read the folder, and
+        # making it would hide a failed mount behind an empty one.
         if not paths.definitions.is_dir():
             msg = (
                 f"KINGFISHER_DEFINITIONS_DIR is {paths.definitions}, which is not a "
                 "directory. `kingfisher seed` makes one and fills it"
             )
             raise ConfigError(msg)
-        # One file rather than several, unlike the definition roots: endpoints
-        # and models cross-reference, and splitting them would let half a
-        # catalogue load.
+        # One file, unlike the definition roots: endpoints and models cross-reference,
+        # and a split would let half a catalogue load.
         models_file = paths.authored_files["models.yaml"]
-        # The source-id vocabulary, and nothing else: who reaches what is written in the
-        # definitions themselves.
+        # The source-id vocabulary only: who reaches what is in the definitions.
         access_file = paths.authored_files["source_ids.yaml"]
 
         return Config(
             workspace=workspace,
             definitions=paths.definitions,
-            # Resolved here, beside the catalogue, rather than handed to `Kingfisher`:
-            # `api` is checked as the file loads, and `kingfisher doctor` and `run`
-            # build their own instance with nowhere to pass an argument.
+            # Wire formats resolved here, not handed to `Kingfisher`: `api` is checked as
+            # the file loads, and `doctor` and `run` build their own with nowhere to pass one.
             models=model_catalogue.load(
                 models_file,
                 self.values,
@@ -178,10 +167,8 @@ class Environment:
                 keys_file=self.optional_path("KINGFISHER_MODEL_KEYS_FILE"),
             ),
             access=access_policy.load(access_file),
-            # The path as well as what was found there. `load` answers `None`
-            # for a file that is not present, which is the ordinary case -- so
-            # without this, the one thing worth reporting about a deployment
-            # that meant to have a policy is unrecoverable.
+            # The path too: `load` answers `None` for a missing file, and a deployment
+            # that meant to have a policy needs to hear where it was looked for.
             access_source=access_file,
             execution_timeout_s=self.number("KINGFISHER_EXECUTION_TIMEOUT_S", 120),
             turn_timeout_s=self.number("KINGFISHER_TURN_TIMEOUT_S", 3600),

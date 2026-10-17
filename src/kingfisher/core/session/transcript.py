@@ -1,9 +1,7 @@
 """What was said in a session, as records this package owns.
 
-**Tool calls are kept, not only the human and assistant text.** Keeping just the
-question and the final answer makes the agent forget its own work: the next turn would
-see *"summarise /inputs/x.csv"* -> *"Done, 40 rows"* with no record that `count_rows`
-ran, so it re-does things and cannot refer to what it did.
+Tool calls are kept, not only the human and assistant text: without them the next turn
+has no record of the agent's own work, so it redoes it and cannot refer to it.
 """
 
 from __future__ import annotations
@@ -12,9 +10,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-#: Who said it. Deliberately the four a provider's wire format has, and not one
-#: more: a role this vocabulary invented would be a translation problem for
-#: whatever reads these next.
+#: Who said it: only the roles a provider's wire format has, so nothing reading these
+#: has to translate one.
 Role = Literal["system", "user", "assistant", "tool"]
 
 

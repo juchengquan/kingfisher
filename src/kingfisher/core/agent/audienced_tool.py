@@ -20,9 +20,8 @@ if TYPE_CHECKING:
 class AudiencedTool(StructuredTool):
     """A `StructuredTool` carrying an audience kingfisher reads and LangChain never sees."""
 
-    # Private rather than a field or `metadata`: LangChain hands a tool's `metadata` to
-    # every callback, so an audience kept there would be in the trace of every call. The
-    # leading underscore is what makes pydantic keep it off the model's fields.
+    # Private, not `metadata`: LangChain hands that to every callback, so the audience
+    # would be in every trace. The underscore keeps it off pydantic's fields.
     _source_ids: Audience = ALL
     _datazone: str | None = None
 

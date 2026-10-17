@@ -1,16 +1,9 @@
 """The two things kingfisher refuses of every backend a session opens, before a turn.
 
-Both only look -- an `isinstance` and a scan of the routes, no I/O -- so running them on
-every backend costs nothing. The rest of what a backend promises writes files and runs
-commands, and is a deployment's to check in its own tests; this repository's are in
-`tests/checks/`.
-
-Running any at all is what stands in for a property this seam used to have for free. A
-deployment handed the backend kingfisher built kept the route table and the confinement
-by returning what it was given; one that builds its own starts from nothing, and a
-backend deepagents gives no shell is the failure with no symptom at the end of that
-road -- deepagents drops the shell, tells the model execution is unavailable, and says
-nothing to the deployment.
+Both only look, with no I/O, so they cost nothing on every backend; the rest of what a
+backend promises is a deployment's to check in its own tests. A backend deepagents
+gives no shell is the failure with no symptom: the model is told execution is
+unavailable, and the deployment is told nothing.
 """
 
 from __future__ import annotations
@@ -34,10 +27,8 @@ def executes(backend: Any) -> bool:
 def not_executing(backend: Any) -> str | None:
     """Why deepagents would give this backend no shell, or `None` where it would.
 
-    `isinstance`, not the methods present -- `SandboxBackendProtocol` is an abstract
-    base class, so a backend that implements `execute` correctly and inherits nothing
-    is treated as having none. Inherit `BaseSandbox` or register with the ABC;
-    implementing the methods is not enough.
+    `isinstance`, not the methods present: `SandboxBackendProtocol` is an abstract base
+    class, so a backend must inherit `BaseSandbox` or register with the ABC.
     """
     if executes(backend):
         return None
@@ -52,12 +43,9 @@ def not_executing(backend: Any) -> str | None:
 def uncovered(backend: Any, scopes: tuple[str, ...] | None = None) -> str | None:
     """Which denied paths this backend routes nothing for, or `None` for none.
 
-    `FilesystemMiddleware` refuses `permissions=` outright on a backend that executes
-    unless every rule path sits under one of its routes -- so a read-only rule is only
-    a legal sentence about a path something routes, and otherwise the graph will not
-    build, with a message that never says kingfisher. `scopes` are the deny rules the
-    backend will be given: the configured layout's at runtime, the module default when
-    left out.
+    `FilesystemMiddleware` refuses `permissions=` on an executing backend unless every
+    rule path sits under a route, with a message that never says kingfisher. `scopes`
+    are the deny rules it will be given, the default layout's when left out.
     """
     if not executes(backend):
         return None  # `not_executing` owns that failure; this would only repeat it
@@ -78,9 +66,7 @@ def uncovered(backend: Any, scopes: tuple[str, ...] | None = None) -> str | None
 def refuse_unusable_backend(backend: Any, scopes: tuple[str, ...] | None = None) -> None:
     """Refuse a backend deepagents would give no shell, or one routing too little.
 
-    `ConfigError`, because this is a library refusing what it was handed. A deployment's
-    own tests raise `AssertionError` for the same two failures, and out of a library that
-    would read as the library's own bug.
+    `ConfigError`, not `AssertionError`: out of a library, that would read as its own bug.
     """
     for why in (not_executing(backend), uncovered(backend, scopes)):
         if why is not None:

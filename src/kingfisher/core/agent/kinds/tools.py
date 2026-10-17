@@ -26,13 +26,9 @@ if TYPE_CHECKING:
 def registered_tools(graph: Any) -> tuple[str, ...] | None:
     """Tool names the compiled agent can actually dispatch, or `None` if unreadable.
 
-    Telling them apart takes a second look, because the obvious one does not work:
-    `create_agent(model, tools=[])` compiles to `['__start__', 'model']` with **no
-    tool node at all**, which is exactly the shape of a hand-written graph that
-    dispatches nothing. Measured, not assumed. What separates them is the `model`
-    node -- an agent graph keeps one whether or not it has tools, so a tool node
-    missing from *that* shape is a definite none, and anything else is a shape with
-    no answer in it.
+    `create_agent(model, tools=[])` compiles with no tool node at all, the shape of a
+    hand-written graph that dispatches nothing. An agent graph keeps its `model` node either
+    way, so a tool node missing beside one is a definite none.
     """
     nodes = getattr(graph, "nodes", None)
     if not hasattr(nodes, "get"):
@@ -68,35 +64,20 @@ def _refuse_shadowed(
 class _ToolSurface:
     """The tool picture one build works from, resolved once."""
 
-    #: What this build has to offer, or `None` when the probe was skipped.
-    #:
-    #: `None` rather than an empty `Offering`, because the two mean opposite
-    #: things: nothing offered would narrow every grant to nothing, while a
-    #: skipped probe means nothing was ever narrowed. The probe is only skipped
-    #: when no definition names a tool either, so nothing below is ever asked to
-    #: enumerate what it does not know.
+    #: What this build has to offer, or `None` when the probe was skipped. Not an empty
+    #: `Offering`, which would narrow every grant to nothing; a skipped probe narrowed nothing.
     offering: Offering | None = None
-    #: What the request asked for. Held so the grants can be *derived* rather
-    #: than stored beside what they came from -- which is what this dataclass
-    #: used to do, and it needed an `unrestricted` flag to compensate, because a
-    #: stored `ALL` could no longer say whether everything was granted or
-    #: nothing was narrowed. `permitted` answers that from the request directly.
+    #: What the request asked for, so the grants are derived rather than stored: a stored
+    #: `ALL` cannot say whether everything was granted or nothing was narrowed.
     asked: Capabilities = field(default_factory=Capabilities)
-    #: The built tool *objects*, by name, taken off the probe graph. Needed
-    #: only for a helper: `SubAgentMiddleware` registers what a spec carries,
-    #: and these are constructed from the backend inside `create_deep_agent`
-    #: where nothing here can reach them -- except off an assembled graph,
-    #: which is what the probe already is.
+    #: The built tool objects, by name, off the probe graph. Only a helper needs them, and
+    #: `create_deep_agent` builds them where nothing else can reach.
     objects: Mapping[str, Any] = field(default_factory=dict)
-    #: Every workspace tool with the file it came from, kept because a grant no
-    #: longer resolves to a name. Two files may each define a `fetch`, so what
-    #: an agent registers has to be chosen as *objects* -- a name would pick one
-    #: of the two out of a dictionary and lose the other before any narrowing
-    #: ran.
+    #: Every workspace tool with its file: two files may each define a `fetch`, and a name
+    #: would lose one of them before any narrowing ran.
     found: tuple[Found, ...] = ()
-    #: Tools whose own audience shuts this caller out, as a grant writes them. Taken
-    #: out of the grant itself rather than out of `found`: a definition naming one is
-    #: still naming a real tool, and `refuse_unknown` must not call it a typo.
+    #: Tools whose audience shuts this caller out. Taken out of the grant, not `found`: a
+    #: definition naming one names a real tool, which `refuse_unknown` must not call a typo.
     out_of_reach: frozenset[str] = frozenset()
 
     @property
@@ -118,9 +99,8 @@ class _ToolSurface:
         """The parent's allowlist, or `None` for no restriction at all."""
         if self.offering is None:
             return None
-        # The grant, not the request, once a tool has been taken out of it: an
-        # unrestricted request is otherwise "no allowlist", and that would put the
-        # tool straight back for the parent and for every subagent it caps.
+        # The grant once a tool is taken out of it: an unrestricted request is no allowlist,
+        # which would hand the tool back to the parent and every subagent it caps.
         tools = self.granted_workspace if self.out_of_reach else self.asked.tools
         return self.offering.permitted(self.asked.builtin_tools, tools)
 
@@ -136,8 +116,7 @@ class _ToolSurface:
         """The request's workspace grant, resolved against what was offered."""
         if self.offering is None:
             return ALL
-        # `spelt` first, for the reason it exists: `narrowed` is set membership
-        # and would drop a long-form grant without a word.
+        # `spelt` first: `narrowed` is set membership and would drop a long-form grant silently.
         granted = narrowed(self.offering.spelt(self.asked.tools), by=self.offering.workspace)
         return tuple(name for name in granted or () if name not in self.out_of_reach)
 
@@ -149,16 +128,15 @@ def _private_tools(
     repository = catalogue.bundled_tools.get(name)
     if repository is None:
         return ()
-    # A bundle is held whatever the request granted, and that is the only grant it
-    # skips: a carried tool's own audience still shuts out a caller it does not admit.
+    # A bundle skips the request's grant and no other: a tool's own audience still applies.
     owned = tuple(
         one for one in repository.found if held is None or reaches(one.audience, held)
     )
     spec = catalogue.subagents.specs.get(name)
     if spec is None or spec.carried:
         return owned
-    # Filtered here as well as refused at load, so a build that skipped `warm` still
-    # hands a subagent only what its definition lists from the folder.
+    # Filtered here as well as refused at load, so a build that skipped `warm` still hands
+    # a subagent only what its definition lists.
     listed = set(spec.bundled.get("tools", ()))
     return tuple(one for one in owned if one.name in listed)
 
@@ -169,50 +147,38 @@ def _tool_objects(graph: Any) -> Mapping[str, Any]:
     by_name = getattr(getattr(node, "bound", None), "tools_by_name", None)
     if not isinstance(by_name, dict):
         return {}
-    # `eval` here is the probe's own sandbox, wired before the grant is known and
-    # never narrowed: a helper holding it would reach `task()` past its own
-    # allowlist, and its runtime would outlive the turn, since `release_interpreter`
-    # closes only the agent's. Without it a nested helper holds what a top-level
-    # subagent does.
+    # Not the probe's `eval`, never narrowed: a helper holding it would reach `task()` past
+    # its allowlist, and it would outlive the turn, as `release_interpreter` closes only the
+    # agent's.
     left_out = {TASK_TOOL, INTERPRETER_TOOL}
     return {name: tool for name, tool in by_name.items() if name not in left_out}
 
 
-def _resolve_tools(  # noqa: PLR0913 -- the sixth is who is asking, which nothing
-    # here can derive and the composition root already knows.
-    # Separate parameters rather than one bundle: folding them up would hide
-    # what each one is for.
+def _resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the composition root knows
     where: str,
     capabilities: Capabilities,
     workspace_tools: Sequence[Found],
-    # `Any` rather than the record it actually returns: naming that type here would
-    # make this module import `core.agent.assembly`, which imports this one
-    # -- the cycle `test_no_module_in_the_package_can_reach_itself` refuses. The
-    # probe takes the graph off it below, which is all this function wants.
+    # `Any`: naming the record it returns would import `core.agent.assembly`, which imports
+    # this module.
     assemble: Callable[[tuple[Any, ...]], Any],
     *,
     names_needed: bool = False,
-    #: What a refusal may list, where there is a caller to narrow it for. Passed in
-    #: rather than worked out here: who is asking is the composition root's to know.
+    #: What a refusal may list, for this caller.
     in_reach: Callable[[str], bool] | None = None,
     held: frozenset[str] | None = None,
 ) -> _ToolSurface:
     """What this request may call, and what this agent offers at all.
 
-    `names_needed` is the fourth job: a *definition* naming tools has to be checked
-    against what exists, and what exists includes the built-in set. A caller asks for
-    it only when some activated definition actually names one. Measured on a build
-    with one subagent: 1 compile and 12.6ms when it names no tools, 2 and 20.3ms when
-    it does -- so the probe is the ~7.7ms, and the runs that never needed it still
-    skip it.
+    `names_needed` asks for the probe a definition naming tools needs, to check them against
+    the built-ins; it costs a compile, so a caller asks only when one does.
     """
     unrestricted = capabilities.builtin_tools == ALL and capabilities.tools == ALL
     if not names_needed and not workspace_tools and unrestricted:
         return _ToolSurface()
 
     probe = assemble(()).graph
-    # Our own probe, so `None` is not reachable here; `or ()` keeps a shape
-    # change upstream from becoming a crash at the one site that would.
+    # `None` is unreachable on our own probe; `or ()` keeps an upstream shape change from
+    # crashing here.
     builtin = registered_tools(probe) or ()
     _refuse_shadowed(workspace_tools, builtin=builtin, where=where)
     offering = Offering.of(workspace_tools, builtin=builtin)

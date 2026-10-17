@@ -30,17 +30,13 @@ def _mechanism(confined: Confinement) -> str:
         if confined.mechanism == confinement.BUBBLEWRAP
         else confined.mechanism or "the platform's sandbox"
     )
-    # A supplied runner that is *local* still receives the confined command, so
-    # the mechanism above holds -- it is just no longer the whole story, and an
-    # operator asking what runs their commands deserves the rest of it.
+    # A local supplied runner still receives the confined command, so the mechanism
+    # holds; it is just not the whole story.
     return f"{named}, with commands run by a supplied runner" if confined.supplied else named
 
 
 def _or_bubblewrap() -> str:
-    """What is left when Landlock is not an option, which is the case that matters: EKS
-    nodes are commonly on 6.1, where a full ruleset is unavailable and kingfisher
-    would otherwise have nothing to suggest but a container.
-    """
+    """What is left without Landlock's full ruleset, as on the 6.1 kernels EKS nodes often run."""
     if bubblewrap_available():
         return (
             "bubblewrap works here, so set KINGFISHER_SHELL_SANDBOX=bubblewrap -- it "
@@ -58,8 +54,7 @@ def _or_bubblewrap() -> str:
 def _what_this_host_could_do() -> str:
     """The remedy, from what the kernel actually answers rather than its name.
 
-    Asked through `confinement`, the same questions the fence asks of the same probes,
-    so this advice and the fence cannot disagree about what the host can do.
+    Asked through the fence's own probes, so the advice and the fence cannot disagree.
     """
     if platform.system() != "Linux":
         return "set KINGFISHER_SHELL_SANDBOX, or confine the process itself"
@@ -73,8 +68,7 @@ def _what_this_host_could_do() -> str:
             f"would be weaker than one on a newer node. {_or_bubblewrap()}"
         )
     if not confinement.landlock_ready():
-        # Installed and refusing this kernel is not the same missing half as absent,
-        # and it used to be told to `pip install` what it already had.
+        # Installed but refusing this kernel, which `pip install` would not fix.
         wants = confinement.sandlock_minimum()
         if wants is not None:
             return (
@@ -94,11 +88,9 @@ def _what_this_host_could_do() -> str:
 
 
 def shell_of(sessions: object) -> ShellSettings | None:
-    """The shell settings of kingfisher's own sessions, or `None` for sessions whose
-    shell this command cannot see into.
+    """The shell settings of kingfisher's own sessions, or `None` for any other.
 
-    By exact class, as `Kingfisher.origins` decides whose sessions they are: a subclass
-    can open its backend with anything changed, the fence included.
+    By exact class: a subclass can open its backend with anything changed, the fence included.
     """
     # Here rather than at the top: `LocalSessions` loads deepagents, and the command
     # imports this module before it knows its verb.
@@ -115,21 +107,15 @@ def named(sessions: object) -> str:
 def _shell(cfg: Config, sessions: object) -> Iterator[Check]:
     """What is keeping `execute` off the host, if anything.
 
-    The check most worth having and the one that was hardest to reach: it lived
-    in `tests/integration/driver.py`, which an installed kingfisher does not
-    have. An unconfined
-    shell is a warning rather than a failure because plenty of deployments mean
-    it -- but silence would make an unconfined one look exactly like a confined
-    one, which is how this went unnoticed until it was measured.
+    An unconfined shell is a warning, not a failure, because plenty of deployments mean it;
+    but said, because silence would make it look exactly like a confined one.
     """
     confined = shell_confinement(cfg, shell_of(sessions) or ShellSettings.from_env())
     if confined.confined:
         yield Check("shell", "ok", f"confined by {_mechanism(confined)}{FROM_CONFIG}")
     elif confined.elsewhere:
-        # The case `EXTERNAL` exists for, and reporting it as the warning below
-        # would recreate the confusion it was invented to remove: a container
-        # that mounts only the workspace looked exactly like nobody having
-        # thought about it.
+        # `ok`, not the warning: a container mounting only the workspace must not
+        # look like nobody having thought about it.
         yield Check(
             "shell", "ok", f"confined by the runtime, not by this process{FROM_CONFIG}"
         )
@@ -145,12 +131,9 @@ def _shell(cfg: Config, sessions: object) -> Iterator[Check]:
 def _session_files(cfg: Config, sessions: object) -> Iterator[Check]:
     """Whether anything this command can see keeps the agent's shell out of `.harness`.
 
-    Nothing signs what kingfisher keeps there -- the pinned agent, the conversation, a
-    paused turn -- so a shell that can write it can rewrite them. Asked of what this
-    command can see: the sessions it runs on, and the sandbox. A deployment wiring its
-    own backends, graph or runner in code is out of its sight.
-    A warning rather than a failure, because the deployment runs either way and may
-    well be fenced by something this cannot look into.
+    Nothing signs what kingfisher keeps there, so a shell that can write it can rewrite the
+    pinned agent, the conversation and a paused turn. A warning, because the deployment
+    runs either way and may be fenced by something out of sight, such as backends in code.
     """
     if (shell := shell_of(sessions)) is None:
         yield Check(
@@ -179,20 +162,12 @@ def _session_files(cfg: Config, sessions: object) -> Iterator[Check]:
 def _linked_sessions(cfg: Config, sessions: object) -> Iterator[Check]:
     """Sessions reached through a link, which a static profile cannot bind.
 
-    `fenced_sessions` resolves the sessions root, so moving all of them with one
-    symlink works and the fence follows. A single session that is itself a link lands
-    where no rule names it, and no rule can: the profile is written per workspace,
-    before the session exists, for the reason `_session_folder_denial` gives. What
-    that costs is not a hole but a session nothing can use -- measured, every command
-    in it failed at `cd` with `shell-init: error retrieving current directory`, which
-    mentions no fence and sends the reader to their shell.
-
-    A warning, like the rows around it, because the deployment runs: the other
-    sessions in that workspace are untouched. Quiet where there is nothing to say.
-    Only the sessions that exist when this runs -- one made later breaks the same way
-    and is not here to be seen -- and only under the macOS mechanism, since the Linux
-    fences are built from the session directory itself, so a link is followed when it
-    is opened and the rules land on the real one.
+    `fenced_sessions` resolves the sessions root, so one link moving all of them is
+    followed. A single session that is a link lands where no rule names it, since the
+    profile is written per workspace before sessions exist, and every command in it
+    fails at `cd` with an error naming no fence. A warning: the other sessions are
+    untouched. Only the macOS mechanism, because the Linux fences are built from the
+    opened session directory and so follow the link.
     """
     if (shell := shell_of(sessions)) is None:
         return
@@ -223,11 +198,9 @@ def _linked_sessions(cfg: Config, sessions: object) -> Iterator[Check]:
 def _sessions_apart(cfg: Config, sessions: object) -> Iterator[Check]:
     """Whether one session's agent can read and change another session's files.
 
-    `shell` says what the host is exposed to; this says the consequence for the people
-    one workspace serves. A report, never a refusal: kingfisher is mostly run as a
-    package, and on many servers no fence can start. Quiet where it cannot happen -- a
-    Linux fence handing each turn its own session -- and for sessions this
-    command cannot see into, whose contract asks it of them.
+    A report, never a refusal: kingfisher is mostly run as a package, and on many servers
+    no fence can start. Quiet under a Linux fence, which hands each turn its own session,
+    and for sessions this cannot see into, whose contract asks it of them.
     """
     if (shell := shell_of(sessions)) is None:
         return

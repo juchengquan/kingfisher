@@ -35,9 +35,8 @@ class Definitions:
     middlewares: LocalMiddlewareRepository
 
     def __post_init__(self) -> None:
-        # Here rather than where the skills are first read: a mount's label becomes a
-        # route segment, and a plugin mounting the labels of a catalogue it was handed
-        # must not be the one to find out that two collide.
+        # Here, not where skills are first read: a mount's label becomes a route segment,
+        # and a plugin mounting these labels must not be the first to find two collide.
         refuse_unmountable(self.skills.root, self.skills.mounts)
 
     @cached_property
@@ -46,14 +45,7 @@ class Definitions:
         return skill_registry.read(self.skills)
 
     def skill_sources(self) -> tuple[tuple[str, Path, str], ...]:
-        """Every place the agent is given a skills index: `(route, folder, source)`.
-
-        The route the folder is served at, the folder on this host, and the source in
-        it deepagents lists -- the catalogue's root and each folder in it that holds
-        skills, then every mounted directory at its root. Listing each through a
-        session's backend and through the folder itself is how a backend is shown to
-        serve what kingfisher read.
-        """
+        """Every place the agent is given a skills index: `(route, folder, source)`."""
         root = self.skills.root
         return (
             *((SKILLS_ROUTE, root, path) for _, path in skill_registry.sources(root)),
@@ -63,11 +55,9 @@ class Definitions:
     def skill_mounts(self) -> tuple[tuple[str, Path], ...]:
         """`(route, directory)` for every skills directory mounted beneath the catalogue.
 
-        Each bundle's, then each mount a deployment named. All under `/skills/`, because
-        both things that keep the catalogue read-only -- the deny rule and the sandbox
-        profile -- are scoped to that prefix. `backend_at` mounts this list and
-        `a_session_serves_the_skills_kingfisher_read` checks a `Sessions` against it: a
-        kind of skills directory mounted anywhere but here would escape the check.
+        All under `/skills/`: the deny rule and sandbox profile that keep the catalogue
+        read-only are scoped to that prefix. A skills directory mounted other than
+        through this list escapes the check that a session serves what was read.
         """
         return (
             *(
@@ -75,8 +65,7 @@ class Definitions:
                 for bundle in _bundles_with_skills(self)
                 for pair in bundled_skill_mounts(bundle.where, bundle.skills)
             ),
-            # The segment the registry lists a mount under, so the deny rule for a skill
-            # in it lands here.
+            # The segment the registry lists a mount under, so a skill's deny rule lands here.
             *((f"{SKILLS_ROUTE}{label}/", mount) for label, mount in self.skills.mounts.items()),
         )
 
@@ -86,10 +75,8 @@ class Definitions:
         bundles = self.subagents.bundles
         if not bundles:
             return {}
-        # Asked of the bundle rather than built here. What backs one is the bundle's
-        # own business now that there are two backings -- a folder to walk, or the
-        # objects a definition carried -- and a second reading of that here would be
-        # the place the two could disagree about what a subagent holds.
+        # Asked of the bundle, not rebuilt here: a folder or carried objects back it, and
+        # a second reading could disagree with the bundle's about what it holds.
         return {
             name: repository
             for name, bundle in bundles.items()
@@ -100,8 +87,7 @@ class Definitions:
     def audienced_tools(self) -> Mapping[str, Found]:
         """Every tool that says who it admits, the catalogue's and each bundle's.
 
-        Keyed by where each lives, so a refusal names the file rather than a name two
-        files may share.
+        Keyed by where each lives, so a refusal names the file, not a name two may share.
         """
         found = (
             *self.tools.found,
@@ -123,9 +109,7 @@ class Definitions:
 
     @cached_property
     def bundled_misplaced(self) -> Mapping[str, tuple[str, ...]]:
-        """Each subagent's skills sitting too deep in its own folder to load, for a
-        listing and for the refusal of a definition that lists one.
-        """
+        """Each subagent's skills sitting too deep in its own folder to load."""
         return {
             name: found
             for name, bundle in self.subagents.bundles.items()
@@ -135,39 +119,23 @@ class Definitions:
     def warm(self) -> Definitions:
         """Read every kind now, so a broken definition fails here."""
         _ = self.agents.specs, self.subagents.specs, self.tools.found
-        # The fifth kind, which this read for none of the time it has existed.
-        # `middlewares/*.py` is Python that has to import, exactly like `tools/*.py`,
-        # and the refusal for a class that is not an `AgentMiddleware` was written
-        # to fire "as the directory is read rather than at the first turn" -- true
-        # of the refusal and not of anything that read the directory, because
-        # nothing did until a definition named one.
+        # Middleware is Python that has to import, like tools, and its refusals belong at
+        # startup rather than at the first turn naming one.
         _ = self.middlewares.classes
         _ = self.registry
-        # A bundle's tools are imported here for the reason every other kind is,
-        # and the reason survives the fact that only one subagent can call them:
-        # a private tool is still Python that has to import, and a deployment
-        # that starts, reports itself fine, and fails on the first request that
-        # happens to activate `surveyor` is the shape of the bug `list` exiting
-        # zero over a broken agent catalogue already was. Encapsulation decides
-        # who may *call* a tool, not whether it is allowed to be broken.
+        # A bundle's tools too, though only one subagent can call them: otherwise the
+        # deployment starts fine and fails on the first request activating that subagent.
         for name, repository in self.bundled_tools.items():
             _ = bundled_tool_names(name, repository)
-        # Skills are read here too, and the difference from tools is what
-        # happens next rather than whether it happens: a skill that will not
-        # load is reported by `unloadable` and never fatal, which is the rule
-        # `list` already follows -- a broken tool exits 1, a broken skill does
-        # not, because a run works without it.
+        # Bundled skills too, but one that will not load is reported in `unloadable`, never
+        # fatal: a run works without it.
         _ = self.bundled_skills
-        # A definition saying where its tools live is checked here for the same
-        # reason the reading happens here: it is a claim about this catalogue,
-        # both halves are now in hand, and a stale path found on the first turn
-        # that activates one subagent is a deployment that started while broken.
+        # Where a definition says its tools live is checked now, with both halves in hand,
+        # rather than on the first turn that activates the subagent.
         offers = Offering.of(self.tools.found)
         for spec in self.subagents.specs.values():
             offers.refuse_moved(spec.tool_sources, subject=f"subagent {spec.name!r}")
-        # And what a definition lists from its own folder, checked here for the same
-        # reason and against the two readings above: both halves are now in hand,
-        # and neither alone can tell whether the list still matches the folder.
+        # Likewise what a definition lists from its own folder, against the folder.
         for name, spec in self.subagents.specs.items():
             where, tools, skills = self.bundled(name)
             refuse_miscounted(
@@ -182,8 +150,7 @@ class Definitions:
     def bundled(self, name: str) -> tuple[str | None, tuple[str, ...], tuple[str, ...]]:
         """Where one subagent's own folder is and what is in it, by the name a grant uses.
 
-        `None` for a definition that owns no folder, which is most of them and is not
-        the same answer as a folder holding nothing.
+        The place is `None` for a definition owning no folder, which is not an empty one.
         """
         bundle = self.subagents.bundles.get(name)
         tools = self.bundled_tools.get(name)
@@ -208,9 +175,8 @@ class Definitions:
             agents=LocalAgentRepository(
                 Path(roots.get("agents", Path(roots["skills"]).parent / AGENT_DIRECTORY))
             ),
-            # `.get` with a fallback, the same as `agents` above and for the
-            # reason written there: a deployment that spelled out the roots it
-            # knew about should not stop starting because a fifth kind exists.
+            # `.get` with a fallback, as for `agents`: roots spelled out before a kind
+            # existed must still start.
             middlewares=LocalMiddlewareRepository(
                 Path(roots.get("middlewares", Path(roots["skills"]).parent / "middlewares"))
             ),
@@ -225,13 +191,8 @@ def _bundles_with_skills(catalogue: Definitions) -> tuple[Any, ...]:
     try:
         bundles = catalogue.subagents.bundles
     except SubagentError:
-        # A catalogue that will not parse has no bundles to mount, and this is
-        # not the place that says so. `--list` exists to be run *because*
-        # something is broken -- it catches the loader error and prints it over
-        # the rest of the inventory -- and it builds a backend on the way.
-        # Raising here took that listing down with it, which is the same shape
-        # as warming inside `resolve_definitions`, and a test caught that one
-        # too. `warm()` still refuses at startup, so nothing is being excused.
+        # Not raised here: `--list` builds a backend on its way to printing this very
+        # error, and `warm()` still refuses at startup.
         return ()
     return tuple(bundle for bundle in bundles.values() if bundle.skills)
 
@@ -244,10 +205,8 @@ def bundled_skills_route(where: str) -> str:
 def bundled_skill_mounts(where: str, directories: tuple[Path, ...]) -> tuple[tuple[str, Path], ...]:
     """`(route, directory)` for each of one bundle's skill directories.
 
-    One directory keeps the bundle's own route. Several are numbered beneath it in
-    the order the definition listed them, because a directory's name is no label:
-    a package's are all called `skills`. Beneath rather than beside, so each stays
-    under `/skills/` and inherits its read-only rule.
+    Several are numbered beneath the bundle's route, since a package's are all called
+    `skills`; beneath rather than beside, so each inherits the `/skills/` read-only rule.
     """
     if len(directories) == 1:
         return ((bundled_skills_route(where), directories[0]),)
@@ -263,11 +222,8 @@ DEFINITION_KINDS: tuple[str, ...] = tuple(f.name for f in fields(Definitions))
 def resolve_definitions(cfg: Config) -> Definitions:
     """This deployment's definitions, read from the folder `cfg` names.
 
-    The folder has to exist, and a kind folder missing inside it means none of that
-    kind. Nothing is created: the folder may be one several deployments read, and making
-    one would hide a mount or a staging that failed behind a catalogue that is merely
-    empty. An agent told about no skills at all is exactly the silent-emptiness this
-    module's neighbours keep refusing.
+    Nothing is created: making a missing folder would hide a failed mount or staging
+    behind a catalogue that is merely empty. A missing kind folder means none of that kind.
     """
     if not cfg.definitions.is_dir():
         msg = (
@@ -294,13 +250,11 @@ def refuse_unmountable(root: Path, mounts: Mapping[str, Path]) -> None:
                 f"so it may not contain {SEPARATOR!r} or '/'"
             )
             raise ConfigError(msg)
-        # The route for a mount is longer than the catalogue's, so it wins: a folder
-        # or skill of the same name in the catalogue would vanish without a word.
+        # A mount's route is longer, so it wins: a namesake in the catalogue would vanish.
         if label in taken:
             msg = f"{where}: the catalogue at {root} has {label!r} too, and this would hide it"
             raise ConfigError(msg)
-        # Not created: a mount is somebody else's directory, and making an empty one
-        # would hide the failure to stage it behind an agent with no skills.
+        # Not created: an empty one would hide a failed staging behind an agent with no skills.
         if not mount.is_dir():
             msg = f"{where} is not a directory"
             raise ConfigError(msg)
@@ -315,11 +269,7 @@ def refuse_unmountable(root: Path, mounts: Mapping[str, Path]) -> None:
 
 
 def _misplaced_in(directories: tuple[Path, ...]) -> tuple[str, ...]:
-    """One subagent's misplaced skills, relative to the folder each sits in.
-
-    Numbered as the folders' routes are when there are several, so `2/group/lookup`
-    names the second -- a package's folders are all called `skills`.
-    """
+    """One subagent's misplaced skills, numbered by folder as its routes are."""
     one = len(directories) == 1
     return tuple(
         deep if one else f"{n}/{deep}"
@@ -333,25 +283,14 @@ def bundled_tool_names(
 ) -> tuple[str, ...]:
     """One subagent's own tool names, with a failure named by whose folder it was in.
 
-    `probe.py: ModuleNotFoundError ...` is a basename in somebody's folder, and which
-    somebody is the one thing a reader needs: `doctor` gives that as the reason this
-    fault has a row of its own -- "a reader has to be told which subagent to go and
-    open" -- and the row did not tell them. The skills half has said it since it was
-    written, in `_one_registry` below.
-
-    Here rather than in the listing, because both readers come through this: a
-    deployment that will not start refuses from `warm`, and that refusal is what an
-    operator sees.
+    Here rather than in the listing, so the refusal `warm` raises names the subagent too.
     """
     try:
         return tuple(sorted(one.name for one in repository.found))
     except (ToolError, SubagentError) as exc:
         msg = f"subagent {name!r}: {exc}"
-        # The original traceback, carried over: `test_a_defect_reaches_the_refusal_it
-        # _is_filed_under` keys a refusal by the deepest frame inside the package, and
-        # a plain re-raise files every failure under this function -- so two refusals
-        # in `core/definitions/tools/catalogue.py` would have read as reached while nothing
-        # reached them.
+        # The original traceback, carried over: a refusal is filed by its deepest frame,
+        # and a plain re-raise would file every one under this function.
         raise type(exc)(msg).with_traceback(exc.__traceback__) from exc
 
 
@@ -360,9 +299,8 @@ def _one_registry(name: str, directories: tuple[Path, ...]) -> SkillRegistry:
     read = [skill_registry.read(LocalSkillRepository(one, flat=True)) for one in directories]
     if len(read) == 1:
         return read[0]
-    # Refused rather than merged: every directory is mounted under the bundle's one
-    # label, so two holding a name would give the subagent one skill by that name
-    # and hide the other -- whichever deepagents happened to list last.
+    # Refused, not merged: every directory is mounted under the bundle's one label, so
+    # two holding a name would hide one skill behind the other.
     seen: dict[str, Path] = {}
     for directory, registry in zip(directories, read, strict=True):
         for taken in registry.taken:

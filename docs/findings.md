@@ -361,6 +361,12 @@ for the next reader who reaches for one.*
   kingfisher owns decides it, which is the reason to re-measure rather than record.
   *(2026-10-14, langchain-anthropic 1.7.6; 1,000,000 at 1.5.6.)*
 
+- **deepagents appends its host-paths section with `append_to_system_message`**, and builds
+  `FilesystemMiddleware` with no system prompt of its own, so that section cannot merge into
+  other prose today. `test_a_mappings_section_merged_into_other_prose_is_left_whole` holds the
+  difference, not `test_deepagents_host_paths_reach_only_a_shell_on_this_host`, which passes
+  whichever way the section is removed. *(Recorded in the code until 2026-10-17.)*
+
 ## Skills and subagents
 
 - **deepagents reads skills off the filesystem, one level down.** That is the only
@@ -376,6 +382,14 @@ for the next reader who reaches for one.*
   graph it runs as given. A compiled one is never given middleware and never gets
   a skills middleware added to it. *(2026-08-18.)*
 - **A skill's `allowed-tools` is prompt text, not enforcement.** *(2026-08-16.)*
+
+- **deepagents reads a skills source one level deep.** One root source finds nothing in a
+  nested layout; three folder sources find all nine. Four directories each holding a skill of
+  one name: kingfisher advertised four names and deepagents loaded three, two of them
+  different. *(Recorded in the code until 2026-10-17.)*
+- **Only `Runnable` tells a compiled graph apart** from an `invoke`-only stub, whatever a class
+  constructs to, and `None`; a duck-type on `invoke` is too loose, since deepagents also calls
+  `with_config`. *(Recorded in the code until 2026-10-17.)*
 
 ## Tool shapes
 
@@ -459,6 +473,14 @@ survives *re-wrapping* a tool, which nothing above needed to ask.
   control passes the same way the case does and the measurement says nothing.
   *(2026-09-18.)*
 
+- **LangChain names a plain function by `__name__`**: `convert_to_openai_tool` calls one
+  `shout`, and a lambda `<lambda>`. A `TOOLS = ["line_count"]` entry was advertised as
+  `'line_count'`, quotes and all, and the build died with `AttributeError: 'function' object
+  has no attribute 'name'`, naming neither the file nor the entry. A pydantic model class in
+  `TOOLS` has no `name` class attribute, so naming falls through to `__name__` and calling it
+  instantiates it: the model gets `status="success"` and the repr of a `CallbackManager`, and
+  the run carries on. *(Recorded in the code until 2026-10-17.)*
+
 ## The run context, and the permissions around a backend
 
 What `ToolContext` and `PermittedBackend` were built on.
@@ -520,6 +542,19 @@ did not work. All of it langchain-core 1.5.5, langgraph 1.2.11, deepagents 0.7.6
   Kept current in `.github/workflows/checks.yml` beside the job it governs, and
   reported on every run by `tests/linux/test_a_fence_was_exercised.py`.
   *(2026-08-27.)*
+
+- **`sandlock`'s own quick-start fails in a container where `confine` works.** Linux 6.12, ABI 6,
+  `SYS_ADMIN` available: `sandlock_create failed`, while `confine` in the same container works
+  in both directions. *(Recorded in the code until 2026-10-17.)*
+- **A policy naming a path the host lacks does not build.** `sandlock_create` fails outright,
+  and every command comes back with exit -1 and no output, which is why the system paths are
+  filtered against the host (`/lib64` is missing on arm64 Debian). *(Recorded in the code until 2026-10-17.)*
+- **Through a bound `/proc`, a bubblewrap shell reads other processes' command lines**, and
+  with none it reads nothing. `/proc/1/environ` was denied either way by the user-namespace
+  mapping, but a command line is enough. Measured with a token generated at runtime. *(Recorded in the code until 2026-10-17.)*
+- **bubblewrap's probe has to run something inside what it binds.** The first one bound `/usr`
+  and ran `/bin/true`, which is not under `/usr`, and reported bubblewrap unavailable on a host
+  where it worked. *(Recorded in the code until 2026-10-17.)*
 
 ## Memory-backed workspaces
 
@@ -607,6 +642,14 @@ directly, and `filter_tools_for_ptc` called on its own.*
 - **`task()` exists whenever `subagents=True` and the agent holds a `task` tool**, and
   dispatches inside an `eval` already approved.
 
+- **The sandbox snapshots 1,280KB a turn whether or not `eval` runs.** A floor rather than a
+  cost that scales with the work: one run called it zero times in forty-five tool calls and
+  still paid it. `max_snapshot_bytes=1` took a workspace's thread database from 2.94MB to
+  0.31MB over the same two turns; a deployment that builds state across calls should raise it
+  and pay the 1,280KB knowingly. On top of a loaded kingfisher the sandbox costs ~15ms and
+  ~6MB resident. A turn that hit `recursion_limit` with it still open printed its traceback
+  and then hung for as long as it was left. *(Recorded in the code until 2026-10-17.)*
+
 ## Costs worth knowing
 
 *Re-measured 2026-09-03. All three had drifted, and one of them was never the
@@ -635,6 +678,25 @@ figure recorded had been taken against an empty one.*
   one: the cost is almost all entry fee, so a workspace with one skill pays
   nearly what a workspace with three does. *(464 tokens 2026-08-18, before the
   split was measured; ~450 + ~50/skill 2026-09-03.)*
+
+- **Building one agent, item by item.** 8.1ms median and 9.2ms p95 for an unrestricted agent,
+  7.2ms of it `create_deep_agent` compiling the graph. Per item added to an otherwise
+  identical build: a subagent +5-6ms, a custom tool +0.47ms (linear to at least 50),
+  middleware +0.03ms, a skill 0.0ms (sixteen measure as none), a deny rule 0.0ms (a hundred
+  measure as none). The costs add: 10 tools, 5 middleware, 20 deny rules and 2 subagents
+  predicted 20.8ms and measured 21.6ms. Of a turn's 15-46ms setup, 9.2ms is building the
+  agent. Construction is CPU-bound Python and does not parallelise -- about 100 builds a
+  second per process, worker threads slightly worse -- so the ceiling is roughly 150
+  concurrent turns, or 34 if each activates eight subagents. Above that, a cache keyed on the
+  capabilities *and* a fingerprint of the definitions is the thing to reach for.
+  *(2026-09-03; recorded in the code until 2026-10-17.)*
+- **What importing costs.** `system_prompt` and `ShellPrompt`, while they shared a module
+  with `create_deep_agent`, cost 764ms and 3,107 modules; split out, about 10ms and 113.
+  deepagents itself was 21ms of it; the rest was provider SDKs reached through it -- openai
+  281ms, anthropic 239ms, google 134ms -- whose pydantic type modules compile validators as
+  they import. `core.agent.kinds.subagents` costs 1,588ms and 3,164 modules, against 12ms and
+  82 for a module importing only the standard library, and the command starts in about 40ms.
+  *(Recorded in the code until 2026-10-17.)*
 
 ## Historical, and not re-measurable
 

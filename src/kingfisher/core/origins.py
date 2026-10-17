@@ -43,9 +43,8 @@ class Origin:
 class Origins:
     """Every place this deployment reads from, settled once."""
 
-    #: What sessions make, and what `./` means below. A bare `Path` rather than an
-    #: `Origin`, as is the one after it: neither is ever derived, supplied or unset,
-    #: since each is a setting with no default.
+    #: What sessions make, and what `./` means on the line. A bare `Path`, as `definitions`
+    #: is: each is a setting with no default, so never derived, supplied or unset.
     workspace: Path
     #: What people write, and what `definitions/` means below.
     definitions: Path
@@ -56,19 +55,13 @@ class Origins:
     subagents: Origin
     tools: Origin
 
-    #: The two operator-authored files. `models` is required, so it is never
-    #: `unset`; `source_ids` is optional, and its `unset` is the most useful thing
-    #: in this record.
+    #: The operator-authored files. `models` is required, so never `unset`; `source_ids`
+    #: is optional, and its `unset` is the most useful thing in this record.
     models: Origin
     source_ids: Origin
 
-    #: Where `kingfisher seed` copies *from*, which is the opposite direction to
-    #: the catalogues above. Named `seed` rather than `assets` for that reason:
-    #: beside `skills` and `tools`, that noun reads like one more place
-    #: definitions are read from.
-    #:
-    #: It said "the four catalogues" until there were five, which is the count
-    #: this file now declines to keep -- the fields are the count.
+    #: Where `kingfisher seed` copies *from*. Not `assets`: beside `skills` and `tools`,
+    #: that reads like one more place definitions are read from.
     seed: Origin
 
     sessions: Origin
@@ -97,11 +90,8 @@ class Origins:
     def line(self) -> str:
         """Every entry, on one line, with the two roots factored out.
 
-        Spelled out in full this is about 450 characters, most of its values
-        sharing one prefix or the other -- and the entries worth noticing, the ones
-        that are somewhere else, are buried in the repetition. Relative brings it to
-        about 240 *and* leaves the relocated ones as the only absolute paths, so the
-        eye finds them without reading.
+        Relative, so the entries that are somewhere else are the only absolute paths,
+        and stand out.
         """
         pairs = " ".join(
             f"{name}={origin.spelled(self.workspace, self.definitions)}"
@@ -153,8 +143,7 @@ def _derived(actual: Path, default: Path) -> Kind:
 def _file(actual: Path | None, default: Path) -> Origin:
     """A path with a derived fallback: `models.yaml`."""
     if actual is None:
-        # Only reachable for a `Models` assembled in code, which carries no
-        # source. The file was never read, so there is no path to report.
+        # A `Models` assembled in code carries no source: no file was read.
         return Origin("supplied")
     return Origin(_derived(actual, default), actual)
 
@@ -196,10 +185,8 @@ def kingfishers_own(sessions: object, cfg: Config) -> bool:
 def _sessions(cfg: Config, sessions: object | None) -> Origin:
     """Where sessions are: the workspace's own directory, or a deployment's own backends.
 
-    Asked of the sessions in use, never of the setting that built them: `kingfisher
-    doctor` once printed `sessions : ./sessions` three rows above its own `sessions
-    survive` check, because one read a setting and the other an object. `None` is a
-    caller that has none to say, and is answered with the workspace's own.
+    Asked of the sessions in use, never of the setting that built them, which a
+    deployment's own backends may ignore. `None` is answered with the workspace's own.
     """
     if sessions is not None and not kingfishers_own(sessions, cfg):
         return Origin("supplied")

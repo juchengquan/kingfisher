@@ -13,21 +13,17 @@ from kingfisher.core.access.capabilities import ALL, SEPARATOR, Selection
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable
 
-    # Type-only, and it has to be: `core.access.source_ids` imports this module to read
-    # its vocabulary document, so a runtime import here would close the loop.
-    # `from __future__ import annotations` is what makes that affordable.
+    # Type-only: `core.access.source_ids` imports this module, so a runtime import is a cycle.
     from kingfisher.core.access.source_ids import Audience
 
-#: How alike two names must look before one is called a typo of the other. Only
-#: ever used to *word* a refusal, never to decide one: a guess that changed
-#: behaviour would be the silent-drop bug wearing a spellchecker.
+#: How alike two names must look for one to be called a typo of the other. It only ever
+#: words a refusal, never decides one: a guess must not change behaviour.
 SIMILARITY = 0.7
 
 
-#: Where one `tools:` or `skills:` entry comes from. `shared` is the workspace's own
-#: catalogue and is what a plain name means; `bundled` is the subagent's own folder,
-#: `subagents/<name>/tools/` or `skills/`, which is the one place a capability can sit
-#: that an agent leaving out `tools:` does not receive.
+#: Where one `tools:` or `skills:` entry comes from: `shared` is the workspace's catalogue
+#: and what a plain name means; `bundled` is the subagent's own folder, the one place a
+#: capability can sit that an agent leaving out `tools:` does not receive.
 SHARED = "shared"
 BUNDLED = "bundled"
 SOURCES: tuple[str, ...] = (SHARED, BUNDLED)
@@ -42,9 +38,8 @@ def _spelled(extra: tuple[str, ...]) -> str:
     return " and/or ".join(repr(one) for one in extra)
 
 
-#: A key an entry may not write, with where it goes instead. A datazone is one value on
-#: the tool or subagent it is about; written on an entry it could only repeat that value
-#: or contradict it, and a contradiction is a tool nobody can reach through that agent.
+#: A key an entry may not write, with where it goes instead. On an entry, a datazone could
+#: only repeat or contradict the thing's own, and a contradiction makes it unreachable.
 ON_THE_THING: Mapping[str, str] = MappingProxyType(
     {"datazone": "write it in the tool's or subagent's own file, the one place it means one thing"}
 )
@@ -75,8 +70,7 @@ def _explain(
     if (reason := declined.get(key)) is not None:
         return f"{key!r} is not a {noun} of this format -- {reason}"
     near = get_close_matches(key, known, n=1, cutoff=SIMILARITY)
-    # Parenthesised, not `; `-joined: that separates one key's explanation from
-    # the next, and a hint using it too would blur where each ends.
+    # Parenthesised: `; ` already separates one key's explanation from the next.
     hint = f" (did you mean {near[0]!r}?)" if near else ""
     return f"unknown {noun} {key!r}{hint}"
 
@@ -103,19 +97,12 @@ class Reader:
 
     #: What a message calls the file -- `probe.yaml`, not its whole path.
     source: str
-    #: The format's own exception. This is the one thing that cannot be shared:
-    #: a subagent's mistakes are `SubagentError` and an agent's are `AgentError`,
-    #: and a caller catching one should not be handed the other.
+    #: The format's own exception, so a caller catching `AgentError` is never handed a
+    #: `SubagentError`.
     error: type[Exception]
 
     def one_name(self, value: object, *, key: str) -> str | None:
-        """One name, or `None` when the field is absent. A list is refused.
-
-        Measured before this: a definition writing `model: [gpt-5, claude-4]` was
-        read as a model of that spelling and refused a request later, by `resolve`,
-        with `no model "['gpt-5', 'claude-4']" defined in models.yaml` -- which sends
-        its reader off to define one.
-        """
+        """One name, or `None` when the field is absent. A list is refused."""
         if value is None:
             return None
         if isinstance(value, (list, tuple, set)):
@@ -144,10 +131,8 @@ class Reader:
         """One name-list field, or what its absence means for that field."""
         if isinstance(value, str) and value.strip() == ALL:
             if refuse_all is not None:
-                # The bracket advice below is for a field that takes the star. On one
-                # that refuses it, it sent its reader to write the forbidden spelling
-                # and be refused again -- `skills: "*"` and `subagents: "*"` both did
-                # that for as long as either field has refused the star.
+                # Before the bracket advice below, which would send the reader to write
+                # `["*"]` and be refused again.
                 raise self.error(self._no_star(key, refuse_all))
             msg = (
                 f"{self.source}: {key} is written {value.strip()!r}; write [{ALL!r}] "
@@ -155,9 +140,8 @@ class Reader:
             )
             raise self.error(msg)
         if isinstance(value, Mapping):
-            # `names` would fall through to `(text(value),)` and read the whole mapping
-            # as one name -- `builtin_tools: {execute: {source_ids: [A]}}` became a built-in
-            # called "{'execute': ...}", offered to nobody and reported nowhere.
+            # `names` would read a mapping as one name: a built-in called "{'execute': ...}",
+            # offered to nobody and reported nowhere.
             msg = (
                 f"{self.source}: {key} is a mapping; this field takes a list. A "
                 f"mapping says who reaches each entry, and only tools, subagents "
@@ -192,21 +176,16 @@ class Reader:
     ) -> tuple[Selection, Mapping[str, Mapping[str, object]]]:
         """One name-list field whose entries may also carry settings."""
         if not isinstance(value, (list, tuple)):
-            # A bare `"*"`, one unbracketed name, or nothing at all. None of
-            # the three can carry a setting, and `selection` already has the
-            # answer or the refusal for each.
+            # A bare `"*"`, one name, or nothing: none can carry a setting.
             return self.selection(value, absent=absent, key=key), MappingProxyType({})
 
         written, carried = self._entries(value, key=key, extra=("settings",))
         settings = {
-            # Absent and empty both land as `{}`, which is the same answer: this
-            # entry wrote the long form and asked for nothing by it.
             name: self.mapping(entry.get("settings"), key=f"{key} entry '{name}' 'settings'")
             for name, entry in carried.items()
         }
 
-        # Back through `selection`, so `["*"]`, the mixing refusal and the
-        # meaning of an absent field are all decided in exactly one place.
+        # Back through `selection`, so the star, mixing and absence are decided in one place.
         return self.selection(written, absent=absent, key=key), MappingProxyType(settings)
 
     def _entries(
@@ -219,12 +198,9 @@ class Reader:
     ) -> tuple[list[str], dict[str, Mapping[str, object]]]:
         """The names a list field wrote, and what each entry carried beside one.
 
-        `same` is how two spellings of one entry are told apart, and the fields differ.
-        A tool's reference is `where::what` and the model is handed a flat `what`, so
-        `a.py::fetch` and `fetch` are one dispatch name and cannot both apply. A skill's
-        identity *is* `source::name` -- two parties who never met may both ship a
-        `lookup` -- so those compare as written, and the bare-against-qualified case is
-        resolved against the catalogue where the ambiguity can actually be seen.
+        `same` says when two spellings are one entry. Tools pass it, since `a.py::fetch`
+        and `fetch` dispatch as one name; skills do not, since `source::name` is a skill's
+        identity, and the catalogue is where a bare name's ambiguity can be seen.
         """
         written: list[str] = []
         carried: dict[str, Mapping[str, object]] = {}
@@ -234,8 +210,7 @@ class Reader:
             dispatched = dispatches(name)
             clash = next((n for n in written if dispatches(n) == dispatched), None)
             if clash is not None:
-                # Both spellings where they differ, because "names 'fetch' twice" sends
-                # a reader looking for a second `fetch` they did not write.
+                # Both spellings: "names 'fetch' twice" sends a reader hunting a second `fetch`.
                 said = f"{name!r}" if clash == name else f"{clash!r} and {name!r}"
                 msg = (
                     f"{self.source}: {key} names {said} twice. One name is one "
@@ -425,10 +400,8 @@ class Reader:
         if not isinstance(raw, Mapping):
             msg = f"{where}: write `source_ids: [...]`, or nothing at all -- got {raw!r}"
             raise self.error(msg)
-        # `name` is the entry's own, checked and consumed by `_entry_name`
-        # before this sees it. Named here rather than stripped there, because
-        # stripping would hand this a mapping the file does not contain and put
-        # the two readers one edit apart from disagreeing about which keys exist.
+        # `name` is in `known` rather than stripped by `_entry_name`, so this checks the
+        # mapping the file contains.
         if complaint := unrecognised(raw, known=set(known), declined=ON_THE_THING, noun="key"):
             msg = f"{where}: {complaint}"
             raise self.error(msg)
@@ -446,11 +419,8 @@ class Reader:
     ) -> tuple[Selection, Mapping[str, Audience]]:
         """A selection, and who reaches each entry of it."""
         if isinstance(value, Mapping):
-            # Refused rather than read: a field-level mapping cannot see a name
-            # written twice, because YAML collapses `{a: X, a: Y}` before any reader
-            # here runs -- so one of the two audiences would be gone with nothing
-            # able to refuse or report it. An access restriction that vanishes
-            # quietly is the failure this format exists to prevent.
+            # Refused rather than read: YAML collapses `{a: X, a: Y}` before any reader runs,
+            # so one of two audiences for a name would vanish unreported.
             first = next(iter(value), "<name>")
             msg = (
                 f"{self.source}: {key} is a mapping; this field takes a list. An "
@@ -460,27 +430,20 @@ class Reader:
             )
             raise self.error(msg)
         if not isinstance(value, (list, tuple)):
-            # A bare `"*"`, one unbracketed name, or nothing. None can carry an
-            # audience, and `selection` already has the answer or the refusal.
+            # A bare `"*"`, one name, or nothing: none can carry an audience.
             return self.selection(value, absent=absent, key=key, refuse_all=refuse_all), {}
 
         written, carried = self._entries(value, key=key, extra=("source_ids",))
         stated = {
             name: self._audience(entry, key=key, entry=name) for name, entry in carried.items()
         }
-        # Back through `selection`, so `["*"]`, the mixing refusal and the
-        # meaning of an absent field are all decided in exactly one place.
+        # Back through `selection`, so the star, mixing and absence are decided in one place.
         chosen = self.selection(written, absent=absent, key=key, refuse_all=refuse_all)
-        # Every name is selected; only the ones that stated an audience carry
-        # one. An entry that wrote the long form and left `source_ids` out falls
-        # back to the definition's own in `reach.reaching`, which is the same
-        # fallback a plain name gets -- so the two spellings agree about an
-        # unrestricted name.
+        # Only entries that stated an audience carry one; the rest fall back to the
+        # definition's own, as a plain name does.
         return chosen, {n: a for n, a in stated.items() if a is not None}
 
-    def sourced(  # noqa: PLR0913 -- five of these are five different questions about
-        # one field, and the sixth is how two spellings of one entry are told apart.
-        # Folding them into an object would hide which of them a caller is answering.
+    def sourced(  # noqa: PLR0913 -- separate questions about one field; an object hides which
         self,
         value: object,
         *,
@@ -492,22 +455,19 @@ class Reader:
     ) -> tuple[Selection, Mapping[str, Audience], tuple[str, ...]]:
         """What `audienced` answers for the shared entries, and the bundled ones apart.
 
-        Apart because nothing narrows a bundled entry: it arrives with the subagent
-        whatever the request granted, so folding it into the selection would let a
-        grant that omits it read as having removed it.
+        Apart because nothing narrows a bundled entry: in the selection, a grant that
+        omits it would read as having removed it.
         """
         if not isinstance(value, (list, tuple)):
-            # A mapping, a bare `"*"`, one unbracketed name, or nothing. None can say
-            # where it comes from, and `audienced` already refuses or answers each.
+            # A mapping, a bare `"*"`, one name, or nothing: none can say where it comes from.
             return (
                 *self.audienced(value, absent=absent, key=key, refuse_all=refuse_all),
                 (),
             )
 
         extra = ("source_ids", "source")
-        # Through `_entries` with both kinds together, so a name written once shared
-        # and once bundled is the "names it twice" refusal: a subagent dispatches by
-        # name, and two entries for one would leave which one it calls unsaid.
+        # Both sources through one `_entries`, so a name written shared and bundled is
+        # refused as written twice: a subagent dispatches by name.
         written, carried = self._entries(value, key=key, extra=extra, same=same)
         bundled = tuple(
             name for name, entry in carried.items() if self._source(entry, key=key) == BUNDLED
@@ -583,9 +543,6 @@ class Reader:
             raise self.error(msg)
         return dict(value)
 
-
-#: The `model:` line, which is one field and two formats -- so it belongs to
-#: neither of them.
 
 def wanted_model(document: Mapping[str, object], read: Reader) -> str | None:
     """The model a definition names, or `None` for whatever summoned it."""

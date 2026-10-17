@@ -14,12 +14,10 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class Plugins:
-    """The plugins a deployment replaces for the command line, each left out for
-    kingfisher's own.
+    """The plugins a deployment replaces for the command line; each left out is kingfisher's.
 
-    The library takes these as `Kingfisher`'s keywords. The command builds its own
-    `Kingfisher` and has no call to be handed them on, so `KINGFISHER_PLUGINS` names a
-    callable returning one of these, and the command passes on each field that is set.
+    The command builds its own `Kingfisher`, with no call to pass keywords through, so
+    `KINGFISHER_PLUGINS` names a callable returning one of these instead.
     """
 
     run_events: RunEvents | None = None

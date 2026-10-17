@@ -1,11 +1,7 @@
 """What a deployment writes a plugin against, and every plugin kingfisher ships.
 
-The interfaces and the records they speak in, beside the implementations a deployment
-names as it would its own -- `LocalSessions` among them, which a `Kingfisher` is handed
-unless it is handed another. Lazily, as the package root is: naming this address loads
-nothing, and each name loads its module the first time it is asked for.
-
-The core never names this package. Inside kingfisher only the command imports from it.
+Lazy, as the package root is: naming this address loads nothing. The core never names
+this package; inside kingfisher only the command imports from it.
 """
 
 from __future__ import annotations
@@ -100,7 +96,7 @@ def __getattr__(name: str) -> Any:
         raise AttributeError(msg) from None
 
     value = getattr(import_module(module), name)
-    globals()[name] = value  # resolve once; subsequent lookups skip __getattr__
+    globals()[name] = value  # resolved once: later lookups skip __getattr__
     return value
 
 

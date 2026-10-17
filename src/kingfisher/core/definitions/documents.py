@@ -1,18 +1,7 @@
 """The YAML an agent or subagent definition is written in, read the same way by both.
 
-Shared rather than duplicated, which is the one exception to *the kinds do not share an
-implementation*: a scalar's style is a fact about a document rather than about what any
-kind means, and the agent and subagent formats reflow a prompt identically.
-
-Named rather than counted, and the count is why. This said "all three kinds" and
-"a header", both true while a skill's frontmatter came through here, and neither
-true after the reader that did it went with the upload path it served. Nothing was
-red: the paragraph above has named the two ever since, contradicting a sentence one
-line up in the same docstring. A name a reader can grep beats a number nobody
-re-counts.
-
-Here beside the kinds because they are what reads it, though by subject it is as
-much the workspace's business as theirs.
+Shared, the one exception to *the kinds do not share an implementation*: a scalar's style
+is a fact about a document rather than about what either kind means.
 """
 
 from __future__ import annotations
@@ -27,15 +16,8 @@ from kingfisher.core.definitions.importing import skipped
 if TYPE_CHECKING:
     from pathlib import Path
 
-#: What a definition file is called, and the spelling that used to vanish. `.yml` is
-#: valid YAML everywhere else, so a file named that way is a definition somebody wrote
-#: and kingfisher silently did not read. Either in another case is the same file to
-#: whoever wrote it, and on macOS's default filesystem to the editor too.
-#:
-#: Here for the reason everything else in this module is: what a document is called is
-#: a fact about the document rather than about what either kind means, and both kinds
-#: need it -- the subagent format to walk its own directory, the agent catalogue to
-#: walk its.
+#: What a definition file is called, and the near miss refused rather than silently
+#: skipped: a `.yml`, or either suffix in another case, is a definition somebody wrote.
 SUFFIX = ".yaml"
 NEAR_MISS = ".yml"
 
@@ -49,14 +31,8 @@ def documents_in(
 ) -> list[Path]:
     """Every definition document below `directory`, at any depth, in a stable order.
 
-    A folder is organisation and is walked into, unless the kind names it in
-    `skipping`: a subagent bundle keeps its own assets in folders beside its
-    definition, and those hold no definitions of its own.
-
-    One walk for both kinds because the refusal below is the point of it. A `.yml`
-    file is a definition somebody wrote that kingfisher would not read, and the two
-    copies of that sentence were byte-identical -- which is a copy that has not
-    drifted yet rather than one that cannot.
+    A folder is walked into unless named in `skipping`, which is how a subagent bundle
+    keeps its own tools and skills beside its definition.
     """
     found: list[Path] = []
     for entry in sorted(directory.iterdir()):
@@ -82,8 +58,7 @@ def decode(text: str) -> dict[str, object] | str:
     try:
         parsed = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        # One line: this ends up inside an `AgentError` or `SubagentError`
-        # message, and YAML's own report spans several with a caret diagram.
+        # One line: it lands inside a refusal, and YAML's own report spans several.
         return " ".join(str(exc).split())
     if parsed is None:
         return {}
@@ -94,12 +69,10 @@ def decode(text: str) -> dict[str, object] | str:
 
 @dataclass(frozen=True)
 class DefinitionText:
-    """A definition as written, and the file it is named after in a refusal.
+    """A definition as written, and the file a refusal names.
 
-    One value rather than a path, so a caller that keeps the text keeps what was parsed:
-    the agent catalogue pins it into a session, and opening the file a second time for
-    that would let an edit land in between -- the first turn and every later one
-    running different agents.
+    The text travels with it so what is pinned into a session is what was parsed:
+    reading the file again would let an edit land in between.
     """
 
     text: str
@@ -111,14 +84,7 @@ class DefinitionText:
 
 
 def fields_of(definition: DefinitionText, error: type[ValueError]) -> dict[str, object]:
-    """A definition's fields, or the refusal naming the file and what stopped it.
-
-    Everything both kinds do to a document before their own format looks at it, which
-    is what this module is for. `decode` answers fields *or* a line saying why not,
-    and that union only means anything together with the sentence reporting it -- so
-    both readers wrote the same five lines, down to the wording, and the check below
-    on the line after.
-    """
+    """A definition's fields, or the refusal naming the file and what stopped it."""
     document = decode(definition.text)
     if isinstance(document, str):
         msg = f"{definition.source.name}: cannot read definition ({document})"

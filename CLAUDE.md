@@ -80,7 +80,9 @@ in the paragraph about the sentences worth keeping, which is the joke the next
 reader should not have to get. Cite a rule you have grepped for.
 
 There is no density to match. A file of one-line comments is not under-explained,
-and the shortest version that still stops the mistake is the right one.
+and the shortest version that still stops the mistake is the right one. Most comments
+are one line. A reason that needs more than about three lines goes in
+`docs/decisions.md`, and the comment keeps the line that stops the mistake.
 
 Write the reason where the mistake is, and never send a reader to the module
 docstring for it. That puts the guard at the top of the file and the thing it

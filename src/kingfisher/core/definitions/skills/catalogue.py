@@ -10,20 +10,16 @@ from types import MappingProxyType
 
 from kingfisher.core.definitions.skills.spec import FILENAME
 
-#: Where a skill has to be for anything to find it, said once so callers can
-#: quote it without knowing the filename themselves. Two shapes, because a
-#: folder directly under the root is registered as its own source and a source
-#: is listed one level deep -- so one level of grouping works and a second does
-#: not.
+#: Where a skill has to be for anything to find it, said once so callers can quote it.
+#: One level of grouping works, because a folder under the root is a source of its own
+#: and a source is listed one level deep; a second level does not.
 SKILL_LAYOUT = f"<skills>/<name>/{FILENAME} or <skills>/<source>/<name>/{FILENAME}"
 
-#: How many path parts a reachable `SKILL.md` has, relative to the root:
-#: `<name>/SKILL.md` is two, `<source>/<name>/SKILL.md` is three. Anything
-#: longer sits below the deepest source and is unreachable.
+#: The most path parts a reachable `SKILL.md` has below the root,
+#: `<source>/<name>/SKILL.md`; anything longer is unreachable.
 DEEPEST = 3
 
-#: The same, for a mount. A mount is one source rather than a root that may hold
-#: sources, so only `<name>/SKILL.md` is reachable in it.
+#: The same for a mount, which is one source, so only `<name>/SKILL.md` is reachable.
 MOUNT_DEEPEST = 2
 
 
@@ -55,21 +51,16 @@ def _below(root: Path, deepest: int) -> tuple[str, ...]:
 class LocalSkillRepository:
     """The skills in one directory, and in any mounted beside it.
 
-    No `names`, unlike every other kind's reader. Which skills there are is
-    `SkillRegistry`'s answer, because the directories that look like a skill are not
-    the set deepagents parses and offers. Measured on a catalogue of four, a listing
-    here answered two: it missed both skills in a source folder and offered one whose
-    file does not parse.
+    No `names`, unlike every other kind's reader: which skills there are is
+    `SkillRegistry`'s answer, because only deepagents' parse decides what loads.
     """
 
     root: Path
     #: Each further directory, by the label it is mounted under.
     mounts: Mapping[str, Path] = field(default_factory=lambda: MappingProxyType({}))
-    #: Whether the root is one source with every skill directly in it, as a mount is.
-    #: A subagent's own folder is, and its skills index is given that folder as one
-    #: source. The catalogue is not: a folder under its root is a source of its own,
-    #: which buys one level of grouping. Both readers ask it, so the skills a subagent
-    #: is granted and the skills it is shown are found the same way.
+    #: Whether the root is one source with every skill directly in it, as a mount and a
+    #: subagent's own folder are. Both readers ask it, so the skills a subagent is granted
+    #: and the skills it is shown are found the same way.
     flat: bool = False
 
     @cached_property

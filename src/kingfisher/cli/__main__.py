@@ -43,13 +43,7 @@ from kingfisher.cli.listing import as_json, failed, origins_document, render
 from kingfisher.cli.progress import show
 from kingfisher.core.access.source_ids import with_datazone
 
-# The names here the door does not carry. The command ships in the same
-# distribution as the library, so it may take one at the module defining it --
-# see *The core and its plugins* in `docs/decisions.md` -- and each of these is something
-# no caller outside the wheel has asked for: the kinds a catalogue holds,
-# used to say what a directory has none of; where a workspace keeps its
-# sessions; and the warning `doctor` says as a check instead.
-# Everything above is public and comes through the front door because it is.
+# Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.config import MissingCredentialsWarning
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
@@ -62,28 +56,19 @@ if TYPE_CHECKING:
     from kingfisher import Config, Kingfisher, RunResult
     from kingfisher.plugins import JsonlRunEvents
 
-#: Read from the working directory and nowhere else. A bare `load_dotenv()`
-#: walks up looking for one, which is the behaviour this deliberately does not
-#: have -- a command should not pick up a file two directories above the one you
-#: are standing in.
+#: Read from the working directory only: a bare `load_dotenv()` walks up looking for
+#: one, and a command should not pick up a file two directories above.
 ENV_FILE = ".env"
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="kingfisher",
-        # This said "running a task is the library's job -- see
-        # `kingfisher.run`", which was the rule `run` reversed. `d53d85f`
-        # corrected the same sentence where the console script is declared and
-        # did not reach this one, which is the copy a person actually reads.
-        # See *The command line* in `docs/decisions.md`.
         description=(
             "Fill a kingfisher workspace, run a task in it, see what is in it, "
             "and check it over."
         ),
     )
-    # `required=False`, so bare `kingfisher` reaches `main` and prints help
-    # rather than argparse exiting 2 with a usage line. Someone typing the bare
-    # name is asking what this is, and a usage line is a worse answer than help.
+    # Not required, so bare `kingfisher` prints help rather than argparse's usage error.
     sub = parser.add_subparsers(dest="command")
     seeding = sub.add_parser(
         "seed",
@@ -96,20 +81,15 @@ def build_parser() -> argparse.ArgumentParser:
             "be asked for."
         ),
     )
-    # A directory rather than a package. Definitions arrived as installed packs
-    # found through an entry point once, then as a set inside the wheel; a path
-    # needs no wheel, no metadata and no publish step, which is the whole of
-    # what a deployment ever wanted from either.
+    # A directory rather than a package: a path needs no wheel, metadata or publish step.
     seeding.add_argument(
         "--from",
         dest="source",
         metavar="DIR",
         help="seed from this directory instead of the one KINGFISHER_ASSETS names",
     )
-    # Off by default, because the default has to be right for a workspace that
-    # has registered nothing -- which is every first run. A definition naming
-    # middleware is refused when it is built, so copying one in by default
-    # would fill a fresh workspace with a file that cannot run.
+    # Off by default: a definition naming middleware is refused when built, so a fresh
+    # workspace would be filled with files that cannot run.
     seeding.add_argument(
         "--all",
         dest="everything",
@@ -124,8 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
     doing = sub.add_parser(
         "run",
         help="run one task",
-        # Wrapped by hand, like `doctor`: the raw formatter is what keeps the
-        # blank lines, and it does no wrapping of its own.
+        # Wrapped by hand: the raw formatter keeps the blank lines and wraps nothing.
         description=(
             "Runs one task and prints the answer.\n"
             "\n"
@@ -144,10 +123,8 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     doing.add_argument("task", help="what to do, in your own words")
-    # Required, and refused downstream rather than defaulted anywhere: an agent
-    # decides which endpoint the session's prompts go to and whose credentials
-    # pay, so a default would put that choice somewhere the command line never
-    # mentions. `kingfisher list` shows what this workspace offers.
+    # Required, never defaulted: the agent decides which endpoint gets the prompts and
+    # whose credentials pay.
     doing.add_argument(
         "--agent",
         required=True,
@@ -158,9 +135,6 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="ID",
         help="the session to run in, started if no turn has named it; without one, 'default'",
     )
-    # A turn has no directory of its own, so every caller-supplied file lives the
-    # length of the session and a name sent twice replaces the first, which
-    # `place_inputs` reports.
     doing.add_argument(
         "--input",
         metavar="PATH",
@@ -168,14 +142,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="a file for the agent to read, in /inputs (read-only); repeatable",
     )
-    # Unlike `list --as`, an absent one is not the operator's view. A listing is
-    # read-only and whoever runs it is on the host with the policy in front of
-    # them; a turn acts, so this is left to the library to refuse. It is the
-    # library's message, so it names the keyword argument and this flag both --
-    # it used to name only the argument, which a terminal cannot pass.
-    # Off by default, because the default has to be right for somebody who does
-    # not know sessions exist yet: a run whose files are gone before they knew
-    # to look for them is worse than a directory they can delete later.
+    # Off by default: files gone before somebody knew to look for them are worse than a
+    # directory they can delete later.
     doing.add_argument(
         "--delete-session",
         action="store_true",
@@ -194,6 +162,8 @@ def build_parser() -> argparse.ArgumentParser:
             "call -- to FILE as JSON lines. Without it, nothing is kept"
         ),
     )
+    # Unlike `list --as`, absent is not the operator's view: a turn acts, so the library
+    # refuses it.
     doing.add_argument(
         "--as",
         dest="held",
@@ -211,10 +181,8 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="NAME",
         help="the datazone the caller is in, one of the vocabulary's 'datazones:'",
     )
-    # A verb rather than flags on `run`, for the reason the library has a `Resume`
-    # rather than a `Request` with the task left out: answering is not asking. `run`
-    # takes a task positionally, so the alternative was making that optional, and a
-    # `kingfisher run --agent x` with nothing to do would then reach the parser.
+    # A verb rather than flags on `run`: answering is not asking, and `run`'s task would
+    # have to become optional.
     deciding = sub.add_parser(
         "decide",
         help="answer a turn that stopped for approval",
@@ -253,9 +221,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="do not run this call; repeatable",
     )
-    # `respond` replaces the tool's result rather than running it, so it is the one
-    # decision that carries text -- and the text is required, which is why this is
-    # `ID=TEXT` rather than a second flag somebody could forget to pair with it.
+    # `ID=TEXT` rather than a second flag, which somebody could forget to pair with it.
     deciding.add_argument(
         "--respond",
         metavar="CALL_ID=TEXT",
@@ -301,10 +267,8 @@ def build_parser() -> argparse.ArgumentParser:
     checkup = sub.add_parser(
         "doctor",
         help="check everything that stands between this install and a run",
-        # Wrapped by hand, because the raw formatter is what keeps the blank
-        # line below and it does no wrapping of its own. The paragraph break is
-        # worth the trade: the second half is a limit, and a limit buried in a
-        # justified block is one nobody reaches.
+        # Wrapped by hand for the paragraph break: a limit buried in one block is one
+        # nobody reaches.
         description=(
             "The configuration, the credentials it names, every catalogue,\n"
             "whether every definition can actually run, and what is confining the\n"
@@ -334,16 +298,11 @@ def build_parser() -> argparse.ArgumentParser:
             "names a subagent\nnothing here defines."
         ),
     )
-    # A flag rather than the default. A listing whose default output is JSON is
-    # a listing nobody reads, and whoever wants one already knows to ask.
     listing.add_argument(
         "--json",
         action="store_true",
         help="emit the same answer as JSON, for a script rather than a person",
     )
-    # Unscoped is the operator's view: everything, plus who reaches it. Naming
-    # source ids simulates a caller, which is how a policy gets checked before
-    # somebody trusts it.
     listing.add_argument(
         "--as",
         dest="held",
@@ -391,8 +350,6 @@ def build_parser() -> argparse.ArgumentParser:
     holding = sub.add_parser(
         "sessions",
         help="show the sessions this workspace is holding",
-        # Wrapped by hand, like `run` and `doctor`: the raw formatter keeps the
-        # blank lines and does no wrapping of its own.
         description=(
             "Every session in the workspace, most recently used first, with how\n"
             "long it has been idle and what it holds on disk.\n"
@@ -431,8 +388,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    # One or the other. An age and a name are two different questions, and a
-    # command handed both would have to decide which one it had been asked.
+    # Exclusive: handed an age and a name, the command would have to pick a question.
     chosen = sweeping.add_mutually_exclusive_group()
     chosen.add_argument(
         "--older-than",
@@ -458,8 +414,7 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
     """Fill the definitions folder."""
     paths = paths_from_env()
     # Before the source is asked for, which refuses when none is named: a deployment
-    # with nothing to seed still gets its folders and `models.yaml.example`, which is
-    # somewhere to start. Idempotent, so a folder already laid out is untouched.
+    # with nothing to seed still gets its folders and `models.yaml.example`.
     ensure_definitions(paths.definitions)
 
     tree = definitions_source(paths, source)
@@ -467,15 +422,11 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
     for line in written.report():
         print(line)
 
-    # Non-zero, because this is one of the likelier mistakes: `--from ./definitions/skills`
-    # names a directory that exists, is readable, and holds none of the kinds.
+    # Non-zero: `--from ./definitions/skills` is a likely mistake that reads without error.
     if not written.written:
         if written.skipped:
-            # A different failure from an empty directory, and the remedy is
-            # the opposite: everything here was found and understood, and left
-            # behind on purpose. Saying "holds none of agents, skills..." would
-            # send a reader looking one directory up for files that are right
-            # where they thought.
+            # Found and held back on purpose: "holds none of" would send a reader
+            # looking elsewhere for files that are right where they thought.
             wants = written.skipped[0].wants
             print(
                 f"nothing seeded — every definition in {tree} names {wants}, "
@@ -496,10 +447,8 @@ _OURS = Path(kingfisher.__file__).resolve().parent
 def _plain_warnings() -> Iterator[None]:
     """Kingfisher's own warnings as one `warning:` line each, on stderr.
 
-    Only its own. They are written for whoever runs the command and name the fix, so
-    a path into the installed package and the source of the `warnings.warn` call are
-    noise around the one sentence meant for them. A dependency's warning is about
-    code they did not write, and its file and line are the only pointer to it.
+    Only its own: a dependency's file and line are the only pointer to code the reader
+    did not write.
     """
     # Inside `catch_warnings` so the handler is put back: `main` runs in-process in
     # the tests, and a handler left installed would reformat every later warning.
@@ -519,8 +468,8 @@ def _plain_warnings() -> Iterator[None]:
             else:
                 before(message, category, filename, lineno, file, line)
 
-        # Assigning is the hook the standard library documents. ty types the attribute
-        # as the stdlib's own function, which no replacement can be, signature and all.
+        # The documented hook; ty types it as the stdlib's own function, which no
+        # replacement is.
         warnings.showwarning = plain  # ty: ignore[invalid-assignment]
         yield
 
@@ -529,8 +478,7 @@ def _run(args: argparse.Namespace) -> int:
     """Run one task, and say how it ended in the only channel that is left."""
     missing = [p for p in args.input if not Path(p).expanduser().is_file()]
     if missing:
-        # Before the model, because this is the one mistake that would otherwise
-        # cost money to discover.
+        # Before the model, or this mistake costs money to discover.
         print(f"no such file: {', '.join(missing)}", file=sys.stderr)
         return 2
 
@@ -551,16 +499,12 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _configured(cfg: Config, *, log: Path | None = None) -> Kingfisher:
-    """The `Kingfisher` a verb that runs or reads a session builds: the deployment's
-    sessions and plugins, from the two settings that name them.
+    """The `Kingfisher` a verb builds, with the sessions and plugins its settings name.
 
-    `--log` replaces any run events `KINGFISHER_PLUGINS` names, because it is the
-    narrower ask -- this command, this file.
+    `--log` replaces any run events `KINGFISHER_PLUGINS` names: it is the narrower ask.
     """
-    # Imported here, not at module scope. `Kingfisher` pulls deepagents and three
-    # provider SDKs -- about a second -- and
-    # `test_the_command_starts_without_the_agent_runtime` holds every verb to not paying
-    # it until it builds one. `seed`, `list` and `doctor` do not.
+    # Here, not at module scope: `Kingfisher` loads deepagents, and `seed`, `list` and
+    # `doctor` never build one.
     from kingfisher import Kingfisher  # noqa: PLC0415
     from kingfisher.cli.configured import (  # noqa: PLC0415
         configured_plugins,
@@ -574,12 +518,7 @@ def _configured(cfg: Config, *, log: Path | None = None) -> Kingfisher:
 
 
 def _kept_in(log: Path | None) -> JsonlRunEvents | None:
-    """Where `--log` keeps a turn's events, or `None` for the library's default.
-
-    The default is the `kingfisher.run` logger, which this command configures nothing
-    to keep -- so without `--log` a turn leaves no record of itself, as it did before
-    the run log left the session.
-    """
+    """Where `--log` keeps a turn's events, or `None` for the library's default."""
     if log is None:
         return None
     from kingfisher.plugins import JsonlRunEvents  # noqa: PLC0415
@@ -592,27 +531,20 @@ def _drive(
 ) -> int:
     """Stream one turn and say how it ended, whether it was asked or answered.
 
-    Shared by `run` and `decide` rather than copied into each, because a resumed
-    turn ends every way an asked one does -- including at a *second* gate, which is
-    the case a second copy would be written without and would not report.
-
-    Takes what it reads rather than the whole `Namespace`, for the reason `HANDLERS`
-    gives: a verb that did not define a flag this reached would be an
-    `AttributeError` waiting for somebody to add one.
+    Shared, because a resumed turn ends every way an asked one does, a second gate
+    included. Takes what it reads rather than the `Namespace`, so it never reads a flag a
+    verb lacks.
     """
     result = show(kf.stream(asked, source_ids=held), sys.stdout, sys.stderr)
     if result is None:
-        # The stream ended without a terminal event, which is not a shape the
-        # library produces -- said out loud rather than reported as success.
+        # Not a shape the library produces; said rather than reported as success.
         print("the run ended without a result", file=sys.stderr)
         return 2
 
     print(f"\nsession {result.session_id}  turn {result.turn_id}", file=sys.stderr)
     if not result.completed:
-        # Two endings, and they need different words. A turn cut off at a bound
-        # reached a partial answer somebody picks up by running again on the
-        # session; a turn holding a gate reached nothing, and running again on the
-        # session is the one action that *discards* what it stopped to ask.
+        # Different words: running again continues a turn cut off at a bound, but
+        # discards what a gate stopped to ask.
         if result.pending:
             _awaiting(result)
         else:
@@ -622,9 +554,7 @@ def _drive(
                 file=sys.stderr,
             )
         if delete_session:
-            # Said rather than done quietly, because the flag was asked for and
-            # this is the one ending that declines it. Both ways out are named:
-            # the work is still there to pick up, and still there to remove.
+            # Said, because this ending declines a flag that was asked for.
             print(
                 f"session kept: continue it with --session {result.session_id}, "
                 f"or remove it with kingfisher reap --session {result.session_id}",
@@ -645,9 +575,7 @@ def _decide(args: argparse.Namespace) -> int:
     for written in args.respond:
         call_id, sep, text = written.partition("=")
         if not sep or not text:
-            # Refused here rather than sent on as an empty `respond`, which the
-            # library would refuse with a message about a decision the person at
-            # the terminal did not write in that form.
+            # Refused here: the library's refusal would describe a form nobody typed.
             print(f"--respond wants CALL_ID=TEXT, got {written!r}", file=sys.stderr)
             return 2
         decisions.append(Decision(call_id=call_id, action="respond", message=text))
@@ -671,9 +599,8 @@ def _decide(args: argparse.Namespace) -> int:
 def _show_pending(kf: Kingfisher, session_id: str, held: Held | None) -> int:
     """What this session is waiting on, for somebody who has lost the ids.
 
-    Asked as the caller `--as` names, not as nobody: what comes back is somebody's
-    tool calls and their arguments, and answering it would otherwise be the one
-    door into a session that does not ask who is knocking.
+    Asked as the caller `--as` names: it shows somebody's tool calls and their arguments,
+    and must not be the one door into a session that skips the access check.
     """
     session = kf.session(session_id, source_ids=held)
     if session is None:
@@ -694,10 +621,8 @@ def _show_pending(kf: Kingfisher, session_id: str, held: Held | None) -> int:
 def _awaiting(result: RunResult) -> None:
     """What a turn that stopped at an approval gate owes the person who ran it.
 
-    The ids are printed because they are the only way to answer. The line about
-    running again is the specific falsehood this replaced: the generic ending told
-    a reader to continue the session, and continuing supersedes the gate rather
-    than answering it.
+    Prints the ids, the only way to answer, and says that running again supersedes the
+    gate rather than answering it.
     """
     print(
         f"stopped: {result.stop_reason} -- waiting for a decision on "
@@ -721,15 +646,8 @@ def _awaiting(result: RunResult) -> None:
 def _discard(kf: Kingfisher, result: RunResult) -> None:
     """Delete the session this run used, having named what goes with it.
 
-    The files are listed before the deletion and not after, because this is the
-    moment they stop being recoverable -- and nothing else in this command ever
-    prints them, so without this a run that wrote a file and a run that wrote
-    nothing end identically.
-
-    A deletion that fails does not change the exit code. Those three codes say
-    how the *turn* ended, which is what a script reading them is asking, and 1
-    already means the answer above was cut short -- which would be a lie told
-    about a turn that finished and a directory that stayed.
+    Listed first: nothing else prints them, and after this they are gone. A failed
+    deletion keeps the exit code, which says how the turn ended; 1 means it was cut short.
     """
     if result.artifacts:
         many = "" if len(result.artifacts) == 1 else "s"
@@ -760,11 +678,8 @@ AGES: dict[str, int] = {"m": 60, "h": 3600, "d": 24 * 3600}
 def _older_than(raw: str) -> float:
     """`30m`, `12h`, `7d` as seconds. A bare number is refused.
 
-    Refused rather than read as seconds, which is what `KINGFISHER_SESSION_TTL_S`
-    holds and would have been the obvious reading. Somebody who means a week
-    types `--older-than 7`, and seven *seconds* sweeps every session no turn is
-    running in: the plausible misreading is the destructive one, so there is no
-    reading at all. `0` is exempt because zero is the same number in every unit.
+    Not read as seconds: `--older-than 7` meant as a week would sweep every idle session.
+    `0` is exempt, being the same in every unit.
     """
     text = raw.strip()
     if text == "0":
@@ -780,11 +695,8 @@ def _older_than(raw: str) -> float:
 def _list(*, as_document: bool = False, held: Held | None = None) -> int:
     """Print what the workspace offers."""
     cfg = config_from_env()
-    # `UNSCOPED` and an absent flag are the same answer here, and that is not
-    # the inconsistency it looks like. A listing is read-only and whoever runs
-    # it is on the host with the policy file in front of them, so it is exempt
-    # from the refusal that covers a *turn*: there is nothing to protect by
-    # making an operator name themselves to read their own workspace.
+    # `UNSCOPED` and no `--as` are the same view: a listing is read-only, run on the host
+    # with the policy in front of its reader, so it is exempt from a turn's refusal.
     source_ids = held if isinstance(held, tuple) else None
     from kingfisher.cli.configured import configured_sessions  # noqa: PLC0415
 
@@ -800,11 +712,7 @@ def _list(*, as_document: bool = False, held: Held | None = None) -> int:
 def _age(seconds: float) -> str:
     """A span in the units `--older-than` takes, so a listing reads into a flag.
 
-    Floored, because the number is read straight into `reap --older-than`: rounded,
-    1.6 days printed `2d` and `--older-than 2d` left the session where it was, and
-    2.4 days printed `2d` as well -- one figure covering sessions a sweep would take
-    and sessions it would not, which is the contradiction `_nothing_reaped` exists to
-    keep these two commands out of.
+    Floored: rounded, 1.6 days would print `2d` and `reap --older-than 2d` would spare it.
     """
     for suffix, size in (("d", 24 * 3600), ("h", 3600), ("m", 60)):
         if seconds >= size:
@@ -829,30 +737,21 @@ def _sessions(*, as_document: bool = False) -> int:
     """What this workspace is holding, and what each session costs it."""
     cfg = config_from_env()
     kf = _configured(cfg)
-    # Asked of `origins` rather than derived from the workspace. The listing below
-    # already comes from the backends, and this line sat beside it saying
-    # `<workspace>/sessions` whatever they were -- so the one deployment the setting
-    # exists for was told to look in a directory its backends never touch, and
-    # "no sessions in ..." pointed at an empty one.
-    #
-    # The absolute path where kingfisher knows it, because somebody reads this to go
-    # there; a sentence where it does not, rather than a path it would be guessing.
+    # From `origins`, not the workspace: configured sessions live where their backends
+    # say. A path only where kingfisher knows it, rather than a guess.
     kept = kf.origins.sessions
     root: Path | None = kf.cfg.sessions_root if kept.kind == "default" else None
     where = str(root) if root is not None else "the sessions this deployment configured"
     now = time.time()
-    # A walk per session, at ~0.8ms each. The same trade `sessions()` already
-    # makes for the listing: cheap where it is read, and a workspace large
-    # enough to mind wants an index rather than a cheaper column.
+    # A walk per session, ~0.8ms each: a workspace large enough to mind wants an index,
+    # not a cheaper column.
     held = [(info, info.size()) for info in kf.sessions()]
 
     if as_document:
         print(
             json.dumps(
                 {
-                    # Named here as well as in the block below, because the two
-                    # forms have to say the same thing -- the rule `doctor` puts
-                    # its origins in both for.
+                    # As in the text form: the two forms must say the same thing.
                     "root": None if root is None else str(root),
                     "sessions": [
                         {
@@ -889,8 +788,7 @@ def _reap(args: argparse.Namespace) -> int:
     if args.session is not None:
         return _reap_one(kf, args.session)
 
-    # Read once and used twice -- to sweep, and to report what swept -- so the
-    # number that decided cannot differ from the number printed.
+    # Read once, so the age that decided is the age printed.
     age = kf.cfg.session_ttl_s if args.older_than is None else args.older_than
     result = kf.reap(older_than_seconds=age, now=time.time())
 
@@ -909,16 +807,9 @@ def _reap(args: argparse.Namespace) -> int:
 def _nothing_reaped(kept: int, busy: int, age: float, *, from_config: bool) -> None:
     """Say what decided, because a sweep that removes nothing reads as a broken one.
 
-    The ordinary case on a workspace in daily use is that nothing has expired,
-    and a command that prints nothing at all there is one whose next user
-    deletes the directory by hand -- which leaves the conversation, the claim
-    and whatever a store kept exactly where they were.
-
-    `busy` is named before the age, because the age is the wrong answer when a turn
-    is what spared the session: `expired` folds a busy session into `kept`, so this
-    blamed the age for one `kingfisher sessions` prints as hours idle -- two commands
-    contradicting each other on one workspace. It also offers advice that cannot work,
-    since no age sweeps a session a turn is running in.
+    Silent, it sends its next user to delete the directory by hand, leaving the
+    conversation and claim behind. `busy` before the age: `kept` includes busy sessions,
+    which no age sweeps.
     """
     if kept == 0:
         print("nothing to reap -- this workspace holds no sessions")
@@ -952,8 +843,7 @@ def _artifact(args: argparse.Namespace) -> int:
         raise UnknownSessionError(msg)
     content = session.artifact(args.name)
     if args.out is None:
-        # The buffer, not `print`: an artifact is bytes, and a text stream would
-        # re-encode a PDF on its way out.
+        # The buffer, not `print`: a text stream would re-encode a PDF.
         sys.stdout.buffer.write(content)
         sys.stdout.flush()
         return 0
@@ -964,13 +854,12 @@ def _artifact(args: argparse.Namespace) -> int:
 
 def _reap_one(kf: Kingfisher, session_id: str) -> int:
     """Reap one session by name, whatever its age and whatever is running in it."""
-    # `UNSCOPED` because this is housekeeping on the machine rather than a call on
-    # anyone's behalf, and a policied deployment now refuses a read that names nobody.
-    # `reap` and `sessions` are the operator's, which is why neither takes `--as`.
+    # `UNSCOPED`, not `None`, which a policied deployment refuses: this is housekeeping,
+    # not a call on anyone's behalf, which is why neither `reap` nor `sessions` takes `--as`.
     session = kf.session(session_id, source_ids=UNSCOPED)
     if session is None:
-        # Refused here, because deleting answers `None` both for "removed it" and for
-        # "there was nothing there" -- a mistyped id would report work nothing did.
+        # Refused here: deleting answers `None` for nothing there too, so a mistyped id
+        # would report work nothing did.
         msg = f"no session {session_id!r}"
         raise UnknownSessionError(msg)
     failure = session.delete()
@@ -984,30 +873,20 @@ def _reap_one(kf: Kingfisher, session_id: str) -> int:
 def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = None) -> int:
     """Say what would stop a run, and what would merely surprise."""
     try:
-        # Silenced rather than shown: the `credentials` check says the same thing, and
-        # says it inside the report instead of above it.
+        # Silenced: the `credentials` check says it, inside the report.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", MissingCredentialsWarning)
             cfg = config_from_env()
     except ConfigError:
-        # Said before the error rather than instead of it. `examine` reports a
-        # retired setting, and a `Config` has to exist before it can -- so the
-        # run that most needs to hear it is the one that cannot: a deployment
-        # from when `KINGFISHER_MODEL` and `KINGFISHER_API_STYLE` chose the model
-        # has no `models.yaml`, because the catalogue is what replaced them. It
-        # gets told the file is missing, and without this, nothing connects that
-        # to the three variables it is still setting.
-        #
-        # `stderr`, so `--json` still emits a document or nothing at all.
+        # Before the error: `examine` needs a `Config`, and a deployment still setting
+        # retired variables can fail for want of what replaced them, such as `models.yaml`.
+        # On `stderr`, so `--json` emits a document or nothing.
         for check in _retired():
             print(f"{check.verdict}  {check.name}  {check.detail}", file=sys.stderr)
             print(f"      -> {check.remedy}", file=sys.stderr)
         raise
-    # Built here and handed on, rather than each of the two asking for its own.
-    # The header and the checks are then reading one object -- and `examine`
-    # building its own is what made "your configuration is being ignored"
-    # unsayable, since a catalogue resolved from `cfg` agrees with `cfg` by
-    # construction.
+    # Built once and handed to `examine`: one it built from `cfg` would agree with `cfg`
+    # by construction, and could never say the configuration is being ignored.
     from kingfisher.cli.configured import configured_sessions  # noqa: PLC0415
 
     sessions = configured_sessions()
@@ -1015,10 +894,7 @@ def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = N
     checks = examine(cfg, found, from_dotenv=from_dotenv, sessions=sessions)
     origins = found.origins
     if as_document:
-        # An object where this was a bare list of checks. The two forms of this
-        # command have to say the same thing, and the human one now opens with
-        # where everything was read from -- a JSON form that omitted it would
-        # be the disagreement between surfaces that record exists to end.
+        # With the origins: the text form opens with them, and the two forms must agree.
         print(
             json.dumps(
                 {"origins": origins_document(origins), "checks": [vars(c) for c in checks]},
@@ -1026,9 +902,7 @@ def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = N
             )
         )
     else:
-        # Before the checks, because it is what they are about. `doctor` could
-        # report twelve tools and never say which directory they came from,
-        # which is a strange thing for a diagnostic not to be able to answer.
+        # Before the checks, because it is what they are about.
         for line in origins.block():
             print(line)
         print()
@@ -1041,13 +915,9 @@ def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = N
     return 1 if worst(checks) == "fail" else 0
 
 
-#: What a caller can put wrong, as against what a deployment can. Every one is
-#: reported rather than raised: a traceback out of langgraph in front of somebody
-#: who mistyped an agent name buries the one line that would have helped.
-#:
-#: `SessionBusyError` is handled before these and not among them -- see `main`.
-#: `AccessError` and `ConfigError` keep their own branches too, because each has
-#: something extra to say.
+#: What a caller can put wrong, reported rather than raised: a traceback buries the one
+#: line that would help. `SessionBusyError`, `AccessError` and `ConfigError` have their
+#: own branches in `main`, each with more to say.
 REFUSALS = (
     AgentError,
     ArtifactError,
@@ -1059,12 +929,8 @@ REFUSALS = (
     UnsafeReferenceError,
 )
 
-#: Verb -> what runs it. A table rather than a chain of `if`s. The chain needed
-#: one branch per verb *in the right order*, because not every verb takes
-#: `--json` and the fallthrough read `args.json` -- so a verb without it reaching
-#: that line was an `AttributeError` waiting on somebody reordering two blocks
-#: that looked interchangeable. Here each verb names the arguments it has, and
-#: the order of this table means nothing.
+#: Verb -> what runs it. Each names only the arguments its own verb defines, so none
+#: can read a flag it lacks.
 HANDLERS = {
     "run": _run,
     "decide": _decide,
@@ -1082,9 +948,8 @@ HANDLERS = {
 def _load_dotenv() -> frozenset[str]:
     """Load `.env`, and say which names it added.
 
-    The rest were in the environment when kingfisher started, which is what a shell
-    on macOS can read of this process -- so `doctor` needs to know which is which, and
-    only this point can tell.
+    The rest were there at start, which a macOS shell can read of this process; only
+    this point can tell `doctor` which is which.
     """
     before = set(os.environ)
     load_dotenv(ENV_FILE, override=False)
@@ -1092,9 +957,8 @@ def _load_dotenv() -> frozenset[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Before anything reads the environment, and it must not become a reason to
-    # depend on being in a checkout: absent is the ordinary case for an
-    # installed kingfisher, and `load_dotenv` returns False rather than raising.
+    # Before anything reads the environment. No `.env` is ordinary once installed, and
+    # `load_dotenv` returns False rather than raising.
     from_dotenv = _load_dotenv()
 
     parser = build_parser()
@@ -1106,51 +970,27 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        # Around every verb rather than `run` alone: each one that reads a configuration
-        # can be warned while it does, and for `list` that warning is the only report of
-        # a missing key it gives.
+        # Every verb, not `run` alone: for `list` the warning is its only report of a
+        # missing key.
         with _plain_warnings():
             return HANDLERS[args.command](args)
     except SessionBusyError as exc:
-        # Its own branch, and the only one of these that is not the caller's
-        # mistake: another turn holds the session and waiting fixes it. The code
-        # is still 2 -- it does not earn one of its own -- so the line has to be
-        # what says "wait" rather than "edit something".
+        # Not the caller's mistake: waiting fixes it. Still exit 2, so the words say "wait".
         print(f"session busy: {exc}", file=sys.stderr)
         print("nothing to change -- run it again when that turn finishes", file=sys.stderr)
         return 2
     except REFUSALS as exc:
-        # Each of these reached a stranger as a traceback until `run` existed, because
-        # nothing but `run` could raise them from a command. Every one is the same shape
-        # as `ConfigError` below: something the person at the terminal wrote and can fix
-        # -- an agent they cannot reach, a session id that is not there, a file
-        # reference that does not resolve.
-        #
-        # `DecisionError` and `AgentError` were the two left out, and `decide` is where
-        # it showed: the same sentence about a session that is not waiting arrived as a
-        # clean exit 2 when `--approve` was absent and as a traceback with exit 1 when
-        # it was present -- a code the help assigns to a turn that ran and stopped at a
-        # gate. `AgentError` did the same on `run` for an `interrupt_on:` naming a tool
-        # that is not there.
+        # Uncaught, one would exit 1, which the help gives a turn that ran and stopped.
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     except AccessError as exc:
-        # Beside `ConfigError` because it is the same kind of thing: something
-        # the person at the terminal wrote and can fix, in a file or on the
-        # command line. A traceback for `--as Q` would bury the one line that
-        # says which source ids this deployment actually defines.
+        # A traceback for `--as Q` would bury the line naming the source ids defined here.
         print(f"access error: {exc}", file=sys.stderr)
         return 2
     except ConfigError as exc:
-        # The one error a caller causes and can fix, so it is reported rather
-        # than raised. Anything else is a bug and should keep its traceback.
+        # Anything not caught by now is a bug, and keeps its traceback.
         print(f"configuration error: {exc}", file=sys.stderr)
-        # Where the answer would have come from, said only when it is somewhere
-        # the reader is not. This used to say `.env` is never read -- true then,
-        # and the reason this command failed while the driver worked with the key
-        # three lines away in a file. Now the useful thing to say is *which*
-        # file was read, because a caller standing one directory from theirs
-        # gets a message about a variable that is set, just not here.
+        # Which `.env` was read: one directory from theirs, a set variable reads as unset.
         where = Path(ENV_FILE).resolve()
         found = "read" if Path(ENV_FILE).is_file() else "not found"
         print(f"configuration comes from the environment and {where} ({found})", file=sys.stderr)

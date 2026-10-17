@@ -11,9 +11,8 @@ from langchain_core.messages import ToolMessage
 from kingfisher.core.agent.host_paths import HostPathError
 
 
-# The guard is the other half of `reject_host_path`: it catches what that raises and
-# hands it back as a correction. It applies no capability, which is what keeps it out
-# of `narrowing`.
+# The other half of `reject_host_path`. It applies no capability, which keeps it out of
+# `narrowing`.
 class HostPathGuard(AgentMiddleware):
     """Turn a rejected host path back into something the agent can act on."""
 

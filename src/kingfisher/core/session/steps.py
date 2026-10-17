@@ -1,9 +1,8 @@
 """Session I/O written once, as the port calls it makes, and driven sync or async.
 
-A sequence is a generator that yields each call it needs and is sent back the
-answer. `drive` makes the call, `adrive` awaits its `a`-prefixed twin, and
-everything between the calls -- every check, every refusal and their order -- is
-written once, so the sync and async ways into a session cannot come apart.
+A sequence is a generator that yields each call it needs and is sent back the answer.
+`drive` makes the call and `adrive` awaits its `a`-prefixed twin, so every check between
+the calls is written once and the sync and async ways in cannot come apart.
 """
 
 from __future__ import annotations
@@ -27,16 +26,15 @@ class Call:
     method: str
     args: tuple[Any, ...] = ()
     kwargs: Mapping[str, Any] = _NO_KEYWORDS
-    #: Whether it changes anything. A cancel waits for a call that does, so what the
-    #: call did reaches the sequence before the cancel does; a read is abandoned.
+    #: Whether it changes anything. A cancel waits for a call that does, so its effect
+    #: reaches the sequence first; a read is abandoned.
     changes: bool = False
 
 
 @dataclass(frozen=True)
 class OnHost:
-    """Work on this host, its disk or its CPU: made inline when driven sync, and on
-    kingfisher's pool when async. Always waited for -- a thread runs to the end
-    whether or not anyone is still waiting, so abandoning one decides nothing.
+    """Work on this host's disk or CPU: inline when driven sync, on kingfisher's pool
+    when async. Always waited for, since a thread runs to the end regardless.
     """
 
     fn: Callable[..., Any]
@@ -75,8 +73,8 @@ def drive[T](steps: Steps[T]) -> T:
         answer, failed = None, None
         try:
             answer = _made(step)
-        # Handed to the sequence rather than raised past it, so its own `except` and
-        # `finally` run: a sequence that took a claim is the one that gives it back.
+        # Thrown into the sequence, not raised past it, so a sequence that took a claim
+        # gives it back.
         except BaseException as exc:  # noqa: BLE001 -- thrown into the sequence
             failed = exc
 
@@ -92,10 +90,9 @@ async def adrive[T](steps: Steps[T]) -> T:
 async def adrive_finished[T](steps: Steps[T]) -> tuple[T, asyncio.CancelledError | None]:
     """`adrive`, handing back with the answer a cancel that arrived during the last call.
 
-    What `finished` is to one call. A cancel during an earlier call is thrown into the
-    sequence, which gives back what it took; one during the last has no later step to
-    go in at, and raised here it would drop an answer holding something -- a claim, a
-    saver -- that only the caller can now let go of.
+    A cancel during an earlier call is thrown into the sequence, which gives back what
+    it took. One during the last has no later step to go in at, and raised here would
+    drop an answer holding a claim or a saver only the caller can now let go of.
     """
     answer: Any = None
     failed: BaseException | None = None
@@ -106,9 +103,8 @@ async def adrive_finished[T](steps: Steps[T]) -> tuple[T, asyncio.CancelledError
         except StopIteration as done:
             return done.value, held
         if held is not None:
-            # A cancel that arrived during a call that changes something. The sequence
-            # has what that call did now, so the cancel goes in here instead of the
-            # next step being made.
+            # A cancel held over a changing call: the sequence has its result now, so the
+            # cancel goes in instead of the next step.
             answer, failed, held = None, held, None
             continue
         answer, failed = None, None

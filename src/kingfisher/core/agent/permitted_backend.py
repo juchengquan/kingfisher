@@ -45,39 +45,29 @@ if TYPE_CHECKING:
 class PermittedBackend(BackendProtocol):
     """A backend that refuses what this turn's file tools would refuse.
 
-    deepagents applies `permissions=` inside each file tool's body and nowhere else, so
-    the backend underneath keeps none of them. Handed to a tool bare, it is a way for
-    the model to write into `/skills`, which every session shares, or to read the run
-    log under `/.harness`, where `write_file` and `read_file` refuse the same path.
+    deepagents applies `permissions=` inside each file tool and nowhere else, so a bare
+    backend handed to a tool would let the model write into the shared `/skills` or
+    read `/.harness`.
 
-    **deepagents' own helpers, private as they are.** A rule has to mean here what it
-    means to `read_file`, and a second matcher written for this class is the copy that
-    drifts -- into a path one of the two refuses and the other reads.
+    Built on deepagents' own private helpers, so a rule means here what it means to
+    `read_file`; a second matcher is the copy that drifts. `BackendProtocol`, not the
+    sandbox one, so there is no `execute`: no rule reaches the shell.
 
-    **`BackendProtocol`, not the sandbox one, so there is no `execute`.** No rule
-    reaches the shell, and a tool holding it would run commands for a request that was
-    refused the `execute` tool.
-
-    What this bounds is where the model can point a tool, not the tool: a tool is code
-    in kingfisher's own process and can open whatever it likes.
+    It bounds where the model can point a tool, not the tool, which runs in
+    kingfisher's own process.
     """
 
     def __init__(
         self, backend: BackendProtocol, permissions: Sequence[FilesystemPermission]
     ) -> None:
         self._inner = backend
-        # Held, not copied: `build_agent` hands this over before it has finished adding
-        # the turn's rules -- memory declined, skills narrowed -- and a copy taken here
-        # would check a tool's path against a turn with fewer rules than it has.
+        # Held, not copied: `build_agent` adds the turn's rules after building this.
         self._permissions = permissions
 
     @property
     def _rules(self) -> list[FilesystemPermission]:
-        # `interrupt` means stop and ask a person, and the asking is the graph pausing
-        # before a file tool runs. Nothing pauses for a call made from inside a tool's
-        # body, so there is nobody to ask and the rule is a refusal. Rewritten rather
-        # than read as written because deepagents' result filters pass `interrupt`
-        # entries through -- for them the person has already said yes.
+        # Nothing pauses for a call from inside a tool, so `interrupt` is a refusal here.
+        # Rewritten because deepagents' result filters pass `interrupt` entries through.
         return [
             replace(rule, mode="deny") if rule.mode == "interrupt" else rule
             for rule in self._permissions
@@ -86,11 +76,8 @@ class PermittedBackend(BackendProtocol):
     def on_this_host(self, path: str) -> Path:
         """Where a tool may be handed `path` as a real file, or `UnsafeReferenceError`.
 
-        The turn's rules first, as `read_file` applies them: a path the file tools may
-        not read -- `/.harness`, `/memory` where it was declined -- is refused before
-        anything is looked up. Then the backend's own answer to where the path lives,
-        so a tool is handed the file the backend would read, and nothing where the
-        backend keeps it somewhere this host cannot open.
+        The turn's rules first, as `read_file` applies them, so a refused path is never
+        looked up; then the backend's own answer to where the path lives.
         """
         where, refused = self._where("read", path)
         if refused:
@@ -105,9 +92,8 @@ class PermittedBackend(BackendProtocol):
             )
             raise UnsafeReferenceError(msg)
         root, candidate = mapped
-        # Resolved before it is compared, and against the root that answered rather
-        # than the session: the agent can make a link, and a link inside a route
-        # pointing out of it must not widen what a tool is handed.
+        # Resolved before comparing, against the root that answered: the agent can make a
+        # link, and one pointing out of its route must not widen what a tool is handed.
         real = candidate.resolve()
         if root is not None and not real.is_relative_to(root.resolve()):
             msg = (
@@ -120,10 +106,8 @@ class PermittedBackend(BackendProtocol):
     def _where(self, operation: FilesystemOperation, path: str) -> tuple[str, str | None]:
         """The spelling the rules read, and the refusal if there is one.
 
-        The backend is handed that spelling and never the one written. It routes on the
-        leading slash, so `skills/x` passes the rules as `/skills/x` and, handed on as
-        written, is looked for under the session instead of in the catalogue -- a
-        different file from the one the rules were asked about.
+        The backend must be handed that spelling, not the one written: it routes on the
+        leading slash, so `skills/x` would be a different file from the one judged.
         """
         try:
             where = validate_path(path)
@@ -204,9 +188,8 @@ class PermittedBackend(BackendProtocol):
         return self._grepped(await _agrep_backend(self._inner, pattern, path, glob, max_count))
 
     def glob(self, pattern: str, path: str | None = None) -> GlobResult:
-        # The root stands in for an unnamed path when the rules are asked, and is not
-        # passed on: `None` leaves the backend to choose where it searches from, and
-        # `/` would choose for it.
+        # The root stands in for no path when the rules are asked, but `None` is passed
+        # on, leaving the backend to choose where it searches.
         where, refused = self._where("read", "/" if path is None else path)
         if refused:
             return GlobResult(error=refused)
@@ -257,9 +240,8 @@ class PermittedBackend(BackendProtocol):
     def _undeletable(self, where: str, *, nested: bool) -> str | None:
         """Why a delete is refused, or `None`.
 
-        Not `_where`: a delete takes everything under its target with it, so the
-        question is whether a rule could match anywhere in that subtree, in any order,
-        rather than whether the first one to match the path allows it.
+        Not `_where`: a delete takes its whole subtree, so any rule matching anywhere
+        in it refuses, not only the first to match the path.
         """
         denying = _find_delete_deny_patterns(self._rules, where, has_descendants=nested)
         if not denying:
@@ -298,8 +280,7 @@ class PermittedBackend(BackendProtocol):
     ) -> tuple[list[tuple[int, str]], dict[int, str]]:
         """A batch split in two: what goes through, and why each of the rest does not.
 
-        Both keyed by position, because a batch is answered in the order it was asked
-        and a refused path in the middle must not shift the answers after it.
+        Keyed by position, so a refused path mid-batch does not shift the answers after it.
         """
         through: list[tuple[int, str]] = []
         refused: dict[int, str] = {}
@@ -351,9 +332,8 @@ def _in_order[Response: (FileUploadResponse, FileDownloadResponse)](
 ) -> list[Response]:
     """One response per path asked, in the order asked.
 
-    Under the spelling asked, too. The backend answers with the one it was handed,
-    which is the normalised path, and a tool matching answers to what it sent would
-    find `inputs/a.csv` missing from a batch that uploaded it.
+    Under the spelling asked, too: the backend answers with the normalised path, and a
+    tool matching answers to what it sent would find them missing.
     """
     landed = {
         at: replace(answer, path=asked[at])
@@ -369,10 +349,8 @@ def host_path(backend: Any, where: str) -> tuple[Path | None, Path] | None:
     """Where `where` lives on this host, as `(root it must stay in, path)`, or `None`.
 
     The backend's own mapping, not a second one: a route is followed as the composite
-    follows it for a read, and a filesystem answers from its root. A backend that
-    says for itself -- `host_path(virtual)` -- is taken at its word, root and all.
-    Anything else keeps its files somewhere this host cannot open, as far as can be
-    told, and answers `None`.
+    follows it, a filesystem answers from its root, and a backend with its own
+    `host_path` is taken at its word. Anything else answers `None`.
     """
     own = getattr(backend, "host_path", None)
     if callable(own):

@@ -9,18 +9,15 @@ from typing import Any
 from kingfisher.core.agent.host_paths import HOST_ROOTS, HostPathError
 from kingfisher.core.layout import DEFAULT_LAYOUT, INPUTS_ROUTE, OUTPUTS_ROUTE, Layout
 
-#: Which arguments name a file. A convention `tools.md` documents and tool authors
-#: write to, so widening it is a line here and a sentence there, rather than a design
-#: question.
+#: Which arguments name a file: a convention `tools.md` documents, so widening it
+#: means a sentence there too.
 PATH_ARGUMENTS: frozenset[str] = frozenset({"path"})
 
-#: Where a workspace tool's *other* arguments may not point: the prefixes the file tools
-#: refuse, and the four a process reads its host and itself through --
-#: `/proc/self/environ` holds this process's API keys. Refused rather than translated,
-#: because nothing says such an argument names a file, and it reaches the tool as
-#: written: a tool calling its file `input_file` was handed another session's secret.
-#: Not a boundary -- a tool runs in kingfisher's own process, unfenced, and can open
-#: anything it likes -- but it takes away the obvious way for a model to ask one to.
+#: Where a workspace tool's other arguments may not point: the file tools' refused
+#: prefixes, and those a process reads its host and itself through -- `/proc/self/environ`
+#: holds this process's API keys. Refused, not translated, since nothing says such an
+#: argument names a file. Not a boundary, as a tool can open anything, but it removes
+#: the obvious way for a model to ask one to.
 NOT_FOR_TOOLS: tuple[str, ...] = (*HOST_ROOTS, "/root/", "/proc/", "/sys/", "/dev/")
 
 
@@ -39,29 +36,19 @@ def _strings_in(value: Any) -> Iterator[str]:
 class SessionPaths:
     """One session, and what a tool call's arguments mean against it.
 
-    Apart from both of its users because two places have to answer identically and
-    only one of them has a call to rewrite: `WorkspaceToolPaths`, and `GuardedTool`,
-    which travels on the tools themselves because a compiled subagent has no
-    middleware to attach. A second `real` written for the second place is the copy
-    that drifts, and the escape it stops resolving would not be visible in either
-    file.
-
-    Holds the turn's backend under the turn's rules, not a session directory. The
-    directory was a second copy of the backend's own path mapping, and it drifted:
-    it handed a tool `/skills` files that do not exist, `/.harness` files the file
-    tools are refused, and on a backend keeping sessions elsewhere a local path to
-    nothing.
+    Shared by `WorkspaceToolPaths` and `GuardedTool`, which must answer identically; a
+    second copy of `real` is the one that drifts. Holds the turn's backend under its
+    rules, not a session directory, so paths follow the backend's own mapping.
     """
 
     def __init__(self, permitted: Any, sessions: Path, layout: Layout = DEFAULT_LAYOUT) -> None:
         self._permitted = permitted
-        #: The two example routes `refusal_text` offers, named from this layout so a
-        #: refusal points at the paths a renamed session actually has.
+        #: The example routes `refusal_text` offers, from this layout so a renamed
+        #: session's paths are the ones named.
         self.inputs_route = layout.inputs_route
         self.outputs_route = layout.outputs_route
-        # Where every session is, spelled both ways. In a container the workspace is
-        # `/workspace`, which no host root names, and another session is one
-        # directory over from this one.
+        # Every session's folder, spelled both ways: in a container the workspace is
+        # `/workspace`, which no host root names.
         self._refused = (
             *NOT_FOR_TOOLS,
             *{f"{root}/" for root in (str(sessions), str(Path(sessions).resolve()))},
@@ -95,12 +82,8 @@ class SessionPaths:
 def refusal_text(escaped: ValueError, paths: SessionPaths | None = None) -> str:
     """What the model is told when a path is refused, in one place.
 
-    Both refusing paths say it: the middleware returns it as a failed result, and
-    `GuardedTool` raises it as one. A model that is told the rule can correct itself
-    mid-turn, and it can only do that if the rule reads the same either way.
-
-    `paths` names the example routes for the layout in force; without one -- a guard
-    with no session to translate against -- the default spellings are used.
+    The middleware and `GuardedTool` both say it, so the rule reads the same either way
+    and the model can correct itself. Without `paths`, the default spellings are used.
     """
     inputs_route = paths.inputs_route if paths is not None else INPUTS_ROUTE
     outputs_route = paths.outputs_route if paths is not None else OUTPUTS_ROUTE

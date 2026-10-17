@@ -1,24 +1,6 @@
-"""The application service: wired once, then asked to run things.
+"""The service: wired once, then asked to run things.
 
-Construction is not per-request, and the trade is measured rather than guessed: 8.1ms
-median and 9.2ms p95 to build an unrestricted agent, of which 7.2ms is
-`create_deep_agent` compiling the graph. Against a turn of 1.5-1.9s that is under 1%.
-
-  subagent      +5-6ms   each compiles its own graph; the range is the subagent
-  custom tool   +0.47ms  linear to at least 50, measured in August
-  middlewares   +0.03ms
-  skill          0.0ms   sixteen measure the same as none
-  deny rule      0.0ms   a hundred measure the same as none
-
-Every figure is *per item added to an otherwise identical build*, which is the only
-form that transfers. The costs are additive and the total stays small: 10 tools, 5
-middleware, 20 deny rules and 2 subagents predicted 20.8ms and measured 21.6ms.
-
-Re-measured 2026-09-03. Construction is CPU-bound Python and does not parallelise --
-about 100 builds a second per process, worker threads slightly worse -- so the
-ceiling is roughly 150 concurrent turns, or 34 if every one activates eight
-subagents. Above that, a cache keyed on capabilities *and* a fingerprint of the
-definitions is the thing to reach for.
+Each request builds its agent afresh on purpose: construction is cheap beside a turn.
 """
 
 from __future__ import annotations
@@ -162,8 +144,7 @@ class _Turn:
     #: What the lifecycle produced and the loop still owes its caller: a context
     #: manager cannot yield into the generator around it.
     pending: list[RunEvent] = field(default_factory=list)
-    #: Gated calls this turn stopped on, filled by the lifecycle from the one state
-    #: read it already makes. Non-empty is what makes `stop_reason` `awaiting_decision`.
+    #: Gated calls this turn stopped on; non-empty makes `stop_reason` `awaiting_decision`.
     awaiting: tuple[PendingDecision, ...] = ()
     #: What this turn's tools returned, as the lifecycle kept it.
     recorded: tuple[LedgerEntry, ...] = ()
@@ -179,26 +160,17 @@ def _asked(value: str | Request | Resume) -> Request | Resume:
     return value if isinstance(value, Request | Resume) else Request.coerce(value)
 
 
-#: What a provider answers with when it will not accept the credentials. Matched
-#: on the exception's own `status_code` rather than its class, so one branch
-#: covers every wire format: `anthropic` and `openai` both raise their own
-#: `AuthenticationError`, and the command may import neither.
+#: Matched on the exception's `status_code`, not its class: `anthropic` and `openai`
+#: each raise their own `AuthenticationError`, and the command may import neither.
 UNAUTHORIZED = 401
 
 
 def refused_credentials(exc: BaseException, cfg: Config) -> ConfigError | None:
     """A provider's 401 as the configuration error it is, or `None` for anything else.
 
-    Named rather than hinted at, and the variable is the whole point: on a 401 the
-    YAML is right and the key it points at is not, so a message that can only say
-    "authentication failed" sends the reader to the file where everything already
-    looks correct. The sentence about the shell is there because `load_dotenv` runs
-    with `override=False` -- an exported value beats `.env`, which is how a key three
-    lines from the reader's eye is not the one that was sent.
-
-    The endpoint is found by matching the failed request's URL rather than by asking
-    for the default: a subagent may run somewhere its parent does not, and naming the
-    default endpoint for a 401 raised by another one would be confidently wrong.
+    The endpoint is matched by the failed request's URL, not taken as the default: a
+    subagent may run elsewhere. The shell is named because `load_dotenv` runs with
+    `override=False`, so an exported key beats the one in `.env`.
     """
     if getattr(exc, "status_code", None) != UNAUTHORIZED:
         return None
@@ -224,20 +196,13 @@ def refused_credentials(exc: BaseException, cfg: Config) -> ConfigError | None:
 class Kingfisher(SessionMethods, Disposal):
     """A configured kingfisher. Construct once; call `run` or `stream` per request."""
 
-    def __init__(  # noqa: PLR0913 -- the composition root; each argument is one
-        # collaborator a deployment or a test substitutes, and folding them into
-        # a parameter object would hide exactly what is substitutable.
+    def __init__(  # noqa: PLR0913 -- the composition root: each argument is substitutable
         self,
         cfg: Config | None = None,
         *,
-        # No default, so leaving it out is reported where the call is written. The
-        # backend is the sandbox -- it confines every command, refuses host paths and
-        # carries the route table a read-only rule is only legal against -- and a
-        # default would let a deployment wire the whole service without learning
-        # there was a boundary at all. A pre-built graph names them too: kingfisher
-        # places a request's inputs, collects what a turn left and takes the turn lock
-        # through them, and only the graph's builder knows where its backend keeps a
-        # session.
+        # No default: the backend is the sandbox, and a default would let a deployment
+        # wire the service without learning there was a boundary. Required beside a
+        # pre-built graph too, whose builder alone knows where a session is kept.
         sessions: Sessions,
         middlewares: Mapping[str, MiddlewareFactory] | None = None,
         graph: Any | None = None,
@@ -253,49 +218,23 @@ class Kingfisher(SessionMethods, Disposal):
         # one process is refused where the service is built.
         self._pool = thread_pool(self.cfg.thread_pool_size)
 
-        # Only what sessions share. Each session's own layout is made per
-        # request, because its path is not known until the request names it.
+        # Only what sessions share: a session's own path is known once a request names it.
         self.workspace: Path = ensure_layout(self.cfg.workspace)
 
-        # The reviewed definitions, from the folder `cfg` names: a deployment that
-        # stages its own points `definitions` there. Resolved here rather than per
-        # request so a catalogue that cannot be read fails at startup rather than
-        # serving an agent that has quietly been told about nothing. Read now rather
-        # than on the first turn: a definition that will not parse is a wiring
-        # mistake, and this is the last moment it is cheap to say so. `--list`
-        # deliberately does not do this -- see `warm`.
+        # Read and parsed now, not per request: a catalogue that cannot be read is a
+        # wiring mistake, to fail at startup rather than serve an agent told about nothing.
         self.catalogue: Definitions = resolve_definitions(self.cfg).warm()
-        # The one refusal `warm` cannot make for itself: whether a workspace tool
-        # wears a built-in's name is only answerable from an assembled graph, and
-        # `warm` has no `Config` to assemble one with. Left to the first request
-        # that touched tools until now -- so a deployment started, said it was
-        # fine, and refused the turn somebody was already waiting on.
-        #
-        # Only when the workspace defines tools, because nothing else can shadow.
-        # That is what keeps it off every build with an empty catalogue, and the
-        # cost where it lands is one compiled graph: about 10ms, once, against a
-        # turn of 1.5-1.9s.
+        # Whether a workspace tool wears a built-in's name, refused at startup: only an
+        # assembled graph can say, so `warm` cannot. Only with tools: nothing else shadows.
         if self.catalogue.tools.found:
-            # Suppressed, and only this type. The probe asks one question -- does a
-            # workspace tool wear a built-in's name -- and answers it with
-            # `CapabilityError`, which still refuses here.
-            # A `ConfigError` is not an answer: it means the deployment could not be
-            # assembled at all, by a `models.yaml` row or a backend, and the probe
-            # never got to look. Raised here it made that fault the probe's, and
-            # `kingfisher sessions` and `kingfisher reap` -- which need no model and
-            # no graph -- exited 2 with no output over one bad row. The turn that
-            # needs a model raises it, naming the row; `doctor` reports it on its own
-            # line. What is lost is the shadow answer for a deployment that cannot
-            # build, which `doctor` also says: the built-in count reads "not checked".
+            # Only `ConfigError`: the deployment could not be assembled, which the turn and
+            # `doctor` report, and raised here it would stop the `sessions` and `reap`
+            # commands, which need no model. `CapabilityError` still refuses.
             with suppress(ConfigError):
                 builtin_tool_names(self.cfg, self.catalogue)
 
-        # Sessions and not a backend: one backend is rooted at one session,
-        # so a single instance shared by every session would be one filesystem for
-        # every caller. A deployment separating its callers by *where their files
-        # are* -- which is what replacing the backend is usually for -- would have
-        # written the leak it was replacing the backend to avoid, and nothing about
-        # the call site would look wrong.
+        # Sessions, not a backend: one backend shared by every session is one filesystem
+        # for every caller, and nothing at the call site would look wrong.
         if not isinstance(sessions, Sessions):
             msg = (
                 "sessions= takes a Sessions, which opens each session's backend "
@@ -306,9 +245,6 @@ class Kingfisher(SessionMethods, Disposal):
                 "Sessions, which brings aopen and asessions with it"
             )
             raise TypeError(msg)
-        # Where each turn's record of itself goes. The default is the `kingfisher.run`
-        # logger, which the default logging configuration discards: a deployment
-        # decides whether it keeps them by configuring logging or by passing a sink.
         self.run_events: RunEvents = (
             run_events if run_events is not None else LoggedRunEvents()
         )
@@ -316,51 +252,35 @@ class Kingfisher(SessionMethods, Disposal):
         self.grants: Capabilities = (
             self.cfg.grants if self.cfg.grants is not None else UNRESTRICTED
         )
-        # What a definition may name in its `middlewares:` field. Empty by
-        # default, so any such line fails loudly until a deployment wires one --
-        # kingfisher cannot define these, only a deployment knows what its
-        # middleware is. Registering is not the same as permitting: `grants`
-        # still clamps which registered names a request may reach.
+        # What a definition may name under `middlewares:`. Registering is not permitting:
+        # `grants` still clamps which registered names a request may reach.
         self.middlewares: Mapping[str, MiddlewareFactory] = middlewares or {}
         self.instructions: Instructions = instructions or InstructionsFile()
-        # Walked here rather than when a definition names one. An entry nothing
-        # can build is a fact about this deployment's own code, true before any
-        # request arrives and true of entries no definition names yet -- so the
-        # deployment hears it where it wired the registry, not from the first
-        # caller unlucky enough to reach the wrong name. `_instantiate` keeps
-        # its own guard for `build_agent`, which takes a registry directly.
+        # Here, not when a definition names one, so the deployment hears it where it
+        # wired the registry rather than from the first caller to reach the wrong name.
         refuse_unbuildable_middleware(self.middlewares)
-        # Where the sessions are: what each turn opens, and what answers the questions
-        # no single session does -- which there are, how big, when each was used.
         self._sessions: Sessions = sessions
         self._graph = graph
-        # There is nothing to reconcile, and that is the shape of the design rather than
-        # an omission. Audiences live in the definitions, so a definition *is* the asset
-        # it is about -- there is no such thing as a line naming something the workspace
-        # does not offer, and a definition naming a tool that does not exist was already
-        # refused by `Offering.refuse_unknown` long before any of this.
+        # Nothing to reconcile against the catalogue: audiences live in the definitions,
+        # and one naming a tool that does not exist was refused by `Offering.refuse_unknown`.
         self.access: SourceIds | None = self.cfg.access
         self.access_report: AccessReport = AccessReport()
         if self.access is not None:
-            # One walk of the definitions, not three. `defined_subagents` reads a
-            # directory, and asking it once per question is how this came to do it three
-            # times at every startup.
+            # Walked once for both calls: `defined_subagents` reads a directory.
             kinds = (
                 ("agent", self.catalogue.agents.specs),
                 ("subagent", defined_subagents(self.cfg, catalogue=self.catalogue)),
             )
-            # Refusals first: a typo makes a line both undeclared and narrowing,
-            # and reported as a narrowing it would explain the wrong fault. Tools are
-            # checked and not audited: one stating no audience is not open, it is
-            # whatever the agent granting it says.
+            # Refusals first: a typo makes a line both undeclared and narrowing, and as a
+            # narrowing it would explain the wrong fault. Tools are checked, not audited:
+            # one stating no audience is whatever the agent granting it says.
             access.refuse_undeclared(
                 *kinds, ("tool", self.catalogue.audienced_tools), vocabulary=self.access
             )
             self.access_report = access.audit(*kinds, vocabulary=self.access)
 
-        # Last, so the line reports what was resolved rather than what was asked for --
-        # and so a wiring failure raises instead of announcing a deployment that never
-        # came up.
+        # Last, so the line reports what was resolved, and a wiring failure raises
+        # instead of announcing a deployment that never came up.
         if logger.isEnabledFor(logging.INFO):
             logger.info("reading from: %s", self.origins.line())
 
@@ -379,24 +299,14 @@ class Kingfisher(SessionMethods, Disposal):
 
     def _effective_grants(self, source_ids: Held | None) -> Capabilities:
         """The ceiling for one call: this deployment's, narrowed by the caller's."""
-        # Nothing central left to intersect with: the narrowing that source ids
-        # imply is per definition, and happens in `AgentSpec.declares` where
-        # the spec is known. What this still does is ask `caller_holds` for the
-        # refusals every door shares, and validate the names -- a caller naming a
-        # source id this deployment does not declare is refused here rather than
-        # quietly reaching nothing.
-        #
-        # One call and no branch of its own. A branch here refused on `source_ids is
-        # not None` where there was no policy, and `UNSCOPED` is not `None` -- so the
-        # one value that means *no caller* was refused by the deployments that need it,
-        # and `run --as UNSCOPED` could not run a workspace with no `source_ids.yaml`.
+        # For its refusals: an undeclared source id is refused here rather than quietly
+        # reaching nothing. Source ids narrow per definition, in `AgentSpec.declares`.
+        # No branch on `source_ids is not None`: `UNSCOPED` is not `None`, and must run
+        # where there is no policy.
         access.caller_holds(self.access, source_ids)
         return self.grants
 
-    def _graph_for(  # noqa: PLR0913 -- one keyword per thing a build needs and
-        # cannot work out for itself. The two at the end were derived here until a
-        # turn was measured resolving each of them twice; deriving them again would
-        # be the shorter signature and the second answer.
+    def _graph_for(  # noqa: PLR0913 -- setup holds each; deriving one here derives it twice
         self,
         request: Request | Resume,
         capabilities: Capabilities,
@@ -409,45 +319,27 @@ class Kingfisher(SessionMethods, Disposal):
     ) -> Any:
         """What serves one request, rooted at its session.
 
-        **Two shapes, and the asymmetry is the point rather than an oversight.** A
-        build kingfisher made comes back as `Assembled`, carrying what was attached;
-        a graph the deployment supplied comes back as a copy of itself on this turn's
-        saver, because there is no record of a build that did not happen here.
-        Returning the record either way would mean inventing one with every field
-        empty -- a record asserting a build that never ran, which is worse than the
-        union, since it would be asserted on.
-        Callers take `.graph` where they need the graph; `_built_turn` is the only one
-        in `src/`.
+        `Assembled` for a build made here; a supplied graph comes back as itself on this
+        turn's saver, because an `Assembled` for it would assert a build that never ran.
         """
         if self._graph is not None:
             if not request.capabilities.is_unrestricted:
                 msg = "cannot honour request.capabilities against a pre-built graph"
                 raise ValueError(msg)
-            # On this turn's saver, never the one it was compiled with. The transcript
-            # carries the conversation, so a graph keeping a saver of its own handed the
-            # model every earlier turn twice, and one keeping none left no state to
-            # write the transcript from -- measured, both ways -- and a pause kept in its
-            # own saver could not outlive the process.
+            # On this turn's saver, never its own: its own would replay every earlier turn
+            # beside the transcript, or keep no state to write one, or lose a pause.
             return self._graph.copy(update={"checkpointer": checkpointer})
 
         return build_agent(
             self.cfg,
-            # Resolved by the caller, which is the only one there is: setup needs the
-            # same spec for the withheld report, and asking twice meant the
-            # first call resolving it from the catalogue and writing the pin while
-            # the second read that pin back and parsed it.
+            # Resolved by setup, which needs the same spec for the withheld report.
             agent=agent,
             held=held,
-            # The one setup opened or was handed, which placed this turn's inputs.
-            # Opened again here, a remote backend would be asked for two sessions'
-            # worth of sandbox, and the agent could run in the one that was never
-            # given the inputs.
+            # The one setup opened, holding the inputs: opened again, a remote backend
+            # would be a second sandbox without them.
             backend=files,
-            # What the deployment permits, narrowed by what the request asked for,
-            # and never the request's own: they are equal only where the deployment
-            # restricts nothing, which is why defaulting to them here looked
-            # harmless. A caller asking for a tool the deployment withheld was
-            # handed it -- measured, and the whole suite stayed green.
+            # Never `request.capabilities`, which would hand a caller a tool the
+            # deployment withheld.
             capabilities=capabilities,
             run_on=request.run_on,
             middleware_registry=self.middlewares,
@@ -460,34 +352,23 @@ class Kingfisher(SessionMethods, Disposal):
     def _files_for(self, session_id: str) -> Steps[Any]:
         """The backend a session's files are reached through, by kingfisher and any agent it builds.
 
-        What runs its commands is the sessions' to decide, not this
-        service's: a runner is about where commands run on a host, and only the
-        sessions know which host a session is on.
+        What runs its commands is the sessions' choice: only they know a session's host.
         """
         files = yield changing(
             self._sessions, "open", self.cfg, session_id, catalogue=self.catalogue
         )
-        # Here and not only where an agent is built: beside a pre-built graph none is,
-        # and without one a turn reads the session through this backend before the
-        # build would look at it.
+        # Here as well as at the build: a pre-built graph has none, and setup reads the
+        # session through this backend before any build.
         refuse_unusable_backend(
             files, (*self.cfg.layout.denied_scopes(), *self.cfg.layout.denied_read_scopes())
         )
         return files
 
     def _pin_agent_in(self, harness: HarnessFiles, name: str | None) -> Steps[None]:
-        """Keep the agent, in the session this is about.
+        """Keep the agent, in the session's own files.
 
-        **The session's own files, never a path re-derived from its id.** This took an id and
-        rebuilt the path as `<workspace>/sessions/<id>`, which is where the session
-        is only when `session_root` is the default. Under any other one the turn
-        runs elsewhere, so the pin was written where `agent_started_with` does not
-        read and where `_keep` does not collect it: every turn re-resolved the agent
-        from the catalogue, a deploy mid-conversation changed the prompt under a
-        history that had already happened, and a request naming a different agent was
-        served instead of refused. `ports.md` promises the store is handed the pinned
-        agent, and that promise was false for exactly the deployments the port exists
-        for.
+        Never at a path rebuilt from the id: that is the session only under the default
+        `session_root`, and a pin written elsewhere is never read back.
         """
         if name is None:
             return
@@ -504,8 +385,7 @@ class Kingfisher(SessionMethods, Disposal):
     ) -> Steps[AgentSpec | None]:
         """The agent this turn runs, which is the one its session opened with.
 
-        `pinned` is the session's pin where the caller has read it already, as setup
-        has: it read the pin to decide whether the caller reaches the session at all.
+        `pinned` is the session's pin where the caller has read it already, as setup has.
         """
         kept = (yield from agent_started_with(harness)) if pinned is _UNSET else pinned
         if kept is None:
@@ -528,21 +408,15 @@ class Kingfisher(SessionMethods, Disposal):
     ) -> AgentSpec | None:
         """The agent this request asked for, out of the catalogue."""
         offered = self.catalogue.agents.specs
-        # Filtered before the listing is built, not after, so the message a caller reads
-        # never names an agent they cannot open. An agent out of reach is spelled
-        # exactly the way an agent that was never written is: anything else lets a
-        # caller enumerate the catalogue by guessing, and sends them off to try
-        # something they will only be refused for.
+        # Filtered before the listing is built: an agent out of reach must read exactly
+        # like one never written, or a caller could enumerate the catalogue by guessing.
         if (held := access.caller_holds(self.access, source_ids)) is not None:
             offered = {
                 n: spec for n, spec in offered.items() if reaches(spec.source_ids, held)
             }
         listing = ", ".join(sorted(offered)) if offered else "none"
-        # Two refusals, one remedy, and the remedy is different when there is nothing at
-        # all. `SEED_HINT` says `--from DIR`, which needs a DIR a reader who installed
-        # the package may not have. Correct, and a dead end: the next thing that
-        # reader needs is the file itself -- written where the agents are read from,
-        # which a setting may have moved, and offered only where there is a directory.
+        # With nothing offered, a starter file as well as `SEED_HINT`, whose `--from DIR`
+        # needs a DIR a reader who only installed the package may not have.
         root = self.catalogue.agents.root
         starter = "" if root is None else f", or write one:\n\n{starter_agent(root)}"
         empty = "" if offered else f" -- try {SEED_HINT}{starter}"
@@ -565,26 +439,21 @@ class Kingfisher(SessionMethods, Disposal):
         """Everything up to the model call, as the one sequence both loops drive.
 
         Every refusal comes before `run_start`, so a refused request leaves no turn
-        behind, and the claim is the one thing taken before them, given back if one
-        of them refuses. Measured at 15-46ms end to end, of which 9.2ms is building
-        the agent -- which is `_built_turn`, the one piece of it done on this host.
+        behind; the claim is taken before them and given back if one refuses.
         """
         cfg = self.cfg
         session = yield from self._session_for(request)
-        # Who is calling, before the session is marked, claimed or written to. Any
-        # later and a refused caller's files are already in the `/inputs` of a session
-        # that was never theirs; after the claim, and a turn running in it would
-        # answer "busy" where a session out of reach answers "no session". The grant
-        # is asked for here only for its refusals, and again below for itself.
+        # Who is calling, before the session is marked, claimed or written to: later, a
+        # refused caller's files would be in its `/inputs`, and a session out of reach
+        # would answer "busy" rather than "no session". Asked here only for its refusals.
         self._effective_grants(source_ids)
-        # Opened here, before anything else reads the session: who may touch it is
-        # decided by its pinned agent, and that is read through the backend too.
+        # Opened before anything else reads the session: who may touch it is decided by
+        # its pinned agent, and that is read through the backend too.
         if files is None:
             files = yield from self._files_for(session.id)
         harness = HarnessFiles(files, session.id)
         held = self._held_for(source_ids)
-        # Read once, for both of its readers: whether this caller reaches the session,
-        # here, and which agent the turn runs, below. Not read where neither asks -- a
+        # Read once, for reach here and for the agent the turn runs; neither asks for a
         # supplied graph under no policy.
         pinned = (
             (yield from agent_started_with(harness))
@@ -593,13 +462,11 @@ class Kingfisher(SessionMethods, Disposal):
         )
         if not self._reaches_pin(pinned, held):
             raise unknown_session(session.id)
-        # A turn writes inside the session, never to the session itself, so the
-        # timestamp `retention.expired` reads would still say "idle" for a
-        # conversation in daily use. Recorded here, at the top of a turn, rather
-        # than at the end: a turn that fails still happened.
+        # A turn writes inside the session, which leaves the timestamp `retention.expired`
+        # reads alone. At the top of the turn, not the end: a turn that fails still happened.
         yield changing(self._sessions, "mark_used", cfg, session.id)
-        # Before the other refusals rather than after: those read the session,
-        # and a turn arriving halfway through would be reading it as it moved.
+        # Before the other refusals: those read the session, and a turn arriving halfway
+        # through would be reading it as it moved.
         claimed = yield changing(
             self._sessions, "claim", cfg, session.id, stale_after=cfg.claim_stale_after
         )
@@ -625,8 +492,7 @@ class Kingfisher(SessionMethods, Disposal):
             yield changing(self._sessions, "release", cfg, session.id)
             raise
 
-    def _claimed(  # noqa: PLR0913 -- what setup already built, handed on rather
-        # than built twice: a second backend is a second sandbox on a remote one
+    def _claimed(  # noqa: PLR0913 -- setup's, handed on: a second backend is a second sandbox
         self,
         request: Request | Resume,
         session: Conversation,
@@ -637,58 +503,32 @@ class Kingfisher(SessionMethods, Disposal):
         source_ids: Held | None = None,
     ) -> Steps[Prepared]:
         """The rest of setup, once the session is claimed."""
-        # What the backend could not make read-only, reported rather than raised. An
-        # optional extra a backend declares, as `host_path` and `shell_prompt` are; a
-        # deployment's own need not have it.
+        # Optional on a backend, like `host_path`; reported rather than raised.
         unprotected = tuple(getattr(files, "unprotected", ()))
 
-        # Before the inputs are placed, not after: placing them grows the session,
-        # so checking afterwards would let a request that is already over
-        # budget add to it and only then be refused.
+        # Before the inputs are placed: placing them grows the session.
         yield from self._refuse_if_over_budget(session)
 
-        # Before the turn exists, and before anything is destroyed: a request
-        # naming a file that is not there must fail without having placed the
-        # ones that were. `place_inputs` re-hardens `/inputs` on its way out.
-        #
-        # A resume places nothing. It is finishing work already proposed rather
-        # than asking for something, so there is no `inputs` on it to place -- see
-        # `Resume`, where the absence of the field carries the reason.
+        # Before the turn exists, so a missing file fails with nothing placed.
         placement = yield from place_inputs(
             getattr(request, "inputs", ()), files, self.cfg.layout
         )
 
-        # What this deployment permits, narrowed by what the request asked for.
         granted = self._effective_grants(source_ids)
         allowed = granted.intersect(request.capabilities)
-        # Named here rather than inline below, because two things want it and
-        # the expression is a mouthful. `None` for a run with no policy or an
-        # `UNSCOPED` one: both see the whole workspace, so there is nothing to
-        # filter the report against.
         held = self._held_for(source_ids)
-        # What an earlier turn stopped on: the state this turn answers, or a pause it
-        # supersedes and drops now. Before the graph is built, because a resume runs
-        # on a saver that already holds the pause.
+        # Before the build: a resume runs on a saver that already holds the pause.
         paused, resume, discarded = yield from self._take_pause(request, session, harness)
-        # Once, here, where both readers of it are in view: the build, and the
-        # withheld report. Measured before this moved: a turn under a policy
-        # resolved the agent twice and down different branches of the same function
-        # -- the first writing the pin, the second reading it back and parsing it.
-        #
-        # Not resolved at all where neither reader wants it. A deployment that
-        # supplied its own graph and declares no policy never asked for one, and
-        # asking anyway would make such a session start refusing a request that names
-        # a different agent, which today it does not.
+        # Not resolved for a supplied graph with no policy: that would refuse a
+        # request naming another agent.
         agent = (
             (yield from self._agent_for(request, harness, source_ids=source_ids, pinned=pinned))
             if self._graph is None or held is not None
             else None
         )
         if self._graph is None:
-            # Here, where the request's own names are still apart from the grant and
-            # the agent that clamp them -- the build is handed the three combined --
-            # and before the build and the reports both read them: a bare name settled
-            # to the one this caller reaches is what both have to see.
+            # Before the build and the reports, which must both see a bare name settled to
+            # the one this caller reaches.
             allowed = settled_request(
                 self.cfg,
                 allowed,
@@ -697,8 +537,7 @@ class Kingfisher(SessionMethods, Disposal):
                 catalogue=self.catalogue,
             )
         history = yield from read_transcript(harness)
-        # Read where the transcript is, and only for a graph built here: one the
-        # deployment supplied has nothing hooked to record into it.
+        # Only for a graph built here: a supplied one has nothing hooked to record into it.
         earlier = (yield from read_ledger(harness)) if self._graph is None else None
         return (
             yield on_host(
@@ -723,22 +562,18 @@ class Kingfisher(SessionMethods, Disposal):
     def _take_pause(
         self, request: Request | Resume, session: Conversation, harness: HarnessFiles
     ) -> Steps[tuple[bytes | None, dict[str, Any] | None, tuple[str, ...]]]:
-        """Deal with whatever an earlier turn left waiting, before this turn starts:
-        the paused state a resume restores, the answers it resumes with, and the
-        tools a new request superseded.
+        """Whatever an earlier turn left waiting: the state and answers a resume restores,
+        or the tools a new request superseded.
 
-        Both ways out of a pause meet here, because both have to happen before the
-        graph exists: an answer needs the saver holding the state it answers, and a
-        supersede needs the state gone before a turn runs on a saver still holding it.
+        Both before the graph exists: an answer needs the saver holding its state, and a
+        supersede needs that state gone before a turn runs on it.
         """
         held = yield from read_pause_mark(harness)
         if not isinstance(request, Resume):
             if held is None:
                 return None, None, ()
-            # Superseded. The transcript this turn replays ends at the unanswered
-            # call, and `PatchToolCallsMiddleware` tells the model it was cancelled
-            # -- so the agent learns the gated call never ran rather than silently
-            # losing it. What the caller is told is `decision_discarded`.
+            # Superseded: `PatchToolCallsMiddleware` tells the model the unanswered call
+            # was cancelled, and the caller is told by `decision_discarded`.
             waiting = tuple(item.tool for item in pending_from_mark(held))
             yield from clear_pause(harness)
             return None, None, waiting
@@ -750,10 +585,8 @@ class Kingfisher(SessionMethods, Disposal):
         if state is None:
             msg = f"session {session.id} recorded a pause whose state is missing"
             raise DecisionError(msg)
-        # Read back rather than derived again from the restored state. These are the
-        # very ids the caller was handed, so answering them cannot drift from being
-        # asked them -- and re-deriving would need the graph, which does not exist
-        # until after this runs.
+        # The ids read back, not re-derived: they are the ones the caller was handed, and
+        # re-deriving would need the graph, which does not exist yet.
         return state, runtime.resume_payload(request.decisions, pending_from_mark(held)), ()
 
     def _refuse_stale_pause(
@@ -761,16 +594,12 @@ class Kingfisher(SessionMethods, Disposal):
     ) -> None:
         """Refuse a resume the paused graph would not be the same graph for.
 
-        Checked rather than attempted. A paused session outliving a deploy is
-        ordinary, and the difference between these two sentences and what a failed
-        deserialise says -- a traceback about a node nobody has heard of -- is the
-        whole reason the mark is written beside the state.
+        Checked rather than attempted: a pause outliving a deploy is ordinary, and a
+        failed deserialise is a traceback about a node nobody has heard of.
         """
         was = held.get(AGENT_MARK) or None
-        # `was is None` is not a mismatch: nothing was recorded because nothing was
-        # resolved -- an injected graph under no policy, where the deployment's own
-        # graph runs whatever the request calls it and a *request* naming an agent is
-        # not refused either. Comparing against it refused the one name that was right.
+        # `None` is no mismatch: nothing was resolved, for an injected graph under no
+        # policy, where a request naming any agent is not refused either.
         if was is not None and request.agent is not None and was != request.agent:
             msg = (
                 f"session {session.id} paused under agent {was!r}, "
@@ -789,15 +618,12 @@ class Kingfisher(SessionMethods, Disposal):
     def _checkpointer(self) -> Any:
         """The saver this turn runs on, empty, or `None` where nothing is remembered.
 
-        Always kingfisher's own and always new: the transcript is what carries a
-        conversation from one turn to the next, so a saver that remembered earlier
-        turns would hand the model each of them twice -- measured, with a persistent
-        store, every follow-up turn's model saw the previous exchange two times over.
+        Always new: the transcript carries the conversation, so a saver that remembered
+        earlier turns would hand the model each of them twice.
         """
         return build_session_checkpointer() if self.cfg.conversation_enabled else None
 
-    def _built_turn(  # noqa: PLR0913 -- everything setup decided, for the one piece
-        # of it that is work on this host rather than calls to a port
+    def _built_turn(  # noqa: PLR0913 -- everything setup decided, for its on-host part
         self,
         request: Request | Resume,
         session: Conversation,
@@ -816,17 +642,15 @@ class Kingfisher(SessionMethods, Disposal):
         earlier: KeptLedger | None = None,
     ) -> Prepared:
         """The saver, the graph and the turn itself: what setup builds rather than asks
-        for. Done in one piece, on kingfisher's pool for `astream`, because building
-        the agent is CPU-bound and on the loop would hold every other turn up.
+        for. On kingfisher's pool for `astream`, because building the agent is CPU-bound
+        and on the loop would hold every other turn up.
         """
         cfg = self.cfg
         checkpointer = self._checkpointer()
         graph = None
         try:
             saver = checkpointer if paused is None else self._restored(session, paused)
-            # A caller-supplied id wins; otherwise one is made. No directory is
-            # claimed, so there is nothing to be atomic about any more. Before the
-            # build, because every row the graph records names the turn.
+            # Before the build, because every row the graph records names the turn.
             turn = session.allocate_turn(request.turn_id)
             ledger = (
                 Ledger(turn.id, earlier, resumed=resume is not None)
@@ -842,33 +666,24 @@ class Kingfisher(SessionMethods, Disposal):
                 files=files,
                 ledger=ledger,
             )
-            # `isinstance` rather than `getattr(built, "graph", built)`: the two shapes
-            # `_graph_for` returns are named types, and a duck test here would also
-            # accept anything else carrying a `graph` attribute -- which is how the
-            # backend seam lost its shell once already.
+            # `isinstance`, not a duck test on `.graph`, which would accept anything
+            # carrying one.
             graph = built.graph if isinstance(built, Assembled) else built
-            # Tools come off the assembled graph rather than a list kept somewhere: the
-            # surface includes whatever the workspace defined, so the only honest
-            # answer to "what was offered" is what was wired. Skills and subagents are
-            # not on the graph, so they are asked of the same functions `build_agent`
-            # asked -- 0.04ms and 1.4ms against a setup measured at 15-46ms.
+            # Tools are read off the graph, the only honest answer to what was offered;
+            # skills and subagents are asked of the functions `build_agent` asked.
             withheld = withheld_by_kind(
                 allowed,
                 cfg,
                 graph,
                 self.catalogue,
-                # Only where a vocabulary is in force. With none, `held` is `None`,
-                # nothing was narrowed by source ids and the filter is a no-op -- so
-                # the spec is not merely unused, it is unavailable: an injected graph
-                # never resolves one, which is exactly the case every test that hands
-                # in its own graph is.
+                # Only under a vocabulary: without one the filter is a no-op, and an
+                # injected graph has no spec to give.
                 agent=agent if held is not None else None,
                 held=held,
             )
             shared = subagent_only(allowed, cfg, catalogue=self.catalogue)
-            # The agent and the caller as well as the grant, so this reports on what the
-            # build activated. The grant alone may be `"*"`, which names every subagent --
-            # those the agent never named, and those out of this caller's reach.
+            # The agent and the caller as well as the grant: the grant alone may be
+            # `"*"`, naming subagents the build never activated.
             indistinct = indistinct_subagents(
                 cfg,
                 allowed,
@@ -884,9 +699,8 @@ class Kingfisher(SessionMethods, Disposal):
                 session_id=session.id,
                 turn_id=turn.id,
             )
-            # What this turn is: a task, or the answers to one already asked. The event
-            # says which, because a resume with a task-shaped `run_start` reads as a
-            # second request for work that was never re-requested.
+            # A resume says so in `run_start`: a task-shaped one would read as the work
+            # being requested again.
             asked = getattr(request, "task", "")
             started = asked or f"resuming {len(getattr(request, 'decisions', ()))} decision(s)"
             logger.run_start(started)
@@ -904,15 +718,12 @@ class Kingfisher(SessionMethods, Disposal):
             context=built.context if isinstance(built, Assembled) else None,
             resume=resume,
             discarded=discarded,
-            # The agent setup resolved, never `request.agent`: a session's agent is
-            # fixed when it opens, so the request names one only on the turn that
-            # opened it and this would be empty for every pause after that.
+            # Never `request.agent`, which is set only on the turn that opened the session.
             agent_name=agent.name if agent is not None else None,
             history=history,
             ledger=ledger,
-            # A resume adds no message: it continues a superstep that already has
-            # everything it needs, and a new user turn appended there would be one
-            # the model never saw asked.
+            # A resume adds no message: it continues a superstep, and a user turn
+            # appended there would be one the model never saw asked.
             message=turn_message(asked, placement.placed, earlier, layout=self.cfg.layout)
             if asked
             else "",
@@ -926,9 +737,8 @@ class Kingfisher(SessionMethods, Disposal):
             },
             events=(
                 *opening_events(turn.id, unprotected, placement, withheld, indistinct, shared),
-                # At the start of the turn that did the superseding, which is where
-                # it belongs: it is a fact about *this* turn, not the terminal state
-                # of the one it replaced.
+                # At the start of the superseding turn: a fact about this turn, not the
+                # terminal state of the one it replaced.
                 *((decision_discarded(discarded),) if discarded else ()),
             ),
             deadline=monotonic() + cfg.turn_timeout_s,
@@ -945,9 +755,8 @@ class Kingfisher(SessionMethods, Disposal):
         try:
             return resumed_saver(state)
         except (ValueError, NotImplementedError) as exc:
-            # A backend has no rename, so a pause is written in place and a crash can
-            # leave part of one. No part of one deserialises; this says which session
-            # rather than leaving msgpack to.
+            # A backend has no rename, so a crash can leave part of a pause; this names
+            # the session rather than leaving msgpack to.
             msg = f"session {session.id} recorded a pause whose state cannot be read: {exc}"
             raise DecisionError(msg) from exc
 
@@ -956,9 +765,7 @@ class Kingfisher(SessionMethods, Disposal):
         yield from self._record_transcript(prepared, snapshot)
         return (yield from collect_artifacts(prepared.files, self.cfg.layout))
 
-    def _finished(  # noqa: PLR0913 -- one terminal event, assembled from the four
-        # things a turn ends holding. A parameter object here would exist only to
-        # be unpacked one line later.
+    def _finished(  # noqa: PLR0913 -- a parameter object would only be unpacked a line later
         self,
         prepared: Prepared,
         answer: str,
@@ -979,8 +786,7 @@ class Kingfisher(SessionMethods, Disposal):
                 session_id=prepared.session.id,
                 turn_id=prepared.turn.id,
                 answer=answer,
-                # Collected after the graph has finished, so it reflects what
-                # the turn actually left behind -- including what the shell
+                # Collected after the graph finished, so it includes what the shell
                 # wrote, which no file tool would have reported.
                 artifacts=kept,
                 stop_reason=stop_reason,
@@ -989,26 +795,20 @@ class Kingfisher(SessionMethods, Disposal):
         )
 
     def _settled(self, prepared: Prepared) -> Any:
-        """This turn's final graph state, read once, or `None` where there is none.
+        """This turn's final graph state, or `None` where there is none.
 
-        One read feeding both the transcript and the pause. Two would pass every test
-        in this tree and come apart the first time one of them learned something the
-        other did not -- which is the shape `test_no_surface_decides_for_itself_what_a
-        _finished_turn_is` already exists to prevent one layer up.
+        Read once for both the transcript and the pause: two reads could come apart.
         """
         read = getattr(prepared.graph, "get_state", None)
         if read is None:
             return None
         try:
-            # A paused turn's own state, so the pause has to be visible here rather
-            # than only on the stream chunk `run` never sees.
+            # The pause has to be visible here, not only on the stream chunk `run`
+            # never sees.
             return read(prepared.config)
         except ValueError:
-            # `No checkpointer set` -- an injected graph that keeps no state
-            # between supersteps. Structural, like the missing method above, and
-            # not a conversation that failed to be read. Caught by name rather
-            # than by suppressing everything, so a graph that genuinely cannot
-            # answer still says so.
+            # `No checkpointer set`: an injected graph that keeps no state. Only this
+            # type, so a graph that genuinely cannot answer still says so.
             return None
 
     def _record_ledger(
@@ -1032,10 +832,8 @@ class Kingfisher(SessionMethods, Disposal):
         if not self.cfg.conversation_enabled:
             return
         if snapshot is None:
-            # A graph that keeps no state, or one that died before its first
-            # superstep -- persistence runs at the end of *every* turn rather than
-            # only a completed one, and reading `.values` off nothing raised, which
-            # turned "nothing to add" into a second failure on top of the first.
+            # No state, or a turn that died before its first superstep: this runs after
+            # every turn, failed ones included.
             return
         messages = snapshot.values.get("messages")
         if messages:
@@ -1046,15 +844,8 @@ class Kingfisher(SessionMethods, Disposal):
     ) -> Steps[tuple[PendingDecision, ...]]:
         """Keep a paused turn's graph state, or clear a pause this turn finished.
 
-        Written here and nowhere else, which is what keeps the file's presence a
-        truthful mark. Every path out of a turn arrives at this one: answered,
-        refused, cut short at a bound -- and each of those is a turn that is no
-        longer waiting.
-
-        Only a resume has a pause left to clear by then. Setup read the mark for every
-        turn, and dropped it for a request that superseded one; a turn that found none
-        has nothing on disk, and clearing it anyway was three round trips -- two
-        deletes and a read to check them -- at the end of every turn there was.
+        Written here and nowhere else, so the file's presence stays a truthful mark. Only
+        a resume has a pause left to clear: setup dropped any a new request superseded.
         """
         harness = prepared.harness
         waiting = runtime.pending_in(snapshot) if snapshot is not None else ()
@@ -1064,10 +855,8 @@ class Kingfisher(SessionMethods, Disposal):
                 yield from clear_pause(harness)
             return ()
         yield from harness.store(PAUSED_STATE, (yield on_host(paused_state, prepared.saver)))
-        # The state first, then the mark. The mark is what every other path tests to
-        # decide a session is waiting, so writing it second means a write that dies
-        # between the two leaves a session that is simply not paused -- rather than
-        # one that claims to be and has nothing to resume into.
+        # The state before the mark, which is what says a session is waiting: a write
+        # dying between them leaves a session not paused, not one with nothing to resume.
         yield from write_pause_mark(
             harness,
             {
@@ -1088,45 +877,31 @@ class Kingfisher(SessionMethods, Disposal):
     ) -> Iterator[RunEvent]:
         """Run one task, yielding progress as it happens.
 
-        A `Resume` answers a turn that stopped at an approval gate. It goes through
-        the same door rather than a method of its own: the admission it faces is the
-        same admission, and a second entry point would be a second place for those
-        checks to be forgotten.
-
+        A `Resume` comes through here too, so the admission checks have one door.
         `files` is the session's backend from `files_for`, for a caller that uses it
-        around the turn too; the request must name that session.
+        around the turn; the request must name that session.
         """
-        # Coerced here, because setup reads the request's session id first and a bare
-        # task string has none to read.
+        # Coerced here: setup reads the session id first, and a bare string has none.
         yield from self._stream_turn(
             _asked(request), source_ids=with_datazone(source_ids, datazone), files=files
         )
 
     @contextmanager
     def _turn_outcome(self, turn: _Turn) -> Iterator[None]:
-        """How a turn's graph loop ended, recorded on `turn`, for both loops.
-
-        A bound or a translation added here reaches `stream` and `astream` at once;
-        they differ only in the loop, and in how the ending is run after it.
-        """
+        """How a turn's graph loop ended, recorded on `turn`, for `stream` and `astream`."""
         try:
             yield
             turn.answer = normalize_answer(turn.answer)
             turn.ok = True
         except runtime.OutOfSteps:
-            # The other bound, reported like the first. `ok` stays true: the turn
-            # ended in a way the caller was told about, which is what that flag
-            # records -- not that every step it wanted happened.
+            # `ok` stays true: it records that the caller was told how the turn ended.
             turn.answer = normalize_answer(turn.answer)
             turn.stop_reason = "max_steps"
             turn.ok = True
             turn.pending.append(out_of_steps(self.cfg))
         except Exception as exc:
-            # Translated, not handled: a 401 is the one model-call failure the
-            # person at the terminal caused and can fix, so it joins the errors
-            # reported as a line instead of a traceback. Everything else is
-            # re-raised untouched and keeps its traceback, which is what makes a
-            # bug here still look like a bug.
+            # Only a 401, which the person at the terminal can fix, becomes a one-line
+            # error; the rest keep their traceback, so a bug still looks like one.
             if (refused := refused_credentials(exc, self.cfg)) is None:
                 raise
             raise refused from exc
@@ -1138,13 +913,9 @@ class Kingfisher(SessionMethods, Disposal):
     async def _aend_turn(self, turn: _Turn) -> None:
         """Everything a turn does once it is over, for `astream`.
 
-        Awaited as a task of its own, which no cancel reaches, and waited for however
-        many times the caller is cancelled meanwhile -- so every step runs, reads
-        included, as on a thread nothing could interrupt, without holding one: each
-        step is a round trip on a remote backend, and on kingfisher's pool two hundred
-        concurrent turns queued for them. What a task does not have that a thread did
-        is surviving its event loop, and the loop goes on while `astream` waits here,
-        which it always does.
+        A task of its own, which no cancel reaches, so every step runs; not a thread,
+        because on the pool concurrent turns queued for these round trips. A task dies
+        with its loop, which is safe only because `astream` always waits here.
         """
         _, cancelled = await finished(adrive(self._ending_steps(turn)))
         if cancelled is not None:
@@ -1154,42 +925,29 @@ class Kingfisher(SessionMethods, Disposal):
         """What a turn does once it is over, however it ended."""
         prepared = turn.prepared
         yield on_host(prepared.logger.run_end, ok=turn.ok, answer_chars=len(turn.answer))
-        # Before the slot goes back, and inside its own `finally` so that a
-        # store which is unreachable does not also leak the claim. Ending
-        # the turn is the only moment that happens whether the caller read
-        # the last event or walked away after the answer.
-        # One read, before anything is let go of: the saver still holds the
-        # paused state, and `_settle_pause` is what writes it out.
+        # Before anything is let go of: the saver still holds the paused state.
         snapshot = yield on_host(self._settled, prepared)
         try:
-            # Before the paused state as well as before the transcript: a resume
-            # carries on from that state, so it is as much the conversation as the
-            # transcript is, and a result in either must already have its row.
+            # Before the pause as well as the transcript: a resume carries on from that
+            # state, and a result in either must already have its row.
             turn.recorded = yield from self._record_ledger(prepared, snapshot)
             turn.awaiting = yield from self._settle_pause(prepared, snapshot)
             if turn.awaiting:
                 turn.pending.append(decision_needed(turn.awaiting))
-                # A bound that already fired keeps the reason it gave. Both are true
-                # -- the gate is real and the checkpoint is written either way -- and
-                # `stop_reason` answers why the turn *ended*, which for a turn cut
-                # off at its deadline is the deadline and not the question it was
-                # holding. The pending calls are reported regardless, so a caller is
-                # never left guessing what was in flight.
+                # A bound that already fired keeps its reason: `stop_reason` says why
+                # the turn ended, and the pending calls are reported either way.
                 if turn.stop_reason == END_TURN:
                     turn.stop_reason = AWAITING
-            # Read off the state rather than the stream, so it is the reply the agent
-            # ended on and never a subagent's, whose own cut answer is its caller's to
-            # read.
+            # Off the state, not the stream, so it is the agent's last reply and never a
+            # subagent's, whose cut answer is its caller's to read.
             if turn.stop_reason == END_TURN and (cut := runtime.ended_cut_off(snapshot)):
                 turn.stop_reason = "max_tokens"
                 turn.pending.append(out_of_tokens(cut))
             turn.kept = yield from self._keep(prepared, snapshot)
         finally:
-            # The slot goes back however the turn ended -- answered, refused
-            # mid-stream, cut short by its deadline, or cancelled during setup.
+            # However the turn ended, and even if the store was unreachable.
             yield changing(self._sessions, "release", self.cfg, prepared.session.id)
-        # And the QuickJS runtime, which is the one of the three that hangs
-        # the process rather than leaking a handle. See `release_interpreter`.
+        # Left open, the QuickJS runtime hangs the process rather than leaking a handle.
         yield on_host(release_interpreter, self.cfg, prepared.graph)
 
     def _read(self, turn: _Turn, namespace: Any, mode: Any, chunk: Any) -> tuple[RunEvent, ...]:
@@ -1200,35 +958,23 @@ class Kingfisher(SessionMethods, Disposal):
         return events
 
     def _payload(self, turn: _Turn) -> Any:
-        """What the graph is driven with: a conversation, or answers to resume into.
-
-        The two are alternatives. A resume re-enters the node that stopped rather
-        than starting a superstep, which is the whole difference between answering a
-        gate and asking the same question over again.
-        """
+        """What the graph is driven with: a conversation, or the answers a resume re-enters
+        the stopped node with, rather than asking the same question again."""
         if turn.prepared.resume is not None:
             return turn.prepared.resume
         return runtime.user_payload(turn.prepared.message, turn.prepared.history)
 
     def _driving(self, turn: _Turn) -> dict[str, Any]:
-        """The keywords both graph streams are driven with.
-
-        Shared so that one of them cannot quietly lose `subgraphs`, which would
-        leave a subagent's tokens out of that path and nothing else changed.
-        """
+        """The keywords both graph streams are driven with, shared so neither loses
+        `subgraphs` and with it a subagent's tokens."""
         driving: dict[str, Any] = {
             "config": turn.prepared.config,
             "stream_mode": runtime.STREAM_MODES,
             "subgraphs": True,
         }
         if turn.prepared.context is not None:
-            # Here rather than beside the payload, so that a resume carries it: the
-            # payload is what differs between a turn and its resume, and the context
-            # is in no checkpoint for the resume to find.
-            #
-            # Left off for a graph the caller built, not passed as `None`. All that is
-            # known of such a graph is that it takes the three keywords above, and one
-            # that is not langgraph's refuses a fourth.
+            # Here, not beside the payload, so a resume carries it: no checkpoint holds
+            # it. Left off rather than `None` for a supplied graph, which may refuse it.
             driving["context"] = turn.prepared.context
         return driving
 
@@ -1265,10 +1011,8 @@ class Kingfisher(SessionMethods, Disposal):
         turn = _Turn(drive(self._prepare_steps(request, source_ids=source_ids, files=files)))
         try:
             with self._turn_outcome(turn):
-                # Inside, not before. A caller that stops reading during these --
-                # `run_start` is the first -- used to leave the turn with no end at
-                # all: the claim stayed taken, the checkpointer stayed open, and
-                # nothing was persisted.
+                # Inside, not before: a caller that stops reading during these must still
+                # end the turn.
                 yield from turn.prepared.events
                 for chunk in turn.prepared.graph.stream(
                     self._payload(turn), **self._driving(turn)
@@ -1288,11 +1032,8 @@ class Kingfisher(SessionMethods, Disposal):
         source_ids: Held | None = None,
         files: Any = None,
     ) -> AsyncGenerator[RunEvent, None]:
-        """The same turn on the graph's own async stream.
-
-        `AsyncGenerator` because `astream` closes this by hand, and the type has
-        to admit `aclose`.
-        """
+        """The same turn on the graph's async stream; an `AsyncGenerator` so `astream` can
+        `aclose` it."""
         prepared, cancelled = await adrive_finished(
             self._prepare_steps(request, source_ids=source_ids, files=files)
         )
@@ -1330,19 +1071,10 @@ class Kingfisher(SessionMethods, Disposal):
     ) -> RunResult:
         """Run one task to completion. A drain of `stream`.
 
-        `delete_session=True` disposes of the session the turn used -- directory,
-        conversation and the claim -- once the turn has finished,
-        and only then. A turn stopped at a bound keeps all of it: the partial
-        work is real, and its conversation is what a retry on the same session
-        is rebuilt from. A deletion that fails is on the result as
-        `deletion_failure`, rather than the caller getting an answer and no sign
-        the session stayed.
-
-        Offered here and not on `stream`, which is not the asymmetry it looks
-        like. A generator has no "after the turn" this library controls: past
-        the final yield never runs for a caller who stops reading at the answer,
-        and a `finally` fires on `GeneratorExit` too -- so a session would be
-        deleted because somebody closed a loop early. A drain has an after.
+        `delete_session=True` disposes of the session once the turn has completed; one
+        stopped at a bound keeps it, as a retry is rebuilt from it. A failed deletion is
+        `deletion_failure` on the result. Not on `stream`: a generator's `finally` also
+        fires when a caller stops reading early, which would delete the session.
         """
         result: RunResult | None = None
         for event in self.stream(request, source_ids=source_ids, datazone=datazone, files=files):
@@ -1373,10 +1105,8 @@ class Kingfisher(SessionMethods, Disposal):
     ) -> AsyncIterator[RunEvent]:
         """`stream`, for a caller already on an event loop. Cancelling is immediate.
 
-        **This path asks one thing `stream` does not.** The `a`-prefixed middleware
-        hook is the one that runs, so a middleware written only as `wrap_model_call`
-        raises the first time this reaches it. The refusal is loud, and does not reach
-        a caller of `stream`.
+        Middleware runs through its `a`-prefixed hooks here, so one written only as
+        `wrap_model_call` raises the first time this reaches it.
         """
         turn = self._astream_turn(
             _asked(request), source_ids=with_datazone(source_ids, datazone), files=files
@@ -1385,9 +1115,8 @@ class Kingfisher(SessionMethods, Disposal):
             async for event in turn:
                 yield event
         finally:
-            # By hand: an async generator dropped by another waits for the loop to
-            # finalise it, and `yield from`'s close has no async spelling. Without
-            # this a caller who stops reading leaves the session claimed.
+            # By hand: a dropped async generator waits for the loop to finalise it, and
+            # until then a caller who stopped reading leaves the session claimed.
             await turn.aclose()
 
     async def arun(
@@ -1401,13 +1130,8 @@ class Kingfisher(SessionMethods, Disposal):
     ) -> RunResult:
         """`run`, for a caller already on an event loop. A drain of `astream`.
 
-        `delete_session` means here what it means on `run`, and for the same
-        reason it is offered on neither stream: a drain has an "after" that a
-        generator does not.
-
-        No `aclose` to match `astream`'s, deliberately: measured, a cancelled
-        drain gives the claim back one turn of the loop later either way, so the
-        close would be a line nothing can observe. `findings.md` has the numbers.
+        No `aclose` to match `astream`'s: a cancelled drain gives the claim back one turn
+        of the loop later either way.
         """
         events = self.astream(request, source_ids=source_ids, datazone=datazone, files=files)
         result: RunResult | None = None

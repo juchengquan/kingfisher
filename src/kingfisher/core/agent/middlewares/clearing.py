@@ -34,9 +34,8 @@ TRIGGER_SHARE = 0.5
 #: The most recent clearable results kept whole, besides the latest batch.
 KEEP_RECENT = 3
 
-#: A pass runs only if it could free this fraction of the high mark. Without it, once
-#: what can never be cleared nears the low mark, every call is a pass that frees almost
-#: nothing and costs the cache everything after the earliest message it touched.
+#: A pass runs only if it could free this fraction of the high mark, or once what cannot be
+#: cleared nears the low mark every call is a pass that frees little and costs the cache.
 WORTH = 1 / 4
 
 #: deepagents' file tools. What one returned is a file's text or a listing of files,
@@ -53,10 +52,8 @@ _STAMP = re.compile(r"\[(A-\d+)\]\s*\Z")
 #: How deepagents' eviction stub begins, `_TOO_LARGE_TOOL_MSG` up to its first field.
 EVICTED = "Tool result too large, the result of this tool call "
 
-#: The handles this module writes, as each ends. Asked before clearing anything, because a
-#: handle is read again on every later pass as if it were what it replaced: a file tool's
-#: handle cleared again names its own length, and an offloaded result's, no longer a
-#: stub, was pointed at the copy the turn's sweep removes.
+#: The handles this module writes, as each ends. Asked before clearing anything: a later pass
+#: would otherwise read a handle as what it replaced and clear it again, wrongly.
 _RESULT_HANDLE = re.compile(
     r"(?:\n\([\d,]+ bytes, cleared; [^\n]*\)\n\[A-\d+\]"
     r"| -- (?:[\d,]+ chars, )?cleared; call \S+ again to see it as it is now)\Z"
@@ -81,9 +78,8 @@ _FAILED = re.compile(
 def high_mark(model: Any, written: int | None) -> int:
     """Where clearing starts on a graph running `model`.
 
-    `written` is the `clear_results_at` of the entry that built the model, used as
-    written: `build_model` has refused one the summariser would reach first. A model the
-    deployment passed in has no entry, and takes the default.
+    `written` is the entry's `clear_results_at`, used as written: `build_model` has refused
+    one the summariser would reach first. A model passed in has no entry and takes the default.
     """
     if written is not None:
         return written
@@ -107,20 +103,14 @@ class ResultClearing(AgentMiddleware):
     """Swap older results and file text for handles in the conversation itself, once it
     has grown past the high mark, from inside each model call.
 
-    Inside the call rather than in a hook of its own, because a `before_model` hook is a
-    graph step and the recursion limit counts it: measured, one cut a turn's 150 steps
-    from 50 model calls to 37. A pass clears the request this call sends and, through
-    the state update it returns, the conversation every later call is built from and
-    the transcript is written from. What that gives up is the summariser's count on the
-    one call a pass starts on, which is taken outside this and first; with the default
-    mark at most half its trigger, only a batch adding more than that between two calls
-    gets there first.
+    Inside the call, not a `before_model` hook: a hook is a graph step the recursion limit
+    counts. The cost is the summariser's count on the call a pass starts on, taken first;
+    with the mark at most half its trigger, only a batch adding more than that between two
+    calls gets there first.
 
-    A message keeps its id and its place, and only its content changes. The summariser's
-    cut is a position in this list, and a message removed would move it.
-
-    Nothing here writes a file. A handle names a saved copy that already exists, or the
-    file a tool read or wrote, so reading one back cannot start another pass.
+    A message keeps its id and place, and only its content changes: the summariser's cut is a
+    position in this list. Nothing here writes a file, so reading a handle back cannot start
+    another pass.
     """
 
     def __init__(self, ledger: Ledger, high: int, offloads_route: str) -> None:
@@ -151,10 +141,8 @@ class ResultClearing(AgentMiddleware):
         if total < self.high:
             return request, None
         messages = list(request.state.get("messages") or ())
-        # What this call sends of the conversation, by id. The summariser's view leaves
-        # out what its summary stands for, and can hold a message whose arguments it
-        # shortened, so a handle is made from the message in state and counted against
-        # the one sent.
+        # The summariser's view omits what its summary stands for and may shorten arguments,
+        # so a handle is made from the message in state and counted against the one sent.
         as_sent = {one.id: one for one in sent if one.id is not None}
         items = self._items(messages, as_sent)
         if sum(item.frees for item in items) < self.high * WORTH:
@@ -252,12 +240,8 @@ class ResultClearing(AgentMiddleware):
     def _row_handle(self, row: LedgerEntry, text: str) -> str | None:
         """A recorded result's handle, naming where its whole text is kept.
 
-        An offloaded one is named by a search for its id rather than by its file:
-        deepagents names that file after the call id, a later call with the same id
-        overwrites it, and a search then finds nothing rather than that call's result.
-        What is offloaded is a row already pointed there, or this turn's result whose
-        stub is shorter than what was recorded. A result recorded as a stub -- a tool
-        that offloaded its own output -- is kept whole as that stub in our copy.
+        An offloaded one is named by a search for its id, not by its file: deepagents names
+        that file after the call id, which a later call with the same id overwrites.
         """
         if (row.path is not None and row.path.startswith(self._offloads)) or (
             text.startswith(EVICTED) and row.size > len(text.encode("utf-8"))
@@ -273,8 +257,7 @@ class ResultClearing(AgentMiddleware):
 def _with(response: Any, update: Command[Any] | None) -> Any:
     """The model's response, carrying the pass's state update where there was a pass.
 
-    The handler hands back a plain response: langchain keeps what layers inside this one
-    returned apart, and applies every layer's update with the model's reply.
+    Inner layers' updates need no merging: langchain applies each with the model's reply.
     """
     if update is None:
         return response

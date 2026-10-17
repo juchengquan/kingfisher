@@ -1,11 +1,8 @@
 """What a request is allowed to use.
 
-Turn-scoped: they travel with a request rather than being fixed for a workspace or a
-conversation. Construction is not the cost -- an agent rebuild is 8ms empty and 54ms
-seeded, and `docs/findings.md` records that the smaller figure is the misleading one.
-The cost is prompt caching, and only when the set actually *changes*, since the cache
-compares bytes and does not care that we rebuilt: a caller passing the same set every
-turn keeps its hits.
+Turn-scoped, travelling with a request. A change costs prompt caching rather than the
+rebuild, and only when the set actually changes: a caller passing the same set every turn
+keeps its hits.
 """
 
 from __future__ import annotations
@@ -14,43 +11,27 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, fields, replace
 from typing import Literal
 
-#: Everything the workspace offers, whatever that turns out to be. The top of
-#: the lattice: narrowing by it changes nothing, and it does not go stale,
-#: because it names nothing that could.
+#: Everything the workspace offers, whatever that turns out to be: narrowing by it changes
+#: nothing, and it names nothing that could go stale.
 ALL: Literal["*"] = "*"
 
-#: What separates where a thing came from from what it is called. Two colons
-#: rather than one because a Windows path can carry a single one, and because
-#: pytest already taught everyone that `file::thing` means "that thing, in that
-#: file".
+#: What separates where a thing came from from what it is called. Two colons: a Windows path
+#: can carry one, and pytest taught everyone that `file::thing` means that thing in that file.
 SEPARATOR = "::"
 
 
 def bare_name(written: str) -> str:
-    """A written name with any source stripped off, for a caller comparing names.
-
-    Public because two modules compare by it: this one, matching a grant against the
-    spellings a catalogue offers, and `fields`, refusing one definition that names one
-    dispatch name twice.
-    """
+    """A written name with any source stripped off, for a caller comparing names."""
     return written.rpartition(SEPARATOR)[2].strip()
 
 
-#: `"*"` is everything, a tuple is exactly those names, `None` is nothing.
-#:
-#: The declared contract is `ALL` or a tuple, and consumers can rely on that.
-#: `__post_init__` is nonetheless lenient about what it will normalise, because
-#: a service deserialising JSON hands us lists; that leniency is a backstop, not
-#: the contract, so a caller holding a list should convert at its own edge.
+#: `"*"` is everything, a tuple is exactly those names, `None` is nothing. `__post_init__`
+#: also takes lists, a backstop for deserialised JSON rather than the contract.
 Selection = Literal["*"] | tuple[str, ...] | None
 
 
-#: What marks the field that is not a list of names. A field says which of the two
-#: it is once, in its own declaration, and the two tuples below are read off that --
-#: because the axes used to be written out again in `__post_init__` and again in
-#: `intersect`, and an axis missing from the second came back at its class default.
-#: For most of them that default is `ALL`, so the narrowing *widened*: measured on a
-#: ninth axis, a grant of one name narrowed by a request asking two answered `'*'`.
+#: What marks the field that is not a list of names, read off by `SELECTIONS` and `SWITCHES`:
+#: an axis listed again by hand can be missed, and a missed one widens to its `ALL` default.
 SWITCH = "switch"
 
 
@@ -78,30 +59,23 @@ def _normalise(value: object) -> Selection:
 class Capabilities:
     """What one request may use, out of what the deployment has wired."""
 
-    #: The tools deepagents brings -- read_file, execute, task and the rest.
-    #: Separate from `tools` because the two sets change for different reasons:
-    #: this one moves when the dependency is upgraded, which is deliberate and
-    #: visible, while a workspace gains a tool whenever someone adds a file.
+    #: The tools deepagents brings. Separate from `tools`: this set moves when the dependency
+    #: is upgraded, deliberately, while a workspace gains a tool whenever a file is added.
     builtin_tools: Selection = ALL
     #: The tools this workspace defines, loaded from `tools/`.
     tools: Selection = ALL
     skills: Selection = ALL
-    #: `"*"` means *everything this agent declares*, and an agent declares the
-    #: subagents it calls, so the set is small and deliberate rather than whatever
-    #: the workspace holds. That matters because wiring a subagent compiles a whole
-    #: graph -- 5-6ms each, re-measured 2026-09-03.
+    #: `"*"` means everything this agent declares, a small deliberate set rather than the
+    #: workspace's, since wiring a subagent compiles a whole graph.
     subagents: Selection = ALL
     #: Middleware a definition may name, out of what the deployment registered.
     middlewares: Selection = ALL
-    #: Endpoints a definition may reach. Granted like `middlewares` and for a stronger
-    #: reason: this one decides which credentials are used and which endpoint receives
-    #: the run's prompts and files. Checked against where a named model *resolves to*,
-    #: since definitions name models rather than endpoints.
+    #: Endpoints a definition may reach, which decides the credentials used and who receives
+    #: the run's prompts and files. Checked against where a named model resolves to.
     endpoints: Selection = ALL
     #: Models a request may put a subagent on, overriding what its file says.
     models: Selection = None
-    #: Not a list of names, and the only field that is not. It says so here rather
-    #: than being left out of two loops, which is what `SWITCH` is for.
+    #: The one field that is not a list of names, marked here rather than left out by hand.
     memory: bool | None = field(default=None, metadata={SWITCH: True})
 
     def __post_init__(self) -> None:
@@ -124,10 +98,8 @@ class Capabilities:
         return replace(self, **narrowing)
 
 
-#: Read off the class, so a field added to it is an axis of one kind or the other
-#: and never of neither. A field that is neither a `Selection` nor marked `SWITCH`
-#: reaches `_normalise`, which refuses anything that is not one -- loudly, at the
-#: first construction, rather than by quietly permitting everything.
+#: Read off the class, so a new field is an axis of one kind or the other. One that is
+#: neither reaches `_normalise`, which refuses it loudly at first construction.
 SELECTIONS: tuple[str, ...] = tuple(
     f.name for f in fields(Capabilities) if not f.metadata.get(SWITCH)
 )
@@ -147,10 +119,8 @@ def _narrow_switch(left: bool | None, right: bool | None) -> bool | None:
 
 def belongs_in(names: tuple[str, ...], *, field: str) -> str:
     """"that is a builtin tool -- name it in builtin_tools", agreeing in number."""
-    # `split`/`join` rather than `.replace`, which
-    # `test_domain_touches_nothing_outside_the_process`
-    # forbids here: `Path.replace` renames a file, and the check reads names rather
-    # than types. A blunt guard is the point of that test, so this bends to it.
+    # `split`/`join`, not `.replace`, which `test_domain_touches_nothing_outside_the_process`
+    # forbids here by name: `Path.replace` renames a file, and a blunt guard is the point.
     kind = " ".join(field[:-1].split("_"))
     if len(names) == 1:
         return f"that is a {kind} -- name it in {field}"
@@ -184,12 +154,8 @@ def all_but(excluded: tuple[str, ...], *, offered: Iterable[str]) -> tuple[str, 
     known = set(offered)
     missing = [name for name in excluded if name not in known]
 
-    # An ambiguous name is not an absent one, and saying so matters more here
-    # than on the granting side. Withholding `lookup` when two sources offer it
-    # is a subtraction that refuses, so nothing dangerous happens -- but told it
-    # is "unknown", a reader goes looking for a skill they can see in the
-    # listing printed underneath. The two mistakes send them to different
-    # places: one is a typo, the other is a name that stopped being enough.
+    # An ambiguous name is not an absent one: told it is "unknown", a reader goes looking for
+    # a name they can see listed, when the fix is a longer spelling.
     for name in sorted(missing):
         if spellings := tuple(sorted(n for n in known if bare_name(n) == name)):
             msg = (
@@ -224,9 +190,7 @@ def refuse_ungranted_models(wanted: Iterable[str], *, granted: Selection, subjec
 def unoffered(asked: Iterable[str], *, offered: Iterable[str]) -> tuple[str, ...]:
     """The names in `asked` that nothing offers as written.
 
-    Public so that `kingfisher list` reports by the test a run refuses with: a
-    listing reading the same names a second way could call one fine that the run
-    then refuses.
+    Public so `kingfisher list` reports by the test a run refuses with, not a second one.
     """
     known = set(offered)
     return tuple(name for name in asked if name not in known)
@@ -243,12 +207,8 @@ def refuse_unoffered(
     """Refuse a name nothing offers, whoever named it."""
     known = set(offered)
     if unknown := unoffered(asked, offered=known):
-        # A name two sources offer is not a name nobody offers, and the same
-        # distinction `all_but` makes on the way out matters more on the way in:
-        # subtracting an ambiguous name leaves one behind, but *granting* one
-        # would hand over whichever the reader did not mean. Refusing is the
-        # only answer that cannot be silently wrong, and it has to say what to
-        # write instead or it is a refusal someone has to go and research.
+        # A name two sources offer is refused with its spellings: granting it would silently
+        # hand over whichever the reader did not mean.
         for name in unknown:
             if spellings := tuple(sorted(n for n in known if bare_name(n) == name)):
                 msg = (
@@ -258,11 +218,7 @@ def refuse_unoffered(
                 )
                 raise CapabilityError(msg)
         shown = listing if listing is not None else f"{tuple(sorted(known))}"
-        # `offered:` rather than "this workspace offers" or "this request
-        # offers": who owns the set differs by kind -- a workspace offers tools
-        # and skills, a request offers the subagents it activated -- and one
-        # message serving five callers cannot claim an owner without being wrong
-        # for some of them. It also stopped the sentence repeating its subject.
+        # `offered:`, not "this workspace offers": who owns the set differs by kind.
         msg = f"{subject} names unknown {kind}(s): {', '.join(unknown)}; offered: {shown}"
         raise CapabilityError(msg)
 
@@ -287,17 +243,14 @@ def approved_middleware(
 ) -> tuple[str, ...]:
     """Which of the middleware a definition names it may actually have.
 
-    Two refusals, and both raise, **for a definition that named names**. A name
-    nothing registered is a mistake in the definition. A name the deployment
-    registered but did not *grant* is an escalation attempt or a misconfiguration,
-    and running with silently less middleware than the definition specified could
-    mean running without the rate limit or the audit hook it was written to have.
+    For a definition that named names, an unregistered or ungranted one raises: running
+    with silently less middleware could mean running without the rate limit or audit hook
+    it was written to have.
     """
     if declared is None:
         return ()
     if declared == ALL:
-        # Everything registered *and* granted -- a definition that asks for the
-        # deployment's middleware still cannot reach past what the request holds.
+        # Registered and granted: asking for everything still cannot reach past the request.
         return tuple(n for n in registered if granted == ALL or n in (granted or ()))
     if not declared:
         return ()
@@ -339,10 +292,7 @@ def approved_settings(
     unknown = tuple(key for key in wrote if key not in permitted)
     if unknown:
         offered = tuple(sorted(permitted))
-        # Worded around what the *class* allows rather than what the file wrote,
-        # because the fix is nearly always to stop writing the key rather than to
-        # spell it differently -- and a class offering none should say so plainly
-        # instead of printing an empty tuple and leaving the reader guessing.
+        # Worded around what the class allows: the fix is nearly always to stop writing the key.
         allows = (
             f"{registered_as!r} takes settings for {', '.join(offered)}"
             if offered
@@ -394,16 +344,13 @@ def refuse_written_wants(
     raise CapabilityError(msg)
 
 
-#: What a deployment permits when it says nothing, which is exactly the default a
-#: request gets: `"*"` on either side means "everything this agent declares", so
-#: both jobs want the same answer. A name rather than a bare constructor, because
-#: `granted.intersect(asked)` reads better when the left-hand side says what it is.
+#: What a deployment permits when it says nothing, the same default a request gets: `"*"`
+#: on either side means everything this agent declares.
 UNRESTRICTED = Capabilities()
 
 
-#: Two lists into one, for a subagent that may narrow both. Here rather than in
-#: `core.definitions.tools.spec` because it takes two `Selection`s and answers a third, never
-#: touching a registry -- which is the line that module draws.
+#: Here, not in `core.definitions.tools.spec`: it answers two `Selection`s with a third and
+#: never touches a registry, which is the line that module draws.
 
 def ceiling(
     asked_builtin: Selection,
@@ -419,10 +366,8 @@ def ceiling(
     if from_builtin == ALL and from_workspace == ALL:
         return ALL
     if ALL in (from_builtin, from_workspace):
-        # Quiet if unguarded: `ALL` is the string `"*"`, so unpacking it into
-        # the union contributes a tool *named* `*` and drops the axis it stood
-        # for. An allowlist is one flat set of names and cannot say "all of
-        # those, plus these".
+        # Quiet if unguarded: `ALL` is the string `"*"`, so unpacking it adds a tool named `*`
+        # and drops the axis it stood for.
         msg = (
             f"{subject}: one tool axis resolved to {ALL!r} while the other named "
             f"tools ({from_builtin!r} / {from_workspace!r}). Resolve both against "

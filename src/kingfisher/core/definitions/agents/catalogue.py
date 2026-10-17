@@ -1,8 +1,4 @@
-"""Agent definitions held in a directory on this host.
-
-`spec` is the format and `reading` parses one; this finds the documents. Why the
-package exists, and why `core/agent/assembly.py` is not in it, is `__init__`.
-"""
+"""Agent definitions held in a directory on this host."""
 
 from __future__ import annotations
 
@@ -13,9 +9,7 @@ from pathlib import Path
 from kingfisher.core.definitions.agents import reading
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 
-# The walk comes from the format that already names what a document is called,
-# rather than being restated here: both kinds read the same YAML out of the same
-# shape of directory, and a second copy is a second thing to keep in step.
+# Shared with subagents, which read the same YAML from the same shape of directory.
 from kingfisher.core.definitions.documents import DefinitionText, documents_in
 
 
@@ -27,8 +21,7 @@ class LocalAgentRepository:
 
     @cached_property
     def _defined(self) -> dict[str, tuple[AgentSpec, str, str]]:
-        """Every definition below `root`, parsed once, with where it came from
-        and the document it was parsed from."""
+        """Every definition below `root`, parsed once, with its source and text."""
         directory = Path(self.root)
         if not directory.is_dir():
             return {}
@@ -39,11 +32,8 @@ class LocalAgentRepository:
             definition = DefinitionText.at(path)
             read.append((reading.read(definition), where, definition.text))
 
-        # Two of a name is refused here rather than reported, which is the one
-        # place this differs from subagents. A request names exactly one agent,
-        # so there is no roster for a reference to disambiguate within -- two
-        # files claiming `helper` means a request for `helper` gets
-        # whichever the walk reached last, and nothing anywhere says which.
+        # Refused, not reported as subagents are: a request names one agent, and two of a
+        # name would give it whichever the walk reached last.
         seen: dict[str, str] = {}
         for spec, where, _ in read:
             if (first := seen.get(spec.name)) is not None:

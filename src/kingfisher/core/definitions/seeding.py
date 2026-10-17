@@ -15,16 +15,15 @@ from kingfisher.core.config import ConfigError, definition_roots_for
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.workspace import ensure_definitions
 
-#: How the four "this workspace is empty" messages tell a reader to fill it.
+#: How the "this workspace is empty" messages tell a reader to fill it.
 SEED_HINT = "`kingfisher seed --from DIR`"
 
 
 def starter_agent(agents: Path) -> str:
     """How to write an agent by hand, for the reader `SEED_HINT` cannot help.
 
-    Names the directory agents are read from rather than `agents/`, because that is in
-    the definitions folder rather than wherever the reader is standing, and a file
-    written where nothing reads it is the dead end this exists to get a reader out of.
+    Names the full directory, since a reader would resolve `agents/` against wherever
+    they are standing, and write a file nothing reads.
     """
     return f"""\
 An agent is a file in {agents}/, and three fields are required. A minimal one:
@@ -61,12 +60,8 @@ def destinations(into: Destination) -> tuple[tuple[str, Path], ...]:
     return tuple((kind, roots[kind]) for kind in DEFINITION_KINDS)
 
 
-#: The kinds whose definitions are YAML documents with a `middlewares:` field.
-#:
-#: `skills` is markdown and `tools` is Python, so neither has one to read. Named
-#: rather than "try to parse everything and see", because a `.yaml` under
-#: `tools/` would be a tool's data file and reading it as a definition would be
-#: this module inventing a meaning for somebody else's file.
+#: The kinds whose definitions are YAML with a `middlewares:` field. Named rather than
+#: detected: a `.yaml` under `tools/` is a tool's data file, not a definition.
 DOCUMENT_KINDS = ("agents", "subagents")
 
 
@@ -76,11 +71,8 @@ class Skipped:
 
     label: str
     names: tuple[str, ...]
-    #: What those names *are* -- `middlewares` or `source_ids`. The remedy differs by
-    #: kind, so a message built from the names alone could only be right for one
-    #: of them: middleware is registered in code, a source id is declared in
-    #: `source_ids.yaml`, and sending a reader to the wrong file is worse than
-    #: saying less.
+    #: What those names are, `middlewares` or `source_ids`, since the remedy differs: one
+    #: is registered in code, the other declared in `source_ids.yaml`.
     wants: str = "middlewares"
 
 
@@ -90,19 +82,10 @@ UNCONSULTED = {
     "source_ids": "your source_ids.yaml",
 }
 
-#: And what to do about it. The half a reader acts on, and the half that would be
-#: wrong if one sentence served both: a middleware is a class this deployment offers,
-#: a source id is declared in a file.
-#:
-#: This said "Register the names", which sent a reader to write Python three lines
-#: after the same run had copied the examples into `middlewares/` -- and a file there
-#: counts as registered, which `middleware.md` says in as many words.
+#: And what to do about it, per kind: one sentence could not be right for both.
 REMEDY = {
     "middlewares": "Seed or write the middlewares first",
-    # No file named here: an example vocabulary holds one deployment's names, and a
-    # workspace needs whichever names its own definitions ask for. `Seeded.report`
-    # prints what to
-    # write instead, using the names that are actually missing.
+    # No example file named: `Seeded.report` prints one from the names actually missing.
     "source_ids": "Declare the source ids in source_ids.yaml",
 }
 
@@ -118,26 +101,18 @@ class Seeded:
     def report(self) -> tuple[str, ...]:
         """Every line a person is owed about this, in the order to print them.
 
-        On the record rather than in the command, because the command was not the
-        only thing printing it. The driver and the example script each wrote their
-        own version and both said *register those* for a source id -- which is the
-        one mistake `Skipped.wants` exists to stop, and neither of them offered the
-        `source_ids.yaml` that would unblock the run. A sentence three callers write
-        separately is a sentence two of them get wrong.
+        On the record rather than in the command, so every caller prints the same remedy.
         """
         lines = [f"seeded {name}" for name in self.written]
         lines += [
-            # Named with what to do about it, because "skipped" on its own reads as
-            # a failure and this is a choice. The names are the actionable half, and
-            # `wants` is what makes them actionable.
+            # With the remedy, because "skipped" alone reads as a failure and this is a choice.
             f"skipped {left.label} — names {left.wants} ({', '.join(left.names)}), "
             f"and seed does not check {UNCONSULTED[left.wants]}. "
             f"{REMEDY[left.wants]}, then seed again with --all"
             for left in self.skipped
         ]
         lines += self._declaration()
-        # After the list, not beside each entry: the point is that you edit your
-        # copy, so losing one is the line that has to survive being skimmed.
+        # Last, where it survives skimming: losing an edited copy is what matters most.
         lines += [f"warning: overwrote your edited {name}" for name in self.overwritten]
         return tuple(lines)
 
@@ -150,10 +125,8 @@ class Seeded:
             return ()
         return (
             "",
-            # The artifact rather than the instruction. Each skipped line already
-            # says to declare them and to seed again; a third copy of that sentence
-            # would be the noise, and what none of those lines can give is the one
-            # list that covers all of them.
+            # The file itself: each skipped line already gives the instruction, and none
+            # can give the one list covering all of them.
             "the source_ids.yaml that unblocks every one of them:",
             "",
             f"    source_ids: [{', '.join(wanted)}]",
@@ -173,10 +146,8 @@ def source_ids_named(text: str) -> tuple[str, ...]:
     _collect(parsed.get("source_ids"), into=found)
     for field_name in AUDIENCED:
         entries = parsed.get(field_name)
-        # A list whose entries are names, or mappings of `name` and `source_ids`. A
-        # reader that walks the wrong shape finds nothing and reports nothing:
-        # a definition naming no source id is exactly what a definition this cannot
-        # read looks like from here.
+        # Names, or `{name, source_ids}` mappings. Walking the wrong shape finds nothing,
+        # silently: it looks like a definition naming no source id.
         if isinstance(entries, (list, tuple)):
             for entry in entries:
                 if isinstance(entry, dict):
@@ -215,9 +186,7 @@ def middleware_named(text: str) -> tuple[str, ...]:
 
     found = []
     for entry in written:
-        # A mapping is the long form, `{name, settings}`; a string is the name
-        # on its own. Anything else is a definition the format will refuse, and
-        # refusing it here is not this function's job.
+        # Anything but a name or `{name, settings}` is the format's to refuse, not this one's.
         name = entry.get("name") if isinstance(entry, dict) else entry
         if isinstance(name, str) and name.strip() and name.strip() != "*":
             found.append(name.strip())
@@ -236,8 +205,7 @@ def _deployment_specific(path: Path) -> tuple[str, tuple[str, ...]] | None:
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        # Unreadable is the loader's problem to report, in its own words. This
-        # copies it and lets that happen.
+        # Copied anyway: the loader reports an unreadable file in its own words.
         return None
     if named := middleware_named(text):
         return "middlewares", named
@@ -305,12 +273,8 @@ def definitions_source(paths: Source, override: str | Path | None = None) -> Pat
 
 def seed(into: Destination, source: Path, *, everything: bool = False) -> Seeded:
     """Copy definitions into this deployment's catalogues, and say what changed."""
-    # Before anything is copied, and not left to the caller. Seeding into a folder
-    # never laid out succeeds, reports every definition written, and leaves no
-    # `models.yaml.example`: a deployment told to write `models.yaml` and given no
-    # example of one. The CLI got the ordering right and nothing made a library caller
-    # do the same, so the obvious two-liner produced a folder that looked seeded and
-    # could not start.
+    # Before anything is copied, and not left to the caller: a folder never laid out
+    # would look seeded and lack the `models.yaml.example` it needs to start.
     ensure_definitions(into.definitions)
 
     if not source.is_dir():
@@ -331,24 +295,15 @@ def _copy(
     for kind, destination in destinations(into):
         source = tree / kind
         if not source.is_dir():
-            # A source holding only some of the kinds, which is ordinary rather
-            # than exceptional: `--from ./my-agents` is a directory with an
-            # `agents/` and nothing else, and seeding it should write the agents
-            # rather than refuse. `kinds_at` answers the same question for
-            # `doctor`, and `_seed` refuses only when *nothing* was written.
+            # A source holding only some of the kinds is ordinary, not a refusal.
             continue
         ignore = _ignoring(source, kind, everything=everything, found=skipped)
         for item in sorted(source.iterdir()):
-            # `tools/` holds Python, so importing one of them once -- a test
-            # run is enough -- leaves bytecode beside it. Seeding that
-            # would put a `__pycache__` in the workspace and, worse, teach
-            # that it belongs there.
             if _is_debris(item.name):
                 continue
             target = destination / item.name
             label = f"{kind}/{item.name}"
-            # The same question `ignore` asks of a nested file, asked here
-            # because `copytree` never sees a top-level one.
+            # `ignore` asks this of nested files; `copytree` never shows it a top-level one.
             if not everything and (wanted := _deployment_specific(item)) is not None:
                 skipped.append(Skipped(label, wanted[1], wants=wanted[0]))
                 continue
@@ -356,9 +311,7 @@ def _copy(
             overwritten += _overwritten(item, target, label)
             target.parent.mkdir(parents=True, exist_ok=True)
             if item.is_dir():
-                # `ignore` rather than the check above, which only ever sees the
-                # top level: a packaged tool is a directory and can hold bytecode
-                # of its own, which `copytree` would take along with the rest.
+                # `ignore` too: a packaged tool is a directory, and can hold bytecode of its own.
                 shutil.copytree(item, target, dirs_exist_ok=True, ignore=ignore)
             else:
                 shutil.copy(item, target)

@@ -1,9 +1,7 @@
 """What the core asks of the world, as interfaces a deployment may implement itself.
 
-`Sessions`, with the `CommandRunner` a session's shell may hand its commands to;
-`RunEvents`; and `Instructions`. Middleware is langchain's `AgentMiddleware`, used as it
-is, and a wire format is a `WireFormat` in configuration rather than something
-implemented. The conversation is not here at all: kingfisher keeps it in the session.
+Middleware is langchain's `AgentMiddleware` as it is, a wire format is configuration,
+and the conversation is kept in the session, so none of them is here.
 """
 
 from __future__ import annotations
@@ -25,45 +23,37 @@ class CommandResult:
 
     output: str
     exit_code: int
-    #: Set when `output` is not all of it. A runner that cuts long output says so,
-    #: because a caller cannot tell a truncated result from a short one.
+    #: Set when `output` is not all of it: a caller cannot tell a cut result from a short one.
     truncated: bool = False
 
 
 class CommandRunner(Protocol):
     """How a shell command is run, for a deployment that runs them elsewhere.
 
-    `command` arrives already confined **when the runner is local**, which is the
-    default. Applying the confinement stays on kingfisher's side so a runner cannot
-    forget to -- but the confinement names paths on *this* host, so a runner shipping
-    the command elsewhere must set `local` to False, and then receives the command as
-    the model wrote it.
+    `command` arrives already confined **when the runner is local**, the default:
+    kingfisher confines it so a runner cannot forget to. The confinement names paths
+    on *this* host, so a runner shipping commands elsewhere must set `local` to False,
+    and then receives the command as the model wrote it.
 
-    What one has to keep, held by this repository's `tests/checks/runner.py`: it says
-    whether it runs here; a command that works says so; a command that fails, or runs
-    out of time, is a result and not an exception; and the result is shaped the way a
-    caller reads it.
+    Held by `tests/checks/runner.py`: it says whether it runs here; a command that
+    works says so; one that fails or runs out of time is a result, not an exception;
+    and the result is shaped the way a caller reads it.
     """
 
     @property
     def local(self) -> bool:
         """Whether the command runs on this machine. `True` unless a runner says not.
 
-        A read-only property rather than a plain attribute, and the difference is not
-        cosmetic: a protocol declaring `local: bool` demands a *settable* one, so an
-        adapter written as a frozen dataclass -- the obvious way to write one, and how
-        `ReferenceRunner` in the suite is written -- does not satisfy this port. Nothing
-        in kingfisher ever assigns to it, so demanding that was asking implementers for
-        a guarantee no caller uses.
+        A property, not an attribute: a protocol declaring `local: bool` demands a
+        settable one, which a frozen dataclass adapter is not, and nothing assigns it.
         """
         return True
 
     def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
         """Run `command`, giving up after `timeout` seconds if one is given.
 
-        A timeout is a result, not an exception: `exit_code` 124, the shell's own,
-        with output saying so. Raising would make every runner's failure the
-        model's problem rather than a tool result it can read and retry.
+        A timeout is a result, not an exception -- `exit_code` 124, the shell's own,
+        with output saying so -- so the model gets a tool result it can read and retry.
         """
         ...
 
@@ -71,26 +61,21 @@ class CommandRunner(Protocol):
 
 @runtime_checkable
 class RunEvents(Protocol):
-    """Where a record of what each turn did goes: its start and end, every model call,
-    every tool call.
+    """Where a record of each turn goes: its start and end, every model and tool call.
 
-    Not session state. It is the one record written as the turn runs rather than at
-    its end, and it is most wanted for the turn that crashed, so it goes wherever a
-    deployment keeps its logs and outlives the session it describes. Every event
-    carries `session_id` and `turn_id`, which is how one session's are found again.
+    Not session state: written as the turn runs and most wanted for a turn that
+    crashed, so it goes where a deployment keeps its logs and outlives the session.
+    Every event carries `session_id` and `turn_id`.
     """
 
     def record(self, event: Mapping[str, object]) -> None:
         """Keep one event: a flat mapping whose `event` key names what happened.
 
-        Called once per event, and not always from the thread running the turn:
-        tool calls a model makes together run at once, on an executor's threads, and
-        on the async path langchain hands each event to a worker thread. So the events
-        of tool calls made together can interleave, though each call's start comes
-        before its end, and a sink that keeps state between events wants a lock. An
-        exception here is logged and the turn goes on, because a turn is not failed
-        for want of a log line -- which also means a sink that fails is heard from
-        only in the log it was failing to write.
+        Not always called from the turn's thread: tool calls made together run at once
+        on an executor, and the async path hands each event to a worker thread. Their
+        events can interleave, though each call's start comes before its end, so a sink
+        keeping state between events wants a lock. An exception here is logged and the
+        turn goes on, so a failing sink is heard from only in the log.
         """
         ...
 
@@ -99,24 +84,18 @@ class RunEvents(Protocol):
 class Sessions(Protocol):
     """How a deployment says where its sessions are, and what each one runs on.
 
-    Asked per turn to `open` the session it is for, and asked the questions only
-    something that sees every session can answer: which there are, how big, and
-    when each was last used. Keyed by session id rather than by a directory,
-    because a backend that runs elsewhere has no directory here to be handed.
+    Asked per turn to `open` its session, and asked what only something seeing every
+    session can answer: which there are, how big, when each was last used. Keyed by
+    session id, because a backend that runs elsewhere has no directory here.
 
-    `open` is typed against its call and not its return, which is the asymmetry
-    worth knowing. deepagents decides what a backend *is* with `isinstance` against its
-    own abstract base class, so a protocol describing the return would describe the
-    requirement wrongly -- an object satisfying it exactly would still be handed no
-    shell. `refuse_unusable_backend` asks that question at the only time it can be
-    answered, which is once there is an object to ask about.
+    `open` is typed by its call, not its return: deepagents decides what a backend is
+    with `isinstance` against its own base class, so an object matching a protocol
+    would still get no shell. `refuse_unusable_backend` asks once there is an object.
 
-    Each takes the `Config` because the default is one object serving every
-    workspace, and the workspace is where it keeps them. A deployment's own may
-    ignore it.
+    Each takes the `Config` because the default serves every workspace and keeps its
+    sessions there; a deployment's own may ignore it.
 
-    What one has to keep, each held by a check in this repository's
-    `tests/checks/sessions.py`:
+    Held by `tests/checks/sessions.py`:
 
     - two session ids never share storage;
     - what one turn's backend wrote, the next `open` of that session finds;
@@ -127,12 +106,12 @@ class Sessions(Protocol):
     - a session serves under `/skills/` the skills kingfisher read;
     - every async twin answers as its sync one does.
 
-    What else kingfisher reads, it reads where an implementation declares it, by name:
-    `where(cfg)` here, the folder these sessions are kept in on this host, for the
-    origins line; `host_path`, `shell_prompt` and `unprotected` on a backend `open`
-    returns; and `runs_here` on its shell.
+    Anything else is read only where an implementation declares it, by name: `where(cfg)`
+    here, the folder these sessions are kept in on this host, for the origins line;
+    `host_path`, `shell_prompt` and `unprotected` on a backend `open` returns; and
+    `runs_here` on its shell.
 
-    And what `open` returns, held by `tests/checks/backend.py`: deepagents recognises it
+    What `open` returns, held by `tests/checks/backend.py`: deepagents recognises it
     as running commands and it routes every path kingfisher denies -- both refused at
     startup by `refuse_unusable_backend` -- and it reads back what it was given, keeps
     deepagents' offloads in the scratchpad, keeps the shell out of `/.harness` and
@@ -143,9 +122,8 @@ class Sessions(Protocol):
         self,
         cfg: Config,
         session_id: str,
-        # Positional-only, or this would be dictating parameter *names*: a protocol
-        # matches those, so without the slash a deployment whose `open` reads
-        # `(config, which)` fails to satisfy it for no reason anybody could act on.
+        # Positional-only: a protocol matches parameter names, so without the slash
+        # an `open` reading `(config, which)` would not satisfy it.
         /,
         *,
         catalogue: Definitions | None = None,
@@ -160,10 +138,8 @@ class Sessions(Protocol):
     def mark_used(self, cfg: Config, session_id: str) -> None:
         """Record that a turn is running in this session now.
 
-        A port because retention depends on it. A turn writes *inside* a session, and
-        on an ordinary filesystem that leaves the session's own timestamp alone --
-        measured, a session was still 10,000s idle by that clock immediately after a
-        turn completed in it.
+        A port because retention depends on it: a turn writes *inside* a session, which
+        on an ordinary filesystem leaves the session's own timestamp alone.
         """
         ...
 
@@ -181,8 +157,8 @@ class Sessions(Protocol):
         """Take this session's turn lock, or answer False because a live turn holds it.
 
         Two turns in one session share a conversation and the last write wins, so this
-        is what refuses the second. A claim older than `stale_after` seconds belongs to
-        a turn that died, and is taken over; `now` is the clock that is judged by.
+        refuses the second. A claim older than `stale_after` seconds belongs to a dead
+        turn and is taken over; `now` is the clock that judges it.
         """
         ...
 
@@ -196,9 +172,8 @@ class Sessions(Protocol):
         """Whether a claim on this session is young enough that its turn may be running."""
         ...
 
-    # The async twins. Written out here, so that a class subclassing this protocol has
-    # them as `open` and `sessions` on kingfisher's pool, and overrides one only where
-    # its own is a round trip it can await.
+    # Written out so a subclass inherits each twin as its sync one on kingfisher's pool,
+    # and overrides only one it can await.
 
     async def aopen(
         self,
@@ -208,45 +183,37 @@ class Sessions(Protocol):
         *,
         catalogue: Definitions | None = None,
     ) -> Any:
-        """`open`, for the async path."""
         return await off_loop(thread_pool(), self.open, cfg, session_id, catalogue=catalogue)
 
     async def asessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
-        """`sessions`, for the async path."""
         return await off_loop(thread_pool(), self.sessions, cfg)
 
     async def adelete(self, cfg: Config, session_id: str) -> str | None:
-        """`delete`, for the async path."""
         return await off_loop(thread_pool(), self.delete, cfg, session_id)
 
     async def amark_used(self, cfg: Config, session_id: str) -> None:
-        """`mark_used`, for the async path."""
         return await off_loop(thread_pool(), self.mark_used, cfg, session_id)
 
     async def asize(self, cfg: Config, session_id: str) -> int:
-        """`size`, for the async path."""
         return await off_loop(thread_pool(), self.size, cfg, session_id)
 
     async def aclaim(
         self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
     ) -> bool:
-        """`claim`, for the async path."""
         return await off_loop(
             thread_pool(), self.claim, cfg, session_id, stale_after=stale_after, now=now
         )
 
     async def arelease(self, cfg: Config, session_id: str, /) -> None:
-        """`release`, for the async path."""
         return await off_loop(thread_pool(), self.release, cfg, session_id)
 
 
 class Instructions(Protocol):
     """A deployment's standing text for every agent and subagent it runs.
 
-    Asked once per agent built, so a change reaches the next turn without a restart,
-    and read after kingfisher's own prompt and before the agent's: it is the most
-    general of the additions, and the agent's own line the most specific. Empty for
-    none. What kingfisher tells every agent is not here and not replaceable.
+    Asked once per agent built, so a change reaches the next turn without a restart.
+    Read after kingfisher's own prompt and before the agent's, the most general first.
+    What kingfisher tells every agent is not replaceable.
     """
 
     def text(self, cfg: Config) -> str:

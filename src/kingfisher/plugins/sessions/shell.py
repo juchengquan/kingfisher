@@ -35,17 +35,14 @@ def shell_env(
 ) -> dict[str, str]:
     """The explicit allowlist handed to the shell — no credentials.
 
-    That is all it does. Redirecting `HOME` moves where a path is *resolved*; the
-    files stay where they are, and an absolute path still reaches them. Measured on
-    this machine, the shell could read `~/.aws` and `~/.config/gh` right through it.
-    Keeping those closed is `confinement`'s job, not this function's.
+    Not a fence: a redirected `HOME` moves where `~` resolves, and an absolute path still
+    reaches the operator's files. Keeping those closed is `confinement`'s job.
     """
     path_parts = [str(Path(sys.executable).parent), *path_extra, *_BASE_PATH]
     env = {
         "PATH": ":".join(path_parts),
         # Inside the session, so `reap` sweeps what tools cache under `~` and
-        # `session_bytes` counts it; above the session such caches reached 59MB
-        # in one workspace with nothing sweeping them.
+        # `session_bytes` counts it.
         "HOME": str(session_dir / cfg.layout.scratchpad),
         "LANG": "en_US.UTF-8",
         "LC_ALL": "en_US.UTF-8",
@@ -65,10 +62,8 @@ _HERE = ("shell_here.md", "shell_here_skills.md", "shell_here_execute.md")
 def kingfishers_shell() -> ShellPrompt:
     """What kingfisher's own shell says of itself.
 
-    It runs on this host in the session root, with `TMPDIR` the scratchpad and
-    `KINGFISHER_SKILLS` the catalogue -- true of no other shell, a runner a deployment
-    supplies included: that is handed the command and nothing else, and starts wherever
-    it was started.
+    It starts in the session root, with `TMPDIR` the scratchpad and `KINGFISHER_SKILLS`
+    the catalogue, which is true of no runner a deployment supplies.
     """
     prompts = resources.files("kingfisher.plugins.sessions.prompts")
     prompt, skills, execute = (
@@ -77,18 +72,16 @@ def kingfishers_shell() -> ShellPrompt:
     return ShellPrompt(prompt=prompt, skills=skills, execute=execute, starts_in_session=True)
 
 
-#: Where the shell's view of a catalogue with mounts is built, one directory per
-#: arrangement of it. Inside `Config.kingfisher_dir` because the shell must read through
-#: it and never write it, and that directory is already both.
+#: Where the shell's view of a catalogue with mounts is built. Inside
+#: `Config.kingfisher_dir`, which the shell may already read and never write.
 SKILLS_VIEW = "skills-view"
 
 
 def skills_view(root: Path, mounts: Mapping[str, Path], kingfisher_dir: Path) -> Path:
     """Where the shell finds the catalogue, so `/skills/X` is `$KINGFISHER_SKILLS/X`.
 
-    The catalogue itself when nothing is mounted. With mounts, a directory of
-    symlinks: one per entry of the catalogue and one per mount under its label,
-    which a `Definitions` refuses to let collide when it is built.
+    With mounts, a directory of symlinks: one per catalogue entry and one per mount
+    label, which `Definitions` refuses to let collide.
     """
     if not mounts:
         return root
@@ -103,9 +96,8 @@ def skills_view(root: Path, mounts: Mapping[str, Path], kingfisher_dir: Path) ->
     )
     if view.is_dir():
         return view
-    # Built aside and renamed into place, so no turn ever reads a half-built view.
-    # A rename onto a directory that another turn finished first fails, and that
-    # turn's view is this one.
+    # Built aside and renamed into place, so no turn reads a half-built view. A rename
+    # onto one another turn finished first fails, and that view is this one.
     staging = view.with_name(f"{view.name}.{os.getpid()}.{uuid.uuid4().hex}")
     staging.mkdir(parents=True)
     for name, target in links.items():
@@ -120,10 +112,9 @@ def skills_view(root: Path, mounts: Mapping[str, Path], kingfisher_dir: Path) ->
 class ConfinedLocalShellBackend(LocalShellBackend):
     """`LocalShellBackend` with every command run through a confinement.
 
-    `None` means run it here, which is what upstream already does -- a default runner
-    would be 110 lines of upstream's truncation, timeout and exit-code shaping,
-    copied to be kept in step. The confinement is applied either way, before the
-    runner sees the command, so a runner cannot forget to.
+    `runner=None` runs it here through upstream, rather than a default runner copying
+    upstream's truncation, timeout and exit-code shaping. The confinement is applied
+    before any runner sees the command, so a runner cannot forget to.
     """
 
     def __init__(
@@ -149,11 +140,8 @@ class ConfinedLocalShellBackend(LocalShellBackend):
     def execute(self, command: str, *, timeout: int | None = None) -> Any:
         if self.runner is None:
             return super().execute(self.confinement.wrap(command), timeout=timeout)
-        # A confinement is a command prefix naming paths on *this* host, so
-        # applying it to something that runs elsewhere produces a
-        # `sandbox-exec -f /Users/.../shell.sb` shipped to a machine with no
-        # such file -- which fails looking like a broken remote shell rather
-        # than like a wrong prefix.
+        # A confinement is a prefix naming paths on *this* host: shipped elsewhere, it
+        # fails looking like a broken remote shell rather than a wrong prefix.
         outcome = self.runner.run(
             self.confinement.wrap(command) if runs_locally(self.runner) else command,
             timeout=timeout,
@@ -168,21 +156,10 @@ class ConfinedLocalShellBackend(LocalShellBackend):
 def runs_locally(runner: Any) -> bool:
     """Whether a supplied runner runs the command on this machine.
 
-    **The default is the safe one, and it is read here so it is one answer rather
-    than two.** `CommandRunner` declares `local` as a property answering `True`, but a
-    duck-typed runner -- the case this default exists for -- inherits nothing from a
-    Protocol, so every reader has to supply the default itself. Two readers did: the
-    shell decides whether to wrap a command with it, and `backend_at` decides what the
-    `Confinement` beside that command claims. The second was written out separately
-    and held by nothing: flipped to `False` it left all 2,109 tests passing, while a
-    supplied local runner that says nothing got `wrap=_unwrapped` and ran with no
-    sandbox at all, under a `Confinement` reporting `confined` as false and warning
-    about nothing.
-
-    `testing.a_runner_says_where_it_runs` keeps its own reading on purpose. It is the
-    kit a deployment checks its own adapter with, and importing this module would take
-    it from 70 loaded modules to 3,104 -- measured -- to share one `getattr`, because it
-    reaches deepagents and deepagents reaches the provider SDKs.
+    The one reading, so whether a command is wrapped and what its `Confinement` claims
+    cannot disagree. A duck-typed runner inherits no `local` from the Protocol, and the
+    safe default is local. The contract kit keeps its own reading on purpose: importing
+    this module would load deepagents to share one `getattr`.
     """
     return getattr(runner, "local", True)
 
@@ -200,23 +177,12 @@ def fence_for(  # noqa: PLR0913 -- one argument per thing a fence is built from
     if confined.mechanism not in confinement.LINUX_FENCES:
         return None
 
-    # One answer for both fences rather than the same three lines twice. `argv_for` and
-    # `policy_for` take the same arguments and mean the same thing by them, so a path
-    # added to one branch and not the other fences the shell differently depending on
-    # which mechanism the host happens to have -- and the suite would not catch it,
-    # because a run only ever exercises the one mechanism its own kernel offers. That is
-    # the divergence this function already avoids one question earlier by deriving from
-    # `Confinement`.
-    #
-    # Not `readable_roots`, which is the obvious call and the wrong one: it also returns
-    # the *workspace*, which is right where the home is denied and the workspace
-    # re-allowed inside it, and catastrophic here. Sessions live under the workspace, so
-    # granting it hands every tenant back the directory this fence exists to take away
-    # -- measured, before the fence: tenant B read tenant A's `outputs/secret.txt` with
-    # `cat ../<A>/...`, exit 0.
+    # One list for both fences: a path added to one branch alone would fence the shell by
+    # whichever mechanism the host has, and a run only exercises the one its kernel offers.
+    # Not `readable_roots`: it returns the workspace, which holds every other tenant's
+    # session.
     readable = [*confinement.toolchain_roots(path_extra), *skills]
-    # Nothing beyond the session, which both fences grant already: `TMPDIR` is
-    # inside it now, so the writable set is exactly the session this turn owns.
+    # Empty: both fences grant the session, and `TMPDIR` is inside it.
     writable: list[Path] = []
 
     if confined.mechanism == confinement.BUBBLEWRAP:
@@ -236,9 +202,8 @@ def fence_for(  # noqa: PLR0913 -- one argument per thing a fence is built from
             env=env,
         )
 
-    # Imported here for the reason the module explains: `sandlock` is a
-    # Linux-only optional install, and this function is called on every turn on
-    # every platform.
+    # Imported here: `sandlock` is a Linux-only optional install, and this runs on every
+    # platform.
     from kingfisher.plugins.sessions.sandbox.fence import (  # noqa: PLC0415
         LandlockRunner,
         policy_for,

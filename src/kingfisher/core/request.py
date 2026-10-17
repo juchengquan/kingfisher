@@ -15,24 +15,16 @@ class Request:
     """One request: the turn boundary made explicit."""
 
     task: str
-    #: Which agent runs this. A name from the workspace's `agents/`, never a
-    #: definition, so an untrusted caller can activate what exists and invent
-    #: nothing.
-    #:
-    #: Optional here and refused downstream rather than defaulted, because there
-    #: is no honest default: the agent decides where every prompt in the session
-    #: goes and what it costs.
+    #: A name from the workspace's `agents/`, never a definition, so an untrusted caller
+    #: can activate what exists and invent nothing. Refused downstream rather than
+    #: defaulted: the agent decides where every prompt goes and what it costs.
     agent: str | None = None
     session_id: str | None = None
     turn_id: str | None = None
     inputs: tuple[Path, ...] = ()
     capabilities: Capabilities = field(default_factory=Capabilities)
-    #: Subagent name -> where this request wants it to run. Empty by default.
-    #:
-    #: Separate from `capabilities.models`, which is the deployment's answer to
-    #: "which models may this caller name at all". This is the caller's answer to
-    #: "which subagent goes on which", and there is nothing to narrow -- an
-    #: assignment is not a permission.
+    #: Subagent name -> where this request wants it to run. Not in `capabilities`, and
+    #: never narrowed: an assignment is not a permission.
     run_on: Mapping[str, RunOn] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -51,11 +43,8 @@ class Request:
 class DecisionError(ValueError):
     """A resume that does not answer the turn it was sent to.
 
-    Separate from setup's refusals of who is calling. This one
-    is about *what* is being answered: an id nothing is waiting on, a decision the
-    gate does not take, or a pending call left unanswered. Named rather than left as
-    a bare `ValueError` because a caller holding a paused session has somewhere to go
-    with it -- read the pending calls again and answer them.
+    Its own class rather than a bare `ValueError` because the caller can recover: read
+    the pending calls again and answer them.
     """
 
 
@@ -65,8 +54,8 @@ class Decision:
 
     #: Which gated call this answers, as `RunResult.pending` reported it.
     call_id: str
-    #: One of `result.DECISIONS`. Checked against that tuple where the answer is
-    #: translated rather than here, so the core keeps one list of what is allowed.
+    #: One of `result.DECISIONS`, checked where the answer is translated rather than
+    #: here, so there is one list of what is allowed.
     action: str
     #: What the model is told: why the call was refused, for `reject`, or what the
     #: tool is to have returned, for `respond`. Unused by `approve`.
@@ -77,16 +66,10 @@ class Decision:
 class Resume:
     """An answer to a turn that stopped for one: the other shape a turn starts in.
 
-    Not a `Request` with the task left out. A resume is not asking for anything, which
-    is why there is no `inputs` here -- placing files on a turn that is finishing work
-    already proposed would put them in `/inputs` with nothing in the conversation saying
-    where they came from.
-
-    What it does carry is what `Request` carries to build a graph with, because the
-    graph has to be built again: the process may have restarted since the pause. The
-    capabilities are re-presented every time and narrowed the ordinary way -- storing
-    the grant beside the checkpoint and restoring it would let a later caller resume
-    under one they never presented.
+    No `inputs`: files placed on a turn finishing work already proposed would sit in
+    `/inputs` with nothing in the conversation saying where they came from. The
+    capabilities are presented again rather than stored with the pause, which would let
+    a later caller resume under a grant they never presented.
     """
 
     session_id: str

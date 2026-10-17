@@ -10,8 +10,7 @@ from pathlib import Path
 class JsonlRunEvents:
     """`RunEvents` appended to a file, one JSON line per event: `kingfisher run --log`.
 
-    Opened and closed for each event rather than held. A turn that crashes leaves
-    every line it got to, and that is the turn a log is most wanted for.
+    Opened per event rather than held, so a turn that crashes leaves every line it got to.
     """
 
     def __init__(self, path: Path) -> None:

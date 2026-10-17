@@ -1,9 +1,8 @@
 """Agent definitions: `/agents/<name>.yaml`.
 
-**Omission means the same thing it means in a subagent file:** leave a *tool* field out
-and you get everything available, leave `skills` or `subagents` out and you get none.
-The skills index alone costs ~600 tokens for three, ~450 of it deepagents' preamble,
-while every subagent compiles a graph at ~6ms. Re-measured 2026-09-03.
+As in a subagent file, a tool field left out means everything available, and `skills` or
+`subagents` left out means none: a skills index costs tokens, and each subagent a compiled
+graph, on every turn.
 """
 
 from __future__ import annotations
@@ -18,10 +17,7 @@ from kingfisher.core.access.source_ids import AUDIENCED
 from kingfisher.core.definitions import fields
 from kingfisher.core.definitions.definition import SpecBase
 
-# A `tools:` entry may be written `where::what`, so reading this format means
-# parsing a tool reference -- the format referring to itself, which is why the
-# domain may name an asset kind's `spec` at all. See the exception stated and
-# measured in `test_domain_imports_only_the_standard_library_and_itself`.
+# Other kinds' vocabulary: a `tools:` entry may be a `where::what` tool reference.
 from kingfisher.core.definitions.subagents.spec import uncallable_helpers
 from kingfisher.core.definitions.tools.spec import claimed_sources
 
@@ -32,9 +28,8 @@ class AgentError(ValueError):
     """Raised when an agent definition cannot be read."""
 
 
-#: Every field this format defines. A key outside it is refused rather than
-#: ignored: a definition writing `tolls:` would otherwise get an agent holding
-#: every tool the workspace defines, since a missing `tools` means all of them.
+#: Every field this format defines. Any other key is refused, not ignored: `tolls:` would
+#: leave `tools` absent, which grants every tool.
 KNOWN: frozenset[str] = frozenset(
     {
         "name",
@@ -53,10 +48,8 @@ KNOWN: frozenset[str] = frozenset(
     }
 )
 
-#: Fields another format defines that this one deliberately does not, each with
-#: the reason. Named separately because the generic message is misleading here:
-#: it reads as "kingfisher has not got round to this" when the answer is that
-#: honouring it would be wrong, or that it is a different piece of work.
+#: Fields other formats define that this one declines, each with the reason, which the
+#: generic "unknown field" refusal would misstate as not done yet.
 REFUSED: Mapping[str, str] = MappingProxyType(
     {
         "permissions": (
@@ -79,46 +72,24 @@ REFUSED: Mapping[str, str] = MappingProxyType(
 
 @dataclass(frozen=True, kw_only=True)
 class AgentSpec(SpecBase):
-    """One agent, once its definition has been read.
+    """One agent, once its definition has been read."""
 
-    What it shares with a subagent is on `SpecBase`; `memory` is the whole of what
-    only an agent has.
-    """
-
-    #: `False` to run without the memory file on a deployment that wired one.
-    #: `None` is no opinion, which is not the same: a switch narrows like every
-    #: other axis, and only `False` can subtract.
+    #: `False` to run without the memory file a deployment wired. `None` is no opinion:
+    #: the switch narrows like every other axis, and only `False` subtracts.
     memory: bool | None = None
 
-    #: Tools whose every call stops for a person before it runs.
-    #:
-    #: Whole tools, and there is no way to write a narrower rule. Gating `execute`
-    #: gates every shell command the agent writes, including `ls` -- which is what an
-    #: approval gate on an unrestricted shell honestly costs. The alternative, a
-    #: pattern matched against the command, cannot be made to hold: `rm -rf` and
-    #: `x=rm; $x -rf` are the same command, and a gate that can be phrased around is
-    #: worse than none because it reads as protection. An author who finds this too
-    #: coarse wants an agent that was never granted `execute`.
-    #:
-    #: Not on `SpecBase` and so not on a subagent: a subagent inherits its
-    #: parent's, which is `REFUSED` in that format with the reason.
+    #: Tools whose every call stops for a person before it runs. Whole tools only: a pattern
+    #: over shell commands can be phrased around (`x=rm; $x -rf`), and a gate that can be
+    #: is worse than none. Not on `SpecBase`: a subagent inherits its parent's.
     interrupt_on: tuple[str, ...] = ()
 
     def declares(self, held: frozenset[str] | None = None) -> Capabilities:
-        """What this agent holds, said as the narrowing a request is clamped by.
+        """What this agent holds, as the narrowing a request is clamped by.
 
-        The five a subagent answers identically come from `SpecBase`; these three
-        are an agent's alone. `models` opens to everything because an agent decides
-        which model its subagents may run, and `memory` is a field only it has.
-
-        **`middlewares` is deliberately not among them**, and the contrast is the
-        reason this is worth reading: middleware is not additive in effect --
-        a cap registered as `cap-generous` is a *looser* ceiling than `cap-strict`, so
-        a subagent free to name any registered entry could pick the roomiest one a
-        deployment happens to offer and leave the bound its parent runs under. So it
-        stays narrowed in the base, which is what makes an agent decide which its
-        subagents may choose from, and why an agent lists one it does not use itself
-        when a subagent needs it.
+        `endpoints` and `models` open to everything, because an agent decides which model
+        its subagents may run. `middlewares` stays narrowed, deliberately: a looser cap is
+        not a smaller grant, so a subagent free to name any registered middleware could
+        pick one that escapes the bound its parent runs under.
         """
         return replace(
             super().declares(held), endpoints=ALL, models=ALL, memory=self.memory
@@ -136,16 +107,14 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     """One definition, from its decoded fields."""
     read = fields.Reader(source=source.name, error=AgentError)
 
-    # Before the required-field check, so `nmae:` is reported as the typo it is
-    # rather than as a missing `name` the author plainly tried to write.
+    # Before the required-field check, so `nmae:` reads as a typo, not a missing `name`.
     complaint = fields.unrecognised(document, known=KNOWN, declined=REFUSED)
     if complaint is not None:
         msg = f"{source.name}: {complaint}"
         raise AgentError(msg)
 
     for required in ("name", "description", "system_prompt"):
-        # Absent and blank are different mistakes and read differently: "missing"
-        # sends someone looking for a line they can see they wrote.
+        # Absent and blank told apart: "missing" sends a reader hunting for a line they wrote.
         if required not in document:
             msg = f"{source.name}: missing required field {required!r}"
             raise AgentError(msg)
@@ -153,11 +122,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
             msg = f"{source.name}: {required!r} is present but empty"
             raise AgentError(msg)
 
-    # Read once, then split. A `tools:` entry may be written `where::what`, and
-    # only `what` may reach the rest of kingfisher; where it claims to live
-    # travels beside it, for whoever checks the claim.
-    # `source: shared` is taken so an entry reads the same in either file; `bundled`
-    # is refused, because only a subagent has a folder of its own to take it from.
+    # `source: shared` is accepted so an entry reads the same here as in a subagent file.
     written_tools, tool_audiences, _ = read.sourced(
         document.get("tools"), absent=ALL, key="tools", same=bare_name, refuse_bundled=_NO_FOLDER
     )
@@ -165,15 +130,14 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         document.get("skills"), absent=None, key="skills", refuse_bundled=_NO_FOLDER
     )
     written_subagents, subagent_audiences = read.audienced(
-        # No `refuse_all` here. A *subagent* naming every subagent names itself,
-        # which is always a loop; an agent is not one of them.
+        # No `refuse_all`: `["*"]` loops only for a subagent, which would name itself.
         document.get("subagents"),
         absent=None,
         key="subagents",
     )
     builtin = read.selection(document.get("builtin_tools"), absent=ALL, key="builtin_tools")
-    # At load, because at the call the agent's allowlist refuses `task`, and the model
-    # answers without its subagents where nobody who could fix the file sees it.
+    # At load: at the call the allowlist refuses `task`, and the model quietly answers
+    # without its subagents.
     if (complaint := uncallable_helpers(builtin, written_subagents)) is not None:
         msg = f"{source.name}: {complaint}"
         raise AgentError(msg)
@@ -185,10 +149,8 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         if entries
     }
     source_ids = read.source_ids(document.get("source_ids"))
-    # Read together, because they are one field. `middlewares` takes no audience,
-    # and that is not an oversight: it is the one field naming *code the deployment
-    # registered* rather than something the workspace offers, so it is granted
-    # rather than reachable.
+    # No audience, deliberately: `middlewares` names code the deployment registered,
+    # which is granted rather than reachable.
     written_middleware, middleware_settings = read.selection_with_settings(
         document.get("middlewares"), absent=None, key="middlewares"
     )
@@ -207,8 +169,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         middlewares=written_middleware,
         middleware_settings=middleware_settings,
         wanted=fields.wanted_model(document, read),
-        # Absent is `None` rather than `False`, which `flag` alone cannot say:
-        # a switch has three states here, and "no opinion" is not "no".
+        # Absent is `None`, not `False`: `flag` alone cannot say "no opinion".
         memory=(
             None
             if document.get("memory") is None
@@ -220,14 +181,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
 
 
 def _gated_tools(written: object, source: Path) -> tuple[str, ...]:
-    """The tools this agent stops on, as names.
-
-    The star is refused rather than read as "gate everything". Every other list in
-    this format narrows what an agent may reach, so a star there means "no limit" --
-    here it would mean the opposite, the tightest possible setting, and one spelling
-    carrying both senses across one file is how an author ends up with whichever they
-    did not want.
-    """
+    """The tools this agent stops on, as names."""
     names = fields.names(written)
     if names is None:
         return ()

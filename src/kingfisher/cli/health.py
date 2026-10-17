@@ -13,14 +13,8 @@ from kingfisher.cli import health_definitions, health_isolation
 from kingfisher.cli.check import Check, Verdict
 from kingfisher.core.backing import MemoryBacking, memory_backing
 
-# Everything below is past the front door on purpose, and this is the file to read if
-# you want to know what that door is now for. These are `doctor`'s probes: what fences
-# this host offers, what the kernel supports, what the cgroup files say, and the
-# sentence that tells a reader where their own definitions go. Every one of them was
-# public because *this file* reached for it -- the export table said so in as many words
-# -- and a probe only `doctor` has ever wanted is not a promise worth making to
-# everybody who runs `pip install kingfisher`. The command ships in this wheel, so it
-# takes each name where it lives.
+# Past the front door on purpose: a probe only `doctor` wants is no public promise, and
+# the command ships in this wheel, so it takes each name where it lives.
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.origins import kingfishers_own
 from kingfisher.plugins.sessions.sandbox import confinement
@@ -30,14 +24,9 @@ from kingfisher.plugins.sessions.sandbox.confinement import (
     shell_confinement,
 )
 
-#: Settings nothing reads any more, and what to write instead. Renaming an
-#: environment variable is the one rename that fails in silence: a moved import
-#: stops the program and says which, while a variable nobody reads falls back to
-#: its default -- a server on port 8000, skills switched off -- with nothing
-#: anywhere to connect the behaviour to the line that used to cause it. Reading
-#: both names was how that was survivable; this list is what replaced it, and it
-#: is the only thing in the tree that will ever mention one of these to a
-#: deployment still carrying it.
+#: Settings nothing reads any more, and what to write instead. A renamed variable fails
+#: in silence, falling back to its default, and this is the only place that names one to
+#: a deployment still carrying it.
 RETIRED: dict[str, str] = {
     "KINGFISHER_SKILLS": "KINGFISHER_SKILLS_ENABLED",
     "KINGFISHER_MEMORY": "KINGFISHER_MEMORY_ENABLED",
@@ -57,9 +46,7 @@ RETIRED: dict[str, str] = {
                               "the `session files` check says what keeps the shell out",
 }
 
-#: Prefixes that went whole, matched rather than enumerated: every setting the
-#: HTTP service read, under both names it had. No suffix is listed, because a
-#: deployment still carrying one is the case this exists for, and a list would
+#: Prefixes that went whole, matched rather than enumerated: a list of suffixes would
 #: miss whichever one nobody remembered setting.
 RETIRED_PREFIXES: dict[str, str] = {
     "KINGFISHER_SERVER_": "nothing -- the HTTP service was removed",
@@ -68,13 +55,7 @@ RETIRED_PREFIXES: dict[str, str] = {
 
 
 def _models(cfg: Config) -> Iterator[Check]:
-    """The model catalogue: that it loaded, and that its names can be reached.
-
-    Named for what it checks rather than for the word `models.yaml` shares with the
-    definition directories: `_catalogues` two hundred lines below is about those, and
-    one letter between two names meaning different things is a reader's problem
-    rather than a writer's.
-    """
+    """The model catalogue: that it loaded, and that its names can be reached."""
     models = cfg.models
     yield Check(
         "catalogue",
@@ -83,15 +64,10 @@ def _models(cfg: Config) -> Iterator[Check]:
         f"default {models.default!r} -- credentials present, not tested",
     )
 
-    # A dropped endpoint is a warning, not a failure. A shared catalogue naming
-    # endpoints this machine cannot reach is the normal case by the loader's own account
-    # -- "one reviewed file works across a fleet holding different subsets of keys" --
-    # so failing here would fail on the arrangement the format encourages. It becomes a
-    # failure through the definitions check, when something actually names one.
-    #
-    # By endpoint rather than by model, because `doctor` silences the loader's warning
-    # and this is what says it instead: an endpoint no model uses has no entry in
-    # `unreachable`, and a report built from that alone would call it keyed.
+    # A dropped endpoint is a warning: a shared catalogue naming endpoints this machine
+    # has no key for is the normal case, and it fails in the definitions check once
+    # something names one. Listed by endpoint, not from `unreachable`, which leaves out an
+    # endpoint no model uses and would call it keyed.
     keyed = "; ".join(
         f"{name}: {_key_source(endpoint)}" for name, endpoint in sorted(models.endpoints.items())
     )
@@ -126,8 +102,7 @@ def _key_source(endpoint: Any) -> str:
 def _keys_file(cfg: Config, sessions: object) -> Iterator[Check]:
     """Whether the agent's shell can read the keys file, by the fence that is running.
 
-    A report and never a refusal: kingfisher keeps nothing from the shell for the
-    keys, so where the file sits decides it, and this says what that is.
+    A report, never a refusal: nothing keeps the shell from the keys but where the file sits.
     """
     path = cfg.models.keys_file
     if path is None:
@@ -186,11 +161,9 @@ def _starting_environment(
 ) -> Iterator[Check]:
     """Keys that were in the environment before kingfisher started, where the shell reads it.
 
-    On macOS a sandboxed shell reads any same-user process's environment as it started,
-    and with no fence nothing stops it; what `.env` added afterwards is not in there.
-    `None` is a caller that cannot say what `.env` added, which is told nothing rather
-    than told something that may be wrong -- and so are sessions whose shell
-    this cannot see.
+    On macOS a sandboxed shell reads any same-user process's starting environment, and with
+    no fence nothing stops it; what `.env` added later is not in it. Silent, rather than
+    possibly wrong, where `from_dotenv` is `None` or the shell cannot be seen.
     """
     shell = health_isolation.shell_of(sessions)
     if from_dotenv is None or shell is None:
@@ -251,54 +224,31 @@ def _packs(cfg: Config) -> Iterator[Check]:
 def _sessions_probe(cfg: Config) -> Path:
     """Where to measure a deployment's sessions, before it has any.
 
-    `_size_of` stats the path, so a sessions directory that is not there yet
-    reports no size -- and `doctor` before `kingfisher seed` is exactly when
-    somebody is sizing a tmpfs. The workspace is the honest fallback: with
-    nothing mounted, that is the filesystem sessions will land on anyway.
+    A missing directory reports no size, and `doctor` before `seed` is when a tmpfs gets
+    sized; with nothing mounted, sessions land on the workspace's filesystem anyway.
     """
     return cfg.sessions_root if cfg.sessions_root.is_dir() else cfg.workspace
 
 
 def _devices(sessions: MemoryBacking, workspace: MemoryBacking) -> str:
-    """Both readings, in every message this check yields.
-
-    Named unconditionally rather than only where they differ: a reader deciding
-    whether the numbers below are about the disk they mounted should not have to
-    infer it from an absence.
-    """
+    """Both filesystems, named even where they agree, so nobody infers which the numbers mean."""
     return f"sessions on {sessions.filesystem}, workspace on {workspace.filesystem}"
 
 
 def _at_rest(cfg: Config, sessions: object) -> Iterator[Check]:
     """Whether sessions kept in memory can actually keep nothing.
 
-    Measured against the sessions tree rather than the workspace, and the two are
-    not the same question once `<workspace>/sessions` is a mount:
-    `_mounted_filesystem` answers for the longest mountpoint containing the path
-    it is handed, so asking about the workspace answers about the workspace's
-    device and never about the one sessions are actually written to.
-
-    Where sessions *are* in memory, this is the one check here that can fail on
-    something which appears to work. Measured, and it is not what the obvious
-    reading predicts:
-
-    - A memory filesystem **larger** than the container's memory limit does not
-      refuse when it fills. The kernel swaps its pages out — data at rest, the
-      write succeeding, no error anywhere. That is exactly the guarantee such a
-      deployment has asserted, broken invisibly.
-    - With swap disabled the same overrun becomes an **OOM kill**, which takes
-      every session in the container rather than one.
-    - Only a filesystem **smaller** than the limit gives a clean `ENOSPC` on a
-      full one, which is a thing kingfisher can refuse on.
+    Asked of the sessions tree, not the workspace: once `<workspace>/sessions` is a mount,
+    the workspace's device is not the one sessions are written to. Measured: a memory
+    filesystem larger than the memory limit swaps silently when it fills, and with swap
+    off is an OOM kill of every session; only one smaller gives a clean `ENOSPC`.
     """
     backing = memory_backing(_sessions_probe(cfg))
     workspace = memory_backing(cfg.workspace)
     devices = _devices(backing, workspace)
     if not backing.in_memory:
-        # The one thing worth saying about a sessions tree on a disk, and only
-        # because the workspace claims otherwise: every check below gates on
-        # sessions, so without this the arrangement that breaks the promise
-        # loudest is the one that says nothing at all.
+        # Sessions on disk under a tmpfs workspace: every check below gates on
+        # sessions, so without this that arrangement would say nothing at all.
         if workspace.in_memory:
             yield Check(
                 "nothing at rest",
@@ -339,8 +289,6 @@ def _at_rest(cfg: Config, sessions: object) -> Iterator[Check]:
             f"{_mb(backing.limit_bytes)} limit, no swap",
         )
 
-    # Two things that only matter once sessions are in memory, and both are
-    # silent until the moment they are expensive.
     if kingfishers_own(sessions, cfg):
         yield Check(
             "sessions survive",
@@ -386,10 +334,7 @@ def _mb(value: int | None) -> str:
 def _retired(environ: Mapping[str, str] | None = None) -> Iterator[Check]:
     """Settings this deployment still carries that nothing reads any more.
 
-    Nothing warns about an unknown `KINGFISHER_` variable, so a line surviving an
-    upgrade is silent by construction: it stops taking effect, and the first sign
-    is behaviour nobody chose. A warning rather than a failure because the
-    deployment does run -- on the defaults, which may well be what it wanted.
+    A warning, not a failure: the deployment runs, on defaults that may be what it wanted.
     """
     values = os.environ if environ is None else environ
     stale = {
@@ -397,7 +342,6 @@ def _retired(environ: Mapping[str, str] | None = None) -> Iterator[Check]:
         for name, instead in RETIRED.items()
         if (values.get(name) or "").strip()
     }
-    # Matched on the prefix, so a suffix nobody thought to list is still caught.
     stale.update(
         {
             name: instead
@@ -430,14 +374,13 @@ def examine(
     `sessions` are the ones the command runs on, built from its settings when not given.
     """
     if sessions is None:
-        # Here rather than at the top, for the reason `shell_of` gives.
+        # Here, not at the top: importing it loads deepagents.
         from kingfisher.cli.configured import configured_sessions  # noqa: PLC0415
 
         sessions = configured_sessions()
     checks: list[Check] = []
     try:
-        # First, because it is the one check that explains another being wrong:
-        # a setting that stopped being read looks exactly like one nobody set.
+        # First: a setting that stopped being read looks exactly like one nobody set.
         checks += _retired()
         checks += _models(cfg)
         checks += _keys_file(cfg, sessions)

@@ -25,9 +25,8 @@ ABSOLUTE = (
 )
 
 
-#: How deepagents opens the section it appends to the system prompt on every model call
-#: where the backend executes, giving each routed folder's path on this host. It is a
-#: block of the system message of its own, which is what lets it be taken out whole.
+#: How deepagents opens the section of host paths it appends to the system prompt where the
+#: backend executes. It is a block of its own, so it can be taken out whole.
 MAPPINGS = "## Shell paths vs. virtual paths"
 
 
@@ -64,8 +63,7 @@ def missed(output: str, virtual: re.Pattern[str] = _VIRTUAL) -> str | None:
     """The first file-tool path the shell reported missing in `output`, if any.
 
     Both on one line, so a path the command printed and an unrelated miss elsewhere in
-    its output are not read as one. `virtual` defaults to the default layout's matcher;
-    `ShellPaths` passes the configured layout's.
+    its output are not read as one.
     """
     for line in output.splitlines():
         if any(said in line for said in _MISSING) and (found := virtual.search(line)):
@@ -91,9 +89,8 @@ def _described(tool: Any, rule: str) -> Any:
 
 
 def _ruled(description: str, rule: str) -> str:
-    # Appended when deepagents has reworded its line, so the rule still arrives;
-    # `test_every_graph_holding_the_shell_is_told_its_paths_rather_than_absolute_ones`
-    # then fails on the advice left beside it, which is the signal to look.
+    # Appended when deepagents has reworded its line, so the rule still arrives and a test
+    # fails on the advice left beside it.
     if ABSOLUTE in description:
         return description.replace(ABSOLUTE, rule)
     return f"{description}\n\n{rule}"
@@ -106,14 +103,8 @@ def _is_mappings(block: Any) -> bool:
 def _unmapped(request: Any) -> Any:
     """`request` without deepagents' section of host paths.
 
-    By block and not by cutting text: a merged section is then left whole, host paths
-    and all, rather than the prose around it losing its tail with nothing to show for
-    it. The parts cannot merge today -- deepagents appends this section with
-    `append_to_system_message`, and builds `FilesystemMiddleware` with no system prompt
-    of its own -- so the distinction is held by
-    `test_a_mappings_section_merged_into_other_prose_is_left_whole` and not by
-    `test_deepagents_host_paths_reach_only_a_shell_on_this_host`, which passes whichever
-    way the section goes.
+    By block, not by cutting text: a section merged into other prose is left whole rather
+    than the prose around it losing its tail.
     """
     system = request.system_message
     if system is None:
@@ -130,9 +121,8 @@ class ShellPaths(AgentMiddleware):
     how a missed path is spelt there, and keep deepagents' host paths from a shell that
     is not on this host.
 
-    The line goes in the description rather than the system prompt because a subagent is
-    built with its own prompt and none of `system.md`, and the description reaches every
-    graph holding the shell.
+    The line goes in the description, not the system prompt: a subagent gets none of
+    `system.md`, and the description reaches every graph holding the shell.
     """
 
     def __init__(
@@ -143,14 +133,12 @@ class ShellPaths(AgentMiddleware):
         here: bool = True,
     ) -> None:
         super().__init__()
-        # Whether the shell runs on this host. Where it does not, deepagents' section
-        # names paths it does not have, and `shell` is the only word on the subject.
+        # Whether the shell runs on this host; where not, deepagents' section names paths it
+        # does not have.
         self._here = here
-        # From the layout, so the line names the configured inputs leaf and the
-        # miss-matcher recognises the configured session folders.
         self._rule = execute_line(shell, layout)
-        # Only where the shell says it starts in the session root: the correction spells
-        # the path the way such a shell reads it.
+        # Only where the shell starts in the session root: the correction spells paths as it
+        # reads them.
         self._corrects = shell is not None and shell.starts_in_session
         self._virtual = _virtual(layout.session_dirs)
 

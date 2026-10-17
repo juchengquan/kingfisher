@@ -35,12 +35,8 @@ def _as_written(name: str) -> str | None:
     return name
 
 
-def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
-    # "what the workspace offers" comes from, and none is derivable from
-    # another: the grant, the config, the built graph and the catalogue. The
-    # last two are who is asking. Folding any of them into a parameter object
-    # would hide which source a kind is measured against, which is the one
-    # thing a reader of this function needs to see.
+def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is offered
+    # (grant, config, graph, catalogue); a bag would hide which one a kind is measured by.
     allowed: Capabilities,
     cfg: Config,
     graph: Any,
@@ -51,30 +47,19 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
     """What this request left out, per kind, skipping the kinds it left nothing.
 
-    **`middlewares` is deliberately not among them**, and the reason is about this
-    report rather than about that axis. What goes here is what a caller could have
-    asked for differently -- a tool, a skill, a subagent they may grant next time. A
-    caller cannot register a middleware: the names come from whatever constructed
-    `Kingfisher`, so telling them one was withheld names something they have no way
-    to act on.
-
-    The catalogue is passed rather than re-derived, so what a caller is told it did
-    not grant is measured against the same directories the agent was built from.
+    Not `middlewares`: a caller cannot register one, so naming one withheld names
+    something they cannot act on. The catalogue is passed rather than re-derived, so
+    this is measured against the directories the agent was built from.
     """
     default = Capabilities()
     workspace = tuple(workspace_tool_names(cfg, catalogue=catalogue))
-    # A skill may be written bare or as `source::name`, and the agent file and the
-    # registry need not have chosen the same one -- so skills are compared by the one
-    # skill each spelling means, or an audience written `catalogue::audit` would hide
-    # nothing from a listing that says `audit`.
+    # A skill may be written bare or as `source::name`, and the agent file and registry
+    # may differ: compared as written, an audience `catalogue::audit` hides no `audit`.
     spelling = {"skills": activatable_skills(cfg, catalogue=catalogue).identity}
 
-    # What this agent would have held for *someone*, less what it holds for
-    # this caller: exactly the names source-id narrowing took away, per field.
-    #
-    # Computed rather than asked of the policy, because there is no policy to
-    # ask any more -- an audience is a property of the definition, so the only
-    # thing that knows what a caller lost is the definition resolved twice.
+    # What this agent would hold for *someone*, less what it holds for this caller: what
+    # source-id narrowing took away. An audience belongs to the definition, so only the
+    # definition resolved twice knows what a caller lost.
     denied: dict[str, frozenset[str]] = {}
     if agent is not None and held is not None:
         everyone, theirs = agent.declares(None), agent.declares(held)
@@ -86,13 +71,9 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
     def visible(kind: str | None, names: tuple[str, ...]) -> tuple[str, ...]:
         """`names`, less what this caller's source ids took away.
 
-        Applied to what the workspace *offers*, before the comparison, and the
-        ordering is the whole of it. This function names every offered thing a grant
-        left out -- so measured against the unfiltered catalogue it would hand a
-        caller the exact list of what their source ids denied them, which is precisely
-        what filtering them out of listings and refusals exists to avoid. An asset
-        out of reach is not withheld from this caller; as far as they are concerned
-        it was never offered.
+        Applied to what is offered, before the comparison: against the unfiltered
+        catalogue this report would hand a caller the list of what their source ids
+        denied them, which filtering listings and refusals exists to avoid.
         """
         if kind is None or not (lost := denied.get(kind)):
             return names
@@ -103,28 +84,19 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
     def subagents() -> tuple[str, ...]:
         """Every subagent this run could have been handed work by, for this caller.
 
-        Two conditions: the subagent's own `source_ids:` has to admit them, and the
-        agent this run opened has to name it. `denied` can see neither -- it is what
-        the agent's own line removed from a name it does name -- and asking only the
-        first left a subagent nothing activates reported as withheld, which says it
-        exists. `handed_work_by` is the one answer the listing asks too.
+        Its `source_ids:` must admit them and the agent this run opened must name it;
+        `denied` sees neither, and asking only the first would report a subagent nothing
+        activates as withheld, which says it exists. The listing asks `handed_work_by` too.
         """
         defined = defined_subagents(cfg, catalogue=catalogue)
-        # No branch on `held` of its own: with no vocabulary `handed_work_by` answers
-        # every subagent, which is what this said before and what an unscoped reader is
-        # owed. A scoped run with no spec to ask -- an injected graph, which resolves
-        # none -- reaches nothing that can be shown reachable, and kingfisher did not
-        # wire that graph's subagents either.
+        # No branch on `held`: unscoped, `handed_work_by` answers every subagent. A scoped
+        # run with no spec (an injected graph) reaches none; kingfisher did not wire them.
         return handed_work_by([agent] if agent is not None else [], defined, held)
 
-    # The agent this run opened, and not the subagents it reaches: a subagent can only
-    # narrow what reached it, so one declaring a tool the agent was not granted
-    # contributes a name this caller gets by no path. `offers` says what the ceiling
-    # does with it. Built once, because a predicate per row would ask twice.
+    # The agent this run opened, not the subagents it reaches: a subagent only narrows
+    # what reached it, so one declaring an ungranted tool names one reached by no path.
     reached_agents = [] if agent is None else [agent]
-    # `same` on both axes, for the reason the listing gives: a grant may write the
-    # long form a tool's own catalogue spells short, and comparing them unspelt named
-    # nothing.
+    # Spelt on tools as on skills: a grant may write the long form a catalogue spells short.
     spelt = set(workspace)
     offers_tool = admitted(
         offers("tools", held, reached_agents, same=lambda one: placed(one, spelt)),
@@ -133,29 +105,16 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
     offers_skill = offers("skills", held, reached_agents, same=spelling["skills"])
 
     offered = (
-        # Built-ins and workspace tools are granted apart, so they are reported
-        # apart: "3 tool(s) not granted" meant nothing when it could have been
-        # either kind.
-        # `or ()` for the unreadable case, which cannot happen to a graph
-        # `build_agent` made -- and if it ever does, a run report listing no
-        # built-ins is a better outcome than a turn that will not start.
-        # `test_a_real_build_is_readable` is what notices instead.
+        # Built-ins and workspace tools are granted apart, so reported apart. `or ()`: a
+        # graph that cannot be read lists no built-ins rather than failing the turn.
         ("builtin tool", "builtin_tools", None, lambda: tuple(
             n for n in registered_tools(graph) or () if n not in set(workspace)
         )),
-        # Tools and skills are measured against what a definition in reach offers,
-        # not against the whole catalogue less what this agent's own line removed.
-        # `visible` was all they had, and it only ever subtracted the agent's
-        # narrowing -- so a caller who narrowed their own grant was told the name of
-        # every tool and skill no definition they reach offers them, which is the one
-        # thing filtering them out of listings and refusals exists to prevent. The
-        # subagent row below has had the same treatment since it was written.
+        # Measured against what a definition in reach offers, not the whole catalogue:
+        # else a caller who narrowed their grant is told every name nothing in reach offers.
         ("tool", "tools", None, lambda: tuple(n for n in workspace if offers_tool(n))),
-        # `cfg` as well as the request, which is where the two axes meet everywhere
-        # else: with the switch off the agent is told about no skills at all, and a
-        # report of one "not granted" says the others were. The third reader of this
-        # switch to have asked only the request -- the subagent branch and `doctor`
-        # were the first two, and the entry recording those says why.
+        # `cfg` as well as the request: with skills switched off the agent is told of
+        # none, and a report of one "not granted" says the others were.
         (
             "skill",
             "skills",
@@ -173,10 +132,8 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
     found = []
     for what, field, kind, names_of in offered:
         granted = getattr(allowed, field)
-        # Skips the work, not the answer: every axis defaults to `ALL`, and
-        # `withheld(ALL, ...)` is empty, so this changes no report. What it saves is
-        # `names_of()`, which for skills and subagents reads the catalogue. It used to
-        # say `subagents` defaults to none, which the dataclass contradicts.
+        # Skips the work, not the answer: every axis defaults to `ALL`, where nothing is
+        # withheld, and `names_of()` reads the catalogue.
         if granted == getattr(default, field):
             continue
         if left_out := withheld(granted, offered=visible(kind, tuple(names_of()))):
@@ -190,9 +147,7 @@ def subagent_only(allowed: Capabilities, cfg: Config, *, catalogue: Any) -> tupl
     return Offering.of(found).ambiguous(allowed.tools, found)
 
 
-def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning
-    # kind, and folding them into a bag would only move the list somewhere
-    # a reader has to go and find it.
+def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning kind
     turn_id: str,
     unprotected: tuple[str, ...],
     placement: Any,
@@ -200,19 +155,12 @@ def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning
     indistinct: tuple[tuple[str, str], ...] = (),
     subagent_only: tuple[str, ...] = (),
 ) -> tuple[RunEvent, ...]:
-    """What the caller is told before the model is reached.
-
-    A function because it is one: nothing here touches the service, and every
-    input is already decided by the time it runs. Setup was 123 lines once, and
-    this was the part of it that could be checked on its own.
-    """
+    """What the caller is told before the model is reached."""
     events: list[RunEvent] = []
     if unprotected:
         events.append(RunEvent(kind="protect_failed", text="; ".join(unprotected)))
-    # A grant is a whitelist, so it means less than the workspace holds and says
-    # so nowhere. Told here rather than discovered when the model reaches for
-    # one and is refused halfway through a turn. One line per kind, because a
-    # single line naming three kinds is the one nobody finishes reading.
+    # A grant means less than the workspace holds and says so nowhere: told here, not
+    # halfway through a turn. One line per kind, as one line naming three goes unread.
     for what, names in withheld:
         events.append(
             RunEvent(
@@ -220,9 +168,8 @@ def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning
                 text=f"{len(names)} {what}(s) not granted: {', '.join(names)}",
             )
         )
-    # Granted, and still not in the agent's own hands. Two files may each define a
-    # `fetch`, and an agent dispatches by name -- so the pair goes to whichever subagent
-    # names one, and the agent holding the grant gets neither.
+    # Granted and still not the agent's: two files may each define `fetch` and dispatch is
+    # by name, so a subagent naming one gets it and the agent holding the grant neither.
     if subagent_only:
         events.append(
             RunEvent(
@@ -234,20 +181,15 @@ def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning
                 ),
             )
         )
-    # A subagent that meant to run elsewhere and did not. Said here because
-    # nothing later will: it builds, it answers, and an answer from the model
-    # it was supposed to be checking looks exactly like a good one.
+    # Said here because nothing later will: an answer from the model the subagent was
+    # meant to check looks like a good one.
     for name, why in indistinct:
         events.append(RunEvent(kind="indistinct", text=f"{name} {why}", agent=name))
     if placement.placed:
-        # Replacement is the one dangerous case -- a caller's file, silently
-        # overwritten -- so it is named rather than assumed.
+        # Named, because a replacement is a caller's file silently overwritten.
         replaced = f" ({len(placement.replaced)} replaced)" if placement.replaced else ""
         events.append(
             RunEvent(kind="inputs_placed", text=f"{', '.join(placement.placed)}{replaced}")
         )
-    # The turn's name, where this used to be its directory. A turn has none now --
-    # it works in the session's `/scratchpad` like every other turn -- so the one fact
-    # left worth opening with is which turn a caller is watching.
     events.append(RunEvent(kind="run_start", text=turn_id))
     return tuple(events)

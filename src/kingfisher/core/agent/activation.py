@@ -58,10 +58,7 @@ def defined_subagents(
 def _unrunnable(cfg: Config, specs: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
     """`(name, why)` for each of these a deployment cannot run.
 
-    Shared by both kinds rather than written twice, because two places deciding
-    whether a definition can run is how `doctor` came to answer for subagents only:
-    the agent half was never written, and the row said "every definition resolves to
-    a model" while the workspace's one agent could not start.
+    Shared by both kinds, so `doctor` answers for agents as it does for subagents.
     """
     found: list[tuple[str, str]] = []
     for name, spec in sorted(specs.items()):
@@ -106,24 +103,13 @@ def offered_to(
 ) -> str:
     """The subagents a refusal of an unknown one lists to this caller.
 
-    `by` is the agents they reach -- one, at a build. A subagent needs two things to be
-    nameable: its own `source_ids:` has to admit the caller, and an agent they can open
-    has to name it. This asked the first alone, so three of the four refusals listing
-    through here named a definition nothing activates -- a name reachable by no path,
-    which `formats.md` says a listing, a refusal and the withheld report all withhold.
-    The listing and the report moved to `handed_work_by`; these are the rest.
+    Nameable means admitted by its own `source_ids:` and named by an agent in `by`. A
+    refusal about a *file* passes every agent the caller can open (`agents_to_ask`),
+    since editing the file can name any of theirs; one about a *request* passes the
+    agent it opened, since `Capabilities.subagents` only narrows what that one declares.
 
-    Which agents depends on what the refusal is about, and the two sites differ for a
-    reason. A *file* naming a subagent wrong is fixed by editing that file, so what it
-    could name instead is everything this caller reaches through any agent they can
-    open -- `agents_to_ask` below. A *request* naming one is bound by the agent it
-    opened, because `Capabilities.subagents` may only narrow what that agent declares,
-    so there `by` is that agent alone.
-
-    Empty `by` is a caller with no agent resolved to ask about, and their own line is
-    then the whole of what can be asked. `settled_request` stays there and needs nothing
-    more: it returns early unless the ceiling is `"*"`, and an agent declaring `"*"`
-    activates every definition the caller reaches, so the two answers are one set.
+    Empty `by` lists the caller's own reach. `settled_request` passes none, which is
+    right: it runs only under a `"*"` ceiling, where the two answers are one set.
     """
     reachable = handed_work_by(by, defined, held) if by else within_reach(defined, defined, held)
     return f"{tuple(sorted(reachable))}"
@@ -132,18 +118,9 @@ def offered_to(
 def agents_to_ask(cfg: Config, *, catalogue: Definitions | None = None) -> tuple[Any, ...]:
     """The agents whose activations decide what this caller can be handed work by.
 
-    Read on a refusal path only, so the catalogue read costs nothing anyone waits on.
-    What it is for is the listing beside a refusal about a *file*: the subagents that
-    file could name instead are the ones some agent in this deployment can hand work
-    to, not only the ones the agent being built happens to name.
-
-    Every agent, and no narrowing here of any kind, because both the narrowings this
-    first had changed no answer: `narrowed_for` reads a definition's own `source_ids:`
-    as the default audience for its entries, so an agent the caller cannot open
-    narrows every subagent it names away; and `handed_work_by` answers an unscoped
-    caller itself. Mutating either away left the suite green -- a guard over nothing
-    is the same defect as a rule that cannot fail, one level down, so the condition
-    belongs where it can be read once and not restated here.
+    For the listing beside a refusal about a file, so read on a refusal path only.
+    Every agent, unnarrowed: `narrowed_for` and `handed_work_by` already narrow for the
+    caller, and restating that here would be a condition nothing can tell is right.
     """
     return tuple((catalogue or Definitions.from_config(cfg)).agents.specs.values())
 
@@ -158,9 +135,9 @@ def settled_request(
 ) -> Capabilities:
     """`asked`, each subagent it names settled to the one it means for this caller.
 
-    `ceiling` is what clamps the request's subagents: the deployment's grant under the
-    agent's declaration. A list there narrows the request silently, a typo and a name
-    out of reach alike, so only `"*"` leaves anything to settle.
+    `ceiling` is the deployment's grant under the agent's declaration. A list there
+    narrows a typo and a name out of reach alike, silently, so only `"*"` leaves anything
+    to settle.
     """
     if ceiling != ALL or not isinstance(asked.subagents, tuple):
         return asked
@@ -218,8 +195,7 @@ def refuse_misnamed_by(
     refuse_two_of_a_name(written, subject=subject)
 
 
-def indistinct_subagents(  # noqa: PLR0913 -- the agent and the caller are what make
-    # this the build's roster rather than the request's
+def indistinct_subagents(  # noqa: PLR0913 -- the agent and caller make this the build's roster
     cfg: Config,
     capabilities: Capabilities,
     *,
@@ -239,18 +215,14 @@ def indistinct_subagents(  # noqa: PLR0913 -- the agent and the caller are what 
     wanted = run_on or {}
 
     found = []
-    # A name nothing defines is skipped rather than refused: `build_agent` refuses it,
-    # and reporting is not its job.
+    # A name nothing defines is skipped, not refused: `build_agent` refuses it.
     for name in within_reach((n for n in named if n in defined), defined, held):
         spec = defined[name]
         try:
             model = resolved_model(spec.wanted, override=wanted.get(name))
         except ConfigError:
-            # A model this deployment cannot run. The build
-            # refuses it with the message worth reading; reporting is not
-            # refusing, and raising a second copy of that refusal from here
-            # would put it in front of the caller twice, worded for the wrong
-            # question. Skipped, and the build says why.
+            # The build refuses an unrunnable model with the message worth reading;
+            # a second copy from here would reach the caller twice.
             continue
         if why := indistinct(spec, cfg, model=model):
             found.append((name, why))
@@ -265,12 +237,8 @@ def _denied_path(read_at: str) -> str:
 def _skill_denials(activated: tuple[str, ...], registry: Any) -> list[FilesystemPermission]:
     """Deny reads of skills this request did not activate.
 
-    Built from each skill's own path rather than from its name, and that is the fix
-    rather than a tidy-up. This wrote `/skills/{name}/**`, which is where a skill
-    sits only while every skill sits at the top level. A skill in a folder lives at
-    `/skills/research/lookup/`, so the rule denied a path that does not exist and the
-    file tools could still read it -- a boundary failing open, silently, the moment
-    folders were possible.
+    From each skill's own path, not its name: a skill in a folder is not at
+    `/skills/{name}/`, and a rule there would leave it readable.
     """
     allowed = set(activated)
     return [
@@ -292,7 +260,7 @@ def _private_skills(
     spec = catalogue.subagents.specs.get(name)
     offered = tuple(registry.offered)
     if spec is not None and not spec.carried:
-        # Filtered for the reason `_private_tools` gives: only what is listed arrives.
+        # Only what the spec lists arrives.
         listed = set(spec.bundled.get("skills", ()))
         offered = tuple(
             key for key in offered if skill_registry.split_qualified(key)[1] in listed
@@ -301,18 +269,16 @@ def _private_skills(
             return None
     bundle = catalogue.subagents.bundles[name]
     where = bundle.where
-    # Re-labelled from the source it was *read* under to the one it is *mounted*
-    # under. `skill_registry.read` calls a root source `catalogue`, and a bundle
-    # is mounted under the folder's own name -- so the two halves of this return
-    # value named one skill two ways, and the subagent was told about none of it.
+    # Re-labelled from the source it was read under, which `skill_registry.read` calls
+    # `catalogue`, to the folder it is mounted under: both halves of this value must name
+    # a skill one way, or the subagent is told of none.
     return (
         tuple(
             skill_registry.qualified(where, skill_registry.split_qualified(key)[1])
             for key in offered
         ),
-        # Every directory under the one label, so a skill's identity does not
-        # depend on which of them it sits in -- and `bundled_skills` has already
-        # refused two that both hold one name.
+        # Every directory under one label, so a skill's identity does not depend on
+        # which it sits in; `bundled_skills` has refused two holding one name.
         tuple((route, where) for route, _ in bundled_skill_mounts(where, bundle.skills)),
     )
 
@@ -323,28 +289,21 @@ def _activated_subagents(
     *,
     catalogue: Definitions | None = None,
     held: frozenset[str] | None = None,
-    #: The agent this build opened, for the refusal's listing alone -- what it judges
-    #: is every definition, because a name nothing defines is the file's mistake
-    #: whoever is asking. `None` where a build resolved no spec.
+    #: For the refusal's listing alone; what it judges is every definition, whoever
+    #: asks. `None` where a build resolved no spec.
     agent: AgentSpec | None = None,
 ) -> tuple[Mapping[str, Any], tuple[str, ...]]:
     """Which subagents this request wired, and every definition available."""
     if capabilities.subagents is None:
         return {}, ()
     defined = defined_subagents(cfg, catalogue=catalogue)
-    # A property of the definitions rather than of this request, and asked here
-    # because here is where the set is known -- before anything reads a spec.
+    # Of the whole catalogue, before anything reads a spec.
     refuse_cycles(defined)
-    # There is deliberately *no* matching check that every definition names a
-    # runnable model. Helper depth is structural -- a catalogue asking for two
-    # levels is incoherent however it is used, and no request can rescue it. An
-    # unrunnable model is not: `run_on` exists precisely so a caller can put a
-    # shipped subagent on a model their credentials reach, and a catalogue-wide
-    # refusal would fire before the override could apply. So it stays per-subagent,
-    # at `as_subagent`, where the override has already been resolved.
-    # `ALL` is every subagent this caller reaches, resolved here because here is where
-    # "what it defines" is known. Every definition would hand two of a name to a
-    # caller who reaches one of them, and the refusal would name the other.
+    # Deliberately no catalogue-wide check that every model is runnable: `run_on` lets a
+    # caller move a subagent onto a model they reach, so that is refused per subagent, at
+    # `as_subagent`, once the override is resolved.
+    # `ALL` is every subagent this caller reaches, not every definition: that would hand
+    # two of a name to a caller who reaches one, and the refusal would name the other.
     activated = (
         within_reach(defined, defined, held)
         if capabilities.subagents == ALL
@@ -356,24 +315,14 @@ def _activated_subagents(
         kind="subagent",
         subject="this request",
         # The agent this build opened, not every agent the caller can open: a request
-        # may only narrow what that agent declares, so a name it does not activate is
-        # advice that cannot be taken. Measured, the two cannot differ here -- a
-        # refusal needs the name to survive the agent's ceiling, only `"*"` lets one
-        # through, and `"*"` is every subagent in reach; and `agent is None` is
-        # unreachable, a workspace offering no agent refusing the turn earlier. Kept
-        # because it is the right answer rather than a coincidence, and
-        # `test_a_request_is_refused_a_name_only_by_an_agent_that_offers_every_subagent`
-        # pins the premise, so widening the refusal reddens there and sends a reader
-        # here.
+        # only narrows what that agent declares, so another's subagent is advice that
+        # cannot be taken.
         listing=offered_to(defined, held, by=() if agent is None else (agent,)),
     )
-    # After the unknown-name check, not before: naming one that does not exist
-    # and naming two that do are different mistakes, and the first would
-    # otherwise be reported as the second.
+    # After the unknown-name check, or a name nothing defines would be reported as
+    # two of a name.
     refuse_two_of_a_name(activated, subject="this request")
-    # Dropped rather than refused. The service settled a request's own names for this
-    # caller before anything clamped them (`settled_request`), and an agent's were
-    # refused as its file wrote them (`refuse_misnamed_by`), so what is out of reach
-    # here is an entry of a list -- an agent's, or a deployment's grant -- and a list
-    # narrows a subagent out of reach as silently as one it never held.
+    # Dropped, not refused: a request's own names and an agent's were refused already
+    # (`settled_request`, `refuse_misnamed_by`), so what is out of reach here is an
+    # entry of a list, and a list narrows silently.
     return defined, within_reach(activated, defined, held)

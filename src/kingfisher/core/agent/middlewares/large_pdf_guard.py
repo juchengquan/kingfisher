@@ -8,17 +8,12 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
-#: The largest PDF a tool result may hand the model whole, in bytes. deepagents counts
-#: a PDF block at its base64 length over four, a third of the file, and a model with
-#: no profile summarizes at 170,000 tokens -- one PDF of about 500 KB, which the
-#: summarizer then keeps, and on an overflow cuts to its text: nothing, for a PDF.
-#: Half of that.
+#: The largest PDF a tool result may hand the model whole, in bytes: half the ~500 KB at
+#: which one PDF alone reaches the summarizer of a model with no profile.
 MAX_PDF_BYTES = 256 * 1024
 
-#: The name this guard recommends to a model holding a PDF too large to read whole:
-#: a tool that saves a PDF's text a range at a time. A convention `tools.md` documents,
-#: so a deployment whose tool takes this name gets the recommendation, and one whose
-#: tool is called anything else does not.
+#: The tool recommended for a PDF too large to read whole, one saving its text a range at a
+#: time. A documented convention: a tool called anything else is not recommended.
 PDF_TEXT = "pdf_text"
 
 KB = 1024
@@ -43,16 +38,14 @@ class LargePdfGuard(AgentMiddleware):
 
     def __init__(self) -> None:
         super().__init__()
-        # What the model was last offered, read off its own request. `None` until a
-        # model call has passed: a call replayed on a resume follows none, and is
-        # advised without naming a tool rather than told to call one it may not hold.
+        # What the model was last offered. `None` until a model call has passed: a call
+        # replayed on a resume follows none, and is not told to call a tool it may not hold.
         self._offered: frozenset[str] | None = None
 
     def _seen(self, request: Any) -> Any:
-        # Read before `ToolAllowlist` narrows the list, which is right here: a graph is
-        # built from its granted workspace tools only, so a tool named `PDF_TEXT` in it
-        # is one the model is offered. The catalogue's names would not do -- `tool_guards` is
-        # handed every tool the workspace defines, granted or not.
+        # Before `ToolAllowlist` narrows, which is right: a graph holds only its granted
+        # workspace tools. Not the catalogue's names: `tool_guards` gets every tool, granted
+        # or not.
         self._offered = frozenset(
             name for tool in request.tools if isinstance(name := getattr(tool, "name", None), str)
         )

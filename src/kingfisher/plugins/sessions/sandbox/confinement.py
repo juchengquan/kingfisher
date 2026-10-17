@@ -1,16 +1,8 @@
 """Keeping the shell out of everything that is not the workspace.
 
-`virtual_mode` roots the *file tools* at a session. It does nothing to `execute`,
-which deepagents documents plainly: commands run through `subprocess.run(shell=True)`
-and can "access any file on the filesystem (regardless of `virtual_mode`)", with the
-advice to pair it with a human-in-the-loop. A harness that runs unattended has no
-such reviewer, so the boundary has to come from the operating system instead.
-
-What that boundary is worth closing was measured rather than assumed. With nothing in
-place the agent's shell could read the deployment's own `.env` -- both API keys --
-along with `~/.aws` and `~/.config/gh`, where the GitHub CLI keeps its token.
-A workspace tool may fetch a URL, so reading and sending are one turn apart for
-anything that gets an injection into a document.
+`virtual_mode` roots the file tools at a session and does nothing to `execute`, which
+deepagents says can "access any file on the filesystem" and pairs with a human reviewer.
+An unattended harness has none, so the boundary comes from the operating system.
 """
 
 from __future__ import annotations
@@ -36,12 +28,9 @@ from kingfisher.plugins.sessions.sandbox.sandbox_exec import (
     write_atomically,
 )
 
-#: `landlock_create_ruleset`, which is 444 on every architecture that has it --
-#: the three Landlock calls were added to the syscall table in one go rather
-#: than per-architecture, so there is no table to carry here.
+#: `landlock_create_ruleset`: 444 on every architecture that has it, so no table.
 _LANDLOCK_CREATE_RULESET = 444
-#: Ask for the ABI version instead of creating anything. With this flag the call
-#: takes a NULL attribute pointer and a zero size, and returns the version.
+#: Ask for the ABI version, with a NULL attribute pointer and a zero size.
 _LANDLOCK_ABI_QUERY = 1
 
 
@@ -59,15 +48,13 @@ def landlock_abi() -> int | None:
 
 #: Pick whatever the platform offers, and say so when it offers nothing.
 AUTO = "auto"
-#: The runtime already confines this process -- a container mounting only the
-#: workspace. Nothing is wrapped and nothing is warned about, because the
-#: deployment has asserted the boundary exists somewhere this code cannot see.
+#: The runtime already confines this process, as a container mounting only the
+#: workspace does. Nothing is wrapped or warned about.
 EXTERNAL = "external"
 #: bubblewrap: a mount namespace with no network. `AUTO` falls back to it where
-#: Landlock cannot run; naming it chooses it even where Landlock would, which is
-#: how a deployment closes the shell's network. Probed rather than trusted either
-#: way, because it works only in a container whose seccomp profile permits user
-#: namespaces. See `plugins/sessions/sandbox/bubblewrap.py`.
+#: Landlock cannot run; naming it chooses it even where Landlock would, which closes the
+#: shell's network. Probed either way: it needs a seccomp profile permitting user
+#: namespaces.
 BUBBLEWRAP = "bubblewrap"
 #: Deliberately unconfined. Warned about on every start, because an exposure
 #: nobody is reminded of is one nobody fixes.
@@ -75,20 +62,14 @@ OFF = "off"
 
 MODES = (AUTO, BUBBLEWRAP, EXTERNAL, OFF)
 
-#: What `Confinement.mechanism` can say. A separate vocabulary from `MODES`, which
-#: reads like a coincidence because bubblewrap is in both and is not one: a mode is
-#: what a deployment asks for, and a mechanism is what ended up confining the command.
-#: `AUTO` produces every one of these and is not any of them.
-#:
-#: Named because three files outside this one branched on the spellings -- `fence_for`
-#: twice, `doctor` once -- and a mechanism renamed here would have gone on reading as
-#: "not a fence" at each of them, which is a shell running unfenced and reported as
-#: confined.
+#: What `Confinement.mechanism` can say: what ended up confining the command, where a
+#: mode is what a deployment asked for. Named, not spelled, wherever it is compared: a
+#: renamed one read as "not a fence" is a shell unfenced and reported confined.
 LANDLOCK = "Landlock"
 SANDBOX_EXEC = "sandbox-exec"
 
-#: The two this process builds and runs itself, which is the question `fence_for`
-#: asks. `SANDBOX_EXEC` is not one: it confines by wrapping the command string.
+#: The two this process builds and runs itself. `SANDBOX_EXEC` is not one: it confines
+#: by wrapping the command string.
 LINUX_FENCES = (LANDLOCK, BUBBLEWRAP)
 
 
@@ -98,38 +79,30 @@ class Confinement:
 
     #: Wraps a command so it runs confined. Identity when nothing is applied.
     wrap: Callable[[str], str]
-    #: Empty when the shell is confined, or when a deployment has said it is
-    #: confined elsewhere. Non-empty text is what `LocalSessions` warns with,
-    #: once per process, and what `doctor` reports.
+    #: What `LocalSessions` warns with and `doctor` reports. Empty when the shell is
+    #: confined, here or elsewhere.
     warning: str = ""
-    #: The deployment asserted a boundary this code cannot see -- a container mounting
-    #: only the workspace. Nothing is wrapped and nothing is wrong.
+    #: The deployment asserted a boundary this code cannot see.
     elsewhere: bool = False
     #: What is doing the confining, named. Empty when nothing is.
     mechanism: str = ""
-    #: A deployment provided the `CommandRunner`, so what actually runs a command is
-    #: code this process cannot inspect.
+    #: A deployment provided the `CommandRunner`, which this process cannot inspect.
     supplied: bool = False
-    #: The profile the command runs under, for the mechanism that reads one. Carried
-    #: because its name is a digest of its rules, so nothing else can spell it.
+    #: The profile the command runs under, where there is one. Carried because its name
+    #: is a digest of its rules, so nothing else can spell it.
     profile: Path | None = None
 
     @property
     def confined(self) -> bool:
-        """Whether *this* process confines the command. See `elsewhere` for the
-        other way a shell can be safe."""
+        """Whether *this* process confines the command; `elsewhere` is the other way."""
         return self.warning == "" and (self.mechanism != "" or self.wrap is not _unwrapped)
 
 
 def with_supplied_runner(confined: Confinement, *, local: bool) -> Confinement:
     """What is confining the shell, once a deployment supplies the runner.
 
-    Measured before this existed: a runner declaring `local = False` ran the command
-    with no wrap applied, and the `Confinement` still reported
-    `mechanism='sandbox-exec'` and `confined=True`. The claim was false inside the
-    process, not merely invisible to `doctor` -- anything reading it got a wrong
-    answer, and a check that reports a fence which is not running is worse than one
-    that reports nothing.
+    A runner that is not local gets no wrap, so its confinement must stop claiming one:
+    reporting a fence that is not running is worse than reporting nothing.
     """
     if local:
         return replace(confined, supplied=True)
@@ -140,21 +113,16 @@ def _unwrapped(command: str) -> str:
     return command
 
 
-#: What `sandlock` requires for its full ruleset -- its README says 6, and
-#: `min_landlock_abi()` says so at runtime once it is installed. Kept as a number
-#: here because the check has to answer on hosts where it is *not* installed,
-#: which is the case the answer matters most in.
+#: What `sandlock` requires for its full ruleset. A number here because the check has to
+#: answer where `sandlock` is not installed.
 REQUIRED_LANDLOCK_ABI = 6
 
 
 def sandlock_minimum() -> int | None:
     """The ABI the installed `sandlock` demands, or `None` when it cannot say.
 
-    `None` covers both "not installed" and "imported, and the native half will not
-    answer", which are one fact to a caller deciding whether a fence exists: a wheel
-    that unpacked is not a fence. Asking the library is what makes this a check at
-    all -- `REQUIRED_LANDLOCK_ABI` is a number in this file, and a number cannot
-    notice the release that raised it.
+    `None` covers not installed and a native half that will not answer: either way, no
+    fence. Asked, because `REQUIRED_LANDLOCK_ABI` cannot notice a release that raised it.
     """
     try:
         import sandlock  # noqa: PLC0415
@@ -169,10 +137,8 @@ def landlock_ready() -> bool:
     abi = landlock_abi()
     if abi is None or abi < REQUIRED_LANDLOCK_ABI:
         return False
-    # Against the installed library's own minimum rather than the constant above. A
-    # release that raises it leaves `REQUIRED_LANDLOCK_ABI` describing a version
-    # nobody has, and the failure runs the wrong way: `auto` picks Landlock, `doctor`
-    # reports a fence, and every command dies inside `confine` instead.
+    # Against the installed library's own minimum too: against the constant alone, a
+    # release raising it has `auto` pick Landlock and every command die inside `confine`.
     wants = sandlock_minimum()
     return wants is not None and abi >= wants
 
@@ -199,22 +165,15 @@ def _bubblewrap() -> Confinement:
 def _linux() -> Confinement:
     """The Linux chain: Landlock, then bubblewrap, then a warning.
 
-    Landlock first because it costs nothing -- no capability, no container change, no
-    relaxed syscall filter -- and because it fails in the right direction: measured,
-    it denies the path resolution `mount(2)` needs, so a fenced process cannot spend
-    `SYS_ADMIN` even where the container has it. A fence that requires the operator
-    to do something is a fence that is off in most deployments.
-
-    bubblewrap second, and only when Landlock cannot run at all. That is kernels
-    below the ABI a full ruleset needs -- 6.12, where EKS nodes are commonly on 6.1
-    -- and on exactly those nodes the alternative was *nothing*: the shell read every
-    session's files and `doctor` said so. Something beats that.
+    Landlock first: it needs nothing of the operator, and a fence that does is off in
+    most deployments. It also denies the path resolution `mount(2)` needs, so a fenced
+    process cannot spend `SYS_ADMIN`. bubblewrap only where Landlock cannot run, where
+    the alternative is no fence at all.
     """
     if landlock_ready():
         return Confinement(wrap=_unwrapped, mechanism=LANDLOCK)
-    # Through `_bubblewrap` rather than probing again, so there is one place
-    # that decides whether bubblewrap works here. Two would eventually disagree,
-    # and the disagreement would be `doctor` naming a fence that is not running.
+    # Through `_bubblewrap`, not a second probe: two would disagree, and `doctor` would
+    # name a fence that is not running.
     fallen_back = _bubblewrap()
     if fallen_back.confined:
         return fallen_back
@@ -257,18 +216,13 @@ def _keys_file(cfg: Config) -> tuple[Path, ...]:
 class ShellSettings:
     """How kingfisher's own shell is fenced, and what it may run besides the system's.
 
-    `LocalSessions` reads them from `KINGFISHER_SHELL_SANDBOX` and
-    `KINGFISHER_SHELL_PATH_EXTRA` unless it is handed them, so the two variables mean
-    the same thing to the command and to a deployment building its own.
+    `LocalSessions` reads `KINGFISHER_SHELL_SANDBOX` and `KINGFISHER_SHELL_PATH_EXTRA`
+    unless handed these, so the variables mean the same to the command and a deployment.
     """
 
-    # Who keeps `execute` out of the rest of the host. `auto` uses whatever the
-    # platform offers, `bubblewrap` asks for it even where Landlock would run,
-    # `external` says a container already does it, `off` opts out and is warned
-    # about on every start. On by default because an exposure nobody opted into
-    # is one nobody knows they have: measured unconfined, the shell could read
-    # this deployment's own API keys, `~/.aws` and the GitHub CLI's token, and a
-    # workspace tool that fetches a URL is one call away from sending them.
+    # One of `MODES`. On by default because an exposure nobody opted into is one nobody
+    # knows they have: unconfined, the shell read this deployment's API keys, `~/.aws`
+    # and the GitHub CLI's token, and a workspace tool can send them.
     sandbox: str = AUTO
     #: Directories put on the shell's `PATH` ahead of the system's, and readable to it.
     path_extra: tuple[str, ...] = ()
@@ -299,18 +253,11 @@ def shell_confinement(
         extra=shell.path_extra,
         skills=(cfg.skills_dir, *cfg.skills_mounts.values()) if skills is None else skills,
         definitions=tuple(cfg.catalogue_roots.values()),
-        # The keys file joins them here rather than in `authored_files`, which names
-        # what sits in the definitions folder -- and a keys file is kept out of that
-        # shared folder. The reason to protect it is the one `profile` already
-        # gives for `models.yaml`: a shell that can edit it picks the key the next start
-        # sends, and one that can make it unparseable refuses the start outright.
-        #
-        # macOS only, and nothing is missing on Linux: there the whole workspace is
-        # writable and this list is what carves exceptions out of it, while both Linux
-        # fences grant the session and nothing above it.
+        # The keys file joins here, not in `authored_files`, which is the definitions
+        # folder's: a shell that edits it picks the key the next start sends, or refuses
+        # the start. macOS only: the Linux fences grant nothing above the session.
         authored=(*cfg.authored_files.values(), *_keys_file(cfg)),
-        # The one renamable leaf this profile names: `sessions/*/<inputs>` is denied
-        # writes, so a renamed inputs folder is the one the kernel protects.
+        # So a renamed inputs folder is the one `sessions/*/<inputs>` denies.
         session_inputs=cfg.layout.inputs,
         saved_results=cfg.layout.saved_results,
     )
@@ -343,9 +290,8 @@ def readable_roots(workspace: Path, sessions_root: Path, extra: tuple[str, ...] 
                    skills: tuple[Path, ...] = ()) -> tuple[Path, ...]:
     """What has to stay readable for the shell to remain useful.
 
-    The sessions root among them, for the reason `fenced_sessions` gives: reached
-    through a link it is not under the workspace, and under the home folder a shell
-    that cannot read its own session cannot even start in it.
+    The sessions root among them: reached through a link it is not under the workspace,
+    and under the home folder a shell that cannot read its session cannot start in it.
     """
     roots = [Path(workspace), fenced_sessions(sessions_root), *toolchain_roots(extra),
              *map(Path, skills)]
@@ -355,8 +301,8 @@ def readable_roots(workspace: Path, sessions_root: Path, extra: tuple[str, ...] 
 def shell_readable(cfg: Config, shell: ShellSettings, mechanism: str) -> tuple[Path, ...]:
     """What `mechanism` lets the shell read, from the lists each fence is built from.
 
-    The session directory is left out: what asks this is about a file of the
-    deployment's, which no session's directory holds.
+    Not the session directory: the question is about a deployment's file, which no
+    session holds.
     """
     skills = (cfg.skills_dir, *cfg.skills_mounts.values())
     if mechanism == SANDBOX_EXEC:
@@ -377,10 +323,8 @@ def shell_reads(
 ) -> str | None:
     """Why the agent's shell can read `path` under `mechanism`, or `None` where it cannot.
 
-    By each fence's shape rather than by asking one. `sandbox-exec` allows everything,
-    denies `home` and gives `readable` back, so a file outside the home folder is
-    readable with the sandbox on; the Linux fences grant `readable` and nothing else.
-    Any other mechanism is no fence.
+    By each fence's shape: `sandbox-exec` denies `home` and gives `readable` back, and
+    the Linux fences grant `readable` and nothing else.
     """
     target = Path(path).resolve()
     under = next((root for root in readable if target.is_relative_to(root)), None)
@@ -394,15 +338,8 @@ def shell_reads(
 
 
 def writable_roots(workspace: Path, sessions_root: Path) -> tuple[Path, ...]:
-    """Everywhere the shell is allowed to write.
-
-    The workspace, and the sessions root where that is somewhere else. `TMPDIR` used
-    to be named beside it, because `KINGFISHER_SCRATCH_DIR` could move it out of the
-    workspace; it lives inside the session instead, so naming it again would be naming
-    a subpath of the first root -- which is why the second is named only when it is not
-    one. `fenced_sessions` says what makes it possible for a session to be elsewhere,
-    and why granting it is half a change.
-    """
+    """Everywhere the shell is allowed to write: the workspace, and the sessions root
+    where that is outside it."""
     root = Path(workspace).resolve()
     sessions = fenced_sessions(sessions_root)
     return (root,) if sessions.is_relative_to(root) else (root, sessions)
@@ -413,13 +350,8 @@ def protected_roots(
 ) -> tuple[Path, ...]:
     """Everywhere inside a writable root the shell must still not write.
 
-    The harness's own directory is one of them, which is what lets the profile
-    stop naming itself by path: everything in `.kingfisher` is the harness's --
-    the marker, the profile that says what the shell may do, and the skills view
-    it reads mounts through -- and none of it is a session's. It could not be a
-    `subpath` deny while `TMPDIR` lived under it, because the denies are written
-    after the allows and would have covered the one directory the shell must be
-    able to write.
+    `kingfisher_dir` whole: the marker, the profile and the skills view are the
+    harness's, so nothing a session writes may live there.
     """
     roots = (
         Path(kingfisher_dir),
@@ -429,8 +361,8 @@ def protected_roots(
     return tuple(dict.fromkeys(p.resolve() for p in roots))
 
 
-def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
-    # `profile` has: directories denied by `subpath` and files by `path` are not one list
+def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name
+    # `subpath` directories and `path` files are not one list
     mode: str, *, workspace: Path, sessions_root: Path, kingfisher_dir: Path,
     extra: tuple[str, ...] = (), skills: tuple[Path, ...] = (),
     definitions: tuple[Path, ...] = (),
@@ -470,28 +402,23 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
     rules = partial(
         profile,
         home=home,
-        # Named separately from the writable roots: `_session_folder_denial` builds
-        # a pattern under it, which needs the sessions root itself rather than
-        # whatever happens to be writable.
+        # Apart from the writable roots: the session-folder patterns are built under the
+        # sessions root itself.
         sessions_root=sessions_root,
         readable=readable_roots(workspace, sessions_root, extra, skills),
         writable=writable_roots(workspace, sessions_root),
-        # The catalogue is instructions the agent follows, so a writable one made a
-        # skill something the agent could rewrite for every later request, including
-        # in the other deployments sharing it. Read at the tool level too, by the deny
-        # rule `kingfisher.core.layout` declares for this route; both are needed, because
-        # the shell bypasses tool permissions entirely.
+        # The catalogue is instructions the agent follows: writable, a skill would be the
+        # agent's to rewrite for every later request. The layout's deny rule covers the
+        # file tools; this covers the shell, which bypasses tool permissions.
         protected=protected_roots(kingfisher_dir, skills, definitions),
-        # Resolved, because the profile matches real paths and a workspace under
-        # `/tmp` or `/var` is really under `/private`. A file that does not exist
-        # yet is named anyway: the shell must not be the one to create it.
+        # Resolved: the profile matches real paths, and `/tmp` or `/var` is really under
+        # `/private`. A file not there yet is named anyway, so the shell cannot create it.
         protected_files=tuple(dict.fromkeys(Path(p).resolve() for p in authored)),
         session_inputs=session_inputs,
         saved_results=saved_results,
     )
     # Named for every rule but the one naming the file itself, which cannot be known
-    # before the name is; the profile then refuses writes to itself, so the rules
-    # cannot be rewritten by the shell they bind. See `profile`.
+    # first; the profile then refuses writes to itself, so the shell cannot rewrite it.
     path = profile_path(kingfisher_dir, rules(itself=Path(SANDBOX_PROFILE)))
     path.parent.mkdir(parents=True, exist_ok=True)
     write_atomically(path, rules(itself=path))
