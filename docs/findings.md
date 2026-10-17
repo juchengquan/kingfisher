@@ -283,6 +283,20 @@ for the next reader who reaches for one.*
   changes what is sent or what is counted, not both. langchain-openai's Responses path
   sends a `function_call` block over `tool_calls` the same way. *(2026-10-16,
   langchain-anthropic 1.7.6, langchain-core 1.6.10.)*
+- **A call cut at the output cap reaches its tool looking whole.** Streamed,
+  langchain-anthropic joins a call's argument chunks and parses them with
+  `parse_partial_json`, which closes an open string and brackets and drops characters
+  until the text parses. A call cut inside a value arrives in `tool_calls` with the value
+  shortened, one cut inside a key arrives without that key, and `invalid_tool_calls` gets
+  only what the repair cannot parse at all. MiniMax-M3 needs no repair: it sends a cut
+  call's arguments as one delta, the JSON already closed. `create_agent` routes on
+  `tool_calls` alone, so every call in a cut reply runs, and a reply left with only an
+  invalid call ends the turn as if it had none. langchain-openai's Responses path
+  repairs streamed arguments the same way, and says a reply was cut with `status:
+  incomplete` and `incomplete_details.reason: max_output_tokens`, having no stop reason.
+  Kingfisher's turns always stream: `messages` among the stream modes makes the model
+  node's `invoke` take the streaming path. *(2026-10-17, langchain 1.4.5,
+  langchain-anthropic 1.7.6, langchain-core 1.6.10, langchain-openai 1.5.1.)*
 - **Its event is in the final state of a turn that summarised, and of no other.**
   Driven through `build_agent`'s stack by the service's own turn loop, a fresh graph
   each turn: at a 6,000-token window the first three short turns did not summarise and

@@ -111,6 +111,7 @@ class RunLogger(BaseCallbackHandler):
             **usage,
             usage_present=bool(getattr(message, "usage_metadata", None)),
             tool_calls=list(runtime.tool_names(message)),
+            cut_off=runtime.cut_off(message),
         )
 
     def on_tool_start(self, serialized: dict[str, Any] | None, input_str: str, **_: Any) -> None:

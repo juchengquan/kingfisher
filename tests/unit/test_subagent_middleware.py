@@ -208,6 +208,7 @@ def test_what_a_subagent_carries_is_pinned_here_and_only_here(cfg, session_dir):
     )
 
     assert [type(m).__name__ for m in middleware_of(built, "reviewer")] == [
+        "CutReplies",
         "HostPathGuard",
         "LargePdfGuard",
         "ShellPaths",
@@ -223,7 +224,7 @@ def test_what_a_subagent_carries_is_pinned_here_and_only_here(cfg, session_dir):
     ]
 
 
-def test_a_bare_definition_carries_five_of_them(cfg, session_dir):
+def test_a_bare_definition_carries_only_the_guards_and_its_allowlist(cfg, session_dir):
     """The other end of the same pin, and it is not two."""
     from tests.conftest import tools_dir
 
@@ -234,6 +235,7 @@ def test_a_bare_definition_carries_five_of_them(cfg, session_dir):
     built = build(cfg, subagents=("reviewer",))
 
     assert [type(m).__name__ for m in middleware_of(built, "reviewer")] == [
+        "CutReplies",
         "HostPathGuard",
         "LargePdfGuard",
         "ShellPaths",

@@ -2315,11 +2315,44 @@ window says -- a test holds the shipped row to that.
 The code's own default stays 4,096. It applies to a row on any vendor, including a small
 local endpoint that would refuse a large reservation, and the template is where a
 deployment reads what to write. A deployment seeded before this keeps its own row and
-has to raise it itself. What is not built is noticing a call that stopped at the cap:
-langchain keeps a cut tool call with whatever arguments parsed, and a provider that
-streams arguments as raw text would hand `write_file` a truncated file that saves
-cleanly. That check reads the response's stop reason and is its own change. *(2026-10-16,
-from the transcript-clearing trials.)*
+has to raise it itself. Noticing a call that stopped at the cap is the next entry.
+*(2026-10-16, from the transcript-clearing trials.)*
+
+**A reply cut off at the output cap has its cut call refused, and three cut replies in a
+row stop the agent.** The entry above said only a provider streaming arguments as raw
+text would save a shortened file. MiniMax-M3 does it itself: in live calls at caps of
+60 and 1,500 tokens it sent a cut call's arguments as one delta with the JSON already
+closed, and `write_file` arrived valid with its `content` stopping mid-word.
+langchain's streaming repair closes a cut call the same way for any provider, so nothing
+in the arguments shows the cut. The trials' `Field required` was the other case, a cap
+reached before the argument began. The only sign is the stop reason: `stop_reason:
+max_tokens` in the Anthropic format, and an incomplete status for `max_output_tokens` in
+the Responses API.
+
+`CutReplies` reads it. Only a reply's last call can be cut, so the calls before it run,
+and the last one is answered "Not run" with the limit it reached and a way round it:
+writing in parts. Where the content has text after the last call, the cut came in the
+text and every call runs. Where the content holds no calls, as the Responses API's does
+not, the last call is refused, because refusing a whole call costs a retry and running a
+cut one saves a shortened file. Three cut replies in a row stop the agent on its text,
+with none of that reply's calls run: each cut reply spends the whole reservation, and one
+trial session retried a whole-file write a dozen times. In a row rather than per turn, so
+an agent writing a long report in parts may hit the cap now and then. The main agent's
+turn then ends with `max_tokens`. A subagent's answer goes back headed by a line saying it
+is cut off, and the turn goes on: the caller can work round a subagent's trouble, and
+ending the turn would throw away the rest of it. A turn that ends on a cut reply reports
+`max_tokens` whatever led there, since its answer is cut off either way. Each cut is
+marked on the run log's `model_call` line and on the stream's `model_call` event, which
+is the only trace of a cut the agent got past.
+
+Retrying quietly with a higher cap was turned down: it overrides `models.yaml`, spends
+without asking, and fails once the model's own maximum is reached. Nothing in `system.md`
+warns in advance, since the refusal arrives exactly when a cut happens and standing text
+is paid for on every call. It lives inside the model call and the tool call, because a
+hook beside them is a graph step and the recursion limit counts those. A subagent the
+workspace compiled itself gets none of it, as it gets none of `tool_guards`. A cut final
+answer ends the turn as it stands; asking the agent for a shorter one is the next change.
+*(2026-10-17, from a design session and live calls.)*
 
 **`doctor` does check it, and the reason I said it could not was measured wrongly.**
 The paragraph here said the pair is only knowable from a built model, that building one

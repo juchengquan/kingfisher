@@ -457,7 +457,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             else (ResultClearing(ledger, high_mark(running, mark), cfg.layout.offloads_route),)
         ),
         TodoListMiddleware(),
-        *tool_guards(guarded, paths, recording(agent), cfg.layout, backend),
+        *tool_guards(guarded, paths, recording(agent), cfg.layout, backend, subagent=False),
     ]
     extras: dict[str, Any] = {}
 
@@ -808,7 +808,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             "middleware": (
                 # The agent's recorder too: these are the agent's tools, offered under
                 # the agent's audiences.
-                tool_guards(guarded, paths, recording(agent), cfg.layout, backend)
+                tool_guards(
+                    guarded, paths, recording(agent), cfg.layout, backend, subagent=True
+                )
                 + ([ToolAllowlist(permitted)] if permitted is not None else [])
                 + _deployment_middleware(
                     agent, registry, capabilities.middlewares, provisions=agent_provisions

@@ -390,6 +390,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
             cfg.layout,
             # The parent's, whose shell is the one this subagent's `execute` runs on.
             backend,
+            subagent=True,
         )
     )
     if allowed != ALL:

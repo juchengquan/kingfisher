@@ -28,7 +28,7 @@ def normalize_answer(text: str) -> str:
 #: `RunResult.completed` is where that question is allowed to be asked.
 END_TURN = "end_turn"
 
-#: The turn stopped at an approval gate and is waiting for an answer. Unlike the two
+#: The turn stopped at an approval gate and is waiting for an answer. Unlike the
 #: bounds below it, this one is resumable: `RunResult.pending` says what it stopped
 #: on, and a `Resume` carrying those answers continues the same graph.
 AWAITING = "awaiting_decision"
@@ -40,6 +40,8 @@ STOP_REASONS: tuple[str, ...] = (
     "max_duration",
     # `KINGFISHER_RECURSION_LIMIT`, enforced inside langgraph's own loop.
     "max_steps",
+    # The agent's last reply stopped at its model's `max_tokens`, so the answer is cut off.
+    "max_tokens",
     AWAITING,
 )
 
@@ -240,6 +242,9 @@ class RunEvent:
     #: `AIMessageChunk`. This is what tells them apart.
     agent: str | None = None
     result: RunResult | None = None
+    #: On a `model_call`: the reply stopped at the model's output cap. The turn goes on,
+    #: the call it was cut inside unrun, so this is the only report of one it got past.
+    cut_off: bool = False
 
     def __post_init__(self) -> None:
         # Parallel arrays are only safe if nothing can construct them out of step.
@@ -272,9 +277,10 @@ class RunEvent:
             rendered = ", ".join(_render_call(name, args) for name, args in pairs)
             calls = f"→ {rendered}" if rendered else ""
             cached = self.usage.get("cache_read", 0)
+            cut = "  (cut off at the output limit)" if self.cut_off else ""
             return (
                 f"[{self._tag('model')}] {calls}  "
-                f"(in={self.usage.get('input_tokens', 0)} cached={cached})"
+                f"(in={self.usage.get('input_tokens', 0)} cached={cached}){cut}"
             )
         if self.kind == "tool_result":
             return f"[{self._tag('tool ')}] {self.tool}: {self._line()}"

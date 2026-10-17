@@ -11,6 +11,7 @@ from langchain_core.tools import BaseTool, StructuredTool, ToolException
 
 from kingfisher.core.agent.backend import shell_prompt_of, shell_runs_here
 from kingfisher.core.agent.host_paths import HostPathError
+from kingfisher.core.agent.middlewares.cut_replies import CutReplies
 from kingfisher.core.agent.middlewares.host_path_guard import HostPathGuard
 from kingfisher.core.agent.middlewares.large_pdf_guard import LargePdfGuard
 from kingfisher.core.agent.middlewares.recorder import Recorder
@@ -25,12 +26,15 @@ from kingfisher.core.config import DEFAULT_LAYOUT
 from kingfisher.core.layout import Layout
 
 
-def tool_guards(
+def tool_guards(  # noqa: PLR0913 -- `subagent` is the one way the three graphs'
+    # guards differ, and a parameter object would hide it from the three calls that say it.
     names: frozenset[str],
     paths: SessionPaths | None,
     recorder: Recorder | None = None,
     layout: Layout = DEFAULT_LAYOUT,
     backend: Any = None,
+    *,
+    subagent: bool,
 ) -> list[AgentMiddleware]:
     """What every graph holding workspace tools gets wrapped in, built once.
 
@@ -41,11 +45,14 @@ def tool_guards(
     with its paths untranslated and a host path unrefused, which is the leak
     `WorkspaceToolPaths` exists to close.
 
-    `HostPathGuard` is unconditional: the backend refuses a host path on every run, so
-    the thing that turns that refusal into a correction the model can read has to be
-    there whether or not this graph holds a workspace tool. So is `LargePdfGuard`,
-    because `read_file` is on every graph and hands a PDF over whole, and `ShellPaths`,
-    because `execute` is a built-in and a subagent holding it never sees `system.md`.
+    `CutReplies` is unconditional, since any model can stop at its cap and a cut call
+    reaches the tool looking whole. `subagent` says what it does with an agent it stops,
+    the one thing the three graphs differ in. `HostPathGuard` is unconditional too: the
+    backend refuses a host path on every run, so the thing that turns that refusal into
+    a correction the model can read has to be there whether or not this graph holds a
+    workspace tool. So is `LargePdfGuard`, because `read_file` is on every graph and hands
+    a PDF over whole, and `ShellPaths`, because `execute` is a built-in and a subagent
+    holding it never sees `system.md`.
     The other two are about the tools themselves, so they need names -- and translation
     needs the turn's backend to translate against, which every graph here is handed the
     same one of.
@@ -58,6 +65,8 @@ def tool_guards(
     # rewrites them to host paths. That it also records what the model is handed is a
     # different question, answered by a deployment's middleware coming after all of this.
     guards: list[AgentMiddleware] = [] if recorder is None else [recorder]
+    # Ahead of the rest, which have nothing to say about a call that is not run.
+    guards.append(CutReplies(subagent=subagent))
     guards.append(HostPathGuard())
     guards.append(LargePdfGuard())
     guards.append(ShellPaths(layout, shell_prompt_of(backend), here=shell_runs_here(backend)))
