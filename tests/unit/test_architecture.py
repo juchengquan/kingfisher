@@ -1543,6 +1543,215 @@ LAZY_TABLES: dict[str, Path] = {
 }
 
 
+#: Who asked for each public name, one table per door. Keyed by `LAZY_TABLES`, which
+#: is the list of doors, so opening a third without a table of its own fails below --
+#: this rule went missing once already, swept out with the layer rules it was filed
+#: beside, and a door nothing watches is how it would go missing again.
+#:
+#: `document` means a page writes the name out and a reader who copied it is owed it;
+#: `embedder` means it is what a documented call takes or hands back; `interface` means
+#: a plugin implements it, which `core/interfaces.py` is where it is written and the
+#: rule below checks.
+WITNESSES: dict[str, dict[str, str]] = {
+    "kingfisher": {
+        # The guides write these out, and a reader who copied one is owed it. Grep
+        # `docs/guides/` for each rather than trusting a page named here -- which
+        # page says what is the part that moves.
+        "Kingfisher": "document",
+        "config_from_env": "document",
+        "Request": "document",
+        "Capabilities": "document",
+        # `ports.md` tells an adapter to raise this one, imported from `kingfisher`,
+        # because a caller tells a bad session id from a broken store by the class.
+        "UnsafeReferenceError": "document",
+        # What those documented calls take and hand back -- `Kingfisher` takes a
+        # `Config`, `run` returns a `RunResult`, `stream` yields `RunEvent`s. The
+        # type of a documented call's answer cannot be private.
+        "Config": "embedder",
+        # `configuration.md` writes a `KINGFISHER_WIRE_FORMATS` out, and the factory it
+        # shows returns a landing per format.
+        "Landing": "document",
+        "RunResult": "embedder",
+        "RunEvent": "embedder",
+        # What `Kingfisher.sessions()` and `session()` return.
+        "SessionInfo": "embedder",
+        # The four an approval gate needs. A turn that stops at one hands back
+        # `PendingDecision`s on its result and cannot be continued without a `Resume`
+        # carrying `Decision`s -- so a consumer that cannot name all three cannot answer
+        # a gate at all, and one that cannot catch `DecisionError` cannot tell a bad
+        # answer from a broken session.
+        "PendingDecision": "embedder",
+        # What `RunResult.ledger` holds, one per recorded result. A caller keeping or
+        # showing those entries names the type to do it.
+        "LedgerEntry": "embedder",
+        "Resume": "embedder",
+        "Decision": "embedder",
+        "DecisionError": "embedder",
+        # What they raise. A caller has to be able to catch, by name, what the
+        # library raises at it without reaching past the door.
+        "AccessError": "embedder",
+        "CapabilityError": "embedder",
+        "ConfigError": "embedder",
+        "QuotaExceededError": "embedder",
+        "SessionBusyError": "embedder",
+        "SubagentError": "embedder",
+        "UnknownSessionError": "embedder",
+        # What `Kingfisher.artifact` raises for a name that is not an artifact, which a
+        # caller fetching by a name it was handed tells apart from a session it cannot
+        # reach.
+        "ArtifactError": "embedder",
+        # `README.md` opens on these four and the package docstring on `run`. A
+        # reader who copied either is owed them.
+        "definitions_source": "document",
+        "ensure_definitions": "document",
+        "paths_from_env": "document",
+        "seed": "document",
+        "run": "document",
+        # `formats.md` writes them out: `source_ids=UNSCOPED`, and
+        # `from kingfisher import Request, RunOn`. Grep for those rather than trusting a
+        # line number here -- two were written down and both went stale the first time
+        # that page was edited.
+        "UNSCOPED": "document",
+        "RunOn": "document",
+        # `tools.md` writes `from kingfisher import ToolContext` for the annotation that
+        # hands a tool the turn's backend. A tool file is in a deployment's workspace,
+        # so nothing in this repository imports the name and nothing ever will.
+        "ToolContext": "document",
+        # `tools.md` writes `kingfisher.tool(...)` for a tool that says who may use it, in
+        # a tool file of the deployment's own, as `ToolContext` above is.
+        "tool": "document",
+        # The type of `Kingfisher.run`'s `source_ids=`. `UNSCOPED` is one of its two
+        # members and is documented; the type that admits it cannot be private.
+        "Held": "embedder",
+        # Seeding and the inventory, plus what each returns.
+        # `test_the_whole_job_is_reachable_through_the_front_door` in
+        # `test_inventory.py` is the written form of the claim in
+        # `cli/__init__.py`, and names these five as the job it walks. Whether
+        # `kinds_at` belongs in that job is an argument about the proof rather than
+        # about this door.
+        "Seeded": "embedder",
+        "Inventory": "embedder",
+        "inventory": "embedder",
+        "kinds_at": "embedder",
+        "WorkspacePaths": "embedder",
+        # Where a deployment reads from. Made public on 2026-09-02 for a library
+        # caller who "had no way to ask at all" -- see *Where a deployment reads
+        # from* in `docs/decisions.md`. No such caller has appeared; the decision is
+        # recent and deliberate enough to leave alone.
+        "Origins": "embedder",
+        "Origin": "embedder",
+        # The streaming half of `run`, which is documented; the two are one decision.
+        "stream": "embedder",
+    },
+    "kingfisher.plugins": {
+        # The five a plugin implements, written in `core/interfaces.py` and checked
+        # below to still be there. `ports.md` gives `CommandRunner`, `RunEvents` and
+        # `Sessions` a section each, and `configuration.md`'s `KINGFISHER_SESSIONS` row
+        # names the type a factory returns.
+        "Sessions": "interface",
+        "RunEvents": "interface",
+        "CommandRunner": "interface",
+        "Instructions": "interface",
+        # The type a runner returns. Nothing *imports* it in a snippet -- a runner's
+        # `run` returns one, so a deployment cannot write the interface without it.
+        "CommandResult": "interface",
+        # Kingfisher's own, which a plugin author builds on rather than implements.
+        # `ports.md` shows subclassing the default, and `backend_at` for a backend over
+        # a directory of its own; `formats.md` and `middleware.md` pass `LocalSessions`
+        # in every snippet that builds a service.
+        "LocalSessions": "document",
+        "backend_at": "document",
+        # The shipped pair behind two of the interfaces above, public so a deployment
+        # can wrap one rather than reimplement it. `upgrading.md` records the move:
+        # they were "not public anywhere" before this door existed.
+        "JsonlRunEvents": "document",
+        "InstructionsFile": "document",
+        # What `KINGFISHER_WIRE_FORMATS` returns, and the shipped two a factory adding a
+        # third starts from. `configuration.md` writes the setting and the factory out,
+        # importing `WireFormat` from this door.
+        "WireFormat": "document",
+        "WIRE_FORMATS": "document",
+        # What `KINGFISHER_PLUGINS` returns, which `configuration.md` tells a deployment
+        # to build in a module of its own.
+        "Plugins": "document",
+        # `ports.md` has a deployment whose shell is not kingfisher's say what it sees,
+        # on its runner or on its own sandbox; nothing here has a shell of that kind.
+        "ShellPrompt": "document",
+        # `ports.md` tells a backend that refuses host paths to refuse them with this,
+        # because it is the type `HostPathGuard` turns into a correction.
+        "HostPathError": "document",
+    },
+}
+
+#: Where a name witnessed as an interface has to be written, so that witness is a
+#: claim about the tree rather than a label.
+INTERFACES = SRC / "core" / "interfaces.py"
+
+
+def test_every_public_name_has_a_witness():
+    """A name nobody can name a caller for is a promise nobody asked for.
+
+    Restored after being swept out with the layer rules, which it was filed beside and
+    had nothing to do with: it keyed on bare public names and would have survived the
+    move untouched. Nothing had been added to either door meanwhile -- the root shrank
+    by the seven that moved here -- so what this catches is the next name, which is
+    what it was for.
+    """
+    import importlib
+
+    assert sorted(WITNESSES) == sorted(LAZY_TABLES), (
+        "every door needs a witness table and every table a door: "
+        f"{sorted(set(WITNESSES) ^ set(LAZY_TABLES))}"
+    )
+
+    for package, witnessed in sorted(WITNESSES.items()):
+        table = importlib.import_module(package)._EXPORTS
+        unwitnessed = sorted(set(table) - set(witnessed))
+        stale = sorted(set(witnessed) - set(table))
+
+        assert not unwitnessed, (
+            f"{unwitnessed} are public on {package} and nothing says who asked. Name "
+            "the caller: `document` if a page tells a reader to write it, `interface` "
+            "if a plugin implements it, `embedder` with a reason if neither -- and if "
+            "the honest answer is nobody, it does not belong on the door"
+        )
+        assert not stale, f"{stale} are witnessed on {package} and not exported any more"
+
+
+def test_a_name_witnessed_as_an_interface_is_written_where_that_claims():
+    """Otherwise `interface` is a label, and a label is what the witness table exists
+    instead of. Driven against the module's own source, so a protocol that moves out of
+    it fails here rather than keeping a witness that has stopped being true.
+    """
+    written = INTERFACES.read_text(encoding="utf-8")
+    claimed = sorted(
+        name
+        for witnessed in WITNESSES.values()
+        for name, who in witnessed.items()
+        if who == "interface"
+    )
+
+    assert claimed, "no name claims to be an interface -- this rule is about nothing"
+    # The control: the other witnesses are not held to this file, so a rule that
+    # checked every name would pass for the wrong reason.
+    assert any(
+        who != "interface" for witnessed in WITNESSES.values() for who in witnessed.values()
+    )
+
+    # Anchored, and `\b` at the end: `class Instructions` is a prefix of
+    # `class InstructionsMoved`, so a substring test passed a protocol renamed out from
+    # under its witness -- measured, by mutating exactly that.
+    missing = [
+        name
+        for name in claimed
+        if not re.search(rf"^class {re.escape(name)}\b", written, re.MULTILINE)
+    ]
+    assert not missing, (
+        f"{missing} are witnessed as interfaces and are not written in "
+        f"{INTERFACES.name} -- move the witness or move the class back"
+    )
+
+
 def _stub_reexports(path: Path) -> tuple[dict[str, str], list[str]]:
     """The `if TYPE_CHECKING:` block: `{name: module}`, and what is not re-exported."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
