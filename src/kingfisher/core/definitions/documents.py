@@ -1,8 +1,8 @@
 """The YAML an agent or subagent definition is written in, read the same way by both.
 
-Shared rather than duplicated, which is the one exception to *kinds do not share*: a
-scalar's style is a fact about a document rather than about what any kind means, and the
-agent and subagent formats reflow a prompt identically.
+Shared rather than duplicated, which is the one exception to *the kinds do not share an
+implementation*: a scalar's style is a fact about a document rather than about what any
+kind means, and the agent and subagent formats reflow a prompt identically.
 
 Named rather than counted, and the count is why. This said "all three kinds" and
 "a header", both true while a skill's frontmatter came through here, and neither

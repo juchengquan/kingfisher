@@ -521,7 +521,7 @@ sandbox off it fails on `/.harness`, which is exactly the deployment it is there
 to catch.
 
 The last is ordinary: if you refuse host paths, refuse them with `HostPathError`
-(`from kingfisher import HostPathError`),
+(`from kingfisher.plugins import HostPathError`),
 because that is the type `HostPathGuard` turns into a correction the model can act
 on. Refusing them at all is optional — inside a sandbox of your own, `/etc/passwd`
 is a file, and refusing it would be refusing your own filesystem.

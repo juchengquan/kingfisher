@@ -8,18 +8,12 @@ agent does not have: no `rules`, because what has to be true across a *set* of
 agents is one sentence -- two of a name is refused in `catalogue` where it is
 found -- and no `harness`, for the reason below.
 
-**`core/agent/assembly.py` did not come with them, and that is the point rather than
-an omission.** *Not a module: agents* refused this package on the grounds that
-an agent "is the thing the graph *is* rather than something the graph holds",
-and drew from that: "assembling a graph out of the three kinds is kingfisher's
-own job, not any kind's". That is right about `build_agent` and reaches no
-further. A format's parser is not an assembly, and the entry gave one reason for
-three files where it covers one.
-
-What the other three earned their packages with is stated in *Not a module:
-middleware*: "a file somebody authors, a reader for it, and a registry built
-from what was found". An agent has all three -- `agents/*.yaml`, this `reading`,
-and `LocalAgentRepository` -- which is why it is here.
+**`core/agent/assembly.py` is not here.** A format's parser is not an assembly:
+`core.agent.assembly` builds the graph out of the kinds, and this package reads one
+format. What earns a kind a package -- a file somebody authors, a reader for it, and a
+registry built from what was found -- is under *The core and its plugins* in
+`docs/decisions.md`, and an agent has all three: `agents/*.yaml`, this `reading`, and
+`LocalAgentRepository`.
 
 **It reaches no framework at all**, and `THIRD_PARTY` says so with an empty
 set. That is a consequence of keeping `core/agent/assembly.py` out of it: an

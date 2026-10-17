@@ -8,11 +8,6 @@ from typing import Any
 
 from deepagents.backends import CompositeBackend
 
-# Re-exported: `ports.md` has named this path to deployments writing their own
-# backend, which may import it from here.
-from kingfisher.core.agent.host_paths import (
-    HostPathError as HostPathError,  # noqa: PLC0414 -- the re-export above
-)
 from kingfisher.core.agent.prompting import ShellPrompt
 from kingfisher.core.config import DEFAULT_LAYOUT, ConfigError
 from kingfisher.core.definitions.catalogue import Definitions

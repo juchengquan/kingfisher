@@ -25,8 +25,8 @@ lines apart.
 | **What a deployment authors** | [The definition format](#the-definition-format) · [The catalogue](#the-catalogue) · [Agents and delegation](#agents-and-delegation) · [Packaging](#packaging-where-the-definitions-live) |
 | **What a request may do** | [Capabilities](#capabilities) · [Source-id access](#source-id-access) · [Models and endpoints](#models-and-endpoints) |
 | **What a run meets** | [What a tool returns](#what-a-tool-returns) · [What a turn's tools returned](#what-a-turns-tools-returned) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) · [A session is its backend](#a-session-is-its-backend) · [A tool's path is the backend's path](#a-tools-path-is-the-backends-path) |
-| **The surfaces** | [The command line](#the-command-line) · [What doctor promises](#what-doctor-promises) · [Where a deployment reads from](#where-a-deployment-reads-from) · [The HTTP service](#the-http-service) · [The front door](#the-front-door) |
-| **The codebase itself** | [Layering](#layering) · [Splitting a file](#splitting-a-file) · [The architecture rules](#the-architecture-rules) · [How much a comment says](#how-much-a-comment-says) · [The size of the test suite](#the-size-of-the-test-suite) |
+| **The surfaces** | [The command line](#the-command-line) · [What doctor promises](#what-doctor-promises) · [Where a deployment reads from](#where-a-deployment-reads-from) · [The HTTP service](#the-http-service) |
+| **The codebase itself** | [The core and its plugins](#the-core-and-its-plugins) · [The architecture rules](#the-architecture-rules) · [How much a comment says](#how-much-a-comment-says) · [The size of the test suite](#the-size-of-the-test-suite) |
 | | [Proposals, and what became of them](#proposals-and-what-became-of-them) |
 
 *Sessions* and *Wiring a store* sit together and are not one section: the first is
@@ -1285,6 +1285,16 @@ keeps the grant whole instead of resetting to the class default. Safer, and the
 reason the obvious test did not bite -- a grant of one name against a request asking
 two answers the grant either way. The rule drives each axis with two sets that
 overlap without either containing the other. *(2026-09-18.)*
+
+**None of kingfisher's own middleware is offered to a definition, and that was the
+alternative considered.** They ship with the package the way `prompts/` does, which invites
+listing them beside a deployment's own so a definition could name one. A name a
+definition can write is a name it can leave out, and `ToolAllowlist` is what holds
+a request to the tools it was granted -- omitting it would be a way to widen, which
+*Capabilities narrow and never widen* does not allow an exception for. They do not
+fit the registry mechanically either: an entry there is built from defaults a
+deployment stored, and these are built per request from the names that request
+resolved and the backend it runs on.
 
 ## Source-id access
 
@@ -4893,14 +4903,17 @@ its session backends" under "A session is its backend".)*
 documented as conveniences over a *default* `Kingfisher`, and `formats.md` teaches
 `run(Request(...))` as the first thing a reader writes. The default is in their
 signature rather than their body so it can be seen and replaced without dropping to
-the constructor.
+the constructor. *(Reversed 2026-10-16: they take `sessions` with no default, as
+`Kingfisher` does. See "Sessions are always named" under *The core and its plugins*.)*
 
 **`default_backend` is one of the eleven names, back through the front door.** The
 rule they left under -- a caller means a caller outside this wheel -- is unchanged;
 what changed is that every such caller now has to name this one. Its witness was
 `service` rather than `document`, because the service imported it and that half of
 the table was read off the real imports and could not rot. It is `document` now,
-since the service is gone and the guides write it out.
+since the service is gone and the guides write it out. *(Both gone since:
+`default_backend` is `LocalSessions` on `kingfisher.plugins`, and the witness table went
+with *The core and its plugins*.)*
 
 **Considered and rejected:** requiring `backend_from` unchanged, which would have
 been ceremony with the default still built inside; a narrower `(session_dir) ->
@@ -5185,6 +5198,42 @@ model's context, which is its job.
 asks the backends whether a session exists rather than looking for a folder, and
 `RunResult.session_dir` is gone, so nothing in a result is a host path and a result
 serialises whole.
+
+**`reject_host_path` is scoped to the workspace, and was scoped to one session.**
+`WorkspaceScopedBackend` took a parameter called `workspace`, stored it as
+`self.workspace`, and was handed `session_dir`. The field had exactly one reader -- the
+guard -- so the whole of what "workspace" meant there was the wrong value.
+
+How it got that way is the useful part, because the wiring was not careless. The first
+clause turns the prefix into the virtual path the caller meant --
+`/{key[len(prefix):]}` -- and that only works if the prefix *is* this session:
+`<workspace>/sessions/s/scratchpad/report.md` minus the workspace is
+`/sessions/s/scratchpad/report.md`, which resolves somewhere else again. Somebody wired
+the one value that made the message right, and the scope came with it.
+
+So the clause covering "a host path inside the workspace" covered one session, and
+every other directory fell through to `HOST_ROOTS`, which names no workspace. Measured
+on 2026-10-01 at the two shapes: on a developer machine all four probes are refused, and
+the reason is that a pytest `tmp_path` sits under `/private/` -- the host-root clause,
+not the workspace one. At `/workspace`, which `Dockerfile` sets, a sibling session's
+file, a skill, `models.yaml` and an agent definition were all **accepted**, and a write
+to one was mirrored inside the session -- which is what `system.md` promises the model is
+refused.
+
+The guard takes both now: the session for the suggestion, the workspace for the scope.
+The two refusals differ deliberately -- a path in this session is offered its virtual
+spelling, and anything else under the workspace is not, because there is none to offer
+and inventing one would send the model somewhere else a third time.
+
+**The rule that named this case could not reach it.**
+`test_a_host_path_to_a_file_tool_is_refused_not_mirrored` was written for exactly this,
+using `f"{cfg.workspace}/sessions/s1/..."` -- a *sibling* of the fixture's
+`sessions/test-session`. It passed throughout, on the host-root clause. Every workspace
+in the suite is a `tmp_path`, so the workspace clause had no case anywhere, and
+`reject_host_path` is now driven directly against a `/workspace`-shaped one: a backend
+needs its directories to exist, and that is a path a test may not make. The wiring has a
+rule of its own as well, because the behaviour alone did not say which of the two values
+was wrong. *(2026-10-06, from an architecture review.)*
 
 ## The command line
 
@@ -6235,818 +6284,226 @@ other, so one continuing conversation needs no setting. *(2026-10-14.)*
 **A skill's `allowed-tools` is prompt text, not enforcement.** Worth knowing
 before trusting it for anything. *(2026-08-16, `session-scoped-api.md`.)*
 
-## The front door
-
-**A caller means a caller outside this wheel.** `kingfisher.__all__` is a promise
-to somebody holding `pip install kingfisher` and nothing else. The command ships
-in the same distribution, so it is family: it reaches a name the door does not
-carry at the module defining it, and still comes through the door for every name
-that is there. The service was its own distribution and kept the strict rule.
-*(2026-09-06, `the-front-door-is-for-outsiders.md`. Three slices, all landed
-the same day.)* With the service gone, the command is the only consumer
-`CONSUMERS` holds.
-
-**It started as a proposal to move the CLI into its own wheel, and the
-measurement reversed it.** The stated reason was keeping the library's import
-surface clean, and the split would have made that strictly worse: `CONSUMERS` in
-`test_architecture.py` then held `kingfisher_service` -- a separate wheel --
-to the front door, so a `kingfisher-cli` would be the second out-of-tree consumer
-and every name it reaches would be locked public permanently, as a
-cross-distribution promise rather than an in-tree convention. The packaging
-argument does not carry either: the service left because a library caller should
-not pay 2.7MB of fastapi and uvicorn to import `Request`, and the CLI's whole
-foreign cost is `python-dotenv` at 100KB, never imported by `import kingfisher`.
-
-What the measurement found instead: of 57 exported names, 25 were reached by the
-CLI and no other shipped consumer, and the export table's own comments recorded
-five of them as forced public by a consumer reaching. `doctor` wanting a sandbox
-probe had made the probe a promise to everybody.
-
-**Enforced by name, not by file.** The line could have run between CLI modules --
-`__main__.py` and `progress.py` held, `health.py` and `listing.py` free, which is
-where the claim in `cli/__init__.py` then lived; its docstring is one line now. Rejected: those two files
-also use `Config`, `inventory`, `Origins` and `Inventory`, so freeing the files
-lets them drift to deep imports for real public names with nothing going red. The
-rule is that the door is mandatory for anything on it, which is self-maintaining
--- put a name back on the list and every deep import of it goes red without
-anyone remembering to move a file between buckets.
-
-**Every public name carries a witness, and the service's half is read rather
-than claimed.** *(Four kinds of witness when this was written; `command` and
-`service` have gone since, as the entries below record, and `document` and `embedder`
-remain.)* `WITNESSES` says who asked for each name: `service` (verified by
-parsing the service's imports, both directions), `document` (a page tells a
-reader to write it -- checked by a person, because `offered` gets five hits in
-the guides and `run` thirty-one, all of them the English word), `embedder` (kept
-deliberately, with the reason), and `command` (nobody outside asked; the work
-that remains). Deny by default: a name in `_EXPORTS` and not in the table fails.
-
-It earned itself before it landed. `ConfigError` was written down as `embedder`
--- "raised by `config_from_env`, so a caller that builds a `Config` must be able
-to catch it" -- and the service picked it up while this branch was open. The
-rule reads the service rather than the label, so it said so, on the direction
-that is easy to leave out: not a claimed witness that is false, but a real one
-that arrived after somebody wrote a weaker reason down.
-
-It is the fifth list of these names, in a file one of whose rules said, when this
-was written, that a second table is what it exists to distrust. Accepted on the precedent beside it --
-`LIGHT_EXPORTS | HEAVY_EXPORTS` is a second table made safe by a test that it is
-*total*, and this one is held the same way.
-
-**The light/heavy partition is re-keyed on consumers, as a union.** It watches
-what a consumer pays to import, and was standing on `__all__`, which stopped
-being the same set the moment a name left it -- `Confinement` is classified light
-*because* `doctor` reaches it, and going private did not make `doctor` stop. The
-union rather than a swap is deliberate: nine public names are imported by
-neither consumer and one of them is heavy, so replacing would have quietly
-dropped them out of a guard they were already inside.
-
-**Sixteen names came off, in three slices.** `Confinement` (light) and
-`unrunnable_subagents` (heavy) landed with the rules, so each new guard had a
-live case in both branches -- a rule with no cases passes whatever it says, which
-this suite has shipped twice. Then `doctor`'s six -- `bubblewrap_available`,
-`landlock_abi`, `shell_confinement`, `memory_backing`, `destination_hint`,
-`DEFINITION_KINDS` -- and then `list`'s eight: `ALL`, `AUDIENCED`, `Audience`,
-`SEED_HINT`, `SKILL_LAYOUT`, `offered`, `spell`, `split_reference`.
-
-What that leaves is the shape worth keeping. `health.py` and `listing.py` each
-reach for every name they render or probe with, and each takes from `kingfisher`
-only the names that are answers the library gives anybody -- `Config`,
-`inventory`, `Inventory`, `Origins`, `kinds_at`. The two kinds of name are told
-apart by where the import points, in the two files that used to cost the door
-most. 57 became 41.
-
-**The fourth witness went with the last of them.** `command` was never a witness:
-it was the eviction list wearing the table's shape, so that the work remaining
-lived in the code rather than only in a proposal, and so a mislabelled entry --
-the service importing one, or the command not -- was refused. Sixteen names
-carried it and none does now, so it is gone rather than kept as a value that is
-always an error. What stops the list growing back is the deny-by-default rule and
-nothing else, which is enough: a name whose only caller is the command can be
-given none of the three remaining witnesses without somebody writing down a
-reason that is false, and the reason is the part a reader can check.
-*(Slices two and three, 2026-09-06.)*
-
-**The `service` witness went with the service.** It was the one kind read off
-real imports rather than claimed, and its names were witnessed again one at a
-time: `document` where a guide tells a reader to write the name, `embedder` where
-it is what a documented call takes, returns or raises. `file_store_named` had no
-second reader and left the door. *(2026-09-15.)*
-
-**The stub block is a third listing of these names, and is bound to the other
-two.** `__all__` and `_EXPORTS` were held to each other; the `if TYPE_CHECKING:`
-re-exports were held to nothing, and had already drifted -- `spell` and
-`SessionInfo` exported with no entry. Measured rather than assumed: `__getattr__`
-returns `Any`, so a name with no stub imports fine, passes every test, and is
-simply untyped. `reveal_type` says `<class 'Capabilities'>` for a name with a
-stub and `Any` for one without, and the drifted one was `SessionInfo`, which the
-service imports.
-
-The module string is compared as well as the name, for the reason the layer and
-the root are: two tables agreeing a name exists while disagreeing where it comes
-from would type-check against one object and import another. So is the redundant
-`X as X`, which under PEP 484 is what marks a name as re-exported at all -- and
-which reads like something to tidy away. Both packages with a lazy table are
-covered, `kingfisher` and `kingfisher.application`. *(2026-09-06.)*
-
-**What it costs, stated rather than discovered.** A deployment embedding
-kingfisher and wanting its own health endpoint loses the promise on the sandbox
-probes; the names still work, at addresses that may move. There is no measured
-caller who wants that today, which is what makes it defensible -- and *Where a
-deployment reads from* declined to serve `Origins` over HTTP because the service
-"authenticates nobody" rather than because nobody wanted the answer, so that is
-the entry to re-read if one appears. No deprecation window, on the precedent the
-export table set for the eleven names that left before these: at 0.1.0 an outside
-caller on the old spelling changes one import line.
-
-**`kinds_at` stays**, on `test_the_whole_job_is_reachable_through_the_front_door`
-in `test_inventory.py`, which is the written form of the claim and names it as
-part of the job. Whether it belongs there is an argument about the proof, not
-about the door.
-
-**Reversed: "a kind owns its route to the runtime."** A kind owns its format and
-its walk over the disk, and nothing below either. `kinds/subagents/harness.py` is
-`infrastructure/harness/subagents.py`, `kinds/tools/harness.py` is
-`infrastructure/harness/tools.py`, and `test_no_kind_names_a_layer` is what keeps it
-that way. *(2026-09-10. Both are in `infrastructure/harness/kinds/` since 2026-10-05.)*
-
-**The entry it reverses was right about ownership and wrong about direction.** *An
-asset kind owns its own registration* said the kinds "do not answer to a layer", and
-five imports said otherwise: the subagent runtime half named three modules under
-`infrastructure/harness/` and `core.agent.prompting`, and the tool surface named
-`core.definitions.catalogue`. Nothing was checking. `THIRD_PARTY` watches foreign
-packages, `HARNESS_EDGES` watches the layers reaching *in*, and the direction between
-`kinds/` and the layers was written in prose and enforced nowhere -- which is how a
-sentence in `CLAUDE.md` about `infrastructure/harness/` had already been false for
-six days before anyone read it against the table.
-
-**Three more edges were found by writing the rule, not by planning it.** All three
-`reading.py` imported the YAML step, which was a flat module under `infrastructure/`,
-and the graph the plan was built on had missed them: it recorded
-`from kingfisher.infrastructure import documents` as an import of the package root
-rather than of the layer. Worth writing down because the
-lesson is not about `documents` -- a measurement that collapses a path loses exactly
-the edges a layering argument is about, and it does it silently.
-
-**`documents.py` split along the two audiences it already had.** *Not moved:
-`documents.py`* argued it was not a kinds file because `decode` and
-`require_literal_prompt` serve the kind readers while `source_ids_named` and
-`middleware_named` serve workspace seeding. That is still the reading; what changed is
-that the file could not stay whole once a kind may not name a layer. So the first half
-is `kinds/documents.py`, beside `kinds/importing.py` in `KINDS_HELPERS`, and the second
-is in `infrastructure/workspace/seeding.py`, which was its only reader. Neither half
-has two audiences any more, and there is no module called `documents` in two places.
-
-**The cost is one grant and one edge, both named.** `THIRD_PARTY["kinds"]` gains
-`yaml`, so a sixth kind arriving without an entry of its own would inherit a parser
-where it used to inherit nothing -- guarded upstream, since
-`test_kinds_holds_exactly_the_kinds` refuses a directory `DEFINITION_KINDS` does not
-name. And `HARNESS_EDGES` gains `tools` for `inventory` and for `reporting`, which is
-the edge the *previous* move recorded closing. Nothing about that coupling changed
-either time: `reporting` has always read the roster off a compiled graph. What changed
-is whether the table could see it, and a table that cannot see an edge is worse than
-one that lists it.
-
-**What it buys, stated so it can be checked.** The swap boundary is two areas rather
-than four: `infrastructure/harness/` and `kinds/skills`, plus `kinds/middlewares` for
-one `isinstance`. `core.definitions.subagents` and `core.definitions.tools` grant nothing at all now, and
-every kind import is 5-6ms and 65 modules. The skills store mount was then the one
-kind module that still reached the runtime at import, and *the swap boundary* entry
-above is where the argument for leaving it there lived; it has since been removed,
-under *The catalogue*.
-
-## Layering
-
-
-**`infrastructure/harness/` holds every module that imports deepagents, langchain
-or langgraph**, and only that package may. Registries and DTOs did *not* move to
-`application/`, and the package root did not change.
-*(2026-08-17, `layer-boundaries.md`.)* Two kinds may since: `kinds/skills`, which
-asks deepagents which skills an agent has, and `kinds/middlewares`, which refuses a
-class that is not an `AgentMiddleware` -- *The cost is the swap boundary*, below.
-
-**The layout is not domain vocabulary, and moved to the package root.**
-`kingfisher.core.layout` was `domain/layout.py`, and it left for the reason `Config`
-left before it: **no domain rule reads it.** Every reader was in
-`infrastructure/`, `skills/`, `tools/` or `subagents/` -- now `infrastructure/`
-and `application/disposal.py`, for the claim's filename -- and it sat in the
-innermost layer so those could share it without depending on each other -- which
-is `config.py`'s own words, *"reasoning about import direction, not
-modelling"*.
-
-The counter is real and does not change the test. `/data` and `/derived` are the
-vocabulary the prompt teaches the model, so this reads far more like the domain
-than `base_url` ever did. But the test the `Config` move applied is not "does it
-sound like vocabulary", it is "does a domain rule read it" -- and vocabulary no
-domain rule uses is a record held for the outer layers.
-
-**Rejected: `infrastructure/harness/`**, which is where this started. Twelve
-readers across five packages and four of them are nowhere near deepagents, so
-the move would have pulled `skills/`, `tools/`, `subagents/` and `workspace/`
-into importing the one package the layering rule quarantines. A file that
-imports no framework does not belong in the package defined by importing one.
-
-**Rejected: splitting the route table out to the harness.** Every field of it is
-shaped by deepagents -- `routed` exists because `CompositeBackend` has a default
-slot, `deny_write_under` is a glob because `FilesystemMiddleware` takes globs,
-the trailing slash exists because matching is by prefix -- and only
-`core.agent.backend` and `core.agent.assembly` read it in
-code, with the backend contract kit beside them. That is a real argument, and the entry above is one day older than it:
-pulling the table apart would undo the joining that entry exists to record. The
-root belongs to no layer, so framework-shaped data there costs much less than in
-the innermost one.
-
-**The move activated a comment that had been wrong for some time.**
-`domain/ports.py` attributed `within` to the layout module; it is in
-`core.agent.references`.
-Prose roots are read off the tree, so `layout` only became a resolvable root
-when the file arrived at one -- and the rule caught it on the first run after.
-*(2026-09-07.)*
-
-**An asset kind owns its own registration.** `tools/`, `skills/` and
-`subagents/` are modules at the package root, each holding what its definitions
-say, how they are found on disk, and how they reach the runtime. Kingfisher
-fetches from them; they do not answer to a layer. *(2026-09-04.)*
-
-**Reversed: "at the package root."** The five kinds are `kinds/agents`,
-`kinds/skills`, `kinds/subagents`, `kinds/tools` and `kinds/middlewares`. Everything
-else in the entry above stands -- a kind still owns its format and its walk over
-the disk, and still answers to no layer. It owned its route to the runtime too when
-this was written; `tools` and `subagents` have since handed theirs to `harness/`. What changed is
-where the five sit relative to each other, which that entry never argued for.
-
-**The reason is a rule, and the tidier root listing is not it.** Read honestly, the
-case put first was presentation: nine packages at the top level, five of them a
-family, and no way to say so. Presentation is what *"a second subpackage would
-advertise a distinction no test could hold"* was written against, and the answer
-that entry settled on -- the modules have to share a subject -- is met here as
-squarely as `sandbox/` meets it. `DEFINITION_KINDS` already names the subject, and
-`test_kinds_holds_exactly_the_kinds` holds the directory to it in both directions.
-
-The second direction is the part that could not exist before.
-`test_the_catalogue_holds_one_module_per_kind` walks the constant and asks whether
-each name has a reader, so a sixth directory carrying a `spec` and a `catalogue`
-passed it by never being asked about. Flat at the root there was nothing to compare
-against: the top level legitimately holds four layers and three loose modules too.
-
-**Measured against the alternative, because the alternative is cheap.** The same
-check is writable today without moving anything -- the nine packages at the root are
-five kinds and four layers, so a four-name `LAYERS` constant and one assertion gets
-it. That is six lines against seventy files, and both versions keep a hand-written
-constant: this one keeps `KINDS_HELPERS`, two names then and three since
-`documents` joined. So the check is not what pays
-for the move, and saying otherwise would be reverse-engineering a reason. The move
-is taken on the presentation case with the rule as a consequence, and the numbers
-are here so the next reader is not told a better story than the one that happened.
-
-**`infrastructure/importing.py` came too, and `documents.py` did not** -- until
-2026-09-11, when the seeding scans had gone to `seeding` and what was left served
-only the kind readers, and it moved into `kinds/` as well. Four kind
-catalogues are `core.definitions.importing`'s only readers and it imports nothing from
-kingfisher at all. `documents` serves two audiences -- `decode` and
-`require_literal_prompt` for the kind readers, `source_ids_named` and `middleware_named`
-for workspace seeding -- so it is not a kinds file, and *"Two modules came up a
-directory, and an import cycle is why"* is why moving it again would need its own
-argument. The cycle that entry records cannot recur here: `kinds/__init__` imports
-nothing, which is also what keeps `core.definitions.skills` at 6ms rather than the 1,033ms
-a re-export reaching a module that imports deepagents would cost every kind import.
-
-**`THIRD_PARTY` gained an entry rather than losing four.** Collapsing the five kinds
-into one `kinds` key would hand `kinds/agents` -- the only kind whose set is empty,
-and empty because its runtime half stayed in `harness/` -- the union of the other
-four. The five stay, re-keyed, and `kinds` itself is named with an empty set so a
-kind added without an entry inherits nothing rather than the package root's answer.
-*(Since then `kinds/tools` and `kinds/subagents` are empty too, and `kinds` grants
-`yaml` for `documents`, so a kind added without an entry inherits that.)*
-
-**Found on the way past: `CLAUDE.md` had been wrong since 2026-09-04.** It said only
-`infrastructure/harness/` may import deepagents, langchain or langgraph, which
-stopped being true the day `tools` and `subagents` became packages. No test reads
-that file against `THIRD_PARTY`, and nothing else would have said so.
-*(2026-09-04, reversed in part 2026-09-10.)*
-
-**A kind reads its own documents.** `core.definitions.subagents.reading.read`,
-`core.definitions.skills.reading.name_from`, and `core.definitions.agents.reading.read`. Each was two functions in two packages: an envelope opener in
-`infrastructure` and the format's own parser, with the opener calling straight
-back into the module it was called from. *(2026-09-05.)*
-
-**The split was left by a constraint that had already lapsed.** The domain
-imports the standard library and `kingfisher.domain` and nothing else, so when
-these formats lived in `domain/` the `yaml.safe_load` had to sit elsewhere and
-hand fields back. Two of the three formats stopped being in `domain/` when they
-became modules, and the wrapper stayed. Each half had exactly one caller, and
-`decisions.md` already cut a seam on that ground once -- a `CatalogueSource`
-protocol, "designed in full and cut before building, on the grounds that one
-implementation is not a seam".
-
-**What could not follow them stayed, and it is not much.** `decode` and
-`require_literal_prompt` are shared by all three: a scalar's style is a fact
-about a document rather than about what any kind means, and the agent and
-subagent formats reflow a prompt identically. `documents` is now that, plus two
-scans that read a document without parsing it, and it names no kind at all --
-one kingfisher import where it had five. *(The skill reader went on 2026-09-16, so
-the agent and subagent readers are its only users; the scans have gone to `seeding`,
-and it imports nothing from kingfisher.)*
-
-**`skills` gained a `reading` beside its `spec`, and the reason is a rule.**
-*(That `reading` went on 2026-09-16 with the upload path, its only caller.)* A
-domain module may name a kind's `spec` and nothing else of it, on the stated
-grounds that a spec is format vocabulary with no adapter behind it. Reading a
-document needs `yaml`, so folding the reader into `core.definitions.skills.spec` would have made
-that sentence false while leaving it written down -- and the architecture test
-checks direct imports, so nothing would have said so.
-
-**Two modules came up a directory, and an import cycle is why.**
-`catalogue/__init__` imports three kind modules; `documents` and `importing`
-sat inside that package and were imported *by* those kinds. The loop resolved by
-luck of import ordering and stopped resolving when the readers moved -- a cold
-`import kingfisher.core.definitions.subagents.catalogue` failed outright. Both files are
-generic:
-`importing` imports nothing from kingfisher whatsoever, and `documents` now
-imports one thing. `infrastructure/__init__` imports nothing, so moving them up
-removes the edge instead of reordering around it.
-
-**Not moved: `layered`.** *(Removed on 2026-09-16, when a session stopped bringing
-definitions of its own.)* `LayeredSkills` and `LayeredSubagents` stay in one
-file because it exists so that two *differing* merge rules can be read against
-each other -- a sorted set union for one, a right-wins `dict |` for the other.
-They were once two inline expressions in `agent.py` that silently did different
-things, and putting them in separate packages for symmetry would restore exactly
-the arrangement that let that happen. "Kinds do not share" is about shared
-implementation; a deliberate comparison is the opposite.
-
-**Three things were in the wrong place, and the move found them.** `NEAR_MISS`
--- the `.yml` a `.yaml` gets mistaken for -- sat in the subagent *catalogue*
-while `SUFFIX` sat in `reading`, so the agent repository had to import a
-catalogue to get the second one, which is the edge that closed the loop. The
-`documents` docstring described sitting inside `catalogue/` and gave that as the
-reason for its own name, while sitting flat in `infrastructure/`. And two of the
-skill reader's refusals -- a missing `---` header, a name that is a path --
-turned out to be exercised by no test at all: mutating either left the whole
-suite green. That gap is older than the move and is now covered.
-
-**They deliberately do not share.** All three resolve a `source::name` and all
-three do it their own way -- `core.definitions.tools.spec.split_reference` and
-`core.definitions.skills.registry.split_qualified` differ today by one call that strips a
-trailing slash. Written once and shared, a change for one kind would have to be
-argued past the other two. *(Subagents have since taken the tools' `split_reference`,
-so two ways remain.)* The duplication is the price of each kind changing on
-its own, and it is the point rather than an oversight. What stays shared is the
-vocabulary of *grants* -- `SEPARATOR` and `bare_name` in `core.access.capabilities` --
-because a grant is spelled the same way whatever it names.
-
-**Reversed to get there: "the domain imports only the standard library and
-itself."** Four domain modules needed an asset kind's `spec`: `ports` names
-`Found` and `SubagentSpec` because a port cannot name a type it has no word for,
-and the definition readers parsed a tool reference because an agent definition
-*writes* `csv_profile::csv_profile` in its `tools:` list. The readers have since
-moved into the kinds, and two remain: `ports`, and `request` for `RunOn`. That is the format
-referring to itself, not the domain reaching for a layer.
-
-The rule was refused as a wall first and then measured, which is the order that
-was wrong. Importing `core.interfaces` and `core.definitions.agents.spec` with those edges takes
-39ms and loads 101 modules with no part of the agent runtime among them -- the
-same 39ms recorded below as the good case against 888ms. The direction was
-protecting two operational properties and this costs neither, so what stopped
-the work was DDD purity in a codebase that had already decided it is an adapter
-over deepagents rather than a domain model.
-
-The exception is narrow and stated where it is enforced: the domain may name a
-kind's `spec`, never its `catalogue` or its `harness` -- and no kind has a `harness`
-any more, both having moved into `infrastructure/harness/`. A spec is format
-vocabulary with no adapter behind it; the other two walk the disk and reach the
-runtime, and a test asserts the predicate at each of those edges.
-
-**The cost is the swap boundary.** `THIRD_PARTY` now names four areas that may
-import the agent runtime rather than one. An upgrade is still a list of files
-rather than a search -- which is what that rule was ever for -- but the list
-spans `infrastructure/harness/`, `tools/`, `skills/` and `subagents/`. *(Three
-areas now: `infrastructure/harness/`, `kinds/skills` and `kinds/middlewares`, once
-the tools and subagents halves moved into `harness/`.)*
-
-**Three things were in the wrong place and only the move said so.** Each had
-lived quietly because the two halves shared a directory and nothing had to
-choose: `SKILLS` and `UPLOADED_SKILL_DIR` were declared by the skill format and
-used by `kingfisher.core.layout`, which *is* the layout; `ceiling` sat in the tool module
-and touches no registry, so it went to `core.access.capabilities` with the rest of
-that arithmetic; and `wanted_model` was in the subagent format while
-`core.definitions.agents.spec` imported it to read its own `model:` line, so it went to
-`core.definitions.fields`, which is the field readers. A helper two formats need belongs
-to neither of them.
-
-**When a kind should be a module, and it is not "always".** `skills` fitted
-first and easiest because kingfisher does not own that format -- deepagents
-reads a `SKILL.md` and decides what it means, so `spec` is 65 lines and nothing
-else depended on it. `tools` and `subagents` own formats that *reference each
-other*, which is why both dragged shared vocabulary into the question. Nothing
-here was insurmountable, but a fourth kind with an interlocking format should
-expect the same three-way negotiation rather than a rename.
-
-**Reversed in part: "not a module: agents."** The entry read *an agent is
-selected by name, one per request, and is the thing the graph* is *rather than
-something the graph holds*, and drew from that: *assembling a graph out of the
-three kinds is kingfisher's own job, not any kind's*. That conclusion is right
-and `harness/agent.py` stays exactly where it was. It reaches one of the three
-files the entry moved to keep, and a format's parser is not an assembly.
-
-`agents/` is the fourth kind module: `spec` the format, `reading` the parser,
-`catalogue` the walk and the repository -- `subagents`' shape minus `rules`,
-whose one cross-definition question is answered where it is found, and minus
-`harness`, for the reason above -- which no kind has now.
-
-**The test applied is the neighbouring entry's.** *Not a module: middleware* is
-what says what earns a package -- *a file somebody authors, a reader for it, and
-a registry built from what was found* -- and an agent has all three where
-middleware then had none. Agents was the only kind that met that test and lacked the
-package, and this entry refused it on a different ground: what an agent *is* at
-runtime, which is a fact about the graph rather than about where a YAML parser
-lives.
-
-**It costs nothing at the boundary, which is the other half of the middleware
-argument.** That entry's closing objection was that a `middleware/` package
-would be *the fifth area in `THIRD_PARTY` reaching the agent runtime*. This one
-reaches none: `THIRD_PARTY["agents"]` is empty, the only kind whose set is, and
-it is empty precisely because the runtime half stayed in `harness/`.
-
-**One rule got smaller.** `test_the_catalogue_holds_one_module_per_kind` looked
-in two places while three kinds had left `catalogue/` and one had not. With the
-fourth gone that branch is unreachable, so it is one place again -- a rule with
-a branch nothing can reach is half a rule. `catalogue/` kept `__init__` and
-`layered`, which was `Definitions` and the per-session merge, and held no
-per-kind module at all -- `__init__` alone since `layered` went, and
-`catalogue.py` since 2026-10-05, because a folder of one module advertises a
-group with nothing in it.
-*(2026-09-04, reversed in part 2026-09-07.)*
-
-**Not a module: middleware.** (Reversed on 2026-09-07 by *Middleware is a
-definition kind*: `middlewares/` is a directory with a reader and a registry, and
-`kinds/middlewares` is on `THIRD_PARTY`. The entry stays for the page it asked
-for.) It has a field in both definition formats and a
-name in `Capabilities`, which is what makes it look like a fourth kind. What it
-does not have is the thing the other three earned their packages with: a format
-of its own and a walk over the disk. `tools`, `skills` and `subagents` each own
-a file somebody authors, a reader for it, and a registry built from what was
-found; middleware has a name a definition writes and a dict the deployment
-passed in, and nothing in between for a package to hold.
-
-The pieces are where they are for reasons that survive being asked again.
-`approved_middleware` and `approved_settings` are in `domain/capabilities.py`
-because the rule is expressible in kingfisher's vocabulary -- both fields are
-name lists -- while turning a name into an object is not. `declared_middleware`
-is in `harness/` because it imports `langchain`, which is the same rule that
-keeps `core.definitions.skills.registry` where it is. A
-`kingfisher/middleware/` package would be the fifth area in `THIRD_PARTY`
-reaching the agent runtime, and the last three entries there each carry a note
-apologising for widening a boundary that used to be one directory.
-
-What was actually missing was a page. Registering middleware is deployment code
-like a port adapter is, and `guides/` had `ports.md` and `tools.md` and nothing
-for this -- so the deployment's half lived in three docstrings inside
-`middleware.py` and two example files. `guides/middleware.md` is that page, and
-it links the examples rather than restating them: the copy in a docstring is the
-one a test exercises. Measured on the way past, and worth recording because it
-was the argument for a package that did not survive it -- a deployment writing
-middleware imports **nothing** from kingfisher. Both examples import
-`langchain` alone, and `MiddlewareFactory` is an annotation this package uses on
-itself. *(2026-09-07. There are three examples now, and two import `langchain_core`
-as well -- still nothing from kingfisher.)*
-
-**Reversed: "the rest of the layer stays flat."** The clause read *a second
-subpackage would advertise a distinction no test could hold*, and by the time
-anyone looked there were three of them -- `catalogue/` had arrived without the
-sentence being revisited, which is the drift the sentence was written to
-prevent. `sandbox/` and `workspace/` joined it deliberately.
-*(2026-08-17, reversed 2026-09-04.)*
-
-What makes a group rather than a folder, since the original worry was real: the
-modules have to share a *subject*, not a layer. `confinement`, `fence` and
-`bubblewrap` are one policy and the two kernels that carry it -- the only corner
-of `infrastructure/` where being wrong is a security failure rather than a bug.
-`fs`, `seeding`, `uploads` and `files` all wrote into one directory, and three
-of them had a rule about not destroying what another put there. *(`fs` has since
-been split, and `uploads` and `files` removed; `workspace/` holds `backing`,
-`layout`, `permissions`, `seeding` and `sessions`.)*
-
-And the harness rule is what bounds them. The backend that *applies* a
-confinement, and the registry `uploads` asked about a name, both import
-deepagents -- so they stayed in `harness/`, until the skill registry moved to
-`kinds/skills` -- and the groups are "everything about
-this subject that does not need the agent runtime". A grouping that had pulled
-them in would have traded an enforced rule for a tidier directory.
-
-Two mechanical facts worth knowing before the next one. `HARNESS_EDGES` is keyed
-by a module's path below its layer, so moving a file into a subpackage renames
-its entry and the table goes red until told -- which is the table working.
-And `tool.ty.overrides` lists files by path: the block ignoring the optional
-Linux-only `sandlock` import named `fence.py` and `confinement.py`, and left
-behind would have stopped matching and gone silently useless.
-
-**A folder inside the harness: `kinds/`, for the kinds whose runtime half is there.**
-`tools`, `subagents` and `declared_middleware` are `infrastructure/harness/kinds/`.
-Two of them were a kind's own `harness.py` until a kind stopped naming a layer, so
-`kinds/tools/` is a format and a walk over the disk and `harness/kinds/tools.py` is
-where what it found meets deepagents -- one question, *where does this kind reach the
-runtime*, with an address per kind. *(2026-10-05.)*
-
-**Taken for whoever is looking, and measured so as not to claim more.** Each of the
-three changes most often with `agent.py`, in two-thirds to three-quarters of its
-commits since August, so no commit opens fewer files for this. It is the case
-`kinds/` itself was taken on, with the shared subject the paragraph above asks of a
-group.
-
-**`activation` stayed beside `agent.py`.** It decides what one request turns on,
-across skills and subagents at once, and reads the backend to do it: not one kind's
-half, and `agent.py` is what it changes with. Nor is every kind in the folder.
-Skills reach the runtime from `core.definitions.skills.registry`, because deepagents reads a
-`SKILL.md` itself, and an agent is the graph `agent.py` builds -- which the folder's
-docstring says, so a reader looking for five does not conclude two are missing.
-
-**`declared_middleware` kept its name.** `harness/kinds/middlewares.py` would mirror
-the kind and put a second `middlewares` beside `harness/middlewares/`, the clash the
-prefix was given to end.
-
-**A third mechanical fact: `_harness_reach` reads the whole path below the harness.**
-It kept the first segment, so after this move `reporting`'s edges to `activation` and
-`core.definitions.tools` would have read as `activation` and `kinds` -- and the table exists to
-say which module took the coupling, not which folder. `middlewares/` never showed it
-because nothing outside the harness imports from there.
-
-**Rejected with it: inverting the nesting to `function/layer.py`.** Drawn in
-full -- fourteen modules, every file placed -- and measured rather than argued.
-The asset kinds are 26% of the tree; a concept's files change together in only
-13-29% of the commits that touch them; and the tightest co-change pair in the
-repository, `subagent` with `harness/agent.py` at 18, runs straight across the
-boundary such a slice would draw. It would have put a deepagents import in 8 of
-14 modules, turning "only this package" into a list of fourteen filenames, and
-`application/config.py` -- which must not pull the harness in, at 39ms against
-888ms -- would have sat beside a sibling that does. *(2026-09-04.)*
-
-**The rule is not a portability claim, and used to read like one.** It said the
-rule "states the swap boundary: replace the harness and exactly those files are
-rewritten", which is true and was the wrong thing to lead with -- it invites the
-next reader to plan around a second harness. Kingfisher is an adapter over
-deepagents. Supporting another framework is *out of scope*, not scheduled, and
-recorded here so the question is not re-opened as though it were open.
-
-What the rule buys, today and repeatedly, is the blast radius of an *upgrade*.
-Not swapping deepagents is not the same as not upgrading it, and `pyproject.toml`
-says what that costs: it "is beta and says so at every construction ... this one
-has moved through 0.1, 0.2 and 0.3 in under two months". A minor bump rewrites
-the same files a swap would, and the rule is what makes that a list of ten
-modules instead of a search. It also keeps the harness off the paths that never
-needed it, which is what lets `kingfisher seed` cost 20ms rather than importing
-three provider SDKs.
-
-Worth knowing before that scope changes: **nothing declares what a harness is.**
-The twelve Protocols in `domain/ports.py` abstract storage and the OS -- stores,
-repositories, a command runner -- and not one of them abstracts the runtime;
-`application/` reaches it as `core.session.runtime`, a module rather
-than a port. So a second harness does not begin by rewriting ten files, it begins
-by discovering the interface, which is not written down anywhere. That is the
-right order: an interface derived from a single implementation comes out shaped
-like that implementation. *(2026-09-04.)*
-
-**A layer may answer for its own names, lazily.** `from kingfisher.application
-import Kingfisher` works alongside the root import, and resolves through a
-`__getattr__` table rather than plain imports at the top of the file.
-
-That is not a style preference. A package's `__init__` runs before any of its
-submodules, so nine eager imports there would make `core.environment` -- which
-needs no harness at all -- pay for `service`, which imports deepagents, which
-imports three provider SDKs at module level. Measured both ways: 39ms lazy,
-888ms eager, and the eager form pulls deepagents into a process that only wanted
-to read environment variables. `kingfisher seed` is 20ms today and would have
-become fifty times slower while staying correct.
-
-The cost is a second table, and two tables that can disagree is what this
-repository distrusts everywhere else -- so they are held to each other in both
-directions, on the module string as well as the name. Only `application/` has
-one, because only it was asked for. *(2026-09-03.)*
-
-`infrastructure/workspace/` has one since, asked for so its callers name the
-package rather than six modules, and lazy for the same kind of cost: `seeding`
-loads `yaml` and the catalogue, which a caller wanting only `permissions` should
-not pay for. It joined `LAZY_TABLES`, so the same three-way agreement holds it.
-*(2026-09-23.)*
-
-## Splitting a file
-
-
-**`workspace/fs.py` became six modules; four other long files did not.**
-`layout` makes the tree and places the furniture that ships in it, `sessions` is
-one session's directory and the ports over it, `permissions` owns the write bits
-on `/data`, `placement` copies a caller's files in, `snapshots` keeps the agent a
-session opened with, and `backing` reads what the workspace sits on. *(2026-09-04.)*
-
-**Chosen by the history rather than by reading the source.** The lesson of the
-`config.py` entry below is that a count of definitions describes the file's
-shape and says nothing about the work, so this time the commits drew the
-boundaries: two definitions are joined when a commit touched both, and whatever
-stays disconnected is a seam already being kept. `fs.py` came back as three
-clusters and fifteen lone definitions, and the clusters landed on the regions
-the source already read as. The callers agreed -- of 25 files importing from it,
-19 need exactly one of the six, and the only one reaching five is
-`application/service.py`, which is the composition root.
-
-Git's default hunk-header pattern matches any line starting in column one, which
-inside a long class reports every method as the class. `core.attributesFile`
-pointing at `*.py diff=python` is what makes the measurement see methods, and
-without it `service.py` looks like one definition touched 232 times.
-
-**The same test said no to the other four, including one that looks obvious.**
-`service.py` is a single cluster of 40, `capabilities.py` one of 16, and
-`__main__.py` one containing `build_parser`, `main` and every command -- adding a
-command touches the parser, `main` and the command together, so splitting the
-commands into files would make those commits open *more* files. `backend.py`
-reads like a hub plus three independent `AgentMiddleware` classes, and those
-three do not appear in its history at all: they have never been edited since
-they landed. Moving them relocates 250 lines nobody touches and leaves
-`default_backend`, at 25 commits, exactly where it was.
-
-**Reversed for `backend.py` two weeks later, by the same test.** *(2026-09-23.)*
-The premise was that the guards were never edited, and #507, #516 and #529 then
-edited nothing else in the file. Measured over its 42 commits, with each hunk
-mapped to the definitions it lands in: 29 touch only the backend, 6 only the
-guards, 1 only the host-path refusal, and none does real work on both. The one
-cluster the whole file still forms is glued by the two commits that moved it and
-the repository-wide comment cut -- the hunk-header trap again, since `git log`
-names `default_backend` on #507 and the hunks never touch it.
-
-So it is three modules. `backend` builds backends. `tool_guards` is what every
-graph holding workspace tools is wrapped in. `host_paths` is `reject_host_path`
-and `HostPathGuard`, which were already written down as one mechanism -- the one
-raises what the other catches -- and are the only thing both of the others need,
-so neither has to import the other. `HostPathError` is exported from the root,
-because `ports.md` tells an adapter to raise it and the address it had given was
-a module that has stopped being where it lives; `backend` still re-exports it for
-anybody who copied that address.
-
-**`reject_host_path` is scoped to the workspace, and was scoped to one session.**
-`WorkspaceScopedBackend` took a parameter called `workspace`, stored it as
-`self.workspace`, and was handed `session_dir`. The field had exactly one reader -- the
-guard -- so the whole of what "workspace" meant there was the wrong value.
-
-How it got that way is the useful part, because the wiring was not careless. The first
-clause turns the prefix into the virtual path the caller meant --
-`/{key[len(prefix):]}` -- and that only works if the prefix *is* this session:
-`<workspace>/sessions/s/scratchpad/report.md` minus the workspace is
-`/sessions/s/scratchpad/report.md`, which resolves somewhere else again. Somebody wired
-the one value that made the message right, and the scope came with it.
-
-So the clause covering "a host path inside the workspace" covered one session, and
-every other directory fell through to `HOST_ROOTS`, which names no workspace. Measured
-on 2026-10-01 at the two shapes: on a developer machine all four probes are refused, and
-the reason is that a pytest `tmp_path` sits under `/private/` -- the host-root clause,
-not the workspace one. At `/workspace`, which `Dockerfile` sets, a sibling session's
-file, a skill, `models.yaml` and an agent definition were all **accepted**, and a write
-to one was mirrored inside the session -- which is what `system.md` promises the model is
-refused.
-
-The guard takes both now: the session for the suggestion, the workspace for the scope.
-The two refusals differ deliberately -- a path in this session is offered its virtual
-spelling, and anything else under the workspace is not, because there is none to offer
-and inventing one would send the model somewhere else a third time.
-
-**The rule that named this case could not reach it.**
-`test_a_host_path_to_a_file_tool_is_refused_not_mirrored` was written for exactly this,
-using `f"{cfg.workspace}/sessions/s1/..."` -- a *sibling* of the fixture's
-`sessions/test-session`. It passed throughout, on the host-root clause. Every workspace
-in the suite is a `tmp_path`, so the workspace clause had no case anywhere, and
-`reject_host_path` is now driven directly against a `/workspace`-shaped one: a backend
-needs its directories to exist, and that is a path a test may not make. The wiring has a
-rule of its own as well, because the behaviour alone did not say which of the two values
-was wrong. *(2026-10-06, from an architecture review.)*
-
-**Regrouped a week later, by what a class is rather than by what is edited with
-it.** *(2026-09-30.)* Kingfisher's own middleware is one package,
-`infrastructure/harness/middlewares/`: `narrowing` holds the three that apply a
-request's capabilities, `workspace_tools` the two around a workspace tool call,
-`host_path_guard` the one. The history test above draws a boundary for whoever is
-editing, and this one is for whoever is looking: "what does kingfisher wrap an
-agent in" had three answers, in modules named for other things, and the six
-classes had no address in common. `test_kingfisher_keeps_its_own_middleware_in_one_package`
-holds it, following bases rather than matching a name, because `NarrowedSkills`
-subclasses deepagents' `SkillsMiddleware` and never says `AgentMiddleware`.
-
-Only the classes moved. `HostPathGuard` left `reject_host_path`, which the
-paragraph above calls one mechanism, and it still is one -- the error stays in
-`host_paths` and the guard imports it. That module names no runtime class now, so
-`HostPathError` went from 250ms and ~970 modules to 16ms and 91, measured, and
-from `HEAVY_EXPORTS` to the light list where a test keeps it there.
-`SessionPaths` went to `session_paths`, a module of its own, because it has two
-readers on opposite sides: `WorkspaceToolPaths` in the package and `GuardedTool`
-outside it. Left in `tool_guards`, the package would import that module for the
-helper and that module would import the package for the three guards it composes.
-
-**None of the six is offered to a definition, and that was the alternative
-considered.** They ship with the package the way `prompts/` does, which invites
-listing them beside a deployment's own so a definition could name one. A name a
-definition can write is a name it can leave out, and `ToolAllowlist` is what holds
-a request to the tools it was granted -- omitting it would be a way to widen, which
-*Capabilities narrow and never widen* does not allow an exception for. They do not
-fit the registry mechanically either: an entry there is built from defaults a
-deployment stored, and these are built per request from the names that request
-resolved and the backend it runs on. Nor are they under `kinds/middlewares`, since
-a kind may not name a layer, nor at the package root, for the reason *Not a
-module: middleware* gave against a fifth area reaching the runtime.
-
-`harness/middleware.py` is `declared_middleware.py`, because beside a package
-called `middlewares` the bare name no longer said which set it builds. It keeps
-the singular, as the mass-noun entry has it; the package takes the plural for the
-reason the kind's does -- it is a directory of them.
-
-**A cluster that size means two different things and this one is the harmless
-one.** Everything joined to everything is what a cohesive unit and a rippling
-one both produce, so the co-change test alone does not settle `service.py` --
-which the paragraph above stated as though it did. What separates them is how
-*wide* one commit has to be: a cohesive unit is edited a method at a time and
-merely covers the same ground repeatedly, and a tangled one cannot be touched
-anywhere without being touched in six places. `service.py` averages 2.9
-definitions per commit, and 44 of its 68 commits touch one or two. The wide ones
-are all features -- source-id access at 17, per-session thread databases at 13, a
-session surviving its machine at 10 -- and the hub is `__init__`, which is the
-composition root's constructor and is what every new dependency arrives through.
-
-Splitting it would not narrow any of those. A feature reaching 17 methods reaches
-17 methods across four files instead, and `application/` is already split five
-ways: of 86 commits touching that package, 59 open exactly one file and none
-opens more than four.
-
-**The split cost one invariant its structure.** *Nothing outside this module
-should ever chmod `/data`* was a fact about a file while `place_data` and the
-`chmod` were the same 700 lines. It is now a rule --
-`test_only_one_module_changes_a_mode` -- because the code that copies
-into `/data` sits one import from the code that lifts the write bits, and the
-unlock that is allowed puts them back in a `finally` an open-coded chmod would
-not have.
-
-**And the move found a comment that had been lying.** Two `#:` lines above
-`class LocalSessionDirs` described "what a catalogue is made of ... the three",
-an orphan left by a constant that went to `kingfisher.core.layout`. It had been read past
-for as long as it had been there, which is what a comment attached to the wrong
-definition does; deciding which of six files it belonged in is what finally
-asked the question.
-
-**Considered and rejected: splitting `config.py` by its parts.** It is 648 lines
-and reads as three -- the model records (`Endpoint`, `ModelProfile`, `Models`),
-the workspace paths (`definition_roots_for`, `authored_files_for`,
-`WorkspacePaths`), and the deployment record itself -- with the second-highest
-churn in the package behind it. That was enough to recommend the split, and the
-recommendation was made on a count of top-level definitions and a histogram of
-who imports what, neither of which is evidence about the work.
-
-The hunk headers are. Of the 36 commits that have touched this file, 20 land
-only in `Config`, which is the part that would stay -- and at ~285 lines it would
-be exactly as long afterwards. Five land only in the model records. Five reach
-two or three of the regions at once, so those commits would open more files than
-they do today. The churn here is a configuration record gaining settings, and a
-new setting lands on `Config` whatever else has moved out from under it.
-
-The costs are on top of a benefit that was not there. `ConfigError` is raised by
-`Models` and imported by twelve modules across every layer, `domain/` included:
-it is this package's *configuration is wrong*, not a model error, so it cannot
-travel with the records. That forces a `config/` package rather than a sibling
-module, and a package has to re-export to keep `from kingfisher.core.config import
-Config` working in the 40 files that write it. No subpackage here re-exported --
-the root `__init__` has a table, and that is there to defer an import cost, not
-to spare callers a module name. (`application/__init__` has one since, for the
-same cost -- *A layer may answer for its own names, lazily*.) Moving only the records out to a top-level
-`models.py` avoids all of that and buys a third thing named "models", beside
-`infrastructure/harness/models.py` and `infrastructure/model_catalogue.py`.
-
-What the file already did instead is the thing worth repeating: `Models` exists
-because five fields on `Config` had invariants between them that siblings of
-`shell_sandbox` could not express. That split ran along a rule, not along a size,
-and it happened inside the file. *(Measured 2026-09-04.)*
-
-**Four guards from the last two weeks could not fail, and each failed the same way: the
-fixture could not tell the fix from the bug.** Found by mutating them, and worth
-recording as a set because the shape is now this repo's most frequent defect.
-
-  - **The skills half of the audience fix.** The fixture had the subagent declare the
-    skill its own agent already granted, so "a skill only a subagent declares" did not
-    exist in it: unioning the subagents back in added a name the test asserts is
-    *present*, and reverting the fix left the suite green on the listing *and* the
-    withheld report. One word in the fixture -- `spare` for `routine` -- is the whole
-    repair, and the report half needed a rule of its own, which it never had.
-  - **`ls` listing a route's own stand-in row.** The control drove `/outputs`, and
-    `/outputs` is not a route, so no stand-in row is ever added for it and the branch
-    the rule is about never ran. Driven on `/inputs` it bites.
-  - **A threshold where a pinned set belongs.** `assert len(_readers(shipped)) >= 2`
-    against nine, one commit after the same shape was deleted elsewhere with the reason
-    written out.
-  - **Four refusal branches on the async path.** `HostPathGuard`,
-    `WorkspaceToolPaths`, `GuardedTool._arun`'s artifact branch and
-    `PermittedBackend.aread` each had their behaviour held on the sync half alone --
-    each could be broken with the suite green, while the same break on the sync half
-    reddened between one and seventeen tests. The `way` fixture existed for exactly
-    this and was not reaching them; it does now, and `write`, `edit` and `delete` are
-    covered on both halves for the first time.
-
-The common tell is cheap to look for: **mutate the thing the guard guards, and if the
-suite stays green the fixture is the suspect, not the rule.** Every one of these four
-had a sibling that bit, which is what made them look covered. *(2026-10-15, from an
-architecture review.)*
+## The core and its plugins
+
+**The package is a core, the plugins kingfisher ships, and the command.** This entry
+replaces *The front door*, *Layering* and *Splitting a file*; their text is in git.
+*(2026-10-16 to 2026-10-17, `core-and-plugins.md`.)*
+
+```
+kingfisher/
+  __init__.py     the front door: names for embedding and for tool files
+  core/           what every deployment runs; interfaces.py, what a plugin must be
+    access/       who reaches what
+    agent/        one request's graph, kingfisher's own middleware, prompts/,
+                  and kinds/, where each kind meets deepagents
+    session/      one session's state and one turn
+    definitions/  the five kinds, the catalogue, seeding
+    *.py          flat: config, layout, request, result, service, run, inventory, ...
+  plugins/        what the core never names: sessions/ and events.py
+  cli/            the command
+```
+
+**The layers had stopped being the dependencies.** Counted at the review that proposed
+this: `domain/` imported the kinds, `application/` imported `infrastructure/harness/` at
+module scope in more than a dozen places, and more than a dozen other imports of the
+harness were deferred into functions to get past the rule rather than because the
+dependency was wrong. The deepagents 0.7.22 upgrade changed three source files, two
+outside the harness, so the folder no longer drew an upgrade's list; startup cost was
+real, and a check that imports in a fresh interpreter holds it without a folder.
+
+**Words.** A *plugin* is a part a deployment may replace with its own, and kingfisher
+ships one of each; its *interface* is what the core needs of it, stated once, in
+`core/interfaces.py`. "Port", "adapter" and "extension" name none of these, and
+`Adapter` became `WireFormat` because it was a model wire format. The conversation
+store and middleware are upstream types used as they are, so they have no interface here.
+
+**The core imports no plugin.** A default the core falls back to lives in the core
+beside its interface: the logger sink `LoggedRunEvents`, `InstructionsFile`, the shipped
+wire formats and the in-memory saver. `plugins/` holds what the core never names --
+`LocalSessions` with its folders, backend, shell and sandbox, and `JsonlRunEvents`. What
+the core needs beyond an interface it reads as extras an implementation may declare --
+`host_path`, `shell_prompt`, `unprotected`, `runs_here`, `where` -- never by identity: five
+places asked `LocalSessions` directly and were cut before anything moved, since one
+`isinstance` would make kingfisher's own sessions impossible to ship apart.
+`test_the_core_imports_nothing_from_plugins` holds it; only `cli/` is excused.
+
+**A plugin imports the core and never another plugin**, and `kingfisher.plugins` counts
+as another: it names every plugin, so it would be the back door.
+`test_no_plugin_imports_another`.
+
+**Sessions are always named.** `Kingfisher`, `run()` and `stream()` refuse to run without
+them. The sessions plugin is the sandbox and decides where each caller's files are, so it
+has no default: a guess there is the leak a deployment replaced it to avoid. The command,
+kingfisher's own deployment, names `LocalSessions` in `cli/configured.py` unless
+`KINGFISHER_SESSIONS` names others. `graph=` is kept and never stands in for sessions -- a
+turn's inputs, leavings and lock go through them whatever runs the agent -- and whether to
+drop it is a later decision.
+
+**`Plugins` is a record for `KINGFISHER_PLUGINS` alone.** The command builds its own
+`Kingfisher` with no call a caller could hand keywords to, so the setting names a callable
+returning one. In the library the same plugins stay `Kingfisher`'s keywords. **Not taken:
+one `Plugins` object as the argument.** It would have changed more than a hundred places to
+say the same thing one level down, and wire formats do not fit it: they are applied as the
+configuration loads, where `doctor` checks every endpoint's `api:`.
+
+**Two public addresses.** `kingfisher`, the front door, is for embedding and for tool
+files: `Config`, `Request`, the result types, `Capabilities`, the errors, `run` and
+`stream`, seeding and `inventory`, `ToolContext` and `tool`. `kingfisher.plugins` is for
+writing a plugin: `Sessions`, `RunEvents`, `Instructions` and `CommandRunner`, the records
+they speak in -- `CommandResult`, `WireFormat`, `Plugins`, `ShellPrompt`, `HostPathError`
+-- and what kingfisher ships to fill them: `LocalSessions`, `backend_at`, `JsonlRunEvents`,
+`InstructionsFile` and `WIRE_FORMATS`. Everything else is private and may move, with no
+deprecation window: at 0.1.0 a caller on an old spelling changes one import line. Both
+are lazy tables: `import kingfisher` is 5.0ms, 4.8 of it `typing` and `importlib`, and
+`kingfisher.plugins` 5.1ms, against 909ms and 3,143 modules for `Kingfisher`. *(Measured
+2026-10-17, Python 3.12.7, best of seven fresh interpreters.)*
+
+**Not on it: `LoggedRunEvents`.** It is what a `Kingfisher` handed no run events uses, so
+naming it gives a deployment nothing, and it loads langgraph: 279ms and 834 modules, where
+the four interfaces together are 39ms and load none of the runtime.
+
+**A caller means a caller outside this wheel.** The command ships in the wheel and may
+import anything, but a name on either address comes through that address:
+`test_a_consumer_uses_the_library_only_through_its_public_api`, by name rather than by
+file. So `cli/health.py` and `cli/listing.py` take from `kingfisher` the answers the
+library gives anybody -- `Config`, `Inventory`, `inventory`, `kinds_at`, `Origins` -- and
+every probe and renderer's word where it is defined, at addresses that may move under a
+deployment that copies them. `kinds_at` is on the door because
+`test_the_whole_job_is_reachable_through_the_front_door` names it as the job.
+
+**Not taken: freeing whole command files from the door.** The free files use real public
+names too and would drift to deep imports of them with nothing red; held by name, putting
+a name back on an address turns every deep import of it red, with no file to move.
+
+**Which address a name is on says who it is for.** It replaced a table naming the guide
+or embedder that asked for each public name, deny by default. The cost: nothing now
+refuses a name added without a reason. What it costs to import is held below; whether it
+belongs is review's.
+
+**Three listings per address, held to each other.** `__all__`, `_EXPORTS` and the
+`if TYPE_CHECKING:` stubs agree on each name and its module, and a stub is written
+`X as X`, which under PEP 484 is what makes it a re-export. `__getattr__` returns `Any`,
+so a name with no stub imports, passes every test and is untyped -- `reveal_type` showed
+it on a name a consumer imported. `LAZY_TABLES` names both addresses.
+
+**A package's `__init__` imports nothing, or does it lazily.** It runs before any of its
+submodules, so one eager re-export reaching the runtime puts most of a second in front of
+every import beneath it. `core/`, `core/definitions/` and `core/agent/kinds/` import
+nothing: each kind is 5.2ms and 71 modules and `core.environment` 34ms, where
+`import deepagents` alone is 845ms. *(Same measurement.)*
+
+**The rules**, all in `tests/unit/test_architecture.py`:
+
+  - **`THIRD_PARTY`**, a per-folder library allowlist, deny by default, kept because an
+    upgrade is then a list of files rather than a search. deepagents is part of the core,
+    and the table grants it to `core/agent`, `core/session`, `plugins` and two kinds,
+    `core/definitions/skills` and `core/definitions/middlewares`.
+  - **The startup check**, imported for real in a fresh interpreter, which replaced
+    hand-kept tables of light and heavy names that needed a rule of their own to stay
+    total. `test_importing_kingfisher_loads_nothing_installed`;
+    `test_the_command_starts_without_the_agent_runtime`, which allows `dotenv` and `yaml`;
+    `test_a_public_name_that_runs_no_agent_loads_no_runtime`, for every name but the five
+    in `RUNS_AN_AGENT`. `langchain_core` is outside the runtime on purpose, since
+    `kingfisher.tool` subclasses its `StructuredTool`.
+  - **`RECORDS` touch nothing outside the process**: the request, the result, the
+    interfaces, the access vocabulary and the field reader. A record that reads a file
+    cannot be built without a workspace behind it, in a test or in a deployment's code.
+  - **The flat core writes nothing to disk** except `core/workspace.py`, which lays out a
+    new one and is asserted to write, so a move fails rather than excusing nothing.
+  - **`test_only_one_module_changes_a_mode`**, walked over the whole package: scoped to a
+    folder, it went on passing over one that no longer held the owner.
+  - The two plugin rules above.
+
+  Gone with what they described: the layer rules, `HARNESS_EDGES`, `WITNESSES`, and the
+  domain rule, whose guarantee that the records touch nothing outside the process is
+  `RECORDS` now.
+
+**Not a portability claim.** Kingfisher is an adapter over deepagents, and supporting
+another framework is out of scope rather than scheduled. Nothing declares what a runtime
+is -- `core.session.runtime` is a module -- so a second one would begin by discovering that
+interface, which is the right order: one derived from one implementation is shaped like it.
+
+**Where the kinds sit.** Each of the five is a directory under `core/definitions/` holding
+what earns a kind a package: a file somebody authors, a reader for it, and a registry
+built from what was found. `DEFINITION_KINDS` names them,
+`test_kinds_holds_exactly_the_kinds` holds the folder to it in both directions, and
+`KINDS_HELPERS` names the loose modules. A kind owns its format and its walk over the
+disk; where it meets deepagents is `core.agent.kinds`, a module per kind. Skills are not
+there, because deepagents reads a `SKILL.md` itself and `core.definitions.skills.registry`
+asks it; nor is an agent, which is the graph `core.agent.assembly` builds. `activation`
+sits beside `assembly.py` because it decides across kinds what one request turns on, and
+`declared_middleware` keeps its prefix so it does not read as a second `middlewares` beside
+`core/agent/middlewares/`. No rule names that direction: `core/definitions/` and
+`core/access/` import nothing from `core.agent`, `core.session` or `core.service` today,
+and every catalogue loads under the public names that run no agent, so the startup check
+refuses a module-scope import of the runtime there and would pass a deferred one.
+*(Measured 2026-10-17.)*
+
+**The kinds do not share an implementation.** Each resolves a `source::name` its own way --
+`split_reference`, `split_qualified` -- so a change for one is not argued past the others;
+the shared part is the grant vocabulary in `core.access.capabilities`. The exception is
+`core.definitions.documents`: a scalar's style is a fact about a document, and the agent
+and subagent formats reflow a prompt identically. `SHARE_A_DOCUMENT_READER` holds it.
+
+**Not taken: a package per concept.** Drawn in full on 2026-09-04 -- fourteen modules, each
+kind's format beside its runtime half -- and measured: a concept's files changed together in
+13-29% of the commits touching them, the tightest co-change pair in the repository ran
+across the boundary such a slice would draw, and eight of the fourteen would have imported
+deepagents. The new shape gives the same answer.
+
+**A group shares a subject, not a layer.** `plugins/sessions/sandbox/` is one policy and
+the kernels that carry it, where being wrong is a security failure rather than a bug.
+Before moving any of it: `tool.ty.overrides` names the two files importing `sandlock` by
+path, and a file it no longer matches loses its exemption in silence.
+
+**An import cycle is removed, not reordered.** One resolved by luck of import order until a
+cold import failed, and moving the generic modules up a directory removed the edge;
+`test_no_module_in_the_package_can_reach_itself` refuses the shape.
+
+**A file is split where its history already splits it.** Two definitions belong together
+when a commit touched both, and whatever stays apart is a seam already being kept. Git's
+default hunk header names any line in column one, which inside a long class reports every
+method as the class; `.gitattributes` sets `*.py diff=python` so the count sees methods.
+Co-change cannot tell a cohesive file from a tangled one, both being everything joined to
+everything; the width of one commit can. By this test `workspace/fs.py` became six
+modules, and `backend.py` was refused, then split when commits edited only its guards.
+
+**This round's splits were the maintainer's call, and each cut was counted before it was made.**
+The proposal listed every file over about 600 lines for a split by subject, against the
+two earlier refusals of this test. Each cut was then measured as how many commits touching
+one half also touched the other, renames and moves left out. Taken:
+
+  - `plugins/sessions/backend.py`, its shell to `shell.py`: 6 of 32 crossed.
+  - `cli/health.py`, to `health_definitions.py` (0 of 20), `health_isolation.py` (4 of 17)
+    and the shared `check.py`.
+  - `sandbox/confinement.py`, the macOS profile to `sandbox_exec.py`: 10 of 20, half of it
+    parameter plumbing.
+  - `core/access/source_ids.py`, who reaches what to `reach.py`: 3 of 8, thin evidence.
+
+Left whole after measuring:
+
+  - `cli/__main__.py`: a command's parser, `main` and body change together; run and decide
+    crossed in 14 of 22.
+  - `core/inventory.py`, a hub: 25 of the 36 commits touching its helpers touched it too.
+  - `core/agent/assembly.py`: `build_agent` alone is 473 lines in one cluster.
+  - `core/definitions/subagents/spec.py`: a new field lands in three of its lists in one
+    commit, and an earlier change kept them together on purpose.
+
+**`core/service.py` is left whole for now, to revisit.** Since `Kingfisher` was split into
+mixins, the two there are, `SessionMethods` and `Disposal`, still change with `service.py`
+in about three commits of four. The best full cut, `Opening` and `Driving` mixins in
+`core/session/`, would have made 22 of the last 83 commits open two or three files.
+
+**Grouped by what a class is, for whoever is looking.** "What does kingfisher wrap an agent
+in" is one package, `core/agent/middlewares/`, held through bases by
+`test_kingfisher_keeps_its_own_middleware_in_one_package`. It took `HostPathError` from
+250ms to 16ms once `host_paths` named no runtime class: 14ms and 96 modules today.
+
+**Not taken: splitting `config.py` by its parts.** It reads as three -- the model records,
+the workspace paths, the deployment record -- and the hunk headers said no: of 36 commits on
+2026-09-04, 20 landed only in `Config`, five only in the model records, and five reached
+two or three regions. The churn is a record gaining settings, which land on `Config`.
 
 ## The architecture rules
 
@@ -7123,9 +6580,8 @@ constant name. Two parametrized rules sit beside it -- the six spellings it must
 five near misses it must not -- because the matcher is the thing being asserted and the
 narrower one passed the rule itself. That is how it came to see two of six.
 
-The repository had the lesson twice already, in
-`test_a_harness_edge_is_seen_however_it_is_spelled` and
-`test_an_aliased_import_reads_the_name_it_renames`. Neither was applied here, which is
+The repository had the lesson twice already, in a harness-edge rule since deleted with
+its table, and in `test_an_aliased_import_reads_the_name_it_renames`. Neither was applied here, which is
 the same shape as the bubblewrap fixture on 2026-10-05: a lesson written down for one
 rule and not carried to its neighbour. *(2026-10-12, from an architecture review.)*
 **Rejected: a rule against prose naming a module that is not there.** Four stale
@@ -7258,7 +6714,9 @@ quiet when the layer changes, so spelling it from the package root is what makes
 checkable at all. Of the other two, one was genuine history -- *harness.skill_registry*,
 named in a `HARNESS_EDGES` note saying which edge a move closed, and excused in
 `PROSE_GONE` beside the deliberate mentions already there -- and one named an attribute
-path rather than a module, which no rooting could resolve. *(2026-09-10.)*
+path rather than a module, which no rooting could resolve. *(2026-09-10. Both lists have
+emptied since: `HARNESS_EDGES` went with the layers it watched, and `PROSE_GONE` holds
+nothing.)*
 
 **A third rule for the same blind spot: what a class body declares.** Two rules ask
 whether anything reads a definition -- one over a module's functions and classes, one
@@ -7288,8 +6746,8 @@ caller was refused.
 
 Two more the same review named were measured and left alone: the macOS deny rule for
 a session's harness directory already builds from `HARNESS` rather than a literal,
-and *Splitting a file*'s claim that the backend's guards had never been edited was
-re-measured and reversed on 2026-09-23. *(2026-09-24, from an architecture review.)*
+and the claim, made when `workspace/fs.py` was split, that the backend's guards had never
+been edited was re-measured and reversed on 2026-09-23. *(2026-09-24, from an architecture review.)*
 
 **And one resolver where there were two.** `model_for(spec, override=...)` read
 `spec.wanted` and handed it to `resolved_model`, whose only caller it was; both
@@ -7297,6 +6755,35 @@ docstrings described the same answer. The adapter is gone and its four callers p
 `spec.wanted`, which says which field the answer comes from. The rule itself stays in
 `core.definitions.subagents.rules`, where what a definition means belongs.
 *(2026-09-24, same review.)*
+
+**Four guards from the last two weeks could not fail, and each failed the same way: the
+fixture could not tell the fix from the bug.** Found by mutating them, and worth
+recording as a set because the shape is now this repo's most frequent defect.
+
+  - **The skills half of the audience fix.** The fixture had the subagent declare the
+    skill its own agent already granted, so "a skill only a subagent declares" did not
+    exist in it: unioning the subagents back in added a name the test asserts is
+    *present*, and reverting the fix left the suite green on the listing *and* the
+    withheld report. One word in the fixture -- `spare` for `routine` -- is the whole
+    repair, and the report half needed a rule of its own, which it never had.
+  - **`ls` listing a route's own stand-in row.** The control drove `/outputs`, and
+    `/outputs` is not a route, so no stand-in row is ever added for it and the branch
+    the rule is about never ran. Driven on `/inputs` it bites.
+  - **A threshold where a pinned set belongs.** `assert len(_readers(shipped)) >= 2`
+    against nine, one commit after the same shape was deleted elsewhere with the reason
+    written out.
+  - **Four refusal branches on the async path.** `HostPathGuard`,
+    `WorkspaceToolPaths`, `GuardedTool._arun`'s artifact branch and
+    `PermittedBackend.aread` each had their behaviour held on the sync half alone --
+    each could be broken with the suite green, while the same break on the sync half
+    reddened between one and seventeen tests. The `way` fixture existed for exactly
+    this and was not reaching them; it does now, and `write`, `edit` and `delete` are
+    covered on both halves for the first time.
+
+The common tell is cheap to look for: **mutate the thing the guard guards, and if the
+suite stays green the fixture is the suspect, not the rule.** Every one of these four
+had a sibling that bit, which is what made them look covered. *(2026-10-15, from an
+architecture review.)*
 
 ## How much a comment says
 

@@ -1,7 +1,7 @@
 """Where a kind's definitions meet deepagents: the half of `kinds/` that names its types.
 
-A kind owns its format and its walk over the disk, and may not name a layer; turning
-what it found into something the agent runtime takes is here, a module per kind.
+A kind owns its format and its walk over the disk, and names nothing in `core/agent/`;
+turning what it found into something the agent runtime takes is here, a module per kind.
 Skills are not, because deepagents reads a skill's document itself and
 `kingfisher.core.definitions.skills.registry` reaches the runtime from inside the kind. An agent
 is not, because it is the graph `core.agent.assembly` builds.
