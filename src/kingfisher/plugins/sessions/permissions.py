@@ -29,31 +29,16 @@ def unlock_and_retry(func: Callable[[str], object], path: str, exc: BaseExceptio
 
 
 def _unreachable(path: Path, error: OSError) -> str:
-    """One path we were not allowed to touch, said in one line."""
     return f"{path.name}: {error.strerror or error}"
 
 
 def keep_tmp_private(session_dir: Path, *, scratchpad: str = DEFAULT_LAYOUT.scratchpad) -> None:
-    """Give the session's `TMPDIR` the mode the shared scratch directory had.
+    """Give the session's `TMPDIR` mode `0o700`.
 
-    Here rather than in `sessions`, which creates the directory, because this
-    package has one module that changes a mode and
-    `test_only_one_module_changes_a_mode` enforces it.
-
-    `mkdir(mode=)` cannot do this at creation: it is masked by the umask, and
-    ignored outright when the directory already exists -- which it does for
-    every session made before `TMPDIR` moved inside one.
-
-    Not a boundary, and not claimed as one. `outputs/` sits beside it holding the
-    same data at whatever the umask gave it, so this is continuity with what
-    `prepare_scratch` did rather than a rule about who may read a session. A
-    session that must be private to its uid wants a mode on the session
-    directory, which is a different change from the one that moved `TMPDIR`.
-
-    Silent when it cannot: a session directory a deployment's own sessions
-    provider may be a mount whose modes are not ours to set, and refusing the
-    turn over the mode of a scratch directory would be a worse answer than
-    running with the mode the provider chose.
+    `mkdir(mode=)` cannot: the umask masks it, and an existing directory ignores it.
+    Not a boundary: `outputs/` beside it holds the same data at the umask's mode, so a
+    session private to its uid needs a mode on the session directory instead. Silent
+    when it cannot, since the session may be a mount whose modes are not ours to set.
     """
     with suppress(OSError):
         (Path(session_dir) / scratchpad).chmod(0o700)
@@ -61,13 +46,11 @@ def keep_tmp_private(session_dir: Path, *, scratchpad: str = DEFAULT_LAYOUT.scra
 
 def protect_inputs(session_dir: Path, inputs: str = DEFAULT_LAYOUT.inputs) -> tuple[str, ...]:
     """Make `inputs/` read-only at the OS level. Idempotent."""
-    # The layout's name and not a spelling of it: `InputsBackend` uploads under the
-    # same leaf, and a folder named here instead is one the upload never reaches.
+    # The layout's name, not a spelling of it: `InputsBackend` uploads under the same leaf.
     inputs_dir = Path(session_dir) / inputs
     if not inputs_dir.is_dir():
         return ()
 
-    # Children first, then the directory itself.
     failures = []
     for path in (*sorted(inputs_dir.rglob("*"), reverse=True), inputs_dir):
         try:

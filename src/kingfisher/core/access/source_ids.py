@@ -11,46 +11,32 @@ from kingfisher.core.access.capabilities import ALL
 from kingfisher.core.definitions.fields import text, unrecognised
 from kingfisher.core.result import Listed
 
-#: The selection fields that may be written as a mapping of name to audience.
-#: `builtin_tools` is absent because deepagents registers those itself: kingfisher
-#: can only filter them once a graph is built, never leave them out of one, so an
-#: audience here would promise a boundary nothing can hold. Control them through
-#: which *agents* a source id may open instead.
+#: The selection fields that may be written as a mapping of name to audience. Not
+#: `builtin_tools`: deepagents registers those, so kingfisher can filter them but never leave
+#: them out, and an audience there would promise a boundary nothing can hold.
 AUDIENCED: Final[tuple[str, ...]] = ("tools", "subagents", "skills")
 
-#: Sections the central format defined, and where each has gone. Refused rather
-#: than ignored, because a deployment upgrading has a file full of policy that
-#: would otherwise be read and dropped in silence -- which is the single failure
-#: this whole area exists to prevent.
-#: Where audiences went, said once and shared by the three keys that used to
-#: hold them.
 _WENT = (
     "audiences live in the definition now: write `source_ids:` in the file itself, "
     "and a mapping under `tools:`, `subagents:` or `skills:` to narrow one "
     "entry further"
 )
 
+#: Sections the central format defined, refused rather than ignored: an upgrading
+#: deployment's policy would otherwise be read and dropped in silence.
 MOVED: Final[Mapping[str, str]] = dict.fromkeys(("agents", "subagents", "tools"), _WENT)
 
-#: One audience entry that is satisfied only by holding *every* name in it.
-#:
-#: A `frozenset` because an entry that literally is a set of names reads as "all
-#: of these", it stays hashable so an `Audience` remains comparable, and order
-#: carries no meaning -- the listing sorts it before showing it.
+#: One audience entry satisfied only by holding every name in it. A `frozenset`: it reads
+#: as "all of these", stays hashable so an `Audience` compares, and has no order.
 Requires = frozenset[str]
 
-#: Who may reach one thing: `"*"` for everyone, or exactly these entries.
-#:
-#: The tuple is an **or** and an entry may be an **and**: a plain name is held or it is
-#: not, and a `Requires` is satisfied only in full. That gives or-of-ands, which is the
-#: shape access rules actually take, out of one field and with no rule about how two
-#: fields combine.
+#: Who may reach one thing: `"*"` for everyone, or exactly these entries. The tuple is an
+#: or and a `Requires` entry an and, which gives or-of-ands out of one field.
 Audience = Literal["*"] | tuple[str | Requires, ...]
 
 
-#: What a datazone becomes among the names a caller holds, and in what a definition
-#: requires: one more name, which every reach check already knows how to ask about.
-#: Refused as a source id, so no vocabulary declares one and no caller presents one.
+#: What a datazone becomes among held names and requirements: one more name, which every
+#: reach check already asks about. Refused as a source id, so nobody declares or presents one.
 DATAZONE_PREFIX = "datazone="
 
 
@@ -98,12 +84,8 @@ class _Unscoped:
         return "UNSCOPED"
 
 
-#: Running with no caller identity at all, said out loud.
-#:
-#: A sentinel rather than `None`, and that is the point. `None` is what an
-#: argument nobody passed looks like, so a handler that forgot to say who is
-#: calling would be indistinguishable from one that meant "no policy here".
-#: This has to be typed, which means it can be grepped for in a review.
+#: Running with no caller identity at all, said out loud. A sentinel, not `None`: `None` is
+#: what an argument nobody passed looks like, and this can be grepped for in a review.
 UNSCOPED: Final[_Unscoped] = _Unscoped()
 
 #: What a call may say about who is making it: the source ids held, or the explicit refusal
@@ -121,9 +103,8 @@ def zoned(audience: Audience, datazone: str | None) -> Audience:
 class Datazone(str):
     """A caller's datazone, carried among their source ids as far as `held_by`.
 
-    A `str` so that it travels in a `Held` unchanged: every door between the caller and
-    the one place the shape of `source_ids` is read passes the value on unread, and a
-    second parameter would have been one more each of them had to remember.
+    A `str` so it travels in a `Held` unchanged through every door that passes it on unread;
+    a second parameter would be one more each of them had to remember.
     """
 
     __slots__ = ()
@@ -273,10 +254,8 @@ class SourceIds:
             )
             raise AccessError(msg)
         if unknown := tuple(name for name in wanted if name not in self.names):
-            # Without the compounds: the clause above refuses one as something a caller
-            # may not present, and offering it here among the names to choose from sent
-            # them straight into that refusal. `refuse_undeclared` does list them, and
-            # should -- there it is a *definition* asking, and a definition may name one.
+            # Without the compounds, which a caller may not present; `refuse_undeclared`
+            # lists them, since a definition may name one.
             known = ", ".join(sorted(set(self.names) - set(self.compounds))) or "none"
             msg = (
                 f"unknown source id(s): {', '.join(sorted(set(unknown)))}; "
@@ -290,10 +269,7 @@ class SourceIds:
             for name, parts in self.compounds.items()
             if name not in reached and all(part in reached for part in parts)
         }:
-            # `names[name]`, not `name`: a compound may itself be covered by
-            # something, and a caller who has just earned it earns that too.
-            # Adding only the bare name would make one written into a covers
-            # chain reach less than the same name written by hand.
+            # `names[name]`, not `name`: what a compound covers is earned with it.
             for name in gained:
                 reached.update(self.names[name])
         return frozenset(reached)
@@ -322,11 +298,9 @@ class SourceIds:
     ) -> tuple[tuple[str, str], ...]:
         """Entries naming a source id this definition's own audience never mentions.
 
-        An entry audience is already an **and** with the definition's, because the
-        only way to reach an entry is through the definition holding it --
-        `Kingfisher._agent_named` refuses a caller who cannot open the agent, and nothing else
-        hands out a spec. So `[pii]` under `[sales_db, audit_log]` means "everyone
-        who opens this agent, and holds `pii`", which is a good second requirement.
+        An entry's audience is already an and with the definition's, since an entry is reached
+        only through its definition: `[pii]` under `[sales_db, audit_log]` means "whoever
+        opens this agent and holds `pii`", a good second requirement.
         """
         if source_ids == ALL:
             return ()
@@ -377,8 +351,7 @@ def _vocabulary(raw: object, source: str) -> _Vocabulary:
                 f"{{a, b}} for what it requires, or nothing at all -- got {body!r}"
             )
             raise AccessError(msg)
-        # Declared either way: a compound is a name in the vocabulary like any
-        # other, and `names` is what says a name exists at all.
+        # Declared either way: `names` is what says a name exists, compound or not.
         declared.setdefault(str(name), ())
     return declared, compounds
 
@@ -391,11 +364,8 @@ def _covers(body: Sequence[object], *, name: str, source: str) -> tuple[str, ...
             f"to declare a plain source id"
         )
         raise AccessError(msg)
-    # The inline half of the rule `_refuse_granted_compounds` holds for a name.
-    # Refused here rather than there because an inline requirement has no name
-    # to look up, and a covers list is the one place it reads as legal: a
-    # requirement that can be handed over is the requirement defeated by the
-    # file imposing it.
+    # The inline half of `_refuse_granted_compounds`'s rule, here because an inline
+    # requirement has no name to look up there.
     for one in body:
         if isinstance(one, Mapping):
             parts = ", ".join(str(part) for part in one) or "..."
@@ -411,9 +381,8 @@ def _covers(body: Sequence[object], *, name: str, source: str) -> tuple[str, ...
 
 def _requires(body: Mapping[object, object], *, name: str, source: str) -> tuple[str, ...]:
     """The source ids a caller must hold together, from the set form."""
-    # The shape that was silently wrong before it was refused: `{finance: senior}`
-    # is a mapping with a value, not a set of two names, and reading it as a set
-    # would take `finance` and throw away what was written beside it.
+    # `{finance: senior}` is a mapping with a value, not a set of two names: read as a set it
+    # would throw away what was written beside `finance`.
     if valued := sorted(str(key) for key, value in body.items() if value is not None):
         msg = (
             f"{source}: source id {name!r} requires {{{', '.join(valued)}}} with "
@@ -424,19 +393,16 @@ def _requires(body: Mapping[object, object], *, name: str, source: str) -> tuple
     return tuple(str(key) for key in body)
 
 
-#: The bodies the vocabulary took before shapes replaced keywords, and what each is
-#: written as now. `A: {}` is here because it was the short form for a plain name;
-#: read as a set it requires nothing, which is everyone.
+#: The keywords the vocabulary took before shapes replaced them. `A: {}`, the old short form
+#: for a plain name, is refused beside them: read as a set it requires nothing, so everyone.
 _RETIRED: Final[tuple[str, ...]] = ("contains", "all_of")
 
 
 def _refuse_retired_spelling(raw: Mapping[object, object], source: str) -> None:
     """Refuse a whole vocabulary written the old way, naming every line to change.
 
-    One refusal for the file rather than one per name. A deployment upgrading has a
-    file full of policy and fixes it once: a message per source id makes them restart
-    for the next one, and the first refusal a realistic old file earns is a `{}` line
-    that says nothing about the `contains` further down.
+    One refusal for the file rather than one per name, so an upgrading deployment fixes it
+    once instead of restarting for each.
     """
     changes: list[tuple[str, str]] = []
     for name, body in raw.items():

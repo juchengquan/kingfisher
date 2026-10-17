@@ -16,32 +16,23 @@ if TYPE_CHECKING:
 class Session:
     """One session, handed out by `Kingfisher.session` or `Kingfisher.sessions`.
 
-    The caller is checked once, when the session is handed out. Its agent is fixed when
-    it opens and the caller's source ids are fixed then, so no method could ask again
-    and be answered differently. A session deleted since answers `UnknownSessionError`,
-    as a wrong id does -- except to `delete`, which finds nothing left to do.
+    The caller is checked once, when this is handed out: its agent and the caller's
+    source ids are fixed by then, so asking again could not answer differently. A session
+    deleted since answers `UnknownSessionError`, except to `delete`.
     """
 
     id: str
-    #: When a turn last ran here, as a unix timestamp.
-    #:
-    #: A turn writes *inside* a session, so this timestamp is meaningful only
-    #: because a turn now records it explicitly -- left to the filesystem, a
-    #: conversation in daily use looked untouched, which is what made retention
-    #: sweep live sessions.
+    #: When a turn last ran here, as a unix timestamp. Recorded by the turn, not read off
+    #: the filesystem, which misses writes inside a session.
     last_used: float
     _service: Any = field(repr=False, compare=False)
-    #: The backend, once opened -- by the check that handed this out, or by the first
-    #: method to need it -- and reused, because on a remote store each opening is a
-    #: sandbox, and two per query is what a read used to cost.
+    #: The backend, once opened, and reused: on a remote store each opening is a sandbox.
     _opened: list[Any] = field(default_factory=list, repr=False, compare=False)
 
     def pending(self) -> tuple[PendingDecision, ...]:
         """What this session's paused turn is waiting on, or nothing.
 
-        Read from the mark the pause wrote rather than by starting a turn: asking what
-        is pending must not be a thing that can supersede it, and every other way into
-        the session is a turn.
+        Read from the pause's mark rather than by starting a turn, which would supersede it.
         """
         return drive(self._service._pending_in(self.id, self._opened))
 
@@ -50,8 +41,7 @@ class Session:
         return await adrive(self._service._pending_in(self.id, self._opened))
 
     def artifact(self, name: str) -> bytes:
-        """One file a turn here produced, fetched through its backend. `name` is as
-        `RunResult.artifacts` gave it."""
+        """One file a turn here produced, by the name `RunResult.artifacts` gave it."""
         return drive(self._service._artifact_in(self.id, name, self._opened))
 
     async def aartifact(self, name: str) -> bytes:
@@ -61,9 +51,8 @@ class Session:
     def files(self) -> Any:
         """The backend a turn here is given, built the way a turn builds it.
 
-        For a caller that reaches the session's files around a turn as well: hand it to
-        the turn as `files=` and the turn runs on it rather than opening another, which
-        on a remote backend is a second sandbox.
+        Handed to the turn as `files=`, the turn runs on it rather than opening another,
+        which on a remote backend is a second sandbox.
         """
         return drive(self._service._files_in(self.id, self._opened))
 

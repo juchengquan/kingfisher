@@ -1,7 +1,6 @@
 """Module-level conveniences: one `Kingfisher`, built and driven in a single call.
 
-They take the sessions `Kingfisher` takes, and as it does, refuse to run
-without them: Python that runs kingfisher says what it runs on.
+Sessions are required, as on `Kingfisher`: Python that runs kingfisher says what it runs on.
 """
 
 from __future__ import annotations
@@ -49,8 +48,7 @@ def stream(
     graph: Any | None = None,
     run_events: Any | None = None,
 ) -> Iterator[RunEvent]:
-    """Run one task, yielding progress as it happens.
-    """
+    """Run one task, yielding progress as it happens."""
     return _service(
         cfg,
         graph=graph,
@@ -67,8 +65,7 @@ def run(
     graph: Any | None = None,
     run_events: Any | None = None,
 ) -> RunResult:
-    """Run one task to completion and return where its outputs landed.
-    """
+    """Run one task to completion and return where its outputs landed."""
     return _service(
         cfg,
         graph=graph,

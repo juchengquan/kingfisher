@@ -20,10 +20,8 @@ from kingfisher.core.definitions.subagents.spec import EXPORT, SubagentError, Su
 from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository
 from kingfisher.core.definitions.tools.spec import SEPARATOR, reference
 
-#: What a bundle's own assets are kept in, and therefore the two directory names that
-#: are not organisation here. A folder under `subagents/` is normally free -- it groups
-#: definitions and nothing else -- but these two hold a subagent's private tools and
-#: skills, and the definition walk must not descend into them.
+#: The folders a bundle keeps its own tools and skills in, which the definition walk must
+#: not descend into; any other folder under `subagents/` only groups definitions.
 ASSET_DIRECTORIES: frozenset[str] = frozenset({"tools", "skills"})
 
 DECLARES = Export(EXPORT, error=SubagentError, holding="subagents", example="my_subagent")
@@ -34,12 +32,9 @@ def _declared_in(directory: Path) -> list[tuple[SubagentSpec, str]]:
     found: list[tuple[SubagentSpec, str]] = []
     for path in modules_in(directory):
         relative = path.relative_to(directory)
-        # The Python half of what `documents_in` is told to skip, and it has to be
-        # here rather than in `modules_in`: that walk is shared with the tool
-        # catalogue, where a folder called `tools` is ordinary organisation.
-        # Filtered after the walk rather than during it because the walk imports
-        # nothing -- `exported_from` does, further down -- so a module under a
-        # bundle's `tools/` is dropped before anything executes it.
+        # Here, not in `modules_in`, which the tool catalogue shares and where `tools/` is
+        # only a folder. Safe after the walk: it imports nothing, so a bundle's module is
+        # dropped before `exported_from` runs it.
         if ASSET_DIRECTORIES & set(relative.parts):
             continue
         where = str(relative) + ("/" if path.is_dir() else "")
@@ -52,32 +47,21 @@ def _declared_in(directory: Path) -> list[tuple[SubagentSpec, str]]:
 class Holdings:
     """The tools and skills that belong to one subagent and to nothing else.
 
-    Named for the goods rather than for the bundle, because `SubagentSpec.bundled` is
-    the other half of the pair and is not these: it is what the definition lists from
-    the folder, checked against this. One word would put the list and the goods a line
-    apart in `rules.miscounted`, which exists to tell them apart.
+    Not named for the bundle: `SubagentSpec.bundled` is the list checked against these.
     """
 
     name: str
     where: str
-    #: The folder these are in, for the usual backing. `None` for a definition that
-    #: carried them instead, which is what a subagent imported from an installed
-    #: package does: it has no folder under this catalogue to be named after.
+    #: The folder these are in, or `None` for a definition that carried them, as one
+    #: imported from an installed package does.
     root: Path | None = None
-    #: What it carried, by the same two halves a folder has. Tools arrive as the
-    #: objects; skills as the directories the definition resolved for itself, since
-    #: a skill is files deepagents mounts and there is nothing else to hand it.
+    #: What it carried, by a folder's two halves: tool objects, and skill directories,
+    #: since a skill is files deepagents mounts.
     carried: Mapping[str, Any] = field(default_factory=dict)
 
     @property
     def tools(self) -> LocalToolRepository | CarriedTools | None:
-        """This subagent's own tools, as the repository everything downstream asks.
-
-        A repository rather than the directory it used to be, because the two
-        backings have nothing else in common: one is a folder to walk, the other is
-        objects already in hand. Both answer `found`, so this is the narrowest thing
-        that lets a carried bundle reach the consumers a folder reaches.
-        """
+        """This subagent's own tools, as the repository everything downstream asks."""
         if "tools" in self.carried:
             return CarriedTools(tuple(self.carried["tools"]), source=self.where)
         found = self._asset("tools")
@@ -85,12 +69,9 @@ class Holdings:
 
     @property
     def skills(self) -> tuple[Path, ...]:
-        """This subagent's skill directories: empty for none, one for a folder.
+        """This subagent's skill directories: none, one for a folder, or those carried.
 
-        Paths for either backing, and not for want of symmetry with `tools`:
-        deepagents mounts a skills source by path, so a carried bundle has to name
-        real directories too. What differs is who resolved them -- the catalogue
-        walk, or the definition itself -- and only a definition may name several.
+        Paths either way, since deepagents mounts a skills source by path.
         """
         carried = self.carried.get("skills")
         if carried is not None:
@@ -108,16 +89,13 @@ class Holdings:
 def _bundle_of(spec: SubagentSpec, where: str, root: Path, key: str) -> Holdings | None:
     """What a definition owns: what it carried, or the folder named after it."""
     if spec.carried:
-        # Keyed as a grant names it, because that is the one label guaranteed unique
-        # -- two packages may each ship a `probe`, and the catalogue has already
-        # told those apart by the file each came through. A route may not hold the
-        # separator, so it travels as a dash.
+        # Labelled by its grant key, the one label guaranteed unique: two packages may
+        # each ship a `probe`. A route may not hold the separator, so it becomes a dash.
         return Holdings(
             name=spec.name, where=key.replace(SEPARATOR, "-"), carried=spec.carried
         )
     parent = Path(where).parent
-    # A loose definition directly under the catalogue has no folder to be named
-    # after, which `parent.name` reports as the empty string.
+    # A definition directly under the catalogue has no folder: `parent.name` is empty.
     if not parent.name or parent.name != spec.name:
         return None
     return Holdings(name=spec.name, root=root / parent, where=str(parent))
@@ -136,26 +114,14 @@ class LocalSubagentRepository:
         if not directory.is_dir():
             return {}
 
-        # Two folders may each hold a `probe.yaml`, and this used to refuse
-        # the pair -- which stopped the whole catalogue loading over a clash no
-        # single agent had yet asked for, and was unfixable by anyone who owned
-        # neither file. The catalogue keeps both now, under the reference a
-        # grant writes, and the refusal moved to where the constraint lives: an
-        # agent's roster is keyed by name, so an *agent* holding two is refused.
-        #
-        # Measured, because it is the reason any of this is needed: handing
-        # deepagents two subagents called `probe` compiles one. No error, and
-        # the other simply never exists.
+        # Two folders may each hold a `probe.yaml`: both are kept, under the reference a
+        # grant writes, and only an agent holding two is refused.
         read: list[tuple[SubagentSpec, str]] = []
         for path in documents_in(directory, error=SubagentError, skipping=ASSET_DIRECTORIES):
-            # Relative to the catalogue: `probe.yaml` stops identifying a
-            # file once two folders may each hold one.
+            # Relative to the catalogue: a file name alone no longer identifies one.
             where = str(path.relative_to(directory))
             read.append((reading.read(DefinitionText.at(path)), where))
-        # The Python half, keyed and counted with the documents rather than
-        # beside them: the two kinds share one namespace, so two definitions
-        # claiming `probe` are told apart the same way whichever formats they
-        # were written in.
+        # Counted with the documents: both formats share one namespace of names.
         read.extend(_declared_in(directory))
 
         counted: dict[str, int] = {}
@@ -185,15 +151,13 @@ class LocalSubagentRepository:
             if bundle is None:
                 continue
             found[key] = bundle
-            # Only the folder-backed ones are counted here. A carried bundle's
-            # `where` is a label rather than a directory, so booking it in would
-            # invent a folder and then refuse the next definition to land in it.
+            # Folder-backed only: a carried bundle's `where` is a label, and counting it
+            # would invent a folder and refuse the next definition in it.
             if bundle.root is not None:
                 holders.setdefault(bundle.where, []).append(where)
 
-        # Every definition under a bundle folder, not only the ones named after
-        # it: the neighbour is the whole problem, and it never gets a bundle of
-        # its own to be counted by the loop above.
+        # Every definition under a bundle folder, not only its owner: the neighbour is the
+        # problem, and it has no bundle of its own to be counted by.
         for _, where in self._defined.values():
             parent = str(Path(where).parent)
             if parent in holders and where not in holders[parent]:
@@ -218,11 +182,8 @@ class LocalSubagentRepository:
         if not directory.is_dir():
             return ()
         owned = {bundle.where for bundle in self.bundles.values()}
-        # And the folder a carried bundle pointed at, when it pointed inside this
-        # catalogue. A definition that carries names its skills by absolute path
-        # rather than by sitting next to them, so the folder is reached by nothing
-        # this walk can see -- and an example arranged the way a package is would be
-        # reported as abandoned while the subagent reading it works.
+        # And a folder inside this catalogue that a carried bundle names by absolute path,
+        # which would otherwise be reported abandoned while the subagent reading it works.
         for bundle in self.bundles.values():
             if bundle.root is not None:
                 continue

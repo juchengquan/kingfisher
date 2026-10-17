@@ -33,11 +33,7 @@ if TYPE_CHECKING:
 
 
 class SessionMethods:
-    """A session existing: naming one, making its directory, holding it, listing them."""
-
-    #: What this half needs from the instance it is mixed into. Declared rather
-    #: than assumed: a mixin that read `self.dirs` without saying so would be a
-    #: contract nothing checks, which is the shape this repository distrusts.
+    #: Needed from the class this is mixed into; declared, or it is a contract nothing checks.
     cfg: Config
     access: SourceIds | None
     #: Where the sessions are: which there are, how big, when each was used.
@@ -46,14 +42,12 @@ class SessionMethods:
     _files_for: Callable[..., Steps[Any]]
 
     def _session_for(self, request: Request | Resume) -> Steps[Conversation]:
-        """This turn's session: the one it names, or `DEFAULT_SESSION` where it names
-        none. Its backend makes it, the first time it is asked for it.
+        """This turn's session: the one it names, or `DEFAULT_SESSION`; its backend makes
+        it the first time it is asked.
 
-        Not checked against the listing: any id names a session, and a request naming
-        one nobody has used starts it. Who may touch one that exists is its pinned
-        agent's to decide, which the turn asks next. A resume is the exception: it
-        answers a turn that stopped, so the session it names has to be there, and
-        opening one to find nothing waiting would make it.
+        Not checked against the listing, since any id names a session and who may touch
+        it is the turn's next question. A resume is checked: its session must be there,
+        and opening an absent one would make it.
         """
         if isinstance(request, Resume):
             yield from self._refuse_if_absent(request.session_id)
@@ -67,11 +61,9 @@ class SessionMethods:
     def _reaches_session(self, harness: Any, held: frozenset[str] | None) -> Steps[bool]:
         """Whether a caller holding `held` may touch the session `harness` belongs to.
 
-        The one rule reading a session and running a turn in it share: a caller who
-        cannot reach the session's pinned agent cannot touch the session. `None` is a
-        deployment with no vocabulary or an `UNSCOPED` call and reaches everything, and
-        so does a session with nothing pinned yet, which has no agent to be out of reach
-        of.
+        The rule reading a session and running a turn in it share: a caller who cannot
+        reach the pinned agent cannot touch the session. `None` (no vocabulary, or an
+        `UNSCOPED` call) reaches everything, as does a session with nothing pinned yet.
         """
         if held is None:
             return True
@@ -105,16 +97,11 @@ class SessionMethods:
     ) -> Session | None:
         """One session, or `None` when this caller has no such session.
 
-        **A session whose pinned agent this caller cannot reach answers `None` too**,
-        and the two states deliberately share one answer. One that said so would be a
-        session *confirmed to exist*, so a leaked id would still be worth something
-        -- and what an unreachable thing looks like here is, everywhere else, a thing
-        that is not there. The reason is not lost; it is what that caller's audit
-        line says.
+        **A session whose pinned agent this caller cannot reach answers `None` too**, so
+        a leaked id confirms nothing; the reason is in that caller's audit line.
 
-        `create` makes a session that is not there yet, as a turn naming it would, so a
-        caller can place files before the first turn. One that is there and out of this
-        caller's reach is still `None`: made or not, nothing is revealed.
+        `create` makes a session not there yet, as a turn naming it would, so files can
+        be placed before the first turn. One out of this caller's reach is still `None`.
         """
         return drive(self._session_steps(session_id, source_ids, create=create))
 
@@ -126,11 +113,7 @@ class SessionMethods:
 
     def sessions(self, *, source_ids: Held | None = None) -> tuple[Session, ...]:
         """Every session this caller reaches, most recently used first; every session
-        there is when no caller is named.
-
-        One listing call, measured at 0.22ms for fifty sessions, and the same call `reap`
-        makes. Naming a caller costs one more read per session, of the agent it is pinned
-        to.
+        there is when no caller is named. Naming one costs a read per session, of its pin.
         """
         return drive(self._sessions_steps(source_ids))
 
@@ -154,8 +137,7 @@ class SessionMethods:
         return Session(session_id, listing[session_id], self, opened) if reached else None
 
     def _sessions_steps(self, source_ids: Held | None) -> Steps[tuple[Session, ...]]:
-        # Naming nobody is the operator's view of every session, which is what the
-        # command's listing is, and not a caller left out under a policy.
+        # Naming nobody is the operator's view of every session, not a caller under a policy.
         held = None if source_ids is None else caller_holds(self.access, source_ids)
         listing = yield reading(self._sessions, "sessions", self.cfg)
         found = []
@@ -170,7 +152,7 @@ class SessionMethods:
     ) -> Steps[tuple[bool, list[Any]]]:
         """`_reaches_session` by id, and the backend opened to decide it, if one was.
 
-        Not opened where nothing narrows: a remote backend would be a sandbox opened to
+        Not opened where nothing narrows: on a remote backend that is a sandbox opened to
         say a session exists.
         """
         if held is None:
@@ -180,9 +162,8 @@ class SessionMethods:
         return reached, [files]
 
     def _files_in(self, session_id: str, opened: list[Any]) -> Steps[Any]:
-        """The backend of a session that is still there, opened at most once into
-        `opened`; `UnknownSessionError` once the session is gone, rather than opening it
-        again, which would make it."""
+        """The backend of a session still there, opened at most once into `opened`;
+        `UnknownSessionError` once it is gone, since opening it again would make it."""
         yield from self._refuse_if_absent(session_id)
         if not opened:
             opened.append((yield from self._files_for(session_id)))

@@ -1,9 +1,7 @@
 """A caller's files into a session's `/inputs`, and what a turn left back out of it.
 
-Through the backend the agent runs on, never through the session directory. A
-backend that runs somewhere else holds the session there, and a directory on this
-host is then a place the agent never sees -- a caller's files placed where the agent
-cannot read them, and a turn that wrote a report handing back nothing.
+Through the backend the agent runs on, never the session directory: a backend running
+elsewhere holds the session there, and a directory on this host is one the agent never sees.
 """
 
 from __future__ import annotations
@@ -17,10 +15,8 @@ from kingfisher.core.layout import Layout
 from kingfisher.core.result import ArtifactError
 from kingfisher.core.session.steps import Steps, changing, on_host, reading
 
-# Deliberately not importing `ARTIFACT_DIRS` or `INPUTS_ROUTE`: both edges here are a
-# caller's, and a deployment renaming a session folder renames them. Reading the module
-# constants is what this did, and it made the feature a trap -- so the names are not
-# reachable from this file at all, and the layout arrives as an argument.
+# The layout arrives as an argument, never as `layout`'s route constants such as
+# `INPUTS_ROUTE`: a deployment may rename the folders a caller's files cross.
 
 _log = logging.getLogger(__name__)
 
@@ -61,11 +57,8 @@ def place_inputs(
 ) -> Steps[InputsPlacement]:
     """Copy caller-supplied files into a session's inputs folder, through its backend.
 
-    The folder this deployment named, which is not always `/inputs`. Spelt as the
-    constant, the files landed at `/inputs/` whatever the layout said: under a renamed
-    one that route does not exist, so the write fell through to the session root and
-    made a folder nothing had routed, hardened or fenced. Measured -- the agent's file
-    tools saw an empty folder, and its shell rewrote the caller's own file with exit 0.
+    The folder this deployment named, which is not always `/inputs`: under a renamed
+    layout that route is not mounted, and a write there lands in a folder nothing fences.
     """
     if not sources:
         return InputsPlacement()
@@ -92,24 +85,18 @@ def _contents_of(seen: dict[str, Path], route: str) -> list[tuple[str, bytes]]:
 def collect_artifacts(backend: Any, layout: Layout) -> Steps[tuple[str, ...]]:
     """What this session holds that is worth keeping, relative to the session.
 
-    A walk of what is there rather than a record of tool calls: `execute`
-    bypasses the file tools, and running a script is how most of `/outputs` gets
-    produced.
-
-    The folders this deployment named. Spelt as the constant, a renamed layout handed
-    the caller `()` -- measured, with the turn's own report sitting in the session and
-    the session reapable, so anything not named here is lost.
+    A walk of what is there rather than a record of tool calls: `execute` bypasses
+    the file tools, and a script produces most of `/outputs`.
     """
     found: set[str] = set()
     for name in layout.artifact_dirs:
-        # Two patterns, because deepagents' glob leaves a name starting with a dot out
-        # of `**` and matches it only where the pattern starts with one: `**` alone
-        # drops `/outputs/.env` from what the caller is handed, and says nothing.
+        # Two patterns: deepagents' `**` skips a name starting with a dot, so alone it
+        # drops `/outputs/.env` without a word.
         for pattern in ("**", ".*"):
             result = yield reading(backend, "glob", pattern, path=f"/{name}/")
             if result.error or result.truncated:
-                # Reported rather than raised. The turn has already run, and failing it
-                # here would lose its answer over a listing of what it left behind.
+                # Reported, not raised: the turn has run, and failing it now would lose
+                # its answer over a listing.
                 _log.warning(
                     "artifacts under /%s/ may be incomplete: %s",
                     name,
@@ -126,10 +113,8 @@ def collect_artifacts(backend: Any, layout: Layout) -> Steps[tuple[str, ...]]:
 def read_artifact(backend: Any, name: str, layout: Layout) -> Steps[bytes]:
     """One file a turn produced, as bytes, by the name `collect_artifacts` gave it.
 
-    Only under the folders `collect_artifacts` walks. The same backend reaches the
-    harness directory and the caller's own inputs, and a caller who may read what a
-    turn produced may not read what kingfisher keeps about the session through the
-    same door.
+    Only under the folders `collect_artifacts` walks: the same backend reaches the
+    harness directory, which a caller who may read a turn's output may not.
     """
     artifacts = layout.artifact_dirs
     path = PurePosixPath(name)

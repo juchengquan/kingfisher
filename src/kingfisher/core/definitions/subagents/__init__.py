@@ -1,25 +1,12 @@
-"""Subagents: registering what a workspace's `subagents/` directory provides.
+"""Subagents: registering what a workspace's `subagents/` directory provides."""
 
-`spec` is the one file outside this directory's business to import: it is the format's
-vocabulary and has no adapter behind it. `catalogue` walks the disk.
-"""
-
-#: The name deepagents gives the tool that dispatches a subagent.
-#:
-#: The format reads it, to refuse a definition that names helpers and withholds the
-#: tool that calls them, and so do `core.agent.kinds.tools` and
-#: `core.agent.interpreter`. Not under `harness/`, because the obvious home
-#: there is an expensive one: `core.agent.kinds.subagents` is 1,588ms and
-#: 3,164 modules, and four characters there would cost `interpreter` all of it -- a file
-#: that is 12ms and 82 modules with every other import stdlib.
+#: The name deepagents gives the tool that dispatches a subagent. Not in
+#: `core.agent.kinds.subagents`, the obvious home: importing that loads the agent runtime,
+#: which `core.agent.interpreter` otherwise does without.
 TASK_TOOL = "task"
 
-#: The tool the code sandbox registers, which only an agent ever holds.
-#:
-#: Handed to the library rather than left to its default, because two things key on
-#: it: a nested helper's tool objects are filtered by it, and the format refuses a
-#: subagent that lists it. A default that moved upstream would hand every nested
-#: helper the probe's sandbox again, and leave the refusal guarding a name nothing
-#: registers. Beside `TASK_TOOL` for its reason, and because a kind may not name the
-#: layer `interpreter` sits in.
+#: The tool the code sandbox registers, which only an agent ever holds. Handed to the
+#: library rather than left to its default: a nested helper's tools are filtered by it and
+#: the format refuses a subagent listing it, so a default moved upstream would hand helpers
+#: the sandbox and leave the refusal guarding a name nothing registers.
 INTERPRETER_TOOL = "eval"

@@ -26,13 +26,9 @@ if TYPE_CHECKING:
     from kingfisher.core.definitions.middlewares.catalogue import LocalMiddlewareRepository
 
 
-#: `defaults` plus whatever the definition was allowed to write.
-#:
-#: Deliberately loose. Narrowed to `Callable[[], Any]` it stopped covering a
-#: registered class, so a deployment pasting the wiring block `middleware.md`
-#: documents got a type error on its own registry while the code ran correctly --
-#: and a signature narrower than the contract is worse than a loose one, because
-#: the reader who believes it is the one following the docs.
+#: `defaults` plus whatever the definition was allowed to write. Deliberately loose:
+#: `Callable[[], Any]` does not cover a registered class, so the documented wiring would fail
+#: to type-check while running correctly.
 MiddlewareFactory = Callable[..., Any]
 
 
@@ -40,15 +36,12 @@ MiddlewareFactory = Callable[..., Any]
 class ByName:
     """A want a definition may choose by name, and what it falls back to.
 
-    Wrapping is what makes a want writable at all. `backend` is an object with no
-    name a file could carry, so a value written for it is refused; a model has one,
-    and `resolve` is what that name means -- the catalogue lookup, the endpoint the
-    request may or may not reach, and the instance built from the profile.
+    Only a wrapped want is writable: `backend` has no name a file could carry, so a value
+    written for it is refused; a model has one, and `resolve` says what it means.
     """
 
     fallback: Any
-    #: Called with the name a definition wrote and a subject naming who wrote it --
-    #: the refusal it raises is read by whoever owns that file, not by the harness.
+    #: Called with the name written and who wrote it: the file's owner reads the refusal.
     resolve: Callable[[str, str], Any]
 
 
@@ -57,10 +50,8 @@ def offered_middleware(
 ) -> dict[str, Any]:
     """Both sources of middleware, as the one mapping a definition selects from.
 
-    Merged once, so an agent and its subagents select from the same thing. A name
-    in both is refused rather than resolved: both belong to the same deployment,
-    so renaming is available -- unlike a tool clash between two vendors, which is
-    why that one is qualified instead.
+    Merged once, so an agent and its subagents select from the same thing. A name in both
+    is refused, not qualified as a tool clash is: both are the deployment's, so it can rename.
     """
     offered = workspace.classes
     if clashing := sorted(set(registered) & set(offered)):
@@ -84,8 +75,7 @@ def declared_middleware(
 ) -> list[Any]:
     """Build the middleware a definition asked for, agent or subagent.
 
-    `provisions` is what this build holds for a class that declared `wants` -- see
-    `_wanted`. Defaulted to nothing rather than required, so a caller with no graph
+    `provisions` fills a class's `wants`; it defaults to nothing so a caller with no graph
     around it can still build a middleware that wants none.
     """
     subject = f"{kind} {spec.name!r}"
@@ -95,9 +85,7 @@ def declared_middleware(
         granted=allowed,
         subject=subject,
     )
-    # Absent on a spec built in code rather than parsed, and on every spec that
-    # predates the field. `{}` is the same answer either way: nothing was
-    # written, so every name is built on what the deployment registered.
+    # Absent on a spec built in code rather than parsed; nothing was written either way.
     wrote = getattr(spec, "middleware_settings", None) or {}
     built = []
     for name in approved:
@@ -152,13 +140,10 @@ def _wanted(
 ) -> dict[str, Any]:
     """`written`, with every key the class declared in `wants` replaced by an object.
 
-    A want is filled in where the agent is assembled, because that is the only place
-    that knows -- the model this graph runs, say. None of what belongs here is a
-    scalar, so none of it can come out of a yaml file, and a class closing over one
-    instead would close over the deployment's answer rather than this build's.
-
-    What may be wanted is whatever the call site holds, deliberately: a list here
-    would be a second place to edit and a place to be wrong.
+    Filled in where the agent is assembled, the only place that knows (the model this graph
+    runs, say): none is a scalar a yaml file could hold, and a class closing over one would
+    get the deployment's answer, not this build's. What may be wanted is whatever the call
+    site holds: a list here would be a second place to be wrong.
     """
     wants = tuple(getattr(entry, "wants", ()) or ())
     if not wants:
@@ -166,8 +151,7 @@ def _wanted(
     refuse_unprovided_wants(
         wants, provided=tuple(provisions), subject=subject, registered_as=registered_as
     )
-    # Which wants may be written is decided here rather than in the domain because it
-    # is a fact about the objects this build is holding, not about a list of names.
+    # Decided here, not in the domain: it is a fact about the objects this build holds.
     whole = tuple(name for name in wants if not isinstance(provisions[name], ByName))
     refuse_written_wants(
         whole,
@@ -183,9 +167,7 @@ def _wanted(
         if not isinstance(held, ByName):
             arguments[name] = held
         elif name in written:
-            # Whatever the file wrote, as the name it was meant to be. `resolve`
-            # refuses an unknown one and quotes what it read, which is the answer
-            # `model: 5` wants as much as a misspelling is.
+            # As a name, whatever was written: `resolve` refuses `model: 5` as it does a typo.
             arguments[name] = held.resolve(
                 str(written[name]), f"middleware {registered_as!r} on {subject}"
             )
@@ -204,24 +186,13 @@ def _instantiate(
 ) -> Any:
     """One registry entry, built into the middleware it stands for.
 
-    A **class** is the shape that can be configured. `defaults` is what the
-    deployment supplies, the settings a definition wrote are laid over the top, and
-    `yaml_settable` on the class decides which of those it was allowed to write.
-    Deployment first and definition second is the whole precedence rule, and `wants`
-    sits underneath both: a wanted key falls back to what the harness holds, and a
-    name written over it in either half is resolved rather than passed through.
-
-    Anything else is a **zero-argument factory**. It takes no settings and cannot be
-    given any -- there is no seam to pass them through, since whatever values it uses
-    were closed over when the deployment wrote the lambda.
+    A class takes settings: its `defaults`, then what the definition wrote, as far as
+    `yaml_settable` allows. A wanted key falls back to what the harness holds, and a name
+    written over it is resolved. Anything else is a zero-argument factory, taking no settings.
     """
     if not callable(entry):
-        # Reached when `Kingfisher` was not the door -- `build_agent` takes a
-        # registry directly. `refuse_unbuildable_middleware` catches this at
-        # construction for everyone who comes the ordinary way; this is what
-        # stops the other path raising `TypeError: 'X' object is not callable`
-        # out of the `entry()` below, which named neither the entry nor the
-        # definition that asked for it.
+        # Reached through `build_agent`, which takes a registry directly and so skips
+        # `refuse_unbuildable_middleware`; `entry()` would raise naming neither.
         raise CapabilityError(_uncallable(entry, registered_as=registered_as, subject=subject))
     if not isinstance(entry, type):
         if wrote:
@@ -235,10 +206,8 @@ def _instantiate(
             )
             raise CapabilityError(msg)
         if getattr(entry, "wants", None):
-            # A callable object that declared `wants` and is not a class. Refused
-            # rather than ignored: a want silently dropped is a middleware built
-            # without the model it was written to use, which fails later and
-            # somewhere else.
+            # Refused, not ignored: a dropped want builds a middleware without the model it
+            # was written for, which fails later and somewhere else.
             msg = (
                 f"{subject} names middleware {registered_as!r}, which declares `wants` "
                 f"and was registered as a factory taking no arguments. Only a "
@@ -254,8 +223,7 @@ def _instantiate(
         subject=subject,
         registered_as=registered_as,
     )
-    # `defaults` is the deployment's half and is copied rather than passed, so a
-    # class attribute cannot be mutated by the merge and carry one definition's
+    # Copied, so the merge cannot mutate a class attribute and carry one definition's
     # setting into the next agent built from the same registry.
     written = {**dict(getattr(entry, "defaults", None) or {}), **approved}
     arguments = _wanted(
@@ -264,10 +232,8 @@ def _instantiate(
     try:
         return entry(**arguments)
     except TypeError as exc:
-        # The registry's mistake rather than the definition's, so it says which
-        # entry and what it was given. Reached when `defaults` does not cover
-        # the arguments the class actually requires -- which no definition can
-        # cause and no definition can fix.
+        # `defaults` missing a required argument: the registry's mistake, which no
+        # definition can cause or fix, so it names the entry and what it was given.
         given = ", ".join(sorted(arguments)) or "no arguments"
         msg = (
             f"{subject} could not build middleware {registered_as!r}: "

@@ -27,11 +27,9 @@ DECLARES = Export(EXPORT, error=MiddlewareError, holding="middleware", example="
 
 
 def name_of(entry: type) -> str:
-    """What a definition writes to select this class.
+    """What a definition writes to select this class: an explicit `name`, or the class's.
 
-    `AgentMiddleware.name` is a *property*, so on the class it is the property
-    object rather than a string -- checked, or the selector would stringify into
-    `<property object at 0x...>`. An explicit `name` on the class wins.
+    On the class, `AgentMiddleware.name` is a property object, hence the `str` check.
     """
     declared = getattr(entry, "name", None)
     return declared if isinstance(declared, str) else entry.__name__
@@ -53,8 +51,7 @@ class Registered:
 class LocalMiddlewareRepository:
     """The middleware defined in one directory, imported into this process.
 
-    Read once, like `LocalToolRepository` and for its reason: these modules are
-    *executed* to be read, so two walks would run every side effect twice.
+    Read once: the modules are executed to be read, so a second walk reruns their effects.
     """
 
     root: Path
@@ -63,9 +60,7 @@ class LocalMiddlewareRepository:
     def found(self) -> tuple[Registered, ...]:
         """Every middleware this directory defines, with its origin.
 
-        A duplicate name is refused rather than qualified: `middlewares:` is a
-        flat selector, so there is nowhere to put a `where::what` and nothing to
-        fall back on.
+        A duplicate name is refused, not qualified: `middlewares:` takes no `where::what`.
         """
         directory = Path(self.root)
         if not directory.is_dir():
@@ -103,12 +98,10 @@ class LocalMiddlewareRepository:
 def _refuse_unless_buildable(entry: Any, *, where: str) -> None:
     """A class, and one deepagents will run.
 
-    Stricter than the registry's refusal, which allows a zero-argument factory.
-    A file is imported once, so an object here would be built once and shared by
-    every graph -- the state leak that makes a cap stop capping.
+    Stricter than the registry, which allows a factory: a file is imported once, so an
+    object here would be shared by every graph, and a shared cap stops capping.
     """
-    # Deferred, the trade `models.py` makes by naming its chat classes as
-    # strings: at module scope this made nine light exports heavy at once.
+    # Deferred: at module scope it would load the agent runtime for the light exports.
     from langchain.agents.middleware import AgentMiddleware  # noqa: PLC0415
 
     if not isinstance(entry, type):

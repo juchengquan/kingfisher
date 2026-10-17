@@ -1,8 +1,4 @@
-"""Turning an agent document into a spec.
-
-`spec` says what a definition means; this says how a file becomes one. Named
-`read` because the module says which kind, as `core.definitions.subagents.reading.read` does.
-"""
+"""Turning an agent document into a spec."""
 
 from __future__ import annotations
 

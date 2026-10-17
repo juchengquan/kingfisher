@@ -1,11 +1,8 @@
 """kingfisher — a personal, local, general-purpose agent built on deepagents.
 
-Names resolve lazily, through `__getattr__` below. `import deepagents` takes most of a
-second and about three thousand modules, most of it the provider SDKs it imports at
-module level and most deployments never call; this front door takes a few
-milliseconds. Eager re-exports would put that second on every consumer --
-`kingfisher --help`, a config check, a test that only touches `Request`.
-`test_a_public_name_that_runs_no_agent_loads_no_runtime` holds every light name to it.
+Names resolve lazily, through `__getattr__`: `import deepagents` takes most of a second,
+mostly provider SDKs most deployments never call, and an eager re-export would put that on
+every consumer. `test_a_public_name_that_runs_no_agent_loads_no_runtime` holds it.
 """
 
 from importlib import import_module
@@ -13,21 +10,8 @@ from typing import TYPE_CHECKING, Any
 
 __version__ = "0.1.0"
 
-#: Public name -> the module that defines it. The single source for both `__getattr__`
-#: and `__all__`, so the two cannot drift.
-#:
-#: **A caller means a caller outside this wheel**, which is the rule eleven names --
-#: `build_agent`, `build_model` and the rest -- were removed under.
-#: Every one is live, and every one of their callers already imports it from the module
-#: that defines it, so nothing had ever come through the front door for them. The
-#: command ships in this distribution and is family: it reaches such a name directly,
-#: and still comes through the front door for every name that *is* here.
-#:
-#: Narrowed rather than deleted. `from kingfisher.core.agent.assembly import
-#: build_agent` still works and is what the package itself does. An outside caller on
-#: the old spelling changes one import line, which is a real cost measured against users
-#: this repository cannot see -- accepted at 0.1.0, and noted here rather than
-#: discovered later.
+#: Public name -> the module that defines it. A name is here for a caller outside this
+#: wheel; the command ships in it, and imports anything else from where it is defined.
 _EXPORTS = {
     "Held": "kingfisher.core.access.source_ids",
     "AccessError": "kingfisher.core.access.source_ids",
@@ -39,14 +23,10 @@ _EXPORTS = {
     "SessionBusyError": "kingfisher.core.session.model",
     "SubagentError": "kingfisher.core.definitions.subagents.spec",
     "UnsafeReferenceError": "kingfisher.core.agent.references",
-    # What a workspace tool annotates `runtime` with to be handed the turn's backend:
-    # `runtime: ToolRuntime[ToolContext]`. A tool file is a caller outside this
-    # wheel by construction -- it lives in a deployment's workspace -- and the bare
-    # `ToolRuntime` it would otherwise write has pydantic warn on every call that
-    # the context it was handed is not the `None` it declared.
+    # For a workspace tool file, outside the wheel by construction, to annotate
+    # `runtime: ToolRuntime[ToolContext]`: a bare `ToolRuntime` has pydantic warn per call.
     "ToolContext": "kingfisher.core.agent.tool_context",
-    # How a tool file says who may use its tool. Called inside a deployment's own
-    # `tools/`, for the reason `ToolContext` is imported there.
+    # How a tool file says who may use its tool.
     "tool": "kingfisher.core.agent.audienced_tool",
     "UnknownSessionError": "kingfisher.core.session.model",
     "Config": "kingfisher.core.config",
@@ -55,15 +35,12 @@ _EXPORTS = {
     "Kingfisher": "kingfisher.core.service",
     "ConfigError": "kingfisher.core.config",
     "Request": "kingfisher.core.request",
-    # The four a caller needs to answer a gated call: what it was asked, how
-    # to answer, the answer itself, and the refusal for an answer that does
-    # not fit. All public for the reason `CapabilityError` is -- a consumer
-    # holding a paused session has to be able to branch on this.
+    # What a caller holding a paused session needs to answer the gated call.
     "Resume": "kingfisher.core.request",
     "Decision": "kingfisher.core.request",
     "DecisionError": "kingfisher.core.request",
     "PendingDecision": "kingfisher.core.result",
-    # One row of `RunResult.ledger`, which a caller keeping them names.
+    # One row of `RunResult.ledger`, for a caller that keeps them.
     "LedgerEntry": "kingfisher.core.result",
     "RunOn": "kingfisher.core.definitions.subagents.spec",
     "RunEvent": "kingfisher.core.result",
@@ -76,10 +53,7 @@ _EXPORTS = {
     "Seeded": "kingfisher.core.definitions.seeding",
     "inventory": "kingfisher.core.inventory",
     "Inventory": "kingfisher.core.inventory",
-    # Where this deployment reads from, as against what it offers. Public
-    # because the answer was assembled three times and agreed nowhere: the
-    # command printed four of eleven places, `doctor` printed one, and a
-    # library caller had no way to ask at all.
+    # Where this deployment reads from, so a library caller can ask what `doctor` prints.
     "Origin": "kingfisher.core.origins",
     "Origins": "kingfisher.core.origins",
     "config_from_env": "kingfisher.core.environment",
@@ -133,9 +107,8 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:
-    # So type checkers and IDEs see the real symbols rather than `Any`.
-    # Redundant aliases mark these as re-exports; `__all__` is computed, so a
-    # checker cannot otherwise tell they are public.
+    # So a checker sees the real types, not `__getattr__`'s `Any`. `X as X` is what marks
+    # a re-export (PEP 484), not a redundancy.
     from kingfisher.core.access.capabilities import Capabilities as Capabilities
     from kingfisher.core.access.capabilities import CapabilityError as CapabilityError
     from kingfisher.core.access.source_ids import UNSCOPED as UNSCOPED
@@ -188,7 +161,7 @@ def __getattr__(name: str) -> Any:
         raise AttributeError(msg) from None
 
     value = getattr(import_module(module), name)
-    globals()[name] = value  # resolve once; subsequent lookups skip __getattr__
+    globals()[name] = value  # resolved once: later lookups skip __getattr__
     return value
 
 

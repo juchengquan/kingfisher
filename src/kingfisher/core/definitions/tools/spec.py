@@ -23,11 +23,6 @@ if TYPE_CHECKING:
 
     from kingfisher.core.access.source_ids import Audience
 
-# `SEPARATOR` is imported above rather than defined here, where it started:
-# skills spell a source the same way, and one separator both kinds import
-# beats two that agree by coincidence. Re-exported by the import, so
-# `tools.spec.SEPARATOR` still resolves for readers who look here first.
-
 
 def reference(source: str, name: str) -> str:
     """How a definition writes one tool: where it lives, then what it is called."""
@@ -48,21 +43,11 @@ def tool_name(tool: Any) -> str:
 
 
 def named(tool: Any) -> bool:
-    """Whether this is something `tool_name` can name, rather than describe.
+    """Whether `tool_name` can name this, rather than fall back to its `repr`.
 
-    The two halves of `tool_name` above are the two shapes a tool comes in --
-    `BaseTool` carries `.name`, a bare callable carries `.__name__` -- and the `repr`
-    beyond them is a last resort so that *naming* never raises. A listing needs that;
-    a loader must not lean on it. Measured: a workspace writing `TOOLS =
-    ["line_count"]` for the name of its tool got one advertised as `'line_count'`,
-    quotes and all, and a build that died with `AttributeError: 'function' object has
-    no attribute 'name'` naming neither the file nor the entry.
-
-    The two attributes are langchain's rule as much as this one's: measured against
-    `convert_to_openai_tool`, a plain function is named by `__name__` and anything
-    carrying neither -- a `functools.partial`, an instance with `__call__` -- raises
-    there. So the fallback stays for naming and this says when it was reached, which
-    is the point a loader can still name the file.
+    The fallback is so a listing never raises; a loader must not lean on it. The two
+    attributes are langchain's rule too: `convert_to_openai_tool` raises on anything with
+    neither, such as a `functools.partial` or an instance with `__call__`.
     """
     return bool(getattr(tool, "name", None) or getattr(tool, "__name__", None))
 
@@ -191,15 +176,8 @@ def select(granted: Selection, found: Sequence[Found]) -> tuple[Found, ...]:
 def placed(entry: str, offered: Iterable[str]) -> str:
     """One written entry as the offering spells it, or unchanged if it cannot.
 
-    Public because two readers compare a written grant against the catalogue's own
-    names: `spelt` below, over a whole selection on its way into a build, and `offers`
-    in `core/access`, one name at a time. `offers` compared them unspelt, so the long form
-    `formats.md` documents -- `reports.py::count_rows` -- matched nothing, and a scoped
-    caller was told they reached no tools at all while the build handed them one.
-
-    A name two sources offer is spelt long by the offering itself, so a written short
-    form stays short and matches neither: ambiguous is not a thing a caller is told
-    they hold.
+    Public so `offers` compares a grant spelt as the build spells it. A name two sources
+    offer is spelt long, so a short form matches neither: ambiguous is not held.
     """
     kept = set(offered)
     if entry in kept:
@@ -237,11 +215,7 @@ class Offering:
         return duplicated(select(granted, found))
 
     def spelt(self, selection: Selection) -> Selection:
-        """A written grant in the spelling this offering uses.
-
-        Measured: two definitions writing the long form could not be run, while the
-        short form worked -- which is why a suite full of it stayed green.
-        """
+        """A written grant in the spelling this offering uses."""
         if selection in (ALL, None):
             return selection
         offered = set(self.workspace)
@@ -255,18 +229,13 @@ class Offering:
         subject: str,
         in_reach: Callable[[str], bool] | None = None,
     ) -> None:
-        """A name on the wrong axis, or on neither. Raises, or says nothing.
+        """Refuse a name on the wrong axis, or on neither.
 
-        `in_reach` narrows what the refusal *lists*, never what it judges: a file
-        naming a tool nothing offers is the file's fault whoever is asking, and a name
-        out of one caller's reach is still a real name. Unnarrowed, the listing handed
-        a caller holding one source id every workspace tool and its file -- measured,
-        three names and three paths where the agent they reach granted one. Only the
-        workspace axis takes it; a built-in is the same set for everybody.
+        `in_reach` narrows what the refusal *lists*, never what it judges: a tool nothing
+        offers is the file's fault whoever asks. Built-ins are the same for everybody.
         """
         for asked, own, other, here, there in (
-            # Spelt before checking, not after: a definition may write either
-            # form and only one of them is what the offering holds.
+            # Spelt first: a definition may write either form, and the offering holds one.
             (self.spelt(tools), self.workspace, self.builtin, "tools", "builtin_tools"),
             (builtin, self.builtin, self.workspace, "builtin_tools", "tools"),
         ):
@@ -292,8 +261,7 @@ class Offering:
     def moved(self, claims: Mapping[str, str]) -> tuple[tuple[str, str, str], ...]:
         """Each `(name, where the definition says it is, where it is)` that disagrees.
 
-        Asked as well as refused, because `doctor` reports what startup refuses and a
-        second walk over the same claims is a second chance to answer differently.
+        Asked as well as refused, so `doctor` reports what startup refuses from one walk.
         """
         return tuple(
             sorted(
@@ -323,18 +291,10 @@ class Offering:
         """Every tool name a request may call, or `None` for no restriction."""
         if builtin == ALL and tools == ALL:
             return None
-        # Spelt here too, and this is the one that was missed first time: the
-        # grant resolved correctly while the *allowlist* was still built from
-        # the written form, so the tool was registered and then refused at the
-        # moment it was called. Measured, not read -- the definition loaded, the
-        # run started, and `count_rows` was simply absent from "Available
-        # tools" when the model reached for it.
+        # Spelt here too, or a long-form grant is registered and then refused when called.
         tools = self.spelt(tools)
-        # The workspace half comes back to bare names, because that is what the
-        # middleware compares against: it filters by `tool.name`, and a tool's name is
-        # `fetch` however a grant spelled it. Safe to flatten because `carried` has
-        # already dropped every clashing pair from what the agent holds, so within one
-        # agent the names are unique and two spellings can never land on one entry here.
+        # Bare names, which the allowlist compares with `tool.name`. Safe because `carried`
+        # has dropped every clashing pair, so within one agent two spellings cannot meet.
         granted = narrowed(tools, by=self.workspace) or ()
         return (
             *(narrowed(builtin, by=self.builtin) or ()),

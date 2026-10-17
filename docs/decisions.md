@@ -3842,6 +3842,26 @@ Linux job. The driven one hands the file to sandbox-exec, because a pattern Pyth
 compiles is not a pattern that engine compiles, which `.{1}` is the proof of.
 *(2026-10-15, from an architecture review.)*
 
+**Landlock, chosen against two measured alternatives.** bubblewrap works only with
+`--security-opt seccomp=unconfined`, disabling the syscall filter to gain path isolation in a
+box shared by tenants. Per-session Unix users through `setpriv` work but deny by ownership:
+every file, forever, including the ones the agent creates. Landlock denies by default, needs
+no privileges and no relaxed seccomp, and cost 0.2ms -> 0.8ms a command under Docker's default
+profile. The policy is generated, never written by hand, because the first hand-written one
+failed open: it granted `/tmp` writable while the workspace was mounted under `/tmp`, so the
+fence covered nothing, and every read succeeded, so it looked as if it worked. `Sandbox` has
+forty fields. *(Recorded in the code until 2026-10-17.)*
+
+**The macOS profile denies writes from `/` down, and headless Chrome pays for it.**
+Unsandboxed it renders a PDF in 2.0s; under the profile it fails in 0.4s with `Failed to create
+a ProcessSingleton for your profile directory`. That rule is the whole cause: the same profile
+with writes unrestricted works, and socket permissions do not help. No flag avoids it, since
+`--user-data-dir` inside the workspace still fails -- Chrome reaches `/private/var/folders/<user>`
+regardless. Allowing writes to the parent of `tempfile.gettempdir()` was verified to make
+Chrome work while `.env`, the home and the repository stay refused. It is not allowed, because
+nothing shipped needs a browser, and the model asked to stay in the workspace wrote
+`/tmp/preview.pdf` and twice tried `pip install`. *(Recorded in the code until 2026-10-17.)*
+
 ## Sessions: what persists and where
 
 These began as decisions in *Nothing at rest on this machine* and were built
@@ -7058,6 +7078,46 @@ writing it is meant to protect; and resolving the names costs a walk of
 same thing that settled the first attempt -- these sixteen are now correct, and a rule
 whose whole yield is a list of things already fixed is a rule bought at the price of
 every future entry about a deletion. The discipline stays the guard.
+
+**Trimmed to the rule, 2026-10-17.** The test above held and the code had not followed it:
+`src/` carried 8,447 lines of comment and docstring against 13,237 of code. A pass over every
+file kept each reason that stops a wrong change, cut to its shortest -- usually one line --
+and took out the history, the restatements and the cross-references, leaving 4,734. It was
+checked by machine rather than by reading: every file's syntax tree, docstrings removed,
+equals the one before, so the pass changed no code. What only a comment recorded -- a
+measurement, or the evidence behind a decision -- moved to `findings.md` or beside its
+decision here. CLAUDE.md now says that most comments are one line and that a reason needing
+more than about three goes here.
+
+The pass also found comments the code had outgrown. One said a claim vanishing between two
+looks counts as held; there is one look now, and a missing claim is not held. Two said a
+subagent's model is compared with whoever summoned it, which went with `distinct: true`.
+Both went rather than being kept.
+
+**What only a comment recorded, kept here.**
+
+- `core/interfaces.py`: by its folder's own clock, a session read 10,000s idle immediately
+  after a turn finished in it, which is why `mark_used` is part of the interface.
+- `core/config.py`: in the window `claim_stale_after` closes, a second caller took a session
+  while the first turn was still running, and the first turn then finished.
+- `core/session/model.py`: before the turn lock, a turn simply vanished -- both callers got an
+  answer and a run directory, and the conversation kept no record of one of them.
+- `core/session/methods.py`: listing sessions takes one call, measured at 0.22ms for fifty.
+- `core/workspace.py`: no `.gitignore` is written, because a shipped one listed two of the five
+  things a workspace holds; `Library/` fell outside it, and `git add -A` in a real workspace
+  offered to commit a 21MB pip cache.
+- `core/origins.py`: spelled out in full the origins line is about 450 characters; relative, it
+  is about 240, and the relocated entries are the only absolute paths left in it.
+- `core/layout.py`: denying the offloads folder and not its pair refused the file tools a
+  32-byte result and handed them a 101KB one.
+- `plugins/sessions/backend.py`: one file supplied with `--input` came back from a search as
+  two matches with one path between them, on every pattern.
+- `plugins/sessions/shell.py`: before `shell_env`, the shell read `~/.aws` and `~/.config/gh`
+  straight through the fence; a runner of kingfisher's own would be 110 lines of upstream's
+  truncation, timeout and exit-code shaping, copied and kept in step.
+- `plugins/sessions/sandbox/confinement.py`: before `with_supplied_runner`, a runner declaring
+  `local = False` ran its command with no wrap, while `Confinement` still reported
+  `mechanism='sandbox-exec'` and `confined=True`.
 
 ## The size of the test suite
 

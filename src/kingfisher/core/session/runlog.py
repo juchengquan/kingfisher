@@ -49,13 +49,11 @@ def usage_of(events: Iterable[Mapping[str, Any]]) -> Usage:
 
 
 class LoggedRunEvents:
-    """`RunEvents` into the `kingfisher.run` logger, which is where a deployment that
-    wired nothing finds them.
+    """`RunEvents` into the `kingfisher.run` logger.
 
-    The event travels as `extra={"run_event": ...}` as well as the message, so a
-    handler that ships structured records has the mapping rather than a string to
-    parse back. Serialised only when the logger would emit it: the default Python
-    configuration drops INFO, and a turn should not pay to format lines nobody keeps.
+    `extra` carries the mapping for a handler that ships structured records. Checked
+    before serialising: `json.dumps` runs whether or not the line is kept, and the
+    default configuration drops INFO.
     """
 
     def __init__(self, logger: logging.Logger | None = None) -> None:
@@ -87,21 +85,15 @@ class RunLogger(BaseCallbackHandler):
     def _write(self, event: str, **fields: Any) -> None:
         try:
             self._sink.record({"ts": time.time(), "event": event, **self._stamp, **fields})
-        except Exception:  # noqa: BLE001 -- the sink is the deployment's code, and
-            # any failure of it is one a turn must outlive: `run_start` and `run_end`
-            # are called from kingfisher's own turn, where langchain's own guard
-            # around callbacks does not reach.
+        except Exception:  # noqa: BLE001 -- a turn outlives a failing sink: `run_start`
+            # and `run_end` are called outside langchain's guard around callbacks.
             _log.warning("a RunEvents sink failed to record %r", event, exc_info=True)
-
-    # -- lifecycle ---------------------------------------------------------
 
     def run_start(self, task: str) -> None:
         self._write("run_start", task=task)
 
     def run_end(self, *, ok: bool, answer_chars: int) -> None:
         self._write("run_end", ok=ok, answer_chars=answer_chars)
-
-    # -- callbacks ---------------------------------------------------------
 
     def on_llm_end(self, response: Any, **_: Any) -> None:
         message = _first_message(response)

@@ -17,19 +17,10 @@ from kingfisher.core.agent.session_paths import SessionPaths, refusal_text
 class WorkspaceToolPaths(AgentMiddleware):
     """Translate the agent's own paths into real ones, per session.
 
-    **It closes a leak and a usability bug with one change, and the second is how the
-    first was found.** `system.md` teaches virtual paths and says the two views do
-    not mix; the tools wanted host paths and the agent is never told one. Measured in
-    a real run: the model passed `/inputs/config.ini` and the tool raised
-    `FileNotFoundError`. The only way it could succeed was to go looking -- `pwd` in
-    the shell, learn the layout -- and from there it can name *any* session:
-    `count_lines('/workspace/sessions/<other>/secret.txt')` returned an answer.
-
-    Rewriting the call rather than wrapping each tool, because a graph this is
-    attached to holds tools that are not alike: some are `BaseTool`s from `@tool` and
-    some are plain functions. The call is the one shape they share, and langgraph
-    documents the rewrite -- `{**request.tool_call, "args": {...}}`. Where there is
-    no middleware to attach, `GuardedTool` pays the cost of wrapping instead.
+    A leak as well as a convenience: a tool wanting host paths sends the agent looking for
+    them, and from there it can name any session's files. The call is rewritten rather than
+    each tool wrapped, since `BaseTool`s and plain functions share only the call; where there
+    is no middleware, `GuardedTool` wraps instead.
     """
 
     def __init__(self, names: frozenset[str], paths: SessionPaths) -> None:
@@ -74,21 +65,10 @@ class WorkspaceToolPaths(AgentMiddleware):
 class WorkspaceToolErrors(AgentMiddleware):
     """Turn a workspace tool's exception into a failed tool result.
 
-    A built-in reports its failures through `_tool_error` and the model carries on;
-    `HostPathGuard` gives a rejected host path the same treatment. A workspace
-    tool had neither, so upstream's default applied -- bad *arguments* are converted,
-    everything else is re-raised -- and one wrong path killed a sixteen-call run.
-    Measured, on one deployment: the same mistake through `read_file` cost nothing,
-    and through a workspace tool cost the run. Which of the two happened depended on the
-    tool the model reached for, which the deployment cannot predict.
-
-    It cannot tell a tool's exception from one raised below it, and a deployment's own
-    middleware is below it -- appended last, so it runs nearest the tool. So that
-    asymmetry is reinstated for a deployment hook that falls over, pointing the other
-    way: driven with a registered middleware whose `wrap_tool_call` raises, the call to
-    a workspace tool came back as a failed result and the run carried on, while the same
-    middleware on `read_file` ended the turn. The surviving half also reads as the
-    tool's fault, because a failed result carries the tool's name.
+    A built-in's failure is reported and the model carries on; without this, upstream
+    re-raises anything but bad arguments, and one wrong path ends the run. It cannot tell a
+    tool's exception from one raised below it, so a deployment middleware, appended last and
+    nearest the tool, that raises on a workspace tool's call becomes a failed result too.
     """
 
     def __init__(self, names: frozenset[str]) -> None:
@@ -102,9 +82,8 @@ class WorkspaceToolErrors(AgentMiddleware):
 
     def _as_tool_error(self, request: Any, exc: Exception) -> ToolMessage:
         call = request.tool_call
-        # The type as well as the message. A workspace tool is somebody else's
-        # code and its exceptions were not written to be read by a model, so
-        # `FileNotFoundError: /inputs/x.csv` reads far better than the path alone.
+        # The type as well as the message: a workspace tool's exceptions were not written
+        # for a model, and `FileNotFoundError: /inputs/x.csv` reads better than the path.
         return ToolMessage(
             content=f"Error: {type(exc).__name__}: {exc}",
             tool_call_id=call.get("id", ""),

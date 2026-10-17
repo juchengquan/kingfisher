@@ -1,8 +1,7 @@
-"""What the command builds every `Kingfisher` with: the plugins its settings name.
+"""The plugins the command's settings name, which every `Kingfisher` it builds is given.
 
-The command, and not the core, because only the command has a setting and no argument
-to be told them by -- and because it may name `LocalSessions` as the fallback, which
-the core never does.
+Here and not in the core: only the command has settings and no argument to be told them by,
+and only it may fall back to `LocalSessions`.
 """
 
 from __future__ import annotations
@@ -23,8 +22,7 @@ def _named(setting: str, environ: Mapping[str, str] | None) -> str | None:
 def configured_sessions(environ: Mapping[str, str] | None = None) -> Sessions:
     """The sessions `KINGFISHER_SESSIONS` names, or `LocalSessions`.
 
-    Without it, `kingfisher sessions` and `reap` would list and delete a local
-    `sessions/` while a deployment's own keep them somewhere else.
+    Without it, `sessions` and `reap` would act on a local `sessions/`, not the deployment's.
     """
     named = _named("KINGFISHER_SESSIONS", environ)
     if named is None:
@@ -35,8 +33,7 @@ def configured_sessions(environ: Mapping[str, str] | None = None) -> Sessions:
 def configured_plugins(environ: Mapping[str, str] | None = None) -> Plugins:
     """The plugins `KINGFISHER_PLUGINS` names, or none, for kingfisher's own of each.
 
-    A deployment whose turns record their events somewhere would otherwise have every
-    command run without them.
+    Without it, a deployment recording its turns' events would have every command skip them.
     """
     named = _named("KINGFISHER_PLUGINS", environ)
     if named is None:

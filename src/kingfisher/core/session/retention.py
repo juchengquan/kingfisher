@@ -10,11 +10,9 @@ from dataclasses import dataclass
 class SweepResult:
     removed: tuple[str, ...]
     kept: int
-    #: How many of `kept` a running turn spared, carried for the reason
-    #: `SweepPlan.busy` gives.
+    #: How many of `kept` a running turn spared.
     busy: int = 0
-    #: Sessions that could not be fully removed, with why. Surfaced rather than
-    #: swallowed: sessions that cannot delete at all should be visible.
+    #: Sessions that could not be fully removed, with why: surfaced, not swallowed.
     failures: tuple[str, ...] = ()
 
 
@@ -24,10 +22,8 @@ class SweepPlan:
 
     doomed: tuple[str, ...]
     kept: int
-    #: How many of `kept` a running turn spared, rather than their age. Carried
-    #: because `kept` cannot tell the two apart, and a sweep that removes nothing
-    #: reports what decided: blaming the age for a busy session contradicts
-    #: `kingfisher sessions`, which prints that session's idle time beside it.
+    #: How many of `kept` a running turn spared rather than their age, which `kept`
+    #: cannot tell apart: blaming age for a busy session contradicts `kingfisher sessions`.
     busy: int = 0
 
 

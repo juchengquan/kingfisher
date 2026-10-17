@@ -1,9 +1,7 @@
 """Which skills the agent will actually have, asked of the thing that decides.
 
-Two readers looked at this catalogue and did not agree. Kingfisher listed the
-directories holding a skill file; deepagents opened each one and kept the ones it
-could parse. Measured on four directories that all held one, kingfisher advertised
-four names and deepagents loaded three -- two of them different.
+A listing of the directories holding a skill file disagrees with what deepagents loads,
+so the answer comes from deepagents' own lister.
 """
 
 from __future__ import annotations
@@ -22,17 +20,8 @@ if TYPE_CHECKING:
 
     from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
 
-# `SEPARATOR` is imported above rather than defined here. It was written out
-# again with a comment saying it matched the separator tools already use, which
-# is a claim a copied literal cannot keep. `core.definitions.tools.spec` had already made
-# this move and said why: one separator both kinds import beats two that agree
-# by coincidence. Re-exported by the import, so `skills.registry.SEPARATOR`
-# still resolves for readers who look here first.
-
-#: The key a qualified id travels under inside deepagents' own metadata. Added
-#: beside `name` rather than replacing it: `name` is what the file says and what
-#: deepagents validated against the directory, and rewriting it would make a
-#: skill's name depend on where its folder sits.
+#: The key a qualified id travels under in deepagents' metadata, beside `name` rather
+#: than replacing it: rewriting `name` would make it depend on where the folder sits.
 KEY = "kingfisher_id"
 
 #: What skills sitting directly in the root are called, when they have to be
@@ -56,24 +45,17 @@ def split_qualified(text: str) -> tuple[str | None, str]:
 def sources(root: Path | None) -> tuple[tuple[str, str], ...]:
     """`(label, path)` for every place a skill may sit, in a stable order.
 
-    The root itself, plus each folder directly inside it that holds a skill. That is
-    the only shape deepagents offers below the top level -- it lists a source one
-    level deep and no further -- so a folder is a source or its skills are invisible.
-    Measured: one root source finds nothing in a nested layout; three folder sources
-    find all nine.
+    The root, plus each folder directly inside it that holds a skill: deepagents lists a
+    source one level deep, so a folder is a source or its skills are invisible.
     """
     found = [(CATALOGUE, ROOT)]
     if root is None:
         return tuple(found)
-    # None at all, not the root on its own: a missing `skills/` means no skills, and
-    # a source deepagents is handed to list is one it logs "Cannot load skills" about
-    # on every turn when the folder is not there.
+    # None at all: deepagents logs "Cannot load skills" every turn about a missing source.
     if not root.is_dir():
         return ()
     for entry in sorted(p for p in root.iterdir() if p.is_dir()):
-        # A folder that *is* a skill is not a folder that *holds* them. Both
-        # look like a directory under the root, and the difference is one level
-        # down: a skill has the file itself, a source has directories that do.
+        # A folder that is a skill is not a folder that holds them.
         if (entry / skill.FILENAME).is_file():
             continue
         if any((child / skill.FILENAME).is_file() for child in entry.iterdir() if child.is_dir()):
@@ -84,11 +66,10 @@ def sources(root: Path | None) -> tuple[tuple[str, str], ...]:
 def list_skills(backend: Any, path: str) -> list[Any]:
     """Every skill deepagents finds under one source, in its own metadata shape.
 
-    The one call to its private lister, which `test_skill_registry` pins, so an
-    upgrade that moves it breaks here and nowhere else. The error it returns beside
-    the skills is one it has already logged. Deferred, because `Definitions` holds a
-    registry and is reachable from `kingfisher`'s light exports: at module scope this
-    import would make `from kingfisher import Config` load three provider SDKs.
+    The one call to its private lister, which `test_skill_registry` pins, so an upgrade
+    that moves it breaks only here; the error returned beside the skills is already
+    logged. Deferred: the light exports reach this module, and deepagents loads the
+    provider SDKs.
     """
     from deepagents.middleware.skills import _list_skills_with_errors  # noqa: PLC0415
 
@@ -106,11 +87,7 @@ async def alist_skills(backend: Any, path: str) -> list[Any]:
 
 @dataclass(frozen=True)
 class Listed:
-    """One loaded skill, as the three things read from deepagents' metadata for it.
-
-    Built where a listing arrives, so the keys of a dictionary this package does not
-    own are spelled in one function rather than wherever an entry is read.
-    """
+    """One loaded skill, read off deepagents' metadata where a listing arrives."""
 
     name: str
     #: Where its skill file is, as the listing's backend addresses it.
@@ -118,10 +95,8 @@ class Listed:
     description: str
 
 
-#: The path a source is listed under when reading a repository directly. Not
-#: `SKILLS_ROUTE`: this reads a catalogue on its own, before any session exists
-#: and outside the backend an agent will eventually get, so there is no route to
-#: speak of -- only the root of whatever is mounted.
+#: The path a source is listed under when a repository is read directly, before any
+#: session exists: not `SKILLS_ROUTE`, since there is no route outside a backend.
 ROOT = "/"
 
 
@@ -129,20 +104,16 @@ ROOT = "/"
 class SkillRegistry:
     """Every skill the agent will be told about, and the ones it will not."""
 
-    #: Every skill that loaded, keyed by `source::name`. Keyed that way rather
-    #: than by name because a name is no longer unique: two parties who never
-    #: met can both ship a `lookup`, and keying by name is exactly the collapse
-    #: this exists to undo.
+    #: Every skill that loaded, keyed by `source::name`: two parties may both ship a skill
+    #: of one name.
     offered: Mapping[str, Listed]
     unloadable: tuple[str, ...] = ()
     #: Skills deepagents filed under a name their directory does not have, as
-    #: `(directory, name)`. Loaded, offered, and reachable -- under the name in the
-    #: header, which is the one nobody typed.
+    #: `(directory, name)`: offered under the header's name, which nobody typed.
     misfiled: tuple[tuple[str, str], ...] = ()
-    #: The folders under the catalogue root that hold skills, in the order they
-    #: were read, then the label of each mount. What `skills_sources` turns into
-    #: one source each -- kept here rather than recomputed there so the labels a
-    #: caller types and the labels the agent loads under come from one walk.
+    #: The folders under the root that hold skills, in read order, then each mount's
+    #: label. Kept here rather than recomputed, so the labels a caller types and the
+    #: labels the agent loads under come from one walk.
     folders: tuple[str, ...] = ()
 
     @property
@@ -169,13 +140,7 @@ class SkillRegistry:
 
     @property
     def spellings(self) -> tuple[str, ...]:
-        """Every spelling a grant may legally write, for a caller checking one.
-
-        `names` is what a listing shows and is not that set: it gives the bare
-        name wherever it is unique, and the qualified form is legal there too --
-        it is the skill's identity, and the one spelling that still means the
-        same skill after somebody else ships that name.
-        """
+        """Every spelling a grant may legally write: `names`, plus every qualified form."""
         return tuple(sorted({*self.names, *self.offered}))
 
     def identity(self, written: str) -> str | None:
@@ -203,10 +168,8 @@ class SkillRegistry:
         if not sources:
             msg = f"unknown skill: {name!r}; this workspace offers {self.names}"
             raise CapabilityError(msg)
-        # More than one, necessarily: `identity` resolves the single-source case
-        # above, so reaching here with any source at all means several. A further
-        # reason for `identity` to return `None` needs its own branch, or it is
-        # reported as an ambiguity it is not.
+        # Several, necessarily: a new reason for `identity` to return `None` needs its own
+        # branch above, or it is reported as an ambiguity.
         spelt = ", ".join(qualified(s, name) for s in sorted(sources))
         msg = (
             f"{name!r} is offered by more than one source, so naming it alone "
@@ -222,16 +185,14 @@ class SkillRegistry:
 
 def read(repository: LocalSkillRepository) -> SkillRegistry:
     """Ask deepagents what this repository offers."""
-    # Deferred for the reason `list_skills` gives.
+    # Deferred: deepagents loads the provider SDKs.
     from deepagents.backends import FilesystemBackend  # noqa: PLC0415
 
     root = repository.root
-    # A subagent's own folder is read as its skills index will be given it: one
-    # source. Read as the catalogue is, a skill in a subfolder would be granted to a
-    # subagent that is never shown it.
+    # A subagent's own folder is one source, as its index will be: read as the catalogue
+    # is, a skill in a subfolder would be granted to a subagent never shown it.
     found_sources = ((CATALOGUE, ROOT),) if repository.flat else sources(root)
-    # `(directory, prefix, sources, deepest)`: the root, then each mount as a single
-    # source at its own root.
+    # `(directory, prefix, sources, deepest)`: the root, then each mount as one source.
     places = [
         (root, "", found_sources, MOUNT_DEEPEST if repository.flat else DEEPEST),
         *(
@@ -240,10 +201,7 @@ def read(repository: LocalSkillRepository) -> SkillRegistry:
         ),
     ]
 
-    # One listing per source, kept apart. deepagents merges them by name and
-    # lets the last win, which is the collapse this exists to undo: two parties
-    # who never met can both ship a `lookup`, and being told about one of them
-    # is worse than being told about neither.
+    # One listing per source, kept apart: deepagents merges by name and lets the last win.
     offered: dict[str, Listed] = {}
     loaded: list[Listed] = []
     missing: list[str] = []
@@ -252,10 +210,8 @@ def read(repository: LocalSkillRepository) -> SkillRegistry:
         here: list[Listed] = []
         for label, path in labelled:
             for one in list_skills(backend, path):
-                # The prefix is the mount's route segment, and it is what the deny
-                # rule for an unactivated skill is built from. Without it, a mounted
-                # skill's rule names `/skills/<name>/**`, a path that does not exist,
-                # and the skill stays readable.
+                # The prefix is the mount's route segment: without it a mounted skill's deny
+                # rule names a path that does not exist, and the skill stays readable.
                 entry = Listed(
                     name=one["name"],
                     path=f"{prefix}{one['path']}",
@@ -265,21 +221,10 @@ def read(repository: LocalSkillRepository) -> SkillRegistry:
                 offered[qualified(label, entry.name)] = entry
         loaded.extend(here)
 
-        # A directory that looked like a skill and did not come back. deepagents says
-        # why in a warning it logs; what matters here is only which ones, so a reader
-        # can go and look at the file rather than wonder why a skill they wrote is not
-        # on offer.
-        # Compared by each skill's own directory, not by its name. This read
-        # `f"/{found.name}/" in path` against every path kept here -- and the sources
-        # under one root share this list, so a `lookup` that loaded from `team/` said a
-        # broken `legal/lookup` had come back. Two sources shipping one name is the case
-        # sources exist for, and it was the case that hid a failure entirely: no
-        # `unloadable` line, `doctor` green, and a grant of `legal::lookup` refused with
-        # "no skill 'lookup' in 'legal'" and nothing anywhere saying why.
-        #
-        # The two sides are spelled differently on purpose. `Listed.path` already
-        # carries the mount prefix, and `relative_to` does not, so prefixing both would
-        # name a mounted skill twice over.
+        # Directories that looked like a skill and did not load. Compared by directory, not
+        # name: sources under one root share this list, and two may ship one name. The two
+        # sides differ on purpose: `Listed.path` carries the mount prefix, and
+        # `relative_to` does not.
         kept = {str(PurePosixPath(one.path).parent).lstrip("/") for one in here}
         missing.extend(
             where
@@ -287,10 +232,8 @@ def read(repository: LocalSkillRepository) -> SkillRegistry:
             if (where := str(PurePosixPath(prefix.lstrip("/")) / found.relative_to(directory)))
             not in kept
         )
-    # A skill whose header names something its directory does not. deepagents files it
-    # under the header and logs a warning nobody reads, so `--list` shows a name that is
-    # not in the tree and a caller who typed the directory name gets "unknown skill" for
-    # a skill that is plainly there.
+    # A skill whose header names something its directory does not: deepagents files it
+    # under the header, so a caller typing the directory name gets "unknown skill".
     misfiled = tuple(
         sorted(
             (directory, one.name)

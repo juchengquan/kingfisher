@@ -18,10 +18,8 @@ from kingfisher.core.definitions.tools.spec import split_reference
 def refuse_two_of_a_name(activated: Sequence[str], *, subject: str) -> None:
     """Refuse a roster that would hold two subagents answering to one name.
 
-    An agent picks a subagent out of a dictionary keyed by name, so two of a name is
-    not a conflict it reports -- it is one subagent that quietly never exists.
-    Measured: handing deepagents two subagents called `probe` compiles one, with
-    no error and nothing to say which survived.
+    Measured: deepagents handed two subagents called `probe` compiles one, with no error
+    and nothing to say which survived.
     """
     seen: dict[str, list[str]] = {}
     for written in activated:
@@ -39,9 +37,7 @@ def refuse_two_of_a_name(activated: Sequence[str], *, subject: str) -> None:
 
 def refuse_cycles(specs: Mapping[str, SubagentSpec]) -> None:
     """Refuse a catalogue where delegation can reach itself."""
-    # Iterative depth-first, so a catalogue deep enough to matter cannot take
-    # the interpreter's recursion limit with it -- the one bound this rule
-    # removes is the one that used to make that impossible.
+    # Iterative, so a deep catalogue cannot hit the recursion limit.
     seen: set[str] = set()
     for start in sorted(specs):
         if start in seen:
@@ -54,16 +50,12 @@ def refuse_cycles(specs: Mapping[str, SubagentSpec]) -> None:
             if leaving:
                 on_path.discard(path.pop())
                 continue
-            # `on_path` before `seen`, and the order is the whole check: a node
-            # reached twice is ordinary in a DAG, a node reached while still on
-            # the current path is the loop. Testing `seen` first skipped straight
-            # past every cycle and reported a clean catalogue.
+            # `on_path` before `seen`: a node reached twice is ordinary in a DAG, one
+            # reached while still on the path is the loop. `seen` first passes every cycle.
             if name in on_path:
                 loop = [*path[path.index(name) :], name]
-                # A definition that says `subagents: ['*']` never names the loop
-                # it made, so the message has to. It is always a loop: `*` is
-                # every definition in the catalogue, and every catalogue holding
-                # it holds that one.
+                # `subagents: ['*']` never names the loop it made, so the message has to;
+                # and it is always one, since `*` includes the definition itself.
                 by_star = specs[path[-1]].subagents == ALL if path else False
                 how = (
                     f" -- {path[-1]!r} names every subagent with `*`, and that includes itself"
@@ -83,28 +75,19 @@ def refuse_cycles(specs: Mapping[str, SubagentSpec]) -> None:
             seen.add(name)
             stack.append((name, True))
             spec = specs.get(name)
-            # `*` means every definition here, which is what `subagent_helpers`
-            # expands it to when it builds. This read it as *no* edges, so a
-            # definition saying it consults everything passed the walk and then
-            # recursed without bound at build time -- `_with_helpers` has no
-            # re-entry guard and says in a comment that it needs none, because
-            # this ran. The two have to agree about what `*` means or the
-            # guarantee is only about the catalogues that avoid it.
+            # `*` is every definition here, as `subagent_helpers` expands it: the two must
+            # agree, since `_with_helpers` has no re-entry guard and relies on this walk.
             if spec is None or spec.subagents is None:
                 named: tuple[str, ...] = ()
             elif spec.subagents == ALL:
                 named = tuple(specs)
             else:
                 named = spec.subagents
-            # Reverse-sorted onto a stack, so they pop in order and a loop is
-            # reported by the same path every time rather than by whichever
-            # branch the dict happened to yield first.
+            # Reverse-sorted onto a stack so they pop in order: a loop is reported by
+            # the same path every time.
             for helper in sorted(named, reverse=True):
-                # A name that is no key is no edge: unknown, or shared by two
-                # files with nothing saying which. Safe because the build refuses
-                # it against these same keys before following it. Resolving it to
-                # every file it could mean would refuse the whole catalogue over a
-                # loop that exists only if the choice goes one way.
+                # A name that is no key is no edge -- unknown, or shared by two files.
+                # Safe because the build refuses it against these same keys first.
                 if helper in specs:
                     stack.append((helper, False))
 
@@ -119,16 +102,12 @@ def _differs(
 ) -> str | None:
     """How one half of what a definition lists as bundled and its folder disagree.
 
-    Both directions, because they are different mistakes with the same cure. A name
-    the folder lost is a definition gone stale; a file the folder holds and the
-    definition does not list is a capability that would arrive, or on upgrading from
-    when the folder granted by itself would vanish, with no line in any file to show
-    it -- and a subset check would let that one through.
+    Both directions: a name the folder lacks is a stale definition, and a file the list
+    lacks is a capability arriving with no line to show it, which a subset check passes.
     """
     missing = sorted(set(listed) - set(held))
     arrived = sorted(set(held) - set(listed))
-    # A listed skill in a subfolder is not missing, and saying it is sends the reader
-    # looking for a file that is plainly there.
+    # A listed skill in a subfolder is buried, not missing: the file is plainly there.
     deep = {PurePosixPath(one).name: one for one in buried}
     sunk = [name for name in missing if name in deep]
     missing = [name for name in missing if name not in deep]
@@ -166,19 +145,16 @@ def miscounted(
 ) -> str | None:
     """How a definition's bundled entries differ from the folder they come from.
 
-    Asked as well as refused, for the reason `Offering.moved` gives: startup refuses
-    this and `doctor` has to report what startup refuses, and a check reachable only
-    through the constructor is one a listing cannot see.
+    Asked as well as refused, so `doctor` can report what startup refuses.
     """
     if spec.carried:
-        return None  # it brought its own, and there is no folder to compare them with
+        return None  # it carried its own: there is no folder to compare
     listed = {half: names for half, names in spec.bundled.items() if names}
     if where is None:
         if not listed:
             return None
-        # The rename, caught from the side the definition is on. `orphaned_assets`
-        # reports the folder left behind; this reports the file that walked away
-        # from it, and only this one knows what the file thought it had.
+        # A renamed definition: `orphaned_assets` reports the folder it left, and only
+        # this knows what the file expected to find there.
         return (
             f"lists entries as source: bundled and owns no folder to take them from "
             f"-- a subagent's own folder is subagents/{spec.name}/, holding this "
@@ -223,7 +199,7 @@ def refuse_miscounted(
 def resolved_model(
     wanted: str | None, *, override: RunOn | None = None
 ) -> str | None:
-    """What a subagent would run, in order, once the request has had its say."""
+    """The model a subagent would run once the request has had its say."""
     if override is not None:
         return override.model
     return wanted

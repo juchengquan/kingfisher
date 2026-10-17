@@ -1,10 +1,8 @@
 """Agent assembly: kingfisher's configuration and grants into a deepagents graph.
 
-Two jobs it used to do live elsewhere now, because at 657 lines it was doing four.
-`prompting` assembles the system prompt -- moved out because it needs nothing foreign,
-and sharing a file with `create_deep_agent` cost every consumer of `system_prompt` 764ms
-and three provider SDKs. Resolving what a subagent runs with is
-`core.agent.kinds.subagents`. Neither calls anything here.
+The system prompt is assembled in `prompting` and what a subagent runs with in
+`core.agent.kinds.subagents`, and neither calls anything here: this module imports
+deepagents, and naming `system_prompt` must not.
 """
 
 from __future__ import annotations
@@ -90,28 +88,15 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class Assembled:
-    """One graph, and what it was built with.
+    """One graph, and what it was built with, so a caller need not intercept
+    `create_deep_agent` to ask.
 
-    Returned instead of the graph alone so a caller can ask what a build attached
-    rather than intercepting `create_deep_agent` to find out. Twenty-two test files
-    did that by patching it under a string path and reading the kwargs back, which
-    made the argument list a contract nothing declared.
-
-    **It carries the graph rather than replacing it.** Two callers want the graph
-    itself -- `builtin_tool_names` reads a tool roster off one, and the service hands
-    one to `stream` -- and a record that made them fetch it from somewhere else would
-    buy a name and cost every use.
-
-    **Every keyword, not the ten a test happens to read.** `checkpointer` is asserted
-    on by nothing today, and `interrupt_on` was asserted on by nothing until the
-    commit that added it. A record holding only what is currently interesting is one
-    that needs a second mechanism the next time a keyword appears -- which is the
-    thing this removes.
+    Every keyword it was called with, not only those a test reads today: a record of
+    only what is interesting needs a second mechanism when the next keyword appears.
     """
 
-    #: What `create_deep_agent` returned. Typed under `TYPE_CHECKING` like every
-    #: other mention of it here, which `from __future__ import annotations` makes
-    #: free: a dataclass does not evaluate its annotations.
+    #: What `create_deep_agent` returned. A `TYPE_CHECKING` name is safe here: a
+    #: dataclass does not evaluate its annotations.
     graph: CompiledStateGraph[Any, ToolContext, Any, Any]
     model: Any
     backend: Any
@@ -121,16 +106,12 @@ class Assembled:
     checkpointer: Any
     tools: list[Any] | None
     context_schema: type[ToolContext]
-    #: What a turn on this graph is driven with -- every turn, a resume too, because
-    #: langgraph keeps the context out of the checkpoint and a graph resumed without
-    #: it hands a tool `None`. The one field `create_deep_agent` was not called
-    #: with, and it is on the record because this build is the only place holding
-    #: both halves: the backend, and the rules the file tools were given. A caller
-    #: pairing them itself could pair the backend with a different list.
+    #: What every turn on this graph is driven with, a resume too: langgraph keeps the
+    #: context out of the checkpoint, and a graph resumed without it hands a tool `None`.
+    #: On the record because only this build holds both the backend and its file rules.
     context: ToolContext
-    #: The four that reach `create_deep_agent` through `**extras` and are absent
-    #: unless this build wired them, so each defaults to what "not passed" means
-    #: rather than to an empty value a test could mistake for one that was.
+    #: Passed through `**extras` only when this build wired them, so each defaults to
+    #: what "not passed" means rather than to an empty value a test could mistake for one.
     memory: Any = None
     skills: Any = None
     interrupt_on: Mapping[str, Any] | None = None
@@ -140,9 +121,7 @@ class Assembled:
 def memory_is_denied(layout: Layout = DEFAULT_LAYOUT) -> FilesystemPermission:
     """For a request that declined memory a deployment did wire.
 
-    Reads are denied rather than the prompt rewritten: the prompt is the cached
-    prefix. The scope is this layout's `/memory/`, so a renamed memory folder is the
-    one the declined request is kept out of.
+    Reads are denied rather than the prompt rewritten: the prompt is the cached prefix.
     """
     return FilesystemPermission(
         operations=["read"],
@@ -152,27 +131,17 @@ def memory_is_denied(layout: Layout = DEFAULT_LAYOUT) -> FilesystemPermission:
 
 
 def read_only_permissions(layout: Layout = DEFAULT_LAYOUT) -> list[FilesystemPermission]:
-    """A deny rule for every scope the layout refuses writes under.
+    """A deny rule for every scope the layout refuses writes or reads under.
 
-    Deduplicated there, so `/skills/**` is one rule covering the catalogue and every
-    bundle. One rule per *mount* would make the count
-    depend on how many bundles a catalogue ships, for no gain.
+    One rule per scope, not per mount, so `/skills/**` covers the catalogue and every
+    bundle whatever a catalogue ships.
 
-    **What this does not reach is the shell.** Filesystem permissions are applied by
-    `FilesystemMiddleware` at the tool level, so they cover `write_file`, `edit_file`
-    and `delete` -- `FilesystemOperation` is read|write and delete maps to write --
-    and `execute` bypasses them entirely. The other half of each rule is elsewhere
-    and neither half is sufficient: `confinement.resolve` denies writes to the skills
-    directory in the sandbox profile, which is macOS-only and can be switched off, and
-    the three fences each refuse `/inputs` and `.harness` in their own terms. The saved
-    results are refused by two of them: Landlock cannot carve a folder out of the
-    scratchpad it grants whole.
-
-    `plugins.sessions.permissions` drops the write bits under `/inputs` as
-    well, and that is not the other half of this rule -- it is a layer below both. The
-    shell runs as the uid owning those files, so it lifts them: measured, `chmod u+w`
-    and the same write replaced the caller's file, and `rm -rf inputs` took the folder,
-    with this docstring naming the bits as what covered the case.
+    These bind the file tools and not `execute`, and neither half suffices alone. The
+    shell's half is `confinement.resolve`, macOS-only and switchable off, and the fences,
+    which refuse `/inputs` and `.harness` in their own terms -- the saved results in only
+    some, since Landlock cannot carve a folder out of the scratchpad it grants whole. The
+    write bits `plugins.sessions.permissions` drops under `/inputs` are not that half: the
+    shell runs as the files' owner and can lift them.
     """
     return [
         FilesystemPermission(operations=["write"], paths=[scope], mode="deny")
@@ -186,12 +155,9 @@ def read_only_permissions(layout: Layout = DEFAULT_LAYOUT) -> list[FilesystemPer
 def _gates_for(agent: AgentSpec | None, checkpointer: Any) -> tuple[str, ...]:
     """Which tools this agent stops on, refusing gates that could never pause.
 
-    Asked of the checkpointer rather than of `conversation_enabled`, because the
-    saver is the thing a pause actually needs and the flag is only the usual reason
-    there is none. Without one, langgraph's `GraphInterrupt` is *"suppressed by the
-    root graph, never surfaced to the user"* -- so the turn would end with the gated
-    call not run and nothing anywhere saying so, which is the outcome the author
-    wrote `interrupt_on` to prevent.
+    Asked of the checkpointer, not `conversation_enabled`: a pause needs a saver, and
+    without one langgraph suppresses the interrupt, so the gated call would be skipped
+    with nothing said.
     """
     wanted = agent.interrupt_on if agent is not None else ()
     if not wanted or agent is None or checkpointer is not None:
@@ -211,11 +177,9 @@ def _refuse_unknown_gates(
 ) -> None:
     """Refuse a gate on a name no tool in this workspace answers to.
 
-    Checked against what the workspace *offers* rather than what this caller was
-    granted, and the difference is the whole point: a grant narrows per request, so
-    an agent gating a tool a particular caller did not ask for is a gate with nothing
-    to fire on and is fine. A name that matches nothing at all is a typo, and
-    honouring it silently leaves an author believing a call is gated while it runs.
+    Against what the workspace offers, not this caller's grant: a gate on a tool one
+    caller was not granted is fine, and a name matching nothing is a typo that leaves
+    the author believing a call is gated.
     """
     if not gated or agent is None:
         return
@@ -249,12 +213,10 @@ def _wanted_endpoints(
 def _running(
     agent: AgentSpec | None, cfg: Config, endpoints: Selection, injected: Any
 ) -> tuple[Any, int | None]:
-    """The model instance this agent's graph is built on, and the `clear_results_at` of
-    the entry that built it -- `None` for a model the deployment passed in, which has no
-    entry, and for one that sets none.
+    """The model this agent's graph runs, and its entry's `clear_results_at`, if any.
 
-    The entry is looked up by the name `model_object` builds from, so the mark is the
-    one written beside the model this graph runs and not the default's.
+    A model the deployment passed in has no entry. The entry is looked up by the name
+    `model_object` builds from, so the mark is this model's and not the default's.
     """
     mine = None if agent is None else model_object(agent, cfg, endpoints=endpoints)
     if injected is not None:
@@ -273,11 +235,8 @@ def _provisions(
 ) -> dict[str, Any]:
     """What a class that declared `wants` is filled in from, for one graph.
 
-    Both call sites hand over the same keys and different values -- a subagent's
-    model is its own, not this agent's -- so a `middlewares:` line means the same
-    thing in an agent file and a subagent file. One builder rather than two, so
-    they cannot drift; a second mapping written inline at one of them is what
-    `test_both_kinds_are_handed_the_same_things_to_want` would catch.
+    One builder for both kinds, so a `middlewares:` line means the same in an agent
+    file and a subagent file; only the values differ, a subagent's model being its own.
     """
     return {
         "model": ByName(runs, resolve=lambda w, s: _model_named(w, s, cfg, endpoints)),
@@ -295,10 +254,8 @@ def _deployment_middleware(
 ) -> list[Any]:
     """What this deployment's registry owes one graph, freshly built.
 
-    Called per graph rather than bound to a variable: `declared_middleware` builds
-    the middleware instances, and two graphs sharing one would share its state.
-    `provisions` is the input those instances are filled from and holds none, which
-    is why it may be built once and handed to both callers.
+    Per graph, because two graphs sharing a middleware instance would share its state.
+    `provisions` holds none, so it may be built once.
     """
     if agent is None:
         return []
@@ -310,10 +267,9 @@ def _deployment_middleware(
 def _probe_backend(cfg: Config, scratch: Path) -> CompositeBackend:
     """A backend nothing runs on, to read the built-in tool set off an assembled graph.
 
-    deepagents' own classes rather than a session's: a probe opens no session, and the
-    core names no sessions implementation. It executes, so `execute` is offered as it is
-    on a real one, and it routes every path the layout does, which is what lets a graph
-    carrying kingfisher's deny rules build at all.
+    deepagents' own classes, since the core names no sessions implementation. It
+    executes, so `execute` is offered as on a real one, and routes every path the layout
+    does, without which a graph carrying kingfisher's deny rules does not build.
     """
     routes = {}
     for route in cfg.layout.routed_paths():
@@ -330,16 +286,11 @@ def builtin_tool_names(
 ) -> tuple[str, ...] | None:
     """The built-in set, which is only knowable from an assembled graph.
 
-    Here rather than in `kinds/tools.py`, where the rest of the tool surface lives:
-    this has to call `build_agent`, and that module is imported *by* this one, so the
-    edge would close a cycle -- which `test_no_module_in_the_package_can_reach_itself`
-    now refuses outright.
+    Not in `kinds/tools.py`: that module is imported by this one, so calling
+    `build_agent` from there would close a cycle.
 
-    It is a *check* as well as a question, whoever calls it: assembling the graph
-    refuses a workspace tool wearing a built-in's name. `workspace_tools` does not
-    decide that -- `build_agent` falls back to the catalogue's own when it is `None`
-    -- it is there for a caller that has already walked them and would rather not
-    hand the decision to somebody else.
+    Also a check: assembling refuses a workspace tool wearing a built-in's name.
+    `workspace_tools` does not decide that; it spares a caller that has walked them.
     """
     import tempfile  # noqa: PLC0415 -- one caller, and only on the branch that probes
 
@@ -350,20 +301,14 @@ def builtin_tool_names(
                 backend=_probe_backend(cfg, Path(scratch)),
                 catalogue=catalogue,
                 workspace_tools=workspace_tools,
-                # No subagents. What a workspace *offers* is answered from the
-                # catalogue by the caller; this build exists solely to read the
-                # built-in tool set off a compiled graph, and wiring a roster to
-                # do it would make a listing refuse the very things it is meant
-                # to report -- two definitions of a name are printed, not raised.
+                # No subagents: wiring a roster would make a listing refuse what it
+                # reports -- two definitions of a name are printed, not raised.
                 capabilities=Capabilities(subagents=None),
             ).graph
         )
 
 
-def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each parameter
-    # is one injectable collaborator, and the body is the wiring itself: every
-    # statement attaches one thing to the graph, so splitting it would move the
-    # wiring somewhere a reader has to go and find rather than shortening it.
+def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each statement wires one thing
     cfg: Config,
     *,
     capabilities: Capabilities | None = None,
@@ -381,43 +326,33 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
 ) -> Assembled:
     """Wire model, backend and checkpointer into a deep agent, and say what was wired.
 
-    `ledger` is the turn's, which every graph built here records into; `None` records
-    nothing, which is right for a build no turn will keep.
+    `ledger` is the turn's, recorded into by every graph built here; `None` records nothing.
     """
-    # The agent file is the baseline and the request only ever subtracts from it. One
-    # lattice, applied in the one direction it already goes: what a caller asks for
-    # cannot exceed what the definition declared. One function, because the run's report
-    # of what it activated has to read the same answer.
+    # The agent file is the baseline and the request only subtracts from it. One
+    # function, because the run's report of what it activated reads the same answer.
     asked = capabilities or Capabilities()
     capabilities = for_the_caller(agent, asked, held=held)
     roots = catalogue or Definitions.from_config(cfg)
-    # Every backend, and that is the point: a check only some builds ran would be a
-    # check nothing here exercises.
+    # Every backend: a check only some builds ran would be one nothing here exercises.
     refuse_unusable_backend(
         backend, (*cfg.layout.denied_scopes(), *cfg.layout.denied_read_scopes())
     )
-    # Asked of the backend because only it knows what its shell sees. `tool_guards` asks
-    # it the same, for the `execute` line.
     shell = shell_prompt_of(backend)
-    # The catalogue walked these when the deployment was wired; a caller that
-    # has already walked them itself -- `--list` -- still wins. Walked before the
-    # stack rather than beside the tools below, because `tool_guards` needs the
-    # names and every graph built here gets the same three.
+    # Before the middleware stack, because `tool_guards` needs the names. A caller that
+    # has walked them itself -- `--list` -- wins over the catalogue.
     walked = tuple(roots.tools.found if workspace_tools is None else workspace_tools)
-    # Every walked tool, not the granted ones: a request that activated none of
-    # them cannot reach one, and narrowing this to the grant would mean building
-    # the guard from a set that is computed after it.
+    # Every walked tool, not the granted ones: the grant is computed after the guards,
+    # and a tool outside it cannot be reached anyway.
     guarded = frozenset(entry.name for entry in walked)
     permissions = read_only_permissions(cfg.layout)
-    # The turn's backend under the turn's rules, and one of it: what a tool is handed as
-    # `runtime.context.backend`, and what a tool's `path` is resolved through. Built
-    # before the rules are finished, and it reads them when it checks, so what is added
-    # below -- memory declined, skills narrowed -- applies to both.
+    # What a tool is handed as `runtime.context.backend` and its `path` resolves through.
+    # It reads the rules when it checks, so those added below -- memory declined, skills
+    # narrowed -- apply to it too.
     under_rules = PermittedBackend(backend, permissions)
     paths = SessionPaths(under_rules, cfg.sessions_root, cfg.layout)
 
-    # A bundle's tools as well as the catalogue's, since a subagent's calls are
-    # recorded too and a bundled tool may say who it admits.
+    # A bundle's tools too: a subagent's calls are recorded, and a bundled tool may say
+    # who it admits.
     own = (
         own_audiences(
             (*walked, *(one for bundle in roots.bundled_tools.values() for one in bundle.found))
@@ -429,15 +364,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     def recording(definition: object | None) -> Recorder | None:
         """A recorder for one graph, reading access off `definition`'s audiences.
 
-        One per graph, as every middleware here is, all into the turn's one ledger.
-
-        It saves through the turn's backend and not through `under_rules`, which is the
-        one place that distinction is wanted: the results folder is write-denied to the
-        file tools, and the recorder is what writes it. This said a result file was held
-        to the rules a tool's own save is, and under that reading the folder could not
-        be denied at all -- the deny reached the recorder first and no graph would
-        build. A deployment's own refusals still apply, since they live in the backend
-        underneath rather than in these rules, and `_unkept` is what reports one.
+        It saves through the turn's backend, not `under_rules`: the results folder is
+        write-denied to the file tools, and the recorder is what writes it. A
+        deployment's own refusals still apply, since they live in the backend.
         """
         if ledger is None:
             return None
@@ -446,10 +375,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
 
     running, mark = _running(agent, cfg, capabilities.endpoints, model)
     middleware: list[Any] = [
-        # The agent's own and no subagent's, and only where a turn keeps the ledger
-        # whose rows its handles name. First, so the request it measures is the one
-        # deepagents' summariser counted, before anything here adds to the prompt or
-        # narrows the tools.
+        # The agent's alone, and only with a ledger for its handles to name. First, so it
+        # measures the request deepagents' summariser counted, before anything adds to it.
         *(
             ()
             if ledger is None
@@ -460,56 +387,45 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     ]
     extras: dict[str, Any] = {}
 
-    # One answer to "are skills on", for this agent and for every subagent it
-    # builds. `cfg` says what is wired and the request says what it wants of that --
-    # and the subagent branch below asked only the request, so a deployment with
-    # skills switched off still handed a subagent an index over a route it was
-    # never meant to reach.
+    # One answer to "are skills on", for this agent and every subagent it builds.
     skills_on = cfg.skills_enabled
 
-    # Two axes, and this is where they meet: `cfg` says what is wired, the
-    # request says what it wants of that. Narrowing can only subtract --
-    # `memory=True` against a deployment that wired none stays off.
+    # Narrowing only subtracts: `memory=True` against a deployment that wired none
+    # stays off.
     if cfg.memory_enabled and capabilities.memory is not False:
         memory_files = memory_sources(cfg.layout)
         extras["memory"] = memory_files
-        # Built here for its `system_prompt`: the one deepagents builds tells the
-        # agent memory lasts into "future conversations". Beside `memory=`, not
-        # instead of it: deepagents merges middleware by name, so this takes the
-        # slot it builds its own in, after the breakpoint caching the static prompt.
-        # Passed alone it lands ahead of that breakpoint, and every edit to the
-        # memory file costs the whole prompt its cache.
+        # For its `system_prompt`: deepagents' own says memory lasts into "future
+        # conversations". Beside `memory=`, not instead: merged by name, this takes the
+        # slot deepagents builds its own in, after the static prompt's cache breakpoint.
+        # Alone it lands ahead of it, and every memory edit costs the prompt its cache.
         middleware.append(
             MemoryMiddleware(
                 backend=backend,
                 sources=memory_files,
-                # What deepagents gives the one this replaces: the memory block's
-                # own breakpoint.
+                # As deepagents' own has it: the memory block's own breakpoint.
                 add_cache_control=True,
                 system_prompt=memory_guidelines(),
             )
         )
     elif cfg.memory_enabled:
-        # Wired but declined. The prompt still describes memory, because it is
-        # the cached prefix and must not vary per request; this stops the file
-        # being read anyway. deepagents puts memory behind its own cache
-        # breakpoint, so dropping the block leaves the prefix cached.
+        # Wired but declined: the prompt still describes memory, because it is the
+        # cached prefix, so this stops the file being read. The memory block sits
+        # behind its own breakpoint, so dropping it leaves the prefix cached.
         permissions.append(memory_is_denied(cfg.layout))
 
     if skills_on:
         registry = activatable_skills(cfg, catalogue=roots)
-        # One source per folder, so a skill below the top level is visible at
-        # all -- and labelled the way the registry labelled it, because a label
-        # is the first half of what a request grants.
+        # One source per folder, so a nested skill is visible, labelled as the registry
+        # labels it: a label is the first half of what a request grants.
         sources = skills_sources(registry.folders)
         if capabilities.skills == ALL:
             extras["skills"] = sources
         elif capabilities.skills is None:
             pass  # none: no index, and no deny rules to write for one
         else:
-            # Each grant to the one skill it means. A bare name that two sources
-            # both offer is refused here rather than resolved, because resolving
-            # it is exactly the silent pick this exists to stop.
+            # A bare name two sources both offer is refused, not resolved: resolving
+            # it is the silent pick this exists to stop.
             activated = tuple(registry.resolve(one) for one in capabilities.skills)
             # Supplied as middleware rather than via `skills=`: passing that
             # argument makes deepagents construct its own SkillsMiddleware,
@@ -532,17 +448,13 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
 
     gated = _gates_for(agent, checkpointer)
     if gated:
-        # `True` rather than an `InterruptOnConfig`: the config's `when` predicate is
-        # the narrowing this format deliberately does not offer, and its
-        # `allowed_decisions` default is all four -- `edit` included, which is
-        # narrowed where a pause is read rather than here, so one place decides it.
+        # `True`, not an `InterruptOnConfig`: its `when` is a narrowing this format does
+        # not offer, and which decisions a pause allows is decided where it is read.
         extras["interrupt_on"] = dict.fromkeys(gated, True)
 
     def assemble(extra_tools: tuple[Any, ...]) -> Assembled:
-        # One mapping, spent twice: it is what `create_deep_agent` is called with and
-        # what the record says it was called with. Built separately, the two could
-        # disagree -- a record that describes a build which did not happen is worse
-        # than no record, because it is asserted on.
+        # One mapping for the call and the record, so the record cannot describe a
+        # build that did not happen.
         attached: dict[str, Any] = {
             "model": running,
             "backend": backend,
@@ -568,27 +480,22 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     defined, activated = _activated_subagents(
         cfg, capabilities, catalogue=roots, held=held, agent=agent
     )
-    # What a refusal below may list, which is not what it judges. `None` where there is
-    # nobody to narrow for, and where the agent is unknown: a build handed its own graph
-    # resolves no spec, and an empty `offered:` list is worse than a wide one.
+    # What a refusal may list, not what it judges. `None` with nobody to narrow for or no
+    # agent resolved: an empty `offered:` list is worse than a wide one.
     in_reach = None if held is None or agent is None else offers("tools", held, [agent])
     surface = _resolve_tools(
         str(roots.tools.root) if roots.tools.root is not None else "the catalogue",
         capabilities,
         walked,
         assemble,
-        # Either list naming anything is enough: both are checked against their
-        # own offered set, and neither set is knowable without the probe.
-        # Either tool list naming anything needs the offered sets. A subagent
-        # naming a helper needs the built tool *objects*, which come off the
-        # same probe -- so wanting one is equally a reason to run it.
+        # Either tool list naming anything needs the offered sets, and a subagent
+        # naming a helper the built tool objects: the probe is what yields both.
         names_needed=bool(gated)
         or any(
             defined[n].tools not in (ALL, None)
             or defined[n].builtin_tools not in (ALL, None)
-            # One axis everything and the other nothing, which is every portable
-            # subagent's default. `ceiling` folds both into one list of names, and
-            # "every built-in" is not a list until the probe has read one.
+            # One axis everything and the other not, every portable subagent's default:
+            # folding both into one list needs "every built-in" read off the probe.
             or (defined[n].tools == ALL) != (defined[n].builtin_tools == ALL)
             or defined[n].subagents is not None
             for n in activated
@@ -596,38 +503,25 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         in_reach=in_reach,
         held=held,
     )
-    # After the probe, because what a workspace offers is only knowable from an
-    # assembled graph -- `builtin_tool_names` builds one to answer it, so asking it
-    # from inside this function would recurse. `gated` forces the probe above for
-    # this: without it, an agent that names only a gate would skip the probe and the
-    # check would have nothing to check against.
+    # After the probe: what a workspace offers is only knowable from an assembled graph,
+    # and asking `builtin_tool_names` from here would recurse. `gated` forces the probe.
     _refuse_unknown_gates(agent, gated, surface.offers)
     permitted = surface.permitted
 
     if interpreter_at is not None and (permitted is not None or gated):
-        # Re-wired now that the union is known. It had to be in place for the
-        # probe -- `eval` is a tool, so a request naming it needs it in the
-        # enumerated set -- but unrestricted, since the grant was not resolved
-        # yet. A caller that withheld the shell must not reach it from code, and
-        # an unrestricted request must not reach a gated `task` from it either.
+        # Re-wired now the grant is known; the probe needed it unrestricted to see
+        # `eval`. A caller who withheld the shell must not reach it from code, nor an
+        # unrestricted request a gated `task`.
         middleware[interpreter_at] = _interpreter(
             cfg,
             permitted,
             gated=gated,
-            # Wrapped, as a compiled subagent's are and for its reason: a call from
-            # code meets none of the guards on this graph's stack.
+            # Wrapped: a call from code meets none of the guards on this graph's stack.
             workspace=guarded_tools(surface.carried, paths),
         )
 
-    # Both kinds read it, so it is resolved before either branch. It used to
-    # be bound inside the subagents' block, which meant an agent with no
-    # subagents never reached a registry at all.
-    #
-    # Two sources since `middlewares/` became a definition kind: what this
-    # deployment wired in its own program, and what its workspace defines.
-    # Merged once here for the same reason it was hoisted -- an agent and its
-    # subagents must select from one mapping, or a name would mean different
-    # things one level apart.
+    # Before either branch, and merged once: an agent and its subagents must select
+    # from one mapping, or a name would mean different things one level apart.
     registry = offered_middleware(middleware_registry or {}, roots.middlewares)
 
     if capabilities.subagents is not None:
@@ -642,8 +536,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                 subject=subject,
                 in_reach=in_reach,
             )
-            # After the unknown-name check, so a definition naming `csv_column`
-            # hears that the name is wrong rather than that it has moved.
+            # After the unknown-name check, so a misspelt name is told it is wrong
+            # rather than that it has moved.
             surface.offers.refuse_moved(defined[name].tool_sources, subject=subject)
 
         wanted = _wanted_endpoints(run_on, activated, capabilities.models)
@@ -651,8 +545,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         def _built(
             name: str,
             *,
-            # This subagent's model, not the agent's -- see `_with_helpers`, which
-            # is the only caller and the only place the difference is known.
+            # This subagent's model, not the agent's.
             runs: Any,
             helpers: list[Any] | None = None,
             default_model: Any = None,
@@ -667,9 +560,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                 endpoints=capabilities.endpoints,
                 builtin_tools=surface.granted_builtin,
                 tools=surface.granted_workspace,
-                # Behind the deployment's switch, like the agent's own index above:
-                # a subagent asked only the request before this, so a workspace with
-                # skills off still handed one an index of the shared catalogue.
+                # Behind the deployment's switch too, like the agent's own index.
                 skills=(
                     subagent_skills(defined[name], offered, capabilities.skills, held=held)
                     if skills_on
@@ -680,15 +571,11 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                 default_model=default_model,
                 tool_objects=tool_objects,
                 catalogue=walked,
-                # Its own, if it has a folder named after it. Looked up by the
-                # key a grant uses, which is what `bundled_tools` is keyed by,
-                # so a qualified `analysis/surveyor.yaml::surveyor` finds its
-                # bundle and a bare `surveyor` finds its own.
+                # Its own folder's, looked up by the key a grant uses, which is
+                # what `bundled_tools` is keyed by.
                 private=_private_tools(roots, name, held=held),
-                # Not behind the switch: a bundle is the subagent's own folder rather
-                # than the catalogue the switch is about, and the backend mounts its
-                # route either way -- withholding the index here would leave the files
-                # reachable and unnamed.
+                # Not behind the switch: a bundle is the subagent's own folder, mounted
+                # either way, so withholding its index leaves the files reachable unnamed.
                 private_skills=_private_skills(roots, name),
                 paths=paths,
                 run_on=wanted.get(name),
@@ -709,23 +596,16 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                 ),
             )
 
-        # One compiled agent per definition, however many places it appears. Not an
-        # optimisation: compiling per *path* is exponential in the shape of the
-        # catalogue, and a catalogue with no cycle at all can describe an enormous
-        # number of paths. Measured -- 15 definitions each naming three is 6,872
-        # compilations and seven seconds, twenty is two and a half minutes. Compiled
-        # once each, the same catalogue is twenty.
+        # One compiled agent per definition, however many places it appears: compiling
+        # per path is exponential in the catalogue's shape, even with no cycle.
         compiled: dict[tuple[str, bool, int], Any] = {}
 
-        # Every agent this caller can open, not the one being built: what a
-        # *subagent's* file could name instead is bounded by the catalogue, and a file
-        # is what this refusal is about. `offered_to` has the distinction.
+        # Every agent this caller can open, not the one being built: this refusal is
+        # about a subagent's file, and what it could name instead is the catalogue's.
         listing = offered_to(defined, held, by=agents_to_ask(cfg, catalogue=roots))
 
-        # What the main agent itself runs, as an object a helper can be handed.
-        # A top-level subagent needs none of this -- deepagents gives it the
-        # agent's own model -- but `SubAgentMiddleware` gives a nested one
-        # nothing, and deepagents refuses a nested spec with no model at all.
+        # For a helper: deepagents gives a top-level subagent the agent's model but a
+        # nested one none, and refuses a nested spec with no model.
         root = running
 
         def _with_helpers(name: str, *, nested: bool, inherited: Any = None) -> Any:
@@ -743,26 +623,20 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
                     _with_helpers(
                         helper,
                         nested=True,
-                        # Its parent's model, which is what "runs whatever
-                        # summoned it" means one level down. This was the main
-                        # agent's, so a helper under a subagent pinned to the
-                        # cheap model quietly ran the expensive one.
+                        # Its parent's model, not the agent's: "runs whatever
+                        # summoned it", one level down.
                         inherited=mine if mine is not None else root,
                     )
-                    # `activated` rather than the grant, which may be `"*"`: a
-                    # helper out of this caller's reach was left out of it.
+                    # `activated`, not the grant, which may be `"*"`: it leaves out
+                    # a helper out of this caller's reach.
                     for helper in subagent_helpers(
                         defined[name], defined, activated, held=held, listing=listing
                     )
                 ]
                 compiled[key] = _built(
                     name,
-                    # What this subagent actually runs: its own model, or the model
-                    # of whoever summoned it when it names none and inherits none.
-                    # `as_subagent` leaves `model` off the spec in that case and
-                    # deepagents hands it the parent's, so a middleware told the
-                    # agent's model here would be told the wrong one exactly when a
-                    # subagent was pinned to a cheaper one.
+                    # What this subagent actually runs: its own model, else its
+                    # summoner's, which deepagents hands a spec that names none.
                     runs=mine if mine is not None else root,
                     helpers=helpers or None,
                     default_model=inherited if nested else None,
@@ -774,9 +648,6 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
             _with_helpers(n, nested=False) for n in activated
         ]
 
-    # Built once and handed to both callers below. What must not be shared between
-    # graphs is the middleware instances, which `_deployment_middleware` builds
-    # afresh each call; this is the input they are filled from and holds no state.
     agent_provisions = (
         {}
         if agent is None
@@ -792,21 +663,16 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     if permitted is not None:
         middleware.append(ToolAllowlist(permitted))
 
-    # deepagents supplies a `general-purpose` subagent with "the same capabilities as
-    # the main agent" and none of our middleware, present whenever `task` is. Supplying
-    # one by the same name *replaces* it -- the specs are keyed by name -- so it keeps
-    # working and arrives with the caller's ceiling on it, rather than being withheld.
+    # deepagents adds a `general-purpose` subagent with the agent's capabilities and none
+    # of our middleware whenever `task` is offered. One supplied by that name replaces
+    # it, so it keeps working under the caller's ceiling rather than being withheld.
     supplied = list(extras.get("subagents", ()))
     supplied.append(
         {
             **GENERAL_PURPOSE_SUBAGENT,
-            # It is handed *this* agent's tools -- deepagents fills a spec that
-            # names none from the parent -- so it holds the same objects and needs
-            # the same guards around them. Without them a tool call through this
-            # subagent reached the tool with its paths untranslated.
+            # deepagents hands it the agent's own tool objects, so it needs the same guards.
             "middleware": (
-                # The agent's recorder too: these are the agent's tools, offered under
-                # the agent's audiences.
+                # The agent's recorder: these are the agent's tools, under its audiences.
                 tool_guards(
                     guarded, paths, recording(agent), cfg.layout, backend, subagent=True
                 )
@@ -818,16 +684,13 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
         }
     )
     extras["subagents"] = supplied
-    # Backstop. Only these names are reachable, so a subagent deepagents adds in
-    # some future version does not silently arrive unrestricted -- a reason that
-    # has nothing to do with whether this caller narrowed anything, though it
-    # was wired only when they had.
+    # Backstop, whether or not this caller narrowed anything: a subagent a future
+    # deepagents adds does not arrive unrestricted.
     reachable = tuple(spec["name"] for spec in supplied)
     middleware.append(DeclaredSubagentsOnly(reachable))
 
-    # The agent's own, and last -- the same placement `as_subagent` gives a subagent's,
-    # for the same reason: a deployment's middleware should see the tool and skill
-    # narrowing kingfisher applied rather than run ahead of it.
+    # Last, as `as_subagent` places a subagent's: a deployment's middleware sees
+    # kingfisher's tool and skill narrowing rather than running ahead of it.
     middleware.extend(
         _deployment_middleware(
             agent, registry, capabilities.middlewares, provisions=agent_provisions

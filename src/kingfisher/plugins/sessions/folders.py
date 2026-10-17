@@ -23,11 +23,9 @@ Durable facts about this project and how to work in it. Add entries below.
 
 def names_a_session(session_id: str) -> bool:
     """Whether an id can name a session's folder: one visible entry in a directory."""
-    # One entry and nowhere else: joined as given, `""` is every session, `..` the
-    # workspace, and an absolute id replaces the path. Not hidden: `.harness` is the
-    # name the macOS profile guards in every session, so a session called that could
-    # not write its own files. The listing reads only what passes this, so nothing it
-    # lists is a session `open` would refuse and `reap` would stop at.
+    # Joined as given, `""` is every session, `..` the workspace, and an absolute id
+    # replaces the path. Not hidden: the macOS profile guards `.harness` in every session,
+    # so a session of that name could not write its files. The listing filters by this too.
     return (
         bool(session_id)
         and not session_id.startswith(".")
@@ -37,11 +35,8 @@ def names_a_session(session_id: str) -> bool:
 
 
 def session_dir(sessions_root: Path, session_id: str) -> Path:
-    """Where one session is kept: a folder of its own under the sessions root, named for
-    its id.
-    """
-    # Here rather than at a door, because every path built from an id is built here --
-    # `open` makes folders where it points and `delete` removes them.
+    """Where one session is kept: a folder under the sessions root, named for its id."""
+    # Checked here rather than at a door: every path built from an id is built here.
     if not names_a_session(session_id):
         msg = (
             f"{session_id!r} cannot name a session: a session id is one name, not "
@@ -52,9 +47,7 @@ def session_dir(sessions_root: Path, session_id: str) -> Path:
 
 
 class LocalSessionDirs:
-    """The rules about session directories on this host: make one exclusively, mark
-    one used, list them, remove one. What `LocalSessions` and the turn lock use.
-    """
+    """Session directories on this host, for `LocalSessions` and the turn lock."""
 
     def create_exclusive(self, path: Path) -> bool:
         try:
@@ -64,9 +57,8 @@ class LocalSessionDirs:
         return True
 
     def mark_used(self, path: Path) -> None:
-        # `exist_ok` because this records use of something that already exists;
-        # a session that has gone is not an error here, it is the sweep winning
-        # a race, and the turn will fail on its own next read.
+        # A session gone is the sweep winning a race, not an error: the turn fails on its
+        # next read.
         with suppress(OSError):
             path.touch(exist_ok=True)
 
@@ -98,33 +90,25 @@ def ensure_session_layout(
 ) -> Path:
     """Every directory a session holds, and its memory scaffolded. Idempotent.
 
-    The leaves default to `DEFAULT_LAYOUT`'s, so the call with no layout lays out
-    the names kingfisher has always used; `backend_at` passes the configured layout's
-    leaves so a renamed session is made under its own names. `memory` and `scratchpad`
-    are passed on their own as well as in `session_dirs` because the two steps below
-    name one directory each and cannot pick it out of the tuple.
+    `memory` and `scratchpad` are also in `session_dirs`, and a renamed layout passes them
+    too: the steps that scaffold and harden them cannot pick them out of the tuple.
     """
     session_dir = Path(session_dir).expanduser().resolve()
-    # `saved_results` before the first result is: bubblewrap binds them read-only only
-    # where they exist when its fence is built, so a folder the recorder made mid-turn
-    # would be the shell's to write until the next one.
+    # `saved_results` before the first result: bubblewrap binds them read-only only where
+    # they exist when its fence is built, so one made mid-turn would be the shell's to write.
     for name in (*session_dirs, DEFAULT_LAYOUT.harness, *saved_results):
         (session_dir / name).mkdir(parents=True, exist_ok=True)
 
-    # Asked for rather than done here: `permissions` is the one module in this
-    # package that changes a mode, and it says why this one is set at all.
+    # Not a chmod here: `permissions` is this package's one module that changes a mode.
     keep_tmp_private(session_dir, scratchpad=scratchpad)
-    # Last, so a session's own memory beats the scaffold rather than losing to it.
+    # Last, so a session's own memory beats the scaffold.
     scaffold_memory(session_dir, memory=memory)
     return session_dir
 
 
 def scaffold_memory(session_dir: Path, *, memory: str = DEFAULT_LAYOUT.memory) -> None:
-    """Give `/memory/AGENTS.md` something for an edit to anchor against.
-
-    Scaffolded rather than empty: the memory prompt directs the agent to save
-    knowledge with `edit_file`, which replaces existing text.
-    """
+    """Give `/memory/AGENTS.md` text for an edit to anchor against: the agent saves memory
+    with `edit_file`, which replaces existing text."""
     agents_md = Path(session_dir) / memory / "AGENTS.md"
     if not agents_md.exists() or not agents_md.read_text(encoding="utf-8").strip():
         agents_md.write_text(AGENTS_SCAFFOLD, encoding="utf-8")

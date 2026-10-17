@@ -15,18 +15,11 @@ if TYPE_CHECKING:
     from kingfisher.core.config import Config, Endpoint, ModelProfile
 
 
-#: The wire formats kingfisher ships. `models.yaml` picks from these by name
-#: through an endpoint's `api`, together with any a deployment adds through
-#: `KINGFISHER_WIRE_FORMATS`.
-#:
-#: A row names its package as a string and `resolve` imports it by name, so neither
-#: provider is an import anywhere in `src/` and neither belongs in `THIRD_PARTY` --
-#: which reads imports, and now refuses a grant nothing spends. Adding one back to
-#: that table on the strength of a row here fails
-#: `test_no_area_is_granted_a_dependency_it_does_not_import`.
+#: The wire formats kingfisher ships, picked by an endpoint's `api` along with any a
+#: deployment adds through `KINGFISHER_WIRE_FORMATS`. A row names its package as a
+#: string, so neither provider is an import and neither belongs in `THIRD_PARTY`.
 WIRE_FORMATS: Mapping[str, WireFormat] = {
-    # The gateway path. MiniMax and anything else imitating Anthropic's wire
-    # format lives here — see models.yaml.example, which recommends this style.
+    # The gateway path: anything imitating Anthropic's wire format, MiniMax included.
     "anthropic": WireFormat(
         "langchain_anthropic:ChatAnthropic",
         Landing(
@@ -37,11 +30,8 @@ WIRE_FORMATS: Mapping[str, WireFormat] = {
             timeout="default_request_timeout",
         ),
     ),
-    # OpenAI proper, on the Responses API. This wire format is *not* a general
-    # OpenAI-compatible client: `/v1/responses` is what we target, and virtually no
-    # gateway imitating OpenAI implements it. Point a gateway at the anthropic wire format
-    # instead. A future Chat-Completions row would be a new entry here, not a flag on
-    # this one.
+    # OpenAI proper, on the Responses API: not a general OpenAI-compatible client, since
+    # almost no gateway implements `/v1/responses`. Chat Completions would be a new row.
     "openai_responses": WireFormat(
         "langchain_openai:ChatOpenAI",
         Landing(
@@ -56,13 +46,10 @@ WIRE_FORMATS: Mapping[str, WireFormat] = {
 }
 
 
-#: The share of a model's advertised input window a request may fill, from deepagents'
-#: `SummarizationMiddleware._input_budget`: it reserves the configured output tokens and
-#: five per cent of headroom, then refuses anything over what is left. Mirrored here
-#: because a row reserving more than this can send nothing at all, and this is the only
-#: place that can say so before a turn starts.
-#: `test_the_share_a_request_may_fill_is_the_one_deepagents_applies` drives their own
-#: function with it, so this going stale is a red test rather than a wrong refusal.
+#: The share of a model's advertised input window a request may fill, mirroring
+#: deepagents' `SummarizationMiddleware._input_budget`, so a row that leaves nothing is
+#: refused before a turn starts. A test drives their function with this, so it going
+#: stale is red rather than a wrong refusal.
 FILLABLE = 0.95
 
 
@@ -86,10 +73,8 @@ def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
 def _advertised_window(model: BaseChatModel) -> int | None:
     """What this model says its input window is, or `None` where it says nothing.
 
-    Read off the built model rather than from a table of our own: the number comes
-    from the provider package's profile for this model name, a row's `extra: {profile:
-    ...}` replaces that whole dict, and a model the table has never heard of -- which
-    is every gateway row naming its own name -- carries no window and is left alone.
+    Read off the built model, not a table of our own: a name the provider's profiles
+    do not know, as on most gateway rows, carries no window and is left alone.
     """
     advertised = getattr(model, "profile", None)
     if not isinstance(advertised, Mapping):
@@ -105,19 +90,10 @@ def _refuse_an_output_reservation_that_fills_the_window(
 ) -> None:
     """Refuse a row whose `max_tokens` leaves no room for the conversation.
 
-    `max_tokens` is the *output* reservation, and a window-sized one reads like the
-    model's own limit -- which is the mistake: the reservation is subtracted from the
-    window before a request is sized, so every turn is refused before it is sent, with
-    a message naming no model, no row and no number. Measured through the real command:
-    `max_tokens: 190001` on a 200,000-token window answered
-    `ContextOverflowError: Context remains above the input budget after compaction`,
-    and nothing had said anything at startup.
-
-    Refused rather than warned because no request of any size can be sent, so it is not
-    a decision anybody could have meant. The window moves when the provider's table
-    does -- it moved from 1,000,000 to 200,000 under this project once -- and a row that
-    started yesterday failing to start today is the right outcome when every turn would
-    otherwise die.
+    `max_tokens` is the output reservation, taken off the window before a request is
+    sized, so a window-sized one refuses every turn with a message naming no model or
+    row. Refused rather than warned, since no request could be sent; the window moves
+    with the provider's table, so a row starting to fail after an upgrade is right.
     """
     window = _advertised_window(model)
     if window is None or int(window * FILLABLE) - profile.max_tokens > 0:
@@ -150,13 +126,10 @@ def summarizer_trigger(model: BaseChatModel) -> int:
     """How large a conversation on `model` gets, in deepagents' approximate tokens,
     before its summariser rewrites it.
 
-    Read from `compute_summarization_defaults`, which is what sizes the summariser on
-    every graph, and never from a number copied out of it: 85% of the window, or 170,000
-    tokens with none. It also summarises once a request is over its input budget, the
-    sooner of the two where `max_tokens` is above a tenth of the window.
+    Read from `compute_summarization_defaults`, never a number copied out of it, and
+    capped where the request's input budget is reached first.
 
-    Imported here rather than at the top, because a catalogue reading `WIRE_FORMATS` should
-    not load deepagents to do it.
+    Imported here, so a catalogue reading `WIRE_FORMATS` does not load deepagents.
     """
     from deepagents.middleware.summarization import (  # noqa: PLC0415
         compute_summarization_defaults,
@@ -184,8 +157,7 @@ def _refuse_a_clearing_mark_the_summarizer_reaches_first(
     """Refuse a `clear_results_at` at or past where this model's conversation is summarised.
 
     The summariser counts each call before clearing does, so a mark it reaches first
-    would never clear anything and say nothing. The highest mark this lets through
-    almost never clears, which is the nearest thing to off there is.
+    would never clear anything and say nothing.
     """
     mark = profile.clear_results_at
     if mark is None or mark < (trigger := summarizer_trigger(model)):
@@ -242,20 +214,13 @@ def model_named(
 ) -> BaseChatModel:
     """The model a written name means, on an endpoint this request may reach.
 
-    Shared with `model_object`, which is this with a definition in front of it rather
-    than a name. A second copy of these three steps that forgot the middle one would
-    send a run to an endpoint the caller refused and say nothing.
+    Shared with `model_object`: a copy that skipped the endpoint check would send a run
+    to an endpoint the caller refused, silently.
     """
-    # A lookup, rather than a `replace` of four `Config` fields built from the copy.
-    # A param nobody remembered to add to that copy was silently the deployment's
-    # own, so a per-model `max_tokens` was dropped without a word; a profile carries
-    # every param and there is nothing here to forget.
     try:
         profile, endpoint = cfg.models.resolve(written)
     except ConfigError as exc:
-        # `resolve` knows the model and the catalogue; only the caller knows *who
-        # asked*. Without that, the reader is told `gpt-5` cannot be run and left to
-        # grep the catalogue for whoever wanted it.
+        # Only the caller knows who asked, which the reader needs.
         msg = f"{subject}: {exc}"
         raise ConfigError(msg) from exc
     refuse_ungranted_endpoint(profile.endpoint, granted=endpoints, subject=subject)

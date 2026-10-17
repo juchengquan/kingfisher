@@ -25,10 +25,9 @@ PREVIEW = 300
 #: A `messages` chunk is a (message, metadata) pair.
 TOKEN_CHUNK_PARTS = 2
 
-#: The stream modes we ask for. `updates` drives progress events; `values` carries the
-#: full state, whose last emission holds the final answer; `messages` carries the
-#: model's output as it is generated; `custom` carries what kingfisher's own middleware
-#: reports of a reply that never reaches the state.
+#: `updates` drives progress events; `values` carries the state, whose last emission
+#: holds the answer; `messages` the model's output as it comes; `custom` what
+#: kingfisher's middleware reports of a reply that never reaches the state.
 STREAM_MODES: list[StreamMode] = ["updates", "values", "messages", "custom"]
 
 #: The key a middleware writes to the `custom` stream under, for a cut answer it asked
@@ -63,10 +62,8 @@ def as_transcript(messages: Iterable[Any]) -> tuple[Message, ...]:
     """What the graph ended up holding, as records this package owns."""
     read: list[Message] = []
     for raw in messages:
-        # Both shapes, because both occur. `_as_langchain` emits plain dicts
-        # wherever one will do, and a graph may hand back what it was given
-        # rather than a coerced object -- reading only one shape meant a
-        # conversation that lost every message this module had just written.
+        # Both shapes occur: `_as_langchain` emits plain dicts where one will do, and a
+        # graph may hand back what it was given rather than a coerced object.
         role = (
             _CANONICAL.get(str(raw.get("role", "")))
             if isinstance(raw, dict)
@@ -93,9 +90,8 @@ def as_transcript(messages: Iterable[Any]) -> tuple[Message, ...]:
     return tuple(read)
 
 
-#: A role that is already kingfisher's, for a message handed back as a plain
-#: dict rather than a coerced object. Spelled out rather than derived, so the
-#: only way in is a role this vocabulary actually has.
+#: A role already kingfisher's, for a message handed back as a plain dict. Spelled
+#: out rather than derived, so only a role this vocabulary has gets in.
 _CANONICAL: dict[str, Role] = {
     "system": "system",
     "user": "user",
@@ -104,9 +100,8 @@ _CANONICAL: dict[str, Role] = {
 }
 
 
-#: LangChain's `.type` for each role kingfisher records. `system` is here for
-#: completeness and does not normally appear: the system prompt is the cached
-#: prefix and is rebuilt per turn rather than stored.
+#: LangChain's `.type` for each role kingfisher records. `system` rarely appears: the
+#: system prompt is rebuilt per turn rather than stored.
 _ROLES: dict[str, Role] = {
     "human": "user",
     "ai": "assistant",
@@ -156,8 +151,7 @@ def cut_off(message: Any) -> bool:
     """Whether a reply stopped because it reached the model's output cap.
 
     Read off the stop reason because nothing else shows it: a call cut partway arrives
-    with its arguments whole-looking, its JSON closed by langchain's streaming repair or
-    by the provider itself, as MiniMax-M3 does.
+    with its JSON closed, by langchain's streaming repair or by the provider.
     """
     meta = getattr(message, "response_metadata", None) or {}
     if meta.get("stop_reason") == "max_tokens":
@@ -233,18 +227,11 @@ def _event_for(message: Any) -> RunEvent | None:
             text=message.text[:PREVIEW],
         )
     if isinstance(message, AIMessage):
-        # One event per completed turn, whether or not it called a tool. The
-        # prose is not carried: it has already arrived as tokens, and a
-        # truncated second copy here would be the same text twice.
-        #
-        # Arguments come along because the run log has been recording them all
-        # along while the terminal showed only the tool's name -- so you could
-        # see that `write_file` ran and not what it wrote where.
+        # One event per model turn, with its tools' arguments but not its prose, which
+        # already arrived as tokens.
         names, args = tool_calls(message)
-        # `.text` rather than `str(content)`: the Responses API returns a list
-        # of content blocks, and `str()` would render their repr. A message
-        # with no text, no tools and no usage is not a turn anyone made -- it
-        # is a state shuffle, and announcing it would be noise.
+        # `.text`, not `str()`, which renders the Responses API's content blocks as a repr.
+        # A message with no text, tools or usage is a state shuffle, not a turn.
         if not (names or message.text.strip() or getattr(message, "usage_metadata", None)):
             return None
         return RunEvent(
@@ -259,9 +246,8 @@ def _event_for(message: Any) -> RunEvent | None:
 
 def messages_in(update: Any) -> list[Any]:
     """Messages carried by a node update, tolerating shapes that carry none."""
-    # A node that writes twice in one step streams its update as a list of writes: the
-    # model node does when clearing runs inside the call, the cleared results beside
-    # the reply. Read as one mapping, the list carried nothing and the reply was lost.
+    # A node writing twice in one step streams a list of writes, as the model node does
+    # when clearing runs inside the call; read as one mapping, the reply would be lost.
     if isinstance(update, (list, tuple)):
         return [message for write in update for message in messages_in(write)]
     if not isinstance(update, Mapping):
@@ -275,12 +261,9 @@ def messages_in(update: Any) -> list[Any]:
 class SubagentNames:
     """Which subagent produced a chunk, learned from the stream as it arrives.
 
-    Only `messages` chunks carry a name, in `lc_agent_name`. `updates` carry no
-    metadata at all -- which would leave `model_call` and `tool_result` unnamed if
-    the two were read independently. They are not: a subagent's first model call is
-    *streamed* before the node update that reports it, so the name is always known by
-    the time an event needs it. Measured, not assumed; a test drives a real two-level
-    run and asserts every subagent event is named.
+    Only `messages` chunks carry a name, in `lc_agent_name`; `updates` carry none. A
+    subagent's first model call is streamed before the update reporting it, so the name
+    is known in time -- driven, not assumed, by a test on a real two-level run.
     """
 
     def __init__(self) -> None:
@@ -299,13 +282,10 @@ class SubagentNames:
 class SeenMessages:
     """Which messages each graph's conversation already held, read off `values` chunks.
 
-    A node can write back a message it did not make: clearing swaps an older result for
-    its handle under the same id, and deepagents' summariser does the same when it clips
-    a result that overflowed. Such an update reads exactly like a new result or a new
-    model call -- one carrying the old reply's usage, too -- and measured, every pass
-    re-announced each message it cleared. The id is what tells them apart: the
-    conversation had it before this step. `values` arrives after each step's writes and
-    `updates` before, so what is held here is the conversation as the step found it.
+    A node can write back a message it did not make, under the same id -- clearing, or
+    the summariser clipping a result -- and its update reads like a new one. The id
+    tells them apart: `values` arrives after a step's writes and `updates` before, so
+    what is held here is the conversation as the step found it.
     """
 
     def __init__(self) -> None:
@@ -330,13 +310,11 @@ def _token_event(chunk: Any) -> RunEvent | None:
     if not isinstance(chunk, tuple) or len(chunk) != TOKEN_CHUNK_PARTS:
         return None
     message, metadata = chunk
-    # The summarizer calls its model from inside the model node, so the node
-    # cannot tell its tokens from the answer's; the tag it sets on the call can.
+    # The summariser calls its model inside the model node, so only the tag it sets
+    # tells its tokens from the answer's.
     if isinstance(metadata, Mapping) and metadata.get("lc_source") == "summarization":
         return None
-    # `AIMessageChunk` and not `AIMessage`: the former is a subclass, and only
-    # it appears on this stream. Testing for the base class would admit the
-    # tool results this exists to exclude.
+    # Not the base `AIMessage`, which would admit the tool results this exists to exclude.
     if not isinstance(message, AIMessageChunk):
         return None
     text = message.text
@@ -366,8 +344,7 @@ def events_in(
             and isinstance(chunk, tuple)
             and len(chunk) == TOKEN_CHUNK_PARTS
         ):
-            # A `messages` chunk is the only one carrying `lc_agent_name`, so
-            # this is where the map learns; ask again once it has.
+            # Only a `messages` chunk carries `lc_agent_name`, so the map learns here.
             named = subagent_names.name(namespace, chunk[1])
         if (event := _token_event(chunk)) is not None:
             yield replace(event, agent=named)
@@ -385,14 +362,9 @@ def events_in(
 def answer_in(namespace: Any, mode: str, chunk: Any) -> str | None:
     """The assistant's last message from a `values` chunk, if it has one.
 
-    And `None` for any chunk from a subagent, which is not a refinement -- it is the
-    whole reason this takes a namespace. Streaming into subagents makes their
-    `values` chunks arrive here too, and "the last one wins" then means the last
-    *anyone* emitted. A turn that ends normally is unharmed, because the caller's
-    agent always speaks last. A turn cut short by `turn_timeout_s` is not: it stops
-    between chunks, and if it stopped just after a subagent finished, the run
-    reported the subagent's answer as its own. Measured on a real two-level run
-    before this line existed.
+    `None` for a subagent's chunk, which is why this takes a namespace: their `values`
+    arrive here too, and a turn cut short just after a subagent finished would report
+    that subagent's answer as its own.
     """
     if namespace:
         return None
@@ -410,12 +382,8 @@ SUMMARY_EVENT = "_summarization_event"
 
 
 def summarised_in(snapshot: Any) -> bool:
-    """Whether a turn ended on a conversation deepagents had summarised.
-
-    Including one summarised before the turn began, which a resume's restored state
-    can carry: either way, the messages before the summary are gone from what the
-    model is shown.
-    """
+    """Whether a turn ended on a conversation deepagents had summarised, even before
+    the turn began, as a resume's restored state can be."""
     values = getattr(snapshot, "values", None)
     return isinstance(values, Mapping) and values.get(SUMMARY_EVENT) is not None
 
@@ -427,13 +395,9 @@ TOOLS_NODE = "tools"
 #: The argument of `TASK_TOOL` naming which subagent it starts.
 SUBAGENT_TYPE_ARG = "subagent_type"
 
-#: Separates the interrupt a gated call belongs to from its place within it.
-#:
-#: The pair is the address because neither half is one alone. langgraph gives an
-#: `Interrupt` a stable id and nothing smaller -- one interrupt covers every gated
-#: call in a message -- and the tool call's own id is not in the pause at all: the
-#: payload carries names and arguments, and for a subagent's pause the tool calls
-#: belong to a nested state this snapshot cannot reach.
+#: Separates the interrupt a gated call belongs to from its place within it. Neither
+#: half is an address alone: one `Interrupt` covers every gated call in a message, and
+#: the tool call's own id is not in the pause.
 CALL_SEPARATOR = "#"
 
 
@@ -457,10 +421,8 @@ def pending_in(snapshot: Any) -> tuple[PendingDecision, ...]:
                         tool=str(request.get("name") or ""),
                         args=dict(request.get("args") or {}),
                         agent=subagent,
-                        # Narrowed to what kingfisher accepts rather than passed on
-                        # as the middleware declared it: a bare `True` gate says all
-                        # four, `edit` included, and offering a caller a decision the
-                        # resume path will refuse is worse than not offering it.
+                        # Narrowed to what kingfisher accepts: a bare `True` gate also
+                        # offers `edit`, which the resume path would refuse.
                         decisions=tuple(d for d in allowed if d in DECISIONS),
                     )
                 )
@@ -470,18 +432,12 @@ def pending_in(snapshot: Any) -> tuple[PendingDecision, ...]:
 def _subagent_behind(task: Any, snapshot: Any) -> str | None:
     """Which subagent proposed this, where the pause can say so without guessing.
 
-    A subagent's pause arrives on the tool node and its nested state is unreachable
-    from here, so the name is not in the pause. It is in the parent's own last
-    message -- the `subagent_type` of the `task` call that started it -- and that is
-    unambiguous only while one subagent is in flight. With two, this is `None` rather
-    than a guess: the tool and arguments are right either way, and naming the wrong
-    subagent beside a call somebody is about to approve is worse than naming none.
+    The name is in the parent's last message, as the `subagent_type` of the `task` call
+    that started it, and is unambiguous only while one subagent is in flight. With two
+    this is `None`: the wrong name beside a call about to be approved is worse than none.
     """
-    # Which task the pause came from, before reading any name off the parent. One
-    # message may both gate a call of the agent's own and start a subagent, and the
-    # search below would then find that `task` call and hand the agent's own call
-    # its subagent's name. Exactly one subagent is in flight there, so the refusal
-    # to guess further down does not catch it.
+    # The pause's task first: one message may gate the agent's own call and start one
+    # subagent, and the search would hand the agent's call that subagent's name.
     if getattr(task, "name", "") != TOOLS_NODE:
         return None
     for message in reversed(list(getattr(snapshot, "values", {}).get("messages", ()))):
@@ -500,15 +456,9 @@ def _subagent_behind(task: Any, snapshot: Any) -> str | None:
 def resume_payload(answers: Iterable[Decision], pending: Iterable[PendingDecision]) -> Any:
     """The caller's answers as a graph is driven with them: per interrupt, in order.
 
-    Returns the `Command` rather than the mapping inside it, so that the one place
-    naming langgraph stays this one -- the service reaches the runtime through this
-    module, and the dependency table is what holds that.
-
-    Keyed by interrupt id rather than handed over as one list, which is what lets a
-    turn paused in two places be answered in one resume. Within an interrupt the order
-    is the order the gate asked in, and the caller never sees it -- they answer the
-    ids they were given, and a wrong or missing one is named here rather than counted
-    by langgraph two frames later.
+    Returns the `Command`, not the mapping inside it, so this stays the one module
+    naming langgraph. Keyed by interrupt id, so a turn paused in two places is answered
+    in one resume; a wrong or missing id is named here rather than counted by langgraph.
     """
     waiting = {item.call_id: item for item in pending}
     answered: dict[str, Decision] = {}
@@ -532,9 +482,8 @@ def resume_payload(answers: Iterable[Decision], pending: Iterable[PendingDecisio
         raise DecisionError(msg)
 
     grouped: dict[str, list[Any]] = {}
-    # Back into the order the gate asked in: langgraph matches `decisions` to its own
-    # `action_requests` by position and never reads an id off one, so answers left in
-    # the caller's order carry out the approval on the call they rejected.
+    # Back into the gate's order: langgraph matches `decisions` to `action_requests` by
+    # position, so the caller's order could carry an approval onto a rejected call.
     for call_id, answer in sorted(
         answered.items(), key=lambda pair: int(pair[0].rsplit(CALL_SEPARATOR, 1)[1])
     ):

@@ -14,25 +14,20 @@ if TYPE_CHECKING:
 class Progress:
     """Print run events as they arrive, and keep the terminal readable.
 
-    **A subagent's prose is progress, not answer.** `token` events carry the subagent
-    that produced them, or `None` for the agent the caller asked. Sent to one stream
-    they read as one voice, which the speaker tag exists to prevent; sent to two, the
-    distinction does the same job better -- an extractor's working notes are not part
-    of what you asked for, and a caller redirecting stdout wants the answer rather
-    than the reasoning that reached it.
+    A subagent's prose is progress, not answer: on two streams it goes to `progress`, so a
+    caller redirecting stdout gets the answer alone; on one, a speaker tag tells them apart.
     """
 
     def __init__(self, answer: TextIO, progress: TextIO | None = None) -> None:
         #: Where the asked-for agent's prose goes, and nothing else.
         self._answer = answer
-        #: Everything a reader watches rather than keeps. The same stream by
-        #: default, which is the driver's behaviour and was the only one.
+        #: Everything a reader watches rather than keeps.
         self._progress = progress if progress is not None else answer
         self._split = self._progress is not self._answer
         self._owed = False
         self._speaker: str | None = None
-        #: Whether any of the asked-for agent's own prose reached `answer`. A subagent's
-        #: does not count: it is not the answer, even on one stream.
+        #: Whether the asked-for agent's own prose reached `answer`. A subagent's does not
+        #: count: it is not the answer, even on one stream.
         self._answered = False
 
     def write(self, event: RunEvent) -> RunResult | None:
@@ -43,10 +38,8 @@ class Progress:
         if self._owed:
             self._progress.write("\n")
             self._owed = False
-        # The terminal event carries the result and is not itself printed. Its answer
-        # is, when none of it streamed: a model that does not stream sends no tokens,
-        # and the answer exists only on the result. When it did stream, saying it
-        # again would read as the model answering twice.
+        # The answer is printed only if none of it streamed: a model that does not stream
+        # sends no tokens, and one that did would otherwise read as answering twice.
         if event.kind == "finished":
             if not self._answered and event.result is not None and event.result.answer:
                 self._answer.write(event.result.answer)
@@ -58,20 +51,15 @@ class Progress:
     def _token(self, event: RunEvent) -> None:
         """One fragment of prose, to whichever stream it belongs on."""
         if self._split and event.agent is not None:
-            # A subagent, and the streams are apart: this is progress. Tagged
-            # on a change of speaker, as it always was, because the fragments
-            # of two subagents would otherwise run together.
+            # Tagged on a change of speaker, or two subagents' fragments run together.
             self._say_who(event.agent)
             self._progress.write(event.text)
             self._progress.flush()
             self._owed = True
             return
         if not self._split:
-            # Prose from a subagent arrives on the same stream as the caller's
-            # own, as the same type, with nothing between them -- so without a
-            # marker the two answers read as one. It cannot go on the fragment
-            # itself: chunks split mid-word, and there is no line to tag. So it
-            # goes at the seam, which is the only place a boundary exists.
+            # One stream, so untagged a subagent's answer and the caller's read as one.
+            # At the seam, because chunks split mid-word and there is no line to tag.
             self._say_who(event.agent)
             self._owed = True
         self._answer.write(event.text)

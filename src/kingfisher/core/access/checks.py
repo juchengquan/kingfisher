@@ -21,9 +21,7 @@ if TYPE_CHECKING:
 
     from kingfisher.core.access.source_ids import SourceIds, Stated
 
-#: One kind of definition and what this deployment has of it, as the callers
-#: hold it: `("agent", {name: spec})`. A pair rather than two arguments because
-#: every function here walks both and neither ever wants one alone.
+#: One kind of definition and what this deployment has of it: `("agent", {name: spec})`.
 Kind = tuple[str, "Mapping[str, object]"]
 
 
@@ -33,9 +31,8 @@ def held_by(
     """What a caller holds, expanded -- or `None` where nothing narrows: no vocabulary,
     nobody named, or `UNSCOPED`.
 
-    The one place the shape of `source_ids` is read. Any sequence of names means what
-    it looks like, because a list is the obvious thing to write; a bare string is a
-    sequence too, and is refused rather than read a letter at a time.
+    The one place the shape of `source_ids` is read: any sequence of names means what it
+    looks like, and a bare string is refused rather than read a letter at a time.
     """
     if source_ids is None or isinstance(source_ids, _Unscoped):
         return None
@@ -47,15 +44,9 @@ def held_by(
     if zones:
         return _zoned(vocabulary, named, zones)
     if vocabulary is None:
-        # A name where nothing narrows expanded to nobody and went through
-        # unrestricted, so `list --as marketing` printed the whole catalogue and
-        # exited zero -- the state the HTTP surface refuses at startup as "a server
-        # somebody believes is locked down and is not".
-        #
-        # Here rather than at each door, so the listing is covered: it bypasses
-        # `caller_holds` deliberately, being read-only, and the refusal it is exempt
-        # from is the one for naming *nobody*. An empty sequence passes, naming no
-        # caller to be wrong about, and `UNSCOPED` is how the absence is meant.
+        # A name where nothing narrows would go through unrestricted. Here rather than at
+        # each door, so the read-only listing, which bypasses `caller_holds`, is covered;
+        # an empty sequence names no caller to be wrong about.
         if named:
             msg = (
                 f"this deployment declares no source ids, so {', '.join(sorted(named))} "
@@ -95,16 +86,9 @@ def caller_holds(
 ) -> frozenset[str] | None:
     """What a caller holds, refusing a call that named nobody where a policy is in force.
 
-    `held_by` answers `None` for three different things -- no vocabulary, nobody named,
-    or `UNSCOPED` -- and every reach check reads `None` as reaching everything. That is
-    right for the first and the third, and wrong for the second: a deployment with a
-    policy was asked something on a caller's behalf and nobody said whose behalf.
-
-    Here rather than at each door, because the sentence below was written out at two of
-    them and forgotten at the third, where reading one session answered for any of them.
-    A caller who means no caller says so with `UNSCOPED`, which is what that value is
-    for; housekeeping that is nobody's -- listing every session, deleting one -- does not
-    come through here at all.
+    `held_by` answers `None` for no vocabulary, nobody named, or `UNSCOPED`, and a reach
+    check reads `None` as reaching everything: wrong for nobody named under a policy. Here
+    rather than at each door, so no door can forget it.
     """
     if vocabulary is not None and source_ids is None:
         msg = (
@@ -120,11 +104,8 @@ def caller_holds(
 def walked(*kinds: Kind) -> Iterator[tuple[str, str, Stated]]:
     """Every definition of every kind, with what it says, in a stable order.
 
-    One walk for three questions. `audit` wants a report, `undeclared_in` wants the
-    first refusal, and a listing wants what to print -- all three began by asking
-    `stated` for the same definition, and the specs are a directory read. Shared
-    here rather than merged: a report that stopped at the first fault would be a
-    refusal, and a refusal that carried on would be a report.
+    Shared by `audit`, `undeclared_in` and the listing rather than merged: a report that
+    stopped at the first fault would be a refusal.
     """
     for kind, specs in kinds:
         for name, spec in sorted(specs.items()):

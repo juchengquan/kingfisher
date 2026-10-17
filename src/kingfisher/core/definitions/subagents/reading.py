@@ -1,8 +1,4 @@
-"""Turning a subagent document into a spec.
-
-`spec` says what a definition means; this says how a file becomes one. Named `read`
-because the module says which kind, as `core.definitions.agents.reading.read` does.
-"""
+"""Turning a subagent document into a spec."""
 
 from __future__ import annotations
 
@@ -17,5 +13,5 @@ if TYPE_CHECKING:
 
 
 def read(definition: DefinitionText) -> SubagentSpec:
-    """One definition. Raises `SubagentError` on anything malformed."""
+    """One definition; raises `SubagentError` on anything malformed."""
     return subagent.parse(documents.fields_of(definition, SubagentError), definition.source)

@@ -18,33 +18,22 @@ def build_session_checkpointer() -> BaseCheckpointSaver:
     return InMemorySaver()
 
 
-#: How a paused turn's state is encoded: msgpack, and a pickle neither written nor
-#: read, because this serialiser is not constructed to do either.
-#:
-#: Which is why this is not `InMemorySaver(factory=PersistentDict)`, the persistence
-#: seam langgraph ships and the obvious thing to reach for -- it is unconditionally
-#: pickle. `.harness` is denied to the file tools, but `execute` bypasses those
-#: entirely, and what refuses the shell is `sandbox_exec._session_folder_denial`: a macOS
-#: profile, on one platform, that a deployment can switch off. A tampered msgpack
-#: checkpoint is bad graph state. A tampered pickle is arbitrary code at resume.
+#: msgpack, never pickle: the shell can reach `.harness` wherever a deployment turns the
+#: sandbox off, and a tampered pickle is arbitrary code at resume. Hence not
+#: `InMemorySaver(factory=PersistentDict)`, which always pickles.
 _SERDE = JsonPlusSerializer()
 
 
-#: What a checkpoint's shape depends on. Not a guess at which of them matters: the
-#: node names a checkpoint refers to are built by all three -- langchain compiles a
-#: middleware into `f"{name}.after_model"`, deepagents decides which middleware there
-#: are, langgraph keys `versions_seen` by node -- so a move in any one can leave a
-#: checkpoint referring to nodes the rebuilt graph does not have.
+#: What a checkpoint's shape depends on: all three build the node names it refers to,
+#: so a move in any one can leave it naming nodes the rebuilt graph does not have.
 HARNESS_LIBRARIES: tuple[str, ...] = ("deepagents", "langchain", "langgraph")
 
 
 def harness_mark() -> dict[str, str]:
     """What a checkpoint written now was built against, for a resume to check.
 
-    Checked rather than discovered on load, because a paused session can outlive a
-    deploy and that is ordinary rather than exceptional. The difference is one
-    sentence saying the pause did not survive an upgrade, against a deserialiser's
-    traceback about a node nobody has heard of.
+    Checked rather than discovered on load: a pause outliving a deploy is ordinary,
+    and earns a sentence rather than a deserialiser's traceback.
     """
     marked: dict[str, str] = {}
     for name in HARNESS_LIBRARIES:
@@ -56,9 +45,8 @@ def harness_mark() -> dict[str, str]:
 def paused_state(saver: Any) -> bytes:
     """What a paused turn's saver holds, as bytes a later turn can resume from.
 
-    The three mappings rather than the saver, because everything they hold is already
-    `(type, bytes)` by the time it lands there -- the saver serialised it on the way
-    in, and that is what makes writing them out possible without a second format.
+    The three mappings rather than the saver: what they hold is already
+    `(type, bytes)`, so writing them out needs no second format.
     """
     document = {
         "storage": [
@@ -83,14 +71,9 @@ def resumed_saver(state: bytes) -> Any:
     kind, _, payload = state.partition(b"\n")
     document = _SERDE.loads_typed((kind.decode("utf-8"), payload))
     saver = InMemorySaver()
-    # Assigned *through* the mappings rather than over them, so the defaultdicts a
-    # saver builds for itself survive: `get_tuple` indexes a thread and a namespace
-    # that may not be there yet and expects a mapping back rather than a `KeyError`.
-    # msgpack has one sequence type, so every tuple in here reads back as a list.
-    # Only the keys are converted, because only they need it -- a list is unhashable
-    # and these are dict lookups. The values are unpacked and indexed, never hashed
-    # or compared, so a recursive conversion over them would be machinery guarding
-    # nothing: mutation-tested, and removing it changed no result.
+    # Assigned *through* the mappings, so the saver's defaultdicts survive: `get_tuple`
+    # indexes a thread and namespace that may not exist yet. msgpack reads every tuple
+    # back as a list, and only the keys are hashed, so only they are converted.
     for thread, namespace, checkpoint_id, entry in document["storage"]:
         saver.storage[thread][namespace][checkpoint_id] = entry
     for outer, inner, entry in document["writes"]:

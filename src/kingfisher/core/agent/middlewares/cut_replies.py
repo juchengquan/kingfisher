@@ -17,10 +17,8 @@ from kingfisher.core.session.runtime import (
     with_call_args,
 )
 
-#: Cut replies in a row after which an agent is stopped. Each spends the model's whole
-#: output reservation, and a model retrying one oversized write would otherwise go on
-#: to the step limit: measured, one session retried the same whole-file write a dozen
-#: times.
+#: Cut replies in a row after which an agent is stopped: each spends the whole output
+#: reservation, and a model retrying one oversized write would otherwise reach the step limit.
 GIVE_UP = 3
 
 #: The longest argument a refused cut call keeps as written. The path it aimed at stays;

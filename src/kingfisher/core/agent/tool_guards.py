@@ -38,32 +38,21 @@ def tool_guards(  # noqa: PLR0913 -- `subagent` is the one way the agent's guard
 ) -> list[AgentMiddleware]:
     """What every graph holding workspace tools gets wrapped in, built once.
 
-    Three graphs hold them -- the agent, a subagent, and the `general-purpose` subagent
-    deepagents supplies, which is handed the agent's tools and so holds the same objects.
-    Composed here because each of the three was composed where it was built, and the one
-    built last got none of this: a tool call through `general-purpose` reached the tool
-    with its paths untranslated and a host path unrefused, which is the leak
-    `WorkspaceToolPaths` exists to close.
+    The agent, a subagent, and deepagents' `general-purpose` subagent, which is handed
+    the agent's tools, all hold them; one builder, so none of them is left unguarded.
 
-    `CutReplies` is unconditional, since any model can stop at its cap and a cut call
-    reaches the tool looking whole. `subagent` says what it does with an agent it stops,
-    the one thing the graphs here differ in. `HostPathGuard` is unconditional too: the
-    backend refuses a host path on every run, so the thing that turns that refusal into
-    a correction the model can read has to be there whether or not this graph holds a
-    workspace tool. So is `LargePdfGuard`, because `read_file` is on every graph and hands
-    a PDF over whole, and `ShellPaths`, because `execute` is a built-in and a subagent
-    holding it never sees `system.md`.
-    The other two are about the tools themselves, so they need names -- and translation
-    needs the turn's backend to translate against, which every graph here is handed the
-    same one of.
+    `CutReplies`, `HostPathGuard`, `LargePdfGuard` and `ShellPaths` go on every graph:
+    any model can stop at its cap and a cut call looks whole, the backend refuses a host
+    path on every run, `read_file` hands a PDF over whole, and a subagent holding
+    `execute` never sees `system.md`. `subagent` says what `CutReplies` does with an
+    agent it stops, the one way the graphs differ. The workspace-tool guards need
+    `names`, and translation needs `paths`.
 
-    `recorder` is the turn's, made for the definition this graph was built from, or
-    `None` where no turn will keep what is recorded. `backend` is the turn's, whose shell
-    says what `ShellPaths` tells the model about it, and is asked whether it runs here.
+    `recorder` is `None` where no turn keeps what is recorded; `backend`'s shell says
+    what `ShellPaths` tells the model about it.
     """
-    # First, so it records the arguments the model wrote: `WorkspaceToolPaths` below
-    # rewrites them to host paths. That it also records what the model is handed is a
-    # different question, answered by a deployment's middleware coming after all of this.
+    # First, so it records the arguments the model wrote, before `WorkspaceToolPaths`
+    # rewrites them to host paths.
     guards: list[AgentMiddleware] = [] if recorder is None else [recorder]
     # Ahead of the rest, which have nothing to say about a call that is not run.
     guards.append(CutReplies(subagent=subagent, outputs=layout.outputs_route))
@@ -71,9 +60,8 @@ def tool_guards(  # noqa: PLR0913 -- `subagent` is the one way the agent's guard
     guards.append(LargePdfGuard())
     guards.append(ShellPaths(layout, shell_prompt_of(backend), here=shell_runs_here(backend)))
     if names:
-        # Beside each other and in this order, which the subagent's stack is pinned to:
-        # both are about a workspace tool call, and the translation rewrites the
-        # arguments before anything below it decides anything about them.
+        # In this order, which the subagent's stack is pinned to: translation rewrites
+        # the arguments before anything after it judges them.
         guards.append(WorkspaceToolErrors(names))
         if paths is not None:
             guards.append(WorkspaceToolPaths(names, paths))
@@ -83,29 +71,18 @@ def tool_guards(  # noqa: PLR0913 -- `subagent` is the one way the agent's guard
 class GuardedTool(BaseTool):
     """One workspace tool, carrying the guards a compiled subagent cannot be given.
 
-    There is a fourth graph holding workspace tools, and `tool_guards` cannot reach
-    it: a subagent the workspace compiled itself. deepagents runs that graph as
-    given, so no middleware of kingfisher's is in front of its tools. Measured: a
-    compiled subagent called `count_lines('/inputs/api.log')` and the tool raised
-    `FileNotFoundError` on a path nothing had translated, ending the run. What
-    kingfisher still owns is the list of objects handed to `build`, so the guards
-    travel on the tools.
+    deepagents runs a compiled subagent as given, so no middleware of kingfisher's is in
+    front of its tools; the guards travel on the tools instead.
 
-    **A refusal is returned, never raised.** Inside a graph kingfisher did not build
-    nothing catches an exception -- measured for `ToolException`, `FileNotFoundError`
-    and `ValueError` alike, each of which ended the run. `handle_tool_error` turns
-    what this raises into a failed result before it leaves the tool, which also keeps
-    `ToolMessage.status` true: `show_your_work` reports a call as failed by reading
-    that field, so a refusal reported as success would be a worse answer than a
-    crash.
+    A refusal is returned, never raised: nothing in a graph kingfisher did not build
+    catches an exception, so the run would end. `handle_tool_error` makes it a failed
+    result, so `ToolMessage.status` reports the failure.
     """
 
     #: Typed `Any` rather than `BaseTool` and `SessionPaths`: this is a pydantic
     #: model, and naming those would make the wrapper refuse a tool it can carry.
     inner: Any
-    #: `None` where a build has no session to translate against, which is the
-    #: condition `tool_guards` puts on `WorkspaceToolPaths` for the same reason.
-    #: The error half still applies.
+    #: `None` where a build has no session to translate against; errors still convert.
     paths: Any = None
 
     def _translated(self, kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -117,18 +94,14 @@ class GuardedTool(BaseTool):
             raise ToolException(refusal_text(escaped, self.paths)) from escaped
 
     def _as_tool_call(self, args: dict[str, Any]) -> dict[str, Any]:
-        """The call form, which is the only one that carries an artifact back.
-
-        A tool declaring `content_and_artifact` returns the pair through a
-        `ToolMessage` and the plain form drops it, so a wrapper that invoked the
-        plain way would quietly lose every artifact it passed on.
+        """The call form, the only one that carries a `content_and_artifact` tool's
+        artifact back.
         """
         return {"type": "tool_call", "id": "guarded", "name": self.inner.name, "args": args}
 
     def _failed(self, exc: Exception) -> ToolException:
-        # The type as well as the message, for the reason `WorkspaceToolErrors`
-        # gives: a workspace tool's exceptions were not written to be read by a
-        # model, and `FileNotFoundError: /inputs/x.csv` reads far better than the path.
+        # The type as well as the message: `FileNotFoundError: /inputs/x.csv` tells a
+        # model far more than the path.
         msg = f"Error: {type(exc).__name__}: {exc}"
         return ToolException(msg)
 
@@ -158,27 +131,19 @@ class GuardedTool(BaseTool):
 
 
 def guarded_tools(tools: Sequence[Any], paths: SessionPaths | None) -> list[Any]:
-    """The workspace tools a compiled subagent is handed, each one wrapped.
-
-    The names are not needed here the way `tool_guards` needs them: everything in
-    this list is a workspace tool already, chosen by the grant this subagent was
-    resolved against.
-    """
+    """The workspace tools a compiled subagent is handed, each one wrapped."""
     return [_guarded(one, paths) for one in tools]
 
 
 def _guarded(one: Any, paths: SessionPaths | None) -> BaseTool:
     """One tool, wrapped without changing what it advertises.
 
-    A plain function is made into the tool the graph would have made of it anyway --
-    `create_agent` converts callables on the way in, and refuses one with no
-    docstring exactly as this does. Normalising first is what lets a plain function
-    report a refusal at all, since the reporting is `BaseTool` machinery.
+    A plain function becomes the tool `create_agent` would make of it, refusing a
+    missing docstring as that does; as a `BaseTool` it can report a refusal at all.
     """
     inner = one if isinstance(one, BaseTool) else _as_tool(one)
-    # `get_input_schema()` where a tool declares none: a `BaseTool` subclass carries
-    # its arguments on `_run` instead, and a wrapper taking `**kwargs` would otherwise
-    # advertise `kwargs` to the model and then be called with none of them.
+    # A `BaseTool` subclass may carry its arguments on `_run`, and a wrapper taking
+    # `**kwargs` would otherwise advertise `kwargs` to the model.
     declared = inner.args_schema if inner.args_schema is not None else inner.get_input_schema()
     return GuardedTool(
         inner=inner,

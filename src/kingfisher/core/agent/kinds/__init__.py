@@ -1,11 +1,5 @@
-"""Where a kind's definitions meet deepagents: the half of `kinds/` that names its types.
+"""Where a kind's definitions meet deepagents, a module per kind that needs one: skills do not,
+since deepagents reads a skill itself, and an agent is the graph `core.agent.assembly` builds.
 
-A kind owns its format and its walk over the disk, and names nothing in `core/agent/`;
-turning what it found into something the agent runtime takes is here, a module per kind.
-Skills are not, because deepagents reads a skill's document itself and
-`kingfisher.core.definitions.skills.registry` reaches the runtime from inside the kind. An agent
-is not, because it is the graph `core.agent.assembly` builds.
-
-Imports nothing: a re-export here would make `core.agent.kinds.tools`,
-which is light, pay for `core.agent.kinds.subagents`, which is not.
+Imports nothing: a re-export here would make the light `tools` module pay for `subagents`.
 """

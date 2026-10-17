@@ -8,13 +8,7 @@ from pathlib import PurePath
 from kingfisher import Inventory, Origins
 from kingfisher.core.access.capabilities import ALL
 
-# The renderer's own vocabulary, taken where it lives. A listing prints audiences, tells
-# a bare name from a `where::what` reference, and quotes the sentence a refusal quotes
-# -- none of which anybody outside this wheel has ever asked for, and all of which were
-# on the front door because *this file* was forbidden to reach for them. `offered` is
-# the one worth naming: a renderer beside a format looks odd until you see that the block
-# a refusal prints is the block a listing prints, so a name two files define reads the
-# same in both. Shared for that reason, not promised for it.
+# Taken where they live, not from the front door: nobody outside this wheel asks for them.
 from kingfisher.core.access.source_ids import AUDIENCED, Audience, Stated, spell
 from kingfisher.core.definitions.seeding import SEED_HINT
 from kingfisher.core.definitions.skills.catalogue import SKILL_LAYOUT
@@ -36,10 +30,8 @@ def _agents(found: Inventory) -> Iterator[str]:
     for name, described in found.agents.items():
         source = found.agent_sources.get(name)
         yield f"  {name}{_from(source, f'{name}.yaml')} — {described}"
-        # The subagents this agent activates, which is what it names and no more:
-        # a helper one of them consults reaches a run only where this file names
-        # it too. Printed rather than left to be worked out, because `["*"]` is a
-        # name for whatever the catalogue holds today.
+        # Resolved, because `["*"]` names whatever the catalogue holds today; and only
+        # what it names, since a helper one of them consults runs only if named here too.
         if subagents := found.agent_subagents.get(name):
             yield f"      subagents: {', '.join(subagents)}"
     if not found.agents:
@@ -50,11 +42,8 @@ def _agents(found: Inventory) -> Iterator[str]:
 def render(found: Inventory) -> Iterator[str]:
     """The listing, line by line.
 
-    One section after another and no branch here, which is the point: this used to
-    return early when the tools catalogue would not load, and every section written
-    afterwards had to be remembered on that path too. Skills and subagents were
-    remembered; `_access` was not, so an operator auditing a policy on a workspace with
-    one unparseable `.py` in `tools/` silently got no access report at all.
+    No early return here: a section skipped on a failure path goes missing exactly when
+    something is broken, which is when the listing is read.
     """
     yield from found.origins.block()
     yield ""
@@ -79,51 +68,31 @@ def _tools(found: Inventory) -> Iterator[str]:
         yield ""
         return
 
-    # Printed as one pile, this listing advertised `read_file` beside `count_rows` and
-    # left a reader to guess which flag took which -- and guessing wrong is the "that is
-    # a builtin tool" refusal.
     yield "builtin tools — grant with builtin_tools: in an agent file"
     for name in found.builtin_tools or ("(could not introspect)",):
         yield f"  {name}"
 
-    # Through the same renderer a refusal uses, so the listing and the refusal
-    # cannot drift: a name two files define is printed as the reference, because
-    # that is what a `tools:` line then has to say.
+    # The renderer a refusal uses, so the two cannot drift: a name two files define
+    # prints as the reference a `tools:` line has to say.
     yield "\nworkspace tools — grant with tools: in an agent file"
     yield offered(dict(found.tool_sources), found.tools)
 
 
 def _middlewares(found: Inventory) -> Iterator[str]:
-    """What this deployment registers, and why the directory could not be read.
-
-    The fifth kind, and the one no renderer printed. `middlewares_error` was carried
-    for it -- `_middlewares` says in as many words that a listing is where somebody
-    goes because something is broken, so the error is printed over the rest of the
-    output -- while `failed` counted it and this file printed nothing, so `list` on a
-    workspace with one unparseable `middlewares/*.py` exited 1 over output whose only
-    hint was `(could not introspect)` under a *different* heading.
-    """
+    """What this deployment registers, and why the directory could not be read."""
     yield "\nmiddlewares"
     if found.middlewares_error is not None:
         yield f"  cannot load: {found.middlewares_error}"
         return
     for name, module in sorted(found.middlewares.items()):
-        # The package, and only for one that came from a package -- the same reason the
-        # subagents section marks a carried bundle: a middleware installed by pip prints
-        # exactly like one a reader can open in this workspace, and where the code is is
-        # the whole of what this section is being asked.
+        # The package, or one installed by pip prints like one in this workspace.
         yield f"  {name}" + (f"  (from {module})" if module else "")
     if not found.middlewares:
         yield "  (none)"
 
 
 def _bundles(found: Inventory) -> Iterator[str]:
-    """Why a subagent's own folder could not be read.
-
-    Not a kind, so nothing that walks them reaches it -- a bundle is one subagent's
-    folder rather than a catalogue. Its tools are still Python that has to import, which
-    is why `failed` counts it, and it was counted without being printed.
-    """
+    """Why a subagent's own folder could not be read: not a kind, so no walk of them prints it."""
     if found.bundles_error is None:
         return
     yield "\nbundles"
@@ -131,14 +100,7 @@ def _bundles(found: Inventory) -> Iterator[str]:
 
 
 def _build(found: Inventory) -> Iterator[str]:
-    """Why no graph could be assembled, which is a fault no directory owns.
-
-    Printed rather than left to the exit status, like every other error here: a
-    non-zero exit tells a script something is wrong and only the text tells the
-    person what. This one is the reason the rest of the listing is thinner than it
-    should be -- the built-in set is unknown without a graph -- so it is said where a
-    reader meets that gap.
-    """
+    """Why no graph could be assembled, which is a fault no directory owns."""
     if found.build_error is None:
         return
     yield "\nthe build"
@@ -148,11 +110,8 @@ def _build(found: Inventory) -> Iterator[str]:
 def _misnamed_tools(found: Inventory) -> Iterator[str]:
     """Definitions naming a tool by a path it has moved from.
 
-    A section rather than a line under each definition, because the two kinds land
-    differently and the difference is what a reader needs: a subagent doing this will
-    not load and is already on its own line above, while an agent doing it loads and
-    runs without the tool it was granted. That second one is the fault this record
-    singles out as the worst to find out about later, and nothing here said it.
+    A section of its own: a subagent doing this already fails to load, while an agent
+    loads and runs without the tool, and nothing else here says so.
     """
     if not found.moved_tools:
         return
@@ -207,15 +166,11 @@ def _singular(field_name: str) -> str:
 
 def _access(found: Inventory) -> Iterator[str]:
     """Who reaches what, twice: as the files say it, and rolled up by asset."""
-    # One clause, because the record decides. It used to read `or found.held is not
-    # None` as well -- the scoped view's second decider, and the half `as_json` never
-    # had, which is how a caller's `--json` came to carry the whole policy.
+    # `access` alone decides, as in `as_json`, so a scoped caller's text and JSON agree.
     if found.access is None:
         return
     if compounds := found.access.compounds:
-        # Before the audiences rather than after, because it is what makes them
-        # readable: a name that requires others tells a reader nothing on the
-        # line it appears on, and every line it appears on needs it.
+        # Before the audiences: a name requiring others means nothing without it.
         yield "\naccess — source ids that require others"
         for name, parts in sorted(compounds.items()):
             yield f"  {name} = {{{', '.join(sorted(parts))}}}"
@@ -257,36 +212,30 @@ def _rollup(found: Inventory) -> Iterator[str]:
 
 
 def _skills(found: Inventory) -> Iterator[str]:
-    """The skills section: what loaded, and the three ways one does not reach the agent."""
+    """The skills section: what loaded, and each way one does not reach the agent."""
     yield (
         "\nskills" if found.skills_enabled else "\nskills (KINGFISHER_SKILLS_ENABLED is off)"
     )
-    # A description each, which subagents have always had here and skills never
-    # did -- it is what deepagents will actually put in front of the model.
+    # With its description, which is what deepagents puts in front of the model.
     for name, described in found.skills.items():
         yield f"  {name}{f' — {described}' if described else ''}"
     if not found.skills:
         yield "  (none)"
 
-    # Present on disk, and the agent will never see it. Reported rather than
-    # refused, so one malformed skill does not stop a deployment starting --
-    # and a caller who *names* one is refused outright.
+    # Reported, not refused, so one malformed skill does not stop a deployment; a
+    # caller naming one is refused outright.
     for name in found.skills_unloadable:
         yield f"  ! {name}/ is not loadable — the agent will not be told about it"
-    # One folder of grouping works and a second does not, so the obvious next
-    # thing to try yields nothing at all. Saying so is the only difference
-    # between a catalogue that looks empty and one that is -- and it needs the
-    # reason, because tools and subagents nest as deep as anyone likes.
+    # With the reason: one folder of grouping works and a second does not, unlike
+    # tools and subagents.
     for name in found.skills_misplaced:
         yield f"  ! {name}/ sits too deep to load — skills live at {SKILL_LAYOUT}"
         yield "    (a folder under the root is its own source, and a source is read"
         yield "     one level down; tools and subagents are read by kingfisher, so"
         yield "     those may nest as deep as you like)"
 
-    # Loaded, offered, and under a name that is not in the tree. deepagents
-    # files a skill by its header and logs a warning nobody reads, so this is
-    # the only place a reader learns why `--skills company-lookup` comes back
-    # unknown for a directory they are looking straight at.
+    # deepagents files a skill by its header and logs a warning nobody reads, so only
+    # this says why a directory's own name comes back unknown.
     for directory, name in found.skills_misfiled:
         yield f"  ! {directory}/ is offered as {name} — its own header names that instead"
         yield f"    (grant it as {name}, or rename the directory to match)"
@@ -295,85 +244,60 @@ def _skills(found: Inventory) -> Iterator[str]:
 def _subagents(found: Inventory) -> Iterator[str]:
     """The subagents section, with what each one brings that nobody else holds.
 
-    The `return` below ends this section, not the listing. Anything appended after
-    it is dropped for a deployment whose subagents will not load -- which is the
-    deployment reading this output.
+    The early `return` drops anything after it when subagents will not load, so nothing
+    another section needs belongs in here.
     """
     yield "\nsubagents"
     if found.subagents_error is not None:
         yield f"  cannot load: {found.subagents_error}"
         return
     for name, described in found.subagents.items():
-        # A reference already names the file, so the trailing annotation is
-        # dropped for it -- `team/surveyor.yaml::surveyor (team/surveyor.yaml)`
-        # says one thing twice in a listing whose job is to be scannable. Two
-        # folders may each define a `surveyor`, and then the key is the
-        # reference; where a name is its own, the two are the same string.
+        # A reference already names its file, so it gets no `(source)` annotation.
         claimed, plain = split_reference(name)
         source = None if claimed else found.subagent_sources.get(name)
-        # Two spellings now, so the obvious filename depends on which kind this
-        # is. Getting it wrong is not cosmetic: `_from` stays silent exactly
-        # when the name already tells you the file, and comparing a `.py`
-        # definition against `<name>.yaml` would annotate every one of them
-        # with the file a reader could already see.
+        # The obvious file depends on the kind: against `<name>.yaml`, every `.py`
+        # definition would be annotated with the file its name already shows.
         compiled = name in found.compiled_subagents
         obvious = f"{plain}.py" if compiled else f"{plain}.yaml"
         marker = "  [compiled]" if compiled else ""
         yield f"  {name}{_from(source, obvious)}{marker} — {described}"
-        # Indented under their owner rather than listed with the catalogue's,
-        # because that is the fact: nothing else holds them. A reader scanning
-        # the `tools` section above has seen everything the *agent* can call,
-        # and these are the ones it cannot.
+        # Private tools and skills sit under their owner, because nothing else holds them.
         stranded = found.stranded_skills.get(name, ())
-        # On the same line and for the same reason the note beside it is: without
-        # it, a tool installed by pip prints exactly like one a reader can open in
-        # this workspace, and the whole of what `list` is being asked here is where
-        # the code actually is.
+        # Marked, or a bundle installed by pip prints like one a reader can open here.
         carried = ", carried" if name in found.carried_bundles else ""
-        # A shadowing tool gets one row, from the loop below. `shadowed` is a subset of
-        # `bundled_tools`, so printing both put the same tool on two lines under two
-        # different annotations -- and the second says everything the first does.
+        # A shadowing tool gets one row, from the shadowing loop: `shadowed` is a
+        # subset of `bundled_tools`.
         shadowing = found.shadowed.get(name, ())
         for kind, held in (("tools", found.bundled_tools), ("skills", found.bundled_skills)):
             for own in held.get(name, ()):
                 if kind == "tools" and own in shadowing:
                     continue
-                # Said on the line itself rather than in a note below, because the
-                # line above it is the one it contradicts: without this, a compiled
-                # subagent's private skill prints exactly like one that arrives.
+                # On the line itself, or a compiled subagent's private skill prints
+                # like one that arrives.
                 reaches = "  (a compiled graph is told about no skills)" if own in stranded else ""
                 yield f"      {own}  [private {kind[:-1]}{carried}]{reaches}"
         if (miscounted := found.miscounted_bundles.get(name)) is not None:
-            # Under the subagent rather than in a section of its own: the lines above
-            # say what its folder holds, and this says the definition's list disagrees
-            # with them. A reader comparing the two is the point.
+            # Under the subagent, beside the folder contents its list disagrees with.
             yield f"      ! {miscounted}"
         for deep in found.bundled_misplaced.get(name, ()):
-            # Beside the skills that do arrive, because the reason is the difference:
-            # the catalogue allows one folder of grouping, and a subagent's own folder
-            # is one source, as a mount is.
+            # The catalogue allows one folder of grouping; a subagent's own folder is
+            # one source, as a mount is, and allows none.
             yield (
                 f"      ! {deep}/ sits too deep to load — a subagent's skills sit "
                 f"directly in its folder"
             )
         for hidden in found.shadowed.get(name, ()):
-            # Said out loud because shadowing is only acceptable while it is
-            # visible. The subagent answers `fetch` with its own; the
-            # catalogue's never reaches it, and no other line here would say so.
+            # Shadowing is only acceptable while it is visible.
             yield f"      {hidden}  [private tool, shadowing the catalogue's]"
     if found.compiled_subagents:
-        # The thing a reader would otherwise assume. deepagents runs a compiled
-        # graph as given and never applies our allowlist to it, so a tool grant
-        # is a suggestion there rather than a limit -- and nothing else in this
-        # output would say so.
+        # deepagents runs a compiled graph as given, without our allowlist, so a
+        # grant there is not a limit.
         yield "  (a compiled subagent brings its own graph: a tools: grant narrows"
         yield "   what it is handed, not what it can call)"
     if not found.subagents:
         yield f"  (none)  — try {SEED_HINT}"
     for folder in found.orphaned_assets:
-        # The subagent this folder was written for has no line of its own to be
-        # missing from: it still lists, still runs, and holds none of what is in
-        # here. Nothing else a reader can see says so.
+        # Its subagent still lists and runs, holding none of this, and nothing else says so.
         owner = PurePath(folder).name
         yield (
             f"  ! {folder}/ holds tools/ or skills/ that reach no subagent "
@@ -429,8 +353,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "orphaned_assets": list(found.orphaned_assets),
         "miscounted_bundles": dict(found.miscounted_bundles),
         "miscounted_bundles_checked": found.miscounted_bundles_checked,
-        # The vocabulary, or `null` where this deployment declares none. Who reaches
-        # what is `audiences` below, keyed the way the definitions themselves are.
+        # The vocabulary, or `null` where none is declared; who reaches what is `audiences`.
         "access": (
             None
             if found.access is None
@@ -468,26 +391,15 @@ def as_json(found: Inventory) -> dict[str, object]:
 def failed(found: Inventory) -> bool:
     """Whether the listing described a workspace that does not mean what it says.
 
-    It was "will not load" until a definition could name a tool by a path it had
-    moved from. A subagent doing that will not load; an agent doing it loads and
-    runs without the tool, which is not the same fault and is worse to find out
-    about later -- so the predicate covers both and is named for what they share.
-
-    A definition whose bundled entries and folder disagree is the first sort: the
-    catalogue refuses it, so a listing that exited zero over one would be promising
-    a deployment that cannot start. One naming a subagent the catalogue has no key
-    for loads, and every run reaching that name is refused.
+    Not only one that will not load: an agent naming a moved tool loads and runs without
+    it, and one naming an unknown subagent loads and refuses every run reaching it.
     """
     if found.moved_tools or found.miscounted_bundles or found.unresolved_subagents:
         return True
-    # Not a kind either, and the most fundamental of these: without a graph nothing
-    # runs at all, whatever the catalogues say.
+    # Not a kind, so the walk below misses it; without a graph nothing runs.
     if found.build_error is not None:
         return True
     if any(kind.error is not None for kind in found.by_kind()):
         return True
-    # Not a kind, and the one error here that a walk of them does not reach. A
-    # bundle's tools are tools -- Python that has to import -- and a deployment that
-    # starts and fails on the first request activating that subagent is the shape
-    # this predicate exists to stop.
+    # Not a kind either, and its tools are Python that has to import.
     return found.bundles_error is not None

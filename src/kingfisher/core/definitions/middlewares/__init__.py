@@ -1,16 +1,6 @@
 """Middleware a workspace defines, as opposed to middleware a deployment wires.
 
-The kind that could not exist until the definition roots stopped being writable
-by the agent's shell: a middleware is wrapped *around* an agent, so a copy in the
-directory the agent can edit was a cap the capped thing could rewrite.
-
-A deployment still registers classes in its own program, which is the only way to
-hand middleware a live object. `core/agent/kinds/declared_middleware.py` builds what a
-definition asked for from either source.
-
-No re-exports, as next door: each module is imported by name. This file used to
-carry five, which made `core.definitions.middlewares` and
-`core.definitions.middlewares.catalogue` import each other -- benign, since a package
-importing its own submodule resolves the same way every time, and the only cycle in
-the package all the same.
+Safe only while the definition roots are not writable by the agent's shell: a middleware
+wraps the agent, so a copy it could edit would be a cap the capped thing could rewrite.
+No re-exports, which would make this package and its `catalogue` import each other.
 """

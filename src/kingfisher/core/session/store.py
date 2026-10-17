@@ -1,8 +1,8 @@
 """What kingfisher keeps about a session: the agent it opened with, its conversation,
 the ledger of what its tools returned, and a turn paused for an answer.
 
-Read and written through `HarnessFiles`, so through the session's backend. This
-module owns the formats; the backend owns where they live.
+This module owns the formats; the session's backend, through `HarnessFiles`, owns
+where they live.
 """
 
 from __future__ import annotations
@@ -32,11 +32,8 @@ from kingfisher.core.session.transcript import Message, as_json, from_json
 class HarnessFiles:
     """What kingfisher keeps about one session under `/.harness`, through its backend.
 
-    Kept as written and read back as found. The agent's shell reaches the same
-    backend, so what keeps it from rewriting its own pinned agent, conversation or
-    paused turn is the shell's fence: kingfisher's sandbox, or a backend of the
-    deployment's that passes `shell_denied`. `kingfisher doctor` says where it can
-    see neither.
+    Read back as found: the agent's shell reaches the same backend, so only the shell's
+    fence keeps it from rewriting its own pinned agent, conversation or paused turn.
     """
 
     def __init__(self, backend: Any, session_id: str) -> None:
@@ -63,9 +60,8 @@ class HarnessFiles:
         paths = [f"{HARNESS_ROUTE}{name}" for name in names]
         for path in paths:
             yield changing(self._backend, "delete", path)
-        # Asked again rather than trusting each answer: a backend reports a file that
-        # was never there as an error, and telling that from a delete that failed
-        # would mean reading its wording.
+        # Asked again rather than trusting each answer: a backend reports a never-written file
+        # as an error, and telling that from a failed delete would mean reading its wording.
         answers = yield reading(self._backend, "download_files", paths)
         left = [a.path for a in answers if a.error is None]
         if left:
@@ -88,18 +84,15 @@ class HarnessFiles:
         return found
 
 
-#: What a refusal of the pinned agent calls it. Only a name: the pin is kept through
-#: `HarnessFiles`, so changing this moves nothing.
+#: What a refusal of the pinned agent calls it: only a name, so changing it moves nothing.
 AGENT_SNAPSHOT = f"{HARNESS}/{PINNED_AGENT}"
 
 
 def remember_agent(harness: Any, document: str) -> Steps[None]:
     """Keep the agent definition this session opened with.
 
-    Written once and never rewritten: a later turn naming the same agent is built
-    from what the session started with, not from whatever the catalogue says by
-    then. A deploy mid-conversation is ordinary; an agent's prompt changing under
-    a history that already happened is not.
+    Written once and never rewritten: a later turn is built from what the session
+    started with, so a deploy cannot change an agent under a history already made.
     """
     if (yield from harness.fetch(PINNED_AGENT)) is not None:
         return
@@ -134,18 +127,16 @@ def entry_id(number: int) -> str:
 
 _ENTRY_ID = re.compile(r"A-(\d+)")
 
-#: The same shape at the front of a file name, which is what the sweep recognises its
-#: own writing by. Built from the pattern above rather than spelled again, so the id
-#: and the file named after it cannot drift apart.
+#: The same shape at the front of a file name, which is how the sweep knows its own
+#: writing. Built from `_ENTRY_ID`, so the id and its file cannot drift apart.
 _RESULT_FILE = re.compile(_ENTRY_ID.pattern)
 
 
 def names_a_result(name: str) -> bool:
     """Whether a file in the tool results folder is one a recorder wrote.
 
-    The agent writes in that folder too -- it reads its own results back out of it and
-    `prompts/system.md` sends it there -- so the sweep cannot treat everything it finds
-    as a result whose row has gone.
+    The agent writes in that folder too, so the sweep cannot treat everything there as
+    a result whose row has gone.
     """
     return _RESULT_FILE.match(name) is not None
 
@@ -167,14 +158,12 @@ class KeptLedger:
     last: int = 0
     #: Every file a row names, which the sweep keeps.
     paths: frozenset[str] = frozenset()
-    #: The parent's `task` call id -> the access of each working entry under it. A
-    #: subagent paused at a gate finishes in the next turn, and its answer is
-    #: recorded there, after the entries its run made before the pause.
+    #: The parent's `task` call id -> the access of each entry under it, kept across
+    #: turns because a subagent paused at a gate finishes in the next one.
     runs: Mapping[str, tuple[Listed, ...]] = field(default_factory=dict)
-    #: Each exchange's entries in the order written, oldest first, an exchange that
-    #: recorded nothing included. An exchange is a turn that carried a user message and
-    #: the resumes after it, which carry none, so a paused `task` and its answer are
-    #: never in two.
+    #: Each exchange's entries, oldest first, empty ones included. An exchange is a turn
+    #: with a user message and the resumes after it, so a paused `task` and its answer
+    #: share one.
     exchanges: tuple[tuple[LedgerEntry, ...], ...] = ()
     #: Whether a turn of the last exchange ended on a summarised conversation.
     summarised: bool = False
@@ -204,12 +193,9 @@ def _kept(text: str) -> KeptLedger:
         try:
             row = json.loads(line)
         except ValueError:
-            # Dropped rather than refused. Every turn rewrites the whole file and a
-            # backend has no rename, so a crash mid-write can cut it anywhere, earlier
-            # turns' rows included, and refusing what is left would refuse every turn
-            # after. A number lost that way may be given again though a transcript
-            # already shows it stamped, and its file is swept. Accepted, as the
-            # transcript's own exposure to a crash mid-write is.
+            # Dropped, not refused: a backend has no rename, so a crash mid-write can cut
+            # the file anywhere, and refusing the rest would refuse every later turn. A
+            # lost row's number may be given again; accepted, as for the transcript.
             continue
         if not isinstance(row, dict):
             continue
@@ -223,9 +209,8 @@ def _kept(text: str) -> KeptLedger:
         if (entry := _entry(row)) is not None:
             unclosed.setdefault(entry.turn, []).append(entry)
         elif "id" not in row and isinstance(row.get("turn"), str):
-            # By the turn a row names rather than where it sits: rows a crash left
-            # without their closing line are followed by the next turn's, and would
-            # be counted as its own.
+            # By the turn a row names, not where it sits: rows a crash left unclosed would
+            # otherwise be counted as the next turn's.
             closed = unclosed.pop(row["turn"], [])
             if row.get(RESUMED) and exchanges:
                 exchanges[-1].extend(closed)
@@ -260,8 +245,7 @@ def _entry(row: Mapping[str, Any]) -> LedgerEntry | None:
     return LedgerEntry(**held)
 
 
-def write_ledger(  # noqa: PLR0913 -- the closing line's two marks, by keyword so
-    # that neither is ever passed for the other
+def write_ledger(  # noqa: PLR0913 -- two marks, by keyword so neither is passed for the other
     harness: Any,
     earlier: KeptLedger,
     entries: Sequence[LedgerEntry],
@@ -272,8 +256,8 @@ def write_ledger(  # noqa: PLR0913 -- the closing line's two marks, by keyword s
 ) -> Steps[None]:
     """Replace the ledger with what it held, this turn's rows, and this turn's closing line.
 
-    The closing line is written however many rows the turn recorded: turn ids are not
-    a sequence, so the file's order is the only record of the turns' order.
+    The closing line is written even with no rows: turn ids are not a sequence, so the
+    file's order is the only record of the turns' order.
     """
     marks = {RESUMED: resumed, SUMMARISED: summarised}
     rows = [
@@ -284,17 +268,13 @@ def write_ledger(  # noqa: PLR0913 -- the closing line's two marks, by keyword s
     yield from harness.store(LEDGER_FILE, ("\n".join(rows) + "\n").encode("utf-8"))
 
 
-#: Which agent the paused graph was built from. Kept for *checking* a resume, never
-#: for granting one: capabilities are re-presented every time, and a different agent
-#: is a different graph shape that this checkpoint's nodes do not belong to.
+#: Which agent the paused graph was built from. For *checking* a resume, never granting
+#: one: capabilities are presented afresh, and another agent's graph does not fit.
 AGENT_MARK = "agent"
 
-#: The gated calls the pause is waiting on, as the caller was told them.
-#:
-#: Kept rather than read back out of the checkpoint, and the ids are the reason: a
-#: caller answers what it was handed, so the two must be the same list rather than
-#: two derivations of one. Deriving them again would also need a compiled graph,
-#: which the admission path does not have until after it has dealt with the pause.
+#: The gated calls the pause is waiting on, as the caller was told them. Kept, not
+#: re-derived: a caller answers the ids it was handed, and deriving them needs a
+#: compiled graph, which admission has only after it has dealt with the pause.
 PENDING_MARK = "pending"
 
 
@@ -335,8 +315,8 @@ def read_pause_mark(harness: Any) -> Steps[dict[str, Any] | None]:
     try:
         held = json.loads(written)
     except ValueError:
-        # Unreadable is the same answer as absent, and deliberately: this file
-        # exists to refuse a resume, so a damaged one refusing it too is right.
+        # Unreadable answers as absent: this file exists to refuse a resume, so a
+        # damaged one refusing it too is right.
         return None
     return held if isinstance(held, dict) else None
 

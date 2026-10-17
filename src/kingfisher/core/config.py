@@ -1,4 +1,4 @@
-"""Deployment configuration. Belongs to no layer, which is why it sits here."""
+"""Deployment configuration."""
 
 from __future__ import annotations
 
@@ -13,29 +13,20 @@ from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.access.source_ids import SourceIds
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS_OWNED, SESSIONS, Layout
 
-#: The frozen default for an `extra` mapping. Shared with `WireFormat.extra`
-#: rather than written twice: both spread into one `build_model` call and carry
-#: one rule between them -- additive only, may not name a value the deployment
-#: configured -- so a reader meeting one should find the other. Public for that
-#: reason alone: an empty mapping cannot drift, so this buys visibility of the
-#: pairing rather than safety.
+#: The default `extra`, shared with `WireFormat.extra` because both spread into one
+#: `build_model` call under one rule: additive only, never a value the deployment set.
 NO_EXTRA: Mapping[str, Any] = MappingProxyType({})
 
-#: A deployment's skills mounts when it names none: frozen, for `NO_EXTRA`'s reason.
+#: The skills mounts of a deployment that names none.
 NO_MOUNTS: Mapping[str, Path] = MappingProxyType({})
 
 
 @dataclass(frozen=True)
 class Landing:
-    """The attribute a chat class keeps each value in, once constructed.
+    """The attribute each value lands in on a chat class, for `build_model` to read back.
 
-    The classes agree on the keyword and disagree on the attribute: `base_url` is
-    `anthropic_api_url` on one and `openai_api_base` on the other. `build_model` reads
-    every value back through these after construction.
-
-    `temperature` and `top_p` are absent deliberately: a class may drop them on purpose
-    -- `ChatOpenAI` discards `temperature` for `gpt-5`, which rejects it -- and
-    checking them would refuse a model the vendor's own client builds correctly.
+    No `temperature` or `top_p`: a class may drop them on purpose (`ChatOpenAI` does for
+    `gpt-5`, which rejects it), and checking them would refuse a model built correctly.
     """
 
     model: str
@@ -49,9 +40,8 @@ class Landing:
 class WireFormat:
     """One wire format: which class speaks it, and what it needs to be told.
 
-    kingfisher targets **gateway-shaped** endpoints — one base URL, one key. A wire
-    format without that shape (Bedrock wants a region and a credentials profile) is a
-    new field on `Endpoint`, not a new row.
+    Endpoints are gateway-shaped, one base URL and one key; a format needing more (a
+    region, a credentials profile) is a new field on `Endpoint`, not a new row.
     """
 
     chat_class: str
@@ -71,20 +61,14 @@ class Endpoint:
     api: str
     base_url: str
     api_key: str
-    #: The variable the key above was read from. Kept rather than discarded at
-    #: load time because it is the only actionable thing in a 401: the YAML is
-    #: correct, the key it points at is not, and a message that cannot name the
-    #: variable sends someone to the file where everything already looks right.
-    #: Defaulted, so an endpoint built in a test need not carry one.
+    #: The variable the key was read from, kept for a 401: the YAML is right and the key
+    #: is not, so the variable is the one thing worth naming.
     key_env: str = ""
-    #: The keys file entry the key was read from, for an endpoint whose `models.yaml`
-    #: says `key:` -- then `key_env` is empty. Kept for the 401's reason above: the
-    #: entry is the thing to check, and a message about variables would send the
-    #: reader to the environment, which held nothing.
+    #: The keys file entry the key was read from, where `models.yaml` says `key:` and
+    #: `key_env` is empty; then this is what a 401 names.
     key_entry: str = ""
-    #: The row `api` named, resolved as the catalogue loaded. Carried rather than
-    #: looked up again by name when a model is built, because a deployment's own
-    #: rows exist only in the table that load was handed.
+    #: The row `api` named, resolved at load. Carried rather than looked up by name
+    #: later: a deployment's own rows exist only in the table load was handed.
     wire_format: WireFormat = field(kw_only=True)
 
 
@@ -136,10 +120,8 @@ def authored_files_for(definitions: Path) -> dict[str, Path]:
 def refuse_overlap(workspace: Path, definitions: Path) -> None:
     """Refuse a workspace and a definitions folder that are one, or one inside the other.
 
-    Either way round loses what the split is for. Sessions inside the definitions put
-    runtime state in the folder several deployments read and somebody reviews; the
-    definitions inside the workspace are in the one place the macOS fence lets every
-    session's shell read.
+    Sessions inside the definitions put runtime state in a shared, reviewed folder;
+    definitions inside the workspace sit where the macOS fence lets every shell read.
     """
     workspace, definitions = Path(workspace).resolve(), Path(definitions).resolve()
     if workspace.is_relative_to(definitions) or definitions.is_relative_to(workspace):
@@ -161,17 +143,11 @@ class WorkspacePaths:
     #: `None` where the deployment named none, which only seeding may do: it writes
     #: into the definitions folder and never into a workspace.
     workspace: Path | None = None
-    #: Skills directories beside the catalogue, each mounted at `/skills/<label>/`.
-    #: Not a definition root: a mount is somebody else's directory, so nothing
-    #: creates it and nothing seeds into it.
+    #: Skills directories beside the catalogue, each mounted at `/skills/<label>/`. Not
+    #: a definition root: a mount is somebody else's, so nothing creates or seeds it.
     skills_mounts: Mapping[str, Path] = NO_MOUNTS
-    #: Where definitions are *copied from*, which is the opposite direction to the
-    #: definition roots — those say where a catalogue is read, this says what
-    #: seeding hands it. Deliberately not beside them for that reason.
-    #:
-    #: `None` when the deployment named none, which is a normal state and not an
-    #: error: a workspace seeded once runs for years without this being set.
-    #: Only the act of seeding needs it, so only seeding refuses without it.
+    #: Where definitions are *copied from*. `None` is normal, not an error: only
+    #: seeding needs it, so only seeding refuses without it.
     assets: Path | None = None
 
     def __post_init__(self) -> None:
@@ -191,20 +167,14 @@ class ConfigError(RuntimeError):
     """Raised when required configuration is missing or invalid."""
 
 
-#: What configured the `SessionStore`, which went when a session's backend became
-#: where it is kept. Refused where the environment is read rather than ignored, and
-#: kept here rather than beside that reader because they are refusals, not knobs.
-#: The size of the process's thread pool when nothing configured one. A turn hands
-#: it only short work on this host -- building the agent, writing a pause, closing up
-#: -- but sessions whose async methods are the protocol's defaults run every
-#: sync call on it too, each a whole round trip on a remote one, and those are what a
-#: smaller pool would queue.
+#: The thread pool's size when nothing configured one. Sessions on the protocol's
+#: default async methods run every sync call on it, each a round trip on a remote
+#: one, and those are what a smaller pool would queue.
 DEFAULT_THREAD_POOL_SIZE = 16
 
-#: Settings that went, refused where the environment is read rather than ignored, each
-#: by what replaces it. Refused because what each did would change without a word:
-#: sessions kept somewhere else would be lost on upgrade, and a request naming no
-#: session would run in `default` rather than the one the deployment chose.
+#: Settings that went, each by what replaces it. Refused rather than ignored: sessions
+#: kept elsewhere would be lost on upgrade, or a request naming none run in `default`.
+#: Not in the module that reads the environment, because they are refusals, not knobs.
 _STORE = (
     "a session's backend keeps it now. Mount durable storage at <workspace>/sessions, or "
     "set KINGFISHER_SESSIONS to sessions that keep them"
@@ -218,11 +188,9 @@ REMOVED_SETTINGS: Mapping[str, str] = MappingProxyType({
     ),
 })
 
-#: Settings that changed name, refused under the old one. A renamed setting still set
-#: is one the deployment wanted, so carrying on with the default is never what it
-#: chose -- for this one, the command line's sessions and shell on this host instead
-#: of the deployment's own. `RETIRED` names are reported rather than refused because
-#: their default may well be what was wanted.
+#: Settings that changed name, refused under the old one: one still set is one the
+#: deployment wanted, so its default is never what it chose. `RETIRED` names are only
+#: reported, because their default may well be what was wanted.
 RENAMED_SETTINGS: Mapping[str, str] = MappingProxyType(
     {
         "KINGFISHER_BACKEND_FACTORY": "KINGFISHER_SESSIONS",
@@ -231,10 +199,9 @@ RENAMED_SETTINGS: Mapping[str, str] = MappingProxyType(
     }
 )
 
-#: Settings that each moved one thing out of the workspace, refused where they are
-#: still set, by the name the thing has in `KINGFISHER_DEFINITIONS_DIR` now. Refused
-#: rather than reported, because the folder named there is what a deployment chose to
-#: serve, and carrying on would serve a different one without a word.
+#: Settings that each moved one thing into `KINGFISHER_DEFINITIONS_DIR`, by its name
+#: there. Refused rather than reported: carrying on would silently serve a folder the
+#: deployment did not choose.
 FOLDED_SETTINGS: Mapping[str, str] = MappingProxyType({
     "KINGFISHER_AGENTS_DIR": "agents",
     "KINGFISHER_MIDDLEWARES_DIR": "middlewares",
@@ -248,8 +215,7 @@ FOLDED_SETTINGS: Mapping[str, str] = MappingProxyType({
 class MissingCredentialsWarning(UserWarning):
     """An endpoint in `models.yaml` whose key is not set here, so it was dropped.
 
-    A class of its own so `doctor`, which reports the same thing as a check, can
-    silence this warning by name rather than by matching its wording.
+    Its own class so `doctor`, which reports this as a check, can silence it by name.
     """
 
 
@@ -260,26 +226,21 @@ class Models:
     #: Keyed by the id sent on the wire. **Closed**: a name absent from here is
     #: refused rather than passed to an endpoint that has never heard of it.
     models: Mapping[str, ModelProfile]
-    #: Every endpoint whose credentials are actually present. One whose
-    #: `key_env` is unset is dropped before it reaches here, with a warning, so
-    #: one reviewed file works across a fleet holding different subsets of keys.
+    #: Every endpoint whose credentials are present. The rest are dropped with a
+    #: warning, so one reviewed file works across a fleet holding different keys.
     endpoints: Mapping[str, Endpoint]
-    #: What runs when nothing names another. Guaranteed to be a key of `models`
-    #: -- `model_catalogue.load` refuses a file where it is not, which is what
-    #: makes `resolve()` total.
+    #: What runs when nothing names another; always a key of `models`, because
+    #: `model_catalogue.load` refuses a file where it is not.
     default: str
     #: Models this file defines that this machine cannot reach, and why -- keyed by
     #: model name, valued as the clause `resolve` drops into its refusal.
     unreachable: Mapping[str, str] = field(default_factory=dict)
-    #: Endpoints this file defines that were dropped for want of a key, valued by
-    #: what was not set: the variable an endpoint names, the keys file setting, or the
-    #: keys file's entry -- each written to read after "whose" and before "is not
-    #: set". Includes an endpoint no model uses, which `unreachable` would not mention.
+    #: Endpoints dropped for want of a key, valued by what was not set, worded to read
+    #: after "whose" and before "is not set". Includes an endpoint no model uses.
     dropped: Mapping[str, str] = field(default_factory=dict)
     #: The keys file `key:` entries were read from, or `None` where none was named.
     keys_file: Path | None = None
-    #: Where all of it was read from. Informational, so a refusal can name the
-    #: file that should have defined what it could not find.
+    #: Where it was read from, so a refusal can name the file.
     source: Path | None = None
 
     def __post_init__(self) -> None:
@@ -294,27 +255,18 @@ class Models:
             raise ConfigError(msg)
 
     def resolve(self, name: str | None = None) -> tuple[ModelProfile, Endpoint]:
-        """Which model to build, and where to send it. One question, one answer.
+        """Which model to build, and where to send it.
 
-        Raises rather than falling back, on both halves. A name this deployment
-        cannot run would otherwise reach an endpoint that has never heard of it -- a
-        404 if you are lucky and a wrong-model run if you are not -- and a model
-        whose endpoint went missing would otherwise run somewhere its author did not
-        choose. Both decide where the prompt goes, which is the one thing worth being
-        loud about here.
+        Raises rather than falling back: a fallback would send the prompt to a model or
+        an endpoint nobody chose.
         """
         wanted = self.default if name is None else name
         profile = self.models.get(wanted)
         if profile is None:
             known = tuple(sorted(self.models))
             where = f" defined in {self.source}" if self.source else ""
-            # Asked before "no such model", because for a model on an endpoint
-            # with no key that answer is false and sends its reader to the wrong
-            # file. The catalogue defines it; this machine cannot use it.
-            # The branch below said this was how it would read, and until
-            # `unreachable` existed it could not deliver: the model had already
-            # been filtered out one step earlier, so the lookup failed here and
-            # answered a question nobody asked.
+            # Before "no such model", which is false for a model whose endpoint has no
+            # key here: the catalogue defines it; this machine cannot use it.
             if reason := self.unreachable.get(wanted):
                 msg = f"model {wanted!r} runs on {reason}; this deployment can run {known}"
                 raise ConfigError(msg)
@@ -322,10 +274,7 @@ class Models:
             raise ConfigError(msg)
         endpoint = self.endpoints.get(profile.endpoint)
         if endpoint is None:
-            # A `Models` assembled by hand -- a fixture, a caller building one
-            # directly -- whose profile names an endpoint the mapping beside it
-            # does not have. `load` cannot produce this: it drops such models,
-            # and the clause above is what speaks for them.
+            # Only a `Models` built by hand: `load` drops such a model into `unreachable`.
             msg = (
                 f"model {wanted!r} runs on endpoint {profile.endpoint!r}, which this "
                 f"deployment has no credentials for; it has {tuple(sorted(self.endpoints))}"
@@ -341,12 +290,6 @@ class Config:
     #: What sessions make: `sessions/` and the harness's own `.kingfisher/`.
     workspace: Path
     #: What this deployment can run, where, and under which names.
-    #:
-    #: One field where there were five -- `models`, `endpoints`, `default_model`,
-    #: `aliases`, `models_file` -- plus the two methods that read only those. A
-    #: `Config` is a flat bag a deployment fills in, and the cluster has
-    #: invariants between its parts that siblings of `turn_timeout_s` could not
-    #: express. See `Models`.
     models: Models
     #: Which source ids reach which agents, subagents and tools, or `None` where this
     #: deployment writes no policy.
@@ -355,97 +298,62 @@ class Config:
     access_source: Path | None = None
     #: What bounds one shell command or one interpreter run.
     execution_timeout_s: int = 120
-    # What one session may consume. Session-scoped because that is what
-    # kingfisher can see: it is tenant-blind by design (T1), so bounding a
-    # *caller* is the job of whatever knows who is calling. These protect the
-    # process from one runaway session, not one caller from another.
+    # What one session may consume, not one caller: kingfisher is tenant-blind by
+    # design (T1), so bounding a caller is the job of whatever knows who is calling.
     #
-    # `recursion_limit` bounds graph steps and a model's own `timeout_s` bounds
-    # a single call; nothing bounded their product, so a turn could hold a
-    # process for 150 x 120s ~= 5 hours. An hour is far past any real turn -- a
-    # 1,000-row analysis is ~20 turns of seconds each -- so this only ever fires
-    # on the pathological case.
+    # Nothing else bounds `recursion_limit` times a model's `timeout_s`, which allows
+    # 150 x 120s, about 5 hours; an hour is far past any real turn.
     turn_timeout_s: int = 3600
-    # Unset by default: workspaces vary by orders of magnitude, and refusing a
-    # turn over a number nobody chose is worse than not bounding it. Checked
-    # before a turn starts, never during -- `execute` writes without any file
-    # tool seeing it, so there is nothing to intercept.
+    # Unset by default: workspaces vary by orders of magnitude. Checked before a turn,
+    # never during: `execute` writes without any file tool seeing it.
     session_max_bytes: int | None = None
-    # How long an idle session survives, when a janitor calls `reap` without
-    # saying. Age rather than a count of sessions kept: how long one has been
-    # idle is a property of that session, where "newest twenty" compares every
-    # caller's against each other.
+    # How long an idle session survives a `reap` that names no age. An age, not a count
+    # kept: a count would weigh every caller's sessions against each other.
     session_ttl_s: int = 7 * 24 * 3600
-    # Each agent turn costs 2-3 graph steps, so this is roughly a turn budget
-    # divided by three. 60 was sized against a toy task and cut a real
-    # 1,000-row analysis off mid-step at 20 turns.
+    # Each agent turn costs 2-3 graph steps. 60 cut a real 1,000-row analysis off
+    # mid-step at 20 turns.
     recursion_limit: int = 150
-    # How many threads the async paths hand blocking work to. One number per
-    # process, because the pool is one per process: threads are the process's to
-    # spend. A call that blocks for a round trip holds its thread for all of it,
-    # which is why the loop's default executor -- 12 workers on an 8-CPU host --
-    # was not enough.
+    # Threads the async paths hand blocking work to, one pool per process. A round trip
+    # holds its thread throughout, which is why the loop's default executor (12 workers
+    # on an 8-CPU host) was not enough.
     thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE
     skills_mounts: Mapping[str, Path] = NO_MOUNTS
-    # Where definitions are copied *from*, which is the opposite direction to
-    # the definition roots. Carried here as well as on `WorkspacePaths` because
-    # `doctor` is handed a whole `Config` and has to report on it -- an unset,
-    # mistyped or emptied source is the likeliest thing standing between an
-    # install and a run once the definitions stop arriving with the wheel.
+    # Where definitions are copied *from*. Here as well as on `WorkspacePaths` because
+    # `doctor` reports on a whole `Config`, and a bad source is the likeliest fault.
     assets: Path | None = None
-    # What people write, apart from what sessions make: every definition kind, and
-    # `models.yaml` and `source_ids.yaml` beside them. Keyword-only and without a
-    # default, so a `Config` built by hand says where its definitions are rather than
-    # inheriting a folder inside the workspace. One folder rather than one per kind:
-    # several deployments point at it, and one path is what they agree on.
+    # What people write: every definition kind, `models.yaml` and `source_ids.yaml`. No
+    # default, so a hand-built `Config` cannot inherit a folder inside the workspace.
+    # One folder, not one per kind: several deployments point at it.
     definitions: Path = field(kw_only=True)
-    # What this deployment *wires*. Distinct from `Capabilities`, which is what a single
-    # request may *use* of it -- and the distinction is not stylistic: these two flags
-    # shape `render_system_prompt`, which is the cached prefix every turn is compared
-    # against. Varying them per request would trade a measured ~90% cache hit for a
-    # per-caller prompt.
+    # What this deployment wires, not what one request may use (`Capabilities`): these
+    # shape the cached system prompt, and varying them per request would give up a
+    # measured ~90% cache hit.
     skills_enabled: bool = False
     memory_enabled: bool = False
-    # A JavaScript sandbox the agent can compute in: no filesystem, no network, capped
-    # memory and time, and reachable tools limited to what the request granted. It is
-    # the one execution surface `execute` can never be, which is why a deployment may
-    # want both.
+    # A JavaScript sandbox to compute in: no filesystem or network, capped memory and
+    # time, and only the tools the request granted.
     interpreter_enabled: bool = False
-    # Whether a turn remembers the one before it. On, because a session that forgets is
-    # a surprising default for something that issues session ids.
-    #
-    # Worth turning off for a request/response API, where a caller sends one task and
-    # reads one answer. Measured: with it on, a two-turn workspace carries a ~0.4MB
-    # database it never reads back.
+    # On, because a session that forgets surprises anything that issues session ids.
+    # Off suits a one-task request/response API: on, a two-turn workspace carries a
+    # ~0.4MB database it never reads back.
     conversation_enabled: bool = True
-    # What this deployment permits every request, before any asks for anything: a
-    # ceiling a request's own capabilities are narrowed by, and never widened past.
-    # `None` restricts nothing, so a single-caller deployment is unaffected; a service
-    # in front of many callers sets it. Set in code, as the `Capabilities` it is.
+    # The ceiling a request's capabilities are narrowed by, never widened past. `None`
+    # restricts nothing.
     grants: Capabilities | None = None
-    # The per-session folder names the agent addresses. Defaulted to kingfisher's own;
-    # a deployment renames the leaves by passing a `Layout`. Set once at startup, so the
-    # routes, the sandbox rules and the prompt that derive from it are stable per
-    # deployment rather than per request.
+    # The per-session folder names the agent addresses. Per deployment, never per
+    # request: the routes, the sandbox rules and the prompt derive from it.
     layout: Layout = DEFAULT_LAYOUT
 
     @property
     def claim_stale_after(self) -> float:
         """How old a session's claim must be before another turn may take it.
 
-        The two were the same number, so the claim became takeable the instant the
-        run's deadline passed -- and a run stops *between stream chunks*, then still
-        has to emit its result, collect what the turn left behind, and let go.
-        Measured in that window: a second caller took the session while the first
-        turn was still running, and the first turn then finished. Two turns in one
-        session is what the claim exists to prevent, and what `SessionBusyError`
-        records having seen once already, where "a turn simply vanished".
+        The turn deadline plus the longest model timeout: a run stops only between stream
+        chunks, then still has to emit its result, collect what it left and let go.
         """
         return self.turn_timeout_s + max(
             (profile.timeout_s for profile in self.models.models.values()),
-            # A catalogue with no models cannot run a turn at all, so nothing
-            # can be mid-chunk; the grace is the timeout a profile would have
-            # defaulted to rather than zero, which would restore the overlap.
+            # Not zero, even with no models: zero would restore the overlap.
             default=ModelProfile.timeout_s,
         )
 
@@ -476,9 +384,8 @@ class Config:
     @property
     def authored_files(self) -> dict[str, Path]:
         """Where the files a deployment writes are read from, found or not."""
-        # Where they were actually read, ahead of where the folder says. A `Config` built
-        # in code may load either from anywhere, and the macOS profile denies the shell
-        # this list: the one it must not edit is the one the next start reads.
+        # Where they were actually read wins: the macOS profile denies the shell this
+        # list, and the copy it must not edit is the one the next start reads.
         beside = authored_files_for(self.definitions)
         return {
             **beside,

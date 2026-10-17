@@ -28,12 +28,11 @@ _POOL = _Pool()
 
 
 def thread_pool(size: int | None = None) -> ThreadPoolExecutor:
-    """The process's pool, which holds `size` threads -- or with no size, the pool as
-    it is, made at the default if nothing has asked for one yet.
+    """The process's pool of `size` threads, or with no size the pool as it is, made at
+    the default if nothing has asked yet.
 
-    A second size is refused rather than ignored: whichever service was built first
-    would otherwise decide for every other, and the one that asked for more would
-    queue behind a number it never chose.
+    A second size is refused rather than ignored, or whichever service was built first
+    would decide for every other.
     """
     if size is not None and size < 1:
         msg = f"KINGFISHER_THREAD_POOL_SIZE must be at least 1, got {size}"
@@ -57,9 +56,8 @@ def off_loop[T](
 ) -> asyncio.Future[T]:
     """`fn` on `pool`, in the caller's context.
 
-    The context is copied by hand, as `asyncio.to_thread` does: a bare
-    `run_in_executor` starts `fn` in an empty one, which drops a caller's ambient
-    `RunnableConfig` and the tracing hanging off it.
+    Copied by hand, as `asyncio.to_thread` does: a bare `run_in_executor` starts `fn`
+    in an empty context, dropping the caller's `RunnableConfig` and its tracing.
     """
     call = functools.partial(contextvars.copy_context().run, fn, *args, **kwargs)
     return asyncio.get_running_loop().run_in_executor(pool, call)
@@ -68,12 +66,9 @@ def off_loop[T](
 async def finished[T](work: Awaitable[T]) -> tuple[T, asyncio.CancelledError | None]:
     """What `work` produced once it has finished, and the cancel that arrived meanwhile.
 
-    Waited for however many times the caller is cancelled, so whatever `work` took --
-    a session's claim, above all -- is in the caller's hands before the cancel goes
-    on, and the caller gives it back. Returning at the first cancel left the work
-    running behind the caller, holding what it took with nobody left to release it.
-    The cancel is handed back rather than raised so the caller can give that back
-    first, and re-raise it after.
+    Waited for through every cancel, so whatever `work` took -- a session's claim, above
+    all -- reaches the caller, and the cancel is handed back rather than raised so the
+    caller can give that back first.
     """
     pending = asyncio.ensure_future(work)
     cancelled: asyncio.CancelledError | None = None

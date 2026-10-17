@@ -28,30 +28,22 @@ if TYPE_CHECKING:
 #: Top-level keys. `default` names a model; the other two are the tables.
 KNOWN_TOP: frozenset[str] = frozenset({"endpoints", "models", "default"})
 
-#: What an endpoint entry may say. `api` picks a wire format from `wire_formats`
-#: below; `base_url` is literal because it is topology, not a
-#: secret, and because two gateways speaking one wire format cannot both be
-#: described by a single conventional variable name -- which is the whole reason
-#: this table exists apart from the wire-format table.
+#: What an endpoint entry may say. `base_url` is literal: it is topology, not a secret,
+#: and two gateways speaking one wire format could not share one conventional variable.
 KNOWN_ENDPOINT: frozenset[str] = frozenset({"api", "base_url", "key", "key_env"})
 
-#: What names the file an endpoint's `key:` is an entry in. No default: everything but
-#: the workspace defaults inside it or is off, and a keys file inside the workspace is
-#: one the macOS fence lets the agent's shell read.
+#: Names the file an endpoint's `key:` is an entry in. No default: one would sit in the
+#: workspace, where the macOS fence lets the agent's shell read it.
 KEYS_SETTING = "KINGFISHER_MODEL_KEYS_FILE"
 
-#: What a model entry may say, beside `extra`. Every one is optional except
-#: `endpoint`; see `ModelProfile` for why omitted means "not passed at all"
-#: rather than "passed as a default we chose".
+#: What a model entry may say, beside `extra`; every one is optional except `endpoint`.
 KNOWN_MODEL: frozenset[str] = frozenset(
     {"endpoint", "max_tokens", "timeout_s", "temperature", "top_p", "clear_results_at", "extra"}
 )
 
 
-#: Keys this format used to define, named individually rather than folded into "unknown
-#: key" for the reason `NOT_COMPILED` gives one layer out: the generic message reads as
-#: a typo and sends its reader looking for the right spelling, when what they need is to
-#: know the key is gone and what replaces it.
+#: Keys this format used to define, named apart from "unknown key", which reads as a typo
+#: when the reader needs to know the key is gone and what replaces it.
 REMOVED: Mapping[str, str] = MappingProxyType(
     {
         "aliases": (
@@ -93,9 +85,8 @@ def wire_formats(spec: str | None) -> Mapping[str, WireFormat]:
                 f"{type(row).__name__} -- every value has to be a kingfisher WireFormat"
             )
             raise ConfigError(msg)
-    # Refused rather than letting the deployment's row win: every endpoint already
-    # written as `api: anthropic` would move to a class its author never chose, and
-    # nothing in `models.yaml` would show it.
+    # Refused rather than letting theirs win: every `api: anthropic` endpoint would move
+    # to a class its author never chose, with nothing in `models.yaml` showing it.
     taken = sorted(set(theirs) & set(WIRE_FORMATS))
     if taken:
         msg = (
@@ -119,19 +110,14 @@ def _mapping(value: Any, where: str) -> Mapping[str, Any]:
 def _without_the_line(exc: yaml.YAMLError) -> str:
     """Why the parse failed, with the place instead of the text.
 
-    `str()` on one of PyYAML's marked errors reproduces the source line it stopped on,
-    with a caret under the column. For a keys file that line *is* a key, and a refusal
-    is printed -- so the one message saying the file is wrong undid the whole reason the
-    key was kept in a file of its own. A line and a column are what a person needs in
-    order to go and look, and they carry nothing.
-
-    Both parse sites use it. `models.yaml` refuses an `api_key:` field, but only once it
-    parses: malformed, it quoted whatever line it stopped on exactly as this one did.
+    `str()` on a marked PyYAML error reproduces the line it stopped on, and in a keys
+    file that line *is* a key, printed in the refusal. `models.yaml` uses it too: it
+    refuses an `api_key:` field only once it parses.
     """
     problem = getattr(exc, "problem", None)
     if not isinstance(problem, str):
-        # Not every `YAMLError` is a marked one, and the others put their detail in
-        # `str()` too. Nothing is said rather than guessing which parts of it are safe.
+        # An unmarked error puts its detail in `str()` too: say nothing rather than guess
+        # which parts are safe.
         return "it could not be parsed"
     mark = getattr(exc, "problem_mark", None)
     if mark is None:
@@ -142,9 +128,8 @@ def _without_the_line(exc: yaml.YAMLError) -> str:
 def _keys(path: Path | None) -> Mapping[str, str] | None:
     """The keys file's entries, or `None` where no keys file is named.
 
-    Refused rather than read around when it is named and wrong. A path somebody wrote
-    is a mistake to say at once, where an endpoint missing its key is one machine's
-    ordinary state -- the line a missing `models.yaml` already draws.
+    Refused when named and wrong: a written path is a mistake to say at once, where an
+    endpoint missing its key is one machine's ordinary state.
     """
     if path is None:
         return None
@@ -210,12 +195,8 @@ def _endpoints(  # noqa: PLR0913 -- one argument per source a key can come from
             raise ConfigError(msg)
         api = str(entry["api"]).strip()
         if api not in buildable:
-            # Refused here rather than in `build_model`, which is where it used to
-            # happen -- meaning a wire format kingfisher cannot speak loaded without
-            # complaint and failed when a turn started, from inside a request. Every
-            # other closed set in this file is checked as it is read: an unknown key is
-            # refused, a model absent from the table is refused, a default naming
-            # neither is refused. `api` was the one that was not.
+            # Refused as it is read, like every other closed set here, rather than when a
+            # turn starts, from inside a request.
             msg = (
                 f"{source}: endpoint {name!r} names api {api!r}, which kingfisher "
                 f"cannot build; known: {tuple(sorted(buildable))}"
@@ -230,12 +211,8 @@ def _endpoints(  # noqa: PLR0913 -- one argument per source a key can come from
             key = (keys.get(named_entry) or "").strip()
             missing = f"entry {named_entry!r} in {keys_file}"
         if not key:
-            # Named, not hinted at. "endpoint 'minimax' has no credentials"
-            # sends someone to the YAML, where everything looks correct.
-            #
-            # Keyed by endpoint rather than pre-formatted, because two callers
-            # need it now and they word it differently: the warning below lists
-            # them, and `resolve` names one inside a sentence about a model.
+            # What is missing, by name: "no credentials" sends someone to the YAML, which
+            # looks correct. Unformatted, because the warning and `resolve` word it differently.
             dropped[name] = missing
             continue
         resolved[name] = Endpoint(
@@ -252,8 +229,7 @@ def _endpoints(  # noqa: PLR0913 -- one argument per source a key can come from
 def _mark(written: Any, subject: str) -> int | None:
     """A `clear_results_at` as tokens, refusing what cannot be a count of them.
 
-    Whether it clears before the summariser does is a question about the built model,
-    whose window is its own, so `build_model` asks it.
+    Not compared with the summariser here: that needs the built model's own window.
     """
     if written is None:
         return None
@@ -280,9 +256,8 @@ def _models(
             raise ConfigError(msg)
         extra = _mapping(entry.get("extra"), f"{source}: model {name!r} extra")
         if collision := tuple(sorted(set(extra) & KNOWN_MODEL)):
-            # The rule `WireFormat.extra` already carries: additive only. A row
-            # that could overrule a named param would silently discard a value
-            # written three lines above it.
+            # Additive only, as `WireFormat.extra` is: overruling a named param would
+            # silently discard a value written beside it.
             msg = (
                 f"{source}: model {name!r} names {', '.join(collision)} under 'extra', "
                 f"which this format already defines; write it directly instead"
@@ -299,9 +274,8 @@ def _models(
             clear_results_at=_mark(entry.get("clear_results_at"), f"{source}: model {name!r}"),
         )
 
-    # An endpoint that does not exist *at all* is a mistake in the file and is
-    # refused; one that exists but was dropped for want of a key is this
-    # machine's situation, not the file's, and takes its models quietly.
+    # An endpoint not in the file is a mistake and refused; one dropped for want of a key
+    # is this machine's situation, not the file's, and takes its models quietly.
     declared = set(_mapping(document.get("endpoints"), f"{source}: endpoints"))
     for name, profile in profiles.items():
         if profile.endpoint not in declared:
@@ -312,8 +286,7 @@ def _models(
             raise ConfigError(msg)
     return (
         {n: p for n, p in profiles.items() if p.endpoint in endpoints},
-        # Worded to slot into a sentence about a model, because that is where it
-        # is read: "model 'gpt-5' runs on endpoint 'openai', whose ...".
+        # Worded to slot into "model 'gpt-5' runs on endpoint 'openai', whose ...".
         {
             name: f"endpoint {p.endpoint!r}, whose {dropped[p.endpoint]} is not set"
             for name, p in profiles.items()
@@ -331,8 +304,8 @@ def load(
 ) -> Models:
     """Read `path` into what this deployment can run, where, and under which names.
 
-    `keys_file` is what `KEYS_SETTING` named, read before the catalogue so a keys file
-    named wrong refuses even where no endpoint has yet asked it for anything.
+    `keys_file` is read before the catalogue, so one named wrong refuses even where no
+    endpoint asks it for anything.
     """
     keys = _keys(keys_file)
     try:
@@ -351,10 +324,8 @@ def load(
             f"    models:\n"
             f"      MiniMax-M3:\n"
             f"        endpoint: minimax\n\n"
-            # The minimal one above is enough to start; the annotated example is the one
-            # that explains `extra` and why an omitted `temperature` is not a defaulted
-            # one. It ships with the framework rather than with an asset pack, so this
-            # can promise it even to a deployment that installed no pack.
+            # The annotated example ships with the framework, not an asset pack, so this can
+            # promise it to a deployment that installed none.
             + (
                 f"An annotated {EXAMPLE} is next to it; copy it across.\n"
                 if (path.parent / EXAMPLE).is_file()
@@ -376,9 +347,8 @@ def load(
         document, environ, path, buildable, keys=keys, keys_file=keys_file
     )
     if dropped:
-        # Warned even when nothing names them. A shared catalogue listing an
-        # endpoint this machine cannot reach is the normal case, but silence
-        # would make a *typo* in `key_env` look identical to it.
+        # Warned even when nothing names them: silence would make a typo in `key_env`
+        # look like the normal case of an endpoint this machine cannot reach.
         named = ", ".join(f"{name} ({key} is not set)" for name, key in sorted(dropped.items()))
         warnings.warn(
             f"{path}: no credentials for endpoint(s) {named}; "
@@ -393,9 +363,8 @@ def load(
         msg = f"{path}: no 'default' model named; one must be, or nothing knows what to run"
         raise ConfigError(msg)
     if default not in models:
-        # Separated because the two read differently: a default naming nothing
-        # is a broken file, while a default whose endpoint has no key on this
-        # machine is a deployment that has not finished being set up.
+        # A default naming nothing is a broken file; one whose endpoint has no key here
+        # is a deployment not yet set up.
         known = tuple(sorted(models))
         if default in set(_mapping(document.get("models"), str(path))):
             msg = (

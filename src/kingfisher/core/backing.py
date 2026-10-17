@@ -12,13 +12,9 @@ from pathlib import Path
 class MemoryBacking:
     """What is underneath a path, for a deployment that must keep nothing.
 
-    Measured, and the arrangement is not what the obvious reading predicts. A memory
-    filesystem *larger* than the container's memory limit does not fail when it
-    fills: the kernel swaps its pages out. That is data at rest, arrived at silently,
-    with the write succeeding and no error anywhere. With swap off the same overrun
-    becomes an OOM kill, which takes every session in the container. Only when the
-    filesystem is smaller than the limit does a full one give a clean `ENOSPC` --
-    which is a thing kingfisher can refuse on.
+    A memory filesystem *larger* than the memory limit does not fail when it fills: the
+    kernel silently swaps it to disk, or with swap off kills every session in the
+    container. Only one smaller than the limit fails cleanly, with `ENOSPC`.
     """
 
     #: The filesystem type under the path, e.g. `tmpfs`, `ext4`, `apfs`.
@@ -75,10 +71,8 @@ def _cgroup_number(name: str) -> int | None:
 def memory_backing(path: Path) -> MemoryBacking:
     """Read what is underneath this path, as far as the platform will say.
 
-    A path rather than a workspace because `doctor` asks this twice: sessions
-    reach a different device than the workspace the moment one is mounted at
-    `<workspace>/sessions`, and a reading of the workspace answers about the
-    wrong disk.
+    A path, not a workspace: sessions mounted at `<workspace>/sessions` are on another
+    disk, and `doctor` asks about both.
     """
     path = Path(path)
     swap = _cgroup_number("memory.swap.max")
@@ -86,8 +80,7 @@ def memory_backing(path: Path) -> MemoryBacking:
         filesystem=_mounted_filesystem(path),
         size_bytes=_size_of(path),
         limit_bytes=_cgroup_number("memory.max"),
-        # `memory.swap.max` of 0 is swapping disabled; any other number, or the
-        # file being absent on a host that has swap, permits it.
+        # 0 disables swapping; `max`, read as `None`, or any other number permits it.
         swap_enabled=None if not Path("/sys/fs/cgroup/memory.swap.max").is_file() else swap != 0,
     )
 

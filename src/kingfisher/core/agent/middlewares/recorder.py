@@ -27,17 +27,13 @@ if TYPE_CHECKING:
 
 _log = logging.getLogger(__name__)
 
-#: The parent's `task` call a subagent is running inside, or `None` in the agent the
-#: caller asked. Set by the agent's recorder around that call and read by every
-#: recorder inside the subagent's graph, including on the threads langgraph runs
-#: calls made together on -- measured, and recorded in `findings.md`.
+#: The parent's `task` call a subagent runs inside, or `None` in the agent the caller asked.
+#: Set around that call and read by every recorder inside it, on langgraph's threads too.
 RUN: ContextVar[str | None] = ContextVar("kingfisher_ledger_run", default=None)
 
-#: What a row would bury the rest of the ledger to say. deepagents' file tools, whose
-#: reads and writes are a file already; and `write_todos`, which rewrites one list the
-#: conversation already carries -- three updates and one real search made three of the
-#: four delta lines a todo list, each repeating it in `args` as well. `execute` is not
-#: among them: what a command did is exactly what a later turn wants to read back.
+#: What a row would bury the rest of the ledger to say: the file tools, whose reads and
+#: writes are a file already, and `write_todos`, one list the conversation carries. Not
+#: `execute`: what a command did is what a later turn wants to read back.
 UNRECORDED = frozenset({
     "ls", "glob", "grep", "read_file", "write_file", "edit_file", "delete", "write_todos",
 })
@@ -54,10 +50,8 @@ class Audiences:
     default: Audience
     #: By the name a call dispatches on, which is how a tool reaches a recorder.
     tools: Mapping[str, Audience]
-    #: Each tool's own audience, by the same name, where it states one. Without it a
-    #: result is stamped at whatever the definition offered the tool at, wider than the
-    #: tool admits -- and the stamp is what a caller deciding who may read a session
-    #: reads.
+    #: Each tool's own audience, where it states one. Without it a result is stamped wider
+    #: than the tool admits, and the stamp decides who may read a session.
     own: Mapping[str, Audience] = field(default_factory=dict)
 
     @classmethod
@@ -100,20 +94,9 @@ class Recorder(AgentMiddleware):
     """Record each successful tool result, keep it as a file in the session, and end
     what the model is handed with the result's id.
 
-    First in what `tool_guards` returns, for one thing: it is ahead of
-    `WorkspaceToolPaths`, so it records the arguments the model wrote rather than the
-    host paths they become. Moved last,
-    `test_the_arguments_recorded_are_the_ones_the_model_wrote` is the only test in the
-    suite that notices.
-
-    Two properties read like further reasons for this position and are not. Being
-    inside deepagents' eviction -- so a long result is seen whole, and the stub the
-    eviction leaves shows the id in its tail -- comes from being custom middleware at
-    all: deepagents lands every custom entry after the last of its own core ones, and
-    the eviction is `FilesystemMiddleware`'s. Recording what a deployment's middleware
-    left comes from that middleware being appended after everything here, which
-    `test_what_a_deployments_middleware_left_is_recorded` holds. Both would survive
-    this moving.
+    First in what `tool_guards` returns, ahead of `WorkspaceToolPaths`, so it records the
+    arguments the model wrote rather than the host paths they become. Sitting inside
+    deepagents' eviction and seeing what a deployment's middleware left do not depend on it.
     """
 
     def __init__(
@@ -129,8 +112,8 @@ class Recorder(AgentMiddleware):
         self._backend = backend
         #: `None` where no `source_ids.yaml` is in force.
         self._audiences = audiences
-        #: Where a result is written: this layout's `/scratchpad/tool_results/`, which
-        #: the backend routes under the same name. The default is the module's.
+        #: Where a result is written: this layout's `/scratchpad/tool_results/`, which the
+        #: backend routes under the same name.
         self._tool_results_route = tool_results_route
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
@@ -213,9 +196,8 @@ class Recorder(AgentMiddleware):
     def _unkept(self, entry: LedgerEntry, answers: Any) -> None:
         """Take the path off an entry if the backend would not keep its file.
 
-        Reported on the row and in the log, and never raised: the tool has run and
-        the model is about to read its result, and a failed call here would be one the
-        model may make again, running the tool twice.
+        Reported on the row and in the log, never raised: the tool has run, and a failed
+        call here is one the model may make again, running the tool twice.
         """
         if isinstance(answers, Exception):
             why = f"{type(answers).__name__}: {answers}"
@@ -242,11 +224,9 @@ def _answer_in(result: Any, call_id: Any) -> ToolMessage | None:
 def _stamped(result: Any, answer: ToolMessage, number: str) -> Any:
     """The result with its id as a last line, in what the model is handed.
 
-    Copied rather than changed in place: a tool may hand back a message it still
-    holds, and the id would go wherever else that message goes. A list of blocks gains
-    a block whose text starts on a new line, because the transcript and `.text` join
-    blocks with nothing between them, and the bare id would read as the end of the
-    result's last line.
+    Copied, not changed in place: a tool may hand back a message it still holds. A list of
+    blocks gains one starting on a new line, because the transcript and `.text` join blocks
+    with nothing between them.
     """
     mark = f"\n[{number}]"
     content = answer.content

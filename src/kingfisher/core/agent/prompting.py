@@ -1,16 +1,8 @@
 """Assembling the system prompt from the markdown that ships with the package.
 
-Split out of `assembly.py`, and not for tidiness. Nothing here needs more than `Config`
-and the standard library, and reaching any of it -- `ShellPrompt`, which `kingfisher`
-exports, or `system_prompt`, which `assembly.py` and the prompt's tests reach -- used to
-cost **764 ms and 3,107 modules**, because touching any name in `assembly.py` runs that
-module's `from deepagents import ...`, and Python cannot import one name from a module
-without executing all of it. Measured after the split: about 10 ms and 113 modules.
-
-Almost none of that was deepagents, which is 21 ms of its own code. It was openai (281
-ms), anthropic (239 ms) and google (134 ms) -- the last one for a provider kingfisher
-has no path to at all. Their type modules are pydantic classes, and defining a model
-compiles a validator at import time.
+Nothing here may import more than `Config`, the layout and the standard library:
+`ShellPrompt` is exported, and a module importing deepagents would load the provider
+SDKs behind it for anyone naming it.
 """
 
 from __future__ import annotations
@@ -29,21 +21,11 @@ if TYPE_CHECKING:
 
 BASE_PROMPT = "system.md"
 
-#: `kingfisher.core.layout` and nothing heavier: the module stays clear of deepagents and the
-#: provider SDKs its docstring is about, and `Layout` carries only strings.
-
-#: A `{{leaf}}` placeholder in the shipped markdown, filled with the layout's name for
-#: that leaf. The prompt is prose with paths woven through it, so a renamed layout is
-#: spliced in by name here rather than by replacing one default path string with
-#: another -- `/scratchpad` is a prefix of `/scratchpad/tool_results`, and a blind
-#: replace would reach the wrong one. The fixed sub-leaves (`large_tool_results`,
-#: `conversation_history`) stay literal: only their parent scratchpad moves.
-#: Anything between a doubled brace, not just a name that could be a leaf. `(\w+)`
-#: saw neither a space, a hyphen nor a dot, so `{{ inputs }}`, `{{tool-results}}` and
-#: `{{inputs.dir}}` were refused by nothing *and* filled by nothing: they reached the
-#: model as braces, in a prompt a deployment had customised and been told nothing
-#: about. One pattern for both readers on purpose -- the refusal below and `_fill`
-#: above -- so a blank either is wrong about is a blank the other reports.
+#: A `{{leaf}}` placeholder in the shipped markdown, filled by name rather than by
+#: replacing default paths: `/scratchpad` is a prefix of `/scratchpad/tool_results`.
+#: Anything between doubled braces, so `{{ inputs }}` is refused rather than reaching
+#: the model as braces; one pattern for `_fill` and `ShellPrompt`'s check, so a blank
+#: either is wrong about is one the other reports.
 _PLACEHOLDER = re.compile(r"\{\{([^{}]*)\}\}")
 
 #: Where optional capability sections are spliced in. An HTML comment, so
@@ -63,15 +45,13 @@ SHELL_MARKER = "<!-- shell -->"
 #: shell runs. No `execute` line: deepagents' own stands.
 _ELSEWHERE = ("shell_elsewhere.md", "shell_elsewhere_skills.md")
 
-#: A deployment's standing instructions for every agent and subagent, beside its
-#: definitions. Distinct from `/memory/AGENTS.md`, which the agent writes: this is
-#: what people write.
+#: A deployment's standing instructions for every agent and subagent, written by
+#: people; `/memory/AGENTS.md` is the agent's own.
 INSTRUCTIONS_FILE = "INSTRUCTIONS.md"
 
-#: deepagents' `MEMORY_SYSTEM_PROMPT` with its lifetime claims corrected, and not to
-#: be re-synced from it on an upgrade: the library's own says memory lasts into
-#: "future conversations", and `/memory` is deleted with its session. Sent as
-#: written: deepagents strips HTML comments from the memory file, not from this.
+#: deepagents' `MEMORY_SYSTEM_PROMPT` with its lifetime claims corrected, so not to be
+#: re-synced on an upgrade: `/memory` is deleted with its session. Sent as written:
+#: deepagents strips HTML comments from the memory file, not from this.
 MEMORY_GUIDELINES = "memory_guidelines.md"
 
 
@@ -95,11 +75,7 @@ _LEAVES = frozenset(_names(DEFAULT_LAYOUT))
 
 
 def _fill(text: str, layout: Layout, source: str) -> str:
-    """`text`, with every `{{leaf}}` replaced by the layout's name for it.
-
-    An unknown placeholder is an edit naming a leaf the layout does not have, caught
-    here rather than reaching the model as `{{typo}}`.
-    """
+    """`text`, with every `{{leaf}}` replaced by the layout's name for it."""
     names = _names(layout)
 
     def _one(match: re.Match[str]) -> str:
@@ -121,28 +97,24 @@ def _filled(name: str, layout: Layout) -> str:
 class ShellPrompt:
     """What the agent is told about the shell that runs `execute`, said by that shell.
 
-    Three parts, because three readers see different ones. `prompt` is the agent's
-    section on the shell. `skills` follows the skills section, so it is shown only
-    where skills are on. `execute` replaces deepagents' "Use absolute paths" line in
-    the tool's description, which is all a subagent is told about the shell.
+    `prompt` is the agent's section on the shell. `skills` follows the skills section,
+    so it is shown only where skills are on. `execute` replaces deepagents' "Use
+    absolute paths" line in the tool's description, which is all a subagent is told.
 
-    A part left `None` is said the neutral way, claiming only what holds wherever a
-    shell runs -- for `execute`, deepagents' own line stays -- and `""` says nothing
-    there. Each may name a layout leaf as `{{inputs}}`, `{{outputs}}`, `{{memory}}`,
-    `{{scratchpad}}` or `{{tool_results}}`, filled with this deployment's name for it.
+    A part left `None` is said the neutral way -- for `execute`, deepagents' own line
+    stays -- and `""` says nothing. Each may name a layout leaf as `{{inputs}}`,
+    `{{outputs}}`, `{{memory}}`, `{{scratchpad}}` or `{{tool_results}}`.
     """
 
     prompt: str | None = None
     skills: str | None = None
     execute: str | None = None
-    #: Whether the shell starts in the session folder, where a file-tool path less its
-    #: leading slash is a path it reaches. A command that misses one is then answered
-    #: with that spelling; a shell not known to start there is not told it.
+    #: Whether the shell starts in the session folder, so a file-tool path less its
+    #: leading slash reaches the file; only then is a missed command told that spelling.
     starts_in_session: bool = False
 
     def __post_init__(self) -> None:
-        # Here rather than when the prompt is rendered, which is a deployment's first
-        # turn: a blank no layout fills is a typo, and the start is where to hear of it.
+        # At construction, not at render on the first turn: a typo is heard at startup.
         for part in ("prompt", "skills", "execute"):
             text = getattr(self, part)
             unknown = sorted({m.group(1) for m in _PLACEHOLDER.finditer(text or "")} - _LEAVES)
@@ -182,13 +154,9 @@ def memory_guidelines() -> str:
     return _prompt_text(MEMORY_GUIDELINES)
 
 
-#: Enough for a fleet of agents rather than for one deployment. The cache is
-#: keyed on the assembled `extra`, which used to be one workspace's `PROMPT.md`
-#: and is now that plus whichever agent is running -- so the number of distinct
-#: keys is the number of agents a process serves, not one. `layout` joins the key
-#: because the paths woven through the prompt are its names: a fleet serving two
-#: layouts must not be handed one layout's prompt for the other's agent. `shell` joins
-#: it for the same reason: two backends' shells may say different things of themselves.
+#: Enough for a fleet: `extra` carries the running agent's line, so there is a key per
+#: agent a process serves. `layout` and `shell` are in the key because two layouts or
+#: two shells must not be handed one prompt.
 @lru_cache(maxsize=32)
 def render_system_prompt(
     *,
@@ -223,8 +191,7 @@ def render_system_prompt(
         ),
         extra,
     )
-    # Removing the marker leaves a run of blank lines behind; collapse them so
-    # the prefix sent on every step stays tidy.
+    # Removing a marker leaves a run of blank lines behind.
     return re.sub(r"\n{3,}", "\n\n", assembled).strip() + "\n"
 
 
@@ -238,9 +205,8 @@ def _joined(prompt: str, extra: str) -> str:
 class InstructionsFile:
     """Kingfisher's own `Instructions`: `INSTRUCTIONS.md` in the definitions folder.
 
-    Beside `models.yaml` and `source_ids.yaml`, because it is what people write and the
-    workspace is what sessions make -- and so it is one of the files the macOS fence
-    keeps the shell from editing.
+    With what people write rather than in the workspace sessions make, so the macOS
+    fence keeps the shell from editing it.
     """
 
     def text(self, cfg: Config) -> str:
@@ -251,8 +217,7 @@ class InstructionsFile:
 def refuse_a_workspace_prompt(cfg: Config) -> None:
     """Refuse a `PROMPT.md` left in the workspace, which nothing reads any more.
 
-    Ignored, the house rules it held would stop reaching every agent with nothing said:
-    the turn runs, and runs differently.
+    Ignored, its house rules would stop reaching every agent with nothing said.
     """
     stale = cfg.workspace / "PROMPT.md"
     if stale.is_file():

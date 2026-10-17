@@ -7,10 +7,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-# Some OpenAI-compatible gateways inline reasoning in the response content
-# (MiniMax returns "<think>…</think>\n\n42"). Stripping is applied on both API
-# styles, not just the one that currently misbehaves — supporting both equally
-# means the deliverable contract has to hold identically on both.
+# Some OpenAI-compatible gateways inline reasoning in the content (MiniMax returns
+# "<think>…</think>\n\n42"). Stripped on both API styles, so the answer holds on either.
 _THINK = re.compile(r"<think\b[^>]*>.*?</think>", re.DOTALL | re.IGNORECASE)
 
 
@@ -23,14 +21,12 @@ def normalize_answer(text: str) -> str:
     return _THINK.sub("", text or "").strip()
 
 
-#: The turn finished because the agent was done. Named apart from the tuple
-#: because it is the one reason anything asks *about* rather than reports, and
-#: `RunResult.completed` is where that question is allowed to be asked.
+#: The agent was done. Named apart because it is the one reason asked *about*, and
+#: `RunResult.completed` is the one place allowed to ask.
 END_TURN = "end_turn"
 
-#: The turn stopped at an approval gate and is waiting for an answer. Unlike the
-#: bounds below it, this one is resumable: `RunResult.pending` says what it stopped
-#: on, and a `Resume` carrying those answers continues the same graph.
+#: Stopped at an approval gate, waiting for an answer. Unlike a bound it is resumable:
+#: a `Resume` answering `RunResult.pending` continues the same graph.
 AWAITING = "awaiting_decision"
 
 #: Why a turn stopped, and the whole of it.
@@ -45,12 +41,9 @@ STOP_REASONS: tuple[str, ...] = (
     AWAITING,
 )
 
-#: What a caller may answer a gated call with, and the whole of it.
-#:
-#: `edit` is deliberately absent. deepagents offers it, and it is the one decision
-#: that lets the answering caller *author* a call rather than judge the one proposed
-#: -- which the admission path is built to prevent everywhere else. Adding it later
-#: breaks nobody; having shipped it and narrowed it would.
+#: What a caller may answer a gated call with. deepagents' `edit` is left out: it lets
+#: the caller *author* a call rather than judge one, which admission prevents everywhere
+#: else, and adding it later breaks nobody where removing it would.
 DECISIONS: tuple[str, ...] = ("approve", "reject", "respond")
 
 
@@ -58,18 +51,15 @@ DECISIONS: tuple[str, ...] = ("approve", "reject", "respond")
 class PendingDecision:
     """One gated call a turn stopped on, and what may be answered about it."""
 
-    #: The tool call's own id, which is what a `Resume` answers by. Position would
-    #: be thinner and is a bug waiting for its first two-gate turn: the answer
-    #: crosses a process boundary and possibly a restart before it comes back.
+    #: The tool call's own id, which a `Resume` answers by. Not a position: a turn may
+    #: have two gates, and the answer crosses a process and maybe a restart.
     call_id: str
     tool: str
     args: Mapping[str, Any] = field(default_factory=dict)
-    #: Which subagent proposed it, or `None` for the agent the caller asked. The
-    #: caller answers either way -- a subagent has no one else to ask.
+    #: Which subagent proposed it, or `None` for the caller's agent; the caller answers either way.
     agent: str | None = None
-    #: What this call will accept, as the middleware declared it. Reported rather
-    #: than assumed: a caller that guessed from `DECISIONS` would offer a choice
-    #: the gate may refuse.
+    #: What this call will accept, as the middleware declared it: a caller guessing from
+    #: `DECISIONS` would offer a choice the gate may refuse.
     decisions: tuple[str, ...] = ()
 
 
@@ -99,9 +89,8 @@ class LedgerEntry:
     tool: str
     #: Each argument as the model wrote it, `name=value`, a long value cut.
     args: str
-    #: The audience the result was produced under, or `None` where no
-    #: `source_ids.yaml` is in force. Kingfisher acts on none of it: who may read a
-    #: session is the caller's to decide, and this is what they decide with.
+    #: The audience the result was produced under, or `None` with no `source_ids.yaml`
+    #: in force. Kingfisher acts on none of it: who may read a session is the caller's to decide.
     access: Listed | None
     #: The result's length in bytes, as the tool returned it.
     size: int
@@ -115,59 +104,44 @@ class LedgerEntry:
 @dataclass(frozen=True)
 class RunResult:
     session_id: str
-    #: What this turn was called. A caller's own id where it supplied one, so a
-    #: service can tie the run back to the request that asked for it; otherwise one
-    #: made here. Not a sequence -- nothing compares two.
+    #: A caller's own id where it supplied one, so a service can tie the run to its
+    #: request; otherwise one made here. Not a sequence: nothing compares two.
     turn_id: str
     answer: str
-    #: Everything under `/outputs` and `/memory` at the end of this turn, as names
-    #: relative to the session, listed through its backend -- so names, not files to
-    #: open: `Session.artifact` fetches one, wherever the backend keeps it. What is
-    #: *present*, not what changed: `execute`
-    #: writes without any file tool seeing it, so the only sound view is the
-    #: filesystem's, and a caller persisting incrementally diffs against the
-    #: previous turn's manifest -- which also tells it what was deleted.
+    #: Names, relative to the session, of everything under `/outputs` and `/memory` at the
+    #: end of this turn; `Session.artifact` fetches one. What is *present*, not what
+    #: changed: `execute` writes unseen by any file tool, so a caller persisting
+    #: incrementally diffs against the previous turn's list, which also shows deletions.
     artifacts: tuple[str, ...] = ()
-    #: Why this turn stopped. `end_turn` is the ordinary case; anything else means the
-    #: answer is what had been reached when a bound was hit, and `artifacts` still lists
-    #: what was written -- discarding either would hide work rather than undo it.
+    #: Why this turn stopped. Past a bound, the answer is what had been reached and
+    #: `artifacts` still lists what was written: discarding either would hide work.
     stop_reason: str = END_TURN
     #: Why the session `run(delete_session=True)` was told to delete is still there,
-    #: or `None`. A turn stopped at a bound keeps its session on purpose, which is not
-    #: a failure and leaves this empty -- `stop_reason` already says so.
+    #: or `None`. A turn stopped at a bound keeps its session on purpose, not as a failure.
     deletion_failure: str | None = None
-    #: What this turn stopped to ask, empty for every turn that stopped for another
-    #: reason. Non-empty exactly when `stop_reason` is `awaiting_decision`, and the
-    #: session is still there to resume into -- `_drained_steps` declines to delete a turn
-    #: that did not complete, so `delete_session=True` already keeps it.
+    #: What this turn stopped to ask: non-empty exactly when `stop_reason` is
+    #: `awaiting_decision`, and then the session is kept to resume into, even under
+    #: `delete_session=True`.
     pending: tuple[PendingDecision, ...] = ()
-    #: A gate that stopped being a gate: the tools an unanswered turn was waiting on
-    #: when this turn superseded it. Reported rather than swallowed, because a human
-    #: decision quietly dropped is the one failure here that leaves no other trace.
+    #: The tools an unanswered turn was waiting on when this turn superseded it: a human
+    #: decision dropped quietly would leave no other trace.
     discarded: tuple[str, ...] = ()
-    #: What this turn's tools returned, one entry each in the order they were
-    #: numbered, a subagent's own calls included. Not the built-in file tools, whose
-    #: results are files already, and not a call that failed. Empty for a graph the
-    #: deployment supplied, which kingfisher did not build and cannot hook.
+    #: What this turn's tools returned, one entry each in numbered order, a subagent's
+    #: calls included. Not the built-in file tools, whose results are files already, nor
+    #: a failed call. Empty for a graph the deployment supplied, which kingfisher cannot hook.
     ledger: tuple[LedgerEntry, ...] = ()
 
     @property
     def completed(self) -> bool:
         """Whether the agent finished, as against a bound cutting the turn off.
 
-        Here rather than at each place that asks, because two surfaces ask and
-        share no code path: `Kingfisher.run(delete_session=True)` and `kingfisher
-        run --delete-session`, one of which drains `stream` while the other is
-        the drain. Two copies of the comparison pass every behaviour test in
-        this tree and still come apart over a fourth stop reason added later,
-        with nothing going red -- which is what
-        `test_no_surface_decides_for_itself_what_a_finished_turn_is` holds.
+        Here rather than at each surface that asks: they share no code path, and two
+        copies of the comparison would come apart over the next stop reason.
         """
         return self.stop_reason == END_TURN
 
 
-#: How much of one tool argument to show. `write_file` takes an entire file as an
-#: argument; unbounded, a single call would fill the terminal.
+#: How much of one tool argument to show: `write_file`'s is a whole file.
 ARG_PREVIEW = 60
 
 
@@ -185,19 +159,12 @@ def _render_call(name: str, args: Mapping[str, Any]) -> str:
     return f"{name}({inner})"
 
 
-#: Every kind a run can emit, and the whole of it.
-#:
-#: A tuple rather than prose, because this is the closest thing to a wire contract
-#: the package has, and it is checked against what the package actually emits.
-#:
-#: A consumer switching on `kind` should ignore one it does not recognise rather
-#: than fail: this tuple grows.
+#: Every kind a run can emit, checked against what the package emits. A consumer
+#: switching on `kind` should ignore one it does not know rather than fail: this grows.
 KINDS: tuple[str, ...] = (
-    # Warnings, emitted before the model is reached and only when they apply. Each
-    # says something that would otherwise be discovered too late: a path that could
-    # not be hardened, a grant that means less than the workspace holds, a grant
-    # this agent cannot hold itself, a subagent that meant to run elsewhere and did
-    # not, and a caller's input that was overwritten.
+    # Warnings, before the model is reached and only when they apply: a path not
+    # hardened, a grant meaning less than the workspace holds, a grant this agent cannot
+    # hold, a subagent that meant to run elsewhere and did not, a caller's input overwritten.
     "protect_failed",
     "withheld",
     "subagent_only",
@@ -208,9 +175,8 @@ KINDS: tuple[str, ...] = (
     "model_call",
     "tool_result",
     "token",
-    # An approval gate. `decision_needed` precedes `finished` the way `cut_short`
-    # does; `decision_discarded` says an *earlier* turn's gate was superseded by
-    # this one, so it arrives at the start of the turn that superseded it.
+    # An approval gate. `decision_needed` precedes `finished`; `decision_discarded` says
+    # an *earlier* turn's gate was superseded, so it arrives at the start of this turn.
     "decision_needed",
     "decision_discarded",
     # Terminal. `cut_short` precedes `finished` rather than replacing it.
@@ -227,20 +193,14 @@ class RunEvent:
     text: str = ""
     tool: str | None = None
     tools: tuple[str, ...] = ()
-    #: Index-aligned with `tools`. Two tuples rather than one tuple of pairs
-    #: because `tools` is the older, already-published shape.
+    #: Index-aligned with `tools`, kept apart because `tools` is already a published shape.
     args: tuple[Mapping[str, Any], ...] = ()
     usage: Mapping[str, int] = field(default_factory=dict)
-    #: Which stream a `token` belongs to: `answer`, or `reasoning` for a provider
-    #: that separates the two. Nothing emits `reasoning` yet — the field exists so
-    #: that when one does, it is not a new event kind.
+    #: Which stream a `token` belongs to: `answer`, or `reasoning` for a provider that
+    #: separates them. Nothing emits `reasoning` yet; this keeps it from being a new kind.
     channel: str = "answer"
-    #: Which subagent produced this, or `None` for the agent the caller asked.
-    #:
-    #: The stream reports the graph it was started on, and a subagent is a separate
-    #: graph run inside a tool call -- so the caller's prose and a subagent's
-    #: arrive on the same channel and the *type* cannot tell them apart. Both are
-    #: `AIMessageChunk`. This is what tells them apart.
+    #: Which subagent produced this, or `None` for the agent the caller asked: a
+    #: subagent's prose arrives on the same stream as the caller's, as the same type.
     agent: str | None = None
     result: RunResult | None = None
     #: On a `model_call`: the reply stopped at the model's output cap. The turn goes on,
@@ -248,8 +208,7 @@ class RunEvent:
     cut_off: bool = False
 
     def __post_init__(self) -> None:
-        # Parallel arrays are only safe if nothing can construct them out of step.
-        # This is the one place that can be enforced.
+        # The one place parallel arrays can be kept from being built out of step.
         if self.args and len(self.args) != len(self.tools):
             msg = f"args ({len(self.args)}) must be parallel to tools ({len(self.tools)})"
             raise ValueError(msg)
@@ -263,15 +222,11 @@ class RunEvent:
         flat = " ".join(self.text.split())
         return flat if len(flat) <= limit else flat[: limit - 1] + "…"
 
-    # A flat dispatch, one branch per kind: fewer returns would mean more nesting,
-    # not less branching.
+    # One branch per kind: fewer returns would mean more nesting, not less branching.
     def __str__(self) -> str:
         if self.kind == "token":
-            # A fragment, not a line. A tag would assert a boundary that is not
-            # there -- chunks split mid-word -- and `_line` would flatten the
-            # markdown the model is in the middle of writing. Which is also why a
-            # subagent's tokens are not tagged: there is nowhere in the middle of a
-            # word to put the tag.
+            # A fragment split mid-word, so untagged even for a subagent, and not passed
+            # through `_line`, which would flatten the markdown being written.
             return self.text
         if self.kind == "model_call":
             pairs = zip(self.tools, self.args or ({},) * len(self.tools), strict=True)

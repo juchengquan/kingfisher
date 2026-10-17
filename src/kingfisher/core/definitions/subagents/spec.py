@@ -1,15 +1,7 @@
 """What a subagent is, and the vocabulary a definition says it in.
 
-**Omitting `tools` inherits the parent's; omitting `skills` grants none.** Tools are
-what a subagent needs to *act*, so inheriting is the useful default; skills are what it
-needs to *know*, and the body below is already its procedure. Handing the index over
-also costs ~600 tokens for three skills, of which ~450 is deepagents' preamble and is
-paid for the first as much as the third. Re-measured 2026-09-03.
-
-`reading` says how a *file* becomes one of these; everything a definition may write,
-and every rule turning what it wrote into a spec, is here. The two were split the
-other way round until the history was asked: every commit that changed what a subagent
-may declare opened both files, and none has ever opened one.
+Every rule turning what a definition wrote into a spec is here, not in `reading`: split the
+other way, every change to what a subagent may declare had to edit both files.
 """
 
 from __future__ import annotations
@@ -38,12 +30,8 @@ class SubagentError(ValueError):
 class RunOn:
     """Where a request wants one subagent to run, instead of what its file says.
 
-    One field, and it used to be two. There was a `provider` beside the model, with a
-    rule that an override had to be wholesale -- never the file's endpoint joined to
-    your model, because a model name sent somewhere that has never heard of it is a
-    404 if you are lucky and a wrong-model run if you are not. A model resolves to
-    its own endpoint through the catalogue now, so that pairing cannot be expressed
-    and the rule has nothing left to guard.
+    A model alone: it names its own endpoint, so it cannot be sent to one that has never
+    heard of it.
     """
 
     model: str
@@ -51,44 +39,24 @@ class RunOn:
 
 @dataclass(frozen=True, kw_only=True)
 class SubagentSpec(SpecBase):
-    """One subagent, as the workspace defines it.
-
-    What it shares with an agent is on `SpecBase`; what is here is what only a
-    subagent has -- the graph it may bring instead of a prompt, and the tools and
-    skills of its own that come with it.
-    """
+    """One subagent, as the workspace defines it."""
 
     #: The `tools:` and `skills:` entries written `source: bundled`, by half: what this
-    #: subagent takes from its own folder, `subagents/<name>/tools/` and `skills/`.
-    #: Kept out of `tools` and `skills` because no grant narrows them -- activating
-    #: the subagent is what grants its parts.
-    #:
-    #: The folder and this have to match exactly, and the catalogue refuses to load
-    #: when they do not. A file in the folder that is not listed would otherwise be
-    #: a capability nobody can see granted, or, on upgrading from when the folder
-    #: granted by itself, one silently lost.
+    #: subagent takes from its own folder. Kept out of `tools` and `skills` because no
+    #: grant narrows them -- activating the subagent grants its parts.
     bundled: Mapping[str, tuple[str, ...]] = field(
         default_factory=dict, metadata={"derived": True}
     )
-    #: The same two halves, brought rather than listed: tool objects, and the
-    #: directory a package resolved for its own skills, written in a portable
-    #: entry's `tools` and `skills`. This *is* the folder for a definition that has
-    #: none, which is why a spec may hold this or `bundled` and never both.
-    #:
-    #: Derived, because no document writes a key called `carried`. A YAML definition
-    #: could not: the objects do not survive being written down, which is the whole
-    #: reason a bundle is a folder there.
-    #:
-    #: `__post_init__` refuses a spec holding both -- a subagent whose tools came from
-    #: two places would have no rule saying which wins, and `miscounted` would check
-    #: the list against the wrong half.
+    #: The same two halves, brought rather than listed by a portable entry: tool objects,
+    #: and the directories it resolved for its skills. This *is* the folder for a
+    #: definition that has none, so a spec holds this or `bundled`, never both. Derived:
+    #: no document can write it, since the objects do not survive being written down.
     carried: Mapping[str, Any] = field(default_factory=dict, metadata={"derived": True})
-    #: What assembles this subagent, when a workspace declared it in Python rather than
-    #: YAML. Called with a model and the tools it was granted, and it returns a graph
-    #: deepagents runs as given.
+    #: For a subagent declared in Python: called with a model and the tools it was
+    #: granted, it returns a graph deepagents runs as given.
     build: Any = field(default=None, metadata={"derived": True})
-    #: The one datazone a caller must be in to reach it, or `None` for any. A subagent's
-    #: and never an agent's: an agent runs in whichever datazone its caller is in.
+    #: The one datazone a caller must be in to reach it, or `None` for any. Not on
+    #: `SpecBase`: an agent runs in whichever datazone its caller is in.
     datazone: str | None = None
 
     def __post_init__(self) -> None:
@@ -106,10 +74,8 @@ class SubagentSpec(SpecBase):
             raise ValueError(msg)
 
 
-#: Every field this format defines. A key outside it is refused rather
-#: than ignored, because ignoring one is indistinguishable from honouring it: a
-#: definition writing `tolls:` got a subagent holding *every* tool its parent had, since
-#: a missing `tools` means inherit.
+#: Every field this format defines. Anything else is refused rather than ignored: a
+#: misspelt `tolls:` would otherwise inherit every tool, since a missing `tools` means that.
 KNOWN: frozenset[str] = frozenset(
     {
         "name",
@@ -127,8 +93,8 @@ KNOWN: frozenset[str] = frozenset(
     }
 )
 
-#: Why `bundle:` is refused in a document and a compiled declaration. Worded as the
-#: spelling to use instead, because whoever writes the key meant a folder's contents.
+#: Why `bundle:` is refused, worded as the spelling to use: whoever writes it meant a
+#: folder's contents.
 NO_BUNDLE_KEY = (
     "a subagent's own tools and skills are listed where the rest are, written "
     "{name: mask_secrets, source: bundled} in tools: or skills:. Only what is "
@@ -136,10 +102,8 @@ NO_BUNDLE_KEY = (
     "keep every catalogue tool it had"
 )
 
-#: Fields deepagents' `SubAgent` understands that this format deliberately does
-#: not expose, each with the reason. They are named separately because the
-#: generic message is actively misleading here -- it reads as "kingfisher has
-#: not got round to this", when the answer is that honouring it would be wrong.
+#: deepagents' `SubAgent` fields this format does not take, each with its reason: the
+#: generic refusal reads as *not yet*, where honouring one would be wrong.
 REFUSED: Mapping[str, str] = MappingProxyType(
     {
         "permissions": (
@@ -153,13 +117,8 @@ REFUSED: Mapping[str, str] = MappingProxyType(
             "could widen or narrow what stops for them would be deciding that on "
             "their behalf"
         ),
-        # Corrected 2026-09-06, and the correction is the point of the entry. This read
-        # "a subagent returns prose to its caller, which is the caller's to shape --
-        # there is nothing here to hand a schema to", and deepagents disproves both
-        # halves: `_compile_spec` takes a `response_format`, and
-        # `middleware/subagents.py` serialises what comes back -- `model_dump_json`, or
-        # `json.dumps` for anything else -- into the `ToolMessage` the parent reads.
-        # There is somewhere to hand it, and it is handed there.
+        # deepagents does take one (`_compile_spec`), so the reason is what reaches the
+        # parent: the reply is serialised into the `ToolMessage` it reads.
         "response_format": (
             "deepagents does support one here, and nothing structured survives it "
             "-- a subagent's response is serialised into the tool result, so its "
@@ -176,25 +135,14 @@ REFUSED: Mapping[str, str] = MappingProxyType(
     }
 )
 
-#: What a module must define: the subagents it contributes, as a sequence.
-#: Declared, never inferred -- the same rule `TOOLS` makes, and here it is not
-#: even a preference. A compiled subagent is a plain `dict` at runtime, so there
-#: is no type to search for, and searching for "a mapping with a `build` key"
-#: would find imported names too: `from .base import RESEARCHER`, written to
-#: compose one subagent into another, would offer `RESEARCHER` as a subagent
-#: nobody meant to expose.
+#: What a module must define: the subagents it contributes, as a sequence. Declared,
+#: never inferred: a compiled subagent is a plain `dict`, and searching for one would find
+#: imported names too, offering a subagent nobody meant to expose. Here rather than in
+#: `catalogue` because the format's own refusals name it.
 EXPORT = "SUBAGENTS"
-#:
-#: Beside the format rather than in `catalogue`, which is where `tools` and
-#: `middlewares` keep theirs. For them the name is only the catalogue walk's business.
-#: Here it is the format's: both Python declarations refuse by naming it -- "SUBAGENTS
-#: entry is missing 'name'" -- so a copy in the catalogue would leave the messages
-#: spelling it a second time.
 
-#: Every key a *compiled* Python declaration may write -- one carrying `build`.
-#: Deliberately not `KNOWN`: the two formats describe the same subagent and do not
-#: describe it with the same words, and a shared set would have to be the union,
-#: which permits each format the other's keys.
+#: Every key a *compiled* declaration, one carrying `build`, may write. Not `KNOWN`: a
+#: shared set would be the union, permitting each format the other's keys.
 DECLARED: frozenset[str] = frozenset(
     {
         "name",
@@ -208,10 +156,8 @@ DECLARED: frozenset[str] = frozenset(
     }
 )
 
-#: Keys the YAML format defines that a Python declaration may not, each with the
-#: reason. Named individually rather than folded into "unknown key", because
-#: every one of them is a thing a reader would reasonably expect to work -- and
-#: the answer is not "not yet", it is that deepagents would ignore it.
+#: Keys a compiled declaration may not write, each with its reason rather than as
+#: unknown: a reader would expect each to work, and deepagents would ignore it.
 NOT_COMPILED: Mapping[str, str] = MappingProxyType(
     {
         "builtin_tools": (
@@ -233,10 +179,7 @@ NOT_COMPILED: Mapping[str, str] = MappingProxyType(
             "one is already built, so naming middleware here would be a line "
             "that does nothing"
         ),
-        # The two `CompiledSubAgent` keys this format does not take. Both were refused
-        # as merely unknown until a rule read the live TypedDict and said so: `mode`
-        # arrived in deepagents 0.7.22 and was met for a portable declaration and not
-        # here, which is what asking only one of the two tables looks like.
+        # deepagents' `CompiledSubAgent` keys, which this format does not take.
         "mode": REFUSED["mode"],
         "runnable": (
             "a compiled subagent's graph reaches kingfisher through `build`, which is "
@@ -254,48 +197,37 @@ NOT_COMPILED: Mapping[str, str] = MappingProxyType(
 )
 
 
-#: The halves a subagent's own folder holds, which is the same two names
-#: `catalogue.ASSET_DIRECTORIES` keeps the walk out of.
-#: `test_the_bundle_key_covers_every_directory_a_bundle_holds` is what stops the two
-#: drifting -- a third asset kind added to the walk and not here would be a folder a
-#: definition could never list from, and nothing else would say so.
+#: The halves a subagent's own folder holds. Must match `catalogue.ASSET_DIRECTORIES`, or
+#: the walk would skip a folder no definition could list from.
 BUNDLE_KEYS: tuple[str, ...] = ("tools", "skills")
 
 
-#: Every key a *portable* declaration may write -- one with no `build`, assembled by
-#: kingfisher from what it says. Each is something a definition can answer without
-#: seeing the deployment it will be installed into, which is the whole of the rule.
+#: Every key a *portable* declaration, one with no `build`, may write: each answerable
+#: without seeing the deployment it will be installed into.
 PORTABLE: frozenset[str] = frozenset(
     {
         "name",
         "description",
         "system_prompt",
-        # deepagents' own, and the same names wherever kingfisher runs. Still
-        # narrowed by the request: they are the host's tools rather than this
-        # definition's, so a request that withheld `execute` withholds it here.
+        # deepagents' own names everywhere, and still narrowed by the request: one
+        # withholding `execute` withholds it here.
         "builtin_tools",
-        # The things themselves rather than names, for a definition that has no
-        # folder and has never seen the deployment's catalogue.
+        # The objects themselves, never names: the definition has never seen the catalogue.
         "tools",
         "skills",
         "metadata",
-        # The one key here that names something only a deployment knows. It names it
-        # without depending on it: a name the deployment's vocabulary lacks stops it
-        # at startup, naming the missing ids, and with no vocabulary the line is
-        # inert. Both fail loudly or not at all -- never a subagent quietly open.
+        # Names what only a deployment knows without depending on it: an id the
+        # vocabulary lacks stops startup, and with no vocabulary the line is inert --
+        # loud or nothing, never a subagent quietly open.
         "source_ids",
-        # For the same reason, and with the same check: a datazone the vocabulary
-        # does not declare stops the deployment.
+        # Likewise: a datazone the vocabulary does not declare stops the deployment.
         "datazone",
     }
 )
 
-#: Keys a portable declaration may not write, each with the reason, named one at a time
-#: for the reason `NOT_COMPILED` is. Two families: this format's own, each naming
-#: something only the deployment knows, and deepagents' `SubAgent` and
-#: `CompiledSubAgent` keys this format does not take -- which a spec typed to one
-#: of those TypedDicts writes, and which would otherwise be refused as merely
-#: unknown, beside a list of keys that does not include `build`.
+#: Keys a portable declaration may not write, each with its reason: this format's own that
+#: name something only the deployment knows, and deepagents' `SubAgent` and
+#: `CompiledSubAgent` keys, which a spec typed to those TypedDicts writes.
 NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
     {
         "bundle": (
@@ -322,8 +254,7 @@ NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
         "interrupt_on": REFUSED["interrupt_on"],
         "response_format": REFUSED["response_format"],
         "mode": REFUSED["mode"],
-        # Not `middlewares` misspelt, which is what a document writing it gets told: in
-        # a `SubAgent` it holds the middleware objects themselves.
+        # Not `middlewares` misspelt: in a `SubAgent` it holds the middleware objects.
         "middleware": (
             "deepagents merges a spec's middleware into the stack it builds by name, "
             "so an entry sharing one replaces what was there -- and the "
@@ -346,12 +277,8 @@ NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
 def _require(entry: Mapping[str, object], *names: str, source: str) -> None:
     """The fields a Python declaration must carry, present and not blank.
 
-    One body for both shapes rather than the check written at each: the compiled branch
-    had only the presence half, so an entry writing `"name": ""` was accepted where the
-    portable reader beside it refused exactly that.
-
-    Absent and blank stay different messages: "missing" sends somebody looking for a
-    line they can see they wrote, which is the wrong hunt.
+    Absent and blank stay different messages: "missing" sends somebody hunting for a line
+    they can see they wrote.
     """
     for required in names:
         if required not in entry:
@@ -363,13 +290,10 @@ def _require(entry: Mapping[str, object], *names: str, source: str) -> None:
 
 
 def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
-    """One entry of a module's `SUBAGENTS` into the spec kingfisher works with.
+    """One entry of a module's `SUBAGENTS` into a spec.
 
-    Two shapes, told apart by `build` and never by where the entry came from. A
-    re-export -- `from acme_agents import SUBAGENTS` -- hands over dictionaries
-    indistinguishable from ones written in the file itself, so nothing here can ask
-    whether an entry was imported. The shape it wrote is the only honest subject for
-    a rule, which is why the portable vocabulary is a property of the format.
+    Two shapes, told apart by `build` and never by where the entry came from: a
+    re-exported entry is indistinguishable from one written in the file.
     """
     if not isinstance(entry, Mapping):
         msg = (
@@ -392,9 +316,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         )
         raise SubagentError(msg)
 
-    # `build` is not among them: whether it is there is what chose this branch, and a
-    # `system_prompt` is refused above -- a compiled subagent's instruction is inside
-    # the graph it brings.
+    # Not `build`, which chose this branch, nor `system_prompt`, which is refused above.
     _require(entry, "name", "description", source=source)
 
     build = entry["build"]
@@ -412,22 +334,17 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     written_tools, tool_audiences, own_tools = read.sourced(
         entry.get("tools"), absent=ALL, key="tools", same=bare_name
     )
-    # Only `tools` here: `skills` and `subagents` are refused for a compiled
-    # subagent by `NOT_COMPILED`, so there is nothing else to carry an audience.
+    # Only `tools`: `NOT_COMPILED` refuses the other fields that carry an audience.
     audiences = {"tools": tool_audiences} if tool_audiences else {}
     source_ids = read.source_ids(entry.get("source_ids"))
     return SubagentSpec(
         name=fields.text(entry["name"]),
         description=fields.text(entry["description"]),
-        # Said rather than defaulted: a compiled subagent's instruction is inside the
-        # graph it brings, and `__post_init__` reads this as exactly that.
+        # Empty: a compiled subagent's instruction is inside the graph it brings.
         system_prompt="",
         build=build,
-        # Not `ALL`, which is what a document that stays quiet means. A
-        # compiled graph is handed the workspace tools it was granted and
-        # nothing else, so claiming every built-in would be a ceiling nothing
-        # can fill -- and `--run` would report a subagent withholding tools it
-        # was never able to have.
+        # Not `ALL`: a compiled graph is handed only workspace tools, so every built-in
+        # would be a ceiling nothing fills, and `--run` would report tools withheld.
         builtin_tools=None,
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),
@@ -464,12 +381,8 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
         description=fields.text(entry["description"]),
         system_prompt=fields.text(entry["system_prompt"]),
         builtin_tools=builtin,
-        # Explicit, and the one line here that would be a hole if it were left out.
-        # The field defaults to `ALL`, which means *inherit whatever the request
-        # granted* -- so a definition saying nothing about workspace tools, which
-        # every portable one does since it has no `tools:` key to say it with, would
-        # be handed the deployment's entire catalogue. An imported subagent holds
-        # what it carried and nothing else.
+        # Not the default `ALL`, which would hand an imported subagent the deployment's
+        # whole catalogue: it holds what it carried and nothing else.
         tools=None,
         carried=_carried(entry, read),
         metadata=read.mapping(entry.get("metadata"), key="metadata"),
@@ -478,10 +391,7 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
     )
 
 
-#: Why a portable entry's `tools` holds no names. A name is a lookup in the
-#: deployment's own catalogue, which a definition written somewhere else has never
-#: seen -- on one machine it finds nothing and on the next a different tool wearing
-#: the name.
+#: Why a portable entry's `tools` holds no names.
 NO_NAMES_HERE = (
     "a portable entry's tools are the tool objects themselves; a name would be a "
     "lookup in a catalogue this definition has never seen, finding nothing on one "
@@ -490,23 +400,18 @@ NO_NAMES_HERE = (
 
 
 def _carried(entry: Mapping[str, object], reader: fields.Reader) -> Mapping[str, Any]:
-    """What a portable entry brought in `tools` and `skills`, for a definition with no
-    folder: the objects, and the directories its skills are in.
-    """
+    """What a portable entry brought in `tools` and `skills`."""
     carried: dict[str, Any] = {}
     if (tools := entry.get("tools")) is not None:
-        # A list or a tuple, and nothing looser -- the rule `TOOLS` and `SUBAGENTS`
-        # both make, for the reason they both give: a single tool is a pydantic
-        # model, and a pydantic model is iterable, so `tools: my_tool` would pass a
-        # duck test and then loop over the tool's own fields.
+        # A list or tuple, nothing looser: a single tool is a pydantic model, which
+        # iterates, so `tools: my_tool` would pass a duck test and loop over its fields.
         if not isinstance(tools, (list, tuple)):
             msg = (
                 f"{reader.source}: tools is {type(tools).__name__}; it takes a "
                 f"list of the tools themselves -- write tools: [my_tool]"
             )
             raise SubagentError(msg)
-        # A mapping is the long form a document writes, `{name: x, source: ...}`,
-        # and is refused for the reason a string is: it names rather than carries.
+        # A mapping is a document's long form, and names rather than carries, as a string does.
         if named := [one for one in tools if isinstance(one, (str, Mapping))]:
             msg = f"{reader.source}: tools names {named!r} -- {NO_NAMES_HERE}"
             raise SubagentError(msg)
@@ -517,13 +422,11 @@ def _carried(entry: Mapping[str, object], reader: fields.Reader) -> Mapping[str,
 
 
 def _skills_directories(value: object, reader: fields.Reader) -> tuple[Path, ...]:
-    """The directories a definition resolved for its own skills, checked here.
+    """The directories a definition resolved for its own skills.
 
-    One path, or a list of them: the list is deepagents' own `SubAgent["skills"]`,
-    so a spec written to that TypedDict loads as it is. Each is a directory on this
-    host, never a backend path -- a definition written elsewhere cannot know this
-    deployment's routes, and kingfisher mounts each one and tells the subagent
-    where.
+    One path or a list, the list being deepagents' own `SubAgent["skills"]`. Each is a
+    directory on this host, never a backend path: a definition written elsewhere cannot
+    know this deployment's routes.
     """
     values = list(value) if isinstance(value, (list, tuple)) else [value]
     if not values:
@@ -544,13 +447,7 @@ def _skills_directories(value: object, reader: fields.Reader) -> tuple[Path, ...
 
 
 def _skills_directory(value: object, reader: fields.Reader) -> Path:
-    """One directory a definition resolved for its own skills, checked here.
-
-    Absolute, because a relative one resolves against the working directory: the
-    package would find its skills when kingfisher happened to be started from the
-    right place and silently offer none otherwise. Whoever ships the definition knows
-    where its files are -- `Path(__file__).parent` -- and kingfisher never guesses.
-    """
+    """One skills directory, absolute: a relative one depends on where kingfisher started."""
     if not isinstance(value, (str, Path)):
         msg = (
             f"{reader.source}: skills holds a {type(value).__name__}; it takes the "
@@ -577,9 +474,7 @@ def _skills_directory(value: object, reader: fields.Reader) -> Path:
 
 
 def _refuse_unknown(document: Mapping[str, object], source: Path) -> None:
-    """Refuse every field this format does not define, saying why for the ones we know
-    about.
-    """
+    """Refuse every field this format does not define, saying why for the known ones."""
     complaint = fields.unrecognised(document, known=KNOWN, declined=REFUSED)
     if complaint is not None:
         msg = f"{source.name}: {complaint}"
@@ -605,8 +500,8 @@ def uncallable_helpers(builtin_tools: Selection, subagents: Selection) -> str | 
 def _refuse_the_sandbox(builtin_tools: Selection, *, source: str) -> None:
     """Refuse a subagent listing the code sandbox's tool, whether or not one is wired.
 
-    With it wired, nothing else would: the definition loads, the name is one the agent
-    offers, and the subagent is built without it.
+    With it wired, nothing else would: the name is one the agent offers, and the subagent
+    is built without it.
     """
     if builtin_tools in (ALL, None) or INTERPRETER_TOOL not in builtin_tools:
         return
@@ -622,14 +517,11 @@ def _refuse_the_sandbox(builtin_tools: Selection, *, source: str) -> None:
 def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     """One definition, from its decoded fields."""
     reader = fields.Reader(source=source.name, error=SubagentError)
-    # Before the required-field check, so `nmae:` is reported as the typo it is
-    # rather than as a missing `name` the author plainly tried to write.
+    # Before the required fields, so `nmae:` is reported as a typo, not a missing `name`.
     _refuse_unknown(document, source)
 
     for required in ("name", "description", "system_prompt"):
-        # Absent and blank are different mistakes and read differently in a
-        # traceback: "missing" sends someone looking for a line they can see
-        # they wrote, which is the wrong hunt.
+        # Absent and blank apart: "missing" sends someone hunting for a line they wrote.
         if required not in document:
             msg = f"{source.name}: missing required field {required!r}"
             raise SubagentError(msg)
@@ -639,22 +531,17 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
 
     wanted = fields.wanted_model(document, reader)
 
-    # `[read_file, grep]` and a block list are the same thing to YAML, so both reach
-    # here already parsed. Absent means inherit for tools and none for skills -- the
-    # asymmetry the format has always had, said in the values rather than in a
-    # reader that special-cases one of them.
+    # Absent, tools inherit and skills are none: a subagent needs tools to act, while its
+    # prompt is already its procedure and a skills index carries a fixed preamble.
     builtin = reader.selection(document.get("builtin_tools"), absent=ALL, key="builtin_tools")
     _refuse_the_sandbox(builtin, source=source.name)
 
-    # Read once, then split. A `tools:` entry may be written `where::what`, and
-    # only `what` may reach the rest of kingfisher -- a grant, an allowlist and
-    # the dictionary the agent dispatches through all key on the plain name.
-    # Where it claims to live travels beside it, for whoever checks the claim.
+    # Kept as written, `where::what` and all: two folders may each define a `fetch`, and
+    # only the reference says which. `Offering.permitted` flattens it for the allowlist.
     written_tools, tool_audiences, own_tools = reader.sourced(
         document.get("tools"), absent=ALL, key="tools", same=bare_name
     )
-    # Same two-in-one read as the agent format, and the same field: a
-    # definition writing settings has to mean the same thing in either file.
+    # Read as the agent format reads it: settings must mean the same in either file.
     written_middleware, middleware_settings = reader.selection_with_settings(
         document.get("middlewares"), absent=None, key="middlewares"
     )
@@ -678,9 +565,8 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             "one, so it is always a loop. Name the subagents this one consults"
         ),
     )
-    # At load, because the only other place this shows is the call: the subagent's own
-    # allowlist refuses `task` there, the model reads the error and carries on without
-    # its helper, and nobody who could fix the file ever sees it.
+    # At load: otherwise only the call shows it, as an error the model reads and works
+    # around, and nobody who could fix the file sees it.
     if (complaint := uncallable_helpers(builtin, written_subagents)) is not None:
         msg = f"{source.name}: {complaint}"
         raise SubagentError(msg)
@@ -711,11 +597,3 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         audiences=audiences,
         datazone=reader.datazone(document.get("datazone")),
     )
-
-
-# `tools:` used to be stripped to bare names here, on the reasoning that a name is the
-# only thing a grant, an allowlist or the agent's dispatch dictionary keys on. That held
-# while a name could only mean one tool. Two folders may now each define a `fetch`, and
-# the reference is the only thing that says which -- so a definition keeps what it
-# wrote, and the flattening happens at the two places that genuinely need a bare name:
-# `ToolAllowlist`, and `permitted`.

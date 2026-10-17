@@ -9,8 +9,7 @@ from kingfisher.core.config import ConfigError
 
 
 def _wanted(port: type) -> str:
-    """The method names a protocol asks for, for a message that says what is
-    missing rather than only that something is."""
+    """The method names a protocol asks for, so a refusal can say what is missing."""
     return ", ".join(sorted(name for name in dir(port) if not name.startswith("_")))
 
 
