@@ -13,7 +13,7 @@ from kingfisher.core.definitions import seeding
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 from kingfisher.core.definitions.tools.spec import (
-    Found,
+    FoundTool,
     Offering,
     reference,
     split_reference,
@@ -78,7 +78,7 @@ def test_a_written_reference_splits_into_a_claim_and_a_name():
 
 def test_a_package_reference_carries_no_trailing_slash():
     """`.py` is what says "file"; its absence says "folder"."""
-    assert Found(object(), "csv_profile/").source == "csv_profile/"
+    assert FoundTool(object(), "csv_profile/").source == "csv_profile/"
     assert reference("csv_profile/", "csv_columns") == "csv_profile::csv_columns"
     assert reference("sql_query.py", "sql_tables") == "sql_query.py::sql_tables"
 
@@ -299,7 +299,7 @@ def probe(x: str) -> str:
     return x
 
 
-PROBE = (Found(tool=probe, source="probe.py"),)
+PROBE = (FoundTool(tool=probe, source="probe.py"),)
 
 
 class _Request:

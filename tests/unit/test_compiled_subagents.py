@@ -550,7 +550,7 @@ def test_a_compiled_subagent_is_handed_the_tool_it_named_either_way(cfg):
 
     from kingfisher.core.agent.kinds.subagents import compiled
     from kingfisher.core.definitions.subagents.spec import SubagentSpec
-    from kingfisher.core.definitions.tools.spec import Found, tool_name
+    from kingfisher.core.definitions.tools.spec import FoundTool, tool_name
 
     @tool
     def probe(x: str) -> str:
@@ -574,7 +574,7 @@ def test_a_compiled_subagent_is_handed_the_tool_it_named_either_way(cfg):
     compiled(
         spec,
         cfg,
-        catalogue=(Found(tool=probe, source="probe.py"),),
+        catalogue=(FoundTool(tool=probe, source="probe.py"),),
         tools=("probe",),
     )
 

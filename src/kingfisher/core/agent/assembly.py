@@ -70,7 +70,7 @@ from kingfisher.core.config import DEFAULT_LAYOUT, Config
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.spec import RunOn
-from kingfisher.core.definitions.tools.spec import Found, own_audiences
+from kingfisher.core.definitions.tools.spec import FoundTool, own_audiences
 from kingfisher.core.layout import Layout
 
 if TYPE_CHECKING:
@@ -277,7 +277,7 @@ def _probe_backend(cfg: Config, scratch: Path) -> CompositeBackend:
 
 
 def builtin_tool_names(
-    cfg: Config, catalogue: Definitions, workspace_tools: Sequence[Found] | None = None
+    cfg: Config, catalogue: Definitions, workspace_tools: Sequence[FoundTool] | None = None
 ) -> tuple[str, ...] | None:
     """The built-in set, which is only knowable from an assembled graph.
 
@@ -313,7 +313,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     checkpointer: Any | None = None,
     catalogue: Definitions | None = None,
     run_on: Mapping[str, RunOn] | None = None,
-    workspace_tools: Sequence[Found] | None = None,
+    workspace_tools: Sequence[FoundTool] | None = None,
     agent: AgentSpec | None = None,
     held: frozenset[str] | None = None,
     ledger: Ledger | None = None,

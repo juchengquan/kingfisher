@@ -72,7 +72,7 @@ def own_datazone(tool: Any) -> str | None:
 
 
 @dataclass(frozen=True)
-class Found:
+class FoundTool:
     """One tool and the file it came from, relative to the catalogue."""
 
     tool: Any
@@ -111,24 +111,24 @@ def offered(sources: Mapping[str, str], names: Sequence[str]) -> str:
     )
 
 
-def written_form(one: Found, *, among: Mapping[str, int]) -> str:
+def written_form(one: FoundTool, *, among: Mapping[str, int]) -> str:
     """How a grant names this tool: flat where the name is its own, else the file."""
     return one.reference if among.get(one.name, 0) > 1 else one.name
 
 
-def _by_name(found: Sequence[Found]) -> dict[str, int]:
+def _by_name(found: Sequence[FoundTool]) -> dict[str, int]:
     counted: dict[str, int] = {}
     for one in found:
         counted[one.name] = counted.get(one.name, 0) + 1
     return counted
 
 
-def duplicated(found: Sequence[Found]) -> tuple[str, ...]:
+def duplicated(found: Sequence[FoundTool]) -> tuple[str, ...]:
     """Names more than one of these tools answers to, sorted."""
     return tuple(sorted(name for name, count in _by_name(found).items() if count > 1))
 
 
-def out_of_reach(found: Sequence[Found], held: frozenset[str] | None) -> frozenset[str]:
+def out_of_reach(found: Sequence[FoundTool], held: frozenset[str] | None) -> frozenset[str]:
     """The tools whose own audience shuts this caller out, as a grant would write them."""
     if held is None:
         return frozenset()
@@ -138,7 +138,7 @@ def out_of_reach(found: Sequence[Found], held: frozenset[str] | None) -> frozens
     )
 
 
-def audienced(found: Sequence[Found]) -> dict[str, Found]:
+def audienced(found: Sequence[FoundTool]) -> dict[str, FoundTool]:
     """The tools that say who they admit, as a grant would write them."""
     among = _by_name(found)
     return {written_form(one, among=among): one for one in found if one.audience != ALL}
@@ -149,7 +149,7 @@ def admitted(granted: Callable[[str], bool], *, shut: frozenset[str]) -> Callabl
     return lambda name: granted(name) and name not in shut
 
 
-def own_audiences(found: Iterable[Found]) -> dict[str, Audience]:
+def own_audiences(found: Iterable[FoundTool]) -> dict[str, Audience]:
     """Each tool's own audience by the name a call dispatches on, where it states one.
 
     Two tools answering to one name are joined the strict way, because whoever reads
@@ -162,7 +162,7 @@ def own_audiences(found: Iterable[Found]) -> dict[str, Audience]:
     return own
 
 
-def select(granted: Selection, found: Sequence[Found]) -> tuple[Found, ...]:
+def select(granted: Selection, found: Sequence[FoundTool]) -> tuple[FoundTool, ...]:
     """The tools a grant means, as the objects that will be registered."""
     if granted is None:
         return ()
@@ -195,7 +195,7 @@ class Offering:
     sources: Mapping[str, str] = field(default_factory=dict)
 
     @classmethod
-    def of(cls, found: Sequence[Found], *, builtin: tuple[str, ...] = ()) -> Offering:
+    def of(cls, found: Sequence[FoundTool], *, builtin: tuple[str, ...] = ()) -> Offering:
         """From what the repository returned, plus what the graph registered."""
         among = _by_name(found)
         return cls(
@@ -204,13 +204,13 @@ class Offering:
             sources={one.name: one.source for one in found if among[one.name] == 1},
         )
 
-    def carried(self, granted: Selection, found: Sequence[Found]) -> tuple[Found, ...]:
+    def carried(self, granted: Selection, found: Sequence[FoundTool]) -> tuple[FoundTool, ...]:
         """What the agent itself holds: everything granted, minus the ambiguous."""
         chosen = select(granted, found)
         clashing = set(duplicated(chosen))
         return tuple(one for one in chosen if one.name not in clashing)
 
-    def ambiguous(self, granted: Selection, found: Sequence[Found]) -> tuple[str, ...]:
+    def ambiguous(self, granted: Selection, found: Sequence[FoundTool]) -> tuple[str, ...]:
         """The names `carried` had to leave behind, for a caller that must say so."""
         return duplicated(select(granted, found))
 
