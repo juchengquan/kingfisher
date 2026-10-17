@@ -66,7 +66,7 @@ def tool_guards(  # noqa: PLR0913 -- `subagent` is the one way the three graphs'
     # different question, answered by a deployment's middleware coming after all of this.
     guards: list[AgentMiddleware] = [] if recorder is None else [recorder]
     # Ahead of the rest, which have nothing to say about a call that is not run.
-    guards.append(CutReplies(subagent=subagent))
+    guards.append(CutReplies(subagent=subagent, outputs=layout.outputs_route))
     guards.append(HostPathGuard())
     guards.append(LargePdfGuard())
     guards.append(ShellPaths(layout, shell_prompt_of(backend), here=shell_runs_here(backend)))

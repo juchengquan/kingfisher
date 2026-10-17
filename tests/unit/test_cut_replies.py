@@ -1,5 +1,5 @@
-"""A reply the model stopped at its output cap: the call it was cut inside goes unrun, and
-an agent cut off three times in a row stops.
+"""A reply the model stopped at its output cap: the call it was cut inside goes unrun, a cut
+answer is asked for again, shorter, and an agent cut off three times in a row stops.
 
 Measured on MiniMax-M3: a `write_file` cut at the cap reached the tool as a valid call with
 its `content` stopping mid-word, and saved. The rule -- which reply is cut, which call in it
@@ -10,6 +10,7 @@ real turns, because the refusal, the stop and the report each happen somewhere e
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -131,11 +132,21 @@ def _written(cfg: Any) -> set[str]:
     return {one.name for one in folder.iterdir()} if folder.is_dir() else set()
 
 
+def _kept(cfg: Any) -> list[Any]:
+    """What the turn's transcript keeps, which is what every later turn sends again."""
+    session = cfg.workspace / "sessions" / "s"
+    return list(from_json((session / HARNESS / TRANSCRIPT_FILE).read_text(encoding="utf-8")))
+
+
 def _said(cfg: Any) -> dict[str, str]:
     """Each tool result the turn's transcript keeps, by call id."""
-    session = cfg.workspace / "sessions" / "s"
-    kept = from_json((session / HARNESS / TRANSCRIPT_FILE).read_text(encoding="utf-8"))
-    return {one.call_id: one.content for one in kept if one.role == "tool"}
+    return {one.call_id: one.content for one in _kept(cfg) if one.role == "tool"}
+
+
+ASKED = (
+    "Your answer reached the 32,768-token output limit and was cut off. Answer again, "
+    "shorter. Put anything long in a file under /outputs and say where it is."
+)
 
 
 @pytest.mark.parametrize("wire", sorted(STOPPED))
@@ -192,12 +203,98 @@ def test_a_reply_that_was_not_cut_starts_the_count_again(writing):
     assert _written(writing) == {"f3.md"}
 
 
-def test_a_turn_that_ends_on_a_cut_answer_says_it_stopped_there(writing):
-    """A final answer cut mid-sentence was reported as complete, and the command said so."""
-    result = _turn(writing, reply(text="The three findings are: first, the"))
+def test_a_cut_answer_is_asked_for_again_shorter_and_kept_out_of_the_conversation(
+    writing, way
+):
+    """A final answer cut mid-sentence was reported as complete. Kept, the cut text would
+    be sent again on every later call, since clearing never touches the agent's own text."""
+    shorter = "Three findings; the full list is in /outputs/findings.md."
+    cut = reply(text="The three findings are: first, the")
+
+    result = _turn(writing, cut, AIMessage(shorter), way=way)
+
+    assert result.stop_reason == "end_turn"
+    assert result.answer == shorter
+    asked = Scripted.heard[1]
+    assert asked[-2].content == "The three findings are: first, the"
+    assert asked[-1].content == ASKED
+    kept = " ".join(one.content for one in _kept(writing))
+    assert "first, the" not in kept
+    assert "Answer again" not in kept
+
+
+def test_three_cut_answers_in_a_row_end_the_turn_on_the_last(writing):
+    """The command said a turn whose answer was cut off had finished."""
+    result = _turn(writing, reply(text="First try"), reply(text="Second try"), reply(text="Third"))
 
     assert result.stop_reason == "max_tokens"
-    assert result.answer == "The three findings are: first, the"
+    assert result.answer == "Third"
+    assert [one.content for one in _kept(writing) if one.role == "assistant"] == ["Third"]
+    # Each try is up to a whole reservation long, so the model is shown its latest only.
+    shown = " ".join(str(one.content) for one in Scripted.heard[2])
+    assert "Second try" in shown
+    assert "First try" not in shown
+
+
+def test_a_cut_answer_asked_again_still_counts_toward_three(writing):
+    """It never reaches the conversation, where the count is read; uncounted, an agent
+    alternating cut answers and cut writes would go well past three."""
+    script = (reply(text="Here is the"), reply(write(2)), reply(write(3)), AIMessage("x"))
+
+    result = _turn(writing, *script)
+
+    assert result.stop_reason == "max_tokens"
+    assert len(Scripted.script) == 1, "a fourth cut reply was asked for"
+    assert set(_said(writing)) == {"c2"}
+
+
+def test_cut_answers_asked_again_in_the_same_call_can_stop_the_reply_after_them(writing):
+    """Counted where the conversation would have held them, so the third cut stops the
+    agent even when it is the first the conversation sees."""
+    result = _turn(writing, reply(text="A"), reply(text="B"), reply(write(3)), AIMessage("x"))
+
+    assert result.stop_reason == "max_tokens"
+    assert _said(writing) == {}, "the third cut reply's call was run or refused"
+    assert len(Scripted.script) == 1
+
+
+def test_a_cut_call_too_broken_to_read_is_asked_again_like_a_cut_answer(writing):
+    """It is sent back as text alone: a call with no result beside it is refused by the
+    provider, and nothing would run it."""
+    broken = AIMessage(
+        content=[{"type": "tool_use", "id": "c1", "name": "write_file", "input": {}}],
+        invalid_tool_calls=[
+            {
+                "type": "invalid_tool_call",
+                "name": "write_file",
+                "args": '{"file_pa',
+                "id": "c1",
+                "error": "unparsable",
+            }
+        ],
+        response_metadata=STOPPED["anthropic"],
+        usage_metadata={"input_tokens": 10, "output_tokens": CAP, "total_tokens": CAP + 10},
+    )
+
+    result = _turn(writing, broken, AIMessage("done"))
+
+    assert result.answer == "done"
+    sent = Scripted.heard[1][-2]
+    assert sent.content == ""
+    assert not sent.tool_calls
+    assert not sent.invalid_tool_calls
+
+
+def test_the_file_a_cut_answer_is_pointed_at_is_under_this_deployments_outputs(writing):
+    """A deployment may name the folder, and the agent told another would write where
+    nothing is returned."""
+    cfg = replace(writing, layout=replace(writing.layout, outputs="deliverables"))
+    start(cfg, "s")
+
+    _turn(cfg, reply(text="The three findings are"), AIMessage("done"))
+
+    told = Scripted.heard[1][-1].content
+    assert told.endswith("in a file under /deliverables and say where it is.")
 
 
 def test_a_subagent_that_gives_up_hands_back_its_cut_answer_marked_and_the_turn_goes_on(
@@ -231,12 +328,50 @@ def test_a_subagent_that_gives_up_hands_back_its_cut_answer_marked_and_the_turn_
 
 
 def test_each_cut_is_recorded_on_its_model_call(writing):
-    """Got past, a cut leaves no other trace: the turn ends as any other does."""
+    """Got past, a cut leaves no other trace: the turn ends as any other does. A cut answer
+    asked again is a model call too, though the conversation never holds it."""
     sink = RecordedEvents()
 
-    _turn(writing, reply(write(1)), reply(text="done", cut=False), events=sink)
+    _turn(writing, reply(text="The"), reply(write(1)), reply(text="done", cut=False), events=sink)
 
-    assert [one["cut_off"] for one in sink.named("model_call")] == [True, False]
+    assert [one["cut_off"] for one in sink.named("model_call")] == [True, True, False]
+
+
+def test_the_stream_marks_a_cut_answer_where_the_answer_starts_over(writing):
+    """Its text has already streamed to whoever is watching, and with no event for it the
+    shorter answer would run straight on from the cut one."""
+    Scripted.script.extend([reply(text="The three findings are"), reply(text="Three.", cut=False)])
+    service = Kingfisher(writing, sessions=LocalSessions())
+
+    events = list(service.stream(Request("go", agent="only", session_id="s")))
+
+    calls = [one for one in events if one.kind == "model_call"]
+    assert [one.cut_off for one in calls] == [True, False]
+    assert calls[0].usage["output_tokens"] == CAP
+    assert events[-1].result is not None
+    assert events[-1].result.answer == "Three."
+
+
+def test_a_subagents_cut_answer_is_asked_again_and_marked_as_its_own(writing):
+    """The caller is handed the shorter answer as any other, and a watcher sees whose
+    answer started over."""
+    subagents_dir(writing).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(writing) / "helper.yaml").write_text(
+        "name: helper\ndescription: Helps.\nsystem_prompt: |\n  You help.\n", encoding="utf-8"
+    )
+    an_agent(writing, subagents="[helper]")
+    asked = {"description": "go", "subagent_type": "helper"}
+    to_helper = AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}])
+    Scripted.script.extend(
+        [to_helper, reply(text="The report so"), AIMessage("Short report."), AIMessage("done")]
+    )
+    service = Kingfisher(writing, sessions=LocalSessions())
+
+    events = list(service.stream(Request("go", agent="only", session_id="s")))
+
+    (cut,) = [one for one in events if one.kind == "model_call" and one.cut_off]
+    assert cut.agent == "helper"
+    assert _said(writing)["t1"].startswith("Short report.")
 
 
 def test_the_stream_says_which_reply_was_cut_and_why_the_turn_stopped(writing):
