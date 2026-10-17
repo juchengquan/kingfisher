@@ -4011,9 +4011,11 @@ last. The note is never stored. Kept, it would be sent again, stale, on every la
 and turn; coming after the cached part, it leaves the prompt cache whole; and there is
 only ever one. The limit stays at 150 steps until a trial shows what this and the
 `read_file` and `grep` changes save. A subagent is not covered, because it does not run
-under that limit: deepagents binds 9,999 steps to every graph it builds, a subagent's
-bound config wins over the turn's, and only the turn's time limit stops one. Bounding
-subagents is its own change. *(2026-10-17, from the trial transcripts.)*
+under that limit: deepagents binds 9,999 steps to the graph it builds, the turn's limit
+overrides that for the agent's own run and not for the subagents run inside it, and only
+the turn's time limit stops one. Measured under a 30-step turn: a subagent's model calls
+saw a limit of 9,999, two steps a call, and it made 41 calls. Bounding subagents is its
+own change. *(2026-10-17, from the trial transcripts and a scripted turn.)*
 
 **What the agent is told about the shell is said by the shell.** `system.md`,
 `capability_skills.md` and `ShellPaths` told every deployment's agent four things true
