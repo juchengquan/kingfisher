@@ -624,7 +624,7 @@ def test_an_artifact_survives_the_wrapping(paths, session, way):
 
 
 def test_without_a_session_a_failure_is_still_an_answer():
-    """`tool_guards` puts the session condition on translation and not on the error
+    """`standing_middleware` puts the session condition on translation and not on the error
     half, and this follows it: a build with no session has nowhere to translate
     against, and a tool that raises still must not end the run.
     """

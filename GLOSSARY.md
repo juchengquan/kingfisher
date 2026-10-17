@@ -58,6 +58,11 @@ How one family of model endpoints is spoken to: which client speaks it and what 
 must be told.
 _Avoid_: adapter, provider
 
+**Standing middleware**:
+Middleware kingfisher puts around every agent it builds because it keeps a promise kingfisher
+makes to every caller; no definition can name it or take it out.
+_Avoid_: built-in middleware, guards, kingfisher's middleware
+
 **Offered middleware**:
 Middleware a deployment makes available for its definitions to name.
 _Avoid_: middleware registry, deployment middleware

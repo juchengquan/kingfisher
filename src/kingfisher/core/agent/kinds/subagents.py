@@ -19,11 +19,11 @@ from kingfisher.core.access.capabilities import (
     narrowed,
     refuse_unoffered,
 )
-from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.models import build_model, model_named
 from kingfisher.core.agent.prompting import behind_instructions
 from kingfisher.core.agent.session_paths import SessionPaths
-from kingfisher.core.agent.tool_guards import guarded_tools, tool_guards
+from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.subagents.rules import resolved_model
 from kingfisher.core.definitions.subagents.spec import RunOn, SubagentError, SubagentSpec
@@ -277,42 +277,39 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     if private:
         owned = {one.name for one in private}
         mine = tuple(one for one in mine if one.name not in owned)
-    # From `tool_guards`, so the agent, this subagent and `general-purpose` cannot differ.
-    # `paths` is handed down, not read off the backend, which need not carry it.
-    middleware.extend(
-        tool_guards(
-            frozenset(entry.name for entry in (*catalogue, *private)),
-            paths,
-            recorder,
-            cfg.layout,
-            # The parent's, whose shell is the one this subagent's `execute` runs on.
-            backend,
-            subagent=True,
-        )
-    )
-    if allowed != ALL:
-        # `None` permits nothing: an empty allowlist, not an absent one.
-        middleware.append(
-            ToolAllowlist(
-                tuple(split_reference(one)[1] for one in (allowed or ()))
-                + tuple(one.name for one in private),
-                subject=f"the {spec.name!r} subagent",
-            )
-        )
-    # No parent middleware reaches a subagent, so this is its only index (`SubAgent.skills`
-    # takes paths, not names). A bundle's skills are folded in first: `skills` defaults to
-    # none, and a subagent must still be told about the skills it ships.
+    # No parent middleware reaches a subagent, so its skills index is its own
+    # (`SubAgent.skills` takes paths, not names). A bundle's skills are folded in first:
+    # `skills` defaults to none, and a subagent must still be told about the skills it ships.
     own_names, own_sources = private_skills or ((), ())
     if own_names:
         granted = () if skills in (None, ALL) else tuple(skills)
         skills = tuple(dict.fromkeys((*granted, *own_names)))
         skill_sources = [*(skill_sources or []), *own_sources]
-    if skills is not None and skills != ALL and backend is not None:
-        # The parent's sources, passed in rather than rebuilt: two walks could disagree and
-        # offer the subagent a different skill than the one named.
-        middleware.append(
-            NarrowedSkills(allowed=skills, backend=backend, sources=skill_sources or [])
+    # From `standing_middleware`, so the agent, this subagent and `general-purpose` cannot
+    # differ. `paths` is handed down, not read off the backend, which need not carry it.
+    middleware.extend(
+        standing_middleware(
+            "subagent",
+            names=frozenset(entry.name for entry in (*catalogue, *private)),
+            paths=paths,
+            layout=cfg.layout,
+            # The parent's, whose shell is the one this subagent's `execute` runs on.
+            backend=backend,
+            recorder=recorder,
+            # `None` permits nothing: an empty allowlist, not an absent one.
+            tools=None
+            if allowed == ALL
+            else tuple(split_reference(one)[1] for one in (allowed or ()))
+            + tuple(one.name for one in private),
+            tools_subject=f"the {spec.name!r} subagent",
+            # The parent's sources, passed in rather than rebuilt: two walks could disagree
+            # and offer the subagent a different skill than the one named.
+            skills=None
+            if skills is None or skills == ALL or backend is None
+            else tuple(skills),
+            skill_sources=skill_sources or [],
         )
+    )
     # deepagents gives a subagent no `task` tool, and `middleware` is the only spec field that
     # carries code, so `task` comes the way the main agent gets it.
     if helpers:

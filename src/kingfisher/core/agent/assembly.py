@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 from deepagents import FilesystemPermission, MemoryMiddleware, create_deep_agent
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
 from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
-from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.core.access.capabilities import (
     ALL,
@@ -58,18 +57,14 @@ from kingfisher.core.agent.kinds.tools import (
     registered_tools,
 )
 from kingfisher.core.agent.middlewares.clearing import ResultClearing, high_mark
-from kingfisher.core.agent.middlewares.narrowing import (
-    DeclaredSubagentsOnly,
-    NarrowedSkills,
-    ToolAllowlist,
-)
 from kingfisher.core.agent.middlewares.recorder import Audiences, Recorder
+from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.models import build_model, model_named
 from kingfisher.core.agent.permitted_backend import PermittedBackend
 from kingfisher.core.agent.prompting import memory_guidelines, system_prompt
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.agent.tool_context import ToolContext
-from kingfisher.core.agent.tool_guards import guarded_tools, tool_guards
+from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.agent.usable_backend import refuse_unusable_backend
 from kingfisher.core.config import DEFAULT_LAYOUT, Config
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
@@ -336,7 +331,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     # Every backend: a check only some builds ran would be one nothing here exercises.
     refuse_unusable_backend(backend, cfg.layout)
     shell = shell_prompt_of(backend)
-    # Before the middleware stack, because `tool_guards` needs the names. A caller that
+    # Before the middleware stack, because `standing_middleware` needs the names. A caller that
     # has walked them itself -- `--list` -- wins over the catalogue.
     walked = tuple(roots.tools.found if workspace_tools is None else workspace_tools)
     # Every walked tool, not the granted ones: the grant is computed after the guards,
@@ -372,17 +367,18 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         return Recorder(ledger, backend, audiences, cfg.layout.tool_results_route)
 
     running, mark = _running(agent, cfg, capabilities.endpoints, model)
-    middleware: list[Any] = [
-        # The agent's alone, and only with a ledger for its handles to name. First, so it
-        # measures the request deepagents' summariser counted, before anything adds to it.
-        *(
-            ()
-            if ledger is None
-            else (ResultClearing(ledger, high_mark(running, mark), cfg.layout.offloads_route),)
-        ),
-        TodoListMiddleware(),
-        *tool_guards(guarded, paths, recording(agent), cfg.layout, backend, subagent=False),
-    ]
+    # The agent's alone, and only with a ledger for its handles to name.
+    clearing = (
+        None
+        if ledger is None
+        else ResultClearing(ledger, high_mark(running, mark), cfg.layout.offloads_route)
+    )
+    # Filled in kingfisher's order once the grant is known; the probe reads it before.
+    middleware: list[Any] = []
+    # What the deployment's settings switch on, which goes after every standing one.
+    switched: list[Any] = []
+    narrowed_skills: tuple[str, ...] | None = None
+    narrowed_sources: list[Any] = []
     extras: dict[str, Any] = {}
 
     # One answer to "are skills on", for this agent and every subagent it builds.
@@ -397,7 +393,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         # conversations". Beside `memory=`, not instead: merged by name, this takes the
         # slot deepagents builds its own in, after the static prompt's cache breakpoint.
         # Alone it lands ahead of it, and every memory edit costs the prompt its cache.
-        middleware.append(
+        switched.append(
             MemoryMiddleware(
                 backend=backend,
                 sources=memory_files,
@@ -428,21 +424,35 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             # Supplied as middleware rather than via `skills=`: passing that
             # argument makes deepagents construct its own SkillsMiddleware,
             # leaving no way to substitute a filtered one.
-            middleware.append(
-                NarrowedSkills(
-                    allowed=activated,
-                    backend=backend,
-                    sources=sources,
-                )
-            )
+            narrowed_skills, narrowed_sources = activated, sources
             permissions.extend(_skill_denials(activated, registry))
 
     interpreter_at: int | None = None
     if cfg.interpreter_enabled:
         # Unrestricted for now: the probe below has to see `eval` to count it
         # among the built-ins, and the grant is not resolved until after it.
-        interpreter_at = len(middleware)
-        middleware.append(_interpreter(cfg, None))
+        interpreter_at = len(switched)
+        switched.append(_interpreter(cfg, None))
+
+    def agents_standing(
+        *, tools: tuple[str, ...] | None = None, reachable: tuple[str, ...] | None = None
+    ) -> list[Any]:
+        return standing_middleware(
+            "agent",
+            names=guarded,
+            paths=paths,
+            layout=cfg.layout,
+            backend=backend,
+            recorder=recording(agent),
+            clearing=clearing,
+            tools=tools,
+            skills=narrowed_skills,
+            skill_sources=narrowed_sources,
+            reachable=reachable,
+        )
+
+    # What the probe below builds with: nothing narrowed yet, and no subagents to name.
+    middleware[:] = [*agents_standing(), *switched]
 
     gated = _gates_for(agent, checkpointer)
     if gated:
@@ -510,7 +520,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         # Re-wired now the grant is known; the probe needed it unrestricted to see
         # `eval`. A caller who withheld the shell must not reach it from code, nor an
         # unrestricted request a gated `task`.
-        middleware[interpreter_at] = _interpreter(
+        switched[interpreter_at] = _interpreter(
             cfg,
             permitted,
             gated=gated,
@@ -658,9 +668,6 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         )
     )
 
-    if permitted is not None:
-        middleware.append(ToolAllowlist(permitted))
-
     # deepagents adds a `general-purpose` subagent with the agent's capabilities and none
     # of our middleware whenever `task` is offered. One supplied by that name replaces
     # it, so it keeps working under the caller's ceiling rather than being withheld.
@@ -671,10 +678,15 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             # deepagents hands it the agent's own tool objects, so it needs the same guards.
             "middleware": (
                 # The agent's recorder: these are the agent's tools, under its audiences.
-                tool_guards(
-                    guarded, paths, recording(agent), cfg.layout, backend, subagent=True
+                standing_middleware(
+                    "general-purpose",
+                    names=guarded,
+                    paths=paths,
+                    layout=cfg.layout,
+                    backend=backend,
+                    recorder=recording(agent),
+                    tools=permitted,
                 )
-                + ([ToolAllowlist(permitted)] if permitted is not None else [])
                 + _deployment_middleware(
                     agent, registry, capabilities.middlewares, provisions=agent_provisions
                 )
@@ -682,17 +694,17 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         }
     )
     extras["subagents"] = supplied
-    # Backstop, whether or not this caller narrowed anything: a subagent a future
-    # deepagents adds does not arrive unrestricted.
-    reachable = tuple(spec["name"] for spec in supplied)
-    middleware.append(DeclaredSubagentsOnly(reachable))
-
-    # Last, as `as_subagent` places a subagent's: a deployment's middleware sees
-    # kingfisher's tool and skill narrowing rather than running ahead of it.
-    middleware.extend(
-        _deployment_middleware(
+    # Kingfisher's order: what it guarantees, then what the deployment's settings switch
+    # on, then what its definitions name -- last, as `as_subagent` places a subagent's, so
+    # a deployment's middleware sees kingfisher's tool and skill narrowing.
+    middleware[:] = [
+        *agents_standing(
+            tools=permitted, reachable=tuple(spec["name"] for spec in supplied)
+        ),
+        *switched,
+        *_deployment_middleware(
             agent, registry, capabilities.middlewares, provisions=agent_provisions
-        )
-    )
+        ),
+    ]
 
     return assemble(surface.carried)

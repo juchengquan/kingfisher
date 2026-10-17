@@ -44,7 +44,7 @@ class LargePdfGuard(AgentMiddleware):
 
     def _seen(self, request: Any) -> Any:
         # Before `ToolAllowlist` narrows, which is right: a graph holds only its granted
-        # workspace tools. Not the catalogue's names: `tool_guards` gets every tool, granted
+        # workspace tools. Not the catalogue's names: `standing_middleware` gets every tool, granted
         # or not.
         self._offered = frozenset(
             name for tool in request.tools if isinstance(name := getattr(tool, "name", None), str)
