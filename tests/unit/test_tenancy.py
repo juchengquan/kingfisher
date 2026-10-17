@@ -19,7 +19,7 @@ from kingfisher.core.session.model import (
     known,
 )
 from kingfisher.plugins import LocalSessions
-from tests.conftest import Through, start
+from tests.conftest import FakeGraph, Through, start
 from tests.unit.test_run import StubAgent
 
 
@@ -202,7 +202,7 @@ def test_two_sessions_do_not_block_each_other(cfg):
 CONCURRENT = 8
 
 
-class _BarrierAgent:
+class _BarrierAgent(FakeGraph):
     """A graph that answers only once every concurrent turn has reached it.
 
     Stands where the model call stands, which is where a turn spends nearly all

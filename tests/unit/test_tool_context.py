@@ -31,6 +31,7 @@ from kingfisher.core.result import AWAITING
 from kingfisher.core.session import runtime
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import (
+    FakeGraph,
     FakeToolCallingModel,
     an_agent,
     paths_in,
@@ -803,7 +804,7 @@ def test_a_graph_the_caller_built_is_driven_with_no_context_at_all(cfg):
     not langgraph's refuses the keyword.
     """
 
-    class Theirs:
+    class Theirs(FakeGraph):
         def __init__(self) -> None:
             self.driven: list[set[str]] = []
 

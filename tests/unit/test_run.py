@@ -10,10 +10,10 @@ from kingfisher.core.result import END_TURN, STOP_REASONS
 from kingfisher.core.run import Request, RunResult, normalize_answer, run
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins import LocalSessions
-from tests.conftest import RecordedEvents, start
+from tests.conftest import FakeGraph, RecordedEvents, start
 
 
-class StubAgent:
+class StubAgent(FakeGraph):
     """Stands in for the compiled graph so the orchestration is testable."""
 
     def __init__(

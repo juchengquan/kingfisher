@@ -413,10 +413,11 @@ class Kingfisher(SessionMethods, Disposal):
 
         **Two shapes, and the asymmetry is the point rather than an oversight.** A
         build kingfisher made comes back as `Assembled`, carrying what was attached;
-        a graph the deployment supplied comes back as itself, because there is no
-        record of a build that did not happen here. Returning the record either way
-        would mean inventing one with every field empty -- a record asserting a build
-        that never ran, which is worse than the union, since it would be asserted on.
+        a graph the deployment supplied comes back as a copy of itself on this turn's
+        saver, because there is no record of a build that did not happen here.
+        Returning the record either way would mean inventing one with every field
+        empty -- a record asserting a build that never ran, which is worse than the
+        union, since it would be asserted on.
         Callers take `.graph` where they need the graph; `_built_turn` is the only one
         in `src/`.
         """
@@ -424,7 +425,12 @@ class Kingfisher(SessionMethods, Disposal):
             if not request.capabilities.is_unrestricted:
                 msg = "cannot honour request.capabilities against a pre-built graph"
                 raise ValueError(msg)
-            return self._graph
+            # On this turn's saver, never the one it was compiled with. The transcript
+            # carries the conversation, so a graph keeping a saver of its own handed the
+            # model every earlier turn twice, and one keeping none left no state to
+            # write the transcript from -- measured, both ways -- and a pause kept in its
+            # own saver could not outlive the process.
+            return self._graph.copy(update={"checkpointer": checkpointer})
 
         return build_agent(
             self.cfg,

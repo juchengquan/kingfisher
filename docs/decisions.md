@@ -4024,6 +4024,15 @@ session. Removed with `checkpointer=` on `run` and `stream`, `Plugins.threads`,
 the plugin, for a use nobody had named -- keeping each turn's step-by-step state for a
 deployment's own tools to read. *(2026-10-17.)*
 
+**A pre-built graph runs on the turn's saver too.** A graph passed as `graph=` ran on the
+saver it was compiled with, and so had both halves of the fault above, whichever it was
+compiled with: on a saver of its own, every follow-up turn's model saw the earlier
+exchanges twice; on none, the end of the turn had no state to read and wrote no
+transcript, so every turn started with no history at all. A pause kept in its own saver
+also lived only as long as the process. Each turn now runs `graph.copy` with the turn's
+saver in place of its own, which is what a definition-built agent gets.
+*(2026-10-17.)*
+
 **The mark beside it records the agent the turn ran, not the one the request named.**
 It recorded `request.agent`, and a session's agent is fixed when it opens -- so every
 turn after the first names nothing, and a pause on one of those recorded `""`.

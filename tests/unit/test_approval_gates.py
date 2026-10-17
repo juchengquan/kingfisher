@@ -188,6 +188,41 @@ def test_approving_runs_the_call_and_finishes_the_turn(cfg, session_dir):
     assert (_session_dir(cfg, paused.session_id) / "outputs" / "a.txt").read_text() == "approved"
 
 
+def test_a_paused_pre_built_graph_resumes_in_a_graph_built_after_a_restart(cfg, session_dir):
+    """A supplied graph paused into the saver it was compiled with, which lives as long
+    as the process; the pause file beside it held kingfisher's saver, which that graph
+    never ran on. Driven with a second graph, as a restart builds one, and judged by the
+    approved write landing: a graph resumed into nothing answers and writes nothing.
+    """
+    before = Kingfisher(
+        cfg,
+        graph=_gated_on_disk(cfg, session_dir, calls=[_write("/outputs/a.txt", "approved", "c1")]),
+        sessions=LocalSessions(),
+    )
+    paused = before.run(Request("write it", session_id=session_dir.name))
+    after = Kingfisher(
+        cfg,
+        graph=create_deep_agent(
+            model=FakeToolCallingModel(responses=[AIMessage(content="written after all")]),
+            backend=backend_at(cfg, session_dir),
+            tools=None,
+            interrupt_on={"write_file": True},
+            checkpointer=InMemorySaver(),
+        ),
+        sessions=LocalSessions(),
+    )
+
+    answered = after.run(
+        Resume(
+            session_id=paused.session_id,
+            decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+        )
+    )
+
+    assert answered.stop_reason == END_TURN
+    assert (_session_dir(cfg, paused.session_id) / "outputs" / "a.txt").read_text() == "approved"
+
+
 def test_rejecting_does_not_run_the_call(cfg, session_dir):
     """The half that a test asserting only on the turn's end would miss: a rejected
     gate still finishes the turn, and the difference is whether the file is there.
