@@ -16,6 +16,7 @@ from kingfisher.core.agent.middlewares.host_path_guard import HostPathGuard
 from kingfisher.core.agent.middlewares.large_pdf_guard import LargePdfGuard
 from kingfisher.core.agent.middlewares.recorder import Recorder
 from kingfisher.core.agent.middlewares.shell_paths import ShellPaths
+from kingfisher.core.agent.middlewares.unavailable import ModelUnavailableGuard
 from kingfisher.core.agent.middlewares.workspace_tools import (
     WorkspaceToolErrors,
     WorkspaceToolPaths,
@@ -56,6 +57,8 @@ def tool_guards(  # noqa: PLR0913 -- `subagent` is the one way the agent's guard
     guards: list[AgentMiddleware] = [] if recorder is None else [recorder]
     # Ahead of the rest, which have nothing to say about a call that is not run.
     guards.append(CutReplies(subagent=subagent, outputs=layout.outputs_route))
+    # Inside `CutReplies`, so a refused call reaches it already as the stop it is.
+    guards.append(ModelUnavailableGuard())
     guards.append(HostPathGuard())
     guards.append(LargePdfGuard())
     guards.append(ShellPaths(layout, shell_prompt_of(backend), here=shell_runs_here(backend)))
