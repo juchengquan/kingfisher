@@ -27,7 +27,7 @@ from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.subagents.rules import resolved_model
 from kingfisher.core.definitions.subagents.spec import RunOn, SubagentError, SubagentSpec
-from kingfisher.core.definitions.tools.spec import Found, Offering, select, split_reference
+from kingfisher.core.definitions.tools.spec import FoundTool, Offering, select, split_reference
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -153,9 +153,9 @@ def compiled(  # noqa: PLR0913 -- one per thing still decided for a graph kingfi
     *,
     endpoints: Selection = ALL,
     tools: Selection = ALL,
-    catalogue: Sequence[Found] = (),
+    catalogue: Sequence[FoundTool] = (),
     #: This subagent's own tools, held whatever the request granted, as on the assembled path.
-    private: Sequence[Found] = (),
+    private: Sequence[FoundTool] = (),
     #: What its tools resolve paths against: a compiled subagent has no middleware to do it.
     paths: SessionPaths | None = None,
     run_on: RunOn | None = None,
@@ -215,10 +215,10 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     # refuses a spec naming none. Omitted at the top so deepagents' own defaults hold.
     default_model: Any = None,
     tool_objects: list[Any] | None = None,
-    catalogue: Sequence[Found] = (),
+    catalogue: Sequence[FoundTool] = (),
     #: This subagent's own tools, held whatever the request granted: a subagent is made of
     #: its parts. `catalogue` is the half that still narrows.
-    private: Sequence[Found] = (),
+    private: Sequence[FoundTool] = (),
     #: Its own skills' `source::name` keys and the sources they mount at, held as `private` is.
     private_skills: tuple[tuple[str, ...], tuple[tuple[str, str], ...]] | None = None,
     skill_sources: list[Any] | None = None,

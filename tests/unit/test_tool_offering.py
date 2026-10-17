@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from kingfisher.core.access.capabilities import ALL, CapabilityError, ceiling
-from kingfisher.core.definitions.tools.spec import Found, Offering
+from kingfisher.core.definitions.tools.spec import FoundTool, Offering
 
 WORKSPACE = Offering(
     builtin=("read_file", "execute"),
@@ -132,7 +132,7 @@ def test_an_offering_is_built_from_what_the_repository_found():
         name = "http_fetch"
 
     offering = Offering.of(
-        [Found(tool=FakeTool(), source="net/http_fetch.py")], builtin=("read_file",)
+        [FoundTool(tool=FakeTool(), source="net/http_fetch.py")], builtin=("read_file",)
     )
 
     assert offering.workspace == ("http_fetch",)

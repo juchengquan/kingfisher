@@ -15,7 +15,7 @@ from kingfisher.core.access.capabilities import (
 from kingfisher.core.access.reach import reaches
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
-from kingfisher.core.definitions.tools.spec import Found, Offering, out_of_reach
+from kingfisher.core.definitions.tools.spec import FoundTool, Offering, out_of_reach
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -48,7 +48,7 @@ def workspace_tool_names(
 
 
 def _refuse_shadowed(
-    walked: Sequence[Found], *, builtin: tuple[str, ...], where: str
+    walked: Sequence[FoundTool], *, builtin: tuple[str, ...], where: str
 ) -> None:
     """What the workspace defines, refusing anything that shadows a built-in."""
     shadowed = tuple(sorted({one.name for one in walked} & set(builtin)))
@@ -75,7 +75,7 @@ class _ToolSurface:
     objects: Mapping[str, Any] = field(default_factory=dict)
     #: Every workspace tool with its file: two files may each define a `fetch`, and a name
     #: would lose one of them before any narrowing ran.
-    found: tuple[Found, ...] = ()
+    found: tuple[FoundTool, ...] = ()
     #: Tools whose audience shuts this caller out. Taken out of the grant, not `found`: a
     #: definition naming one names a real tool, which `refuse_unknown` must not call a typo.
     out_of_reach: frozenset[str] = frozenset()
@@ -123,7 +123,7 @@ class _ToolSurface:
 
 def _private_tools(
     catalogue: Definitions, name: str, *, held: frozenset[str] | None = None
-) -> tuple[Found, ...]:
+) -> tuple[FoundTool, ...]:
     """The tools a subagent brings itself that this caller may use, or none."""
     repository = catalogue.bundled_tools.get(name)
     if repository is None:
@@ -157,7 +157,7 @@ def _tool_objects(graph: Any) -> Mapping[str, Any]:
 def _resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the composition root knows
     where: str,
     capabilities: Capabilities,
-    workspace_tools: Sequence[Found],
+    workspace_tools: Sequence[FoundTool],
     # `Any`: naming the record it returns would import `core.agent.assembly`, which imports
     # this module.
     assemble: Callable[[tuple[Any, ...]], Any],
