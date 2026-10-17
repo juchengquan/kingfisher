@@ -1,5 +1,5 @@
 """A reply the model stopped at its output cap: the call it was cut inside goes unrun, a cut
-answer is asked for again, shorter, and an agent cut off three times in a row is stopped."""
+answer is asked for again, shorter, and an agent cut off too often in a row is stopped."""
 
 from __future__ import annotations
 
@@ -9,7 +9,13 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware, ModelResponse
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from kingfisher.core.session.runtime import cut_off, cut_off_mark, output_limit
+from kingfisher.core.session.runtime import (
+    call_block_id,
+    cut_off,
+    cut_off_mark,
+    output_limit,
+    with_call_args,
+)
 
 #: Cut replies in a row after which an agent is stopped. Each spends the model's whole
 #: output reservation, and a model retrying one oversized write would otherwise go on
@@ -17,9 +23,10 @@ from kingfisher.core.session.runtime import cut_off, cut_off_mark, output_limit
 #: times.
 GIVE_UP = 3
 
-#: The content blocks that are calls, one per wire format: the Anthropic format's, the
-#: Responses API's when it carries them, and langchain's own.
-CALL_BLOCKS = frozenset({"tool_use", "function_call", "tool_call"})
+#: The longest argument a refused cut call keeps as written. The path it aimed at stays;
+#: the text it was cut writing goes, since nothing ever reads it again and every later
+#: call would send it, and clearing never shortens a call that failed.
+KEPT_WHOLE = 500
 
 #: How the result of a call refused for being cut begins. Clearing reads it to leave the
 #: refusal whole once a replayed transcript has dropped its error status.
@@ -30,25 +37,36 @@ NOT_RUN = "Not run: your reply reached "
 ASKED_BEFORE = "kingfisher_cut_answers_before"
 
 
-def _is_call(block: Any) -> bool:
-    return isinstance(block, dict) and block.get("type") in CALL_BLOCKS
-
-
 def cut_call(reply: Any) -> str | None:
-    """The id of the call a cut reply stopped inside, or `None` where every call is whole.
+    """The id of the call a cut reply stopped inside, or `None` where every call it runs
+    is whole.
 
-    Only its last call can be: the cap stops a reply at its end. Where the content puts
-    something after that call, the reply was cut writing that instead. Where the content
-    carries no calls, nothing says what came last, and the last call is the one refused:
-    refusing a whole call costs a retry, and running a cut one saves a shortened file.
+    The cap stops a reply at its end, so the content's last block is what was cut. Text
+    there means every call before it is whole; a call too broken to parse there is in
+    none of the calls that run, so it cuts none of them either. Where a provider puts no
+    calls in the content, nothing says what came last, and the last call is the one
+    refused: refusing a whole call costs a retry, and running a cut one saves a shortened
+    file.
     """
     calls = getattr(reply, "tool_calls", None)
     if not calls or not cut_off(reply):
         return None
     content = reply.content if isinstance(reply.content, list) else []
-    if any(_is_call(block) for block in content) and not _is_call(content[-1]):
-        return None
-    return calls[-1]["id"]
+    if not any(call_block_id(block) for block in content):
+        return calls[-1]["id"]
+    last = call_block_id(content[-1])
+    return last if any(call["id"] == last for call in calls) else None
+
+
+def _unrun(reply: AIMessage, call_id: str) -> AIMessage:
+    """A reply with the arguments its cut call was writing replaced by their length."""
+    args = next(call["args"] for call in reply.tool_calls if call["id"] == call_id)
+    shortened = {
+        name: f"[{len(value):,} characters, cut off; not run]"
+        for name, value in args.items()
+        if isinstance(value, str) and len(value) > KEPT_WHOLE
+    }
+    return with_call_args(reply, call_id, shortened) if shortened else reply
 
 
 def _cut_in_a_row(messages: Any) -> int:
@@ -65,6 +83,11 @@ def _cut_in_a_row(messages: Any) -> int:
 
 def _reply(response: Any) -> AIMessage | None:
     return next((one for one in reversed(response.result) if isinstance(one, AIMessage)), None)
+
+
+def _gives_up(first: Any, asked: int) -> bool:
+    """Whether the reply in hand, being cut, is the one too many in a row."""
+    return _cut_in_a_row(first.messages) + asked + 1 >= GIVE_UP
 
 
 def _replaced(response: Any, reply: AIMessage, by: AIMessage) -> Any:
@@ -134,20 +157,18 @@ class CutReplies(AgentMiddleware):
         Built on the first request each time, so the model sees its latest attempt and
         not every one: each is up to a whole reservation long. Neither the cut answer nor
         the note asking again reaches the conversation, since clearing never touches the
-        agent's own text and every later call would send it again. Its text has already streamed
-        to whoever is watching, so the cut is reported there, where the answer starts over.
+        agent's own text and every later call would send it again. Its text has already
+        streamed to whoever is watching, so the cut is reported there, where the answer
+        starts over.
         """
         reply = _reply(response)
-        if reply is None or not cut_off(reply) or reply.tool_calls:
-            return None
-        if _cut_in_a_row(first.messages) + asked + 1 >= GIVE_UP:
+        if reply is None or not cut_off(reply) or reply.tool_calls or _gives_up(first, asked):
             return None
         write = getattr(first.runtime, "stream_writer", None)
         if write is not None:
             write(cut_off_mark(reply))
-        # The file first, then its path, and no path without the file: told only to put the
-        # long part in a file and say where, a live turn named a file it never wrote, and
-        # told to write it first, one whose question forbade files still named one.
+        # The file first, then its path, and no path without the file: an agent told only
+        # to put the long part in a file and say where names a file it never wrote.
         note = (
             f"Your answer reached {output_limit(reply)} and was cut off. Answer again, "
             f"shorter. If it needs the length, first write the long part to a file under "
@@ -160,12 +181,13 @@ class CutReplies(AgentMiddleware):
         reply = _reply(response)
         if reply is None or not cut_off(reply):
             return response
-        if _cut_in_a_row(first.messages) + asked + 1 >= GIVE_UP:
+        if _gives_up(first, asked):
             return _replaced(response, reply, _stopped(reply, subagent=self.subagent))
-        if not asked:
-            return response
-        meta = {**reply.response_metadata, ASKED_BEFORE: asked}
-        return _replaced(response, reply, reply.model_copy(update={"response_metadata": meta}))
+        kept = reply if (cut := cut_call(reply)) is None else _unrun(reply, cut)
+        if asked:
+            meta = {**kept.response_metadata, ASKED_BEFORE: asked}
+            kept = kept.model_copy(update={"response_metadata": meta})
+        return response if kept is reply else _replaced(response, reply, kept)
 
     def _refused(self, request: Any) -> ToolMessage | None:
         call = request.tool_call

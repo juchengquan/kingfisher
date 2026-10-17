@@ -26,8 +26,8 @@ from kingfisher.core.config import DEFAULT_LAYOUT
 from kingfisher.core.layout import Layout
 
 
-def tool_guards(  # noqa: PLR0913 -- `subagent` is the one way the three graphs'
-    # guards differ, and a parameter object would hide it from the three calls that say it.
+def tool_guards(  # noqa: PLR0913 -- `subagent` is the one way the agent's guards differ
+    # from a subagent's, and a parameter object would hide it from each call that says it.
     names: frozenset[str],
     paths: SessionPaths | None,
     recorder: Recorder | None = None,
@@ -47,7 +47,7 @@ def tool_guards(  # noqa: PLR0913 -- `subagent` is the one way the three graphs'
 
     `CutReplies` is unconditional, since any model can stop at its cap and a cut call
     reaches the tool looking whole. `subagent` says what it does with an agent it stops,
-    the one thing the three graphs differ in. `HostPathGuard` is unconditional too: the
+    the one thing the graphs here differ in. `HostPathGuard` is unconditional too: the
     backend refuses a host path on every run, so the thing that turns that refusal into
     a correction the model can read has to be there whether or not this graph holds a
     workspace tool. So is `LargePdfGuard`, because `read_file` is on every graph and hands

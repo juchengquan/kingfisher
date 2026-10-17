@@ -1,5 +1,5 @@
 """A reply the model stopped at its output cap: the call it was cut inside goes unrun, a cut
-answer is asked for again, shorter, and an agent cut off three times in a row stops.
+answer is asked for again, shorter, and an agent cut off too often in a row stops.
 
 Measured on MiniMax-M3: a `write_file` cut at the cap reached the tool as a valid call with
 its `content` stopping mid-word, and saved. The rule -- which reply is cut, which call in it
@@ -10,6 +10,7 @@ real turns, because the refusal, the stop and the report each happen somewhere e
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import replace
 from typing import Any
 
@@ -21,7 +22,7 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.cut_replies import CutReplies, cut_call
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.layout import HARNESS, TRANSCRIPT_FILE
-from kingfisher.core.session.runtime import cut_off, output_limit
+from kingfisher.core.session.runtime import cut_off, output_limit, with_call_args
 from kingfisher.core.session.transcript import from_json
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
@@ -51,12 +52,32 @@ def write(at: int, path: str = "", content: str = "half a fi") -> dict[str, Any]
 def reply(
     *calls: dict[str, Any], text: str = "", wire: str = "anthropic", cut: bool = True
 ) -> AIMessage:
-    """A reply as its wire format hands it over: the Anthropic format puts each call in
-    the content as a block, the Responses API keeps them out of it."""
+    """A reply as its wire format hands it over, each call in the content as a block of
+    that format's own: the Responses API's as langchain-openai builds one from a real
+    incomplete response, its text and calls in the order they were written."""
     blocks: list[Any] = [{"type": "text", "text": text}] if text else []
     if wire == "anthropic":
         blocks += [
-            {"type": "tool_use", "id": c["id"], "name": c["name"], "input": {}} for c in calls
+            {
+                "type": "tool_use",
+                "id": c["id"],
+                "name": c["name"],
+                "input": {},
+                "partial_json": json.dumps(c["args"]),
+            }
+            for c in calls
+        ]
+    else:
+        blocks += [
+            {
+                "type": "function_call",
+                "call_id": c["id"],
+                "name": c["name"],
+                "arguments": json.dumps(c["args"]),
+                "id": f"fc_{c['id']}",
+                "status": "incomplete",
+            }
+            for c in calls
         ]
     meta = STOPPED[wire] if cut else {"stop_reason": "end_turn"}
     spent = CAP if cut else 40
@@ -93,12 +114,54 @@ def test_only_the_last_call_of_a_cut_reply_is_the_cut_one(wire):
     assert cut_call(reply(text="half an answ", wire=wire)) is None
 
 
-def test_a_reply_cut_writing_text_after_its_calls_cut_none_of_them():
+@pytest.mark.parametrize("wire", sorted(STOPPED))
+def test_a_reply_cut_writing_text_after_its_calls_cut_none_of_them(wire):
     """Where the content says something came after the last call, the cut was there."""
-    after = reply(write(1))
+    after = reply(write(1), wire=wire)
     after.content = [*after.content, {"type": "text", "text": "Next I will"}]
 
     assert cut_call(after) is None
+
+
+def test_a_call_too_broken_to_parse_cut_none_of_the_calls_before_it():
+    """Taking the last call that parsed refused a whole write and left the cut one to langchain."""
+    broken = reply(write(1), write(2))
+    broken.tool_calls = broken.tool_calls[:1]
+    broken.invalid_tool_calls = [
+        {"type": "invalid_tool_call", "name": "write_file", "args": '{"file_pa', "id": "c2",
+         "error": "unparsable"}
+    ]
+
+    assert cut_call(broken) is None
+
+
+def test_where_a_provider_puts_no_calls_in_the_content_the_last_call_is_refused():
+    """Nothing there says what came last, and running a cut call saves a shortened file."""
+    bare = reply(write(1), write(2))
+    bare.content = ""
+
+    assert cut_call(bare) == "c2"
+
+
+def test_new_arguments_reach_every_copy_of_a_call_in_each_block_shape():
+    """A copy left holding the old text is still sent, or counted, in full."""
+    args = {"file_path": "/outputs/f1.md", "content": "y" * 900}
+    shapes = [
+        {"type": "tool_use", "id": "c1", "name": "write_file", "input": {},
+         "partial_json": json.dumps(args)},
+        {"type": "function_call", "call_id": "c1", "name": "write_file",
+         "arguments": json.dumps(args), "id": "fc_c1"},
+        {"type": "tool_call", "id": "c1", "name": "write_file", "args": args},
+    ]
+    for block in shapes:
+        call = {"name": "write_file", "args": args, "id": "c1"}
+        message = AIMessage(content=[block], tool_calls=[call])
+
+        changed = with_call_args(message, "c1", {"content": "short"})
+
+        assert changed.tool_calls[0]["args"]["content"] == "short"
+        assert "y" * 900 not in json.dumps(changed.content), block["type"]
+        assert "short" in json.dumps(changed.content), block["type"]
 
 
 def test_the_limit_is_named_from_what_the_reply_spent():
@@ -162,6 +225,34 @@ def test_a_cut_write_is_not_run_and_the_agent_is_told_why(writing, way, wire):
     assert result.stop_reason == "end_turn", "one cut reply the agent got past ends nothing"
 
 
+@pytest.mark.parametrize("wire", sorted(STOPPED))
+def test_a_refused_call_keeps_its_path_and_drops_the_text_it_was_cut_writing(writing, wire):
+    """Clearing never shortens a failed call, so the cut text, up to a whole reservation,
+    was sent again on every later call of every later turn."""
+    _turn(writing, reply(write(1, content="y" * 2_000), wire=wire), AIMessage("done"))
+
+    shortened = {"file_path": "/outputs/f1.md", "content": "[2,000 characters, cut off; not run]"}
+    (kept,) = [one for one in _kept(writing) if one.tool_calls]
+    assert kept.tool_calls[0].args == shortened
+    (sent,) = [one for one in Scripted.heard[1] if isinstance(one, AIMessage)]
+    assert sent.tool_calls[0]["args"] == shortened
+    assert "y" * 600 not in json.dumps(sent.content), "the copy in the content still holds it"
+
+
+def test_a_whole_call_before_one_too_broken_to_parse_runs(writing):
+    """Taking the last call that parsed for the cut one refused a whole write."""
+    broken = reply(write(1), write(2))
+    broken.tool_calls = broken.tool_calls[:1]
+    broken.invalid_tool_calls = [
+        {"type": "invalid_tool_call", "name": "write_file", "args": '{"file_pa', "id": "c2",
+         "error": "unparsable"}
+    ]
+
+    _turn(writing, broken, AIMessage("done"))
+
+    assert _written(writing) == {"f1.md"}
+
+
 def test_the_whole_calls_before_the_cut_one_run(writing):
     """Refusing them would have the agent redo work that was fine."""
     _turn(writing, reply(write(1), write(2)), AIMessage("done"))
@@ -208,8 +299,8 @@ def test_a_reply_that_was_not_cut_starts_the_count_again(writing):
 def test_a_cut_answer_is_asked_for_again_shorter_and_kept_out_of_the_conversation(
     writing, way
 ):
-    """A final answer cut mid-sentence was reported as complete. Kept, the cut text would
-    be sent again on every later call, since clearing never touches the agent's own text."""
+    """A final answer cut mid-sentence was reported as complete, and its text kept would be
+    sent again on every later call, since clearing never touches the agent's own text."""
     shorter = "Three findings; the full list is in /outputs/findings.md."
     cut = reply(text="The three findings are: first, the")
 
@@ -330,8 +421,7 @@ def test_a_subagent_that_gives_up_hands_back_its_cut_answer_marked_and_the_turn_
 
 
 def test_each_cut_is_recorded_on_its_model_call(writing):
-    """Got past, a cut leaves no other trace: the turn ends as any other does. A cut answer
-    asked again is a model call too, though the conversation never holds it."""
+    """A cut the agent got past, a hidden cut answer included, would leave no trace at all."""
     sink = RecordedEvents()
 
     _turn(writing, reply(text="The"), reply(write(1)), reply(text="done", cut=False), events=sink)
@@ -400,8 +490,8 @@ def _spec(cfg: Any, name: str) -> Any:
 
 
 def test_every_graph_kingfisher_builds_has_it_and_only_a_subagent_marks_its_answer(writing):
-    """The agent, a subagent and deepagents' `general-purpose`, which is handed the agent's
-    own tools: the three graphs whose middleware kingfisher composes."""
+    """A graph built without it would save a cut file, and one built for the wrong role
+    would mark the agent's own answer as a subagent's, or leave a subagent's unmarked."""
     subagents_dir(writing).mkdir(parents=True, exist_ok=True)
     (subagents_dir(writing) / "helper.yaml").write_text(
         "name: helper\ndescription: Helps.\nsystem_prompt: |\n  You help.\n", encoding="utf-8"

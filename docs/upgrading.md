@@ -34,8 +34,8 @@ replaced the four layers began.
   its model's `max_tokens`, so the answer is cut off. `completed` is false, so
   `run(delete_session=True)` keeps the session, and `kingfisher run` exits 1 as it does
   for `max_steps`. A caller switching on `stop_reason` meets a value it has not seen.
-- **`RunEvent` has `cut_off`**, true on a `model_call` whose reply was cut, and the run
-  log's `model_call` line carries it as well.
+- **`RunEvent` has `cut_off`**, true on a `model_call` whose reply was cut, and the
+  `model_call` run event carries it as well.
 - **`tool_guards` takes `subagent=`**, with no default: what it does with an agent it
   stops is the one way the agent's guards and a subagent's differ.
 
