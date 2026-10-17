@@ -18,6 +18,12 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `grep` searches each string of `a|b`, after #858
+
+- **A `grep` pattern of non-empty strings joined by `|` is searched for each string**,
+  literally, and answered once with each string's matches under its own line. Every
+  graph's model is told so. A pattern with an empty part is searched as written.
+
 ## `read_file` reads 1,000 lines unless told otherwise, after #856
 
 - **A `read_file` call naming no `limit` reads up to 1,000 lines**, where deepagents

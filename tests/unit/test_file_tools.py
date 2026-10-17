@@ -10,7 +10,13 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.file_tools import READ_LINES, WHOLE, FileTools
+from kingfisher.core.agent.middlewares.file_tools import (
+    JOINED,
+    READ_LINES,
+    WHOLE,
+    FileTools,
+    alternatives,
+)
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import an_agent, start, subagents_dir
@@ -34,8 +40,9 @@ def reading(scripted, monkeypatch):
     (subagents_dir(scripted) / "helper.yaml").write_text(HELPER, encoding="utf-8")
     an_agent(scripted, subagents="[helper]")
     start(scripted, "s")
-    long = scripted.workspace / "sessions" / "s" / "outputs" / "long.txt"
-    long.write_text("".join(f"row {n:04d}\n" for n in range(1_200)), encoding="utf-8")
+    outputs = scripted.workspace / "sessions" / "s" / "outputs"
+    (outputs / "long.txt").write_text("".join(f"row {n:04d}\n" for n in range(1_200)))
+    (outputs / "notes.txt").write_text("alpha one\nbeta two\ngamma three\n| a |\n")
     return scripted, offered
 
 
@@ -95,6 +102,47 @@ def test_every_graph_is_told_to_read_a_file_whole_and_shown_the_default(reading,
         assert WHOLE in read.description
         assert "instead of reading them whole" not in read.description, "deepagents reworded it"
         assert read.args["limit"]["default"] == READ_LINES
+        (grep,) = [tool for tool in tools if getattr(tool, "name", None) == "grep"]
+        assert JOINED in grep.description
+        assert "run a separate grep for each" not in grep.description, "deepagents reworded it"
+
+
+def _grep(at: str, pattern: str) -> AIMessage:
+    args = {"pattern": pattern, "path": "/outputs", "output_mode": "content"}
+    return AIMessage(content="", tool_calls=[{"name": "grep", "args": args, "id": at}])
+
+
+def test_a_pattern_joining_strings_with_a_bar_searches_for_each(reading, way):
+    """`grep` is literal, and 63 of 97 searches that found nothing were `a|b` written anyway."""
+    cfg, _ = reading
+
+    _turn(cfg, _grep("g1", "alpha|beta"), AIMessage("done"), way=way)
+
+    said = _answer("g1")
+    assert said.startswith("Searched `alpha|beta` as separate literal parts.")
+    alpha, beta = said.split("matches for `beta`:")
+    assert "matches for `alpha`:" in alpha and "alpha one" in alpha
+    assert "beta two" in beta
+
+
+def test_a_pattern_with_an_empty_part_is_searched_as_written(reading):
+    """A table cell, `| a |`, is a literal search for the cell, not three for nothing."""
+    cfg, _ = reading
+
+    _turn(cfg, _grep("g1", "| a |"), AIMessage("done"))
+
+    said = _answer("g1")
+    assert "| a |" in said
+    assert "separate literal parts" not in said
+
+
+def test_only_strings_all_of_them_there_are_split():
+    """An empty part would search for everything, so a pattern with one is left whole."""
+    assert alternatives("run_start|run_end") == ["run_start", "run_end"]
+    assert alternatives("def run|def stream|x") == ["def run", "def stream", "x"]
+    assert alternatives("a||b") is None
+    assert alternatives("|a") is None
+    assert alternatives("plain") is None
 
 
 def test_it_adds_no_step_to_the_agents_loop(reading):

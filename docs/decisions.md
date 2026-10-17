@@ -3990,6 +3990,17 @@ patched for this, here or anywhere: its tools are changed from outside, as `Shel
 changes `execute`, each with a test that fails when an upgrade moves what it changes.
 *(2026-10-17, from the trial transcripts.)*
 
+**`grep` searches each string of `a|b`, and says so.** deepagents' `grep` is literal and
+its description says so in capitals, with `foo|bar` as the example of what not to write.
+Over 71 trial turns, 97 searches written as regex found nothing, 63 of them alternations,
+and 85% were followed by another search. `FileTools` runs a pattern of non-empty strings
+joined by `|` as one literal search per string and answers once, each string's matches
+under a line naming it, and tells the model that is what `|` does. A pattern with an
+empty part, such as a table cell `| a |`, is searched as written, since an empty string
+matches everything. Escapes and anchors are left alone: deepagents' note already points
+at `rg` in the shell, and unescaping them would guess at what was meant. *(2026-10-17,
+from the trial transcripts.)*
+
 **What the agent is told about the shell is said by the shell.** `system.md`,
 `capability_skills.md` and `ShellPaths` told every deployment's agent four things true
 only of kingfisher's own shell: it runs on the host in the session root, `TMPDIR` is the
