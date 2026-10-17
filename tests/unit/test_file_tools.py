@@ -19,10 +19,14 @@ from kingfisher.core.agent.middlewares.builtin_tools import (
 )
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
-from tests.conftest import an_agent, start, subagents_dir
+from tests.conftest import EVERY_TOOL, an_agent, start, subagents_dir
 from tests.unit.scripted import Scripted
 
-HELPER = "name: helper\ndescription: Helps.\nsystem_prompt: |\n  You help.\n"
+HELPER = (
+    "name: helper\ndescription: Helps.\n"
+    'builtin_tools: ["*"]\ntools: ["*"]\n'
+    "system_prompt: |\n  You help.\n"
+)
 
 
 @pytest.fixture
@@ -38,7 +42,7 @@ def reading(scripted, monkeypatch):
     monkeypatch.setattr(Scripted, "bind_tools", bind)
     subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
     (subagents_dir(scripted) / "helper.yaml").write_text(HELPER, encoding="utf-8")
-    an_agent(scripted, subagents="[helper]")
+    an_agent(scripted, subagents="[helper]", **EVERY_TOOL)
     start(scripted, "s")
     outputs = scripted.workspace / "sessions" / "s" / "outputs"
     (outputs / "long.txt").write_text("".join(f"row {n:04d}\n" for n in range(1_200)))

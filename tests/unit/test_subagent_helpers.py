@@ -14,6 +14,8 @@ from tests.conftest import FakeToolCallingModel, a_subagent, subagents_dir
 
 REVIEWER = """name: reviewer
 description: Checks figures.
+builtin_tools: ["*"]
+tools: ["*"]
 subagents: [second-opinion]
 system_prompt: |
   You check figures, and may ask for a second opinion.
@@ -21,6 +23,8 @@ system_prompt: |
 
 HELPER = """name: second-opinion
 description: Answers again, elsewhere.
+builtin_tools: ["*"]
+tools: ["*"]
 system_prompt: |
   You answer on your own.
 """
@@ -33,11 +37,16 @@ CYCLIC_HELPER = HELPER.replace("system_prompt:", "subagents: [reviewer]\nsystem_
 #: A third level. `reviewer` consults `second-opinion`, which consults `checker`.
 CHECKER = """name: checker
 description: Checks the checker.
+builtin_tools: ["*"]
+tools: ["*"]
 system_prompt: |
   You are the last word.
 """
 
 NESTING_HELPER = HELPER.replace("system_prompt:", "subagents: [checker]\nsystem_prompt:")
+
+#: Its built-ins as written, for a test that writes its own.
+STAR = 'builtin_tools: ["*"]\n'
 
 #: A parent that pinned a model, above a helper that named none. The pair is
 #: the whole question of what "no model" means one level down.
@@ -117,8 +126,8 @@ def test_a_definition_may_name_subagents():
 
 
 def test_naming_none_is_the_default():
-    """Like `skills` and unlike `tools`: a subagent that needed the whole catalogue
-    would not have been worth defining.
+    """Like every grant field: a subagent that needed the whole catalogue would not have
+    been worth defining.
     """
     spec = a_subagent(HELPER, "second-opinion.yaml")
 
@@ -130,23 +139,37 @@ def test_naming_helpers_with_built_ins_that_leave_out_task_is_refused(listed):
     """The shipped `reviewer` named `profiler` and listed its built-ins without `task`,
     so every consultation was refused at run time and nothing said so at load.
     """
-    body = REVIEWER.replace("subagents:", f"builtin_tools: {listed}\nsubagents:")
+    body = REVIEWER.replace(STAR, f"builtin_tools: {listed}\n")
 
     with pytest.raises(SubagentError) as raised:
         a_subagent(body, "reviewer.yaml")
 
     assert str(raised.value).startswith("reviewer.yaml: subagents names second-opinion")
+    assert "builtin_tools leaves out 'task'" in str(raised.value)
     assert "Add task to builtin_tools" in str(raised.value)
 
 
-@pytest.mark.parametrize(
-    "written", ["", 'builtin_tools: ["*"]\n', "builtin_tools: [read_file, task]\n"]
-)
+def test_naming_helpers_with_builtin_tools_left_out_is_refused():
+    """Left out, `builtin_tools` grants no built-in, so `task` is missing as surely as
+    from a list without it -- and "leaves out 'task'" would send the reader hunting for
+    a list they never wrote.
+    """
+    with pytest.raises(SubagentError) as raised:
+        a_subagent(REVIEWER.replace(STAR, ""), "reviewer.yaml")
+
+    said = str(raised.value)
+    assert said.startswith("reviewer.yaml: subagents names second-opinion")
+    assert "builtin_tools is left out, which grants no built-in" in said
+    assert "leaves out 'task'" not in said
+    assert "builtin_tools: ['*'] for every built-in" in said
+
+
+@pytest.mark.parametrize("written", [STAR, "builtin_tools: [read_file, task]\n"])
 def test_naming_helpers_loads_wherever_task_is_held(written):
     """The control the refusal needs: a rule refusing every subagent with helpers passes
     the test above.
     """
-    spec = a_subagent(REVIEWER.replace("subagents:", f"{written}subagents:"), "reviewer.yaml")
+    spec = a_subagent(REVIEWER.replace(STAR, written), "reviewer.yaml")
 
     assert spec.subagents == ("second-opinion",)
 
@@ -154,7 +177,7 @@ def test_naming_helpers_loads_wherever_task_is_held(written):
 @pytest.mark.parametrize("written", ["", "subagents: []\n"])
 def test_a_subagent_naming_no_helpers_may_leave_task_out(written):
     """A rule reading `builtin_tools` alone would refuse every narrow subagent there is."""
-    body = HELPER.replace("system_prompt:", f"builtin_tools: [read_file]\n{written}system_prompt:")
+    body = HELPER.replace(STAR, f"builtin_tools: [read_file]\n{written}")
 
     assert a_subagent(body, "second-opinion.yaml").builtin_tools == ("read_file",)
 
@@ -412,7 +435,8 @@ def test_a_definition_is_compiled_once_for_each_position(cfg, session_dir, monke
 def _spec(name, subagents=None):
     body = f"name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
     if subagents is not None:
-        body += f"subagents: {subagents}\n"
+        # `task`, or naming a helper is refused at load before any walk is reached.
+        body += f"builtin_tools: [task]\nsubagents: {subagents}\n"
     return a_subagent(body, f"{name}.yaml")
 
 

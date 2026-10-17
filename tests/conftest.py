@@ -555,6 +555,10 @@ def dispatched(graph) -> tuple[str, ...]:
     return names
 
 
+#: Both tool lists at `["*"]`, for an `an_agent` that has to act: left out, each grants none.
+EVERY_TOOL = {"builtin_tools": '["*"]', "tools": '["*"]'}
+
+
 def an_agent(cfg, name: str = "only", **fields: str) -> str:
     """Write one agent into this workspace and return its name."""
     directory = cfg.catalogue_roots["agents"]

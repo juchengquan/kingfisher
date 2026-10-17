@@ -10,7 +10,7 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.prompting import INSTRUCTIONS_FILE, InstructionsFile
 from kingfisher.core.config import ConfigError
 from kingfisher.plugins import LocalSessions, backend_at
-from tests.conftest import an_agent, subagent_of, subagents_dir
+from tests.conftest import EVERY_TOOL, an_agent, subagent_of, subagents_dir
 from tests.unit.scripted import Scripted
 
 HELPER = """name: helper
@@ -33,7 +33,7 @@ def _system_said(cfg, *requests: Request, **wiring) -> list[str]:
 
 def test_the_file_beside_the_definitions_reaches_the_model(scripted):
     """The default: written once, beside `models.yaml`, and said to every agent."""
-    an_agent(scripted)
+    an_agent(scripted, **EVERY_TOOL)
     scripted.authored_files[INSTRUCTIONS_FILE].write_text(
         "House rule: cite every figure.\n", encoding="utf-8"
     )
@@ -51,7 +51,7 @@ def test_no_file_is_no_instructions(cfg):
 def test_a_deployments_own_are_asked_on_every_turn(scripted):
     """Read once at startup, a change would wait for a restart that nothing announces,
     where the file it replaces took effect on the next turn."""
-    an_agent(scripted)
+    an_agent(scripted, **EVERY_TOOL)
 
     class Counting:
         asked = 0
@@ -74,7 +74,7 @@ def test_a_deployments_own_are_asked_on_every_turn(scripted):
 def test_a_build_hands_the_instructions_to_every_subagent(cfg, session_dir):
     """A house rule that reached the main agent and nothing it delegated to is one
     delegated work quietly escapes."""
-    an_agent(cfg, "lead", subagents="[helper]")
+    an_agent(cfg, "lead", subagents="[helper]", **EVERY_TOOL)
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "helper.yaml").write_text(HELPER, encoding="utf-8")
     kf = Kingfisher(cfg, sessions=LocalSessions())

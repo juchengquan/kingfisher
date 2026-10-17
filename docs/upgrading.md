@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A tool field left out grants nothing, after #867
+
+- **Leaving out `tools:` or `builtin_tools:` grants none**, as leaving out `skills:`,
+  `subagents:` or `middlewares:` already did; `["*"]` is all. In every agent and subagent
+  file that leaves either line out, write `tools: ["*"]` or `builtin_tools: ["*"]` to keep
+  what it held, or name the tools it should hold.
+- **A file naming `subagents:` with `builtin_tools` left out is refused at startup**, since
+  it holds no `task`. Those show up loudly; the rest run with fewer tools, quietly.
+- **In Python `SUBAGENTS`**, a portable entry gets `"builtin_tools": ["*"]` and a `build`
+  entry `"tools": ["*"]` to keep what it held. A spec typed to deepagents' `SubAgent` has
+  no word for built-ins, so wrap it: `{**spec, "builtin_tools": ["*"]}`.
+- **A caller's `Capabilities` are unchanged**: unset still means no narrowing.
+
 ## A turn's budget is said near its end, and a subagent is held to it, after #861
 
 - **From 80% of a turn's steps, each model call ends with a note** saying about how many

@@ -17,7 +17,7 @@ from kingfisher.core.agent.middlewares.step_budget import StepBudgetMiddleware
 from kingfisher.core.layout import HARNESS, TRANSCRIPT_FILE
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
-from tests.conftest import an_agent, start, subagents_dir
+from tests.conftest import EVERY_TOOL, an_agent, start, subagents_dir
 from tests.unit.scripted import Scripted
 
 LEFT = re.compile(r"You have about (\d+) model calls? left in this turn\.")
@@ -26,7 +26,7 @@ LAST = "This is your last model call in this turn."
 
 @pytest.fixture
 def busy(scripted):
-    an_agent(scripted)
+    an_agent(scripted, **EVERY_TOOL)
     start(scripted, "s")
     return scripted
 
@@ -93,14 +93,18 @@ def test_the_note_is_never_kept(busy):
     assert "model calls left" not in kept and "model call left" not in kept
 
 
-HELPER = "name: helper\ndescription: Helps.\nsystem_prompt: |\n  You help.\n"
+HELPER = (
+    "name: helper\ndescription: Helps.\n"
+    'builtin_tools: ["*"]\ntools: ["*"]\n'
+    "system_prompt: |\n  You help.\n"
+)
 
 
 @pytest.fixture
 def consulting(busy):
     subagents_dir(busy).mkdir(parents=True, exist_ok=True)
     (subagents_dir(busy) / "helper.yaml").write_text(HELPER, encoding="utf-8")
-    an_agent(busy, subagents="[helper]")
+    an_agent(busy, subagents="[helper]", **EVERY_TOOL)
     return busy
 
 

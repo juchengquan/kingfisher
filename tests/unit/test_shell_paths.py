@@ -27,7 +27,7 @@ from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.plugins import LocalSessions, ShellPrompt
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from kingfisher.plugins.sessions.shell import kingfishers_shell
-from tests.conftest import an_agent, start, subagents_dir
+from tests.conftest import EVERY_TOOL, an_agent, start, subagents_dir
 from tests.unit.scripted import Scripted
 from tests.unit.test_shell_prompt import Plain
 
@@ -53,7 +53,7 @@ def shelled(scripted, monkeypatch):
     monkeypatch.setattr(Scripted, "bind_tools", bind)
     subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
     (subagents_dir(scripted) / "checker.yaml").write_text(CHECKER, encoding="utf-8")
-    an_agent(scripted, subagents="[checker]")
+    an_agent(scripted, subagents="[checker]", **EVERY_TOOL)
     start(scripted, "s")
     return scripted, offered
 

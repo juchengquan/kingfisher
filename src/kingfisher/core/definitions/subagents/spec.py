@@ -75,7 +75,7 @@ class SubagentSpec(SpecBase):
 
 
 #: Every field this format defines. Anything else is refused rather than ignored: a
-#: misspelt `tolls:` would otherwise inherit every tool, since a missing `tools` means that.
+#: misspelt `tolls:` would leave the subagent holding no tool, with nothing saying why.
 KNOWN: frozenset[str] = frozenset(
     {
         "name",
@@ -331,8 +331,9 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     where = Path(source)
     read = fields.Reader(source=where.name, error=SubagentError)
     wanted = fields.wanted_model(entry, read)
+    # Absent grants none, as in a document: `["*"]` asks for every tool the request granted.
     written_tools, tool_audiences, own_tools = read.sourced(
-        entry.get("tools"), absent=ALL, key="tools", same=bare_name
+        entry.get("tools"), absent=None, key="tools", same=bare_name
     )
     # Only `tools`: `NOT_COMPILED` refuses the other fields that carry an audience.
     audiences = {"tools": tool_audiences} if tool_audiences else {}
@@ -374,15 +375,16 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
     _require(entry, "name", "description", "system_prompt", source=source)
 
     read = fields.Reader(source=source, error=SubagentError)
-    builtin = read.selection(entry.get("builtin_tools"), absent=ALL, key="builtin_tools")
+    # Absent grants none, so a spec typed to deepagents' `SubAgent`, which has no word for
+    # this, holds no built-in until the deployment's own file adds one.
+    builtin = read.selection(entry.get("builtin_tools"), absent=None, key="builtin_tools")
     _refuse_the_sandbox(builtin, source=source)
     return SubagentSpec(
         name=fields.text(entry["name"]),
         description=fields.text(entry["description"]),
         system_prompt=fields.text(entry["system_prompt"]),
         builtin_tools=builtin,
-        # Not the default `ALL`, which would hand an imported subagent the deployment's
-        # whole catalogue: it holds what it carried and nothing else.
+        # No catalogue names, whatever it wrote: it holds what it carried and nothing else.
         tools=None,
         carried=_carried(entry, read),
         metadata=read.mapping(entry.get("metadata"), key="metadata"),
@@ -489,11 +491,17 @@ def uncallable_helpers(builtin_tools: Selection, subagents: Selection) -> str | 
     if not subagents or builtin_tools == ALL or TASK_TOOL in (builtin_tools or ()):
         return None
     named = "every subagent" if subagents == ALL else ", ".join(subagents)
+    # Told apart: "leaves out 'task'" sends someone who wrote no list hunting for one.
+    said = (
+        f"builtin_tools is left out, which grants no built-in -- not even {TASK_TOOL!r}"
+        if builtin_tools is None
+        else f"builtin_tools leaves out {TASK_TOOL!r}"
+    )
     return (
-        f"subagents names {named}, and builtin_tools leaves out {TASK_TOOL!r}, the tool "
-        f"a subagent is called through. Naming one does not grant it, so every call "
-        f"would be refused when it was made. Add {TASK_TOOL} to builtin_tools, or "
-        f"leave builtin_tools out for every built-in"
+        f"subagents names {named}, and {said}, the tool a subagent is called through. "
+        f"Naming one does not grant it, so every call would be refused when it was "
+        f"made. Add {TASK_TOOL} to builtin_tools, or write builtin_tools: [{ALL!r}] "
+        f"for every built-in"
     )
 
 
@@ -531,15 +539,14 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
 
     wanted = fields.wanted_model(document, reader)
 
-    # Absent, tools inherit and skills are none: a subagent needs tools to act, while its
-    # prompt is already its procedure and a skills index carries a fixed preamble.
-    builtin = reader.selection(document.get("builtin_tools"), absent=ALL, key="builtin_tools")
+    # Absent grants none on every field, tools included: a forgotten line fails closed.
+    builtin = reader.selection(document.get("builtin_tools"), absent=None, key="builtin_tools")
     _refuse_the_sandbox(builtin, source=source.name)
 
     # Kept as written, `where::what` and all: two folders may each define a `fetch`, and
     # only the reference says which. `Offering.permitted` flattens it for the allowlist.
     written_tools, tool_audiences, own_tools = reader.sourced(
-        document.get("tools"), absent=ALL, key="tools", same=bare_name
+        document.get("tools"), absent=None, key="tools", same=bare_name
     )
     # Read as the agent format reads it: settings must mean the same in either file.
     written_middleware, middleware_settings = reader.selection_with_settings(

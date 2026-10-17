@@ -18,7 +18,7 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.layout import HARNESS, TRANSCRIPT_FILE
 from kingfisher.core.session import runtime
 from kingfisher.plugins import LocalSessions
-from tests.conftest import an_agent, start, tools_dir
+from tests.conftest import EVERY_TOOL, an_agent, start, tools_dir
 from tests.unit.scripted import Scripted
 
 USAGE = {"input_tokens": 900, "output_tokens": 10, "total_tokens": 910}
@@ -105,7 +105,7 @@ def test_a_turn_with_a_clearing_pass_reports_each_call_and_result_once(scripted)
     the transcript shows that results were cleared."""
     tools_dir(scripted).mkdir(parents=True, exist_ok=True)
     (tools_dir(scripted) / "probe.py").write_text(TOOLS, encoding="utf-8")
-    an_agent(scripted)
+    an_agent(scripted, **EVERY_TOOL)
     start(scripted, "s")
     models = scripted.models
     marked = replace(models.models[models.default], clear_results_at=12_000)

@@ -38,8 +38,8 @@ middlewares:
   - name: tool-note
     settings:
       text: Return the path and line, not the file.
-# Reading only, and both lists named, because omitting `tools` would mean all of
-# them -- a subagent that exists to read files able to write and fetch.
+# Reading only, and both lists named: `[]` says none on purpose, where a
+# missing line reads as one forgotten.
 builtin_tools: [read_file, ls, glob, grep]
 tools: []
 # No `model:`, so this runs your `default:` -- and like `extractor.yaml`,

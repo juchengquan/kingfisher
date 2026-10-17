@@ -25,7 +25,9 @@ from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, a_subagent, subagents_dir
 
 HELPER = """name: helper
-description: Declares no tools, so it inherits whatever it is given.
+description: Asks for every tool, so it holds whatever it is given.
+builtin_tools: ["*"]
+tools: ["*"]
 system_prompt: |
   You help.
 
@@ -465,14 +467,16 @@ def test_a_subagents_skills_are_narrowed_by_it():
     assert not wrong, "\n".join(wrong)
 
 
-def test_undeclared_skills_mean_none_and_undeclared_tools_inherit():
-    """Where `tools` inherits, `skills` does not."""
-    parsed = a_subagent(HELPER, "helper.yaml")
+def test_undeclared_skills_and_tools_both_mean_none():
+    """Read as the caller's, an undeclared tool line hands a subagent every tool its
+    caller holds -- the shell among them -- with nothing in its file saying so.
+    """
+    parsed = a_subagent(HELPER.replace('builtin_tools: ["*"]\ntools: ["*"]\n', ""), "h.yaml")
 
-    assert parsed.skills is None  # declared none, so none
-    assert parsed.tools == ALL  # declared nothing, so whatever the caller has
+    assert parsed.skills is None
+    assert (parsed.builtin_tools, parsed.tools) == (None, None)
     assert subagent_skills(parsed, offering("a", "b"), ("a", "b")) is None
-    assert narrowed(parsed.tools, by=("a", "b")) == ("a", "b")
+    assert narrowed(parsed.tools, by=("a", "b")) is None
 
 
 def _built_with(cfg, session_dir, capabilities) -> dict:
@@ -745,6 +749,9 @@ def _audited_build(cfg, session_dir, **caps):
             name="probed",
             description="names the deployment's middleware",
             system_prompt="You work.",
+            # Every tool, so that "nothing was narrowed" below is a claim about the request.
+            builtin_tools=ALL,
+            tools=ALL,
             middlewares=("audit",),
             subagents=("helper",),
         ),
@@ -773,6 +780,41 @@ def _with_a_tool(cfg):
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "peek.py").write_text(A_WORKSPACE_TOOL, encoding="utf-8")
     return cfg
+
+
+#: Reads, and is granted none of the workspace's tools.
+NO_WORKSPACE_TOOL = """name: helper
+description: Reads, and holds no workspace tool.
+builtin_tools: [read_file]
+system_prompt: |
+  You help.
+"""
+
+
+def _tool_node(graph) -> set[str]:
+    """The tools a compiled graph registers: what a call can dispatch to, allowlist aside."""
+    return set(graph.nodes["tools"].bound.tools_by_name)
+
+
+def test_a_subagent_granted_no_workspace_tool_is_built_without_its_callers(cfg, session_dir):
+    """deepagents reads a subagent spec with no `tools` key as "the parent's tools", so a
+    subagent granted none was built holding the agent's `peek`, kept from the model only
+    by its allowlist. Read off the subagent's own tool node rather than that allowlist,
+    which said "none" either way.
+    """
+    wired = _with_helper(_with_a_tool(cfg), NO_WORKSPACE_TOOL)
+    graph = build_agent(
+        wired,
+        backend=backend_at(wired, session_dir),
+        model=_model(),
+        capabilities=Capabilities(subagents=("helper",)),
+    ).graph
+
+    held = _tool_node(_subagent_graphs(graph)["helper"])
+
+    assert "peek" in _tool_node(graph), "the agent has to hold it for this to prove anything"
+    assert "read_file" in held, "and this is the subagent's tool node, not an empty read"
+    assert "peek" not in held
 
 
 def test_every_graph_holding_the_workspace_tools_carries_the_same_guards(

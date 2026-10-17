@@ -8,20 +8,21 @@ and `ty` holds the dict to it, so a key only kingfisher understands fails the ty
 check here before anything loads it.
 
 It loads unchanged. A package exporting `versions_subagent` is taken by a deployment
-writing one file of its own:
+writing one file of its own, which says which built-ins it holds:
 
     # subagents/acme.py
     from acme_agents import versions_subagent
 
-    SUBAGENTS = [versions_subagent]
+    SUBAGENTS = [{**versions_subagent, "builtin_tools": ["read_file", "ls", "glob", "grep"]}]
 
 **The type has no word for two things `timestamps` says.** Without `builtin_tools`
-this subagent gets every built-in the request granted -- narrowed still, so a
-request that withheld `execute` withholds it here, but one that granted
-`write_file` hands it over, and a subagent that should only read has only its
-prompt asking it to. Without `metadata` it cannot record where it came from.
-Needing either is the point to stop writing to the TypedDict: add the key, drop the
-annotation, and you have `timestamps`.
+this subagent holds none of deepagents' tools, so it could not read a file it was
+pointed at; the deployment's file adds the key, as above, and the package's own
+dict stays a `SubAgent`. What it names is narrowed still, so a request that
+withheld `execute` withholds it here. Without `metadata` it cannot record where it
+came from. Needing that, or wanting the package to choose its own built-ins, is the
+point to stop writing to the TypedDict: add the key, drop the annotation, and you
+have `timestamps`.
 
 **And it has words kingfisher refuses.** `model`, `middleware`, `interrupt_on`,
 `permissions` and `response_format` are all `SubAgent` keys, and a spec writing
@@ -142,4 +143,6 @@ versions_subagent: SubAgent = {
     ),
 }
 
-SUBAGENTS = [versions_subagent]
+# The deployment's half: the TypedDict has no `builtin_tools`, and a spec without one
+# holds no built-in. Every one the request granted, here.
+SUBAGENTS = [{**versions_subagent, "builtin_tools": ["*"]}]

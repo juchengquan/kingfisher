@@ -1,9 +1,4 @@
-"""Agent definitions: `/agents/<name>.yaml`.
-
-As in a subagent file, a tool field left out means everything available, and `skills` or
-`subagents` left out means none: a skills index costs tokens, and each subagent a compiled
-graph, on every turn.
-"""
+"""Agent definitions: `/agents/<name>.yaml`."""
 
 from __future__ import annotations
 
@@ -29,7 +24,7 @@ class AgentError(ValueError):
 
 
 #: Every field this format defines. Any other key is refused, not ignored: `tolls:` would
-#: leave `tools` absent, which grants every tool.
+#: leave `tools` absent, so the agent would hold no tool and nothing would say why.
 KNOWN: frozenset[str] = frozenset(
     {
         "name",
@@ -123,8 +118,9 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
             raise AgentError(msg)
 
     # `source: shared` is accepted so an entry reads the same here as in a subagent file.
+    # Absent grants none on both tool axes, as everywhere: a forgotten line fails closed.
     written_tools, tool_audiences, _ = read.sourced(
-        document.get("tools"), absent=ALL, key="tools", same=bare_name, refuse_bundled=_NO_FOLDER
+        document.get("tools"), absent=None, key="tools", same=bare_name, refuse_bundled=_NO_FOLDER
     )
     written_skills, skill_audiences, _ = read.sourced(
         document.get("skills"), absent=None, key="skills", refuse_bundled=_NO_FOLDER
@@ -135,7 +131,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         absent=None,
         key="subagents",
     )
-    builtin = read.selection(document.get("builtin_tools"), absent=ALL, key="builtin_tools")
+    builtin = read.selection(document.get("builtin_tools"), absent=None, key="builtin_tools")
     # At load: at the call the allowlist refuses `task`, and the model quietly answers
     # without its subagents.
     if (complaint := uncallable_helpers(builtin, written_subagents)) is not None:

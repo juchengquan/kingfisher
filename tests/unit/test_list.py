@@ -7,7 +7,7 @@ import json
 import pytest
 
 from kingfisher.cli.__main__ import main
-from tests.conftest import an_agent, subagents_dir
+from tests.conftest import EVERY_TOOL, an_agent, subagents_dir
 
 
 def test_listing_reports_a_workspace_that_will_not_load(cfg, at_the_command_line, capsys):
@@ -658,7 +658,7 @@ def _broken_definitions_out_of_reach(cfg) -> None:
     agents = cfg.catalogue_roots["agents"]
     agents.mkdir(parents=True, exist_ok=True)
     (agents / "straying.yaml").write_text(
-        "name: straying\ndescription: An agent.\nsource_ids: [A]\n"
+        'name: straying\ndescription: An agent.\nsource_ids: [A]\nbuiltin_tools: ["*"]\n'
         "tools: [adrift.py::line_count]\nsubagents: [noplace]\nsystem_prompt: |\n  Go.\n",
         encoding="utf-8",
     )
@@ -684,7 +684,7 @@ def _broken_definitions_out_of_reach(cfg) -> None:
     _private(root / "ghostly" / "tools" / "boo.py", "boo")
     (root / "wanderer.yaml").write_text(
         "name: wanderer\ndescription: A subagent.\nsource_ids: [A]\n"
-        "subagents: [nowhere]\nsystem_prompt: |\n  Go.\n",
+        'builtin_tools: ["*"]\ntools: ["*"]\nsubagents: [nowhere]\nsystem_prompt: |\n  Go.\n',
         encoding="utf-8",
     )
 
@@ -891,16 +891,20 @@ UNRESOLVED = {
 }
 
 
+#: Both tool lines at `["*"]`, for a subagent here that names a helper and so needs `task`.
+STARS = 'builtin_tools: ["*"]\ntools: ["*"]\n'
+
+
 def _define(cfg, files, agent_line: str) -> None:
     for where, (name, helpers) in files.items():
         path = subagents_dir(cfg) / where
         path.parent.mkdir(parents=True, exist_ok=True)
-        line = "" if helpers is None else f"subagents: {helpers}\n"
+        line = "" if helpers is None else f"{STARS}subagents: {helpers}\n"
         path.write_text(
             f"name: {name}\ndescription: A subagent.\n{line}system_prompt: |\n  Go.\n",
             encoding="utf-8",
         )
-    an_agent(cfg, "lead", subagents=agent_line)
+    an_agent(cfg, "lead", subagents=agent_line, **EVERY_TOOL)
 
 
 @pytest.mark.parametrize("case", sorted(UNRESOLVED))
@@ -1014,15 +1018,18 @@ system_prompt: |
   You do the task.
 """
 
-#: A reachable agent naming no tools at all, which is what most definitions look like.
-#: An unset `tools:` offers the whole catalogue at the definition's own audience, and
-#: `skills:` unset means none -- the one place the two fields deliberately differ.
-NAMES_NO_TOOLS = """name: unfussy
+#: A reachable agent granting every tool, which offers the whole catalogue at the
+#: definition's own audience.
+GRANTS_EVERY_TOOL = """name: unfussy
 description: An agent.
 source_ids: [A, B]
+tools: ["*"]
 system_prompt: |
   You do the task.
 """
+
+#: The same agent with no `tools:` line, which grants none.
+NAMES_NO_TOOLS = GRANTS_EVERY_TOOL.replace('tools: ["*"]\n', "")
 
 
 @pytest.mark.parametrize("form", ["text", "json"])
@@ -1045,23 +1052,35 @@ def test_a_star_entry_out_of_reach_stays_out_of_reach(form, cfg, at_the_command_
 
 
 @pytest.mark.parametrize("form", ["text", "json"])
-def test_an_agent_naming_no_tools_offers_the_whole_catalogue(
+def test_an_agent_granting_every_tool_offers_the_whole_catalogue(
     form, cfg, at_the_command_line, capsys
 ):
-    """A caller reaching an agent with no `tools:` line is shown every workspace tool,
-    because that is what the unset field grants.
+    """A caller reaching an agent written `tools: ["*"]` is shown every workspace tool.
 
-    The shape most deployments have, and the one a filter reading "unset" as "nothing"
-    would empty: `"*"` is a string, so a walk that unions the entries of each field
-    without stopping at it collects the character rather than the catalogue.
+    `"*"` is a string, so a walk that unions the entries of each field without stopping
+    at it collects the character rather than the catalogue.
+    """
+    _workspace(cfg, GRANTS_EVERY_TOOL, A_ONLY)
+
+    assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
+
+    printed = capsys.readouterr().out
+    assert "line_count" in printed
+    assert "secret_export" in printed, "the star offers this one too"
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_an_agent_naming_no_tools_offers_none(form, cfg, at_the_command_line, capsys):
+    """A listing reading an absent `tools:` as the whole catalogue would show a caller
+    tools that no agent they reach holds. The test above is the control.
     """
     _workspace(cfg, NAMES_NO_TOOLS, A_ONLY)
 
     assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
 
     printed = capsys.readouterr().out
-    assert "line_count" in printed
-    assert "secret_export" in printed, "the unset field offers this one too"
+    assert "line_count" not in printed
+    assert "secret_export" not in printed
 
 
 #: The long form `formats.md` documents, `where::what`, which the shipped `surveyor` is
@@ -1105,6 +1124,7 @@ source_ids: [A, B]
 tools:
   - name: line_count
     source_ids: [A, B]
+builtin_tools: ["*"]
 subagents: [helper]
 system_prompt: |
   You do the task.
@@ -1164,6 +1184,8 @@ def test_a_tool_only_a_subagent_declares_is_not_offered_to_that_caller(
 NAMES_ONE_SUBAGENT = """name: boss
 description: An agent.
 source_ids: [A, B]
+builtin_tools: ["*"]
+tools: ["*"]
 subagents: [helper]
 system_prompt: |
   You do the task.
@@ -1228,6 +1250,8 @@ SHARES_SKILL_AND_HANDS_WORK_ON = """name: sharer
 description: An agent.
 source_ids: [A, B]
 skills: [routine]
+builtin_tools: ["*"]
+tools: ["*"]
 subagents: [helper]
 system_prompt: |
   You do the task.
@@ -1296,6 +1320,8 @@ system_prompt: |
 UNRESOLVED_BEHIND_AN_AUDIENCE = """name: boss
 description: An agent.
 source_ids: [A, B]
+builtin_tools: ["*"]
+tools: ["*"]
 subagents:
   - name: ghost
     source_ids: [A]

@@ -13,7 +13,7 @@ from kingfisher.core.definitions.subagents.spec import RunOn
 from kingfisher.core.reporting import opening_events
 from kingfisher.core.request import Request
 from kingfisher.core.session.steps import drive
-from tests.conftest import a_subagent, an_agent, start, subagents_dir
+from tests.conftest import EVERY_TOOL, a_subagent, an_agent, start, subagents_dir
 
 ASKED = """name: second-opinion
 description: Answers again, elsewhere.
@@ -200,7 +200,7 @@ def test_the_caller_is_told_before_the_turn_starts(cfg, session_dir):
 
     same = _elsewhere(cfg, cfg.models.resolve()[1].base_url.replace("/anthropic", "/v1"))
     _define(same, ASKED)
-    an_agent(same, subagents="[second-opinion]")
+    an_agent(same, subagents="[second-opinion]", **EVERY_TOOL)
     service = Kingfisher(same, sessions=LocalSessions())
     start(same, "s")
     asked = Request(
@@ -228,7 +228,7 @@ def test_a_run_with_nothing_to_say_says_nothing(cfg, session_dir):
     from kingfisher.plugins import LocalSessions
 
     _define(cfg, ASKED_FOR_NOTHING)
-    an_agent(cfg, subagents="[reviewer]")
+    an_agent(cfg, subagents="[reviewer]", **EVERY_TOOL)
     service = Kingfisher(cfg, sessions=LocalSessions())
     start(cfg, "quiet")
     asked = Request(

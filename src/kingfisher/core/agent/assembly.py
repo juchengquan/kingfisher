@@ -503,8 +503,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         or any(
             defined[n].tools not in (ALL, None)
             or defined[n].builtin_tools not in (ALL, None)
-            # One axis everything and the other not, every portable subagent's default:
-            # folding both into one list needs "every built-in" read off the probe.
+            # One axis everything and the other not, as a portable subagent writing
+            # `builtin_tools: ["*"]` has: folding both into one list needs "every
+            # built-in" read off the probe.
             or (defined[n].tools == ALL) != (defined[n].builtin_tools == ALL)
             or defined[n].subagents is not None
             for n in activated

@@ -26,17 +26,17 @@ class SpecBase:
     system_prompt: str
     #: The two tool axes, granted apart because they are offered apart: built-ins come with
     #: deepagents, `tools` is what the workspace wrote. In one list, asking for a workspace
-    #: tool would give up every built-in.
-    builtin_tools: Selection = ALL
-    tools: Selection = ALL
+    #: tool would give up every built-in. `None` grants none, as on every grant field here: a
+    #: forgotten line must fail closed, not hand over the shell and every tool added later.
+    builtin_tools: Selection = None
+    tools: Selection = None
     #: Where each `where::what` entry in `tools:` claimed its tool lives, by name. Apart
     #: from `tools`, which everything downstream keys on by name; only the checker reads it.
     tool_sources: Mapping[str, str] = field(
         default_factory=dict, metadata={"derived": True}
     )
-    #: Skills this definition is told about. `None` means none, unlike `tools`: tools are
-    #: what it needs to act, skills what it needs to know. A subagent also refuses `["*"]`:
-    #: its body is its procedure, and its caller's index would crowd a narrow context.
+    #: Skills this definition is told about; absent means none. A subagent also refuses
+    #: `["*"]`: its body is its procedure, and its caller's index would crowd a narrow context.
     skills: Selection = None
     #: Definitions this one may consult, by name, from the same catalogue; absent means
     #: none. A subagent may not write `["*"]`, which would include itself and so loop.

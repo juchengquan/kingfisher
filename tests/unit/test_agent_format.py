@@ -89,16 +89,26 @@ def test_a_present_but_empty_field_says_so_rather_than_missing():
 # -- omission, which is where the two formats agree -------------------------
 
 
-def test_leaving_the_tool_fields_out_grants_all_of_them():
-    """The one place omission grants rather than withholds."""
+def test_leaving_the_tool_fields_out_grants_none_of_them():
+    """Read as all, a forgotten line hands the agent the shell and every tool the
+    workspace gains later, and nothing on its first turn shows it.
+    """
     spec = _read(MINIMAL, "plain.yaml")
+
+    assert spec.builtin_tools is None
+    assert spec.tools is None
+
+
+def test_the_star_is_how_an_agent_asks_for_every_tool():
+    """The control: a reader granting nothing whatever was written passes the test above."""
+    spec = _read(MINIMAL.rstrip() + '\nbuiltin_tools: ["*"]\ntools: ["*"]\n', "plain.yaml")
 
     assert spec.builtin_tools == ALL
     assert spec.tools == ALL
 
 
 def test_leaving_skills_and_subagents_out_grants_none():
-    """The other half of that sentence."""
+    """The same rule on the other grant fields."""
     spec = _read(MINIMAL, "plain.yaml")
 
     assert spec.skills is None
@@ -141,7 +151,8 @@ def test_an_agent_may_name_every_subagent_and_a_subagent_may_not():
     """One of the two fields that answer `["*"]` differently in the two folders, and the
     reason is in the files rather than in a table somebody has to remember.
     """
-    assert _read(MINIMAL.rstrip() + '\nsubagents: ["*"]\n', "plain.yaml").subagents == ALL
+    every = MINIMAL.rstrip() + '\nbuiltin_tools: ["*"]\nsubagents: ["*"]\n'
+    assert _read(every, "plain.yaml").subagents == ALL
 
     subagent = 'name: d\ndescription: A subagent.\nsubagents: ["*"]\nsystem_prompt: |\n  Go.\n'
     with pytest.raises(SubagentError, match="always a loop"):
@@ -325,6 +336,9 @@ def test_an_agent_that_says_nothing_is_reachable_by_everyone():
     assert _read(MINIMAL, "plain.yaml").source_ids == ALL
 
 
+TASK = "builtin_tools: [task]\n"
+
+
 def test_every_audienced_field_takes_a_mapping():
     """All three, because a rule that covered one would be the one nobody noticed was a
     third of a rule.
@@ -337,7 +351,8 @@ def test_every_audienced_field_takes_a_mapping():
             ("subagents", "subagents:\n  - name: checker\n    source_ids: [A]\n"
                 "  - name: reviewer\n    source_ids: [A, B]\n"),
         ]:
-        spec = _read(MINIMAL.rstrip() + f"\nsource_ids: [A, B]\n{written}", "plain.yaml")
+        # `task` held, or the `subagents` case is refused before it reaches an audience.
+        spec = _read(MINIMAL.rstrip() + f"\nsource_ids: [A, B]\n{TASK}{written}", "plain.yaml")
 
         first, second = (getattr(spec, field_name))[0], (getattr(spec, field_name))[1]
         assert spec.audiences[field_name] == {first: ("A",), second: ("A", "B")}
@@ -360,7 +375,8 @@ def test_every_audienced_field_narrows_for_a_caller():
                 "reviewer",
             ),
         ]:
-        spec = _read(MINIMAL.rstrip() + f"\nsource_ids: [A, B]\n{written}", "plain.yaml")
+        # `task` held, or the `subagents` case is refused before it reaches an audience.
+        spec = _read(MINIMAL.rstrip() + f"\nsource_ids: [A, B]\n{TASK}{written}", "plain.yaml")
 
         assert getattr(spec.declares(frozenset({"B"})), field_name) == (kept,)
 
@@ -484,13 +500,14 @@ def test_the_starter_agent_the_refusal_prints_actually_loads(cfg):
     from kingfisher.core.definitions.seeding import starter_agent
 
     printed = starter_agent(cfg.definitions / "agents")
-    block = printed.split("A minimal one:\n\n", 1)[1].split("\n\nOmitting", 1)[0]
+    block = printed.split("holding every tool:\n\n", 1)[1].split("\n\nLeave out", 1)[0]
     document = yaml.safe_load(textwrap.dedent(block))
 
     spec = parse(document, Path("agents/helper.yaml"))
 
     assert spec.name == "helper"
     assert spec.system_prompt.strip()
+    assert (spec.builtin_tools, spec.tools) == (ALL, ALL), "a starter that cannot act"
 
 
 def test_a_workspace_with_no_agents_is_told_how_to_write_one(cfg):
