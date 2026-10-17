@@ -2,9 +2,10 @@
 
 Not shipped: kingfisher holds its own backend to these, and a deployment writing its own
 copies them. Plain functions raising `AssertionError` and no pytest, so a suite of any
-kind can run them. The first two are also what kingfisher refuses at startup, in
-`usable_backend`; the rest write files and run commands, which a library should not do
-at a build.
+kind can run them. `make` returns a fresh `(Config, backend)` pair, as the sessions kit's
+does, because the folders a backend must serve are that deployment's layout's. The first
+two are also what kingfisher refuses at startup, in `usable_backend`; the rest write
+files and run commands, which a library should not do at a build.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from uuid import uuid4
 
 from deepagents.backends import CompositeBackend
 
-from kingfisher.plugins import DEFAULT_LAYOUT, HostPathError, unrouted_denials, why_no_shell
+from kingfisher.plugins import HostPathError, unrouted_denials, why_no_shell
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -24,13 +25,15 @@ if TYPE_CHECKING:
 
 def execution_support(make: Callable[[], Any]) -> None:
     """The one failure with no symptom: deepagents drops `execute` and tells nobody."""
-    if (why := why_no_shell(make())) is not None:
+    _, backend = make()
+    if (why := why_no_shell(backend)) is not None:
         raise AssertionError(why)
 
 
-def route_coverage(make: Callable[[], Any], scopes: tuple[str, ...] | None = None) -> None:
+def route_coverage(make: Callable[[], Any]) -> None:
     """Otherwise the graph will not build, with a message that never says kingfisher."""
-    if (why := unrouted_denials(make(), scopes)) is not None:
+    cfg, backend = make()
+    if (why := unrouted_denials(backend, cfg.layout)) is not None:
         raise AssertionError(why)
 
 
@@ -50,14 +53,15 @@ def filesystem_consistency(make: Callable[[], Any]) -> None:
     -- so the check passed against a backend where the shell reached nothing at all,
     on the error message quoting its own argument back.
     """
-    backend = make()
+    cfg, backend = make()
     if why_no_shell(backend) is not None:
         return
     body, name = uuid4().hex, uuid4().hex
+    outputs = cfg.layout.outputs_route
     for virtual, write in (
-        (f"{DEFAULT_LAYOUT.outputs_route}{name}-tools.txt", lambda path: backend.write(path, body)),
+        (f"{outputs}{name}-tools.txt", lambda path: backend.write(path, body)),
         (
-            f"{DEFAULT_LAYOUT.outputs_route}{name}-shell.txt",
+            f"{outputs}{name}-shell.txt",
             lambda path: backend.execute(f"printf %s {body} > {path.lstrip('/')}"),
         ),
     ):
@@ -90,9 +94,9 @@ def offloads_in_the_scratchpad(make: Callable[[], Any]) -> None:
     deepagents reads it, `isinstance` included, because a backend that is no
     `CompositeBackend` is `/` whatever attribute it carries.
     """
-    backend = make()
+    cfg, backend = make()
     root = backend.artifacts_root if isinstance(backend, CompositeBackend) else "/"
-    scratch = DEFAULT_LAYOUT.scratch_route
+    scratch = cfg.layout.scratch_route
     if root.rstrip("/") != scratch.rstrip("/"):
         msg = (
             f"{type(backend).__name__} has deepagents write the tool results it evicts "
@@ -124,14 +128,14 @@ def shell_denied(make: Callable[[], Any]) -> None:
     is allowed to fail: on a backend that has none, or where something else refuses
     it, what is asserted is still only the file afterwards.
     """
-    backend = make()
+    cfg, backend = make()
     if why_no_shell(backend) is not None:
         return
     token = uuid4().hex
     written: list[str] = []
     for route, what in (
-        (DEFAULT_LAYOUT.harness_route, "what kingfisher reads back and trusts"),
-        (DEFAULT_LAYOUT.inputs_route, "the caller's input"),
+        (cfg.layout.harness_route, "what kingfisher reads back and trusts"),
+        (cfg.layout.inputs_route, "the caller's input"),
     ):
         kept, fresh = f"{route}{token}-kept", f"{route}{token}-fresh"
         backend.upload_files([(kept, b"as written")])
@@ -164,7 +168,7 @@ def host_path_refusal(make: Callable[[], Any]) -> None:
     type and nothing else: refuse with anything else and a mistake the model could
     have corrected reaches it as a failed turn.
     """
-    backend = make()
+    _, backend = make()
     try:
         backend.read("/etc/passwd")
     except HostPathError:

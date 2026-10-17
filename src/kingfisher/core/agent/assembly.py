@@ -334,9 +334,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     capabilities = for_the_caller(agent, asked, held=held)
     roots = catalogue or Definitions.from_config(cfg)
     # Every backend: a check only some builds ran would be one nothing here exercises.
-    refuse_unusable_backend(
-        backend, (*cfg.layout.denied_scopes(), *cfg.layout.denied_read_scopes())
-    )
+    refuse_unusable_backend(backend, cfg.layout)
     shell = shell_prompt_of(backend)
     # Before the middleware stack, because `tool_guards` needs the names. A caller that
     # has walked them itself -- `--list` -- wins over the catalogue.

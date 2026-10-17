@@ -14,7 +14,7 @@ from deepagents.backends import CompositeBackend
 from deepagents.backends.protocol import SandboxBackendProtocol
 
 from kingfisher.core.config import ConfigError
-from kingfisher.core.layout import denied_read_scopes, denied_scopes
+from kingfisher.core.layout import Layout
 
 
 def executes(backend: Any) -> bool:
@@ -40,17 +40,16 @@ def why_no_shell(backend: Any) -> str | None:
     )
 
 
-def unrouted_denials(backend: Any, scopes: tuple[str, ...] | None = None) -> str | None:
-    """Which denied paths this backend routes nothing for, or `None` for none.
+def unrouted_denials(backend: Any, layout: Layout) -> str | None:
+    """Which paths `layout` denies that this backend routes nothing for, or `None`.
 
     `FilesystemMiddleware` refuses `permissions=` on an executing backend unless every
-    rule path sits under a route, with a message that never says kingfisher. `scopes`
-    are the deny rules it will be given, the default layout's when left out.
+    rule path sits under a route, with a message that never says kingfisher. The layout
+    has no default: the shipped one's paths are the wrong ones for a renamed deployment.
     """
     if not executes(backend):
         return None  # `why_no_shell` owns that failure; this would only repeat it
-    if scopes is None:
-        scopes = (*denied_scopes(), *denied_read_scopes())
+    scopes = (*layout.denied_scopes(), *layout.denied_read_scopes())
     routes = tuple(backend.routes) if isinstance(backend, CompositeBackend) else ()
     missing = [scope for scope in scopes if not any(scope.startswith(r) for r in routes)]
     if not missing:
@@ -63,11 +62,11 @@ def unrouted_denials(backend: Any, scopes: tuple[str, ...] | None = None) -> str
     )
 
 
-def refuse_unusable_backend(backend: Any, scopes: tuple[str, ...] | None = None) -> None:
+def refuse_unusable_backend(backend: Any, layout: Layout) -> None:
     """Refuse a backend deepagents would give no shell, or one routing too little.
 
     `ConfigError`, not `AssertionError`: out of a library, that would read as its own bug.
     """
-    for why in (why_no_shell(backend), unrouted_denials(backend, scopes)):
+    for why in (why_no_shell(backend), unrouted_denials(backend, layout)):
         if why is not None:
             raise ConfigError(why)

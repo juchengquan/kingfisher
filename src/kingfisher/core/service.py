@@ -237,9 +237,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         )
         # Here as well as at the build: a pre-built graph has none, and setup reads the
         # session through this backend before any build.
-        refuse_unusable_backend(
-            files, (*self.cfg.layout.denied_scopes(), *self.cfg.layout.denied_read_scopes())
-        )
+        refuse_unusable_backend(files, self.cfg.layout)
         return files
 
     def _pin_agent_in(self, harness: HarnessFiles, name: str | None) -> Steps[None]:
