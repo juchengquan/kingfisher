@@ -32,7 +32,7 @@ from kingfisher.core.definitions.tools.spec import Found, Offering, select, spli
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from kingfisher.core.agent.middlewares.recorder import Recorder
+    from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
     from kingfisher.core.config import Config
     from kingfisher.core.definitions.skills.registry import SkillRegistry
 
@@ -67,7 +67,7 @@ def subagent_skills(
             listing=f"{offered.names}",
         )
     # Both sides as identities before they meet: `narrowed` intersects strings, one skill
-    # has two spellings, and `NarrowedSkills` filters its index by identity.
+    # has two spellings, and `NarrowedSkillsMiddleware` filters its index by identity.
     reached = spec.declares(held).skills
     return narrowed(_identities(offered, reached), by=_identities(offered, activated))
 
@@ -233,7 +233,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     held: frozenset[str] | None = None,
     #: The turn's recorder for this definition. A compiled subagent's calls go unrecorded;
     #: its parent records its answer as the result of `task`.
-    recorder: Recorder | None = None,
+    recorder: RecorderMiddleware | None = None,
     #: The deployment's instructions, which every subagent is given ahead of its own.
     instructions: str = "",
 ) -> dict[str, Any]:
@@ -260,7 +260,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         "system_prompt": behind_instructions(spec.system_prompt, instructions),
     }
     middleware: list[Any] = []
-    # A subagent inherits none of the parent's `ToolAllowlist`, so the ceiling is applied
+    # A subagent inherits none of the parent's `GrantedOnlyMiddleware`, so the ceiling is applied
     # here or a withheld `execute` reaches every subagent. What it is stays `ceiling`'s call.
     allowed = ceiling(
         spec.builtin_tools,
@@ -321,7 +321,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
 
     if mine or private or tool_objects is not None:
         # Objects, not names: names raise inside `ToolNode`. The whole set goes in and
-        # `ToolAllowlist` decides.
+        # `GrantedOnlyMiddleware` decides.
         subagent["tools"] = [one.tool for one in (*private, *mine)] + list(tool_objects or [])
 
     # An instance, not a name: deepagents' `init_chat_model` would infer its own provider and

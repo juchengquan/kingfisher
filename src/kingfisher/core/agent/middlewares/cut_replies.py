@@ -9,6 +9,7 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware, ModelResponse
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from kingfisher.core.agent.middlewares.results import failed
 from kingfisher.core.session.runtime import (
     call_block_id,
     cut_off,
@@ -96,16 +97,12 @@ def _replaced(response: Any, reply: AIMessage, by: AIMessage) -> Any:
 
 
 def _refusal(reply: AIMessage, call: Any) -> ToolMessage:
-    return ToolMessage(
-        content=(
-            f"{NOT_RUN}{output_limit(reply)} while this call was still "
-            "being written, so its arguments are incomplete and nothing was done. Make the "
-            "change in smaller pieces — for a long file, write the first part, then add the "
-            "rest in further calls."
-        ),
-        tool_call_id=call["id"],
-        name=call["name"],
-        status="error",
+    return failed(
+        call,
+        f"{NOT_RUN}{output_limit(reply)} while this call was still "
+        "being written, so its arguments are incomplete and nothing was done. Make the "
+        "change in smaller pieces — for a long file, write the first part, then add the "
+        "rest in further calls.",
     )
 
 

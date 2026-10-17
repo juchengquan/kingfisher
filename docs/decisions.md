@@ -706,7 +706,7 @@ path-taking tools handed to `show-your-work`, and the first call died on
 carries the translation and the error conversion on the tool objects, which is the one
 thing kingfisher still owns for a graph it did not build.
 
-This reverses, for that path only, the reasoning `WorkspaceToolPaths` records --
+This reverses, for that path only, the reasoning `WorkspaceToolPathsMiddleware` records --
 rewrite the call rather than wrap each tool, because the tools are not alike. They
 still are not, so the wrapper normalises: a plain function becomes the tool
 `create_agent` would have made of it anyway, refusing a missing docstring exactly
@@ -743,6 +743,21 @@ by name, and `build_agent` reads which tools are built in off the middleware its
 holds. Offered, the checklist would leave the probe, and `builtin_tools: [write_todos]`
 would name a tool that is not there. Moving it waits on the built-ins being read some
 other way. *(2026-10-17.)*
+
+**Two pairs of standing middleware are one each now.** `HostPathGuard` and
+`WorkspaceToolErrors` each turned an exception into a failed result, three places apart;
+`ToolFailureMiddleware` does both, a workspace tool's exception first so it keeps its
+type, from the outer one's place, so a `grep` that `FileTools` runs as several searches
+fails once. `ToolAllowlist` and `DeclaredSubagentsOnly` each refused what a request was
+not granted; `GrantedOnlyMiddleware` is on every graph and grants everything where
+nothing was narrowed, as the declared-subagent check already was on the agent. Five more
+took the suffix -- `RecorderMiddleware`, `ResultClearingMiddleware`,
+`LargePdfMiddleware`, `WorkspaceToolPathsMiddleware`, `NarrowedSkillsMiddleware` -- so a
+class in the package says what it is. `results.failed` builds every failed result
+kingfisher's own hand back. The offered ones keep their own: `kingfisher` and
+`kingfisher.plugins` are the addresses a file in `assets/` may import, and everything
+else may move. A helper to append a line to a result was proposed beside it and not
+built, because only `ShellPaths` appends. *(2026-10-17.)*
 
 **A call from `eval` is a fifth way to dispatch, and it met none of the guards.** With
 the sandbox wired, a narrowed request's `eval` holds `tools.<name>()` for each tool it
@@ -1316,7 +1331,7 @@ overlap without either containing the other. *(2026-09-18.)*
 **None of kingfisher's own middleware is offered to a definition, and that was the
 alternative considered.** They ship with the package the way `prompts/` does, which invites
 listing them beside a deployment's own so a definition could name one. A name a
-definition can write is a name it can leave out, and `ToolAllowlist` is what holds
+definition can write is a name it can leave out, and `GrantedOnlyMiddleware` is what holds
 a request to the tools it was granted -- omitting it would be a way to widen, which
 *Capabilities narrow and never widen* does not allow an exception for. They do not
 fit the registry mechanically either: an entry there is built from defaults a
@@ -2482,7 +2497,7 @@ their window.
 
 **A workspace tool's return type is langchain's rule, and kingfisher adds none.**
 The loader checks that `TOOLS` holds tools and stops; nothing reads a return
-annotation, and `WorkspaceToolErrors` passes the value through untouched because
+annotation, and `ToolFailureMiddleware` passes the value through untouched because
 it catches exceptions and nothing else. A dict therefore reaches the model as
 `json.dumps`, and a `ToolMessage` or a langgraph `Command` is not wrapped at all
 -- the graph applies it.
@@ -2636,7 +2651,7 @@ both -- their shared connection rule is the stated reason they are written as th
 *(2026-10-14, from an architecture review.)*
 
 **A PDF over 256 KB in a tool's result reaches the model as advice instead.**
-`LargePdfGuard`, in `standing_middleware` on every graph kingfisher builds, swaps the
+`LargePdfMiddleware`, in `standing_middleware` on every graph kingfisher builds, swaps the
 block for a line saying how large the PDF is and why it was not handed over, and marks
 the call an error when nothing else came back. 256 KB because one PDF of about 500 KB
 springs the summarizer's trap on a model with no profile, and half leaves room for the
@@ -2673,7 +2688,7 @@ on page 2 of three -- and found that page blank. MiniMax's API reference lists n
 document block for either, and this entry said from it alone that MiniMax read no
 PDF, until the same day's call said otherwise.
 
-**A slice past 256 KB is refused, not saved.** `LargePdfGuard` would replace it with
+**A slice past 256 KB is refused, not saved.** `LargePdfMiddleware` would replace it with
 advice, so a saved one is a file the model is told to open and never sees. The tool
 keeps its own copy of the limit, because a shipped tool is written against the
 public API and the guard's module is not part of it; a test holds the copy to the
@@ -2945,7 +2960,7 @@ on how langgraph shapes its chunks. Middleware sees only real calls.
 
 **The recorder is ahead of the guards in `standing_middleware`, and each thing that
 position gives is needed.** Inside deepagents' eviction, so it sees a long result whole
-and the id survives in the stub's tail. Ahead of `WorkspaceToolPaths`, so it records
+and the id survives in the stub's tail. Ahead of `WorkspaceToolPathsMiddleware`, so it records
 the arguments the model wrote rather than the host paths they become. Ahead of a
 deployment's middleware, which `build_agent` appends after `standing_middleware`, so it
 records what the model was shown, a `ToolNote` reminder included. Moved, nothing fails a
@@ -3336,11 +3351,11 @@ fix.
 ## Tool failure
 
 **A workspace tool's exception is a failed tool result, not a dead run.**
-`WorkspaceToolErrors` converts it to a `ToolMessage` with `status="error"` and
+`ToolFailureMiddleware` converts it to a `ToolMessage` with `status="error"` and
 the text carried whole, so the model sees a failure rather than a value. Built-in
-tools are untouched -- they already report properly, and `HostPathGuard` covers
-the one thing they do not, so widening this to them would put a second opinion
-between deepagents and its own error handling. `BaseException` is deliberately
+tools are untouched but for a refused host path, the one thing they do not report
+themselves -- they already report the rest, so widening this to them would put a second
+opinion between deepagents and its own error handling. `BaseException` is deliberately
 not caught: an interrupt is not a tool telling the model something.
 
 Measured before it was built, on one deployment: the same wrong path cost nothing
@@ -3356,7 +3371,7 @@ subagents holding the workspace's tools with the guard only on the parent.
 2026-08-31.)*
 
 **What a deployment's own middleware raises is not this guard's to convert, and it
-cannot tell.** `WorkspaceToolErrors` catches whatever `handler(request)` raises, and a
+cannot tell.** `ToolFailureMiddleware` catches whatever `handler(request)` raises, and a
 deployment's middleware is below it -- appended last, so it sees the narrowing
 kingfisher applied. So the asymmetry above is reinstated for a deployment hook that
 falls over, pointing the other way: driven with a registered middleware whose
@@ -3374,14 +3389,14 @@ whether a hook that falls over should end every turn or none of them. The middle
 guide says what happens today.
 
 **The same placement hands a hook host paths.** Nearest the tool is below
-`WorkspaceToolPaths`, so a deployment's `wrap_tool_call` is handed the rewritten
+`WorkspaceToolPathsMiddleware`, so a deployment's `wrap_tool_call` is handed the rewritten
 argument: driven, the model wrote `line_count(path="/inputs/n.txt")` and the middleware
 saw the absolute session path. The recorder states this question for itself and answers
 it by position; for a deployment hook the answer is the opposite one, and it was written
 nowhere. *(2026-10-16, from an architecture review.)*
 
 **A workspace tool is handed real paths, resolved against its own session.**
-`WorkspaceToolPaths` rewrites a `path` argument before the tool sees it, so
+`WorkspaceToolPathsMiddleware` rewrites a `path` argument before the tool sees it, so
 `/data/config.ini` means the same thing to a workspace tool as it does to
 `read_file`. A workspace tool is an ordinary function that opens files with the
 operating system; the built-in file tools do not have the problem because they
@@ -7083,7 +7098,7 @@ body and invisible to all three. `Surface.ambiguous` was one: no caller anywhere
 while the run report asked `Offering.ambiguous` directly. It is deleted rather than
 guarded, because the rule that would catch the next one has to decide about a
 property read only by tests -- and that question was answered the other way for
-`ToolAllowlist._allowed` on 2026-09-24, where a public accessor with no production
+`GrantedOnlyMiddleware._allowed` on 2026-09-24, where a public accessor with no production
 caller was refused.
 
 Two more the same review named were measured and left alone: the macOS deny rule for
@@ -7114,8 +7129,8 @@ recording as a set because the shape is now this repo's most frequent defect.
   - **A threshold where a pinned set belongs.** `assert len(_readers(shipped)) >= 2`
     against nine, one commit after the same shape was deleted elsewhere with the reason
     written out.
-  - **Four refusal branches on the async path.** `HostPathGuard`,
-    `WorkspaceToolPaths`, `GuardedTool._arun`'s artifact branch and
+  - **Four refusal branches on the async path.** `ToolFailureMiddleware`,
+    `WorkspaceToolPathsMiddleware`, `GuardedTool._arun`'s artifact branch and
     `PermittedBackend.aread` each had their behaviour held on the sync half alone --
     each could be broken with the suite green, while the same break on the sync half
     reddened between one and seventeen tests. The `way` fixture existed for exactly
@@ -7463,7 +7478,7 @@ reached it. `subagent_of` and `middleware_of` are in `conftest` beside `declared
 now, which was already the same read one step back.
 
 **The middleware itself was left unanswerable, which is the other half of the
-review's suggestion and the half to decline.** Tests read `ToolAllowlist._allowed`
+review's suggestion and the half to decline.** Tests read `GrantedOnlyMiddleware._allowed`
 at eighteen sites; making it public would be production API that nothing in
 production reads, which is the shape `test_nothing_is_defined_for_tests_alone`
 exists to refuse -- and it would slip past that rule, since the walk collects a
@@ -7499,7 +7514,7 @@ at the folder and at the index, and the index is held to the folder by
 sentence that needs a test.*
 
 *A second one was there until 2026-08-31. `a-tool-failure-is-not-a-crash` had
-shipped -- `WorkspaceToolErrors` and `tests/unit/test_workspace_tool_errors.py` --
+shipped -- `ToolFailureMiddleware` and `tests/unit/test_workspace_tool_errors.py` --
 and its status line had never been changed to say so. Its decisions are under
 *Tool failure* above.*
 

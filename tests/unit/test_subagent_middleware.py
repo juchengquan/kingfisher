@@ -212,17 +212,15 @@ def test_what_a_subagent_carries_is_pinned_here_and_only_here(cfg, session_dir):
     assert [type(m).__name__ for m in middleware_of(built, "reviewer")] == [
         "CutReplies",
         "ModelUnavailableGuard",
-        "HostPathGuard",
-        "LargePdfGuard",
+        "ToolFailureMiddleware",
+        "LargePdfMiddleware",
         "ShellPaths",
         "FileTools",
-        "WorkspaceToolErrors",
-        # Beside the errors guard rather than anywhere else: both are about a
-        # workspace tool call, and this one rewrites the arguments before the
-        # entries below decide anything about them.
-        "WorkspaceToolPaths",
-        "ToolAllowlist",
-        "NarrowedSkills",
+        # Ahead of the entries below: it rewrites the arguments before they decide
+        # anything about them.
+        "WorkspaceToolPathsMiddleware",
+        "GrantedOnlyMiddleware",
+        "NarrowedSkillsMiddleware",
         "SubAgentMiddleware",
         "Audited",
     ]
@@ -241,11 +239,10 @@ def test_a_bare_definition_carries_only_the_guards_and_its_allowlist(cfg, sessio
     assert [type(m).__name__ for m in middleware_of(built, "reviewer")] == [
         "CutReplies",
         "ModelUnavailableGuard",
-        "HostPathGuard",
-        "LargePdfGuard",
+        "ToolFailureMiddleware",
+        "LargePdfMiddleware",
         "ShellPaths",
         "FileTools",
-        "WorkspaceToolErrors",
-        "WorkspaceToolPaths",
-        "ToolAllowlist",
+        "WorkspaceToolPathsMiddleware",
+        "GrantedOnlyMiddleware",
     ]

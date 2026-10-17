@@ -11,7 +11,7 @@ import pytest
 from langchain_core.tools import ToolException
 
 from kingfisher.core.agent.host_paths import HOST_ROOTS
-from kingfisher.core.agent.middlewares.workspace_tools import WorkspaceToolPaths
+from kingfisher.core.agent.middlewares.workspace_tools import WorkspaceToolPathsMiddleware
 from kingfisher.core.agent.session_paths import NOT_FOR_TOOLS
 from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.layout import DEFAULT_LAYOUT
@@ -43,7 +43,7 @@ def paths(cfg, session):
 
 @pytest.fixture
 def bridge(paths):
-    return WorkspaceToolPaths(frozenset({"line_count", "csv_profile"}), paths)
+    return WorkspaceToolPathsMiddleware(frozenset({"line_count", "csv_profile"}), paths)
 
 
 def handed(bridge, request) -> Any:
@@ -142,7 +142,7 @@ def test_another_session_is_refused_where_no_host_root_would_catch_it(cfg, sessi
     catches it there is the directory this session's siblings are in.
     """
     siblings = paths_in(cfg, session, sessions=Path("/workspace/sessions"))
-    mine = WorkspaceToolPaths(frozenset({"peek"}), siblings)
+    mine = WorkspaceToolPathsMiddleware(frozenset({"peek"}), siblings)
     seen: list[object] = []
 
     answer = mine.wrap_tool_call(

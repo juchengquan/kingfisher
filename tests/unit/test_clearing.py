@@ -31,7 +31,7 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.clearing import (
     DEFAULT_MARK,
-    ResultClearing,
+    ResultClearingMiddleware,
     high_mark,
 )
 from kingfisher.core.agent.middlewares.cut_replies import _refusal
@@ -63,7 +63,7 @@ def _text(first: str) -> str:
 class Talk:
     """A main agent's conversation built call by call, with the rows the turn's recorder
     would have kept for it: a row and an id for every successful result of a recorded
-    tool, as `Recorder` writes them.
+    tool, as `RecorderMiddleware` writes them.
     """
 
     def __init__(self, earlier: KeptLedger | None = None) -> None:
@@ -148,7 +148,7 @@ class Talk:
             heard.append(request)
             return ModelResponse(result=[AIMessage("ok")])
 
-        returned = ResultClearing(self.ledger, high, OFFLOADS_ROUTE).wrap_model_call(
+        returned = ResultClearingMiddleware(self.ledger, high, OFFLOADS_ROUTE).wrap_model_call(
             request, model
         )
         (asked,) = heard
@@ -818,7 +818,7 @@ def test_clearing_adds_no_step_to_the_agents_loop(bulky):
 
 
 def _clearing(middleware: Any) -> list[Any]:
-    return [one for one in middleware if isinstance(one, ResultClearing)]
+    return [one for one in middleware if isinstance(one, ResultClearingMiddleware)]
 
 
 def _spec(cfg: Any, name: str) -> Any:
@@ -839,8 +839,10 @@ def test_only_the_main_agent_of_a_turn_kingfisher_built_clears(bulky):
     kept = build_agent(bulky, backend=backend, ledger=Ledger("t", KeptLedger()), agent=agent)
     none = build_agent(bulky, backend=backend, agent=agent)
 
-    assert [type(one) for one in kept.middleware].count(ResultClearing) == 1
-    assert isinstance(kept.middleware[0], ResultClearing), "not where it measures the request"
+    assert [type(one) for one in kept.middleware].count(ResultClearingMiddleware) == 1
+    assert isinstance(kept.middleware[0], ResultClearingMiddleware), (
+        "not where it measures the request"
+    )
     assert {spec["name"] for spec in kept.subagents or ()} >= {"helper", "general-purpose"}
     for spec in kept.subagents or ():
         assert _clearing(spec.get("middleware", ())) == [], spec["name"]

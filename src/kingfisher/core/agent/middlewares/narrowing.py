@@ -10,6 +10,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
 
+from kingfisher.core.agent.middlewares.results import failed
 from kingfisher.core.definitions.skills.registry import KEY, alist_skills, list_skills, qualified
 
 
@@ -23,15 +24,25 @@ def _tool_name(tool: Any) -> str | None:
     return None
 
 
-class ToolAllowlist(AgentMiddleware):
-    """Restrict the tools the model is offered, per call."""
+class GrantedOnlyMiddleware(AgentMiddleware):
+    """Offer and run only the tools a request was granted, and through `task` only the
+    subagents it declared; `None` for either narrows nothing."""
 
-    def __init__(self, allowed: tuple[str, ...], *, subject: str = "this request") -> None:
-        self._allowed = set(allowed)
+    def __init__(
+        self,
+        tools: tuple[str, ...] | None = None,
+        *,
+        subagents: tuple[str, ...] | None = None,
+        subject: str = "this request",
+    ) -> None:
+        self._allowed = None if tools is None else set(tools)
+        self._declared = None if subagents is None else set(subagents)
         self._subject = subject
         super().__init__()
 
     def _filter(self, request: Any) -> Any:
+        if self._allowed is None:
+            return request
         kept = [
             tool
             for tool in request.tools
@@ -52,17 +63,26 @@ class ToolAllowlist(AgentMiddleware):
         """A `ToolMessage` when the call must not run, `None` when it may."""
         call = request.tool_call
         name = call.get("name")
-        if name in self._allowed:
-            return None
-        return ToolMessage(
-            content=(
+        if self._allowed is not None and name not in self._allowed:
+            return failed(
+                call,
                 f"Error: {name} is not available for {self._subject}. "
-                f"Available tools: {', '.join(sorted(self._allowed))}."
-            ),
-            tool_call_id=call.get("id", ""),
-            name=name,
-            status="error",
+                f"Available tools: {', '.join(sorted(self._allowed))}.",
+            )
+        if name != "task" or self._declared is None:
+            return None
+        wanted = (call.get("args") or {}).get("subagent_type")
+        if wanted in self._declared:
+            return None
+        offered = ", ".join(sorted(self._declared)) or "none"
+        # A missing argument is a different mistake from a refused name: told the name was
+        # refused, a live model that had sent `subagentType` called the tool broken and gave up.
+        detail = (
+            "no subagent_type was given -- the argument is `subagent_type`"
+            if wanted is None
+            else f"{wanted!r} is not a subagent this request may use"
         )
+        return failed(call, f"Error: {detail}. Available: {offered}.")
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         return self._refuse(request) or handler(request)
@@ -74,7 +94,7 @@ class ToolAllowlist(AgentMiddleware):
         return refusal if refusal is not None else await handler(request)
 
 
-class NarrowedSkills(SkillsMiddleware):
+class NarrowedSkillsMiddleware(SkillsMiddleware):
     """A skills index restricted to the skills a request activated."""
 
     def __init__(self, *, allowed: tuple[str, ...], **kwargs: Any) -> None:
@@ -116,42 +136,3 @@ class NarrowedSkills(SkillsMiddleware):
         return super()._format_skills_list(
             [s for s in skills if s.get(KEY, s.get("name")) in self._allowed]
         )
-
-
-class DeclaredSubagentsOnly(AgentMiddleware):
-    """Refuse `task` to a subagent this request did not declare."""
-
-    def __init__(self, declared: tuple[str, ...]) -> None:
-        self._declared = set(declared)
-        super().__init__()
-
-    def _refuse(self, request: Any) -> ToolMessage | None:
-        call = request.tool_call
-        if call.get("name") != "task":
-            return None
-        wanted = (call.get("args") or {}).get("subagent_type")
-        if wanted in self._declared:
-            return None
-        offered = ", ".join(sorted(self._declared)) or "none"
-        # A missing argument is a different mistake from a refused name: told the name was
-        # refused, a live model that had sent `subagentType` called the tool broken and gave up.
-        detail = (
-            "no subagent_type was given -- the argument is `subagent_type`"
-            if wanted is None
-            else f"{wanted!r} is not a subagent this request may use"
-        )
-        return ToolMessage(
-            content=f"Error: {detail}. Available: {offered}.",
-            tool_call_id=call.get("id", ""),
-            name=call.get("name"),
-            status="error",
-        )
-
-    def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
-        return self._refuse(request) or handler(request)
-
-    async def awrap_tool_call(
-        self, request: Any, handler: Callable[[Any], Awaitable[Any]]
-    ) -> Any:
-        refusal = self._refuse(request)
-        return refusal if refusal is not None else await handler(request)

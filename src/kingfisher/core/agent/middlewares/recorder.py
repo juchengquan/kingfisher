@@ -90,11 +90,11 @@ def _running(call: Mapping[str, Any]) -> Iterator[None]:
         RUN.reset(token)
 
 
-class Recorder(AgentMiddleware):
+class RecorderMiddleware(AgentMiddleware):
     """Record each successful tool result, keep it as a file in the session, and end
     what the model is handed with the result's id.
 
-    Ahead of the guards in what `standing_middleware` returns, `WorkspaceToolPaths` among
+    Ahead of the guards in what `standing_middleware` returns, `WorkspaceToolPathsMiddleware` among
     them, so it records the arguments the model wrote rather than the host paths they
     become. Sitting inside
     deepagents' eviction and seeing what a deployment's middleware left do not depend on it.

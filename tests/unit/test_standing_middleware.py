@@ -75,20 +75,18 @@ def test_the_agent_is_wrapped_in_standing_then_switched_then_offered(cfg, sessio
     built = _everything(cfg, session_dir)
 
     assert [type(m).__name__ for m in built.middleware] == [
-        "ResultClearing",
+        "ResultClearingMiddleware",
         "TodoListMiddleware",
-        "Recorder",
+        "RecorderMiddleware",
         "CutReplies",
         "ModelUnavailableGuard",
-        "HostPathGuard",
-        "LargePdfGuard",
+        "ToolFailureMiddleware",
+        "LargePdfMiddleware",
         "ShellPaths",
         "FileTools",
-        "WorkspaceToolErrors",
-        "WorkspaceToolPaths",
-        "ToolAllowlist",
-        "NarrowedSkills",
-        "DeclaredSubagentsOnly",
+        "WorkspaceToolPathsMiddleware",
+        "GrantedOnlyMiddleware",
+        "NarrowedSkillsMiddleware",
         "MemoryMiddleware",
         "CodeInterpreterMiddleware",
         "_Offered",
@@ -101,16 +99,15 @@ def test_general_purpose_is_wrapped_in_standing_then_offered(cfg, session_dir):
     built = _everything(cfg, session_dir)
 
     assert [type(m).__name__ for m in subagent_of(built, "general-purpose")["middleware"]] == [
-        "Recorder",
+        "RecorderMiddleware",
         "CutReplies",
         "ModelUnavailableGuard",
-        "HostPathGuard",
-        "LargePdfGuard",
+        "ToolFailureMiddleware",
+        "LargePdfMiddleware",
         "ShellPaths",
         "FileTools",
-        "WorkspaceToolErrors",
-        "WorkspaceToolPaths",
-        "ToolAllowlist",
+        "WorkspaceToolPathsMiddleware",
+        "GrantedOnlyMiddleware",
         "_Offered",
     ]
 

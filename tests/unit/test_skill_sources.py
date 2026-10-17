@@ -10,7 +10,7 @@ import pytest
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.backend import skills_sources
-from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills
+from kingfisher.core.agent.middlewares.narrowing import NarrowedSkillsMiddleware
 from kingfisher.core.definitions.skills import registry as skill_registry
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
 from kingfisher.plugins.sessions.backend import backend_at
@@ -198,7 +198,7 @@ def test_a_reload_request_is_not_read_as_already_loaded(cfg, session_dir):
     """
     _two_parties(cfg)
     backend = backend_at(replace(cfg, skills_enabled=True), session_dir)
-    middleware = NarrowedSkills(
+    middleware = NarrowedSkillsMiddleware(
         allowed=("research::lookup",),
         backend=backend,
         sources=skills_sources(("research", "legal")),
@@ -226,7 +226,7 @@ def test_the_async_loader_agrees_with_the_sync_one(cfg, session_dir):
     """
     _two_parties(cfg)
     backend = backend_at(replace(cfg, skills_enabled=True), session_dir)
-    middleware = NarrowedSkills(
+    middleware = NarrowedSkillsMiddleware(
         allowed=("research::lookup",),
         backend=backend,
         sources=skills_sources(("research", "legal")),
@@ -246,7 +246,7 @@ def test_only_the_activated_one_reaches_the_model(cfg, session_dir):
     """Both load; one is shown."""
     _two_parties(cfg)
     backend = backend_at(replace(cfg, skills_enabled=True), session_dir)
-    middleware = NarrowedSkills(
+    middleware = NarrowedSkillsMiddleware(
         allowed=("research::lookup",),
         backend=backend,
         sources=skills_sources(("research", "legal")),

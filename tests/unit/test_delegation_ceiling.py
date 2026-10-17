@@ -17,7 +17,7 @@ from kingfisher.core.access.capabilities import (
 )
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.kinds.subagents import as_subagent, subagent_skills
-from kingfisher.core.agent.middlewares.narrowing import ToolAllowlist
+from kingfisher.core.agent.middlewares.narrowing import GrantedOnlyMiddleware
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.skills.registry import Listed, SkillRegistry
 from kingfisher.core.definitions.subagents.spec import SubagentError
@@ -122,7 +122,7 @@ def test_a_subagent_may_not_use_what_its_caller_was_denied(cfg, session_dir):
     # and the refusal cannot tell them apart, so it says whose surface the tool
     # is missing from rather than guessing at which layer removed it. Blaming
     # the request is right in this test and was wrong in the one that prompted
-    # the change -- see `ToolAllowlist`.
+    # the change -- see `GrantedOnlyMiddleware`.
     assert "not available for the 'helper' subagent" in transcript
 
 
@@ -304,7 +304,7 @@ def test_an_unrestricted_request_delegates_as_before(cfg, session_dir):
 # Two things it cannot catch, both verified rather than assumed:
 #
 # A copy that changes only the *order* passes at the subagent level, because
-# the ceiling reaches nothing but `ToolAllowlist`, which keeps a set. The old
+# the ceiling reaches nothing but `GrantedOnlyMiddleware`, which keeps a set. The old
 # swapped-argument copy fails nothing here, and there is nothing for it to fail
 # -- same names, same set, same behaviour.
 #
@@ -361,9 +361,11 @@ def test_a_subagent_is_narrowed_by_it(cfg):
 
         built = as_subagent(spec, cfg, tools=cap, builtin_tools=cap)
 
-        allowlists = [m for m in built.get("middleware", []) if isinstance(m, ToolAllowlist)]
+        allowlists = [
+            m for m in built.get("middleware", []) if isinstance(m, GrantedOnlyMiddleware)
+        ]
         if expected == ALL:
-            assert allowlists == [], selection  # no allowlist, which is not an empty one
+            assert allowlists[0]._allowed is None, selection  # every tool, not an empty set
         elif expected is None:
             assert allowlists[0]._allowed == set(), selection  # empty, which is not absent
         else:
@@ -504,9 +506,9 @@ def test_the_builtin_subagent_gets_exactly_the_main_agents_tools(cfg, session_di
     """
     seen = _built_with(cfg, session_dir, Capabilities(builtin_tools=("read_file", "task")))
 
-    (parent,) = [m for m in seen["middleware"] if isinstance(m, ToolAllowlist)]
+    (parent,) = [m for m in seen["middleware"] if isinstance(m, GrantedOnlyMiddleware)]
     (builtin,) = [s for s in seen["subagents"] if s["name"] == "general-purpose"]
-    (subagent,) = [m for m in builtin["middleware"] if isinstance(m, ToolAllowlist)]
+    (subagent,) = [m for m in builtin["middleware"] if isinstance(m, GrantedOnlyMiddleware)]
 
     assert parent._allowed == subagent._allowed == {"read_file", "task"}
 
@@ -533,17 +535,19 @@ def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session
     """
     seen = _built_with(cfg, session_dir, Capabilities())
 
-    assert not [m for m in seen["middleware"] if isinstance(m, ToolAllowlist)]
+    (granted,) = [m for m in seen["middleware"] if isinstance(m, GrantedOnlyMiddleware)]
+    assert granted._allowed is None
     supplied = [s for s in (seen.get("subagents") or ()) if s["name"] == "general-purpose"]
     assert len(supplied) == 1
     kinds = [type(m).__name__ for m in supplied[0]["middleware"]]
-    assert "ToolAllowlist" not in kinds, "nothing was narrowed, so nothing to narrow it by"
+    (theirs,) = [m for m in supplied[0]["middleware"] if isinstance(m, GrantedOnlyMiddleware)]
+    assert theirs._allowed is None, "nothing was narrowed, so nothing to narrow it by"
     # It still carries the guards every graph holding workspace tools carries. This
     # asserted an empty list, which was the defect: deepagents hands this subagent the
     # agent's own tools, and it held them with nothing wrapped around them.
     assert kinds == [
-        "CutReplies", "ModelUnavailableGuard", "HostPathGuard", "LargePdfGuard", "ShellPaths",
-        "FileTools",
+        "CutReplies", "ModelUnavailableGuard", "ToolFailureMiddleware", "LargePdfMiddleware",
+        "ShellPaths", "FileTools", "GrantedOnlyMiddleware",
     ], kinds
 
 
@@ -678,12 +682,12 @@ def test_the_wrong_list_message_agrees_in_number(cfg, session_dir):
 
 def test_a_missing_subagent_type_says_so_rather_than_naming_none():
     """A missing argument is a different mistake from a refused name."""
-    from kingfisher.core.agent.middlewares.narrowing import DeclaredSubagentsOnly
+    from kingfisher.core.agent.middlewares.narrowing import GrantedOnlyMiddleware
 
     class _Call:
         tool_call = {"name": "task", "args": {"subagentType": "reviewer"}, "id": "c1"}
 
-    refusal = DeclaredSubagentsOnly(("reviewer",))._refuse(_Call())
+    refusal = GrantedOnlyMiddleware(subagents=("reviewer",))._refuse(_Call())
 
     assert refusal is not None
     assert "no subagent_type was given" in refusal.content
@@ -693,12 +697,12 @@ def test_a_missing_subagent_type_says_so_rather_than_naming_none():
 
 def test_a_subagent_that_does_not_exist_still_names_it():
     """The other half, unchanged: a real name that is not on the list."""
-    from kingfisher.core.agent.middlewares.narrowing import DeclaredSubagentsOnly
+    from kingfisher.core.agent.middlewares.narrowing import GrantedOnlyMiddleware
 
     class _Call:
         tool_call = {"name": "task", "args": {"subagent_type": "nobody"}, "id": "c1"}
 
-    refusal = DeclaredSubagentsOnly(("reviewer",))._refuse(_Call())
+    refusal = GrantedOnlyMiddleware(subagents=("reviewer",))._refuse(_Call())
 
     assert refusal is not None
     assert "'nobody' is not a subagent" in refusal.content
@@ -786,12 +790,11 @@ def test_every_graph_holding_the_workspace_tools_carries_the_same_guards(
         cfg, session_dir, subagents=("helper",), builtin_tools=("task",)
     )
     guards = [
-        "HostPathGuard",
-        "LargePdfGuard",
+        "ToolFailureMiddleware",
+        "LargePdfMiddleware",
         "ShellPaths",
         "FileTools",
-        "WorkspaceToolErrors",
-        "WorkspaceToolPaths",
+        "WorkspaceToolPathsMiddleware",
     ]
 
     for where, stack in (
@@ -811,7 +814,8 @@ def test_the_builtin_subagent_carries_the_deployments_middleware(cfg, session_di
 
     kinds = [type(m).__name__ for m in _gp(built).get("middleware", ())]
     assert "_Audit" in kinds, f"the built-in subagent runs unaudited: {kinds}"
-    assert "ToolAllowlist" in kinds, "the ceiling it already had must survive"
+    (granted,) = [m for m in _gp(built)["middleware"] if isinstance(m, GrantedOnlyMiddleware)]
+    assert granted._allowed is not None, "the ceiling it already had must survive"
 
 
 def test_the_builtin_subagent_is_supplied_when_nothing_was_narrowed(cfg, session_dir):
@@ -822,16 +826,19 @@ def test_the_builtin_subagent_is_supplied_when_nothing_was_narrowed(cfg, session
 
     kinds = [type(m).__name__ for m in _gp(built).get("middleware", ())]
     assert "_Audit" in kinds, f"an unrestricted request runs it unaudited: {kinds}"
-    assert "ToolAllowlist" not in kinds, "nothing was narrowed, so nothing to narrow it by"
+    (granted,) = [m for m in _gp(built)["middleware"] if isinstance(m, GrantedOnlyMiddleware)]
+    assert granted._allowed is None, "nothing was narrowed, so nothing to narrow it by"
 
 
 def test_the_backstop_is_on_an_unrestricted_request_too(cfg, session_dir):
-    """`DeclaredSubagentsOnly` exists so a subagent deepagents adds in a future version
+    """`GrantedOnlyMiddleware` exists so a subagent deepagents adds in a future version
     does not arrive unnoticed.
     """
     built = _audited_build(cfg, session_dir)
 
-    assert "DeclaredSubagentsOnly" in {type(m).__name__ for m in built.middleware}
+    (granted,) = [m for m in built.middleware if isinstance(m, GrantedOnlyMiddleware)]
+    assert granted._allowed is None, "nothing was narrowed, so this proves nothing"
+    assert granted._declared is not None
 
 
 def test_the_builtin_subagent_gets_its_own_instances(cfg, session_dir):

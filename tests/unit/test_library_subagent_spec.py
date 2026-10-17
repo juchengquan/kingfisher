@@ -17,7 +17,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills
+from kingfisher.core.agent.middlewares.narrowing import NarrowedSkillsMiddleware
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.definitions.subagents.spec import SubagentError
@@ -130,7 +130,9 @@ def test_the_subagent_is_shown_the_skills_from_both(cfg, deployed, session_dir):
         capabilities=Capabilities(subagents=("clerk",), tools=()),
     )
     (index,) = [
-        m for m in subagent_of(built, "clerk")["middleware"] if isinstance(m, NarrowedSkills)
+        m
+        for m in subagent_of(built, "clerk")["middleware"]
+        if isinstance(m, NarrowedSkillsMiddleware)
     ]
 
     shown = index._format_skills_list(index.before_agent({}, None, {})["skills_metadata"])

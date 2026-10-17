@@ -313,7 +313,7 @@ def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir,
     """The guard exists to correct the model mid-turn, and its message names the virtual
     path to use.
 
-    Both ways, because `HostPathGuard` catches in two hooks and only the sync one was
+    Both ways, because `ToolFailureMiddleware` catches in two hooks and only the sync one was
     driven: making `awrap_tool_call` re-raise instead of correcting left the whole suite
     green, while the same change to `wrap_tool_call` reddened this test and one more.
     An async turn is the one a service runs.

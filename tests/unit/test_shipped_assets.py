@@ -19,7 +19,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent, declared_middleware
 from kingfisher.core.agent.kinds.declared_middleware import ByName
-from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills
+from kingfisher.core.agent.middlewares.narrowing import NarrowedSkillsMiddleware
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.importing import load
 from kingfisher.core.definitions.skills import spec as skill
@@ -462,7 +462,9 @@ def test_the_preset_that_grants_a_skill_is_told_about_it(
         capabilities=Capabilities(subagents=("reviewer",)),
     )
 
-    (scoped,) = [m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkills)]
+    (scoped,) = [
+        m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkillsMiddleware)
+    ]
     rendered = scoped._format_skills_list(scoped._qualified())
     # Both the spellings `reviewer.yaml` writes, which is why it writes two.
     assert "postmortem" in rendered
@@ -697,7 +699,9 @@ def test_the_typed_preset_is_handed_its_tool_and_shown_its_skill(
         capabilities=Capabilities(subagents=("versions",)),
     )
     (index,) = [
-        m for m in subagent_of(built, "versions")["middleware"] if isinstance(m, NarrowedSkills)
+        m
+        for m in subagent_of(built, "versions")["middleware"]
+        if isinstance(m, NarrowedSkillsMiddleware)
     ]
 
     shown = index._format_skills_list(index.before_agent({}, None, {})["skills_metadata"])

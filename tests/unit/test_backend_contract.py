@@ -181,7 +181,7 @@ def test_a_subclass_of_the_scoped_backend_keeps_the_scratchpad(cfg, session_dir)
 
 
 def test_a_host_path_refused_with_the_wrong_type_is_caught(cfg, session_dir):
-    """`HostPathGuard` catches one type. Refuse with another and a correction the
+    """`ToolFailureMiddleware` catches one type. Refuse with another and a correction the
     model could have acted on arrives as a failed turn instead.
     """
 
@@ -200,7 +200,7 @@ def test_a_host_path_refused_with_the_wrong_type_is_caught(cfg, session_dir):
         layout=DEFAULT_LAYOUT,
     )
 
-    with pytest.raises(AssertionError, match="HostPathGuard does not catch"):
+    with pytest.raises(AssertionError, match="ToolFailureMiddleware does not catch"):
         host_path_refusal(lambda: (cfg, wrong))
 
 

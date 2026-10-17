@@ -399,7 +399,7 @@ not repeated here. What that file does not say is what the decorator is *for*, w
 cost an experiment to establish.
 
 - **`@tool` buys control, not capability.** A plain function reaches the graph, is
-  offered to the model, dispatches, and is covered by `WorkspaceToolErrors` exactly
+  offered to the model, dispatches, and is covered by `ToolFailureMiddleware` exactly
   as a decorated one is -- deepagents wraps whatever it is handed, so by the time a
   tool is in the graph it has `.name` and `.invoke` either way. The decorator is
   worth reaching for when the name or description must *differ* from the function as
@@ -437,7 +437,7 @@ cost an experiment to establish.
 - **A `Command` returned by a workspace tool is applied, not wrapped.**
   `_format_output` hands back any `ToolOutputMixin` untouched, and both
   `ToolMessage` and langgraph's `Command` are one -- so a tool can replace its own
-  result or write graph state, and `WorkspaceToolErrors` never sees it because it
+  result or write graph state, and `ToolFailureMiddleware` never sees it because it
   catches exceptions and nothing else. The cost is in the transcript: the message
   carries no `name`, so `_event_for` records a `tool_result` naming no tool.
   Documented rather than refused, and `decisions.md` says why. *(2026-09-04.)*
@@ -632,7 +632,7 @@ directly, and `filter_tools_for_ptc` called on its own.*
   is called without them; `tool_call_schema` drops them.
 - **An exception the program does not catch leaves `eval` as itself.** The original is
   re-raised out of the evaluation and meets whatever wraps the `eval` call: in
-  kingfisher, `HostPathGuard` turned the backend's host-path refusal into a failed
+  kingfisher, `ToolFailureMiddleware` turned the backend's host-path refusal into a failed
   `eval` result, and a workspace tool's `FileNotFoundError` ended the turn. Caught in
   the program, either reads as `HostError: Host function failed`, its message lost. A
   tool with `handle_tool_error` returns its error text as an ordinary value instead.

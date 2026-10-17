@@ -125,7 +125,7 @@ class CallCap(AgentMiddleware):
     """Refuse a tool call once this turn has made `limit` of them.
 
     Refused as a `ToolMessage` rather than raised, which is what
-    `ToolAllowlist` does two files over and for the same reason: the agent gets
+    `GrantedOnlyMiddleware` does two files over and for the same reason: the agent gets
     to see that it ran out and write its answer from what it already has, where
     an exception would end the turn and lose the work.
 
