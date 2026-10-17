@@ -443,6 +443,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             paths=paths,
             layout=cfg.layout,
             backend=backend,
+            step_limit=cfg.recursion_limit,
             recorder=recording(agent),
             clearing=clearing,
             tools=tools,
@@ -684,6 +685,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     paths=paths,
                     layout=cfg.layout,
                     backend=backend,
+                    step_limit=cfg.recursion_limit,
                     recorder=recording(agent),
                     tools=permitted,
                 )

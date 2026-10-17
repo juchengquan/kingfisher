@@ -4050,6 +4050,30 @@ an empty string matches everything. Escapes and anchors are left alone: deepagen
 already points at `rg` in the shell, and unescaping them would guess at what was meant.
 *(2026-10-17, from the trial transcripts.)*
 
+**An agent near the end of its budget is told how many model calls it has left, and a
+subagent is held to the same budget.** Over 71 trial turns, every turn either finished in
+38 calls or fewer or ran to the 50-call limit and stopped mid-work, never told it was
+close. `StepBudgetMiddleware` reads langgraph's own step counter and limit, so it follows
+`KINGFISHER_RECURSION_LIMIT`, and from 80% of the steps adds a note as the last thing each
+model call reads: about how many calls remain after this one, three steps a call, and on
+the last call that it is the last. The note is never stored. Kept, it would be sent
+again, stale, on every later call and turn; coming after the cached part, it leaves the
+prompt cache whole; and there is only ever one. The limit stays at 150 steps.
+
+A subagent does not run under that limit: deepagents binds 9,999 steps to the graph it
+builds, and the turn's limit overrides that for the agent's own run and not for the
+subagents run inside it. Measured under a 30-step turn, a subagent's model calls saw a
+limit of 9,999, two steps a call, and it made 41 calls, all of them one tool call to the
+agent. So `standing_middleware` holds each subagent it builds to the agent's budget in
+model calls, counted off its own conversation rather than steps, which deepagents' config
+would decide: warned from four fifths of it like the agent, and on its last allowed call
+any calls it still asks for are dropped and its text handed back headed by a line saying
+it stopped at its limit. The turn goes on, as with a subagent that gave up on cut
+replies. Enforcing it there, rather than binding a limit onto graphs deepagents compiles,
+leaves deepagents' config alone. On neutral prompts the trial after the `read_file` and
+`grep` changes had no turn reach the warning. *(2026-10-17, from the trial transcripts
+and a scripted turn.)*
+
 **What the agent is told about the shell is said by the shell.** `system.md`,
 `capability_skills.md` and `BuiltinToolsMiddleware` told every deployment's agent four
 things true only of kingfisher's own shell: it runs on the host in the session root,

@@ -295,6 +295,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
             layout=cfg.layout,
             # The parent's, whose shell is the one this subagent's `execute` runs on.
             backend=backend,
+            step_limit=cfg.recursion_limit,
             recorder=recorder,
             # `None` permits nothing: an empty allowlist, not an absent one.
             tools=None

@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A turn's budget is said near its end, and a subagent is held to it, after #861
+
+- **From 80% of a turn's steps, each model call ends with a note** saying about how many
+  calls are left, or that this one is the last. It is never stored, so no transcript or
+  event carries it; a deployment's middleware reading the model's request sees it.
+- **A subagent may make `KINGFISHER_RECURSION_LIMIT` ÷ 3 model calls in a turn**, 50 at
+  the default, the agent's own budget. It was bounded only by the turn's time limit. It
+  is warned the same way, and a subagent still asking for tools on its last allowed call
+  hands back its text headed "[Stopped: this subagent reached its limit of N model
+  calls…]". The turn goes on.
+- **`standing_middleware` takes `step_limit=`**, with no default: pass
+  `cfg.recursion_limit`.
+
 ## `grep` searches each string of `a|b`, after #858
 
 - **A `grep` pattern of non-empty strings joined by `|` is searched for each string**,
