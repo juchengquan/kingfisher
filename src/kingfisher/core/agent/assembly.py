@@ -64,6 +64,7 @@ from kingfisher.core.agent.middlewares.narrowing import (
     ToolAllowlist,
 )
 from kingfisher.core.agent.middlewares.recorder import Audiences, Recorder
+from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.agent.models import build_model, model_named
 from kingfisher.core.agent.permitted_backend import PermittedBackend
 from kingfisher.core.agent.prompting import memory_guidelines, system_prompt
@@ -380,6 +381,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             if ledger is None
             else (ResultClearing(ledger, high_mark(running, mark), cfg.layout.offloads_route),)
         ),
+        # The agent's own limit is the one `KINGFISHER_RECURSION_LIMIT` sets.
+        StepBudget(),
         TodoListMiddleware(),
         *tool_guards(guarded, paths, recording(agent), cfg.layout, backend, subagent=False),
     ]

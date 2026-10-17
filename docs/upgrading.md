@@ -18,6 +18,12 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## An agent near its step limit is told so, after #859
+
+- **From 80% of a turn's steps, each model call ends with a note** saying about how many
+  calls are left, or that this one is the last. It is never stored, so no transcript or
+  event carries it; a deployment's middleware reading the model's request sees it.
+
 ## `grep` searches each string of `a|b`, after #858
 
 - **A `grep` pattern of non-empty strings joined by `|` is searched for each string**,

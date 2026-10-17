@@ -4001,6 +4001,20 @@ matches everything. Escapes and anchors are left alone: deepagents' note already
 at `rg` in the shell, and unescaping them would guess at what was meant. *(2026-10-17,
 from the trial transcripts.)*
 
+**An agent past four fifths of its steps is told how many model calls it has left.**
+Over 71 trial turns, every turn either finished in 38 calls or fewer or ran to the
+50-call limit and stopped mid-work, never told it was close. `StepBudget` reads
+langgraph's own step counter and limit, so it follows `KINGFISHER_RECURSION_LIMIT`, and
+from 80% of the steps adds a note as the last thing each model call reads: about how many
+calls remain after this one, three steps a call, and on the last call that it is the
+last. The note is never stored. Kept, it would be sent again, stale, on every later call
+and turn; coming after the cached part, it leaves the prompt cache whole; and there is
+only ever one. The limit stays at 150 steps until a trial shows what this and the
+`read_file` and `grep` changes save. A subagent is not covered, because it does not run
+under that limit: deepagents binds 9,999 steps to every graph it builds, a subagent's
+bound config wins over the turn's, and only the turn's time limit stops one. Bounding
+subagents is its own change. *(2026-10-17, from the trial transcripts.)*
+
 **What the agent is told about the shell is said by the shell.** `system.md`,
 `capability_skills.md` and `ShellPaths` told every deployment's agent four things true
 only of kingfisher's own shell: it runs on the host in the session root, `TMPDIR` is the
