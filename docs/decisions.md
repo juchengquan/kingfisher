@@ -1333,6 +1333,10 @@ it refused by `refuse_unknown` for that caller alone -- the failure that reverse
 central `access.yaml` below. So the build takes it out of the grant, `kingfisher list`
 and the run report take it out of what they say is offered, and the ledger stamps a
 result no wider than its tool, each through `core.definitions.tools.spec.out_of_reach`.
+A subagent's own tool is held back the same way, and a caller's listing printed one
+under its subagent regardless until 2026-10-17: the build's filter was written for
+bundles, and the listing's kept bundles to the subagents the caller reaches and
+nothing finer.
 
 **The audience is a private attribute, not `metadata`.** `BaseTool.metadata` was the
 obvious home and is wrong: LangChain passes it to every callback, so an audience kept

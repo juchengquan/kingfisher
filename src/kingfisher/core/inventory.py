@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Container, Iterable, Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
@@ -403,6 +404,43 @@ def _subject(kind: str, name: str) -> str:
     return f"{kind} {name!r}"
 
 
+def _shut_out_of_bundles(
+    resolved: Definitions, held: frozenset[str] | None
+) -> Mapping[str, frozenset[str]]:
+    """Each subagent's own tools whose own audience shuts this caller out.
+
+    The build holds them back whatever the grant says, so a listing naming one under its
+    subagent tells the caller their run would hold a tool it will not.
+    """
+    if held is None:
+        return {}
+    shut: dict[str, frozenset[str]] = {}
+    # One subagent at a time, as `_bundled` reads them: a bundle that will not load
+    # lists no tools to hold back, and must not stop the others' being held back.
+    with suppress(SubagentError):
+        for owner, bundle in resolved.bundled_tools.items():
+            with suppress(ToolError, SubagentError):
+                shut[owner] = frozenset(
+                    one.name for one in bundle.found if not reaches(one.audience, held)
+                )
+    return shut
+
+
+def _without(
+    by_name: Mapping[str, tuple[str, ...]], shut: Mapping[str, frozenset[str]]
+) -> Mapping[str, tuple[str, ...]]:
+    """Each subagent's names less the ones `shut` holds back, and one left with none."""
+    if not shut:
+        return by_name
+    return MappingProxyType(
+        {
+            name: kept
+            for name, names in by_name.items()
+            if (kept := tuple(one for one in names if one not in shut.get(name, ())))
+        }
+    )
+
+
 def _kept[V](by_name: Mapping[str, V], reached: Container[str]) -> Mapping[str, V]:
     """Only the entries for definitions this caller reaches."""
     return MappingProxyType({name: one for name, one in by_name.items() if name in reached})
@@ -765,6 +803,7 @@ def inventory(
         if subagents_error is None
         else (_NO_NAMES, _NO_NAMES, _NO_NAMES, None, (), ())
     )
+    held_back = _shut_out_of_bundles(resolved, held)
     bundled_misplaced: Mapping[str, tuple[str, ...]] = _NO_NAMES
     if subagents_error is None and bundles_error is None:
         bundled_misplaced = resolved.bundled_misplaced
@@ -934,7 +973,7 @@ def inventory(
             else _kept(miscounted_bundles, for_caller_subagents)
         ),
         miscounted_bundles_checked=miscounted_bundles is not None,
-        bundled_tools=_kept(bundled_tools, for_caller_subagents),
+        bundled_tools=_kept(_without(bundled_tools, held_back), for_caller_subagents),
         bundled_skills=_kept(bundled_skills, for_caller_subagents),
         # Computed here rather than in `_bundled`, which is the only place that
         # knows what is in a bundle and not which definitions carry a graph.
@@ -946,7 +985,11 @@ def inventory(
             }
         ),
         bundled_misplaced=_kept(bundled_misplaced, for_caller_subagents),
-        shadowed=_kept(shadowed, for_caller_subagents) if shadowed is not None else _NO_NAMES,
+        shadowed=(
+            _kept(_without(shadowed, held_back), for_caller_subagents)
+            if shadowed is not None
+            else _NO_NAMES
+        ),
         shadowed_checked=shadowed is not None,
         carried_bundles=tuple(name for name in carried if name in for_caller_subagents),
         bundles_error=bundles_error,
