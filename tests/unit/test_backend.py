@@ -14,6 +14,7 @@ from kingfisher.core.agent.host_paths import (
 )
 from kingfisher.core.layout import (
     BUNDLED_SKILLS_ROUTE,
+    DEFAULT_LAYOUT,
     OFFLOADS_ROUTE,
     ROUTES,
     SCRATCH_ROUTE,
@@ -294,7 +295,7 @@ def test_scratch_is_the_session_s_own(cfg, session_dir):
 def test_two_sessions_do_not_share_a_tmpdir(cfg, session_dir, workspace):
     """The cross-session channel this closed: what one caller derived sat where another
     caller's agent could read it."""
-    other = ensure_session_layout(workspace / "sessions" / "second")
+    other = ensure_session_layout(workspace / "sessions" / "second", DEFAULT_LAYOUT)
 
     assert shell_env(cfg, session_dir)["TMPDIR"] != shell_env(cfg, other)["TMPDIR"]
 
@@ -432,8 +433,8 @@ def test_home_is_not_shared_between_two_sessions(cfg, workspace):
     """One session's cached tokens or tool config must not be another's."""
     from kingfisher.plugins.sessions.folders import ensure_session_layout
 
-    first = ensure_session_layout(workspace / "sessions" / "one")
-    second = ensure_session_layout(workspace / "sessions" / "two")
+    first = ensure_session_layout(workspace / "sessions" / "one", DEFAULT_LAYOUT)
+    second = ensure_session_layout(workspace / "sessions" / "two", DEFAULT_LAYOUT)
 
     assert shell_env(cfg, first)["HOME"] != shell_env(cfg, second)["HOME"]
 

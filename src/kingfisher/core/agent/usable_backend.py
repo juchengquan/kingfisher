@@ -24,7 +24,7 @@ def executes(backend: Any) -> bool:
     return isinstance(backend, SandboxBackendProtocol)
 
 
-def not_executing(backend: Any) -> str | None:
+def why_no_shell(backend: Any) -> str | None:
     """Why deepagents would give this backend no shell, or `None` where it would.
 
     `isinstance`, not the methods present: `SandboxBackendProtocol` is an abstract base
@@ -40,7 +40,7 @@ def not_executing(backend: Any) -> str | None:
     )
 
 
-def uncovered(backend: Any, scopes: tuple[str, ...] | None = None) -> str | None:
+def unrouted_denials(backend: Any, scopes: tuple[str, ...] | None = None) -> str | None:
     """Which denied paths this backend routes nothing for, or `None` for none.
 
     `FilesystemMiddleware` refuses `permissions=` on an executing backend unless every
@@ -48,7 +48,7 @@ def uncovered(backend: Any, scopes: tuple[str, ...] | None = None) -> str | None
     are the deny rules it will be given, the default layout's when left out.
     """
     if not executes(backend):
-        return None  # `not_executing` owns that failure; this would only repeat it
+        return None  # `why_no_shell` owns that failure; this would only repeat it
     if scopes is None:
         scopes = (*denied_scopes(), *denied_read_scopes())
     routes = tuple(backend.routes) if isinstance(backend, CompositeBackend) else ()
@@ -68,6 +68,6 @@ def refuse_unusable_backend(backend: Any, scopes: tuple[str, ...] | None = None)
 
     `ConfigError`, not `AssertionError`: out of a library, that would read as its own bug.
     """
-    for why in (not_executing(backend), uncovered(backend, scopes)):
+    for why in (why_no_shell(backend), unrouted_denials(backend, scopes)):
         if why is not None:
             raise ConfigError(why)

@@ -17,6 +17,7 @@ from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.access.source_ids import UNSCOPED, AccessError, parse
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.narrowing import ToolAllowlist
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
 from kingfisher.core.session.steps import drive
@@ -77,7 +78,7 @@ def policied(cfg):
 def session_at(kf, name: str):
     session = kf.workspace / "sessions" / name
     session.mkdir(parents=True, exist_ok=True)
-    ensure_session_layout(session)
+    ensure_session_layout(session, DEFAULT_LAYOUT)
     return session
 
 

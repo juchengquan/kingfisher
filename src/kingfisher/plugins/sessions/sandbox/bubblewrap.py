@@ -16,7 +16,7 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kingfisher.core.layout import DEFAULT_LAYOUT
+from kingfisher.core.layout import Layout
 from kingfisher.plugins.sessions.sandbox.linux import MAX_OUTPUT_BYTES, outcome, present
 
 if TYPE_CHECKING:
@@ -52,11 +52,10 @@ def bubblewrap_available() -> bool:
 
 def argv_for(
     session_dir: Path,
+    layout: Layout,
     *,
     readable: Iterable[Path | str] = (),
     writable: Iterable[Path | str] = (),
-    inputs: str = DEFAULT_LAYOUT.inputs,
-    saved_results: Iterable[str] = DEFAULT_LAYOUT.saved_results,
 ) -> list[str]:
     """The sandbox one session's commands run in, generated from it."""
     argv = ["bwrap"]
@@ -71,13 +70,7 @@ def argv_for(
     # drops an absent one, which is why `ensure_session_layout` makes them first. `inputs`
     # is the caller's, and its write bits are the shell's to lift; a saved result is what
     # a later turn reads back as a tool's answer.
-    session = Path(session_dir)
-    guarded = [
-        session / DEFAULT_LAYOUT.harness,
-        session / inputs,
-        *(session / p for p in saved_results),
-    ]
-    for path in present(guarded):
+    for path in present([Path(session_dir) / name for name in layout.shell_read_only]):
         argv += ["--ro-bind", str(path), str(path)]
     argv += [
         "--dev", "/dev",

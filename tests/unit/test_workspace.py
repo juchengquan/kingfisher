@@ -5,6 +5,7 @@ import os
 from kingfisher import WorkspacePaths
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.layout import (
+    DEFAULT_LAYOUT,
     HARNESS,
     LAYOUT_DIRS,
     SESSION_DIRS,
@@ -217,7 +218,7 @@ def test_the_layout_names_no_genre_of_output():
 
 def test_one_pass_makes_a_whole_session(tmp_path):
     """What `LocalSessions` used to finish off, and the reason this exists."""
-    session = ensure_session_layout(tmp_path / "s")
+    session = ensure_session_layout(tmp_path / "s", DEFAULT_LAYOUT)
 
     for name in (*SESSION_DIRS, HARNESS):
         assert (session / name).is_dir(), name

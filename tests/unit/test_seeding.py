@@ -170,9 +170,8 @@ def test_a_workspace_tool_reaches_the_assembled_agent(cfg, fixture_pack):
 
     shutil.copytree(fixture_pack / "tools", cfg.definitions / "tools", dirs_exist_ok=True)
 
-    tools = dispatched(
-        build_agent(cfg, backend=backend_at(cfg, ensure_session_layout(cfg.workspace / "s"))).graph
-    )
+    session = ensure_session_layout(cfg.workspace / "s", cfg.layout)
+    tools = dispatched(build_agent(cfg, backend=backend_at(cfg, session)).graph)
 
     assert "probe" in tools
     assert "read_file" in tools  # and the built-ins are still there
@@ -193,8 +192,9 @@ def test_a_workspace_tool_may_not_shadow_a_builtin(cfg):
         "TOOLS = [read_file]\n"
     )
 
+    session = ensure_session_layout(cfg.workspace / "s", cfg.layout)
     with pytest.raises(CapabilityError, match="read_file"):
-        build_agent(cfg, backend=backend_at(cfg, ensure_session_layout(cfg.workspace / "s")))
+        build_agent(cfg, backend=backend_at(cfg, session))
 
 
 # -- seeding says what it took away ---------------------------------------

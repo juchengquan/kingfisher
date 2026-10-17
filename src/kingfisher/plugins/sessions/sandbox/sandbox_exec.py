@@ -11,7 +11,7 @@ import threading
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
-from kingfisher.core.layout import DEFAULT_LAYOUT
+from kingfisher.core.layout import Layout
 
 #: The sandbox profile's name, which `profile_path` puts a digest of its rules inside:
 #: `shell.<digest>.sb`.
@@ -27,8 +27,7 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name
     itself: Path,
     protected: tuple[Path, ...] = (),
     protected_files: tuple[Path, ...] = (),
-    session_inputs: str = DEFAULT_LAYOUT.inputs,
-    saved_results: tuple[str, ...] = DEFAULT_LAYOUT.saved_results,
+    layout: Layout,
 ) -> str:
     """A `sandbox-exec` profile denying the operator's home, minus what runs code.
 
@@ -74,11 +73,13 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name
     # paths. Without the node denies the shell could rename a folder above `.harness`,
     # write where the pattern no longer reaches, and rename it back.
     lines.append(_sessions_denial(sessions_root))
-    lines += [_enclosing_denial(sessions_root, folder) for folder in _enclosing(saved_results)]
+    lines += [
+        _enclosing_denial(sessions_root, folder) for folder in _enclosing(layout.saved_results)
+    ]
     # The rule that keeps the rest enforceable: append, unlink and rename-over are all
     # `file-write*` against this name.
     lines.append(f"(deny file-write* (path {_sb(itself)}))")
-    for folder in (session_inputs, DEFAULT_LAYOUT.harness, *saved_results):
+    for folder in layout.shell_read_only:
         lines.append(_session_folder_denial(sessions_root, folder))
     return "\n".join(lines) + "\n"
 

@@ -1771,8 +1771,8 @@ WITNESSES: dict[str, dict[str, str]] = {
         # The two refusals kingfisher makes of every backend it resolves, which
         # `ports.md` offers a plugin's own suite to ask first; and where a tool's path
         # lives on this host, which it offers for checking a backend's answer.
-        "not_executing": "document",
-        "uncovered": "document",
+        "unrouted_denials": "document",
+        "why_no_shell": "document",
         "host_path": "document",
         # How deepagents will list one skills source, which `ports.md` offers for
         # comparing what a backend serves with what kingfisher read.
@@ -2225,7 +2225,7 @@ PUBLIC = ("kingfisher", "kingfisher.plugins")
 RUNS_AN_AGENT = frozenset({
     "Kingfisher", "run", "stream",
     "LocalSessions", "backend_at",
-    "not_executing", "uncovered", "host_path",
+    "why_no_shell", "unrouted_denials", "host_path",
 })
 
 #: What the command may load before it knows which verb it is running: it reads `.env`

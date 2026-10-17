@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.layout import DEFAULT_LAYOUT
+from kingfisher.core.layout import Layout
 from kingfisher.plugins.sessions.sandbox.linux import MAX_OUTPUT_BYTES, outcome, present
 
 if TYPE_CHECKING:
@@ -28,12 +28,7 @@ SYSTEM_PATHS: tuple[str, ...] = (
 )
 
 
-def _session_writable(
-    session_dir: Path,
-    *,
-    session_dirs: tuple[str, ...] = DEFAULT_LAYOUT.session_dirs,
-    inputs: str = DEFAULT_LAYOUT.inputs,
-) -> list[Path]:
+def _session_writable(session_dir: Path, layout: Layout) -> list[Path]:
     """Everywhere inside one session the shell may write: its directories, one by one.
 
     Never the session itself: a Landlock rule only grants, and a write walks up to the
@@ -42,16 +37,15 @@ def _session_writable(
     `tests/linux/test_fence_escapes.py`. `inputs` is left out because it is the caller's,
     and a grant here is the only thing that would let the shell change it.
     """
-    return [Path(session_dir) / name for name in session_dirs if name != inputs]
+    return [Path(session_dir) / name for name in layout.session_dirs if name != layout.inputs]
 
 
 def policy_for(
     session_dir: Path,
+    layout: Layout,
     *,
     readable: Iterable[Path | str] = (),
     writable: Iterable[Path | str] = (),
-    session_dirs: tuple[str, ...] = DEFAULT_LAYOUT.session_dirs,
-    inputs: str = DEFAULT_LAYOUT.inputs,
 ) -> Any:
     """The `Sandbox` one session's commands run under, generated from it.
 
@@ -69,7 +63,7 @@ def policy_for(
         # gets swapped out for no fence at all.
         fs_readable=present([*SYSTEM_PATHS, *readable, session_dir]),
         fs_writable=present([
-            *_session_writable(session_dir, session_dirs=session_dirs, inputs=inputs),
+            *_session_writable(session_dir, layout),
             *writable,
         ]),
     )

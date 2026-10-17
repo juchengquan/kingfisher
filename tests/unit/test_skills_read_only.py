@@ -14,6 +14,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins.sessions.backend import backend_at
 from kingfisher.plugins.sessions.sandbox import sandbox_exec
 from tests.conftest import FakeToolCallingModel
@@ -147,6 +148,7 @@ def test_the_profile_denies_after_it_allows(tmp_path):
         writable=(tmp_path / "ws",),
         itself=tmp_path / "ws" / ".kingfisher" / "shell.sb",
         protected=(tmp_path / "ws" / "skills",),
+        layout=DEFAULT_LAYOUT,
     )
     lines = text.splitlines()
 
@@ -166,6 +168,7 @@ def test_a_profile_with_nothing_protected_is_unchanged(tmp_path):
         "readable": (tmp_path / "ws",),
         "writable": (tmp_path / "ws",),
         "itself": tmp_path / "ws" / ".kingfisher" / "shell.sb",
+        "layout": DEFAULT_LAYOUT,
     }
 
     assert sandbox_exec.profile(**args) == sandbox_exec.profile(**args, protected=())

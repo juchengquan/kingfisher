@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 
-from kingfisher.core.layout import DEFAULT_LAYOUT
+from kingfisher.core.layout import Layout
 
 
 def _drop_write_bits(path: Path) -> None:
@@ -32,7 +32,7 @@ def _unreachable(path: Path, error: OSError) -> str:
     return f"{path.name}: {error.strerror or error}"
 
 
-def keep_tmp_private(session_dir: Path, *, scratchpad: str = DEFAULT_LAYOUT.scratchpad) -> None:
+def keep_tmp_private(session_dir: Path, layout: Layout) -> None:
     """Give the session's `TMPDIR` mode `0o700`.
 
     `mkdir(mode=)` cannot: the umask masks it, and an existing directory ignores it.
@@ -41,13 +41,13 @@ def keep_tmp_private(session_dir: Path, *, scratchpad: str = DEFAULT_LAYOUT.scra
     when it cannot, since the session may be a mount whose modes are not ours to set.
     """
     with suppress(OSError):
-        (Path(session_dir) / scratchpad).chmod(0o700)
+        (Path(session_dir) / layout.scratchpad).chmod(0o700)
 
 
-def protect_inputs(session_dir: Path, inputs: str = DEFAULT_LAYOUT.inputs) -> tuple[str, ...]:
+def protect_inputs(session_dir: Path, layout: Layout) -> tuple[str, ...]:
     """Make `inputs/` read-only at the OS level. Idempotent."""
     # The layout's name, not a spelling of it: `InputsBackend` uploads under the same leaf.
-    inputs_dir = Path(session_dir) / inputs
+    inputs_dir = Path(session_dir) / layout.inputs
     if not inputs_dir.is_dir():
         return ()
 
@@ -61,9 +61,9 @@ def protect_inputs(session_dir: Path, inputs: str = DEFAULT_LAYOUT.inputs) -> tu
 
 
 @contextmanager
-def writable_inputs(session_dir: Path, inputs: str = DEFAULT_LAYOUT.inputs) -> Iterator[Path]:
+def writable_inputs(session_dir: Path, layout: Layout) -> Iterator[Path]:
     """Temporarily make `inputs/` writable, for loading inputs."""
-    inputs_dir = Path(session_dir) / inputs
+    inputs_dir = Path(session_dir) / layout.inputs
     inputs_dir.mkdir(parents=True, exist_ok=True)
     _add_write_bits(inputs_dir)
     for path in inputs_dir.rglob("*"):
@@ -72,4 +72,4 @@ def writable_inputs(session_dir: Path, inputs: str = DEFAULT_LAYOUT.inputs) -> I
     try:
         yield inputs_dir
     finally:
-        protect_inputs(session_dir, inputs)
+        protect_inputs(session_dir, layout)

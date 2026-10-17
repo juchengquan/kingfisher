@@ -849,8 +849,6 @@ def _backing(monkeypatch, sessions=None, **fields):
 
     on_the_workspace = MemoryBacking(**fields)
     on_the_sessions = MemoryBacking(**sessions) if sessions is not None else on_the_workspace
-    # Taken from `SESSIONS` rather than spelled, so a layout that renames
-    # the directory renames it here too.
     marker = SESSIONS
 
     monkeypatch.setattr(

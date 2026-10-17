@@ -11,7 +11,7 @@ import pytest
 
 from kingfisher import Kingfisher, Request, UnknownSessionError
 from kingfisher.cli.__main__ import main
-from kingfisher.core.layout import HARNESS, PINNED_AGENT, SESSION_DIRS
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT, SESSION_DIRS
 from kingfisher.core.request import Decision, Resume
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -209,7 +209,7 @@ def test_a_session_named_for_a_guarded_folder_still_writes_its_own_files(cfg):
     """
     session = cfg.workspace / "sessions" / "inputs"
     session.mkdir(parents=True, exist_ok=True)
-    ensure_session_layout(session)
+    ensure_session_layout(session, DEFAULT_LAYOUT)
     backend = backend_at(cfg, session)
 
     assert backend.execute("printf ok > outputs/mine.txt").exit_code == 0
@@ -223,7 +223,7 @@ def test_the_guarantee_holds_inside_a_session_named_for_a_guarded_folder(cfg):
     """
     session = cfg.workspace / "sessions" / "inputs"
     session.mkdir(parents=True, exist_ok=True)
-    ensure_session_layout(session)
+    ensure_session_layout(session, DEFAULT_LAYOUT)
     (session / "inputs" / "given.txt").write_text("as written", encoding="utf-8")
     backend = backend_at(cfg, session)
 
@@ -278,7 +278,7 @@ def test_sessions_reached_through_a_link_are_writable_and_still_fenced(sessions_
     all exit 0. Either half alone reddens this.
     """
     cfg = sessions_elsewhere
-    session = ensure_session_layout(cfg.workspace / "sessions" / DEFAULT)
+    session = ensure_session_layout(cfg.workspace / "sessions" / DEFAULT, DEFAULT_LAYOUT)
     (session / "inputs" / "given.txt").write_text("as written", encoding="utf-8")
     backend = backend_at(cfg, session)
 
@@ -312,7 +312,7 @@ def test_a_session_reached_through_a_link_of_its_own_is_still_refused_its_inputs
     far = tmp_path / "far"
     far.mkdir()
     (cfg.workspace / "sessions" / "strayed").symlink_to(far)
-    session = ensure_session_layout(cfg.workspace / "sessions" / "strayed")
+    session = ensure_session_layout(cfg.workspace / "sessions" / "strayed", DEFAULT_LAYOUT)
     (session / "inputs" / "given.txt").write_text("as written", encoding="utf-8")
     backend = backend_at(cfg, session)
 
@@ -330,7 +330,7 @@ def test_the_shell_cannot_leave_a_folder_the_listing_would_read_as_a_session(nam
     """
     session = cfg.workspace / "sessions" / DEFAULT
     session.mkdir(parents=True, exist_ok=True)
-    ensure_session_layout(session)
+    ensure_session_layout(session, DEFAULT_LAYOUT)
     backend = backend_at(cfg, session)
 
     made = backend.execute(f"mkdir ../{name}")

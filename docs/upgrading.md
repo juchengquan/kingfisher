@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The plugin checks are named for what they answer, after #850
+
+- **`not_executing` is `why_no_shell`, and `uncovered` is `unrouted_denials`**, from
+  `kingfisher.plugins`. They answer the same questions; the old names are gone.
+- **`Definitions.skill_mounts()` and `skill_sources()` return named tuples**,
+  `SkillMount(route, directory)` and `SkillSource(route, folder, source)`. Unpacking them
+  as pairs and triples still works.
+- **The sessions kit in `tests/checks/sessions.py` reads `cfg.layout`**, so a copy of it
+  holds a deployment that renamed its folders to its own names.
+
 ## A cut answer is asked for again, after #832
 
 - **A turn's graph is streamed with `custom` among its modes** as well as `updates`,

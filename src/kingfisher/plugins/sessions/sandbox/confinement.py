@@ -18,7 +18,7 @@ from functools import partial
 from pathlib import Path
 
 from kingfisher.core.config import Config
-from kingfisher.core.layout import DEFAULT_LAYOUT
+from kingfisher.core.layout import Layout
 from kingfisher.plugins.sessions.sandbox.sandbox_exec import (
     SANDBOX_PROFILE,
     fenced_sessions,
@@ -257,9 +257,8 @@ def shell_confinement(
         # folder's: a shell that edits it picks the key the next start sends, or refuses
         # the start. macOS only: the Linux fences grant nothing above the session.
         authored=(*cfg.authored_files.values(), *_keys_file(cfg)),
-        # So a renamed inputs folder is the one `sessions/*/<inputs>` denies.
-        session_inputs=cfg.layout.inputs,
-        saved_results=cfg.layout.saved_results,
+        # So a renamed inputs folder and saved results are the ones the profile denies.
+        layout=cfg.layout,
     )
 
 
@@ -367,8 +366,7 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name
     extra: tuple[str, ...] = (), skills: tuple[Path, ...] = (),
     definitions: tuple[Path, ...] = (),
     authored: tuple[Path, ...] = (),
-    session_inputs: str = DEFAULT_LAYOUT.inputs,
-    saved_results: tuple[str, ...] = DEFAULT_LAYOUT.saved_results,
+    layout: Layout,
 ) -> Confinement:
     """Choose a confinement for this deployment, writing any profile it needs."""
     if mode == BUBBLEWRAP:
@@ -414,8 +412,7 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name
         # Resolved: the profile matches real paths, and `/tmp` or `/var` is really under
         # `/private`. A file not there yet is named anyway, so the shell cannot create it.
         protected_files=tuple(dict.fromkeys(Path(p).resolve() for p in authored)),
-        session_inputs=session_inputs,
-        saved_results=saved_results,
+        layout=layout,
     )
     # Named for every rule but the one naming the file itself, which cannot be known
     # first; the profile then refuses writes to itself, so the shell cannot rewrite it.

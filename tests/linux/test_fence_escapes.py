@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins.sessions.sandbox.confinement import (
     REQUIRED_LANDLOCK_ABI,
     landlock_abi,
@@ -41,7 +42,7 @@ def two_sessions(tmp_path):
     mine = tmp_path / "sessions" / "a"
     theirs = tmp_path / "sessions" / "b"
     for session in (mine, theirs):
-        ensure_session_layout(session)
+        ensure_session_layout(session, DEFAULT_LAYOUT)
     (mine / "outputs" / "secret.txt").write_text("TENANT-A-PRIVATE\n", encoding="utf-8")
     return mine, theirs
 
@@ -53,7 +54,7 @@ def fenced(two_sessions):
 
     _, theirs = two_sessions
     return LandlockRunner(
-        policy_for(theirs, readable=toolchain_roots()),
+        policy_for(theirs, DEFAULT_LAYOUT, readable=toolchain_roots()),
         cwd=theirs,
         env={"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin:/usr/local/bin"},
     )
@@ -186,7 +187,7 @@ def _runner_for(session):
     from kingfisher.plugins.sessions.sandbox.fence import LandlockRunner, policy_for
 
     return LandlockRunner(
-        policy_for(session, readable=toolchain_roots()),
+        policy_for(session, DEFAULT_LAYOUT, readable=toolchain_roots()),
         cwd=session,
         env={"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin:/usr/local/bin"},
     )

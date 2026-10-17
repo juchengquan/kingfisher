@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from deepagents.backends import FilesystemBackend
 
-from kingfisher.plugins import DEFAULT_LAYOUT, Definitions, host_path, list_skills
+from kingfisher.plugins import Definitions, host_path, list_skills
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -48,7 +48,7 @@ def two_sessions_are_kept_apart(make: Callable[[], Any]) -> None:
     """
     cfg, backends = make()
     one, other = CONTRACT_SESSIONS
-    kept = f"{DEFAULT_LAYOUT.outputs_route}kept-apart"
+    kept = f"{cfg.layout.outputs_route}kept-apart"
     backends.open(cfg, one).upload_files([(kept, b"one's")])
     (seen,) = backends.open(cfg, other).download_files([kept])
     if seen.error is None:
@@ -60,7 +60,7 @@ def a_session_is_there_on_the_next_turn(make: Callable[[], Any]) -> None:
     """Each turn builds its backend again. What one turn wrote, the next must find."""
     cfg, backends = make()
     one = CONTRACT_SESSIONS[0]
-    again = f"{DEFAULT_LAYOUT.outputs_route}again"
+    again = f"{cfg.layout.outputs_route}again"
     backends.open(cfg, one).upload_files([(again, b"still here")])
     (seen,) = backends.open(cfg, one).download_files([again])
     if seen.content != b"still here":
@@ -122,7 +122,7 @@ def a_host_path_stays_in_its_session(make: Callable[[], Any]) -> None:
     cfg, backends = make()
     one, other = CONTRACT_SESSIONS
     mine, theirs = backends.open(cfg, one), backends.open(cfg, other)
-    whose = f"{DEFAULT_LAYOUT.outputs_route}whose"
+    whose = f"{cfg.layout.outputs_route}whose"
     mine.upload_files([(whose, f"{one}'s".encode())])
     theirs.upload_files([(whose, f"{other}'s".encode())])
     answered = host_path(mine, whose)
@@ -200,7 +200,7 @@ def aopen_reaches_the_session_open_does(make: Callable[[], Any]) -> None:
     """
     cfg, backends = make()
     one, _ = CONTRACT_SESSIONS
-    twins = f"{DEFAULT_LAYOUT.outputs_route}twins"
+    twins = f"{cfg.layout.outputs_route}twins"
     backends.open(cfg, one).upload_files([(twins, b"written through open")])
 
     async def opened() -> Any:
@@ -303,7 +303,7 @@ def asize_counts_what_size_does(make: Callable[[], Any]) -> None:
     """
     cfg, backends = make()
     one = CONTRACT_SESSIONS[0]
-    backends.open(cfg, one).upload_files([(f"{DEFAULT_LAYOUT.outputs_route}weighed", b"x" * 1024)])
+    backends.open(cfg, one).upload_files([(f"{cfg.layout.outputs_route}weighed", b"x" * 1024)])
 
     async def counted() -> Any:
         return await backends.asize(cfg, one)

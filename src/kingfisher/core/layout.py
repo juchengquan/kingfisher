@@ -274,6 +274,18 @@ class Layout:
         return (f"{self.scratchpad}/{self.tool_results}", f"{self.scratchpad}/{OFFLOADS}")
 
     @property
+    def made_dirs(self) -> tuple[str, ...]:
+        """Every directory a session is made with: the agent's, `.harness`, and the saved
+        results."""
+        return (*self.session_dirs, HARNESS, *self.saved_results)
+
+    @property
+    def shell_read_only(self) -> tuple[str, ...]:
+        """What every fence keeps the shell from writing inside a session: the caller's
+        inputs, what kingfisher keeps about the session, and the files a ledger row names."""
+        return (self.inputs, HARNESS, *self.saved_results)
+
+    @property
     def routes(self) -> tuple[Route, ...]:
         """The route table for this layout: the renamable leaves spelled from the
         instance, the fixed skills and harness routes unchanged."""

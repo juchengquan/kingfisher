@@ -25,6 +25,7 @@ from kingfisher.core.definitions.subagents.spec import SubagentError, declared
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, ToolError
 from kingfisher.core.definitions.tools.spec import tool_name
 from kingfisher.core.inventory import inventory
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -93,7 +94,7 @@ def built(kf: Kingfisher, source_ids, datazone: str | None) -> tuple[set[str], s
     caller = with_datazone(source_ids, datazone)
     session = kf.workspace / "sessions" / f"{datazone}-{id(caller)}"
     session.mkdir(parents=True, exist_ok=True)
-    ensure_session_layout(session)
+    ensure_session_layout(session, DEFAULT_LAYOUT)
     assembled = build_agent(
         kf.cfg,
         agent=kf._agent_named("surveyor", source_ids=caller),

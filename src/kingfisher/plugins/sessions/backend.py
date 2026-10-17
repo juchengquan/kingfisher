@@ -20,7 +20,7 @@ from kingfisher.core.agent.prompting import ShellPrompt
 from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import CommandRunner, Sessions
-from kingfisher.core.layout import DEFAULT_LAYOUT
+from kingfisher.core.layout import Layout
 from kingfisher.plugins.sessions.folders import (
     LocalSessionDirs,
     ensure_session_layout,
@@ -162,14 +162,14 @@ class WorkspaceScopedBackend(CompositeBackend):
         *,
         session_dir: Path,
         workspace: Path,
-        artifacts_root: str = DEFAULT_LAYOUT.scratch_route,
+        layout: Layout,
     ) -> None:
         # Where deepagents writes on its own: a tool result too long to send, the history
         # its summarizer keeps. Working material, so not `/outputs`, which would hand each
         # to the caller as an artifact, nor the default `/`, outside every folder the layout
         # names. The shell may rewrite them: nothing kingfisher reads back trusts them.
         # deepagents reads this only off a `CompositeBackend`, so it is set here.
-        super().__init__(default=default, routes=routes, artifacts_root=artifacts_root)
+        super().__init__(default=default, routes=routes, artifacts_root=layout.scratch_route)
         #: What a host path is refused against; not the session, which the refusal's
         #: suggestion needs separately.
         self.workspace = Path(workspace)
@@ -192,27 +192,19 @@ class InputsBackend(FilesystemBackend):
     backend: a remote one has no permission bits to lift.
     """
 
-    def __init__(self, session_dir: Path, inputs: str = DEFAULT_LAYOUT.inputs) -> None:
-        super().__init__(root_dir=str(Path(session_dir) / inputs))
+    def __init__(self, session_dir: Path, layout: Layout) -> None:
+        super().__init__(root_dir=str(Path(session_dir) / layout.inputs))
         self._session_dir = Path(session_dir)
-        self._inputs = inputs
+        self._layout = layout
 
     def upload_files(self, files: list[tuple[str, bytes]]) -> Any:
-        with writable_inputs(self._session_dir, self._inputs):
+        with writable_inputs(self._session_dir, self._layout):
             return super().upload_files(files)
 
 
-def _require_layout(
-    session_dir: Path,
-    session_dirs: tuple[str, ...] = DEFAULT_LAYOUT.session_dirs,
-    saved_results: tuple[str, ...] = DEFAULT_LAYOUT.saved_results,
-) -> None:
+def _require_layout(session_dir: Path, layout: Layout) -> None:
     """Refuse a session directory that has not been made yet."""
-    missing = [
-        name
-        for name in (*session_dirs, DEFAULT_LAYOUT.harness, *saved_results)
-        if not (session_dir / name).is_dir()
-    ]
+    missing = [name for name in layout.made_dirs if not (session_dir / name).is_dir()]
     if missing:
         msg = (
             f"session directory {session_dir} is missing {', '.join(missing)}; "
@@ -237,11 +229,11 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     built reads `default` and `routes` off it, and the protocol carries neither.
     """
     _refuse_wording_without_runner(runner, shell_prompt)
-    found = catalogue or Definitions.from_config(cfg)
-    skills = found.skills
+    definitions = catalogue or Definitions.from_config(cfg)
+    skills = definitions.skills
     skills_dir = skills.root
 
-    _require_layout(session_dir, cfg.layout.session_dirs, cfg.layout.saved_results)
+    _require_layout(session_dir, cfg.layout)
     # The skills folder is not created where missing: a start only reads the definitions
     # folder, and a missing one means no skills. The view as well as its targets: every
     # fence checks the resolved path, and the Linux ones also have to reach the links.
@@ -284,7 +276,7 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     # than resolving to the default backend and ignoring its own deny rule.
     layout = cfg.layout
     backing = {
-        layout.inputs_route: lambda: InputsBackend(session_dir, layout.inputs),
+        layout.inputs_route: lambda: InputsBackend(session_dir, layout),
         layout.skills_route: lambda: FilesystemBackend(root_dir=str(skills_dir)),
         layout.memory_route: lambda: FilesystemBackend(
             root_dir=str(session_dir / layout.memory)
@@ -311,7 +303,7 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     # party's skills too. Generated: the names are not known until a catalogue is read.
     routes.update({
         route: FilesystemBackend(root_dir=str(directory))
-        for route, directory in found.skill_mounts()
+        for route, directory in definitions.skill_mounts()
     })
 
     return WorkspaceScopedBackend(
@@ -319,7 +311,7 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
         routes=routes,
         session_dir=session_dir,
         workspace=cfg.workspace,
-        artifacts_root=layout.scratch_route,
+        layout=layout,
     )
 
 
@@ -364,18 +356,10 @@ class LocalSessions(Sessions):
         *,
         catalogue: Definitions | None = None,
     ) -> WorkspaceScopedBackend:
-        directory = ensure_session_layout(
-            _where(cfg, session_id),
-            cfg.layout.session_dirs,
-            memory=cfg.layout.memory,
-            # Named as well as in the tuple: omitted, a renamed scratchpad, which is
-            # `TMPDIR`, is laid out without its `0o700`.
-            scratchpad=cfg.layout.scratchpad,
-            saved_results=cfg.layout.saved_results,
-        )
+        directory = ensure_session_layout(_where(cfg, session_id), cfg.layout)
         # Kernel-level, because the deny rule covers only the file tools. Reported by the
         # turn, not raised: one file owned by another user would end the session for good.
-        unprotected = protect_inputs(directory, cfg.layout.inputs)
+        unprotected = protect_inputs(directory, cfg.layout)
         runner = self._runner(directory) if self._runner is not None else None
         built = backend_at(
             cfg,

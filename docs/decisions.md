@@ -6497,7 +6497,7 @@ as another: it names every plugin, so it would be the back door.
 reached twenty-five names no public address carried -- the folder names every
 deployment's sessions must honour among them -- and the kit in `tests/checks/`, which a
 plugin's author is told to copy, fifteen of its own. Whatever a default needs and an
-outsider cannot import is a gap in the plugin contract, so the gaps were closed rather
+outsider cannot import is a gap in the plugin interface, so the gaps were closed rather
 than the default excused: the layout through `cfg.layout`, with `Layout` public;
 `Config.sessions_root` and `Config.kingfisher_dir`; `Definitions` public, saying where
 its skills are served; the checks kingfisher makes of a backend, and how it lists a
@@ -6509,6 +6509,18 @@ may not import its own door; the kit takes it through the door, since it leaves 
 written. **Not taken: shipping `LocalSessions` as a package of its own.** It needs
 nothing the core does not, `sandlock` is already an extra, and a second release would
 buy an install nobody has asked to skip.
+
+**Inside `LocalSessions`, a function that needs the layout takes the `Layout`.** The
+folders, the backend and the three fences took the folder names one at a time, each
+defaulting to the name kingfisher ships. Every caller passed `cfg.layout`'s, so nothing
+was wrong, but nothing stopped a new caller forgetting one and laying out or fencing a
+renamed deployment's session under the shipped name, silently. One required `Layout` is
+all of them at once. `Layout.made_dirs` and `Layout.shell_read_only` name the two sets
+of folders each spelled out in two places: what a session is made with, and what every
+fence keeps the shell from writing. The checks kingfisher makes of a backend are named
+for what they answer, `why_no_shell` and `unrouted_denials`, and `Definitions` lists
+its skills as named tuples, since a plugin's author reads them cold. *(2026-10-17, from a
+review of the plugin work.)*
 
 **Sessions are always named.** `Kingfisher`, `run()` and `stream()` refuse to run without
 them. The sessions plugin is the sandbox and decides where each caller's files are, so it

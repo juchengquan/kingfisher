@@ -348,9 +348,10 @@ that otherwise report nothing.
 your bundles ship, and an `open` that quietly drops it gets a backend that is
 perfectly well-formed and sees none of them. It is a `Definitions`, from
 `kingfisher.plugins`, and `catalogue.skill_mounts()` lists where your backend has to
-serve its skills: a route under `/skills/` and the directory behind it, one for each
-subagent's bundle and each mount. `catalogue.skill_sources()` adds the catalogue's own
-folders, as every place the agent is given a skills index, and `list_skills(backend,
+serve its skills: each a `route` under `/skills/` and the `directory` behind it, one for
+each subagent's bundle and each mount. `catalogue.skill_sources()` adds the catalogue's
+own folders, as every place the agent is given a skills index, each a `route`, a
+`folder` and the `source` in it deepagents lists, and `list_skills(backend,
 path)` lists one the way deepagents will: listing each through your backend and through
 the folder itself shows whether you serve what kingfisher read. Nothing at runtime can see that mistake,
 which is why `Sessions` is a typed protocol rather than a line of prose —
@@ -506,8 +507,8 @@ implements the file operations in terms of `execute`, or register with the ABC.
 or the graph will not build: deepagents refuses `permissions=` outright on a
 backend that executes unless every rule is scoped to a route.
 
-Both are yours to ask before kingfisher does: `not_executing(backend)` and
-`uncovered(backend)`, from `kingfisher.plugins`, each say why a backend would be
+Both are yours to ask before kingfisher does: `why_no_shell(backend)` and
+`unrouted_denials(backend)`, from `kingfisher.plugins`, each say why a backend would be
 refused, or answer `None`.
 
 **The other four stay yours**, in `tests/checks/backend.py`: that the backend reads

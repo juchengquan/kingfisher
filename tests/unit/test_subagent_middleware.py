@@ -34,7 +34,9 @@ def define(cfg, body: str, name: str = "reviewer") -> None:
 def build(cfg, registry=None, **caps):
     return build_agent(
         cfg,
-        backend=backend_at(cfg, ensure_session_layout(cfg.workspace / "sessions" / "s")),
+        backend=backend_at(
+            cfg, ensure_session_layout(cfg.workspace / "sessions" / "s", cfg.layout)
+        ),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         middleware_registry=registry,
         capabilities=Capabilities(**caps),

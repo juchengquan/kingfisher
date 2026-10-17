@@ -39,7 +39,7 @@ def fenced(two_sessions):
     """A runner sandboxed to the second session, as `LocalSessions` builds one."""
     _, theirs = two_sessions
     return BubblewrapRunner(
-        argv_for(theirs, readable=toolchain_roots()),
+        argv_for(theirs, DEFAULT_LAYOUT, readable=toolchain_roots()),
         env={"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin:/usr/local/bin"},
     )
 
@@ -111,11 +111,11 @@ def test_a_saved_result_is_the_shells_to_read_and_not_to_write(tmp_path):
     The control runs first, because the rename probe is the one that could leave the
     scratchpad somewhere else if it got half-way.
     """
-    session = ensure_session_layout(tmp_path / "sessions" / "s1")
+    session = ensure_session_layout(tmp_path / "sessions" / "s1", DEFAULT_LAYOUT)
     for folder in DEFAULT_LAYOUT.saved_results:
         (session / folder / "A-0001.txt").write_text("as written", encoding="utf-8")
     runner = BubblewrapRunner(
-        argv_for(session, readable=toolchain_roots()),
+        argv_for(session, DEFAULT_LAYOUT, readable=toolchain_roots()),
         env={"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin:/usr/local/bin"},
     )
 

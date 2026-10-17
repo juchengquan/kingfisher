@@ -10,7 +10,7 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.usable_backend import refuse_unusable_backend
 from kingfisher.core.config import ConfigError
 from kingfisher.core.interfaces import CommandResult, CommandRunner
-from kingfisher.core.layout import INPUTS
+from kingfisher.core.layout import DEFAULT_LAYOUT, INPUTS
 from kingfisher.core.request import Request
 from kingfisher.core.run import run, stream
 from kingfisher.core.session.steps import drive
@@ -38,6 +38,7 @@ class Substitute(WorkspaceScopedBackend):
             given.routes,
             session_dir=given._session_dir,
             workspace=given.workspace,
+            layout=DEFAULT_LAYOUT,
         )
         self.wrapping = given
 

@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from functools import cached_property
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from kingfisher.core.access.capabilities import ALL, SEPARATOR
 from kingfisher.core.config import NO_MOUNTS, Config, ConfigError, definition_roots_for
@@ -22,6 +22,26 @@ from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository, ToolError
 from kingfisher.core.definitions.tools.spec import Found, Offering
 from kingfisher.core.layout import BUNDLED_SKILLS_ROUTE, RESERVED_SKILL_FOLDER, SKILLS_ROUTE
+
+
+class SkillSource(NamedTuple):
+    """One place the agent is given a skills index."""
+
+    #: The route the folder is served at.
+    route: str
+    #: The folder on this host.
+    folder: Path
+    #: The source in it that deepagents lists.
+    source: str
+
+
+class SkillMount(NamedTuple):
+    """One skills directory mounted beneath the catalogue."""
+
+    #: The route it is served at, under `/skills/`.
+    route: str
+    #: The directory on this host.
+    directory: Path
 
 
 @dataclass(frozen=True)
@@ -44,16 +64,19 @@ class Definitions:
         """What the agent will actually be told about, asked of deepagents."""
         return skill_registry.read(self.skills)
 
-    def skill_sources(self) -> tuple[tuple[str, Path, str], ...]:
-        """Every place the agent is given a skills index: `(route, folder, source)`."""
+    def skill_sources(self) -> tuple[SkillSource, ...]:
+        """Every place the agent is given a skills index."""
         root = self.skills.root
         return (
-            *((SKILLS_ROUTE, root, path) for _, path in skill_registry.sources(root)),
-            *((route, folder, skill_registry.ROOT) for route, folder in self.skill_mounts()),
+            *(SkillSource(SKILLS_ROUTE, root, path) for _, path in skill_registry.sources(root)),
+            *(
+                SkillSource(route, folder, skill_registry.ROOT)
+                for route, folder in self.skill_mounts()
+            ),
         )
 
-    def skill_mounts(self) -> tuple[tuple[str, Path], ...]:
-        """`(route, directory)` for every skills directory mounted beneath the catalogue.
+    def skill_mounts(self) -> tuple[SkillMount, ...]:
+        """Every skills directory mounted beneath the catalogue.
 
         All under `/skills/`: the deny rule and sandbox profile that keep the catalogue
         read-only are scoped to that prefix. A skills directory mounted other than
@@ -61,12 +84,15 @@ class Definitions:
         """
         return (
             *(
-                pair
+                SkillMount(*pair)
                 for bundle in _bundles_with_skills(self)
                 for pair in bundled_skill_mounts(bundle.where, bundle.skills)
             ),
             # The segment the registry lists a mount under, so a skill's deny rule lands here.
-            *((f"{SKILLS_ROUTE}{label}/", mount) for label, mount in self.skills.mounts.items()),
+            *(
+                SkillMount(f"{SKILLS_ROUTE}{label}/", mount)
+                for label, mount in self.skills.mounts.items()
+            ),
         )
 
     @cached_property

@@ -18,6 +18,7 @@ from kingfisher.core.agent.middlewares.recorder import Audiences
 from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository, ToolError
 from kingfisher.core.definitions.tools.spec import own_audience
 from kingfisher.core.inventory import inventory
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -67,7 +68,7 @@ def built(kf: Kingfisher, held: tuple[str, ...]) -> list[str]:
     """The workspace tools handed to `create_deep_agent` for this caller."""
     session = kf.workspace / "sessions" / "-".join(held)
     session.mkdir(parents=True, exist_ok=True)
-    ensure_session_layout(session)
+    ensure_session_layout(session, DEFAULT_LAYOUT)
     assembled = build_agent(
         kf.cfg,
         agent=kf._agent_named("surveyor", source_ids=held),
@@ -349,7 +350,7 @@ def test_the_run_report_agrees_with_the_build(policied):
     def report(held_names: tuple[str, ...]) -> dict[str, tuple[str, ...]]:
         session = kf.workspace / "sessions" / f"report-{'-'.join(held_names)}"
         session.mkdir(parents=True, exist_ok=True)
-        ensure_session_layout(session)
+        ensure_session_layout(session, DEFAULT_LAYOUT)
         held = kf._held_for(held_names)
         request = Request(task="t", agent="surveyor")
         agent = drive(kf._agent_for(request, harness_in(kf.cfg, session), source_ids=held_names))
