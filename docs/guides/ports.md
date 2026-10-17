@@ -456,7 +456,9 @@ kingfisher's own process, outside every sandbox. So it must never name another
 session's file — `a_host_path_stays_in_its_session` in `tests/checks/sessions.py` writes a file
 into two sessions and reads back what your answer names. The turn's rules still
 apply first: a path the file tools may not read, `/.harness` among them, is
-refused before your method is asked.
+refused before your method is asked. `host_path(backend, virtual)`, from
+`kingfisher.plugins`, answers as kingfisher will: `(the root it must stay in, the
+path)`, or `None`.
 
 **Three more extras are read where you declare them.** `unprotected` on the backend,
 a tuple of what it could not make read-only, which a turn reports to its caller as
@@ -499,6 +501,10 @@ implements the file operations in terms of `execute`, or register with the ABC.
 **The paths kingfisher denies writes under must sit under something you route**,
 or the graph will not build: deepagents refuses `permissions=` outright on a
 backend that executes unless every rule is scoped to a route.
+
+Both are yours to ask before kingfisher does: `not_executing(backend)` and
+`uncovered(backend)`, from `kingfisher.plugins`, each say why a backend would be
+refused, or answer `None`.
 
 **The other four stay yours**, in `tests/checks/backend.py`: that the backend reads
 back what it was given, keeps deepagents' offloads in the scratchpad, keeps the shell

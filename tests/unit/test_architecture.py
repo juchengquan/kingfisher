@@ -1413,13 +1413,7 @@ NOT_YET: dict[str, frozenset[str]] = {
     "src/kingfisher/plugins/sessions/backend.py": frozenset({
         "kingfisher.core.agent.prompting:kingfishers_shell",
     }),
-    "tests/checks/backend.py": frozenset({
-        "kingfisher.core.agent.usable_backend:executes",
-        "kingfisher.core.agent.usable_backend:not_executing",
-        "kingfisher.core.agent.usable_backend:uncovered",
-    }),
     "tests/checks/sessions.py": frozenset({
-        "kingfisher.core.agent.permitted_backend:host_path",
         "kingfisher.core.definitions.skills:registry",
     }),
 }
@@ -1796,6 +1790,12 @@ WITNESSES: dict[str, dict[str, str]] = {
         # And the refusal kingfisher's own backend makes, which `ports.md` offers a
         # backend that wants to refuse host paths the same way.
         "reject_host_path": "document",
+        # The two refusals kingfisher makes of every backend it resolves, which
+        # `ports.md` offers a plugin's own suite to ask first; and where a tool's path
+        # lives on this host, which it offers for checking a backend's answer.
+        "not_executing": "document",
+        "uncovered": "document",
+        "host_path": "document",
     },
 }
 
@@ -2244,6 +2244,7 @@ PUBLIC = ("kingfisher", "kingfisher.plugins")
 RUNS_AN_AGENT = frozenset({
     "Kingfisher", "run", "stream",
     "LocalSessions", "backend_at",
+    "not_executing", "uncovered", "host_path",
 })
 
 #: What the command may load before it knows which verb it is running: it reads `.env`

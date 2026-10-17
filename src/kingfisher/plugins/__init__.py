@@ -27,6 +27,9 @@ _EXPORTS = {
     "DEFAULT_LAYOUT": "kingfisher.core.layout",
     "HostPathError": "kingfisher.core.agent.host_paths",
     "reject_host_path": "kingfisher.core.agent.host_paths",
+    "not_executing": "kingfisher.core.agent.usable_backend",
+    "uncovered": "kingfisher.core.agent.usable_backend",
+    "host_path": "kingfisher.core.agent.permitted_backend",
     "LocalSessions": "kingfisher.plugins.sessions.backend",
     "backend_at": "kingfisher.plugins.sessions.backend",
     "JsonlRunEvents": "kingfisher.plugins.events",
@@ -54,15 +57,21 @@ __all__ = [
     "ShellSettings",
     "WireFormat",
     "backend_at",
+    "host_path",
+    "not_executing",
     "reject_host_path",
+    "uncovered",
 ]
 
 if TYPE_CHECKING:
     from kingfisher.core.agent.host_paths import HostPathError as HostPathError
     from kingfisher.core.agent.host_paths import reject_host_path as reject_host_path
     from kingfisher.core.agent.models import WIRE_FORMATS as WIRE_FORMATS
+    from kingfisher.core.agent.permitted_backend import host_path as host_path
     from kingfisher.core.agent.prompting import InstructionsFile as InstructionsFile
     from kingfisher.core.agent.prompting import ShellPrompt as ShellPrompt
+    from kingfisher.core.agent.usable_backend import not_executing as not_executing
+    from kingfisher.core.agent.usable_backend import uncovered as uncovered
     from kingfisher.core.config import WireFormat as WireFormat
     from kingfisher.core.definitions.catalogue import Definitions as Definitions
     from kingfisher.core.interfaces import CommandResult as CommandResult
