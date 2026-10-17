@@ -17,6 +17,7 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.middlewares.shell_paths import (
     ABSOLUTE,
     MAPPINGS,
+    TIMEOUT,
     ShellPaths,
     hint,
     missed,
@@ -191,6 +192,24 @@ def test_a_shell_s_own_line_reaches_every_graph_holding_it(shelled, subagent):
         described = _execute(tools)
         assert "- The shell holds this session at `/workspace/inputs`." in described
         assert ABSOLUTE not in described
+
+
+@pytest.mark.parametrize("shell", ["own", "silent", "theirs"])
+def test_every_shell_says_its_timeout_is_in_seconds(shelled, shell):
+    """Models passed milliseconds, 5000 to 40000, each refused as past deepagents' longest,
+    and kingfisher's line had replaced the one that mentioned the timeout at all."""
+    cfg, offered = shelled
+    backends = {
+        "own": LocalSessions(),
+        "silent": LocalSessions(runner=lambda _where: Plain()),
+        "theirs": LocalSessions(runner=lambda _where: Plain(), shell_prompt=THEIRS),
+    }[shell]
+
+    _run(cfg, *_consulting("checker"), backends=backends)
+
+    assert len(offered) == 3
+    for tools in offered:
+        assert TIMEOUT in _execute(tools)
 
 
 def test_a_miss_on_a_shell_kingfisher_does_not_run_is_left_as_it_was(shelled):
@@ -439,7 +458,7 @@ def test_a_tool_offered_as_a_mapping_is_told_the_rule_by_name(way):
     )
 
     assert told == [
-        {"name": "execute", "description": f"Run a command.\n\n{rule}"},
+        {"name": "execute", "description": f"Run a command.\n\n{rule}\n{TIMEOUT}"},
         {"name": "read_file", "description": "Read a file."},
     ]
 

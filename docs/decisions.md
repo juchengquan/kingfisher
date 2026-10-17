@@ -3954,7 +3954,10 @@ miss the agent made despite `system.md` was a path inside a script the command r
 which no rewrite sees. Not a copy of `system.md`'s table in every subagent's prompt:
 it would contradict the description beside it, and cost every subagent the tokens.
 deepagents' own host mappings for routed mounts are left as they are; both spellings
-reach the same files.
+reach the same files. The description also says `timeout` is in seconds and its longest,
+on every shell: the line it replaces was the one that mentioned the timeout, and over 71
+trial turns models passed milliseconds, 5,000 to 40,000, each refused as past the hour
+deepagents allows. *(2026-10-17.)*
 
 Measured over ten real turns each way, five of an agent running its own script and five
 of it asking `reviewer` to work in the shell: turns with a miss did not fall, 3 before
