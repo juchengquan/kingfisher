@@ -3,10 +3,12 @@ the shell gives of itself."""
 
 from __future__ import annotations
 
+import inspect
 import re
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from deepagents.middleware.filesystem import FilesystemMiddleware
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
@@ -23,6 +25,15 @@ ABSOLUTE = (
     "- Use absolute paths and avoid `cd` so the working directory stays stable; use the "
     "optional timeout to override the default."
 )
+
+
+#: deepagents' longest `timeout`, which kingfisher leaves at its default.
+_LONGEST = (
+    inspect.signature(FilesystemMiddleware.__init__).parameters["max_execute_timeout"].default
+)
+
+#: Said on every shell: models passed milliseconds, 5000 to 40000, and each was refused.
+TIMEOUT = f"- `timeout` is in seconds, {_LONGEST:,} at most."
 
 
 #: How deepagents opens the section of host paths it appends to the system prompt where the
@@ -80,15 +91,21 @@ def hint(path: str) -> str:
     )
 
 
-def _described(tool: Any, rule: str) -> Any:
+def _described(tool: Any, rule: str | None) -> Any:
     if isinstance(tool, BaseTool) and tool.name == EXECUTE:
-        return tool.model_copy(update={"description": _ruled(tool.description, rule)})
+        return tool.model_copy(update={"description": _timed(_ruled(tool.description, rule))})
     if isinstance(tool, dict) and tool.get("name") == EXECUTE:
-        return {**tool, "description": _ruled(tool.get("description") or "", rule)}
+        return {**tool, "description": _timed(_ruled(tool.get("description") or "", rule))}
     return tool
 
 
-def _ruled(description: str, rule: str) -> str:
+def _timed(description: str) -> str:
+    return description if TIMEOUT in description else f"{description}\n{TIMEOUT}"
+
+
+def _ruled(description: str, rule: str | None) -> str:
+    if rule is None:
+        return description
     # Appended when deepagents has reworded its line, so the rule still arrives and a test
     # fails on the advice left beside it.
     if ABSOLUTE in description:
@@ -143,10 +160,9 @@ class ShellPaths(AgentMiddleware):
         self._virtual = _virtual(layout.session_dirs)
 
     def _told(self, request: Any) -> Any:
-        if self._rule is not None:
-            tools = [_described(tool, self._rule) for tool in request.tools]
-            if not all(new is old for new, old in zip(tools, request.tools, strict=True)):
-                request = request.override(tools=tools)
+        tools = [_described(tool, self._rule) for tool in request.tools]
+        if not all(new is old for new, old in zip(tools, request.tools, strict=True)):
+            request = request.override(tools=tools)
         return request if self._here else _unmapped(request)
 
     def _corrected(self, request: Any, result: Any) -> Any:
