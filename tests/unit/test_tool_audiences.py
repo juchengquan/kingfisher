@@ -293,6 +293,33 @@ def test_an_unrestricted_grant_still_gets_an_allowlist_without_the_tool():
     assert "read_file" in surface.permitted, "the built-ins went with it"
 
 
+@pytest.mark.parametrize("tool", ["count", "line_count"], ids=["own", "shadowing"])
+def test_a_callers_listing_names_no_own_tool_the_build_holds_back(policied, tool):
+    """The build left the tool out of `counter` for B, and B's listing still printed it
+    under `counter` as one their run would hold. A tool shadowing the catalogue's is
+    printed by a line of its own, so it is held back by a filter of its own.
+    """
+    from kingfisher.cli.listing import render
+
+    subagents = policied.catalogue_roots["subagents"]
+    subagents.mkdir(parents=True, exist_ok=True)
+    (subagents / "counter.py").write_text(
+        CARRIER.replace("def count(", f"def {tool}(").replace("tool(count,", f"tool({tool},"),
+        encoding="utf-8",
+    )
+    (policied.catalogue_roots["agents"] / "surveyor.yaml").write_text(
+        AGENT + "subagents: [counter]\n", encoding="utf-8"
+    )
+    a = inventory(policied, source_ids=["A"])
+    b = inventory(policied, source_ids=["B"])
+
+    assert f"{tool}  [private tool" in "\n".join(render(a)), "the control: A holds it"
+    assert "counter" in b.subagents, "B still reaches the subagent"
+    assert "counter" not in b.bundled_tools
+    assert "counter" not in b.shadowed
+    assert f"{tool}  [private tool" not in "\n".join(render(b))
+
+
 def test_a_moved_tool_the_caller_cannot_reach_is_not_named_to_them(policied):
     """The listing's moved-tool rows read the agent's half only, and named a tool to a
     caller whose every other view of the deployment withholds it.
