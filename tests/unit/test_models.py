@@ -71,7 +71,7 @@ def test_the_model_comes_from_the_profile_it_is_handed(cfg):
 #: The params `kwargs` passes only when they are set. Listed rather than written
 #: into the test below, because the test below was written for `temperature` and
 #: `top_p` sat one line under it in `kwargs` for as long, unnamed by anything.
-OPTIONAL = ("temperature", "top_p")
+OPTIONAL = ("max_retries", "temperature", "top_p")
 
 
 def test_an_unset_param_is_not_passed_at_all(cfg):
@@ -108,7 +108,9 @@ def test_every_value_reaches_the_client():
         endpoint = Endpoint(
             api, "https://example.invalid/v1", "sk-not-real", wire_format=wire_format
         )
-        profile = ModelProfile("a-model", "somewhere", max_tokens=321, timeout_s=45)
+        profile = ModelProfile(
+            "a-model", "somewhere", max_tokens=321, timeout_s=45, max_retries=7
+        )
         model = build_model(profile, endpoint)
         sites = wire_format.lands
 
@@ -117,6 +119,8 @@ def test_every_value_reaches_the_client():
         assert getattr(model, sites.api_key).get_secret_value() == endpoint.api_key
         assert getattr(model, sites.max_tokens) == 321
         assert getattr(model, sites.timeout) == 45
+        assert sites.max_retries is not None, api
+        assert getattr(model, sites.max_retries) == 7
 
 
 @dataclass(frozen=True)
@@ -593,3 +597,16 @@ def test_the_shipped_minimax_reservation_leaves_the_summarizer_to_its_window(tmp
     window = model.profile["max_input_tokens"]
 
     assert int(window * 0.95) - model.max_tokens >= int(window * 0.85), model.max_tokens
+
+
+def test_retries_a_format_has_nowhere_to_keep_are_refused_before_it_is_built():
+    """A class that does not know `max_retries` moves it into the request body, where the
+    provider refuses every call; and a `Landing` may leave it out, for such a class."""
+    anthropic = WIRE_FORMATS["anthropic"]
+    bare = replace(anthropic, lands=replace(anthropic.lands, max_retries=None))
+    endpoint = Endpoint("bare", "https://example.invalid/v1", "sk-not-real", wire_format=bare)
+
+    with pytest.raises(ConfigError, match=r"sets max_retries.*nowhere to keep it"):
+        build_model(_row("a-model", max_retries=4), endpoint)
+    # The control: the same format builds a model that does not set it.
+    assert build_model(_row("a-model"), endpoint).model == "a-model"

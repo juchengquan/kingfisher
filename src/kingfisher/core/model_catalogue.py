@@ -38,7 +38,10 @@ KEYS_SETTING = "KINGFISHER_MODEL_KEYS_FILE"
 
 #: What a model entry may say, beside `extra`; every one is optional except `endpoint`.
 KNOWN_MODEL: frozenset[str] = frozenset(
-    {"endpoint", "max_tokens", "timeout_s", "temperature", "top_p", "clear_results_at", "extra"}
+    {
+        "endpoint", "max_tokens", "timeout_s", "max_retries", "temperature", "top_p",
+        "clear_results_at", "extra",
+    }
 )
 
 
@@ -226,6 +229,16 @@ def _endpoints(  # noqa: PLR0913 -- one argument per source a key can come from
     return resolved, dropped
 
 
+def _retries(value: object, where: str) -> int | None:
+    """A model's `max_retries`: unset, or a count of further tries, never negative."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        msg = f"{where} max_retries is {value!r}; it takes a whole number, 0 or more"
+        raise ConfigError(msg)
+    return value
+
+
 def _mark(written: Any, subject: str) -> int | None:
     """A `clear_results_at` as tokens, refusing what cannot be a count of them.
 
@@ -268,6 +281,7 @@ def _models(
             endpoint=endpoint_name,
             max_tokens=int(entry.get("max_tokens", 4096)),
             timeout_s=int(entry.get("timeout_s", 120)),
+            max_retries=_retries(entry.get("max_retries"), f"{source}: model {name!r}"),
             temperature=entry.get("temperature"),
             top_p=entry.get("top_p"),
             extra=dict(extra),

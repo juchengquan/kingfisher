@@ -2147,6 +2147,14 @@ the catalogue loads, with a warning; `Models` keeps the models that named it, an
 cannot reach. An endpoint no model names is dropped with the loader's warning alone.
 *(2026-08-16, `model-catalogue.md`; 2026-08-18, `what-the-catalogue-dropped.md`.)*
 
+**`max_retries` is the SDK's, set per model.** How patient a deployment is with a
+provider that refuses or cannot answer differs by provider and plan, so a model row
+says it, and it is handed to the SDK, which backs off and reads the provider's
+retry-after. Unset is the SDK's own. A `Landing` may leave the site out for a class with
+nowhere to keep it, and a model setting it on that format is refused before it is built,
+since a keyword a class does not know is moved into the request body. Kingfisher adds no
+retry layer of its own: one would multiply with the SDK's. *(2026-10-17.)*
+
 **The shipped definitions name no models.** A vendor's model id is portable
 nowhere, and a file shipped inside a wheel cannot name one.
 *(2026-08-16, `model-catalogue.md`.)*

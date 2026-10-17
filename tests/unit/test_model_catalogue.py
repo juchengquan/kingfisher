@@ -88,6 +88,30 @@ def test_a_clearing_mark_that_is_no_count_of_tokens_is_refused(tmp_path, written
         loaded(tmp_path, body)
 
 
+def test_an_entry_may_say_how_many_more_tries_the_sdk_makes(tmp_path):
+    """Read onto the profile and sent; unset, it is not sent, and the SDK's own stands."""
+    body = GOOD.replace(
+        "  main-model:\n    endpoint: gateway\n",
+        "  main-model:\n    endpoint: gateway\n    max_retries: 5\n",
+    )
+    models = loaded(tmp_path, body).models
+
+    assert models["main-model"].kwargs()["max_retries"] == 5
+    assert "max_retries" not in models["tuned"].kwargs()
+
+
+@pytest.mark.parametrize("written_as", ["lots", "-1", "true", "1.5"])
+def test_retries_that_are_no_count_are_refused(tmp_path, written_as):
+    """`true` would read as one more try, and a fraction as nothing an SDK takes."""
+    body = GOOD.replace(
+        "  main-model:\n    endpoint: gateway\n",
+        f"  main-model:\n    endpoint: gateway\n    max_retries: {written_as}\n",
+    )
+
+    with pytest.raises(ConfigError, match="'main-model' max_retries is"):
+        loaded(tmp_path, body)
+
+
 def test_a_clearing_mark_under_extra_is_refused(tmp_path):
     """Under `extra` it would be handed to the chat class as a keyword, beside the mark
     this format reads, which is the collision `extra` already refuses."""

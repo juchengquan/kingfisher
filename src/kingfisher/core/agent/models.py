@@ -28,6 +28,7 @@ WIRE_FORMATS: Mapping[str, WireFormat] = {
             api_key="anthropic_api_key",
             max_tokens="max_tokens",
             timeout="default_request_timeout",
+            max_retries="max_retries",
         ),
     ),
     # OpenAI proper, on the Responses API: not a general OpenAI-compatible client, since
@@ -40,6 +41,7 @@ WIRE_FORMATS: Mapping[str, WireFormat] = {
             api_key="openai_api_key",
             max_tokens="max_tokens",
             timeout="request_timeout",
+            max_retries="max_retries",
         ),
         MappingProxyType({"use_responses_api": True}),
     ),
@@ -56,6 +58,13 @@ FILLABLE = 0.95
 def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
     """Build a chat model from `profile`, pointed at `endpoint`."""
     wire_format = endpoint.wire_format
+    if profile.max_retries is not None and wire_format.lands.max_retries is None:
+        msg = (
+            f"model {profile.model!r} sets max_retries, and api {endpoint.api!r} names "
+            f"{wire_format.chat_class}, whose Landing has nowhere to keep it; leave it out "
+            "for this model, or give the format's Landing a max_retries"
+        )
+        raise ConfigError(msg)
     model = wire_format.resolve()(
         model=profile.model,
         base_url=endpoint.base_url,
@@ -192,6 +201,8 @@ def _refuse_what_did_not_land(
         "max_tokens": profile.max_tokens,
         "timeout": profile.timeout_s,
     }
+    if profile.max_retries is not None:
+        sent["max_retries"] = profile.max_retries
     for value, expected in sent.items():
         site = getattr(wire_format.lands, value)
         landed = getattr(model, site, None)

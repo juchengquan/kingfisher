@@ -34,6 +34,9 @@ class Landing:
     api_key: str
     max_tokens: str
     timeout: str
+    #: `None` for a class with nowhere to keep it, and a model setting `max_retries` on
+    #: that format is refused rather than sent where the request body would carry it.
+    max_retries: str | None = None
 
 
 @dataclass(frozen=True)
@@ -80,6 +83,9 @@ class ModelProfile:
     endpoint: str
     max_tokens: int = 4096
     timeout_s: int = 120
+    #: How many more times the SDK tries a call the provider refused or could not
+    #: answer, or `None` for the SDK's own default.
+    max_retries: int | None = None
     temperature: float | None = None
     top_p: float | None = None
     extra: Mapping[str, Any] = NO_EXTRA
@@ -90,6 +96,8 @@ class ModelProfile:
     def kwargs(self) -> dict[str, Any]:
         """The model params to build with, omitting everything unset."""
         params: dict[str, Any] = {"max_tokens": self.max_tokens, "timeout": self.timeout_s}
+        if self.max_retries is not None:
+            params["max_retries"] = self.max_retries
         if self.temperature is not None:
             params["temperature"] = self.temperature
         if self.top_p is not None:
