@@ -81,7 +81,7 @@ def sources(root: Path | None) -> tuple[tuple[str, str], ...]:
     return tuple(found)
 
 
-def listed(backend: Any, path: str) -> list[Any]:
+def list_skills(backend: Any, path: str) -> list[Any]:
     """Every skill deepagents finds under one source, in its own metadata shape.
 
     The one call to its private lister, which `test_skill_registry` pins, so an
@@ -96,8 +96,8 @@ def listed(backend: Any, path: str) -> list[Any]:
     return found
 
 
-async def alisted(backend: Any, path: str) -> list[Any]:
-    """`listed`, for a graph run on an event loop."""
+async def alist_skills(backend: Any, path: str) -> list[Any]:
+    """`list_skills`, for a graph run on an event loop."""
     from deepagents.middleware.skills import _alist_skills_with_errors  # noqa: PLC0415
 
     found, _error = await _alist_skills_with_errors(backend, path)
@@ -222,7 +222,7 @@ class SkillRegistry:
 
 def read(repository: LocalSkillRepository) -> SkillRegistry:
     """Ask deepagents what this repository offers."""
-    # Deferred for the reason `listed` gives.
+    # Deferred for the reason `list_skills` gives.
     from deepagents.backends import FilesystemBackend  # noqa: PLC0415
 
     root = repository.root
@@ -251,7 +251,7 @@ def read(repository: LocalSkillRepository) -> SkillRegistry:
         backend = FilesystemBackend(root_dir=str(directory))
         here: list[Listed] = []
         for label, path in labelled:
-            for one in listed(backend, path):
+            for one in list_skills(backend, path):
                 # The prefix is the mount's route segment, and it is what the deny
                 # rule for an unactivated skill is built from. Without it, a mounted
                 # skill's rule names `/skills/<name>/**`, a path that does not exist,

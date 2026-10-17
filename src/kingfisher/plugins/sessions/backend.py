@@ -9,31 +9,31 @@ from __future__ import annotations
 
 import time
 import warnings
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from deepagents.backends import CompositeBackend, FilesystemBackend
 
-from kingfisher.core.agent.backend import skill_mounts
 from kingfisher.core.agent.host_paths import reject_host_path
-from kingfisher.core.agent.prompting import ShellPrompt, kingfishers_shell
+from kingfisher.core.agent.prompting import ShellPrompt
 from kingfisher.core.config import Config, ConfigError
-from kingfisher.core.definitions.catalogue import Definitions, refuse_unmountable
+from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import CommandRunner, Sessions
-from kingfisher.core.layout import CLAIM, DEFAULT_LAYOUT
-from kingfisher.core.session.model import session_dir, still_held
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins.sessions.folders import (
     LocalSessionDirs,
     ensure_session_layout,
     session_bytes,
+    session_dir,
 )
 from kingfisher.plugins.sessions.permissions import protect_inputs, writable_inputs
 from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.shell import (
     ConfinedLocalShellBackend,
     fence_for,
+    kingfishers_shell,
     runs_locally,
     shell_env,
     skills_view,
@@ -271,11 +271,9 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     carries neither.
     """
     _refuse_wording_without_runner(runner, shell_prompt)
-    skills = (catalogue or Definitions.from_config(cfg)).skills
+    found = catalogue or Definitions.from_config(cfg)
+    skills = found.skills
     skills_dir = skills.root
-    # Before anything is mounted: a label becomes a route segment below, and a bad
-    # one would otherwise reach the composite as a path.
-    refuse_unmountable(skills_dir, skills.mounts)
 
     _require_layout(session_dir, cfg.layout.session_dirs, cfg.layout.saved_results)
     # Not created where it is missing: it is in the definitions folder, which a
@@ -285,7 +283,7 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     # The view as well as what it points at: every fence checks the resolved path,
     # so the targets need their grant, and the Linux one also has to reach the
     # links themselves.
-    view = skills_view(skills, cfg.kingfisher_dir) if skills.mounts else None
+    view = skills_view(skills_dir, skills.mounts, cfg.kingfisher_dir) if skills.mounts else None
     every_skills_dir = (skills_dir, *skills.mounts.values(), *((view,) if view else ()))
 
     settings = shell if shell is not None else confinement.ShellSettings.from_env()
@@ -365,7 +363,7 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     # what `family=True` marks.
     routes.update({
         route: FilesystemBackend(root_dir=str(directory))
-        for route, directory in skill_mounts(catalogue or Definitions.from_config(cfg))
+        for route, directory in found.skill_mounts()
     })
 
     return WorkspaceScopedBackend(
@@ -510,7 +508,23 @@ class LocalSessions(Sessions):
 
 def _where(cfg: Config, session_id: str) -> Path:
     """Where kingfisher's own backends keep one session of this workspace."""
-    return session_dir(cfg.workspace, session_id)
+    return session_dir(cfg.sessions_root, session_id)
+
+
+#: The turn lock's name, a directory in the session's `.harness`.
+CLAIM = "claim"
+
+
+def still_held(
+    entries: Sequence[tuple[str, float]], *, stale_after: float, now: float
+) -> tuple[str, ...]:
+    """Which of these claims somebody could still be holding.
+
+    Treating every claim as a turn in progress is what let a claim left behind by a
+    dead process exempt its session from retention permanently -- measured at ten
+    years idle, still there.
+    """
+    return tuple(name for name, taken in entries if now - taken < stale_after)
 
 
 def _claim_at(cfg: Config, session_id: str) -> Path:

@@ -6,9 +6,49 @@ import shutil
 from contextlib import suppress
 from pathlib import Path
 
-from kingfisher.core.layout import AGENTS_SCAFFOLD, DEFAULT_LAYOUT
-from kingfisher.core.session.model import names_a_session
+from kingfisher.core.layout import DEFAULT_LAYOUT
+from kingfisher.core.session.model import UnknownSessionError
 from kingfisher.plugins.sessions.permissions import keep_tmp_private, unlock_and_retry
+
+AGENTS_SCAFFOLD = """\
+# Project memory
+
+Durable facts about this project and how to work in it. Add entries below.
+
+## Conventions
+
+(none recorded yet)
+"""
+
+
+def names_a_session(session_id: str) -> bool:
+    """Whether an id can name a session's folder: one visible entry in a directory."""
+    # One entry and nowhere else: joined as given, `""` is every session, `..` the
+    # workspace, and an absolute id replaces the path. Not hidden: `.harness` is the
+    # name the macOS profile guards in every session, so a session called that could
+    # not write its own files. The listing reads only what passes this, so nothing it
+    # lists is a session `open` would refuse and `reap` would stop at.
+    return (
+        bool(session_id)
+        and not session_id.startswith(".")
+        and "/" not in session_id
+        and "\0" not in session_id
+    )
+
+
+def session_dir(sessions_root: Path, session_id: str) -> Path:
+    """Where one session is kept: a folder of its own under the sessions root, named for
+    its id.
+    """
+    # Here rather than at a door, because every path built from an id is built here --
+    # `open` makes folders where it points and `delete` removes them.
+    if not names_a_session(session_id):
+        msg = (
+            f"{session_id!r} cannot name a session: a session id is one name, not "
+            "starting with '.', holding neither '/' nor NUL"
+        )
+        raise UnknownSessionError(msg)
+    return Path(sessions_root) / session_id
 
 
 class LocalSessionDirs:

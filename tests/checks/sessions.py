@@ -15,11 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from deepagents.backends import FilesystemBackend
 
-from kingfisher.core.agent.backend import skill_mounts
-from kingfisher.core.agent.permitted_backend import host_path
-from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.definitions.skills import registry as skill_registry
-from kingfisher.plugins import DEFAULT_LAYOUT
+from kingfisher.plugins import DEFAULT_LAYOUT, Definitions, host_path, list_skills
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -163,23 +159,19 @@ def a_session_serves_the_skills_kingfisher_read(make: Callable[[], Any]) -> None
     catalogue = Definitions.from_config(cfg).warm()
     one = CONTRACT_SESSIONS[0]
     session = backends.open(cfg, one, catalogue=catalogue)
-    root = catalogue.skills.root
-    places = [
-        # Source by source, because deepagents lists a source one level deep: a
-        # skill in a catalogue folder is found only by listing that folder.
-        *((DEFAULT_LAYOUT.skills_route, root, path) for _, path in skill_registry.sources(root)),
-        *((route, directory, skill_registry.ROOT) for route, directory in skill_mounts(catalogue)),
-    ]
+    # Source by source, because deepagents lists a source one level deep: a skill in a
+    # catalogue folder is found only by listing that folder.
+    places = catalogue.skill_sources()
     read: set[tuple[str, str]] = set()
     served: set[tuple[str, str]] = set()
     for route, directory, path in places:
         read |= {
             (skill["name"], f"{route}{skill['path'].lstrip('/')}")
-            for skill in skill_registry.listed(FilesystemBackend(root_dir=str(directory)), path)
+            for skill in list_skills(FilesystemBackend(root_dir=str(directory)), path)
         }
         served |= {
             (skill["name"], skill["path"])
-            for skill in skill_registry.listed(session, f"{route}{path.lstrip('/')}")
+            for skill in list_skills(session, f"{route}{path.lstrip('/')}")
         }
     if read != served:
         msg = (

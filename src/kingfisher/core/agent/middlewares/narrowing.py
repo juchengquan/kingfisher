@@ -10,7 +10,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
 
-from kingfisher.core.definitions.skills.registry import KEY, alisted, listed, qualified
+from kingfisher.core.definitions.skills.registry import KEY, alist_skills, list_skills, qualified
 
 
 def _tool_name(tool: Any) -> str | None:
@@ -86,7 +86,7 @@ class NarrowedSkills(SkillsMiddleware):
         """Every skill every source offers, tagged with the source it came from."""
         found = []
         for label, path in zip(self.source_labels, self.sources, strict=True):
-            for one in listed(self._backend, path):
+            for one in list_skills(self._backend, path):
                 found.append({**one, KEY: qualified(label, one["name"])})
         return found
 
@@ -94,7 +94,7 @@ class NarrowedSkills(SkillsMiddleware):
         """The same, for a graph run on an event loop."""
         found = []
         for label, path in zip(self.source_labels, self.sources, strict=True):
-            for one in await alisted(self._backend, path):
+            for one in await alist_skills(self._backend, path):
                 found.append({**one, KEY: qualified(label, one["name"])})
         return found
 

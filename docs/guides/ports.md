@@ -160,7 +160,7 @@ Things to know:
   so it is shown only where skills are on. `execute` replaces deepagents' "Use absolute
   paths…" line in the tool's description, and is the only part a subagent sees: a
   subagent is built without the system prompt. Kingfisher's own are
-  `src/kingfisher/core/agent/prompts/shell_here.md`, `shell_here_skills.md` and
+  `src/kingfisher/plugins/sessions/prompts/shell_here.md`, `shell_here_skills.md` and
   `shell_here_execute.md`.
 - **A part left `None` is said the neutral way**, claiming only what holds wherever a
   shell runs — for `execute`, deepagents' own line stays — and `""` says nothing there.
@@ -175,9 +175,10 @@ Things to know:
 - **Kingfisher's own shell describes itself**, so `shell_prompt=` without a runner is
   refused. Standing instructions for every agent go in `INSTRUCTIONS.md` beside the
   definitions, or `instructions=` on `Kingfisher`.
-- **A miss is corrected only on kingfisher's own shell.** A command that fails on a
-  file-tool path there is answered with the path's spelling in the shell, worked out
-  from the session root it starts in; no other shell is known to start there.
+- **A miss is corrected where the shell says it starts in the session.**
+  `starts_in_session=True` says so, and a command that fails on a file-tool path is
+  then answered with the path's spelling in the shell, worked out from the session
+  root. Kingfisher's own shell says it; a shell that does not is not corrected.
 - **deepagents' list of this host's paths is kept only for a shell on this host.**
   deepagents adds a "Shell paths vs. virtual paths" section giving each routed folder's
   path here. It stays for kingfisher's own shell and for a runner whose `local` is
@@ -345,7 +346,13 @@ that otherwise report nothing.
 
 **Take `catalogue` even if you ignore it.** It is what lets a session see the skills
 your bundles ship, and an `open` that quietly drops it gets a backend that is
-perfectly well-formed and sees none of them. Nothing at runtime can see that mistake,
+perfectly well-formed and sees none of them. It is a `Definitions`, from
+`kingfisher.plugins`, and `catalogue.skill_mounts()` lists where your backend has to
+serve its skills: a route under `/skills/` and the directory behind it, one for each
+subagent's bundle and each mount. `catalogue.skill_sources()` adds the catalogue's own
+folders, as every place the agent is given a skills index, and `list_skills(backend,
+path)` lists one the way deepagents will: listing each through your backend and through
+the folder itself shows whether you serve what kingfisher read. Nothing at runtime can see that mistake,
 which is why `Sessions` is a typed protocol rather than a line of prose —
 write the signature out and your type checker catches it.
 
@@ -453,7 +460,9 @@ kingfisher's own process, outside every sandbox. So it must never name another
 session's file — `a_host_path_stays_in_its_session` in `tests/checks/sessions.py` writes a file
 into two sessions and reads back what your answer names. The turn's rules still
 apply first: a path the file tools may not read, `/.harness` among them, is
-refused before your method is asked.
+refused before your method is asked. `host_path(backend, virtual)`, from
+`kingfisher.plugins`, answers as kingfisher will: `(the root it must stay in, the
+path)`, or `None`.
 
 **Three more extras are read where you declare them.** `unprotected` on the backend,
 a tuple of what it could not make read-only, which a turn reports to its caller as
@@ -496,6 +505,10 @@ implements the file operations in terms of `execute`, or register with the ABC.
 **The paths kingfisher denies writes under must sit under something you route**,
 or the graph will not build: deepagents refuses `permissions=` outright on a
 backend that executes unless every rule is scoped to a route.
+
+Both are yours to ask before kingfisher does: `not_executing(backend)` and
+`uncovered(backend)`, from `kingfisher.plugins`, each say why a backend would be
+refused, or answer `None`.
 
 **The other four stay yours**, in `tests/checks/backend.py`: that the backend reads
 back what it was given, keeps deepagents' offloads in the scratchpad, keeps the shell
@@ -549,5 +562,6 @@ to catch.
 The last is ordinary: if you refuse host paths, refuse them with `HostPathError`
 (`from kingfisher.plugins import HostPathError`),
 because that is the type `HostPathGuard` turns into a correction the model can act
-on. Refusing them at all is optional — inside a sandbox of your own, `/etc/passwd`
+on. `reject_host_path`, beside it, is the refusal kingfisher's own backend makes:
+call it from your file operations to refuse the same paths with the same message. Refusing them at all is optional — inside a sandbox of your own, `/etc/passwd`
 is a file, and refusing it would be refusing your own filesystem.

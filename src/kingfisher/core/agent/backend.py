@@ -3,15 +3,12 @@ runs, and the skills it serves."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from deepagents.backends import CompositeBackend
 
 from kingfisher.core.agent.prompting import ShellPrompt
 from kingfisher.core.config import DEFAULT_LAYOUT, ConfigError
-from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.core.layout import (
     BUNDLED_SKILLS_ROUTE,
     RESERVED_SKILL_FOLDER,
@@ -53,64 +50,6 @@ def shell_runs_here(backend: Any) -> bool:
     deployment's own is not known to run here, and says what it sees for itself.
     """
     return getattr(_shell_of(backend), "runs_here", False) is True
-
-
-def _bundles_with_skills(catalogue: Definitions) -> tuple[Any, ...]:
-    """Every bundle that has skills to mount, or none."""
-    try:
-        bundles = catalogue.subagents.bundles
-    except SubagentError:
-        # A catalogue that will not parse has no bundles to mount, and this is
-        # not the place that says so. `--list` exists to be run *because*
-        # something is broken -- it catches the loader error and prints it over
-        # the rest of the inventory -- and it builds a backend on the way.
-        # Raising here took that listing down with it, which is the same shape
-        # as warming inside `resolve_definitions`, and a test caught that one
-        # too. `warm()` still refuses at startup, so nothing is being excused.
-        return ()
-    return tuple(bundle for bundle in bundles.values() if bundle.skills)
-
-
-def bundled_skills_route(where: str) -> str:
-    """The route one bundle's skills are mounted at."""
-    return f"{BUNDLED_SKILLS_ROUTE}{where}/"
-
-
-def bundled_skill_mounts(where: str, directories: tuple[Path, ...]) -> tuple[tuple[str, Path], ...]:
-    """`(route, directory)` for each of one bundle's skill directories.
-
-    One directory keeps the bundle's own route. Several are numbered beneath it in
-    the order the definition listed them, because a directory's name is no label:
-    a package's are all called `skills`. Beneath rather than beside, so each stays
-    under `/skills/` and inherits its read-only rule.
-    """
-    if len(directories) == 1:
-        return ((bundled_skills_route(where), directories[0]),)
-    return tuple(
-        (bundled_skills_route(f"{where}/{n}"), directory)
-        for n, directory in enumerate(directories, start=1)
-    )
-
-
-def skill_mounts(catalogue: Definitions) -> tuple[tuple[str, Path], ...]:
-    """`(route, directory)` for every skills directory mounted beneath the catalogue.
-
-    Each bundle's, then each mount a deployment named. All under `/skills/`, because
-    both things that keep the catalogue read-only -- the deny rule and the sandbox
-    profile -- are scoped to that prefix. `backend_at` mounts this list and
-    `a_session_serves_the_skills_kingfisher_read` checks a `Sessions` against it: a kind of
-    skills directory mounted anywhere but here would escape the check.
-    """
-    return (
-        *(
-            pair
-            for bundle in _bundles_with_skills(catalogue)
-            for pair in bundled_skill_mounts(bundle.where, bundle.skills)
-        ),
-        # The segment the registry lists a mount under, so the deny rule for a skill
-        # in it lands here.
-        *((f"{SKILLS_ROUTE}{label}/", mount) for label, mount in catalogue.skills.mounts.items()),
-    )
 
 
 def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:

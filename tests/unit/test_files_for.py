@@ -10,8 +10,8 @@ from langchain_core.messages import AIMessage
 from kingfisher import Kingfisher, Request, UnknownSessionError
 from kingfisher.core import service as service_module
 from kingfisher.core.interfaces import CommandResult
-from kingfisher.core.session.model import session_dir
 from kingfisher.plugins.sessions.backend import LocalSessions
+from kingfisher.plugins.sessions.folders import session_dir
 from tests.conftest import Through, an_agent, start
 from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
@@ -92,7 +92,7 @@ def test_files_for_opens_the_session_with_the_deployments_runner(cfg, way):
 
     assert files is counting.opened[0]
     assert counting.asked == ["s"]
-    assert built == [(session_dir(cfg.workspace, "s"), files.default.runner)]
+    assert built == [(session_dir(cfg.sessions_root, "s"), files.default.runner)]
 
 
 @pytest.mark.parametrize("session_id", UNNAMABLE)
@@ -194,7 +194,7 @@ def test_files_for_a_session_no_turn_has_made_makes_it(cfg, way):
     files.upload_files([("/outputs/placed.txt", b"placed")])
 
     assert [s.id for s in kf.sessions()] == ["q3-report"]
-    assert (session_dir(cfg.workspace, "q3-report") / "outputs" / "placed.txt").is_file()
+    assert (session_dir(cfg.sessions_root, "q3-report") / "outputs" / "placed.txt").is_file()
     assert kf.run(Request("go", session_id="q3-report")).session_id == "q3-report"
 
 

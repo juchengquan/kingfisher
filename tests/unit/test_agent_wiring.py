@@ -15,9 +15,10 @@ from kingfisher.core.agent.kinds.declared_middleware import (
     _deepagents_middleware_names,
     declared_middleware,
 )
-from kingfisher.core.agent.prompting import kingfishers_shell, system_prompt
+from kingfisher.core.agent.prompting import system_prompt
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.plugins import LocalSessions, backend_at
+from kingfisher.plugins.sessions.shell import kingfishers_shell
 from tests.conftest import (
     FakeToolCallingModel,
     declared_subagents,

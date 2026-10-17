@@ -9,6 +9,8 @@ import shutil
 import sys
 import uuid
 from collections.abc import Mapping
+from functools import lru_cache
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -18,9 +20,7 @@ from deepagents.backends.protocol import ExecuteResponse
 from kingfisher.core.agent.prompting import ShellPrompt
 from kingfisher.core.config import Config
 from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
 from kingfisher.core.interfaces import CommandRunner
-from kingfisher.core.layout import SKILLS_VIEW
 from kingfisher.plugins.sessions.sandbox import confinement
 
 _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
@@ -52,22 +52,48 @@ def shell_env(
         "TMPDIR": str(session_dir / cfg.layout.scratchpad),
     }
     skills = (catalogue or Definitions.from_config(cfg)).skills
-    env["KINGFISHER_SKILLS"] = str(skills_view(skills, cfg.kingfisher_dir))
+    env["KINGFISHER_SKILLS"] = str(skills_view(skills.root, skills.mounts, cfg.kingfisher_dir))
     return env
 
 
-def skills_view(skills: LocalSkillRepository, kingfisher_dir: Path) -> Path:
+#: What kingfisher's own shell says of itself: its section, its paragraph under skills,
+#: and its line in `execute`'s description.
+_HERE = ("shell_here.md", "shell_here_skills.md", "shell_here_execute.md")
+
+
+@lru_cache(maxsize=1)
+def kingfishers_shell() -> ShellPrompt:
+    """What kingfisher's own shell says of itself.
+
+    It runs on this host in the session root, with `TMPDIR` the scratchpad and
+    `KINGFISHER_SKILLS` the catalogue -- true of no other shell, a runner a deployment
+    supplies included: that is handed the command and nothing else, and starts wherever
+    it was started.
+    """
+    prompts = resources.files("kingfisher.plugins.sessions.prompts")
+    prompt, skills, execute = (
+        prompts.joinpath(name).read_text(encoding="utf-8").strip() for name in _HERE
+    )
+    return ShellPrompt(prompt=prompt, skills=skills, execute=execute, starts_in_session=True)
+
+
+#: Where the shell's view of a catalogue with mounts is built, one directory per
+#: arrangement of it. Inside `Config.kingfisher_dir` because the shell must read through
+#: it and never write it, and that directory is already both.
+SKILLS_VIEW = "skills-view"
+
+
+def skills_view(root: Path, mounts: Mapping[str, Path], kingfisher_dir: Path) -> Path:
     """Where the shell finds the catalogue, so `/skills/X` is `$KINGFISHER_SKILLS/X`.
 
     The catalogue itself when nothing is mounted. With mounts, a directory of
     symlinks: one per entry of the catalogue and one per mount under its label,
-    which `refuse_unmountable` has already made sure cannot collide.
+    which a `Definitions` refuses to let collide when it is built.
     """
-    if not skills.mounts:
-        return skills.root
-    root = skills.root
+    if not mounts:
+        return root
     links = {e.name: e.absolute() for e in sorted(root.iterdir())} if root.is_dir() else {}
-    links.update({label: mount.absolute() for label, mount in skills.mounts.items()})
+    links.update({label: mount.absolute() for label, mount in mounts.items()})
     # Named for what it holds, so a catalogue that gained a skill gets a new view
     # rather than a stale one, and two turns building the same view build one.
     listing = "\n".join(f"{name}\t{target}" for name, target in sorted(links.items()))

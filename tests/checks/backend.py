@@ -14,13 +14,12 @@ from uuid import uuid4
 
 from deepagents.backends import CompositeBackend
 
-from kingfisher.plugins import DEFAULT_LAYOUT, HostPathError
+from kingfisher.plugins import DEFAULT_LAYOUT, HostPathError, not_executing, uncovered
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-from kingfisher.core.agent.usable_backend import executes, not_executing, uncovered
 
 
 def execution_support(make: Callable[[], Any]) -> None:
@@ -52,7 +51,7 @@ def filesystem_consistency(make: Callable[[], Any]) -> None:
     on the error message quoting its own argument back.
     """
     backend = make()
-    if not executes(backend):
+    if not_executing(backend) is not None:
         return
     body, name = uuid4().hex, uuid4().hex
     for virtual, write in (
@@ -126,7 +125,7 @@ def shell_denied(make: Callable[[], Any]) -> None:
     it, what is asserted is still only the file afterwards.
     """
     backend = make()
-    if not executes(backend):
+    if not_executing(backend) is not None:
         return
     token = uuid4().hex
     written: list[str] = []

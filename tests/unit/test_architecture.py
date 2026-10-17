@@ -1407,47 +1407,6 @@ def test_the_cross_plugin_rule_tells_its_own_from_another(tmp_path):
 #: from the module that door takes it from -- the object an outsider gets.
 OUTSIDERS: dict[Path, bool] = {SRC / "plugins": False, REPO / "tests" / "checks": True}
 
-#: What each file still takes that no door carries, as `module:name`. It only shrinks:
-#: the change that stops an import removes its line, and the table goes once it is empty.
-NOT_YET: dict[str, frozenset[str]] = {
-    "src/kingfisher/plugins/sessions/backend.py": frozenset({
-        "kingfisher.core.agent.backend:skill_mounts",
-        "kingfisher.core.agent.host_paths:reject_host_path",
-        "kingfisher.core.agent.prompting:kingfishers_shell",
-        "kingfisher.core.definitions.catalogue:Definitions",
-        "kingfisher.core.definitions.catalogue:refuse_unmountable",
-        "kingfisher.core.layout:CLAIM",
-        "kingfisher.core.session.model:session_dir",
-        "kingfisher.core.session.model:still_held",
-    }),
-    "src/kingfisher/plugins/sessions/folders.py": frozenset({
-        "kingfisher.core.layout:AGENTS_SCAFFOLD",
-        "kingfisher.core.session.model:names_a_session",
-    }),
-    "src/kingfisher/plugins/sessions/sandbox/confinement.py": frozenset({
-        "kingfisher.core.layout:SANDBOX_PROFILE",
-    }),
-    "src/kingfisher/plugins/sessions/sandbox/sandbox_exec.py": frozenset({
-        "kingfisher.core.layout:SANDBOX_PROFILE",
-    }),
-    "src/kingfisher/plugins/sessions/shell.py": frozenset({
-        "kingfisher.core.definitions.catalogue:Definitions",
-        "kingfisher.core.definitions.skills.catalogue:LocalSkillRepository",
-        "kingfisher.core.layout:SKILLS_VIEW",
-    }),
-    "tests/checks/backend.py": frozenset({
-        "kingfisher.core.agent.usable_backend:executes",
-        "kingfisher.core.agent.usable_backend:not_executing",
-        "kingfisher.core.agent.usable_backend:uncovered",
-    }),
-    "tests/checks/sessions.py": frozenset({
-        "kingfisher.core.agent.backend:skill_mounts",
-        "kingfisher.core.agent.permitted_backend:host_path",
-        "kingfisher.core.definitions.catalogue:Definitions",
-        "kingfisher.core.definitions.skills:registry",
-    }),
-}
-
 
 def _past_the_doors(path: Path, *, as_written: bool) -> frozenset[str]:
     """What this file takes of kingfisher that no door carries: `module:name`, or the
@@ -1481,21 +1440,10 @@ def test_a_plugin_has_of_kingfisher_only_what_an_outsider_has():
         if (taken := _past_the_doors(path, as_written=as_written))
     }
 
-    new = {
-        path: sorted(more)
-        for path, taken in found.items()
-        if (more := taken - NOT_YET.get(path, frozenset()))
-    }
-    assert not new, (
-        f"{new} -- no door carries these: import a name a door carries, or make one public "
-        "on purpose, with a witness"
+    assert not found, (
+        f"{ {path: sorted(taken) for path, taken in found.items()} } -- no door carries "
+        "these: import a name a door carries, or make one public on purpose, with a witness"
     )
-    stopped = {
-        path: sorted(gone)
-        for path, names in NOT_YET.items()
-        if (gone := names - found.get(path, frozenset()))
-    }
-    assert not stopped, f"{stopped} are no longer taken -- remove them from NOT_YET"
 
 
 def test_the_outsider_rule_tells_a_door_s_name_from_a_private_one(tmp_path):
@@ -1781,6 +1729,9 @@ WITNESSES: dict[str, dict[str, str]] = {
         # The type a runner returns. Nothing *imports* it in a snippet -- a runner's
         # `run` returns one, so a deployment cannot write the interface without it.
         "CommandResult": "interface",
+        # What `Sessions.open` is handed as `catalogue`. `ports.md` tells a plugin to
+        # take it, and where its skills must be served.
+        "Definitions": "document",
         # Kingfisher's own, which a plugin author builds on rather than implements.
         # `ports.md` shows subclassing the default, and `backend_at` for a backend over
         # a directory of its own; `formats.md` and `middleware.md` pass `LocalSessions`
@@ -1814,6 +1765,18 @@ WITNESSES: dict[str, dict[str, str]] = {
         # `ports.md` tells a backend that refuses host paths to refuse them with this,
         # because it is the type `HostPathGuard` turns into a correction.
         "HostPathError": "document",
+        # And the refusal kingfisher's own backend makes, which `ports.md` offers a
+        # backend that wants to refuse host paths the same way.
+        "reject_host_path": "document",
+        # The two refusals kingfisher makes of every backend it resolves, which
+        # `ports.md` offers a plugin's own suite to ask first; and where a tool's path
+        # lives on this host, which it offers for checking a backend's answer.
+        "not_executing": "document",
+        "uncovered": "document",
+        "host_path": "document",
+        # How deepagents will list one skills source, which `ports.md` offers for
+        # comparing what a backend serves with what kingfisher read.
+        "list_skills": "document",
     },
 }
 
@@ -2262,6 +2225,7 @@ PUBLIC = ("kingfisher", "kingfisher.plugins")
 RUNS_AN_AGENT = frozenset({
     "Kingfisher", "run", "stream",
     "LocalSessions", "backend_at",
+    "not_executing", "uncovered", "host_path",
 })
 
 #: What the command may load before it knows which verb it is running: it reads `.env`

@@ -11,7 +11,11 @@ import threading
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
-from kingfisher.core.layout import DEFAULT_LAYOUT, SANDBOX_PROFILE
+from kingfisher.core.layout import DEFAULT_LAYOUT
+
+#: The sandbox profile's name, which `profile_path` puts a digest of its rules inside:
+#: `shell.<digest>.sb`.
+SANDBOX_PROFILE = "shell.sb"
 
 
 def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and each is
