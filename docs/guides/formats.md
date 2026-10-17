@@ -303,7 +303,7 @@ As of deepagents 0.7.6:
 | `task` | Delegate to a subagent |
 | `write_todos` | Track a multi-step plan |
 
-Three things worth knowing before you restrict this list:
+Four things worth knowing before you restrict this list:
 
 - **`read_file` is close to mandatory.** The filesystem tooling assumes it. An
   allowlist without it produces an agent that cannot see its own workspace.
@@ -314,6 +314,10 @@ Three things worth knowing before you restrict this list:
   filesystem permission layer entirely, so a request that activates the shell
   can reach anything the process can, including skills it did not activate. Deny
   rules are a real boundary only for requests without it.
+- **The prompt follows the list.** An agent is not told about a tool it does not
+  hold: without `execute` it hears nothing of the shell, without `write_todos`
+  nothing of the checklist, and the file tools' section names only the file tools
+  granted, or is left out when there are none.
 
 ### Workspace tools
 

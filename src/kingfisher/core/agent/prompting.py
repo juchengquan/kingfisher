@@ -17,6 +17,8 @@ from kingfisher.core.config import ConfigError
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from kingfisher.core.config import Config
 
 BASE_PROMPT = "system.md"
@@ -40,6 +42,18 @@ CAPABILITY_FILES = {
 #: Where the shell's own section is spliced in. The rest of `system.md` says nothing
 #: about the shell, because what is true of one depends on what runs it.
 SHELL_MARKER = "<!-- shell -->"
+
+#: Where the file tools' section is spliced in, naming those the agent holds.
+FILE_TOOLS_MARKER = "<!-- file tools -->"
+FILE_TOOLS_FILE = "file_tools.md"
+
+#: deepagents' file tools, in the order their section names them.
+FILE_TOOLS = ("ls", "read_file", "write_file", "edit_file", "delete", "glob", "grep")
+EXECUTE = "execute"
+
+#: The tools a section of the prompt is about. Nothing else in a grant changes the prompt,
+#: so nothing else goes in `render_system_prompt`'s cache key.
+_DESCRIBED = frozenset((*FILE_TOOLS, EXECUTE))
 
 #: What is said of a shell that says nothing, which is only what holds wherever a
 #: shell runs. No `execute` line: deepagents' own stands.
@@ -74,9 +88,10 @@ def _names(layout: Layout) -> dict[str, str]:
 _LEAVES = frozenset(_names(DEFAULT_LAYOUT))
 
 
-def _fill(text: str, layout: Layout, source: str) -> str:
-    """`text`, with every `{{leaf}}` replaced by the layout's name for it."""
-    names = _names(layout)
+def _fill(text: str, layout: Layout, source: str, **more: str) -> str:
+    """`text`, with every `{{leaf}}` replaced by the layout's name for it, and every
+    blank in `more` by its value."""
+    names = {**_names(layout), **more}
 
     def _one(match: re.Match[str]) -> str:
         leaf = match.group(1)
@@ -88,9 +103,9 @@ def _fill(text: str, layout: Layout, source: str) -> str:
     return _PLACEHOLDER.sub(_one, text)
 
 
-def _filled(name: str, layout: Layout) -> str:
+def _filled(name: str, layout: Layout, **more: str) -> str:
     """One shipped prompt, with every `{{leaf}}` replaced by the layout's name for it."""
-    return _fill(_prompt_text(name), layout, name)
+    return _fill(_prompt_text(name), layout, name, **more)
 
 
 @dataclass(frozen=True)
@@ -154,41 +169,54 @@ def memory_guidelines() -> str:
     return _prompt_text(MEMORY_GUIDELINES)
 
 
+def _file_tools(held: tuple[str, ...], layout: Layout) -> str:
+    """The file tools' section, naming the ones in `held`, or nothing for none."""
+    if not held:
+        return ""
+    named = ", ".join(f"`{name}`" for name in held)
+    return _filled(FILE_TOOLS_FILE, layout, file_tools=named).strip()
+
+
 #: Enough for a fleet: `extra` carries the running agent's line, so there is a key per
 #: agent a process serves. `layout` and `shell` are in the key because two layouts or
 #: two shells must not be handed one prompt.
 @lru_cache(maxsize=32)
-def render_system_prompt(
+def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt describes
     *,
     skills_enabled: bool = False,
     memory_enabled: bool = False,
     extra: str = "",
     layout: Layout = DEFAULT_LAYOUT,
     shell: ShellPrompt | None = None,
+    tools: frozenset[str] | None = None,
 ) -> str:
     """Assemble the prompt for the capabilities that are actually wired.
 
     `shell` is what the shell running `execute` says of itself, and `None` is one that
-    says nothing.
+    says nothing. `tools` is what the agent was granted, and `None` is everything: a
+    tool it does not hold is not described, since a model told of one calls it.
     """
     base = _filled(BASE_PROMPT, layout)
-    for marker in (CAPABILITY_MARKER, SHELL_MARKER):
+    for marker in (CAPABILITY_MARKER, FILE_TOOLS_MARKER, SHELL_MARKER):
         if marker not in base:  # pragma: no cover -- guards a silent edit
             msg = f"{BASE_PROMPT} is missing the {marker} marker"
             raise ValueError(msg)
 
+    held = tuple(name for name in FILE_TOOLS if tools is None or name in tools)
+    shelled = tools is None or EXECUTE in tools
     parts: list[str] = []
     if skills_enabled:
         parts.append(_filled(CAPABILITY_FILES["skills"], layout).strip())
-        parts.append(_said(shell, "skills", layout))
+        if shelled:
+            parts.append(_said(shell, "skills", layout))
     if memory_enabled:
         parts.append(_filled(CAPABILITY_FILES["memory"], layout).strip())
     sections = "\n\n".join(part for part in parts if part)
 
     assembled = _joined(
-        base.replace(SHELL_MARKER, _said(shell, "prompt", layout)).replace(
-            CAPABILITY_MARKER, sections
-        ),
+        base.replace(FILE_TOOLS_MARKER, _file_tools(held, layout))
+        .replace(SHELL_MARKER, _said(shell, "prompt", layout) if shelled else "")
+        .replace(CAPABILITY_MARKER, sections),
         extra,
     )
     # Removing a marker leaves a run of blank lines behind.
@@ -242,11 +270,13 @@ def system_prompt(
     agent: str = "",
     shell: ShellPrompt | None = None,
     instructions: str = "",
+    tools: Collection[str] | None = None,
 ) -> str:
     """The assembled prompt: the harness, then the deployment's instructions, then the
     agent's own line.
 
     `shell` is what the backend's shell says of itself, which only the backend knows.
+    `tools` is the agent's allowlist, `None` where nothing narrows it.
     """
     return render_system_prompt(
         skills_enabled=bool(cfg and cfg.skills_enabled),
@@ -254,4 +284,5 @@ def system_prompt(
         extra=behind_instructions(agent, instructions),
         layout=cfg.layout if cfg else DEFAULT_LAYOUT,
         shell=shell,
+        tools=None if tools is None else _DESCRIBED.intersection(tools),
     )
