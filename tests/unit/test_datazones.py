@@ -9,7 +9,7 @@ from dataclasses import replace
 import pytest
 import yaml
 
-import kingfisher
+from kingfisher import ToolSpec
 from kingfisher.cli.__main__ import main
 from kingfisher.core.access.source_ids import (
     UNSCOPED,
@@ -22,7 +22,7 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.recorder import Audiences
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.subagents.spec import SubagentError, declared
-from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, ToolError
+from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, ToolError, found_in
 from kingfisher.core.definitions.tools.spec import tool_name
 from kingfisher.core.inventory import inventory
 from kingfisher.core.layout import DEFAULT_LAYOUT
@@ -35,7 +35,7 @@ VOCABULARY = "source_ids: [A, B]\ndatazones: [finance, hr]\n"
 
 #: `payroll` is for the finance datazone; `line_count` is for any.
 TOOLS = '''
-import kingfisher
+from kingfisher import ToolSpec
 
 
 def payroll(month: str) -> str:
@@ -48,7 +48,7 @@ def line_count(path: str) -> str:
     return "0"
 
 
-TOOLS = [kingfisher.tool(payroll, datazone="finance"), line_count]
+TOOLS = [ToolSpec(payroll, datazone="finance"), line_count]
 '''
 
 #: A subagent for the finance datazone, and nothing else about who reaches it.
@@ -235,8 +235,8 @@ def test_a_tool_datazone_that_is_not_one_name_is_refused():
         """Count the lines in a text file."""
         return "0"
 
-    with pytest.raises(ToolError, match="one name"):
-        kingfisher.tool(count, datazone="")
+    with pytest.raises(ToolError, match=r"^pay\.py: tool 'count': datazone is one name"):
+        found_in(ToolSpec(count, datazone=""), where="pay.py", holder="TOOLS")
 
 
 @pytest.mark.parametrize("where", ["subagent", "tool"])

@@ -18,6 +18,21 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `kingfisher.tool` is gone: a tool file writes `ToolSpec`, after #866
+
+- **`kingfisher.tool(fn, source_ids=..., datazone=...)` is removed.** Write
+  `ToolSpec(fn, source_ids=..., datazone=...)` in `TOOLS` instead, with
+  `from kingfisher import ToolSpec`. It holds any tool, a `@tool` object or a `BaseTool`
+  instance as well as a plain function, and a Python subagent's carried `tools` take it
+  too. Left out, `source_ids` is `["*"]`, which admits whoever the granting agent admits,
+  as before.
+- **A plain function in a `ToolSpec` stays a plain function** unless it is renamed.
+  `kingfisher.tool` returned a `StructuredTool`, so code of yours that called `.invoke`
+  or read `.name` on what it returned calls the function instead.
+- **`name=` and `description=` are applied when the definitions are read**, to a copy.
+  A tool whose class computes either one is refused at startup. `args_schema=` has no
+  counterpart: give a `@tool` or a `BaseTool` subclass its schema, and wrap that.
+
 ## A turn's budget is said near its end, and a subagent is held to it, after #861
 
 - **From 80% of a turn's steps, each model call ends with a note** saying about how many

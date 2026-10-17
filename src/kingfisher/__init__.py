@@ -17,6 +17,8 @@ _EXPORTS = {
     "AccessError": "kingfisher.core.access.source_ids",
     "ArtifactError": "kingfisher.core.result",
     "UNSCOPED": "kingfisher.core.access.source_ids",
+    # How a tool file says who may use its tool, or gives it another name.
+    "ToolSpec": "kingfisher.core.definitions.tools.spec",
     "Capabilities": "kingfisher.core.access.capabilities",
     "CapabilityError": "kingfisher.core.access.capabilities",
     "QuotaExceededError": "kingfisher.core.session.model",
@@ -26,8 +28,6 @@ _EXPORTS = {
     # For a workspace tool file, outside the wheel by construction, to annotate
     # `runtime: ToolRuntime[ToolContext]`: a bare `ToolRuntime` has pydantic warn per call.
     "ToolContext": "kingfisher.core.agent.tool_context",
-    # How a tool file says who may use its tool.
-    "tool": "kingfisher.core.agent.audienced_tool",
     "UnknownSessionError": "kingfisher.core.session.model",
     "Config": "kingfisher.core.config",
     "WorkspacePaths": "kingfisher.core.config",
@@ -91,6 +91,7 @@ __all__ = [
     "SessionBusyError",
     "SubagentError",
     "ToolContext",
+    "ToolSpec",
     "UnknownSessionError",
     "UnsafeReferenceError",
     "WorkspacePaths",
@@ -103,7 +104,6 @@ __all__ = [
     "run",
     "seed",
     "stream",
-    "tool",
 ]
 
 if TYPE_CHECKING:
@@ -114,7 +114,6 @@ if TYPE_CHECKING:
     from kingfisher.core.access.source_ids import UNSCOPED as UNSCOPED
     from kingfisher.core.access.source_ids import AccessError as AccessError
     from kingfisher.core.access.source_ids import Held as Held
-    from kingfisher.core.agent.audienced_tool import tool as tool
     from kingfisher.core.agent.references import UnsafeReferenceError as UnsafeReferenceError
     from kingfisher.core.agent.tool_context import ToolContext as ToolContext
     from kingfisher.core.config import Config as Config
@@ -127,6 +126,7 @@ if TYPE_CHECKING:
     from kingfisher.core.definitions.seeding import seed as seed
     from kingfisher.core.definitions.subagents.spec import RunOn as RunOn
     from kingfisher.core.definitions.subagents.spec import SubagentError as SubagentError
+    from kingfisher.core.definitions.tools.spec import ToolSpec as ToolSpec
     from kingfisher.core.environment import config_from_env as config_from_env
     from kingfisher.core.environment import paths_from_env as paths_from_env
     from kingfisher.core.inventory import Inventory as Inventory

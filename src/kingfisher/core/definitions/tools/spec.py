@@ -1,8 +1,8 @@
-"""What a tool is, seen from the domain: an object, and where it came from."""
+"""What a tool is, seen from the domain: what its file wrote, and what the loader found."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import KW_ONLY, dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
@@ -20,6 +20,7 @@ from kingfisher.core.access.source_ids import jointly, zoned
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
+    from collections.abc import Set as AbstractSet
 
     from kingfisher.core.access.source_ids import Audience
 
@@ -52,23 +53,21 @@ def named(tool: Any) -> bool:
     return bool(getattr(tool, "name", None) or getattr(tool, "__name__", None))
 
 
-#: Where `kingfisher.tool` keeps who may use a tool. Read by name, because the class that
-#: defines it subclasses a langchain tool and this package may not import langchain.
-AUDIENCE_ATTRIBUTE = "kingfisher_source_ids"
+@dataclass(frozen=True)
+class ToolSpec:
+    """One entry of a tool file's `TOOLS`, saying what the tool alone cannot.
 
+    The tool is any form `TOOLS` holds bare. What kingfisher reads is kept here and never
+    put on the tool, whose `metadata` LangChain hands to every callback.
+    """
 
-#: Where `kingfisher.tool` keeps the one datazone a tool is for, read by name likewise.
-DATAZONE_ATTRIBUTE = "kingfisher_datazone"
-
-
-def own_audience(tool: Any) -> Audience:
-    """Who this tool admits by itself: `"*"` for every tool `kingfisher.tool` did not make."""
-    return getattr(tool, AUDIENCE_ATTRIBUTE, ALL)
-
-
-def own_datazone(tool: Any) -> str | None:
-    """The datazone this tool is for, or `None` for a tool any datazone may use."""
-    return getattr(tool, DATAZONE_ATTRIBUTE, None)
+    tool: Any
+    _: KW_ONLY
+    name: str | None = None
+    description: str | None = None
+    #: Written as a definition's own `source_ids:` line, and read by the same reader.
+    source_ids: Sequence[str | AbstractSet[str]] = (ALL,)
+    datazone: str | None = None
 
 
 @dataclass(frozen=True)

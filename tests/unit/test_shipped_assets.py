@@ -202,28 +202,30 @@ def test_the_preset_tools_load_where_the_agent_group_is_not_installed(shipped, m
     assert {"pdf_text", "pdf_pages"} <= {tool_name(t) for t in tools}
 
 
-def test_the_shipped_set_shows_all_four_tool_shapes(shipped):
-    """`docs/guides/tools.md` documents four ways to write a tool, and a reference that
-    describes a shape nothing ships is a shape somebody has to take on trust.
+def test_the_shipped_set_shows_all_three_tool_shapes_and_a_spec(shipped):
+    """`docs/guides/tools.md` documents three ways to write a tool and a `ToolSpec` to
+    hold any of them, and a reference that describes a form nothing ships is a form
+    somebody has to take on trust.
     """
     from langchain_core.tools import BaseTool, StructuredTool
 
-    from kingfisher.core.agent.audienced_tool import AudiencedTool
+    from kingfisher.core.access.capabilities import ALL
 
-    tools = LocalToolRepository(shipped / "tools").tools
-    decorated = {tool_name(t) for t in tools if type(t) is StructuredTool}
-    audienced = {tool_name(t) for t in tools if isinstance(t, AudiencedTool)}
+    found = LocalToolRepository(shipped / "tools").found
+    decorated = {one.name for one in found if type(one.tool) is StructuredTool}
     classes = {
-        tool_name(t)
-        for t in tools
-        if isinstance(t, BaseTool) and not isinstance(t, StructuredTool)
+        one.name
+        for one in found
+        if isinstance(one.tool, BaseTool) and not isinstance(one.tool, StructuredTool)
     }
-    plain = {tool_name(t) for t in tools if not isinstance(t, BaseTool)}
+    plain = {one.name for one in found if not isinstance(one.tool, BaseTool)}
+    # Only a `ToolSpec` gives a top-level tool a lock, so a locked one was written as one.
+    specced = {one.name for one in found if one.audience != ALL}
 
     assert decorated, "no `@tool` preset"
-    assert audienced == {"sql_query"}
     assert classes == {"sql_explain"}
-    assert plain == {"line_count"}
+    assert plain == {"line_count", "sql_query"}
+    assert specced == {"sql_query"}
 
 
 def test_the_class_shaped_preset_exports_an_instance(shipped):

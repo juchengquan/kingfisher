@@ -19,8 +19,8 @@ here too, and this line is where it will be said.
 Nothing wraps it, with one exception below. A kingfisher-flavoured decorator would
 be a second name for someone else's rule, and the loader accepts what LangChain
 accepts — a `BaseTool` from `@tool`, an instantiated `BaseTool` subclass, or a plain
-function. The exception is `kingfisher.tool`, for the one thing LangChain has no
-field for: who may use the tool.
+function. The exception is `ToolSpec`, which holds any of the three beside the one
+thing LangChain has no field for: who may use the tool.
 
 ```python
 from langchain_core.tools import tool
@@ -117,14 +117,14 @@ build one. A class loads and is offered to the model, and calling it returns a
 new instance as if it were an answer
 ```
 
-## Or `kingfisher.tool`, when the tool says who may use it
+## Or a `ToolSpec`, when the tool says who may use it
 
-The fourth shape, and the only one that imports kingfisher. A tool that reads
-something only some callers may see can say so itself, rather than relying on
-every agent that grants it to remember:
+Not a fourth shape: a `ToolSpec` holds a tool of any of the three, and it is the only
+thing here that imports kingfisher. A tool that reads something only some callers may
+see can say so itself, rather than relying on every agent that grants it to remember:
 
 ```python
-import kingfisher
+from kingfisher import ToolSpec
 
 
 def sql_query(statement: str) -> str:
@@ -132,13 +132,18 @@ def sql_query(statement: str) -> str:
     ...
 
 
-TOOLS = [kingfisher.tool(sql_query, source_ids=["sales_db"])]
+TOOLS = [ToolSpec(sql_query, source_ids=["sales_db"])]
 ```
 
+An entry of `TOOLS` is a `ToolSpec` or a bare tool, mixed as you like, and a bare tool
+is `ToolSpec(tool)`: open to everyone. The tool inside is checked the way a bare one
+is, so a class named without its `()` is refused here too.
+
 `source_ids` is written the way a definition writes its own line — any one of the
-names is enough, and a set is a requirement: `["admin", {"sales_db", "pii"}]`.
-Every name has to be declared in `source_ids.yaml`, or the deployment does not
-start. With no `source_ids.yaml` at all, the line has no effect.
+names is enough, and a set is a requirement: `["admin", {"sales_db", "pii"}]`. Left
+out, it is `["*"]`, everyone. `[]` is refused rather than read as nobody, as it is in
+a definition. Every name has to be declared in `source_ids.yaml`, or the deployment
+does not start. With no `source_ids.yaml` at all, the line has no effect.
 
 It holds **whichever agent grants the tool**. An agent's own entry can narrow it
 further — `{name: sql_query, source_ids: [senior]}` means `sales_db` *and*
@@ -151,10 +156,40 @@ ledger under the tool's audience as well as the agent's.
 `datazone="finance"` says the one datazone a caller must also be in — see
 *Datazones* in [`formats.md`](formats.md). Left out, it is any.
 
-What comes back is a LangChain `StructuredTool`, and `description`, `args_schema`
-and `name` mean what they mean to `StructuredTool.from_function`. The source ids
-are kept off it: not in `metadata`, which LangChain hands to every callback, so
-they never appear in a trace.
+The source ids are read off the `ToolSpec` when the directory is read and never put on
+the tool: not in `metadata`, which LangChain hands to every callback, so they never
+appear in a trace. A line that cannot be read is refused naming the file.
+
+### Another name, or another description
+
+`name=` and `description=` change what the model is shown and what a definition
+grants, without touching the tool you wrote:
+
+```python
+TOOLS = [
+    ToolSpec(Shout(), name="yell"),
+    ToolSpec(line_count, description="Count the lines in a text file. Use before ..."),
+]
+```
+
+They are applied when the directory is read. A `BaseTool`, from `@tool` or a class, is
+copied with the new values; a plain function, async or not, is made into a
+`StructuredTool` under them. The object in your file keeps its own name, so a test
+calling it, or another file importing it, sees what it always did. A grant, an
+allowlist and the check for two tools of one name all use the new name.
+
+A class that computes its `name` or `description` — a property inherited ahead of
+`BaseTool` does — answers with its own whatever a copy holds, so what you wrote would
+never reach the model. That is refused at startup:
+
+```
+lookup.py: tool 'lookup' still answers with its own description after its ToolSpec
+gave another -- Lookup computes it, as a property does, so a copy cannot change it.
+Set it on the class instead
+```
+
+With neither, the tool is used exactly as written, and a plain function stays a plain
+function.
 
 ## What a tool returns
 
@@ -297,6 +332,7 @@ workspace defines is worse than a run that stops.
 | A module with no `TOOLS` | Scanning for callables would guess at intent |
 | An entry that is not a tool | `TOOLS = ["line_count"]` — the tool's *name* where the tool goes. Unrefused it reaches the model as `'line_count'`, quotes and all, and the build dies later naming no file |
 | A class where an instance was meant | `TOOLS = [Shout]` for `[Shout()]`. See [the note above](#or-a-class-when-you-want-to-declare-the-schema) |
+| A `ToolSpec` name or description that did not take | The tool computes its own, so the model would never be shown yours. See [above](#another-name-or-another-description) |
 | A module that will not import | Skipping it gives the agent silently fewer tools |
 | Two modules claiming one tool name | `tools_by_name` is a dict; the later would win in silence. Checked across folders, so two people cannot each add a `find_company` |
 | A tool named like a built-in | Same, except the thing that vanishes is `read_file` |
