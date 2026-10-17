@@ -397,9 +397,8 @@ def main(argv: list[str]) -> int:
 
     # The regression signal is the structured result, not the prose: two runs
     # on identical input rewrite the report entirely while the numbers hold.
-    payload = load_result(
-        kf.artifact(result.session_id, RESULT) if RESULT in result.artifacts else None
-    )
+    session = kf.session(result.session_id) if RESULT in result.artifacts else None
+    payload = load_result(session.artifact(RESULT) if session is not None else None)
     if payload is None:
         print("\nresult.json missing or unparseable — cannot check", file=sys.stderr)
         return 1

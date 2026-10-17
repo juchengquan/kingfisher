@@ -337,17 +337,23 @@ def _ran(monkeypatch, events, cfg):
         def __init__(self, *a, **k) -> None:
             self.seen: list = []
             self.deleted: list = []
-            # What `delete_session` answers: a failure string, as the library's
-            # own does, or None for a removal that worked.
+            # What deleting answers: a failure string, as the library's own does,
+            # or None for a removal that worked.
             self.failure: str | None = None
 
         def stream(self, request, *, source_ids=None):
             self.seen.append((request, source_ids))
             yield from events
 
-        def delete_session(self, session_id):
-            self.deleted.append(session_id)
-            return self.failure
+        def session(self, session_id, *, source_ids=None):
+            stub = self
+
+            class Handle:
+                def delete(self):
+                    stub.deleted.append(session_id)
+                    return stub.failure
+
+            return Handle()
 
     stub = Stub()
     monkeypatch.setattr("kingfisher.Kingfisher", lambda *a, **k: stub)
@@ -873,7 +879,7 @@ def test_reaping_one_by_name_takes_it_whatever_its_age(cfg, monkeypatch, capsys)
 
 
 def test_an_id_that_names_nothing_is_refused_rather_than_called_done(cfg, monkeypatch, capsys):
-    """`delete_session` answers `None` both for "removed it" and for "there was no such
+    """Deleting answers `None` both for "removed it" and for "there was no such
     session", so without the check here a mistyped id reports success for work that
     nothing did.
     """

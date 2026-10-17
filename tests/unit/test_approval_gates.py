@@ -674,7 +674,7 @@ def test_deleting_a_waiting_session_takes_the_pause_with_it(cfg, way):
     paused = kf.run(Request("write it"))
     directory = _session_dir(cfg, paused.session_id)
 
-    assert Through(kf, way).delete_session(paused.session_id) is None
+    assert Through(kf, way).delete(paused.session_id) is None
 
     assert not directory.exists()
     assert not (directory / PAUSED).exists()

@@ -133,7 +133,7 @@ def test_a_backend_that_keeps_the_session_elsewhere_gets_the_inputs_and_gives_ba
     (finished,) = [e for e in events if e.kind == "finished"]
     session_id = finished.result.session_id
     assert "outputs/report.txt" in finished.result.artifacts
-    assert kf.artifact(session_id, "outputs/report.txt") == b"made elsewhere"
+    assert kf.session(session_id).artifact("outputs/report.txt") == b"made elsewhere"
     assert kf.sessions()[0].id == session_id
     # And none of it went through the directory kingfisher holds, which is what makes
     # the answers above ones only the backend could have given.

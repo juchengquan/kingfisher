@@ -151,7 +151,7 @@ def test_that_refusal_is_word_for_word_a_session_that_is_not_there(two_agents):
     with pytest.raises(UnknownSessionError) as refused:
         _first_event(kf, Request(task="again", session_id=session_id), ("B",))
     with pytest.raises(UnknownSessionError) as absent:
-        kf.pending(invented, source_ids=("B",))
+        Through(kf, "sync").pending(invented, source_ids=("B",))
 
     assert str(refused.value) == str(absent.value).replace(invented, session_id)
 
@@ -252,7 +252,7 @@ def test_listing_sessions_stays_the_operators(two_agents, way):
     session_id = _pinned_by_a(kf)
 
     assert [info.id for info in kf.sessions()] == [session_id]
-    assert Through(kf, way).delete_session(session_id) is None
+    assert Through(kf, way).delete(session_id) is None
 
 
 @pytest.mark.parametrize("held", [("B",), ["B"]], ids=["tuple", "list"])

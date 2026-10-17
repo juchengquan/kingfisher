@@ -118,7 +118,7 @@ def test_deleting_a_session_takes_its_conversation_with_it(cfg, way):
     directory = _session_dir(cfg, result.session_id)
     assert (directory / TRANSCRIPT).is_file()
 
-    assert Through(kf, way).delete_session(result.session_id) is None
+    assert Through(kf, way).delete(result.session_id) is None
 
     assert not directory.exists()
 

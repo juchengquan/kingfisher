@@ -23,7 +23,7 @@ from kingfisher.core.request import Request
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
-from tests.conftest import FakeToolCallingModel, pin, start
+from tests.conftest import FakeToolCallingModel, Through, pin, start
 
 macos = pytest.mark.skipif(
     platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
@@ -166,7 +166,7 @@ def test_the_pin_and_the_claim_go_with_the_session(cfg):
     directory = cfg.workspace / "sessions" / session_id
     assert agent_snapshot(directory).is_file()
 
-    service.delete_session(session_id)
+    Through(service, "sync").delete(session_id)
 
     assert not agent_snapshot(directory).exists()
     assert not (directory / HARNESS / CLAIM).exists()

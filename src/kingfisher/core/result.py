@@ -119,7 +119,7 @@ class RunResult:
     answer: str
     #: Everything under `/outputs` and `/memory` at the end of this turn, as names
     #: relative to the session, listed through its backend -- so names, not files to
-    #: open: `Kingfisher.artifact` fetches one, wherever the backend keeps it. What is
+    #: open: `Session.artifact` fetches one, wherever the backend keeps it. What is
     #: *present*, not what changed: `execute`
     #: writes without any file tool seeing it, so the only sound view is the
     #: filesystem's, and a caller persisting incrementally diffs against the

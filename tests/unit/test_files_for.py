@@ -88,7 +88,7 @@ def test_files_for_opens_the_session_with_the_deployments_runner(cfg, way):
     kf = Kingfisher(cfg, sessions=counting)
     start(cfg, "s")
 
-    files = Through(kf, way).files_for("s")
+    files = Through(kf, way).files("s")
 
     assert files is counting.opened[0]
     assert counting.asked == ["s"]
@@ -109,7 +109,7 @@ def test_files_for_an_id_that_cannot_name_a_folder_lays_nothing_out(
     before = sorted(tmp_path.rglob("*"))
 
     with pytest.raises(UnknownSessionError, match="cannot name a session"):
-        Through(kf, way).files_for(session_id)
+        Through(kf, way).files(session_id)
 
     assert sorted(tmp_path.rglob("*")) == before
 
@@ -131,7 +131,7 @@ def test_a_turn_handed_its_files_opens_no_others(cfg, monkeypatch, door, way):
     counting = Counting()
     kf = Kingfisher(cfg, sessions=counting)
     start(cfg, "s")
-    files = Through(kf, way).files_for("s")
+    files = Through(kf, way).files("s")
 
     result = _turn(kf, door, Request("go", agent=named, session_id="s"), files=files)
 
@@ -153,7 +153,7 @@ def test_the_callers_backend_is_the_one_the_agent_works_in(scripted, tmp_path):
     sandboxes = Sandboxes(tmp_path / "remote")
     (sandboxes.root / "s").mkdir(parents=True)  # listed, as a turn would leave it
     kf = Kingfisher(scripted, sessions=sandboxes)
-    files = kf.files_for("s")
+    files = kf.session("s", create=True).files()
     files.upload_files([("/inputs/brief.md", b"the brief")])
 
     events = list(kf.stream(Request("go", agent="only", session_id="s"), files=files))
@@ -175,7 +175,7 @@ def test_files_for_the_default_session_serve_a_request_naming_none(cfg, monkeypa
     named = an_agent(cfg)
     counting = Counting()
     kf = Kingfisher(cfg, sessions=counting)
-    files = kf.files_for("default")
+    files = kf.session("default", create=True).files()
 
     result = _turn(kf, door, Request("go", agent=named), files=files)
 
@@ -190,7 +190,7 @@ def test_files_for_a_session_no_turn_has_made_makes_it(cfg, way):
     counting = Counting()
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=counting)
 
-    files = Through(kf, way).files_for("q3-report")
+    files = Through(kf, way).files("q3-report")
     files.upload_files([("/outputs/placed.txt", b"placed")])
 
     assert [s.id for s in kf.sessions()] == ["q3-report"]
@@ -206,7 +206,7 @@ def test_files_for_a_session_a_turn_made_opens_it(cfg, way):
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=counting)
     issued = kf.run(Request("go")).session_id
 
-    files = Through(kf, way).files_for(issued)
+    files = Through(kf, way).files(issued)
 
     assert counting.asked == [issued, issued]
     assert files is counting.opened[-1]

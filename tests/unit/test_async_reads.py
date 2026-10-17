@@ -82,11 +82,8 @@ def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wir
 
     async def read_all():
         held = ("A",)
-        return (
-            await kf.asession("s", source_ids=held),
-            await kf.apending("s", source_ids=held),
-            await kf.aartifact("s", "outputs/out.txt", source_ids=held),
-        )
+        session = await kf.asession("s", source_ids=held)
+        return (session, await session.apending(), await session.aartifact("outputs/out.txt"))
 
     found, waiting, content = asyncio.run(read_all())
 
@@ -135,7 +132,10 @@ def test_opening_a_sessions_files_makes_no_sync_port_call_on_the_loop(cfg, sync_
     start(cfg, "s")
     sync_calls.clear()
 
-    files = asyncio.run(kf.afiles_for("s"))
+    async def opened():
+        return await (await kf.asession("s")).afiles()
+
+    files = asyncio.run(opened())
 
     assert files is not None
     assert sync_calls, "no sync port method was reached, on any thread"

@@ -92,11 +92,15 @@ from kingfisher.core.session.disposal import Disposal
 from kingfisher.core.session.files import (
     collect_artifacts,
     place_inputs,
-    read_artifact,
 )
 from kingfisher.core.session.ledger import Ledger, keep_ledger
 from kingfisher.core.session.methods import SessionMethods
-from kingfisher.core.session.model import Session, SessionBusyError, sessions_root, unknown_session
+from kingfisher.core.session.model import (
+    Conversation,
+    SessionBusyError,
+    sessions_root,
+    unknown_session,
+)
 from kingfisher.core.session.runlog import LoggedRunEvents, RunLogger
 from kingfisher.core.session.steps import (
     Steps,
@@ -477,78 +481,6 @@ class Kingfisher(SessionMethods, Disposal):
         )
         return files
 
-    def files_for(self, session_id: str) -> Any:
-        """The backend a turn in this session is given, built the way a turn builds it.
-
-        For a caller that reaches the session's files around a turn as well: hand it
-        to the turn as `files=` and the turn runs on it rather than opening another,
-        which on a remote backend is a second sandbox. Nothing here asks who the
-        caller is acting for -- the turn still does, through the backend it is handed.
-
-        A session no turn has made yet is made, as a turn naming it would make it, so
-        a caller can place files before the first turn.
-        """
-        return drive(self._files_for(session_id))
-
-    async def afiles_for(self, session_id: str) -> Any:
-        """`files_for`, for a caller on an event loop."""
-        return await adrive(self._files_for(session_id))
-
-    def pending(
-        self, session_id: str, *, source_ids: Held | None = None
-    ) -> tuple[PendingDecision, ...]:
-        """What this session's paused turn is waiting on, or nothing.
-
-        Read from the mark the pause wrote rather than by starting a turn: asking what
-        is pending must not be a thing that can supersede it, and every other way into
-        the session is a turn.
-
-        Checked the way reading a session is, because what it returns is somebody's
-        tool calls with their arguments. A caller who cannot reach the session gets
-        `UnknownSessionError`, the same answer a wrong id gets.
-        """
-        return drive(self._pending_steps(session_id, source_ids))
-
-    async def apending(
-        self, session_id: str, *, source_ids: Held | None = None
-    ) -> tuple[PendingDecision, ...]:
-        """`pending`, for a caller on an event loop."""
-        return await adrive(self._pending_steps(session_id, source_ids))
-
-    def _pending_steps(
-        self, session_id: str, source_ids: Held | None
-    ) -> Steps[tuple[PendingDecision, ...]]:
-        reached = yield from self._reached(session_id, source_ids, files_wanted=True)
-        if reached is None:
-            raise unknown_session(session_id)
-        _, files = reached
-        mark = yield from read_pause_mark(HarnessFiles(files, session_id))
-        return pending_from_mark(mark or {})
-
-    def artifact(
-        self, session_id: str, name: str, *, source_ids: Held | None = None
-    ) -> bytes:
-        """One file a turn in this session produced, fetched through its backend.
-
-        `name` is as `RunResult.artifacts` gave it. Checked the way reading a session
-        is: a caller who cannot reach the session gets `UnknownSessionError`, the
-        same answer a wrong id gets.
-        """
-        return drive(self._artifact_steps(session_id, name, source_ids))
-
-    async def aartifact(
-        self, session_id: str, name: str, *, source_ids: Held | None = None
-    ) -> bytes:
-        """`artifact`, for a caller on an event loop."""
-        return await adrive(self._artifact_steps(session_id, name, source_ids))
-
-    def _artifact_steps(self, session_id: str, name: str, source_ids: Held | None) -> Steps[bytes]:
-        reached = yield from self._reached(session_id, source_ids, files_wanted=True)
-        if reached is None:
-            raise unknown_session(session_id)
-        _, files = reached
-        return (yield from read_artifact(files, name, self.cfg.layout))
-
     def _pin_agent_in(self, harness: HarnessFiles, name: str | None) -> Steps[None]:
         """Keep the agent, in the session this is about.
 
@@ -703,7 +635,7 @@ class Kingfisher(SessionMethods, Disposal):
         # than built twice: a second backend is a second sandbox on a remote one
         self,
         request: Request | Resume,
-        session: Session,
+        session: Conversation,
         *,
         files: Any,
         harness: HarnessFiles,
@@ -795,7 +727,7 @@ class Kingfisher(SessionMethods, Disposal):
         )
 
     def _take_pause(
-        self, request: Request | Resume, session: Session, harness: HarnessFiles
+        self, request: Request | Resume, session: Conversation, harness: HarnessFiles
     ) -> Steps[tuple[bytes | None, dict[str, Any] | None, tuple[str, ...]]]:
         """Deal with whatever an earlier turn left waiting, before this turn starts:
         the paused state a resume restores, the answers it resumes with, and the
@@ -831,7 +763,7 @@ class Kingfisher(SessionMethods, Disposal):
         return state, runtime.resume_payload(request.decisions, pending_from_mark(held)), ()
 
     def _refuse_stale_pause(
-        self, session: Session, held: Mapping[str, str], request: Resume
+        self, session: Conversation, held: Mapping[str, str], request: Resume
     ) -> None:
         """Refuse a resume the paused graph would not be the same graph for.
 
@@ -874,7 +806,7 @@ class Kingfisher(SessionMethods, Disposal):
         # of it that is work on this host rather than calls to a port
         self,
         request: Request | Resume,
-        session: Session,
+        session: Conversation,
         *,
         files: Any,
         harness: HarnessFiles,
@@ -1014,7 +946,7 @@ class Kingfisher(SessionMethods, Disposal):
             subagent_only=shared,
         )
 
-    def _restored(self, session: Session, state: bytes) -> Any:
+    def _restored(self, session: Conversation, state: bytes) -> Any:
         """The saver a paused turn left, for its resume to run on."""
         try:
             return resumed_saver(state)

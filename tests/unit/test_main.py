@@ -657,9 +657,13 @@ def test_a_smoke_run_checks_the_result_it_fetched_through_the_session(cfg, monke
         def stream(self, request):
             return iter(())
 
-        def artifact(self, session_id, name):
-            fetched.append((session_id, name))
-            return b"{}"
+        def session(self, session_id, *, source_ids=None):
+            class Handle:
+                def artifact(self, name):
+                    fetched.append((session_id, name))
+                    return b"{}"
+
+            return Handle()
 
     monkeypatch.setattr("kingfisher.Kingfisher", Service, raising=False)
     monkeypatch.setattr(driver, "show", lambda events, out: finished)

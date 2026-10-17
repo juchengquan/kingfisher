@@ -676,11 +676,11 @@ def _show_pending(kf: Kingfisher, session_id: str, held: Held | None) -> int:
     tool calls and their arguments, and answering it would otherwise be the one
     door into a session that does not ask who is knocking.
     """
-    try:
-        waiting = kf.pending(session_id, source_ids=held)
-    except UnknownSessionError:
+    session = kf.session(session_id, source_ids=held)
+    if session is None:
         print(f"no such session: {session_id}", file=sys.stderr)
         return 2
+    waiting = session.pending()
     if not waiting:
         print(f"session {session_id} is not waiting on a decision", file=sys.stderr)
         return 2
@@ -740,7 +740,9 @@ def _discard(kf: Kingfisher, result: RunResult) -> None:
         )
         for name in result.artifacts:
             print(f"  {name}", file=sys.stderr)
-    failure = kf.delete_session(result.session_id)
+    # `UNSCOPED`: the command deletes the session its own turn just used.
+    session = kf.session(result.session_id, source_ids=UNSCOPED)
+    failure = session.delete() if session is not None else None
     if failure:
         print(f"session not deleted -- {failure}", file=sys.stderr)
 
@@ -841,7 +843,7 @@ def _sessions(*, as_document: bool = False) -> int:
     # A walk per session, at ~0.8ms each. The same trade `sessions()` already
     # makes for the listing: cheap where it is read, and a workspace large
     # enough to mind wants an index rather than a cheaper column.
-    held = [(info, kf.session_size(info.id)) for info in kf.sessions()]
+    held = [(info, info.size()) for info in kf.sessions()]
 
     if as_document:
         print(
@@ -943,7 +945,11 @@ def _artifact(args: argparse.Namespace) -> int:
     """Fetch one file a turn produced, to a file or to standard output."""
     cfg = config_from_env()
     kf = _configured(cfg)
-    content = kf.artifact(args.session, args.name, source_ids=args.held)
+    session = kf.session(args.session, source_ids=args.held)
+    if session is None:
+        msg = f"no session {args.session!r}"
+        raise UnknownSessionError(msg)
+    content = session.artifact(args.name)
     if args.out is None:
         # The buffer, not `print`: an artifact is bytes, and a text stream would
         # re-encode a PDF on its way out.
@@ -960,13 +966,13 @@ def _reap_one(kf: Kingfisher, session_id: str) -> int:
     # `UNSCOPED` because this is housekeeping on the machine rather than a call on
     # anyone's behalf, and a policied deployment now refuses a read that names nobody.
     # `reap` and `sessions` are the operator's, which is why neither takes `--as`.
-    if kf.session(session_id, source_ids=UNSCOPED) is None:
-        # Asked before deleting, because `delete_session` answers `None` both
-        # for "removed it" and for "there was no such session" -- so without
-        # this a mistyped id reports success for work nothing did.
+    session = kf.session(session_id, source_ids=UNSCOPED)
+    if session is None:
+        # Refused here, because deleting answers `None` both for "removed it" and for
+        # "there was nothing there" -- a mistyped id would report work nothing did.
         msg = f"no session {session_id!r}"
         raise UnknownSessionError(msg)
-    failure = kf.delete_session(session_id)
+    failure = session.delete()
     if failure:
         print(f"not reaped -- {failure}", file=sys.stderr)
         return 1

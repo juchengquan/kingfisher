@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.session import retention
 from kingfisher.core.session.retention import SweepResult
-from kingfisher.core.session.steps import Steps, adrive, changing, drive
+from kingfisher.core.session.steps import Steps, changing, drive
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -27,16 +27,6 @@ class Disposal:
     cfg: Config
     _sessions: Any
     _known_steps: Callable[[], Steps[tuple[str, ...]]]
-
-    def delete_session(self, session_id: str) -> str | None:
-        """Dispose of one session and everything its backend holds. Returns a failure,
-        or None.
-        """
-        return drive(self._delete_session_steps(session_id))
-
-    async def adelete_session(self, session_id: str) -> str | None:
-        """`delete_session`, for a caller on an event loop."""
-        return await adrive(self._delete_session_steps(session_id))
 
     def _delete_session_steps(self, session_id: str) -> Steps[str | None]:
         if session_id not in (yield from self._known_steps()):

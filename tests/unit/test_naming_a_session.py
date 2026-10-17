@@ -15,6 +15,7 @@ from kingfisher.core.layout import HARNESS, PINNED_AGENT, SESSION_DIRS
 from kingfisher.core.request import Decision, Resume
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
+from tests.conftest import Through
 from tests.unit.test_files_for import DOORS, _turn
 from tests.unit.test_run import StubAgent
 
@@ -126,11 +127,10 @@ def test_reading_a_session_nobody_has_made_answers_no_session_and_makes_none(cfg
     """
     kf = _service(cfg)
 
+    assert kf.session("never-made") is None
     with pytest.raises(UnknownSessionError, match="no session 'never-made'"):
-        kf.pending("never-made")
-    with pytest.raises(UnknownSessionError, match="no session 'never-made'"):
-        kf.artifact("never-made", "outputs/report.md")
-    assert kf.delete_session("never-made") is None
+        Through(kf, "sync").pending("never-made")
+    assert Through(kf, "sync").delete("never-made") is None
 
     assert kf.sessions() == ()
     assert not (cfg.workspace / "sessions" / "never-made").exists()

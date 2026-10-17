@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-from kingfisher.core.session.model import Session, UnknownSessionError, session_dir
+from kingfisher.core.session.model import Conversation, UnknownSessionError, session_dir
 
 #: One of each form of id that cannot name a session's folder: not one visible entry.
 UNNAMABLE = ("", ".", "..", ".hidden", ".harness", "../../escaped", "/etc", "a/b", "a\x00b")
@@ -19,7 +19,7 @@ def test_a_callers_own_turn_id_wins():
     the same per-turn directory, and the directory went with `/runs`: two runs under
     one id are now two runs, and a caller wanting one has to not ask twice.
     """
-    session = Session(id="sess")
+    session = Conversation(id="sess")
 
     assert session.allocate_turn("req-abc").id == "req-abc"
 
@@ -30,7 +30,7 @@ def test_two_turns_are_told_apart():
     sequence -- it reaches a printed line, the run log and the result, and none of
     them compares two -- so what is left to hold is only that they differ.
     """
-    session = Session(id="sess")
+    session = Conversation(id="sess")
 
     assert session.allocate_turn().id != session.allocate_turn().id
 
