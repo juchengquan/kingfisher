@@ -324,7 +324,7 @@ class SourceIds:
 
         An entry audience is already an **and** with the definition's, because the
         only way to reach an entry is through the definition holding it --
-        `agent_named` refuses a caller who cannot open the agent, and nothing else
+        `Kingfisher._agent_named` refuses a caller who cannot open the agent, and nothing else
         hands out a spec. So `[pii]` under `[sales_db, audit_log]` means "everyone
         who opens this agent, and holds `pii`", which is a good second requirement.
         """

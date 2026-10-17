@@ -70,8 +70,8 @@ def built(kf: Kingfisher, held: tuple[str, ...]) -> list[str]:
     ensure_session_layout(session)
     assembled = build_agent(
         kf.cfg,
-        agent=kf.agent_named("surveyor", source_ids=held),
-        held=kf.held_for(held),
+        agent=kf._agent_named("surveyor", source_ids=held),
+        held=kf._held_for(held),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf._effective_grants(held),
         catalogue=kf.catalogue,
@@ -302,7 +302,7 @@ def test_the_run_report_agrees_with_the_build(policied):
         session = kf.workspace / "sessions" / f"report-{'-'.join(held_names)}"
         session.mkdir(parents=True, exist_ok=True)
         ensure_session_layout(session)
-        held = kf.held_for(held_names)
+        held = kf._held_for(held_names)
         request = Request(task="t", agent="surveyor")
         agent = drive(kf._agent_for(request, harness_in(kf.cfg, session), source_ids=held_names))
         graph = kf._graph_for(

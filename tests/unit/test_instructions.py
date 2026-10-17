@@ -81,7 +81,7 @@ def test_a_build_hands_the_instructions_to_every_subagent(cfg, session_dir):
 
     built = build_agent(
         cfg,
-        agent=kf.agent_named("lead"),
+        agent=kf._agent_named("lead"),
         backend=backend_at(cfg, session_dir),
         checkpointer=None,
         instructions="House rule: cite every figure.",

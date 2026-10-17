@@ -503,7 +503,7 @@ def test_a_workspace_with_no_agents_is_told_how_to_write_one(cfg):
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(CapabilityError) as refused:
-        kf.agent_named("assistant")
+        kf._agent_named("assistant")
 
     said = str(refused.value)
     assert "offers none" in said
@@ -525,7 +525,7 @@ def test_the_starter_names_where_agents_are_read_from(cfg, tmp_path):
     kf = Kingfisher(replace(cfg, definitions=elsewhere.parent), sessions=LocalSessions())
 
     with pytest.raises(CapabilityError) as refused:
-        kf.agent_named("assistant")
+        kf._agent_named("assistant")
 
     said = str(refused.value)
     assert f"a file in {elsewhere}/" in said
@@ -542,7 +542,7 @@ def test_a_workspace_that_has_agents_is_not_lectured(cfg):
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(CapabilityError) as refused:
-        kf.agent_named("missing")
+        kf._agent_named("missing")
 
     said = str(refused.value)
     assert "only" in said
