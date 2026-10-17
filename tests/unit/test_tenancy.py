@@ -19,13 +19,13 @@ from kingfisher.core.session.model import (
     known,
 )
 from kingfisher.plugins import LocalSessions
-from tests.conftest import StubCheckpointer, Through, start
+from tests.conftest import Through, start
 from tests.unit.test_run import StubAgent
 
 
 def service(cfg, **kwargs):
     return Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer(), **kwargs
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), **kwargs
     )
 
 
@@ -75,7 +75,6 @@ def test_a_request_cannot_widen_past_what_the_deployment_granted(cfg, session_di
     kf = Kingfisher(
         replace(cfg, grants=Capabilities(builtin_tools=("read_file",))),
         sessions=LocalSessions(),
-        threads=StubCheckpointer(),
     )
 
     allowed = kf.grants.intersect(Capabilities(builtin_tools=("read_file", "execute")))
@@ -85,7 +84,7 @@ def test_a_request_cannot_widen_past_what_the_deployment_granted(cfg, session_di
 
 def test_grants_are_unrestricted_by_default(cfg):
     """A deployment serving one caller is unaffected by any of this."""
-    kf = Kingfisher(cfg, sessions=LocalSessions(), threads=StubCheckpointer())
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     assert kf.grants == UNRESTRICTED
 
 
@@ -113,7 +112,7 @@ def test_a_second_turn_on_a_busy_session_is_refused(cfg):
     doing, and tells a racing caller nothing.
     """
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     session = start(cfg, "s")
 
@@ -126,7 +125,7 @@ def test_a_second_turn_on_a_busy_session_is_refused(cfg):
 def test_the_slot_goes_back_when_the_turn_ends(cfg):
     """Or the first turn would wedge the session for an hour."""
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     start(cfg, "s")
 
@@ -142,7 +141,7 @@ def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
     out would wedge the session over a typo.
     """
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     start(cfg, "s")
 
@@ -188,7 +187,7 @@ def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
 def test_two_sessions_do_not_block_each_other(cfg):
     """The slot is per session. One busy conversation must not stop another."""
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     busy = start(cfg, "busy")
     other = start(cfg, "other")
@@ -238,7 +237,7 @@ def test_turns_in_separate_sessions_are_in_flight_at_once(cfg):
     """
     barrier = threading.Barrier(CONCURRENT, timeout=10)
     kf = Kingfisher(
-        cfg, graph=_BarrierAgent(barrier), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=_BarrierAgent(barrier), sessions=LocalSessions()
     )
     for n in range(CONCURRENT):
         start(cfg, f"s{n}")
@@ -258,7 +257,7 @@ def test_the_overlap_check_fails_when_the_turns_do_not_overlap(cfg):
     """
     barrier = threading.Barrier(CONCURRENT, timeout=0.5)
     kf = Kingfisher(
-        cfg, graph=_BarrierAgent(barrier), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=_BarrierAgent(barrier), sessions=LocalSessions()
     )
     start(cfg, "alone")
 

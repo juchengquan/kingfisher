@@ -225,13 +225,11 @@ and a sink that keeps state between events wants a lock.
 
 ## The rest
 
-**A checkpointer every session shares** is passed as `threads=` and is langgraph's
-own type, so there is no protocol of ours for it to satisfy. A factory passed as
-`threads=` instead is called with a session's id at the start of each of its turns,
-and what it returns is released when the turn ends. Deleting a session asks
-it to delete that session's thread — `delete_thread`, or `adelete_thread` on the async
-path where the saver has one and on kingfisher's thread pool where it does not — and
-`reap` asks it to `list` its threads where it can, to find any no session owns.
+**The conversation is not for replacing either.** Kingfisher keeps it in the session,
+as the transcript each turn is handed, and runs every turn on a store of its own that
+holds nothing once the turn ends; a turn that stops for approval is written into the
+session and read back by the answer. There is no `threads=` to pass a langgraph saver
+of your own: one that remembered earlier turns showed the model each of them twice.
 
 Definitions are not covered here, because how they are read is not for replacing:
 kingfisher reads each kind from a directory. Definitions kept somewhere else are staged

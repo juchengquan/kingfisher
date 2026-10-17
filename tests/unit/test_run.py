@@ -10,7 +10,7 @@ from kingfisher.core.result import END_TURN, STOP_REASONS
 from kingfisher.core.run import Request, RunResult, normalize_answer, run
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins import LocalSessions
-from tests.conftest import RecordedEvents, StubCheckpointer, start
+from tests.conftest import RecordedEvents, start
 
 
 class StubAgent:
@@ -77,7 +77,6 @@ def test_run_creates_the_session_triple(cfg):
         cfg=cfg,
         graph=agent,
         sessions=LocalSessions(),
-        checkpointer=StubCheckpointer(),
     )
 
     assert isinstance(result, RunResult)
@@ -99,7 +98,6 @@ def test_run_tells_the_agent_where_to_work_in_the_task(cfg):
         cfg=cfg,
         graph=agent,
         sessions=LocalSessions(),
-        checkpointer=StubCheckpointer(),
     )
 
     message = agent.state["messages"][0]["content"]
@@ -117,7 +115,6 @@ def test_run_logs_usage_shaped_records(cfg):
         cfg=cfg,
         graph=agent,
         sessions=LocalSessions(),
-        checkpointer=StubCheckpointer(),
         run_events=sink,
     )
 
@@ -142,8 +139,7 @@ def test_a_turn_disposes_of_nothing(cfg):
         start(cfg, name)
     start(cfg, "s4")
 
-    run(Request("t", session_id="s4"), cfg=cfg, graph=StubAgent("ok"), sessions=LocalSessions(),
-        checkpointer=StubCheckpointer())
+    run(Request("t", session_id="s4"), cfg=cfg, graph=StubAgent("ok"), sessions=LocalSessions())
 
     for name in ("s1", "s2", "s3", "s4"):
         assert (cfg.workspace / "sessions" / name).is_dir(), name
@@ -156,7 +152,6 @@ def test_a_bare_task_string_still_works(cfg):
         cfg=cfg,
         graph=StubAgent("ok"),
         sessions=LocalSessions(),
-        checkpointer=StubCheckpointer(),
     )
     assert result.answer == "ok"
 
@@ -196,7 +191,6 @@ def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
             Request("t", capabilities=Capabilities(subagents=("ghost",))),
             cfg=cfg,
             sessions=LocalSessions(),
-            checkpointer=StubCheckpointer(),
         )
 
     assert old.is_dir()  # nothing was removed
@@ -210,7 +204,6 @@ def test_the_framework_never_asks_for_files_of_its_own(cfg):
         cfg=cfg,
         graph=quiet,
         sessions=LocalSessions(),
-        checkpointer=StubCheckpointer(),
     )
     sent = quiet.state["messages"][0]["content"]
 
@@ -225,7 +218,6 @@ def test_the_framework_never_asks_for_files_of_its_own(cfg):
         cfg=cfg,
         graph=asked,
         sessions=LocalSessions(),
-        checkpointer=StubCheckpointer(),
     )
     # Whatever the caller names, verbatim and unembellished.
     assert "findings.csv" in asked.state["messages"][0]["content"]
@@ -239,20 +231,17 @@ def test_supplied_inputs_are_still_there_on_the_next_turn(cfg):
     source.write_text("a,b\n1,2\n")
 
     start(cfg, "keeps")
-    ck = StubCheckpointer()
     first = run(
         Request("look at it", session_id="keeps", inputs=(source,)),
         cfg=cfg,
         graph=StubAgent("ok"),
         sessions=LocalSessions(),
-        checkpointer=ck,
     )
     second = run(
         Request("and again", session_id="keeps"),
         cfg=cfg,
         graph=StubAgent("ok"),
         sessions=LocalSessions(),
-        checkpointer=ck,
     )
 
     session = cfg.workspace / "sessions" / first.session_id
@@ -273,7 +262,6 @@ def test_the_agent_is_told_what_arrived_in_inputs(cfg):
         cfg=cfg,
         graph=agent,
         sessions=LocalSessions(),
-        checkpointer=StubCheckpointer(),
     )
 
     assert "New files in /inputs/: fresh.csv." in agent.state["messages"][0]["content"]
@@ -295,7 +283,7 @@ def test_a_result_is_json_all_of_it(cfg):
     import dataclasses
 
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     start(cfg, "s")
     result = service.run(Request("go", session_id="s"))
@@ -341,7 +329,7 @@ def test_the_loop_asks_for_what_a_subagent_does(cfg):
     """
     agent = RecordingAgent("ok")
     list(Kingfisher(
-        cfg, graph=agent, sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=agent, sessions=LocalSessions()
     ).stream(Request("go")))
 
     assert agent.asked == [True]

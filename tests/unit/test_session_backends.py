@@ -19,7 +19,6 @@ from kingfisher.core.layout import SKILLS_ROUTE
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from tests.checks.sessions import CONTRACT_SESSIONS, SESSIONS_CHECKS
-from tests.conftest import StubCheckpointer
 from tests.unit.test_run import StubAgent
 from tests.unit.test_session_files import Elsewhere
 
@@ -179,7 +178,7 @@ def test_a_turn_refuses_while_the_sessions_say_it_is_claimed(cfg):
     from kingfisher import Request, SessionBusyError
 
     kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     session_id = kf.run(Request("first")).session_id
     assert LocalSessions().claim(cfg, session_id, stale_after=3600)

@@ -3966,8 +3966,9 @@ purpose: the next turn may not be run by this harness.
 turn's *working* state does not cross a turn boundary even though its
 conversation does -- an agent resuming a session does not find a half-finished
 `TodoListMiddleware` checklist it has no memory of writing, for a task the caller
-may have dropped. That is structural rather than enforced, so it is asserted:
-a deployment injecting a persistent `threads` factory takes it back.
+may have dropped. That is structural rather than enforced, so it is asserted.
+*(A deployment could once take it back by passing a persistent saver as `threads=`. That
+went on 2026-10-17; see "Dropped: a deployment's own saver" below.)*
 
 That is a change in what a checkpointer is *for* here rather than a cheaper way
 to do the same job: a checkpoint preserves resumable graph state, and kingfisher never
@@ -3997,6 +3998,31 @@ A turn can stop on one gated call while a sibling in the same superstep has
 already run; drop those writes and the sibling runs *again* on resume, which for
 an approval gate means a tool firing twice for one decision. Both paths end in
 identical state, so nothing but a side effect can tell them apart. *(2026-09-22.)*
+
+**Dropped: a deployment's own saver.** `threads=` let a deployment hand every turn a
+langgraph saver of its own, one every session shared or one made per session. Driven
+on 2026-10-17 it had four faults, and one cause -- a saver that remembers earlier turns,
+beside a transcript that is replayed into each of them:
+
+  - every follow-up turn's model saw the earlier exchanges twice, once from the saver
+    and once from the transcript;
+  - a turn that stopped at a gate crashed as it ended, on any saver but
+    `InMemorySaver`, because writing the pause reads `InMemorySaver`'s own mappings;
+  - on a shared `InMemorySaver`, the pause written into one session carried every
+    session's checkpoints;
+  - a resume ran on a copy read back from that file, so the deployment's saver never
+    saw the turn it finished.
+
+A normal turn needs a saver only for its own length: the end of the turn reads the final
+state once, which is how the transcript is written. So a deployment's saver bought
+nothing kingfisher's did not, and the pause file already keeps a paused turn inside the
+session. Removed with `checkpointer=` on `run` and `stream`, `Plugins.threads`,
+`SharedThreads`, and the sweep in `reap` for threads no session owned;
+`test_a_follow_up_turn_hands_the_model_the_earlier_exchange_once` holds the doubling.
+
+**Not taken: a thread per turn in the deployment's saver.** It fixed all four and kept
+the plugin, for a use nobody had named -- keeping each turn's step-by-step state for a
+deployment's own tools to read. *(2026-10-17.)*
 
 **The mark beside it records the agent the turn ran, not the one the request named.**
 It recorded `request.agent`, and a session's agent is fixed when it opens -- so every
@@ -4052,7 +4078,8 @@ a hundred kingfisher carries and two dependencies every install pays for. That
 it is a breaking change to a public surface is why it is written down here, and
 `0.1.0` is when such a change costs least. *(2026-09-04. The service stopped
 opening one first, separately, so the removal landed on a tree where nothing
-used it.)*
+used it. Reversed 2026-10-17 in the part that sent a deployment to `threads=`: there
+is none -- see "Dropped: a deployment's own saver".)*
 
 **A saver factory is handed the session's id, not its directory.** It was handed
 `<workspace>/sessions/<id>` so the per-session sqlite above could live inside the
@@ -4060,7 +4087,8 @@ session it belonged to. That database is gone, and since a session became its ba
 the directory is not the session either: one its backend keeps elsewhere has none
 here, and a factory handed one would put its saver beside nothing. `SessionBackends.open`
 takes the id for the same reason. A factory that does want a file per session on this
-host builds the path from its own configuration. *(2026-10-05.)*
+host builds the path from its own configuration. *(2026-10-05. Gone with `threads=`
+on 2026-10-17.)*
 
 **`doctor` checks whether a memory-backed workspace can be filled safely.**
 `workspace/backing.py` reads the filesystem type, its size, the cgroup limit
@@ -5935,7 +5963,7 @@ calls; `InMemorySaver` has both and `SqliteSaver` does not. Neither refusal can
 reach a caller of `stream`, whose behaviour is unchanged, and the async pair had
 no callers at all when this landed -- so this is a requirement of a new API
 rather than a break in an old one. `guides/middleware.md` says it where a
-deployment reads it.
+deployment reads it. *(The saver half went with `threads=` on 2026-10-17.)*
 
 **Two things that had to be closed by hand.** Building the turn goes through a
 thread -- all of setup through `asyncio.to_thread` then, only `_built_turn` on
@@ -6070,7 +6098,7 @@ where it has none or raises `NotImplementedError`, as langgraph's base class doe
 refused instead, a sync-only saver would make deleting a session fail on the async
 path alone, which is the rule `SessionBackends`' defaults already follow. `_exists`
 and `_known` were two listings asking one question; `_known_steps` is the one.
-*(2026-10-05.)*
+*(2026-10-05. `SharedThreads` went with `threads=` on 2026-10-17.)*
 
 **Setup is one sequence for both loops, and the turn's ending is off the loop.**
 `stream` and `astream` set a turn up by driving one `_prepare_steps` -- the session
@@ -6315,12 +6343,14 @@ real, and a check that imports in a fresh interpreter holds it without a folder.
 **Words.** A *plugin* is a part a deployment may replace with its own, and kingfisher
 ships one of each; its *interface* is what the core needs of it, stated once, in
 `core/interfaces.py`. "Port", "adapter" and "extension" name none of these, and
-`Adapter` became `WireFormat` because it was a model wire format. The conversation
-store and middleware are upstream types used as they are, so they have no interface here.
+`Adapter` became `WireFormat` because it was a model wire format. Middleware is
+upstream's type used as it is, so it has no interface here, and the conversation is not
+a plugin at all: "Dropped: a deployment's own saver" under *Sessions: what persists and
+where* says why.
 
 **The core imports no plugin.** A default the core falls back to lives in the core
-beside its interface: the logger sink `LoggedRunEvents`, `InstructionsFile`, the shipped
-wire formats and the in-memory saver. `plugins/` holds what the core never names --
+beside its interface: the logger sink `LoggedRunEvents`, `InstructionsFile` and the
+shipped wire formats. `plugins/` holds what the core never names --
 `LocalSessions` with its folders, backend, shell and sandbox, and `JsonlRunEvents`. What
 the core needs beyond an interface it reads as extras an implementation may declare --
 `host_path`, `shell_prompt`, `unprotected`, `runs_here`, `where` -- never by identity: five

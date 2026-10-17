@@ -17,7 +17,7 @@ from kingfisher.core.session.runlog import (
     usage_of,
 )
 from kingfisher.plugins import LocalSessions
-from tests.conftest import RecordedEvents, StubCheckpointer, start
+from tests.conftest import RecordedEvents, start
 from tests.unit.test_run import StubAgent
 
 
@@ -91,7 +91,6 @@ def test_a_sink_that_fails_does_not_fail_the_turn(cfg, caplog):
         cfg,
         graph=StubAgent("42"),
         sessions=LocalSessions(),
-        threads=StubCheckpointer(),
         run_events=Broken(),
     )
 
@@ -109,7 +108,6 @@ def test_a_turn_records_its_start_and_end(cfg):
         cfg,
         graph=StubAgent("42"),
         sessions=LocalSessions(),
-        threads=StubCheckpointer(),
         run_events=sink,
     )
 
@@ -135,7 +133,6 @@ def test_a_sink_that_is_empty_is_still_the_one_used(cfg):
         cfg,
         graph=StubAgent("42"),
         sessions=LocalSessions(),
-        threads=StubCheckpointer(),
         run_events=sink,
     )
 
@@ -151,7 +148,7 @@ def test_with_nothing_wired_the_events_go_to_the_run_logger(cfg, caplog):
     """
     start(cfg, "s")
     kf = Kingfisher(
-        cfg, graph=StubAgent("42"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("42"), sessions=LocalSessions()
     )
 
     with caplog.at_level(logging.INFO, logger=RUN_LOGGER):

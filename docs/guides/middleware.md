@@ -253,11 +253,6 @@ implements only one works under one of the two entry points and refuses the
 other, which is a deployment-shaped surprise rather than a bug you can find by
 reading the class.
 
-The same applies to a saver passed as `threads=`: langgraph calls `aget_tuple`
-and `aput` on the async path, so a sync-only one — `SqliteSaver` is the obvious
-example — refuses there while working under `stream`. The default `InMemorySaver`
-implements both.
-
 A subclass fails quietly. A LangChain middleware that implements both halves —
 `SummarizationMiddleware` is one — keeps its own sync hook when a subclass
 overrides only `abefore_model`: the subclass is installed, the turn runs, and none

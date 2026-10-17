@@ -13,7 +13,7 @@ from kingfisher import Kingfisher
 from kingfisher.core.access.source_ids import parse
 from kingfisher.core.request import Request
 from kingfisher.plugins import LocalSessions
-from tests.conftest import StubCheckpointer, an_agent, pin, start
+from tests.conftest import an_agent, pin, start
 from tests.unit.test_run import StubAgent
 
 #: Every sync method the async paths can reach, on the classes that answer them.
@@ -68,7 +68,7 @@ def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wir
     policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
     kf = (
         Kingfisher(
-            policied, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+            policied, graph=StubAgent("ok"), sessions=LocalSessions()
         )
         if wiring == "graph"
         else Kingfisher(policied, sessions=LocalSessions())
@@ -113,7 +113,7 @@ def test_an_async_turn_makes_no_sync_port_call_on_the_loop(cfg, sync_calls, tmp_
     supplied = tmp_path / "in.csv"
     supplied.write_text("a,b\n")
     kf = Kingfisher(
-        policied, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        policied, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     start(policied, "s")
     sync_calls.clear()
@@ -153,7 +153,7 @@ def test_a_turn_reads_the_pin_once(cfg, monkeypatch):
     an_agent(cfg, "only_a", source_ids="[A]")
     policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
     kf = Kingfisher(
-        policied, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        policied, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     start(policied, "s")
     asked = Request("go", agent="only_a", session_id="s")
@@ -183,7 +183,7 @@ def test_an_async_turn_refused_after_its_claim_gives_it_back_off_the_loop(
     from kingfisher.core.session.files import InputsError
 
     kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     start(cfg, "s")
     sync_calls.clear()

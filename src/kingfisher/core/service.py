@@ -83,11 +83,9 @@ from kingfisher.core.result import (
 )
 from kingfisher.core.session import runtime
 from kingfisher.core.session.checkpointing import (
-    SharedThreads,
     build_session_checkpointer,
     harness_mark,
     paused_state,
-    release_checkpointer,
     resumed_saver,
 )
 from kingfisher.core.session.disposal import Disposal
@@ -234,11 +232,6 @@ class Kingfisher(SessionMethods, Disposal):
         self,
         cfg: Config | None = None,
         *,
-        # A langgraph checkpointer every session shares, a factory given a session
-        # id, or nothing for the default -- see `_checkpointer_for`. The
-        # checkpointer is langgraph's own type, which this layer may not name, so
-        # it is `Any` and `SharedThreads` is what kingfisher asks of it.
-        threads: Any = None,
         # No default, so leaving it out is reported where the call is written. The
         # backend is the sandbox -- it confines every command, refuses host paths and
         # carries the route table a read-only rule is only legal against -- and a
@@ -320,14 +313,6 @@ class Kingfisher(SessionMethods, Disposal):
         # decides whether it keeps them by configuring logging or by passing a sink.
         self.run_events: RunEvents = (
             run_events if run_events is not None else LoggedRunEvents()
-        )
-        # Three shapes, and the difference is who owns the connection. An instance is a
-        # shared store the deployment made and manages; a callable is a factory this
-        # service calls per session and closes after the turn; `None` means the default,
-        # which is `InMemorySaver` and holds nothing after the turn that made it.
-        self.threads: Any = threads
-        self._shared = (
-            SharedThreads(threads) if (threads is not None and not callable(threads)) else None
         )
         # `intersect` can only subtract, so no request can widen past this.
         self.grants: Capabilities = (
@@ -417,7 +402,7 @@ class Kingfisher(SessionMethods, Disposal):
         self,
         request: Request | Resume,
         capabilities: Capabilities,
-        checkpointer: Any = _UNSET,
+        checkpointer: Any = None,
         *,
         agent: AgentSpec | None,
         held: frozenset[str] | None,
@@ -463,7 +448,7 @@ class Kingfisher(SessionMethods, Disposal):
             run_on=request.run_on,
             middleware_registry=self.middlewares,
             instructions=self.instructions.text(self.cfg),
-            checkpointer=self.threads if checkpointer is _UNSET else checkpointer,
+            checkpointer=checkpointer,
             catalogue=self.catalogue,
             ledger=ledger,
         )
@@ -869,17 +854,15 @@ class Kingfisher(SessionMethods, Disposal):
             )
             raise DecisionError(msg)
 
-    def _checkpointer_for(self, session_id: str) -> tuple[Any, Any]:
-        """The saver this turn runs on, and how to release it when the turn ends."""
-        if not self.cfg.conversation_enabled:
-            return None, None
-        if self.threads is None:
-            saver = build_session_checkpointer()
-            return saver, saver
-        if callable(self.threads):
-            saver = self.threads(session_id)
-            return saver, saver
-        return self.threads, None
+    def _checkpointer(self) -> Any:
+        """The saver this turn runs on, empty, or `None` where nothing is remembered.
+
+        Always kingfisher's own and always new: the transcript is what carries a
+        conversation from one turn to the next, so a saver that remembered earlier
+        turns would hand the model each of them twice -- measured, with a persistent
+        store, every follow-up turn's model saw the previous exchange two times over.
+        """
+        return build_session_checkpointer() if self.cfg.conversation_enabled else None
 
     def _built_turn(  # noqa: PLR0913 -- everything setup decided, for the one piece
         # of it that is work on this host rather than calls to a port
@@ -905,9 +888,7 @@ class Kingfisher(SessionMethods, Disposal):
         the agent is CPU-bound and on the loop would hold every other turn up.
         """
         cfg = self.cfg
-        # Resolved here rather than in `__init__`, because a saver is built per
-        # session and there is no session until now.
-        checkpointer, release = self._checkpointer_for(session.id)
+        checkpointer = self._checkpointer()
         graph = None
         try:
             saver = checkpointer if paused is None else self._restored(session, paused)
@@ -981,14 +962,12 @@ class Kingfisher(SessionMethods, Disposal):
             # Built and not yet handed over, so nothing else will let go of them.
             if graph is not None:
                 release_interpreter(cfg, graph)
-            release_checkpointer(release)
             raise
 
         return Prepared(
             graph=graph,
             files=files,
             harness=harness,
-            release=release,
             saver=saver,
             context=built.context if isinstance(built, Assembled) else None,
             resume=resume,
@@ -1148,10 +1127,7 @@ class Kingfisher(SessionMethods, Disposal):
         harness = prepared.harness
         waiting = runtime.pending_in(snapshot) if snapshot is not None else ()
         if not waiting or prepared.saver is None:
-            # Including the turn that was just resumed and ran to the end. A saver
-            # this service did not open cannot be written out either -- an injected
-            # store is the deployment's, and holding its state in a file of ours
-            # would be a second copy nobody asked for.
+            # Including the turn that was just resumed and ran to the end.
             if prepared.resume is not None:
                 yield from clear_pause(harness)
             return ()
@@ -1274,10 +1250,6 @@ class Kingfisher(SessionMethods, Disposal):
             # The slot goes back however the turn ended -- answered, refused
             # mid-stream, cut short by its deadline, or cancelled during setup.
             yield changing(self._sessions, "release", self.cfg, prepared.session.id)
-        # And so does the connection, when this service opened one. A
-        # per-session database is a file descriptor per session, so a
-        # process serving many would otherwise hold every one it touched.
-        yield on_host(release_checkpointer, prepared.release)
         # And the QuickJS runtime, which is the one of the three that hangs
         # the process rather than leaking a handle. See `release_interpreter`.
         yield on_host(release_interpreter, self.cfg, prepared.graph)
@@ -1463,11 +1435,10 @@ class Kingfisher(SessionMethods, Disposal):
     ) -> AsyncIterator[RunEvent]:
         """`stream`, for a caller already on an event loop. Cancelling is immediate.
 
-        **This path asks two things `stream` does not.** The `a`-prefixed
-        middleware hook is the one that runs, so a middleware written only as
-        `wrap_model_call` raises the first time this reaches it; and a saver
-        passed as `threads=` needs `aget_tuple` and `aput`. Both refusals are
-        loud, and neither reaches a caller of `stream`.
+        **This path asks one thing `stream` does not.** The `a`-prefixed middleware
+        hook is the one that runs, so a middleware written only as `wrap_model_call`
+        raises the first time this reaches it. The refusal is loud, and does not reach
+        a caller of `stream`.
         """
         turn = self._astream_turn(
             _asked(request), source_ids=with_datazone(source_ids, datazone), files=files

@@ -15,7 +15,6 @@ from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import (
     FakeToolCallingModel,
-    StubCheckpointer,
     a_subagent,
     middleware_of,
 )
@@ -69,7 +68,7 @@ def test_a_definition_gets_the_middleware_it_names(cfg, session_dir):
 
 def test_the_registry_is_empty_until_a_deployment_wires_one(cfg):
     """Kingfisher cannot define these; only a deployment knows what its middleware is."""
-    assert Kingfisher(cfg, sessions=LocalSessions(), threads=StubCheckpointer()).middlewares == {}
+    assert Kingfisher(cfg, sessions=LocalSessions()).middlewares == {}
 
 
 def test_an_unregistered_name_fails_loudly(cfg, session_dir):
@@ -86,7 +85,7 @@ def test_kingfisher_hands_its_registry_to_the_agent(cfg):
     registry = {"audit": Audited}
 
     kf = Kingfisher(
-        cfg, sessions=LocalSessions(), threads=StubCheckpointer(), middlewares=registry
+        cfg, sessions=LocalSessions(), middlewares=registry
     )
     assert kf.middlewares is registry
 

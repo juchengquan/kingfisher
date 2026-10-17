@@ -24,7 +24,6 @@ from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import (
     FAKE_ENDPOINT,
     OTHER_ENDPOINT,
-    StubCheckpointer,
     an_agent,
     harness_in,
     start,
@@ -38,40 +37,11 @@ def agent_snapshot(session_dir) -> Path:
     return Path(session_dir) / HARNESS / PINNED_AGENT
 
 
-class CountingCheckpointer(StubCheckpointer):
-    """Counts how many times a thread store had to be opened."""
-
-    built = 0
-
-    def __init__(self) -> None:
-        super().__init__()
-        type(self).built += 1
-
-
-def test_an_injected_thread_store_is_opened_once_and_reused(cfg):
-    """The reason this object exists.
-
-    Still true for a store a deployment made itself, which is the case this was
-    written for. The *default* is now a database inside each session, opened for the
-    turn and closed after it -- measured at 0.22ms to reopen, against the orphaned
-    threads and cross-session contention one shared file cost.
-    """
-    CountingCheckpointer.built = 0
-    store = CountingCheckpointer()
-    service = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=store)
-
-    for _ in range(3):
-        service.run(Request("go"))
-
-    assert CountingCheckpointer.built == 1  # three turns later, still one
-    assert service.threads is store
-
-
 def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
     """Wiring is shared; per-turn state is not."""
     start(cfg, "s")
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
 
     asked = Request("go", agent="only", session_id="s")
@@ -83,7 +53,7 @@ def test_construction_prepares_only_what_sessions_share(cfg):
     """Eagerly, so a broken workspace fails at startup rather than mid-turn -- but only
     the shared tier, and no definition kind, which nothing reads from the workspace.
     """
-    service = Kingfisher(cfg, sessions=LocalSessions(), threads=StubCheckpointer())
+    service = Kingfisher(cfg, sessions=LocalSessions())
 
     assert service.workspace.is_dir()
     assert (service.workspace / "sessions").is_dir()
@@ -96,7 +66,7 @@ def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
     elsewhere cannot honour restrictions it never saw.
     """
     agent = StubAgent("ok")
-    service = Kingfisher(cfg, graph=agent, sessions=LocalSessions(), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=agent, sessions=LocalSessions())
 
     # No spec and no source ids: a supplied graph is handed back before either is
     # looked at, which is the thing this asserts.
@@ -140,7 +110,7 @@ def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
     """
     start(cfg, "s")
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
 
     real_chmod = Path.chmod
@@ -168,7 +138,7 @@ def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
         lambda _dir, _inputs=None: ("theirs.pdf: Operation not permitted",),
     )
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
 
     events = list(service.stream(Request("go", agent="only", session_id="s")))
@@ -189,7 +159,6 @@ def test_the_module_level_helpers_are_unchanged(cfg):
         cfg=cfg,
         graph=StubAgent("hello"),
         sessions=LocalSessions(),
-        checkpointer=StubCheckpointer(),
     )
     assert result.answer == "hello"
 
@@ -305,7 +274,6 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how)
         budgeted,
         graph=StubAgent("ok"),
         sessions=LocalSessions(),
-        threads=StubCheckpointer(),
         run_events=recorded,
     )
 
@@ -520,7 +488,7 @@ def test_a_caller_who_stops_reading_still_gives_the_session_back(cfg):
     slot went back.
     """
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     opened = service.run(Request(task="anything"))
 
@@ -535,7 +503,7 @@ def test_a_caller_who_stops_reading_still_gives_the_session_back(cfg):
 def test_the_graph_is_sent_the_whole_conversation_not_only_the_question(cfg):
     """Where history comes from now."""
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     first = service.run(Request(task="the number is forty"))
     service.run(Request(task="and now?", session_id=first.session_id))
@@ -580,7 +548,7 @@ def test_a_runner_is_built_for_each_turn_and_told_the_session(cfg, tmp_path, mon
 
     named = an_agent(cfg, "worker")
     monkeypatch.setattr(service_module, "build_agent", lambda *a, **kw: StubAgent("ok"))
-    service = Kingfisher(cfg, sessions=Recording(runner=build), threads=StubCheckpointer())
+    service = Kingfisher(cfg, sessions=Recording(runner=build))
 
     first = service.run(Request(task="anything", agent=named))
     service.run(Request(task="again", agent=named, session_id=first.session_id))
@@ -707,7 +675,7 @@ def test_a_turn_translates_a_rejected_key_rather_than_raising_the_providers_erro
             return None
 
     service = Kingfisher(
-        cfg, graph=Rejects(), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=Rejects(), sessions=LocalSessions()
     )
 
     with pytest.raises(ConfigError, match="rejected the key"):
@@ -784,7 +752,7 @@ def test_a_supplied_graph_with_no_policy_is_never_asked_which_agent(cfg, monkeyp
     """
     an_agent(cfg, "only")
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     reads = _snapshot_reads(monkeypatch)
 
@@ -802,7 +770,7 @@ def test_a_supplied_graph_under_a_policy_still_resolves_one(cfg, monkeypatch):
     from kingfisher.core import service as service_module
 
     service = Kingfisher(
-        _policied(cfg), graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        _policied(cfg), graph=StubAgent("ok"), sessions=LocalSessions()
     )
     reads = _snapshot_reads(monkeypatch)
     reported: list[object] = []

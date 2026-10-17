@@ -154,12 +154,11 @@ def test_the_pin_and_the_claim_go_with_the_session(cfg):
     """The residue this whole change is about: one file per session that ever existed,
     under `state_dir`, deleted by nothing."""
     from kingfisher.core.service import Kingfisher
-    from tests.conftest import StubCheckpointer
     from tests.unit.test_run import StubAgent
 
     _agent(cfg)
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     session_id = start(cfg, "s")
     pin(service, session_id, "assistant")

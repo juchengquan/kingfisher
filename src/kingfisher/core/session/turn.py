@@ -39,11 +39,8 @@ class Prepared:
     #: What kingfisher keeps about the session under `/.harness`, read and written
     #: through `files`.
     harness: Any = None
-    #: The saver this service opened for the turn, closed when the turn ends, or None
-    #: when it opened nothing -- an injected instance is the deployment's to close.
-    release: Any = None
-    #: The saver itself, which `release` is only sometimes. A turn that stops at a
-    #: gate has to write what this holds before the turn lets go of it.
+    #: The saver the turn ran on. A turn that stops at a gate has to write what this
+    #: holds before the turn lets go of it.
     saver: Any = None
     #: What a graph kingfisher built is driven with, or `None` for one the caller
     #: built -- that graph's context is whatever its builder decided, which is not

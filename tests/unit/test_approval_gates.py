@@ -625,7 +625,6 @@ def test_a_pause_nobody_answers_is_swept_with_its_session(cfg):
 
     assert paused.session_id in swept.removed
     assert not directory.exists()
-    assert swept.orphans == (), "the pause was reaped as residue rather than with its session"
     assert swept.failures == ()
 
 

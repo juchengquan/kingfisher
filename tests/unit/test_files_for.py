@@ -12,7 +12,7 @@ from kingfisher.core import service as service_module
 from kingfisher.core.interfaces import CommandResult
 from kingfisher.core.session.model import session_dir
 from kingfisher.plugins.sessions.backend import LocalSessions
-from tests.conftest import StubCheckpointer, Through, an_agent, start
+from tests.conftest import Through, an_agent, start
 from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
 from tests.unit.test_session import UNNAMABLE
@@ -129,7 +129,7 @@ def test_a_turn_handed_its_files_opens_no_others(cfg, monkeypatch, door, way):
     monkeypatch.setattr(service_module, "build_agent", build)
     named = an_agent(cfg)
     counting = Counting()
-    kf = Kingfisher(cfg, sessions=counting, threads=StubCheckpointer())
+    kf = Kingfisher(cfg, sessions=counting)
     start(cfg, "s")
     files = Through(kf, way).files_for("s")
 
@@ -174,7 +174,7 @@ def test_files_for_the_default_session_serve_a_request_naming_none(cfg, monkeypa
     monkeypatch.setattr(service_module, "build_agent", lambda *a, **kw: StubAgent("ok"))
     named = an_agent(cfg)
     counting = Counting()
-    kf = Kingfisher(cfg, sessions=counting, threads=StubCheckpointer())
+    kf = Kingfisher(cfg, sessions=counting)
     files = kf.files_for("default")
 
     result = _turn(kf, door, Request("go", agent=named), files=files)
@@ -188,7 +188,7 @@ def test_files_for_a_session_no_turn_has_made_makes_it(cfg, way):
     no way to place its inputs before the first turn.
     """
     counting = Counting()
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=counting, threads=StubCheckpointer())
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=counting)
 
     files = Through(kf, way).files_for("q3-report")
     files.upload_files([("/outputs/placed.txt", b"placed")])
@@ -203,7 +203,7 @@ def test_files_for_a_session_a_turn_made_opens_it(cfg, way):
     would leave `files=` holding files the turn never sees.
     """
     counting = Counting()
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=counting, threads=StubCheckpointer())
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=counting)
     issued = kf.run(Request("go")).session_id
 
     files = Through(kf, way).files_for(issued)

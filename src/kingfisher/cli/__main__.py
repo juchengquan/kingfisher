@@ -893,10 +893,6 @@ def _reap(args: argparse.Namespace) -> int:
 
     for gone in result.removed:
         print(f"reaped {gone}")
-    if result.orphans:
-        # Not sessions this sweep ended: conversations left behind by sessions
-        # that went some other way, which nothing but a sweep ever looks for.
-        print(f"and {len(result.orphans)} conversations no session owned any more")
     for failure in result.failures:
         print(f"not reaped -- {failure}", file=sys.stderr)
 

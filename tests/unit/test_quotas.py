@@ -13,7 +13,7 @@ from kingfisher.core.request import Request
 from kingfisher.core.session.model import QuotaExceededError
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.folders import session_bytes
-from tests.conftest import StubCheckpointer, start
+from tests.conftest import start
 from tests.unit.test_run import StubAgent
 
 
@@ -43,7 +43,6 @@ def test_a_turn_that_runs_past_its_bound_stops(cfg):
         replace(cfg, turn_timeout_s=0),
         graph=agent,
         sessions=LocalSessions(),
-        threads=StubCheckpointer(),
     )
 
     result = kf.run(Request("go"))
@@ -62,7 +61,6 @@ def test_being_cut_short_keeps_the_work(cfg):
         replace(cfg, turn_timeout_s=0),
         graph=SlowAgent(),
         sessions=LocalSessions(),
-        threads=StubCheckpointer(),
     )
 
     result = kf.run(Request("go"))
@@ -79,7 +77,6 @@ def test_the_caller_is_told_rather_than_left_to_guess(cfg):
         replace(cfg, turn_timeout_s=0),
         graph=SlowAgent(),
         sessions=LocalSessions(),
-        threads=StubCheckpointer(),
     )
 
     kinds = [e.kind for e in kf.stream(Request("go"))]
@@ -91,7 +88,7 @@ def test_the_caller_is_told_rather_than_left_to_guess(cfg):
 def test_an_ordinary_turn_is_untouched(cfg):
     """An hour is far past any real turn, so this only fires on the pathological case."""
     result = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     ).run(Request("go"))
 
     assert result.stop_reason == "end_turn"
@@ -113,7 +110,7 @@ class RunawayAgent:
 def test_a_turn_that_runs_out_of_steps_is_cut_short_not_crashed(cfg):
     """The other bound on a turn, and it behaved nothing like the first."""
     kf = Kingfisher(
-        cfg, graph=RunawayAgent(), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=RunawayAgent(), sessions=LocalSessions()
     )
 
     result = kf.run(Request("go"))
@@ -140,7 +137,6 @@ def test_a_turn_cut_short_for_steps_is_logged_as_having_ended(cfg):
         cfg,
         graph=RunawayAgent(),
         sessions=LocalSessions(),
-        threads=StubCheckpointer(),
         run_events=sink,
     ).run(Request("go"))
 
@@ -153,7 +149,7 @@ def test_running_out_of_steps_says_which_bound_and_how_to_raise_it(cfg):
     the wrong setting.
     """
     kf = Kingfisher(
-        cfg, graph=RunawayAgent(), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=RunawayAgent(), sessions=LocalSessions()
     )
 
     events = list(kf.stream(Request("go")))
@@ -176,7 +172,6 @@ def test_a_session_over_its_disk_bound_cannot_start_another_turn(cfg):
         replace(cfg, session_max_bytes=10),
         graph=StubAgent("ok"),
         sessions=LocalSessions(),
-        threads=StubCheckpointer(),
     )
     session_id = start(cfg, "s")
     (cfg.workspace / "sessions" / session_id / "outputs" / "big.bin").write_bytes(b"x" * 100)
@@ -192,7 +187,7 @@ def test_the_disk_bound_is_off_unless_a_deployment_sets_one(cfg):
     assert cfg.session_max_bytes is None
 
     kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     session_id = start(cfg, "s")
     (cfg.workspace / "sessions" / session_id / "outputs" / "big.bin").write_bytes(b"x" * 10_000)
@@ -220,7 +215,6 @@ def test_reap_falls_back_to_the_configured_ttl(cfg):
         replace(cfg, session_ttl_s=60),
         graph=StubAgent("ok"),
         sessions=LocalSessions(),
-        threads=StubCheckpointer(),
     )
     import os
 
@@ -239,7 +233,6 @@ def test_a_session_over_budget_is_refused_before_its_inputs_are_placed(cfg, tmp_
         replace(cfg, session_max_bytes=10),
         graph=StubAgent("ok"),
         sessions=LocalSessions(),
-        threads=StubCheckpointer(),
     )
     session_id = start(cfg, "s")
     session = cfg.workspace / "sessions" / session_id

@@ -18,13 +18,13 @@ from kingfisher.core.service import Kingfisher
 from kingfisher.core.session import runtime
 from kingfisher.core.session.model import SessionBusyError
 from kingfisher.plugins import LocalSessions
-from tests.conftest import StubCheckpointer, start
+from tests.conftest import start
 from tests.unit.test_run import StubAgent
 
 
 def service(cfg, graph=None):
     return Kingfisher(
-        cfg, graph=graph or StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=graph or StubAgent("ok"), sessions=LocalSessions()
     )
 
 
@@ -184,13 +184,12 @@ def test_arun_can_dispose_of_the_session_like_run(cfg):
 
 
 def test_disposing_of_a_session_does_not_happen_on_the_event_loop(cfg, monkeypatch):
-    """Disposal reaches the store as well as the disk, and a deployment's store may
-    be a network away -- so `arun` must not do it on the loop while every other turn
-    in the process waits. Measured at 0.75ms locally, which is the floor and not the
-    cost that matters.
+    """Disposal reaches the sessions, and a deployment's own may be a network away --
+    so `arun` must not do it on the loop while every other turn in the process waits.
+    Measured at 0.75ms locally, which is the floor and not the cost that matters.
 
-    Asserted as *which thread* each of the two deletions ran on, because the time
-    they take is the deployment's and the thread they take it on is ours.
+    Asserted as *which thread* the deletion ran on, because the time it takes is the
+    deployment's and the thread it takes it on is ours.
     """
     import threading
 
@@ -206,17 +205,14 @@ def test_disposing_of_a_session_does_not_happen_on_the_event_loop(cfg, monkeypat
         return recording
 
     monkeypatch.setattr(LocalSessions, "delete", watched("session", LocalSessions.delete))
-    monkeypatch.setattr(
-        StubCheckpointer, "delete_thread", watched("thread", StubCheckpointer.delete_thread)
-    )
     session = start(cfg, "s")
     kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
 
     asyncio.run(kf.arun(Request("go", session_id=session), delete_session=True))
 
-    assert on_main == {"thread": False, "session": False}, "a deletion ran on the loop's thread"
+    assert on_main == {"session": False}, "the deletion ran on the loop's thread"
     assert not (cfg.workspace / "sessions" / session).exists()
 
 
@@ -502,7 +498,7 @@ def test_cancelling_at_any_step_of_setup_leaves_the_session_free(cfg, monkeypatc
     supplied.write_text("a,b\n")
     session = start(policied, "s")
     kf = Kingfisher(
-        policied, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        policied, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     asked, held = Request("go", agent="only_a", session_id=session, inputs=(supplied,)), ("A",)
     real = steps_module._awaited

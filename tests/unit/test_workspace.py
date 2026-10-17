@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 
 from kingfisher import WorkspacePaths
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
@@ -13,7 +12,6 @@ from kingfisher.core.layout import (
 from kingfisher.core.workspace import EXAMPLE, EXAMPLES, ensure_definitions, ensure_layout
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.folders import LocalSessionDirs, ensure_session_layout
-from tests.conftest import StubCheckpointer
 
 
 def test_layout_is_created_and_idempotent(tmp_path):
@@ -151,7 +149,7 @@ def test_no_gitignore_is_written_for_a_repository_nothing_manages(workspace):
     assert not (workspace / ".gitignore").exists()
 
 
-def sweep(workspace, keep, checkpointer):
+def sweep(workspace, keep, sessions=None):
     """`reap`, over the sessions under this workspace."""
     import time
 
@@ -162,14 +160,12 @@ def sweep(workspace, keep, checkpointer):
 
     definitions = ensure_definitions(workspace.parent / "definitions")
     cfg = Config(workspace=workspace, definitions=definitions, models=FAKE_CATALOGUE)
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=checkpointer)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=sessions or LocalSessions())
     return kf.reap(older_than_seconds=keep, now=time.time())
 
 
-def test_sweep_keeps_the_newest_and_deletes_thread_with_directory(workspace):
-    """A swept session loses its directory and its thread together, so the checkpointer
-    can never point at files that no longer exist.
-    """
+def test_sweep_keeps_the_newest_and_deletes_the_idle(workspace):
+    """A swept session loses its directory, and one still in use keeps it."""
     import time
 
     now = time.time()
@@ -178,87 +174,38 @@ def test_sweep_keeps_the_newest_and_deletes_thread_with_directory(workspace):
         d.mkdir(parents=True)
         os.utime(d, (now - age, now - age))
 
-    ckpt = StubCheckpointer()
-    result = sweep(workspace, keep=100, checkpointer=ckpt)  # idle over 100s goes
+    result = sweep(workspace, keep=100)  # idle over 100s goes
 
     assert result.removed == ("oldest",)
     assert not (workspace / "sessions" / "oldest").exists()
     assert (workspace / "sessions" / "newest").exists()
-    assert ckpt.deleted == ["oldest"]
 
 
 def test_sweep_is_a_noop_when_under_the_limit(workspace):
     (workspace / "sessions" / "only").mkdir(parents=True)
-    result = sweep(workspace, keep=10_000, checkpointer=StubCheckpointer())
+    result = sweep(workspace, keep=10_000)
     assert result.removed == ()
-
-
-class BrokenCheckpointer:
-    """A checkpointer whose thread deletion fails."""
-
-    def delete_thread(self, thread_id: str) -> None:
-        msg = f"cannot delete {thread_id}"
-        raise RuntimeError(msg)
-
-
-def test_sweep_deletes_the_thread_before_the_directory(workspace):
-    """No transaction spans a filesystem and sqlite, so the order is chosen to make the
-    surviving failure benign.
-    """
-    order: list[str] = []
-
-    class Recording:
-        def delete_thread(self, thread_id: str) -> None:
-            order.append("thread")
-
-    d = workspace / "sessions" / "old"
-    d.mkdir(parents=True)
-    (d / "scratch.txt").write_text("x")
-
-    original = shutil.rmtree
-
-    def watched(*args, **kwargs):
-        order.append("directory")
-        return original(*args, **kwargs)
-
-    shutil.rmtree = watched
-    try:
-        sweep(workspace, keep=0, checkpointer=Recording())
-    finally:
-        shutil.rmtree = original
-
-    assert order == ["thread", "directory"]
-
-
-def test_a_failed_thread_delete_leaves_the_session_whole(workspace):
-    """Nothing is half-deleted: if the thread will not go, the directory stays, so the
-    next sweep retries an intact session rather than finding a thread that points at
-    files which are gone.
-    """
-    d = workspace / "sessions" / "old"
-    d.mkdir(parents=True)
-
-    result = sweep(workspace, keep=0, checkpointer=BrokenCheckpointer())
-
-    assert result.removed == ()
-    assert d.is_dir(), "the directory was removed despite the thread surviving"
-    assert len(result.failures) == 1
-    assert "thread not deleted" in result.failures[0]
 
 
 def test_sweep_failures_are_reported_not_swallowed(workspace):
-    """A checkpointer that can never delete should be visible, not tolerated silently on
+    """Sessions that can never be deleted should be visible, not tolerated silently on
     every single run.
     """
+
+    class Refusing(LocalSessions):
+        def delete(self, cfg, session_id):
+            return "refused"
+
     for name in ("a", "b"):
         (workspace / "sessions" / name).mkdir(parents=True)
 
-    result = sweep(workspace, keep=0, checkpointer=BrokenCheckpointer())
+    result = sweep(workspace, keep=0, sessions=Refusing())
 
+    assert result.removed == ()
     assert len(result.failures) == 2
     # Each failure names the session it belongs to, so the report is actionable.
     assert {f.split(":")[0] for f in result.failures} == {"a", "b"}
-    assert all("RuntimeError" in f for f in result.failures)
+    assert all("refused" in f for f in result.failures)
 
 
 def test_the_layout_names_no_genre_of_output():
