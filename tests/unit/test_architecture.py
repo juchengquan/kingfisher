@@ -1418,7 +1418,6 @@ NOT_YET: dict[str, frozenset[str]] = {
         "kingfisher.core.definitions.catalogue:refuse_unmountable",
         "kingfisher.core.layout:CLAIM",
         "kingfisher.core.session.model:session_dir",
-        "kingfisher.core.session.model:sessions_root",
         "kingfisher.core.session.model:still_held",
     }),
     "src/kingfisher/plugins/sessions/folders.py": frozenset({
@@ -1426,18 +1425,14 @@ NOT_YET: dict[str, frozenset[str]] = {
         "kingfisher.core.session.model:names_a_session",
     }),
     "src/kingfisher/plugins/sessions/sandbox/confinement.py": frozenset({
-        "kingfisher.core.layout:HARNESS_OWNED",
         "kingfisher.core.layout:SANDBOX_PROFILE",
     }),
     "src/kingfisher/plugins/sessions/sandbox/sandbox_exec.py": frozenset({
-        "kingfisher.core.layout:HARNESS_OWNED",
         "kingfisher.core.layout:SANDBOX_PROFILE",
-        "kingfisher.core.session.model:sessions_root",
     }),
     "src/kingfisher/plugins/sessions/shell.py": frozenset({
         "kingfisher.core.definitions.catalogue:Definitions",
         "kingfisher.core.definitions.skills.catalogue:LocalSkillRepository",
-        "kingfisher.core.layout:HARNESS_OWNED",
         "kingfisher.core.layout:SKILLS_VIEW",
     }),
     "tests/checks/backend.py": frozenset({

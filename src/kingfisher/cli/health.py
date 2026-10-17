@@ -23,7 +23,6 @@ from kingfisher.core.backing import MemoryBacking, memory_backing
 # takes each name where it lives.
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.origins import kingfishers_own
-from kingfisher.core.session.model import sessions_root
 from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.sandbox.confinement import (
     LINUX_FENCES,
@@ -249,7 +248,7 @@ def _packs(cfg: Config) -> Iterator[Check]:
     yield Check("definitions to seed", "ok", f"{', '.join(kinds)} — from {cfg.assets}")
 
 
-def _sessions_probe(workspace: Path) -> Path:
+def _sessions_probe(cfg: Config) -> Path:
     """Where to measure a deployment's sessions, before it has any.
 
     `_size_of` stats the path, so a sessions directory that is not there yet
@@ -257,8 +256,7 @@ def _sessions_probe(workspace: Path) -> Path:
     somebody is sizing a tmpfs. The workspace is the honest fallback: with
     nothing mounted, that is the filesystem sessions will land on anyway.
     """
-    root = sessions_root(workspace)
-    return root if root.is_dir() else Path(workspace)
+    return cfg.sessions_root if cfg.sessions_root.is_dir() else cfg.workspace
 
 
 def _devices(sessions: MemoryBacking, workspace: MemoryBacking) -> str:
@@ -293,7 +291,7 @@ def _at_rest(cfg: Config, sessions: object) -> Iterator[Check]:
     - Only a filesystem **smaller** than the limit gives a clean `ENOSPC` on a
       full one, which is a thing kingfisher can refuse on.
     """
-    backing = memory_backing(_sessions_probe(cfg.workspace))
+    backing = memory_backing(_sessions_probe(cfg))
     workspace = memory_backing(cfg.workspace)
     devices = _devices(backing, workspace)
     if not backing.in_memory:

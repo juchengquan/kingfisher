@@ -5834,8 +5834,9 @@ deployment had configured.
 Measured on 2026-10-11 against a deployment naming its own backends: `kingfisher doctor`
 and `kingfisher list` both printed `sessions : ./sessions` while the library answered
 `<supplied>` for the same deployment -- and `doctor` printed it three rows above its own
-`sessions survive` check, which reads the setting and knew better. `_sessions` reads
-that setting where no object is handed in, so the two ways of asking agree.
+`sessions survive` check, which reads the setting and knew better. `inventory` is
+handed the sessions the command runs on now, and `Origins` asks them, so the two ways
+of asking agree.
 
 **The `sessions` command had the same split, with the listing right and the line beside
 it wrong.** `kf.sessions()` asks the backends; the path printed next to it was

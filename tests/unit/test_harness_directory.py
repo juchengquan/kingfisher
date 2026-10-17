@@ -179,14 +179,13 @@ def test_the_pin_and_the_claim_go_with_the_session(cfg):
 def test_the_harness_owned_directory_is_protected_too(cfg):
     """The profile lives in it, and after `TMPDIR` moved out nothing in it is the
     agent's -- so it is denied as a directory rather than as one named file."""
-    from kingfisher.core.layout import HARNESS_OWNED
     from kingfisher.plugins.sessions.sandbox import confinement
 
     protected = confinement.protected_roots(
-        cfg.workspace, (cfg.skills_dir,), tuple(cfg.catalogue_roots.values())
+        cfg.kingfisher_dir, (cfg.skills_dir,), tuple(cfg.catalogue_roots.values())
     )
 
-    assert (cfg.workspace / HARNESS_OWNED).resolve() in protected
+    assert cfg.kingfisher_dir.resolve() in protected
 
 
 def test_an_empty_directory_is_laid_out_fresh(tmp_path):

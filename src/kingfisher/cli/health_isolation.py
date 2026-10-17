@@ -198,7 +198,7 @@ def _linked_sessions(cfg: Config, sessions: object) -> Iterator[Check]:
         return
     if shell_confinement(cfg, shell).mechanism != SANDBOX_EXEC:
         return
-    root = fenced_sessions(cfg.workspace)
+    root = fenced_sessions(cfg.sessions_root)
     if not root.is_dir():
         return
     strayed = sorted(

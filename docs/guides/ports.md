@@ -401,7 +401,11 @@ a backend of yours meets the same promise its own way.
 yours has to serve is what the `Config` it is handed says: `cfg.layout`, a `Layout`
 from `kingfisher.plugins`, with each folder's name and a route for each --
 `inputs_route`, `outputs_route`, `scratch_route`, `skills_route`, `harness_route` and
-the rest. `DEFAULT_LAYOUT` is the one a `Config` has unless told.
+the rest. `DEFAULT_LAYOUT` is the one a `Config` has unless told. Two folders of the
+workspace are on the `Config` too: `cfg.sessions_root`, where kingfisher's own sessions
+are kept and against which the origins line tells them from yours, and
+`cfg.kingfisher_dir`, kingfisher's own folder, where `LocalSessions` keeps what its
+shell must not be able to change.
 
 **Open it once if you use it around a turn.** `kf.session(session_id).files()`
 builds a session's backend the way a turn does, through your sessions, and `run`,

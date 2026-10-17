@@ -19,6 +19,7 @@ import warnings
 from concurrent import futures
 from dataclasses import replace
 from pathlib import Path
+from typing import TypedDict
 
 import pytest
 
@@ -49,13 +50,29 @@ DEFAULT_SHELL = confinement.ShellSettings()
 UNFENCED = confinement.ShellSettings(sandbox=confinement.OFF)
 
 
+
+class _Places(TypedDict):
+    workspace: Path
+    sessions_root: Path
+    kingfisher_dir: Path
+
+
+def _places(cfg) -> _Places:
+    """The three places `resolve` is told, as `shell_confinement` tells it them."""
+    return _Places(
+        workspace=cfg.workspace,
+        sessions_root=cfg.sessions_root,
+        kingfisher_dir=cfg.kingfisher_dir,
+    )
+
+
 # -- choosing one ---------------------------------------------------------
 
 
 def test_off_is_warned_about_on_every_start(cfg, tmp_path):
     """An exposure nobody is reminded of is one nobody fixes."""
     chosen = confinement.resolve(
-        confinement.OFF, workspace=cfg.workspace
+        confinement.OFF, **_places(cfg)
     )
 
     assert not chosen.confined
@@ -66,7 +83,7 @@ def test_off_is_warned_about_on_every_start(cfg, tmp_path):
 def test_external_is_silent_because_the_runtime_already_did_it(cfg, tmp_path):
     """A container that mounts only the workspace has provided the boundary."""
     chosen = confinement.resolve(
-        confinement.EXTERNAL, workspace=cfg.workspace
+        confinement.EXTERNAL, **_places(cfg)
     )
 
     assert chosen.warning == ""
@@ -77,14 +94,14 @@ def test_an_unknown_mode_is_refused_rather_than_treated_as_off(cfg, tmp_path):
     """A typo in a deployment's env must not silently unconfine it."""
     with pytest.raises(ValueError, match="unknown shell sandbox mode"):
         confinement.resolve(
-            "sandbox", workspace=cfg.workspace
+            "sandbox", **_places(cfg)
         )
 
 
 @macos
 def test_auto_confines_and_says_nothing(cfg, tmp_path):
     chosen = confinement.resolve(
-        confinement.AUTO, workspace=cfg.workspace
+        confinement.AUTO, **_places(cfg)
     )
 
     assert chosen.confined
@@ -105,8 +122,12 @@ def test_the_profile_has_one_place_it_can_be(cfg):
     boundary is `test_the_shell_cannot_rewrite_the_profile_it_runs_under`; what
     this checks is that there is one answer to where it lives.
     """
-    first = confinement.resolve(confinement.AUTO, workspace=cfg.workspace)
-    again = confinement.resolve(confinement.AUTO, workspace=cfg.workspace)
+    first = confinement.resolve(
+        confinement.AUTO, **_places(cfg)
+    )
+    again = confinement.resolve(
+        confinement.AUTO, **_places(cfg)
+    )
 
     assert first.profile == again.profile
     assert first.profile is not None
@@ -121,9 +142,11 @@ def test_processes_configured_apart_keep_their_profiles_apart(cfg):
     writing their rules to one file, which left every turn bound by whichever process
     wrote last, under rules its own configuration never asked for.
     """
-    one = confinement.resolve(confinement.AUTO, workspace=cfg.workspace, extra=("/opt/one",))
+    one = confinement.resolve(
+        confinement.AUTO, **_places(cfg), extra=("/opt/one",)
+    )
     other = confinement.resolve(
-        confinement.AUTO, workspace=cfg.workspace, extra=("/opt/other",)
+        confinement.AUTO, **_places(cfg), extra=("/opt/other",)
     )
 
     assert one.profile is not None
@@ -142,7 +165,7 @@ def test_the_interpreter_stays_readable_or_python_stops_working(cfg, tmp_path):
     """
     import sys
 
-    roots = confinement.readable_roots(cfg.workspace)
+    roots = confinement.readable_roots(cfg.workspace, cfg.sessions_root)
 
     assert Path(sys.base_prefix).resolve() in roots
     assert Path(cfg.workspace).resolve() in roots
@@ -153,22 +176,22 @@ def test_the_sessions_root_is_named_twice_only_where_it_is_somewhere_else(cfg, t
     again would read as though it added something. Reached through a link it is not
     under the workspace at all, and then it is the whole point.
     """
-    inside = confinement.writable_roots(cfg.workspace)
+    inside = confinement.writable_roots(cfg.workspace, cfg.sessions_root)
 
     far = tmp_path / "far"
     far.mkdir()
     (cfg.workspace / "sessions").rmdir()
     (cfg.workspace / "sessions").symlink_to(far)
-    elsewhere = confinement.writable_roots(cfg.workspace)
+    elsewhere = confinement.writable_roots(cfg.workspace, cfg.sessions_root)
 
     assert inside == (Path(cfg.workspace).resolve(),)
     assert elsewhere == (Path(cfg.workspace).resolve(), far.resolve())
-    assert far.resolve() in confinement.readable_roots(cfg.workspace)
+    assert far.resolve() in confinement.readable_roots(cfg.workspace, cfg.sessions_root)
 
 
 def test_paths_a_deployment_put_on_path_stay_readable(cfg, tmp_path):
     """`ShellSettings.path_extra` is a deployment saying "the agent may run these"."""
-    roots = confinement.readable_roots(cfg.workspace, ("/opt/homebrew/bin",))
+    roots = confinement.readable_roots(cfg.workspace, cfg.sessions_root, ("/opt/homebrew/bin",))
 
     assert Path("/opt/homebrew/bin") in roots
 
@@ -617,7 +640,7 @@ def test_walking_in_does_not_open_the_home_it_walks_through(cfg, workspace_in_th
 def test_external_is_confined_elsewhere_rather_than_unconfined(cfg, tmp_path):
     """The distinction `EXTERNAL` exists for, made readable downstream."""
     chosen = confinement.resolve(
-        confinement.EXTERNAL, workspace=cfg.workspace
+        confinement.EXTERNAL, **_places(cfg)
     )
 
     assert chosen.elsewhere
@@ -629,7 +652,7 @@ def test_external_is_confined_elsewhere_rather_than_unconfined(cfg, tmp_path):
 def test_nothing_configured_is_not_confined_elsewhere(cfg, tmp_path):
     """The other side, or the flag would say yes to everything."""
     chosen = confinement.resolve(
-        confinement.OFF, workspace=cfg.workspace
+        confinement.OFF, **_places(cfg)
     )
 
     assert not chosen.elsewhere
@@ -818,7 +841,7 @@ def test_every_definition_root_is_protected(cfg):
     parametrised tests above would not notice.
     """
     protected = confinement.protected_roots(
-        cfg.workspace, (cfg.skills_dir,), tuple(cfg.catalogue_roots.values())
+        cfg.kingfisher_dir, (cfg.skills_dir,), tuple(cfg.catalogue_roots.values())
     )
 
     missing = [
@@ -837,7 +860,9 @@ def test_a_root_named_twice_is_protected_once(cfg):
     """`skills` is passed separately *and* is a catalogue root."""
     roots = tuple(cfg.catalogue_roots.values())
 
-    protected = confinement.protected_roots(cfg.workspace, (cfg.catalogue_roots["skills"],), roots)
+    protected = confinement.protected_roots(
+        cfg.kingfisher_dir, (cfg.catalogue_roots["skills"],), roots
+    )
 
     assert len(protected) == len(set(protected))
     assert len(protected) == len(roots) + 1, "a duplicate survived, or a root was dropped"
@@ -847,7 +872,7 @@ def test_a_definition_root_that_does_not_exist_is_still_named(cfg, tmp_path):
     """A profile is written once, and `seed` runs after it at least once."""
     absent = tmp_path / "not-created"
 
-    protected = confinement.protected_roots(tmp_path / "ws", (), (absent,))
+    protected = confinement.protected_roots(tmp_path / "ws" / ".kingfisher", (), (absent,))
 
     assert absent.resolve() in protected
 
@@ -1027,7 +1052,7 @@ def test_every_pattern_in_the_profile_still_means_the_path_it_is_about(name, tmp
 
     text = sandbox_exec.profile(
         home=tmp_path / "home",
-        workspace=workspace,
+        sessions_root=workspace / "sessions",
         readable=(),
         writable=(workspace,),
         itself=workspace / ".kingfisher" / "shell.sb",
@@ -1065,7 +1090,7 @@ def test_a_renamed_inputs_leaf_is_the_one_the_profile_denies(tmp_path):
 
     text = sandbox_exec.profile(
         home=tmp_path / "home",
-        workspace=workspace,
+        sessions_root=workspace / "sessions",
         readable=(),
         writable=(workspace,),
         itself=workspace / ".kingfisher" / "shell.sb",
@@ -1096,7 +1121,7 @@ def test_a_renamed_layout_moves_the_saved_results_denies_with_it(tmp_path):
 
     text = sandbox_exec.profile(
         home=tmp_path / "home",
-        workspace=workspace,
+        sessions_root=workspace / "sessions",
         readable=(),
         writable=(workspace,),
         itself=workspace / ".kingfisher" / "shell.sb",
@@ -1126,7 +1151,7 @@ def test_what_stands_in_for_a_quote_cannot_reach_across_a_directory(tmp_path):
 
     text = sandbox_exec.profile(
         home=tmp_path / "home",
-        workspace=workspace,
+        sessions_root=workspace / "sessions",
         readable=(),
         writable=(workspace,),
         itself=workspace / ".kingfisher" / "shell.sb",
@@ -1181,7 +1206,7 @@ def test_an_authored_file_is_denied_by_its_exact_path(tmp_path):
 
     text = sandbox_exec.profile(
         home=tmp_path / "home",
-        workspace=workspace,
+        sessions_root=workspace / "sessions",
         readable=(),
         writable=(workspace,),
         itself=workspace / ".kingfisher" / "shell.sb",
@@ -1286,7 +1311,7 @@ def test_the_profile_refuses_itself_last(tmp_path):
 
     lines = sandbox_exec.profile(
         home=tmp_path / "home",
-        workspace=tmp_path / "ws",
+        sessions_root=tmp_path / "ws" / "sessions",
         readable=(tmp_path / "ws",),
         writable=(tmp_path / "ws",),
         itself=written,
@@ -1311,7 +1336,12 @@ def test_a_profile_is_replaced_rather_than_truncated(tmp_path):
     """
     workspace = tmp_path / "ws"
     for _ in range(2):
-        chosen = confinement.resolve(confinement.AUTO, workspace=workspace)
+        chosen = confinement.resolve(
+        confinement.AUTO,
+        workspace=workspace,
+        sessions_root=workspace / "sessions",
+        kingfisher_dir=workspace / ".kingfisher",
+    )
 
     assert chosen.profile is not None
     assert list(chosen.profile.parent.iterdir()) == [chosen.profile], (
@@ -1340,7 +1370,12 @@ def test_no_turn_can_read_the_profile_half_written(tmp_path, monkeypatch):
     with `write_text` left all 2,390 tests green.
     """
     workspace = tmp_path / "ws"
-    path = confinement.resolve(confinement.AUTO, workspace=workspace).profile
+    path = confinement.resolve(
+        confinement.AUTO,
+        workspace=workspace,
+        sessions_root=workspace / "sessions",
+        kingfisher_dir=workspace / ".kingfisher",
+    ).profile
     assert path is not None
     whole = path.read_text(encoding="utf-8")
 
@@ -1353,7 +1388,12 @@ def test_no_turn_can_read_the_profile_half_written(tmp_path, monkeypatch):
         return renaming(self, target)
 
     monkeypatch.setattr(Path, "replace", watched)
-    confinement.resolve(confinement.AUTO, workspace=workspace)
+    confinement.resolve(
+        confinement.AUTO,
+        workspace=workspace,
+        sessions_root=workspace / "sessions",
+        kingfisher_dir=workspace / ".kingfisher",
+    )
 
     assert seen == [whole], "the profile was not replaced by a rename over a whole file"
 
@@ -1448,7 +1488,13 @@ def test_concurrent_writers_do_not_share_one_scratch_file(tmp_path):
 
     with futures.ThreadPoolExecutor(max_workers=writers) as pool:
         done = [
-            pool.submit(confinement.resolve, confinement.AUTO, workspace=workspace)
+            pool.submit(
+                confinement.resolve,
+                confinement.AUTO,
+                workspace=workspace,
+                sessions_root=workspace / "sessions",
+                kingfisher_dir=workspace / ".kingfisher",
+            )
             for _ in range(writers)
         ]
     failed = [task.exception() for task in done if task.exception() is not None]

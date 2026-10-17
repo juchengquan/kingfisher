@@ -11,7 +11,7 @@ from typing import Any
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.access.source_ids import SourceIds
-from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS_OWNED, SESSIONS, Layout
 
 #: The frozen default for an `extra` mapping. Shared with `WireFormat.extra`
 #: rather than written twice: both spread into one `build_model` call and carry
@@ -451,6 +451,17 @@ class Config:
 
     def __post_init__(self) -> None:
         refuse_overlap(self.workspace, self.definitions)
+
+    @property
+    def sessions_root(self) -> Path:
+        """Where this workspace keeps its sessions, one folder each."""
+        return self.workspace / SESSIONS
+
+    @property
+    def kingfisher_dir(self) -> Path:
+        """The workspace's folder that is kingfisher's own, neither a session's nor the
+        agent's: what a plugin keeps here, the agent's shell must not be able to change."""
+        return self.workspace / HARNESS_OWNED
 
     @property
     def skills_dir(self) -> Path:

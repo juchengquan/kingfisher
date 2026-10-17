@@ -845,13 +845,13 @@ def _backing(monkeypatch, sessions=None, **fields):
     sessions tree, which is the thing these tests are here to hold.
     """
     from kingfisher.core.backing import MemoryBacking
-    from kingfisher.core.session.model import sessions_root
+    from kingfisher.core.layout import SESSIONS
 
     on_the_workspace = MemoryBacking(**fields)
     on_the_sessions = MemoryBacking(**sessions) if sessions is not None else on_the_workspace
-    # Taken from `sessions_root` rather than spelled, so a layout that renames
+    # Taken from `SESSIONS` rather than spelled, so a layout that renames
     # the directory renames it here too.
-    marker = sessions_root(Path("/anywhere")).name
+    marker = SESSIONS
 
     monkeypatch.setattr(
         "kingfisher.cli.health.memory_backing",
@@ -924,7 +924,7 @@ def test_every_message_names_both_devices(cfg, monkeypatch):
         assert "tmpfs" in check.detail and "ext4" in check.detail, check
 
 
-def test_a_workspace_nobody_has_seeded_still_reports_a_size(tmp_path):
+def test_a_workspace_nobody_has_seeded_still_reports_a_size(cfg, tmp_path):
     """`_size_of` stats the path it is given, so measuring a sessions directory that
     does not exist yet would answer `None` and turn every sized check into the
     unknown-limit branch -- on the one run that matters most, `doctor` before
@@ -935,17 +935,18 @@ def test_a_workspace_nobody_has_seeded_still_reports_a_size(tmp_path):
     bare = tmp_path / "unseeded"
     bare.mkdir()
 
-    assert health._sessions_probe(bare) == bare
-    assert memory_backing(health._sessions_probe(bare)).size_bytes is not None
+    unseeded = replace(cfg, workspace=bare)
+
+    assert health._sessions_probe(unseeded) == bare
+    assert memory_backing(health._sessions_probe(unseeded)).size_bytes is not None
 
 
-def test_a_laid_out_workspace_is_measured_at_its_sessions(workspace):
+def test_a_laid_out_workspace_is_measured_at_its_sessions(cfg):
     """The control for the fallback above: where the directory exists, that is what
     gets stat'd, or the mount would never be the thing measured.
     """
-    from kingfisher.core.session.model import sessions_root
-
-    assert health._sessions_probe(workspace) == sessions_root(workspace)
+    assert cfg.sessions_root.is_dir(), "the control needs a laid-out workspace"
+    assert health._sessions_probe(cfg) == cfg.sessions_root
 
 
 def test_an_ordinary_disk_says_nothing_at_all(cfg, monkeypatch):

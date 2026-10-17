@@ -11,8 +11,7 @@ import threading
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS_OWNED, SANDBOX_PROFILE
-from kingfisher.core.session.model import sessions_root
+from kingfisher.core.layout import DEFAULT_LAYOUT, SANDBOX_PROFILE
 
 
 def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and each is
@@ -20,7 +19,7 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     # and the two paths the profile has to know about itself
     *,
     home: Path,
-    workspace: Path,
+    sessions_root: Path,
     readable: tuple[Path, ...],
     writable: tuple[Path, ...],
     itself: Path,
@@ -125,15 +124,15 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     # folder, write the pin where the pattern no longer reaches, and rename it back;
     # measured doing exactly that before this line. It denies the node and not its
     # contents, so the session's own work stays writable.
-    lines.append(_sessions_denial(workspace))
-    lines += [_enclosing_denial(workspace, folder) for folder in _enclosing(saved_results)]
+    lines.append(_sessions_denial(sessions_root))
+    lines += [_enclosing_denial(sessions_root, folder) for folder in _enclosing(saved_results)]
     lines.append(f"(deny file-write* (path {_sb(itself)}))")
     for folder in (session_inputs, DEFAULT_LAYOUT.harness, *saved_results):
-        lines.append(_session_folder_denial(workspace, folder))
+        lines.append(_session_folder_denial(sessions_root, folder))
     return "\n".join(lines) + "\n"
 
 
-def fenced_sessions(workspace: Path) -> Path:
+def fenced_sessions(sessions_root: Path) -> Path:
     """Where this profile's rules say the sessions are: the real path.
 
     Four rules name it -- two that allow and two that deny -- and they have to name
@@ -156,10 +155,10 @@ def fenced_sessions(workspace: Path) -> Path:
     is what says so, because a profile naming the sessions that exist when it is
     written is the thing `_session_folder_denial` explains this design avoids.
     """
-    return sessions_root(workspace).resolve()
+    return Path(sessions_root).resolve()
 
 
-def _sessions_denial(workspace: Path) -> str:
+def _sessions_denial(sessions_root: Path) -> str:
     """Deny writes to the directories a `.harness` is guarded by the position of.
 
     `_session_folder_denial` matches `.harness` by where it sits under `sessions/`, so an
@@ -170,7 +169,7 @@ def _sessions_denial(workspace: Path) -> str:
     are, a `file-write*` against the name -- and `$` stops it reaching their contents, so
     a session's own folders stay writable.
     """
-    root = re.escape(str(fenced_sessions(workspace)))
+    root = re.escape(str(fenced_sessions(sessions_root)))
     return f"(deny file-write* (regex {_sb_regex(f'^{root}(/[^/]+)?$')}))"
 
 
@@ -183,7 +182,7 @@ def _enclosing(saved_results: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(found)
 
 
-def _enclosing_denial(workspace: Path, folder: str) -> str:
+def _enclosing_denial(sessions_root: Path, folder: str) -> str:
     """Deny writes to every session's `folder` itself and not to what it holds.
 
     `folder` is the scratchpad, which the shell may write and the saved results sit in.
@@ -193,12 +192,12 @@ def _enclosing_denial(workspace: Path, folder: str) -> str:
     and not its contents, as `_sessions_denial` leaves a session's own folders: `$`
     stops it reaching the files and folders the agent makes there.
     """
-    root = re.escape(f"{fenced_sessions(workspace)}/")
+    root = re.escape(f"{fenced_sessions(sessions_root)}/")
     written = f"^{root}[^/]+/{re.escape(folder)}$"
     return f"(deny file-write* (regex {_sb_regex(written)}))"
 
 
-def _session_folder_denial(workspace: Path, folder: str) -> str:
+def _session_folder_denial(sessions_root: Path, folder: str) -> str:
     """Refuse every session's `folder` at once: `sessions/*/<folder>`.
 
     A regex rather than one `subpath` per session, and that is what keeps the
@@ -228,7 +227,7 @@ def _session_folder_denial(workspace: Path, folder: str) -> str:
     ledger row can name, which a later turn reads back as what a tool returned; they
     sit a folder deeper, under the scratchpad, which is what `_enclosing_denial` holds.
     """
-    root = re.escape(f"{fenced_sessions(workspace)}/")
+    root = re.escape(f"{fenced_sessions(sessions_root)}/")
     written = f"^{root}[^/]+/{re.escape(folder)}(/|$)"
     return f"(deny file-write* (regex {_sb_regex(written)}))"
 
@@ -283,7 +282,7 @@ def traversable(home: Path, readable: tuple[Path, ...]) -> tuple[Path, ...]:
     return tuple(found)
 
 
-def profile_path(workspace: Path, rules: str) -> Path:
+def profile_path(kingfisher_dir: Path, rules: str) -> Path:
     """Where the sandbox profile holding `rules` is written: named for them.
 
     By content rather than under one name, because processes configured differently
@@ -298,7 +297,7 @@ def profile_path(workspace: Path, rules: str) -> Path:
     """
     digest = hashlib.sha256(rules.encode()).hexdigest()[:16]
     stem, _, suffix = SANDBOX_PROFILE.rpartition(".")
-    return Path(workspace) / HARNESS_OWNED / f"{stem}.{digest}.{suffix}"
+    return Path(kingfisher_dir) / f"{stem}.{digest}.{suffix}"
 
 
 def wrapper(profile_path: Path) -> Callable[[str], str]:

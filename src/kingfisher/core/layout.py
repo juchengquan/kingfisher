@@ -15,13 +15,16 @@ from dataclasses import dataclass
 #: by `MARKER`, the sandbox profile and the skills view that live in it.
 HARNESS_OWNED = ".kingfisher"
 
+#: Where a workspace keeps its sessions, one folder each: `Config.sessions_root`.
+SESSIONS = "sessions"
+
 #: Created in the workspace whatever else is configured: where sessions are, and
 #: the harness's own directory. No definition kind belongs here, because a kind is
 #: made where its setting points and that is not always the workspace -- a kind
 #: listed here gets a folder beside the sessions that nothing reads.
 LAYOUT_DIRS: tuple[str, ...] = (
     # Sessions are the unit of isolation; each one is a backend root.
-    "sessions",
+    SESSIONS,
     # The harness's own, which the agent may not write: the marker, the sandbox
     # profile that says what the shell may do, and the skills view the shell reads
     # a mounted catalogue through -- the one thing here it is told about. It held
@@ -275,7 +278,7 @@ def routed_paths() -> tuple[str, ...]:
 #: `scratchpad` and `tool_results` share a session with the harness and sit beside (or
 #: under) deepagents' own folders, so colliding with one of these would overwrite it.
 _RESERVED_LEAF_NAMES = frozenset(
-    {HARNESS, "sessions", SKILLS, OFFLOADS, "conversation_history", "blobs"}
+    {HARNESS, SESSIONS, SKILLS, OFFLOADS, "conversation_history", "blobs"}
 )
 _LEAF = re.compile(r"^[A-Za-z0-9_-]+$")
 

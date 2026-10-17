@@ -20,7 +20,7 @@ from kingfisher.core.config import Config
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
 from kingfisher.core.interfaces import CommandRunner
-from kingfisher.core.layout import HARNESS_OWNED, SKILLS_VIEW
+from kingfisher.core.layout import SKILLS_VIEW
 from kingfisher.plugins.sessions.sandbox import confinement
 
 _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
@@ -52,11 +52,11 @@ def shell_env(
         "TMPDIR": str(session_dir / cfg.layout.scratchpad),
     }
     skills = (catalogue or Definitions.from_config(cfg)).skills
-    env["KINGFISHER_SKILLS"] = str(skills_view(skills, cfg.workspace))
+    env["KINGFISHER_SKILLS"] = str(skills_view(skills, cfg.kingfisher_dir))
     return env
 
 
-def skills_view(skills: LocalSkillRepository, workspace: Path) -> Path:
+def skills_view(skills: LocalSkillRepository, kingfisher_dir: Path) -> Path:
     """Where the shell finds the catalogue, so `/skills/X` is `$KINGFISHER_SKILLS/X`.
 
     The catalogue itself when nothing is mounted. With mounts, a directory of
@@ -72,7 +72,7 @@ def skills_view(skills: LocalSkillRepository, workspace: Path) -> Path:
     # rather than a stale one, and two turns building the same view build one.
     listing = "\n".join(f"{name}\t{target}" for name, target in sorted(links.items()))
     view = (
-        workspace / HARNESS_OWNED / SKILLS_VIEW
+        kingfisher_dir / SKILLS_VIEW
         / hashlib.sha256(listing.encode()).hexdigest()[:16]
     )
     if view.is_dir():

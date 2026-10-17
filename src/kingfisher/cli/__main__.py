@@ -54,7 +54,6 @@ from kingfisher.core.config import MissingCredentialsWarning
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.definitions.seeding import REMEDY, UNCONSULTED
-from kingfisher.core.session.model import sessions_root
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -839,7 +838,7 @@ def _sessions(*, as_document: bool = False) -> int:
     # The absolute path where kingfisher knows it, because somebody reads this to go
     # there; a sentence where it does not, rather than a path it would be guessing.
     kept = kf.origins.sessions
-    root: Path | None = sessions_root(kf.workspace) if kept.kind == "default" else None
+    root: Path | None = kf.cfg.sessions_root if kept.kind == "default" else None
     where = str(root) if root is not None else "the sessions this deployment configured"
     now = time.time()
     # A walk per session, at ~0.8ms each. The same trade `sessions()` already

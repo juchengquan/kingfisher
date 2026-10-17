@@ -23,7 +23,7 @@ from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.catalogue import Definitions, refuse_unmountable
 from kingfisher.core.interfaces import CommandRunner, Sessions
 from kingfisher.core.layout import CLAIM, DEFAULT_LAYOUT
-from kingfisher.core.session.model import session_dir, sessions_root, still_held
+from kingfisher.core.session.model import session_dir, still_held
 from kingfisher.plugins.sessions.folders import (
     LocalSessionDirs,
     ensure_session_layout,
@@ -285,7 +285,7 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     # The view as well as what it points at: every fence checks the resolved path,
     # so the targets need their grant, and the Linux one also has to reach the
     # links themselves.
-    view = skills_view(skills, cfg.workspace) if skills.mounts else None
+    view = skills_view(skills, cfg.kingfisher_dir) if skills.mounts else None
     every_skills_dir = (skills_dir, *skills.mounts.values(), *((view,) if view else ()))
 
     settings = shell if shell is not None else confinement.ShellSettings.from_env()
@@ -457,7 +457,7 @@ class LocalSessions(Sessions):
         return built
 
     def sessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
-        return LocalSessionDirs().listing(sessions_root(cfg.workspace))
+        return LocalSessionDirs().listing(cfg.sessions_root)
 
     def mark_used(self, cfg: Config, session_id: str) -> None:
         LocalSessionDirs().mark_used(_where(cfg, session_id))
@@ -474,7 +474,7 @@ class LocalSessions(Sessions):
         Only for exactly this class: a subclass can return its backend with anything
         changed, so it is answered as somewhere this cannot see.
         """
-        return sessions_root(cfg.workspace) if type(self) is LocalSessions else None
+        return cfg.sessions_root if type(self) is LocalSessions else None
 
     # The turn lock is a directory under the session's `.harness`. `mkdir` because it is
     # the one operation that fails when the name is taken, which is what a lock is --
