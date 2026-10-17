@@ -21,6 +21,10 @@ GIVE_UP = 3
 #: Responses API's when it carries them, and langchain's own.
 CALL_BLOCKS = frozenset({"tool_use", "function_call", "tool_call"})
 
+#: How the result of a call refused for being cut begins. Clearing reads it to leave the
+#: refusal whole once a replayed transcript has dropped its error status.
+NOT_RUN = "Not run: your reply reached "
+
 #: On a cut reply kept in the conversation: the cut answers asked again in the same call
 #: before it, which never reach the conversation and would otherwise drop out of the count.
 ASKED_BEFORE = "kingfisher_cut_answers_before"
@@ -73,7 +77,7 @@ def _replaced(response: Any, reply: AIMessage, by: AIMessage) -> Any:
 def _refusal(reply: AIMessage, call: Any) -> ToolMessage:
     return ToolMessage(
         content=(
-            f"Not run: your reply reached {output_limit(reply)} while this call was still "
+            f"{NOT_RUN}{output_limit(reply)} while this call was still "
             "being written, so its arguments are incomplete and nothing was done. Make the "
             "change in smaller pieces — for a long file, write the first part, then add the "
             "rest in further calls."
