@@ -338,7 +338,6 @@ def test_a_saved_result_is_stamped_with_its_datazone():
 
     class Subagent:
         source_ids = ("A",)
-        audiences: dict[str, object] = {}
         datazone = "finance"
 
     stamps = Audiences.of(Subagent(), own={"payroll": (zone_name("hr"),)})

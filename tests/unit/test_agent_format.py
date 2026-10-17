@@ -336,51 +336,6 @@ def test_an_agent_that_says_nothing_is_reachable_by_everyone():
     assert _read(MINIMAL, "plain.yaml").source_ids == ALL
 
 
-TASK = "builtin_tools: [task]\n"
-
-
-def test_every_audienced_field_takes_a_mapping():
-    """All three, because a rule that covered one would be the one nobody noticed was a
-    third of a rule.
-    """
-    for field_name, written in [
-            ("tools", "tools:\n  - name: sql_query\n    source_ids: [A]\n"
-                "  - name: http_fetch\n    source_ids: [A, B]\n"),
-            ("skills", "skills:\n  - name: audit\n    source_ids: [A]\n"
-                "  - name: review\n    source_ids: [A, B]\n"),
-            ("subagents", "subagents:\n  - name: checker\n    source_ids: [A]\n"
-                "  - name: reviewer\n    source_ids: [A, B]\n"),
-        ]:
-        # `task` held, or the `subagents` case is refused before it reaches an audience.
-        spec = _read(MINIMAL.rstrip() + f"\nsource_ids: [A, B]\n{TASK}{written}", "plain.yaml")
-
-        first, second = (getattr(spec, field_name))[0], (getattr(spec, field_name))[1]
-        assert spec.audiences[field_name] == {first: ("A",), second: ("A", "B")}
-
-
-def test_every_audienced_field_narrows_for_a_caller():
-    for field_name, written, kept in [
-            (
-                "tools",
-                "tools:\n  - name: sql_query\n    source_ids: [A]\n"
-                    "  - name: http_fetch\n    source_ids: [A, B]\n",
-                "http_fetch",
-            ),
-            ("skills", "skills:\n  - name: audit\n    source_ids: [A]\n"
-                "  - name: review\n    source_ids: [A, B]\n", "review"),
-            (
-                "subagents",
-                "subagents:\n  - name: checker\n    source_ids: [A]\n"
-                    "  - name: reviewer\n    source_ids: [A, B]\n",
-                "reviewer",
-            ),
-        ]:
-        # `task` held, or the `subagents` case is refused before it reaches an audience.
-        spec = _read(MINIMAL.rstrip() + f"\nsource_ids: [A, B]\n{TASK}{written}", "plain.yaml")
-
-        assert getattr(spec.declares(frozenset({"B"})), field_name) == (kept,)
-
-
 def test_an_entry_with_no_audience_inherits_the_definitions():
     """A plain list under a policied definition means 'these, at my audience', which is
     what keeps every file written before audiences unchanged.
@@ -394,11 +349,11 @@ def test_an_entry_with_no_audience_inherits_the_definitions():
 def test_declaring_with_no_caller_is_what_it_always_was():
     """A deployment with no vocabulary, or an UNSCOPED call."""
     spec = _read(
-        MINIMAL.rstrip() + "\nsource_ids: [A]\ntools:\n  - name: sql_query\n    source_ids: [A]\n",
+        MINIMAL.rstrip() + "\nsource_ids: [A]\nskills:\n  - name: audit\n    source_ids: [B]\n",
         "plain.yaml",
     )
 
-    assert spec.declares(None).tools == ("sql_query",)
+    assert spec.declares(None).skills == ("audit",)
 
 
 def test_builtin_tools_takes_no_audience():
@@ -412,20 +367,15 @@ def test_builtin_tools_takes_no_audience():
         )
 
 
-def test_only_the_audienced_fields_take_a_mapping():
-    """Pins the prose in `fields.selection` against `AUDIENCED`, which it cannot import
-    -- `core.access.source_ids` imports `fields`, so naming it there is a cycle.
+def test_the_refusal_of_a_mapping_names_skills_as_the_one_field_taking_an_audience():
+    """It named tools and subagents too, sending a reader to write the audience the
+    reader of either field refuses.
     """
-    from kingfisher.core.access.source_ids import AUDIENCED
-
-    with pytest.raises(AgentError) as raised:
+    with pytest.raises(AgentError, match="only a skills entry may say that"):
         _read(
             MINIMAL.rstrip() + "\nbuiltin_tools:\n  execute:\n    source_ids: [A]\n",
             "plain.yaml",
         )
-
-    for field_name in AUDIENCED:
-        assert field_name in str(raised.value)
 
 
 def test_an_entry_audience_outside_the_definitions_own_is_recorded_not_judged():
@@ -435,12 +385,12 @@ def test_an_entry_audience_outside_the_definitions_own_is_recorded_not_judged():
     """
     spec = _read(
         MINIMAL.rstrip()
-        + "\nsource_ids: [A, B]\ntools:\n  - name: sql_query\n    source_ids: [C]\n",
+        + "\nsource_ids: [A, B]\nskills:\n  - name: audit\n    source_ids: [C]\n",
         "plain.yaml",
     )
 
     assert spec.source_ids == ("A", "B")
-    assert spec.audiences["tools"]["sql_query"] == ("C",)
+    assert spec.skill_audiences["audit"] == ("C",)
 
 
 def test_a_requirement_is_read_as_one_entry_of_the_list():
@@ -460,15 +410,15 @@ def test_only_the_restricted_entries_need_an_audience():
     """The ergonomics of the long form, and the reason an entry may stay short."""
     spec = _read(
         MINIMAL.rstrip()
-        + "\nsource_ids: [A, B]\ntools:\n  - name: sql_query\n    source_ids: [A]\n"
-        + "  - http_fetch\n  - line_count\n",
+        + "\nsource_ids: [A, B]\nskills:\n  - name: audit\n    source_ids: [A]\n"
+        + "  - review\n  - triage\n",
         "plain.yaml",
     )
 
-    assert spec.tools == ("sql_query", "http_fetch", "line_count")
-    assert spec.audiences["tools"] == {"sql_query": ("A",)}
-    assert spec.declares(frozenset({"A"})).tools == ("sql_query", "http_fetch", "line_count")
-    assert spec.declares(frozenset({"B"})).tools == ("http_fetch", "line_count")
+    assert spec.skills == ("audit", "review", "triage")
+    assert spec.skill_audiences == {"audit": ("A",)}
+    assert spec.declares(frozenset({"A"})).skills == ("audit", "review", "triage")
+    assert spec.declares(frozenset({"B"})).skills == ("review", "triage")
 
 
 def test_long_entries_that_restrict_nothing_mean_what_the_list_means():

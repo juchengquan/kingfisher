@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access.capabilities import Capabilities, Selection, withheld
+from kingfisher.core.access.capabilities import Capabilities, withheld
 from kingfisher.core.access.reach import handed_work_by, offers
-from kingfisher.core.access.source_ids import AUDIENCED
 from kingfisher.core.agent.activation import (
     activatable_skills,
     available_skills,
@@ -23,16 +22,6 @@ from kingfisher.core.result import RunEvent
 if TYPE_CHECKING:
     from kingfisher.core.config import Config
     from kingfisher.core.definitions.agents.spec import AgentSpec
-
-
-def _named(selection: Selection) -> set[str]:
-    """A selection as a set of names, with the two ends read as empty."""
-    return set(selection) if isinstance(selection, tuple) else set()
-
-
-def _as_written(name: str) -> str | None:
-    """A name that has one spelling, compared as it stands."""
-    return name
 
 
 def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is offered
@@ -55,38 +44,14 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
     workspace = tuple(workspace_tool_names(cfg, catalogue=catalogue))
     # A skill may be written bare or as `source::name`, and the agent file and registry
     # may differ: compared as written, an audience `catalogue::audit` hides no `audit`.
-    spelling = {"skills": activatable_skills(cfg, catalogue=catalogue).identity}
-
-    # What this agent would hold for *someone*, less what it holds for this caller: what
-    # source-id narrowing took away. An audience belongs to the definition, so only the
-    # definition resolved twice knows what a caller lost.
-    denied: dict[str, frozenset[str]] = {}
-    if agent is not None and held is not None:
-        everyone, theirs = agent.declares(None), agent.declares(held)
-        denied = {
-            name: frozenset(_named(getattr(everyone, name)) - _named(getattr(theirs, name)))
-            for name in AUDIENCED
-        }
-
-    def visible(kind: str | None, names: tuple[str, ...]) -> tuple[str, ...]:
-        """`names`, less what this caller's source ids took away.
-
-        Applied to what is offered, before the comparison: against the unfiltered
-        catalogue this report would hand a caller the list of what their source ids
-        denied them, which filtering listings and refusals exists to avoid.
-        """
-        if kind is None or not (lost := denied.get(kind)):
-            return names
-        same = spelling.get(kind, _as_written)
-        gone = {same(name) for name in lost} - {None}
-        return tuple(name for name in names if same(name) not in gone)
+    identity = activatable_skills(cfg, catalogue=catalogue).identity
 
     def subagents() -> tuple[str, ...]:
         """Every subagent this run could have been handed work by, for this caller.
 
-        Its `source_ids:` must admit them and the agent this run opened must name it;
-        `denied` sees neither, and asking only the first would report a subagent nothing
-        activates as withheld, which says it exists. The listing asks `handed_work_by` too.
+        Its `source_ids:` must admit them and the agent this run opened must name it:
+        asking only the first would report a subagent nothing activates as withheld, which
+        says it exists. The listing asks `handed_work_by` too.
         """
         defined = defined_subagents(cfg, catalogue=catalogue)
         # No branch on `held`: unscoped, `handed_work_by` answers every subagent. A scoped
@@ -102,23 +67,22 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
         offers("tools", held, reached_agents, same=lambda one: placed(one, spelt)),
         shut=out_of_reach(catalogue.tools.found, held),
     )
-    offers_skill = offers("skills", held, reached_agents, same=spelling["skills"])
+    offers_skill = offers("skills", held, reached_agents, same=identity)
 
     offered = (
         # Built-ins and workspace tools are granted apart, so reported apart. `or ()`: a
         # graph that cannot be read lists no built-ins rather than failing the turn.
-        ("builtin tool", "builtin_tools", None, lambda: tuple(
+        ("builtin tool", "builtin_tools", lambda: tuple(
             n for n in registered_tools(graph) or () if n not in set(workspace)
         )),
         # Measured against what a definition in reach offers, not the whole catalogue:
         # else a caller who narrowed their grant is told every name nothing in reach offers.
-        ("tool", "tools", None, lambda: tuple(n for n in workspace if offers_tool(n))),
+        ("tool", "tools", lambda: tuple(n for n in workspace if offers_tool(n))),
         # `cfg` as well as the request: with skills switched off the agent is told of
         # none, and a report of one "not granted" says the others were.
         (
             "skill",
             "skills",
-            None,
             lambda: tuple(
                 name
                 for name in (
@@ -127,16 +91,16 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
                 if offers_skill(name)
             ),
         ),
-        ("subagent", "subagents", "subagents", subagents),
+        ("subagent", "subagents", subagents),
     )
     found = []
-    for what, field, kind, names_of in offered:
+    for what, field, names_of in offered:
         granted = getattr(allowed, field)
         # Skips the work, not the answer: every axis defaults to `ALL`, where nothing is
         # withheld, and `names_of()` reads the catalogue.
         if granted == getattr(default, field):
             continue
-        if left_out := withheld(granted, offered=visible(kind, tuple(names_of()))):
+        if left_out := withheld(granted, offered=tuple(names_of())):
             found.append((what, left_out))
     return tuple(found)
 

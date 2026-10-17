@@ -967,10 +967,7 @@ description: An agent.
 source_ids: [public, finance]
 builtin_tools: ["*"]
 subagents: [researcher]
-tools:
-  - name: web_search
-    source_ids: [public]
-  - sql_query
+tools: [web_search, sql_query]
 system_prompt: |
   You do the task.
 """
@@ -978,13 +975,16 @@ system_prompt: |
 AUDIENCED_RESEARCHER = """name: researcher
 description: Researches.
 source_ids: [finance]
-tools:
-  - name: web_search
-    source_ids: [public]
-  - sql_query
+tools: [web_search, sql_query]
 system_prompt: |
   You research.
 """
+
+#: `web_search` locked in its own file, the one place a tool says who may use it.
+LOCKED_TOOLS = TOOLS.replace(
+    "TOOLS = [web_search,",
+    'from kingfisher import ToolSpec\n\nTOOLS = [ToolSpec(web_search, source_ids=["public"]),',
+)
 
 
 #: Who the caller in these tests is: everyone the vocabulary names, so nothing is
@@ -997,6 +997,7 @@ def _audienced(cfg, *, gated: str | None = None):
     agent = AUDIENCED_AGENT
     if gated is not None:
         agent = agent.replace("system_prompt:", f"interrupt_on: [{gated}]\nsystem_prompt:")
+    (tools_dir(cfg) / "probe.py").write_text(LOCKED_TOOLS, encoding="utf-8")
     (cfg.catalogue_roots["agents"] / "only.yaml").write_text(agent, encoding="utf-8")
     (subagents_dir(cfg) / "researcher.yaml").write_text(AUDIENCED_RESEARCHER, encoding="utf-8")
     return replace(cfg, access=parse(yaml.safe_load(VOCABULARY), source="source_ids.yaml"))
@@ -1023,11 +1024,11 @@ def test_access_is_the_audience_each_result_was_offered_under(ledgered):
     )
 
     assert {e.call: e.access for e in result.ledger} == {
-        # The entry's own audience, then the definition's where the entry has none.
+        # The definition's own audience, joined with the tool's own lock where it has one.
         "c1": ("public",),
         "c2": ("public", "finance"),
         # The subagent's own definition, not the agent's.
-        "c3": ("public",),
+        "c3": (("finance", "public"),),
         "c4": ("finance",),
         # Whoever reaches `task` and everything its run read: both, held together.
         "t1": (("finance", "public"),),
@@ -1054,7 +1055,9 @@ def test_a_subagent_paused_at_a_gate_answers_under_everything_its_run_read(ledge
     paused = kf.run(Request("go", agent="only", session_id="s"), source_ids=HOLDING)
 
     assert paused.stop_reason == AWAITING, "the subagent never stopped at the gate"
-    assert [(e.call, e.run, e.access) for e in paused.ledger] == [("c1", "t1", ("public",))]
+    assert [(e.call, e.run, e.access) for e in paused.ledger] == [
+        ("c1", "t1", (("finance", "public"),))
+    ]
 
     Scripted.script.extend([AIMessage(content="thin margins"), AIMessage(content="done")])
     resumed = kf.run(

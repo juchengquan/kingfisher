@@ -356,13 +356,13 @@ def test_that_refusal_names_the_definition_and_what_is_declared(cfg):
 
 def test_an_entry_audience_naming_an_undeclared_source_id_is_refused(cfg):
     """Not only the definition's own line: an entry names source ids too, and a typo there
-    hides one tool rather than the whole agent -- which is quieter.
+    hides one skill rather than the whole agent -- which is quieter.
     """
     directory = cfg.catalogue_roots["agents"]
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "analyst.yaml").write_text(
         "name: analyst\ndescription: An agent.\n"
-        "tools:\n  - name: line_count\n    source_ids: [analists]\n"
+        "skills:\n  - name: tabular-qa\n    source_ids: [analists]\n"
         "system_prompt: |\n  Do it.\n",
         encoding="utf-8",
     )
@@ -378,7 +378,7 @@ def test_a_restricted_definition_reports_the_same_typo_the_same_way(cfg):
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "analyst.yaml").write_text(
         "name: analyst\ndescription: An agent.\nsource_ids: [analysts]\n"
-        "tools:\n  - name: line_count\n    source_ids: [analists]\n"
+        "skills:\n  - name: tabular-qa\n    source_ids: [analists]\n"
         "system_prompt: |\n  Do it.\n",
         encoding="utf-8",
     )
@@ -394,7 +394,7 @@ def test_a_line_narrowing_past_declared_source_ids_is_reported_not_refused(cfg):
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "analyst.yaml").write_text(
         "name: analyst\ndescription: An agent.\nsource_ids: [analysts]\n"
-        "tools:\n  - name: line_count\n    source_ids: [auditors]\n"
+        "skills:\n  - name: tabular-qa\n    source_ids: [auditors]\n"
         "system_prompt: |\n  Do it.\n",
         encoding="utf-8",
     )
@@ -404,7 +404,7 @@ def test_a_line_narrowing_past_declared_source_ids_is_reported_not_refused(cfg):
 
     kf = Kingfisher(policied, sessions=LocalSessions())
 
-    assert kf.access_report.narrowed == (("agent analyst: tool line_count", "auditors"),)
+    assert kf.access_report.narrowed == (("agent analyst: skill tabular-qa", "auditors"),)
     assert "reaches only callers holding both" in "\n".join(kf.access_report.lines())
 
 

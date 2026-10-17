@@ -192,6 +192,6 @@ def sql_query(statement: str) -> str:
 
 # The database is `sales_db`, so the tool's own `ToolSpec` says so rather than every
 # agent that grants it: an agent that forgot the line would hand the database to whoever
-# opened it. An agent's own entry can still narrow this further; nothing it writes can
-# widen it.
+# opened it. This is the tool's only lock -- an agent's `tools:` entry is its name and
+# nothing more, so who may use `sql_query` is read here and nowhere else.
 TOOLS = [sql_tables, ToolSpec(sql_query, source_ids=["sales_db"])]

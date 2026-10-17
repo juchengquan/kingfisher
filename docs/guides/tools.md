@@ -145,13 +145,14 @@ out, it is `["*"]`, everyone. `[]` is refused rather than read as nobody, as it 
 a definition. Every name has to be declared in `source_ids.yaml`, or the deployment
 does not start. With no `source_ids.yaml` at all, the line has no effect.
 
-It holds **whichever agent grants the tool**. An agent's own entry can narrow it
-further — `{name: sql_query, source_ids: [senior]}` means `sales_db` *and*
-`senior` — and nothing an agent writes can widen it. A caller it shuts out does
-not get the tool, and is not shown it by `kingfisher list` or the run report. The
-operator's `kingfisher list`, with no `--as`, prints the line itself, as `tool
-sql_query  [sales_db]`. A result the tool produces is recorded in the session's
-ledger under the tool's audience as well as the agent's.
+It holds **whichever agent grants the tool**, and it is the tool's only lock: a
+`tools:` entry is the tool's name and nothing more, and one writing `source_ids` is
+refused at load, so who may use `sql_query` is read here and nowhere else. An agent
+that should not hand the tool to anyone leaves it off its list. A caller the lock
+shuts out does not get the tool, and is not shown it by `kingfisher list` or the run
+report. The operator's `kingfisher list`, with no `--as`, prints the line itself, as
+`tool sql_query  [sales_db]`. A result the tool produces is recorded in the session's
+ledger under the tool's audience joined with the agent's.
 
 `datazone="finance"` says the one datazone a caller must also be in — see
 *Datazones* in [`formats.md`](formats.md). Left out, it is any.

@@ -36,26 +36,26 @@ from tests.conftest import (
 from tests.unit.scripted import Scripted
 
 TOOL = '''
+from kingfisher import ToolSpec
+
+
 def line_count(path: str) -> str:
     """Count the lines in a text file."""
     return "0"
 
 
-TOOLS = [line_count]
+TOOLS = [ToolSpec(line_count, source_ids=["A"])]
 '''
 
 VOCABULARY = "source_ids: [A, B]\n"
 
-#: `surveyor` is for A and B; its one tool is for A alone. So a caller holding B
-#: reaches the agent and runs it with nothing -- the compounding case, in one
-#: file.
+#: `surveyor` is for A and B; its one tool, in its own file, is for A alone. So a caller
+#: holding B reaches the agent and runs it with nothing -- the compounding case.
 AGENT = """name: surveyor
 description: An agent.
 source_ids: [A, B]
 builtin_tools: ["*"]
-tools:
-  - name: line_count
-    source_ids: [A]
+tools: [line_count]
 system_prompt: |
   You do the task.
 """
@@ -1015,26 +1015,31 @@ def {name}(q: str) -> str:
 TOOLS = [{name}]
 '''
 
-#: `formats.md`'s example, with a skill and a helper written the same way, and one
-#: helper -- `insider` -- that its own line rather than this entry keeps from `C`.
+#: `sql_query` says in its own file that it is for `A` and `B`, as the shipped one does.
+LOCKED_TOOL = '''
+from kingfisher import ToolSpec
+
+
+def sql_query(q: str) -> str:
+    """sql_query."""
+    return "0"
+
+
+TOOLS = [ToolSpec(sql_query, source_ids=["A", "B"])]
+'''
+
+#: `formats.md`'s example: a tool its own file keeps from `C`, a skill its entry keeps
+#: from `C`, and a helper -- `insider` -- its own line keeps from `C`.
 REVIEWER = """name: reviewer
 description: Reviews.
 source_ids: [A, B, C]
-tools:
-  - name: sql_query
-    source_ids: [A, B]
-  - name: http_fetch
-    source_ids: [A, B, C]
+tools: [sql_query, http_fetch]
 skills:
   - name: audit
     source_ids: [A, B]
   - name: review
 builtin_tools: ["*"]
-subagents:
-  - name: second-opinion
-    source_ids: [A, B]
-  - plain-helper
-  - insider
+subagents: [second-opinion, plain-helper, insider]
 system_prompt: |
   You review.
 """
@@ -1065,7 +1070,7 @@ SUBAGENTS = [
         "name": "profiler",
         "description": "Profiles.",
         "source_ids": ["A", "B", "C"],
-        "tools": [{"name": "sql_query", "source_ids": ["A"]}, "http_fetch"],
+        "tools": ["sql_query", "http_fetch"],
         "build": _build,
     },
     {
@@ -1097,10 +1102,10 @@ system_prompt: |
 def delegating(cfg):
     """An agent every caller opens, delegating to subagents whose own lines narrow `C`."""
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
-    for name in ("sql_query", "http_fetch"):
-        (tools_dir(cfg) / f"{name}.py").write_text(
-            DELEGATED_TOOL.format(name=name), encoding="utf-8"
-        )
+    (tools_dir(cfg) / "sql_query.py").write_text(LOCKED_TOOL, encoding="utf-8")
+    (tools_dir(cfg) / "http_fetch.py").write_text(
+        DELEGATED_TOOL.format(name="http_fetch"), encoding="utf-8"
+    )
     for name in ("audit", "review"):
         folder = cfg.skills_dir / name
         folder.mkdir(parents=True, exist_ok=True)
@@ -1162,7 +1167,7 @@ def built_names(built) -> set[str]:
 
 def test_a_caller_in_c_gets_a_reviewer_holding_http_fetch_and_not_sql_query(delegating):
     """`formats.md`'s own example: the build read `reviewer`'s raw `tools:` and handed a
-    caller in `C` the `sql_query` its own entry keeps from them.
+    caller in `C` the `sql_query` kept from them.
     """
     held = holding(delegated(delegating, ("C",)), "reviewer")
 
@@ -1175,13 +1180,10 @@ def test_a_subagents_own_audiences_narrow_its_skills_and_helpers_too(delegating)
     """The other two audienced fields were read raw as well, and a helper whose own line
     excludes the caller was built under a parent that named it.
     """
-    built = delegated(delegating, ("C",))
-    held = holding(built, "reviewer")
+    held = holding(delegated(delegating, ("C",)), "reviewer")
 
     assert held["skills"] == {"review"}
-    assert held["helpers"] == {"plain-helper"}
-    # `reviewer`'s entry narrows `reviewer`'s context and not the agent's.
-    assert "second-opinion" in built_names(built)
+    assert held["helpers"] == {"plain-helper", "second-opinion"}
 
 
 @pytest.mark.parametrize("name", ["insider", "ledger"])
@@ -1192,8 +1194,10 @@ def test_a_subagent_whose_own_source_ids_exclude_the_caller_is_not_built(delegat
     assert name not in built_names(delegated(delegating, ("C",)))
 
 
-def test_a_compiled_subagent_is_handed_only_the_tools_its_audiences_admit(delegating):
-    """`build` was handed every tool the declaration listed, its per-tool audience unread."""
+def test_a_compiled_subagent_is_handed_only_the_tools_the_caller_reaches(delegating):
+    """`build` was handed every tool the declaration listed, whatever kept one from the
+    caller.
+    """
     graph = subagent_of(delegated(delegating, ("C",)), "profiler")["runnable"]
 
     assert "http_fetch" in dispatched(graph)
@@ -1219,17 +1223,13 @@ def test_a_caller_every_audience_admits_gets_everything_each_subagent_names(dele
 
 # -- what a caller is told about a subagent out of reach --------------------
 
-#: Keeps `plain-helper` from `C` with its own entry, where `insider` is kept by its
-#: own line, and names nothing else but `second-opinion`.
+#: Names `plain-helper` and `second-opinion`, and not `insider`.
 GATEKEEPER = """name: gatekeeper
 description: Delegates less.
 source_ids: [A, B, C]
 builtin_tools: ["*"]
 tools: ["*"]
-subagents:
-  - name: plain-helper
-    source_ids: [A]
-  - second-opinion
+subagents: [plain-helper, second-opinion]
 system_prompt: |
   You delegate.
 """
@@ -1311,27 +1311,8 @@ def test_a_subagent_out_of_reach_is_not_reported_as_running_on_the_callers_host(
     assert told(delegating, ("C",))["indistinct"] == {"plain-helper"}
 
 
-def test_the_listing_chains_what_an_agent_activates_for_this_caller(
-    delegating, at_the_command_line, capsys
-):
-    """The chain read the agent's raw `subagents:` line, so `C` saw `plain-helper` under
-    `gatekeeper`, whose own entry keeps it from them.
-    """
-    (delegating.catalogue_roots["agents"] / "gatekeeper.yaml").write_text(
-        GATEKEEPER, encoding="utf-8"
-    )
-
-    chains = {
-        held: json.loads(listed(capsys, held, as_json=True))["agent_subagents"]["gatekeeper"]
-        for held in ("C", "A")
-    }
-
-    assert chains == {"C": ["second-opinion"], "A": ["plain-helper", "second-opinion"]}
-
-
 def test_a_run_reports_only_the_subagents_it_activated(delegating):
-    """Reading the request's grant, the report named `plain-helper` to a caller in `C`
-    whom `gatekeeper`'s entry keeps it from, and `insider` to a caller in `A` whose
+    """Reading the request's grant, the report named `insider` to a caller in `A` whose
     agent never names it.
     """
     (delegating.catalogue_roots["agents"] / "gatekeeper.yaml").write_text(
@@ -1339,7 +1320,6 @@ def test_a_run_reports_only_the_subagents_it_activated(delegating):
     )
     on_the_default_host(delegating, "insider", "plain-helper")
 
-    assert told(delegating, ("C",), agent="gatekeeper")["indistinct"] == set()
     assert told(delegating, ("A",), agent="gatekeeper")["indistinct"] == {"plain-helper"}
 
 
@@ -1667,21 +1647,6 @@ def test_naming_the_other_x_reads_what_a_typo_reads(two_of_x):
 
 # -- a mistake in a file, refused for every caller --------------------------
 
-#: Keeps `ghost` from `C` with its entry, so only a check reading the file as written
-#: refuses it to them.
-SHADY = """name: shady
-description: Names a subagent nothing defines, behind an audience.
-source_ids: [A, B, C]
-builtin_tools: ["*"]
-tools: ["*"]
-subagents:
-  - plain-helper
-  - name: ghost
-    source_ids: [A]
-system_prompt: |
-  You delegate.
-"""
-
 
 def test_an_agents_own_typo_is_refused_in_its_name(delegating):
     """An agent's typo was refused as "this request names", sending the caller to fix a
@@ -1692,20 +1657,6 @@ def test_an_agents_own_typo_is_refused_in_its_name(delegating):
     assert refusal(delegating, ("C",), agent, asked).startswith(
         "agent 'ghostly' names unknown subagent(s): ghost;"
     )
-
-
-@pytest.mark.parametrize("source_ids", [("C",), ("A",)])
-def test_an_agents_typo_behind_an_entry_audience_is_refused_for_every_caller(
-    delegating, source_ids
-):
-    """The agent's names were checked as this caller reaches them, so a typo its entry
-    keeps from `C` was refused for `A` and ran silently for `C`.
-    """
-    (delegating.catalogue_roots["agents"] / "shady.yaml").write_text(SHADY, encoding="utf-8")
-
-    message = refusal(delegating, source_ids, "shady", Capabilities())
-
-    assert message.startswith("agent 'shady' names unknown subagent(s): ghost;")
 
 
 # -- what the model is told when it asks for one ----------------------------

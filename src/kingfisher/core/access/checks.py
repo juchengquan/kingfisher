@@ -123,9 +123,8 @@ def undeclared_in(specs: Mapping[str, object], *, kind: str, vocabulary: SourceI
         for where, audience in (
             (f"{kind} {name!r}", said.source_ids),
             *(
-                (f"{kind} {name!r}: {field} entry {entry!r}", who)
-                for field, entries in said.entries.items()
-                for entry, who in entries.items()
+                (f"{kind} {name!r}: skills entry {entry!r}", who)
+                for entry, who in said.skills.items()
             ),
         ):
             try:
@@ -150,8 +149,6 @@ def audit(*kinds: Kind, vocabulary: SourceIds) -> AccessReport:
         if said.source_ids == ALL and said.datazone is None:
             unrestricted.append((kind, name))
         narrowed.extend(
-            vocabulary.narrowing_in(
-                said.entries, source_ids=said.source_ids, where=f"{kind} {name}"
-            )
+            vocabulary.narrowing_in(said.skills, source_ids=said.source_ids, where=f"{kind} {name}")
         )
     return AccessReport(unrestricted=tuple(unrestricted), narrowed=tuple(narrowed))

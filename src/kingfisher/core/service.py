@@ -151,7 +151,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
             )
             # Refusals first: a typo makes a line both undeclared and narrowing, and as a
             # narrowing it would explain the wrong fault. Tools are checked, not audited:
-            # one stating no audience is whatever the agent granting it says.
+            # one stating no audience is open to whoever opens an agent granting it.
             access.refuse_undeclared(
                 *kinds, ("tool", self.catalogue.audienced_tools), vocabulary=self.access
             )

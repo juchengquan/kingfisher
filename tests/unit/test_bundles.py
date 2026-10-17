@@ -1202,7 +1202,7 @@ def test_a_bundled_entry_has_no_audience_of_its_own():
     audience on it would read as a restriction that nothing applies.
     """
     with pytest.raises(SubagentError) as raised:
-        read_surveyor("tools: [{name: probe, source: bundled, source_ids: [A]}]")
+        read_surveyor("skills: [{name: probe, source: bundled, source_ids: [A]}]")
 
     assert "reaches whoever reaches this subagent" in str(raised.value)
 

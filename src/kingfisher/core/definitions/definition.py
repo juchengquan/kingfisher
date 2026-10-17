@@ -59,9 +59,9 @@ class SpecBase:
     #: Who may reach this definition: open a session on an agent, or reach a subagent
     #: wherever it is used.
     source_ids: Audience = ALL
-    #: Field name -> entry name -> who reaches that entry, for the fields in
-    #: `AUDIENCED`. Empty for a definition written as plain lists.
-    audiences: Mapping[str, Mapping[str, Audience]] = field(
+    #: Skill name -> who is told about it, for the `skills:` entries written long. Only
+    #: skills: a skill has no file of its own to say it in, where a tool and a subagent do.
+    skill_audiences: Mapping[str, Audience] = field(
         default_factory=dict, metadata={"derived": True}
     )
 

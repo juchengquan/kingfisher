@@ -488,7 +488,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         )
 
     # `asked`, not `capabilities`: combined, the agent's names are the ones this caller
-    # reaches, and a typo behind an entry audience would be refused to some callers only.
+    # reaches, and a typo in the file must be refused whoever is calling.
     refuse_misnamed_by(cfg, agent, asked, held=held, catalogue=roots)
     defined, activated = _activated_subagents(
         cfg, capabilities, catalogue=roots, held=held, agent=agent

@@ -80,8 +80,8 @@ names nothing else: not a path, a file or a database.
 _Avoid_: source, sources, group
 
 **Audience**:
-The source ids that may reach a definition, or one thing a definition holds: any one of
-several, each either a single source id or a set that must be held together.
+The source ids that may reach a definition or a tool, or be told of a skill a definition
+offers: any one of several, each either a single source id or a set that must be held together.
 _Avoid_: required sources, permissions, ACL
 
 **Vocabulary**:

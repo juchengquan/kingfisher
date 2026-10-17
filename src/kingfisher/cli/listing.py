@@ -9,7 +9,7 @@ from kingfisher import Inventory, Origins
 from kingfisher.core.access.capabilities import ALL
 
 # Taken where they live, not from the front door: nobody outside this wheel asks for them.
-from kingfisher.core.access.source_ids import AUDIENCED, Audience, Stated, spell
+from kingfisher.core.access.source_ids import Audience, Stated, spell
 from kingfisher.core.definitions.seeding import SEED_HINT
 from kingfisher.core.definitions.skills.catalogue import SKILL_LAYOUT
 from kingfisher.core.definitions.tools.spec import offered, split_reference
@@ -159,13 +159,8 @@ def _said(stated: Stated) -> str:
     return f"{_who(stated.source_ids)}{zone}"
 
 
-def _singular(field_name: str) -> str:
-    """`tools` -> `tool`. `skills` is the one that does not just lose an s."""
-    return "skill" if field_name == "skills" else field_name[:-1]
-
-
 def _access(found: Inventory) -> Iterator[str]:
-    """Who reaches what, twice: as the files say it, and rolled up by asset."""
+    """Who reaches what, twice: as the files say it, and rolled up by skill."""
     # `access` alone decides, as in `as_json`, so a scoped caller's text and JSON agree.
     if found.access is None:
         return
@@ -180,9 +175,8 @@ def _access(found: Inventory) -> Iterator[str]:
         for name, stated in definitions.items():
             said = True
             yield f"  {kind[:-1]} {name}  {_said(stated)}"
-            for field_name in AUDIENCED:
-                for entry, audience in stated.of(field_name).items():
-                    yield f"      {_singular(field_name)} {entry}  {_who(audience)}"
+            for entry, audience in stated.skills.items():
+                yield f"      skill {entry}  {_who(audience)}"
     if not said:
         yield "  (nothing says who reaches it, so everyone reaches everything)"
 
@@ -191,24 +185,23 @@ def _access(found: Inventory) -> Iterator[str]:
 
 
 def _rollup(found: Inventory) -> Iterator[str]:
-    """Every asset carrying an audience anywhere, and where it carries it."""
-    where: dict[str, dict[str, list[str]]] = {}
-    # First under its name, because every grant of the tool below is held to it.
-    for name, stated in found.audiences.get("tools", {}).items():
-        where.setdefault("tools", {})[name] = [f"(the tool itself)  {_said(stated)}"]
+    """Every skill an entry gives an audience, under it each definition that does.
+
+    Skills alone: a tool's lock and a subagent's audience are each one line in its own
+    file, printed above, so there is no second place for a use of one to differ.
+    """
+    where: dict[str, list[str]] = {}
     for definitions in found.audiences.values():
         for name, stated in definitions.items():
-            for field_name in AUDIENCED:
-                for entry, audience in stated.of(field_name).items():
-                    where.setdefault(field_name, {}).setdefault(entry, []).append(
-                        f"{name}  {_who(audience)}"
-                    )
-    for field_name, entries in where.items():
-        yield f"\naccess — by {_singular(field_name)}"
-        for entry, sites in sorted(entries.items()):
-            yield f"  {entry}"
-            for site in sites:
-                yield f"      {site}"
+            for entry, audience in stated.skills.items():
+                where.setdefault(entry, []).append(f"{name}  {_who(audience)}")
+    if not where:
+        return
+    yield "\naccess — by skill"
+    for entry, sites in sorted(where.items()):
+        yield f"  {entry}"
+        for site in sites:
+            yield f"      {site}"
 
 
 def _skills(found: Inventory) -> Iterator[str]:
@@ -369,12 +362,11 @@ def as_json(found: Inventory) -> dict[str, object]:
                 name: {
                     "source_ids": _audience_json(stated.source_ids),
                     **({} if stated.datazone is None else {"datazone": stated.datazone}),
-                    **{
-                        field_name: {
-                            entry: _audience_json(who) for entry, who in entries.items()
-                        }
-                        for field_name, entries in stated.entries.items()
-                    },
+                    **(
+                        {"skills": {e: _audience_json(who) for e, who in stated.skills.items()}}
+                        if stated.skills
+                        else {}
+                    ),
                 }
                 for name, stated in definitions.items()
             }

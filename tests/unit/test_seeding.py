@@ -281,7 +281,7 @@ SPELLINGS = {
     "a bare name": ("source_ids: A\n", ("A",)),
     "a list": ("source_ids: [A, B]\n", ("A", "B")),
     "a requirement set": ("source_ids: [{A, B}]\n", ("A", "B")),
-    "an entry's own audience": ("tools:\n  - name: t\n    source_ids: [A]\n", ("A",)),
+    "a skills entry's own audience": ("skills:\n  - name: t\n    source_ids: [A]\n", ("A",)),
 }
 
 

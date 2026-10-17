@@ -4,29 +4,17 @@ description: Re-checks figures against their sources. Use before reporting numbe
 # example of the case the whole feature exists for: **one definition, different
 # tools per caller.**
 #
-# A tool's audience lives in one of two places, and the difference is what it is
-# about. `sql_query` *is* the sales database, so it says `[sales_db]` in its own
-# file and holds wherever it is granted. `http_fetch` is not sensitive on its own
-# -- leaving the workspace is, from a subagent that holds sales figures -- so that
-# rule is this definition's, written on its entry below. `kingfisher list` prints a
-# roll-up by tool, which is where a call site quietly wider than its neighbours
-# becomes visible.
+# Nothing below says so. `sql_query` *is* the sales database, so it says
+# `[sales_db]` in its own file, `tools/sql_query.py`, and holds wherever it is
+# granted; an entry under `tools:` is a name and nothing more.
 source_ids: [sales_db, audit_log, warehouse]
 builtin_tools: [read_file, glob, grep]
 tools:
-  # The compounding case, and it needs no line here. Reached on `audit_log`
-  # alone, this subagent holds `line_count` and not `sql_query`, because the tool
-  # itself admits only `sales_db`; reached on `sales_db` it holds both. Nothing is
-  # refused, nothing errors -- it simply runs with less, and the caller is not
-  # told: out of reach reads as not offered.
+  # Reached on `audit_log` alone, this subagent holds `line_count` and not
+  # `sql_query`, because the tool itself admits only `sales_db`; reached on
+  # `sales_db` it holds both. Nothing is refused, nothing errors -- it simply runs
+  # with less, and the caller is not told: out of reach reads as not offered.
   - sql_query
-  # The same requirement as `agents/analyst.yaml` writes, by the same name --
-  # which is the whole argument for naming one. Two definitions, one place to
-  # change it, and `kingfisher list` prints what it requires once above the
-  # audiences rather than on every line that mentions it.
-  - name: http_fetch
-    source_ids: [sales_db_pii]
-  # Unrestricted, so a bare name with nothing attached.
   - line_count
 system_prompt: |
   You verify claims. You do not improve prose or add analysis -- somebody else
@@ -39,8 +27,7 @@ system_prompt: |
   design rather than a fault to report. Check what you hold and verify what
   that lets you verify.
 
-  Without `sql_query` you cannot re-derive a figure from the database, and
-  without `http_fetch` you cannot reach a source outside this workspace. Say so
+  Without `sql_query` you cannot re-derive a figure from the database. Say so
   against the figures affected -- "not checked: no database access" -- and check
   the rest. A verification that quietly skipped the one number nobody could confirm
   is worse than one that names it, because the caller believes the whole

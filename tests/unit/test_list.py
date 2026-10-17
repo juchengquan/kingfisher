@@ -502,12 +502,21 @@ def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(
 
 # -- listing under a source-id vocabulary ---------------------------------------
 
-#: Two tools, because a tool goes out of a caller's reach two ways and the rules below
-#: need to tell them apart: `line_count` is narrowed away inside an agent they *can*
-#: open, and `secret_export` is offered only by one they cannot.
+#: A tool goes out of a caller's reach two ways and the rules below need to tell them
+#: apart: `line_count` is kept from `B` by its own lock inside an agent they *can* open,
+#: and `secret_export` is offered only by one they cannot. `word_tally` says nothing
+#: about who may use it, for an agent to share with both.
 TOOL = '''
+from kingfisher import ToolSpec
+
+
 def line_count(path: str) -> str:
     """Count the lines in a text file."""
+    return "0"
+
+
+def word_tally(path: str) -> str:
+    """Tally the words in a text file."""
     return "0"
 
 
@@ -516,16 +525,14 @@ def secret_export(path: str) -> str:
     return "0"
 
 
-TOOLS = [line_count, secret_export]
+TOOLS = [ToolSpec(line_count, source_ids=["A"]), word_tally, secret_export]
 '''
 
 
 NARROW = """name: narrow
 description: An agent.
 source_ids: [A, B]
-tools:
-  - name: line_count
-    source_ids: [A]
+tools: [line_count]
 system_prompt: |
   You do the task.
 """
@@ -534,9 +541,7 @@ system_prompt: |
 WIDE = """name: wide
 description: An agent.
 source_ids: [A, B]
-tools:
-  - name: line_count
-    source_ids: [A, B]
+tools: [word_tally]
 system_prompt: |
   You do the task.
 """
@@ -972,7 +977,7 @@ def test_the_operator_still_sees_all_of_it(form, cfg, at_the_command_line, capsy
 
 @pytest.mark.parametrize("form", ["text", "json"])
 def test_a_scoped_listing_carries_no_tool_out_of_reach(form, cfg, at_the_command_line, capsys):
-    """Neither the tool a reachable agent narrows away from this caller, nor the one
+    """Neither the tool whose own lock keeps it from this caller, nor the one
     only an agent they cannot open offers, nor the file either lives in.
 
     Measured through the real command before this existed: the filter standing here
@@ -985,7 +990,7 @@ def test_a_scoped_listing_carries_no_tool_out_of_reach(form, cfg, at_the_command
     assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
 
     printed = capsys.readouterr().out
-    assert "line_count" not in printed, "`narrow` narrows this one away from B"
+    assert "line_count" not in printed, "its own lock keeps this one from B"
     assert "secret_export" not in printed, "and only `hidden` offers this one"
     assert "narrow" in printed, "and it should still show the agent they can open"
 
@@ -993,27 +998,25 @@ def test_a_scoped_listing_carries_no_tool_out_of_reach(form, cfg, at_the_command
 @pytest.mark.parametrize("form", ["text", "json"])
 def test_a_scoped_listing_keeps_a_tool_shared_with_them(form, cfg, at_the_command_line, capsys):
     """The control the rule above needs, and the one a filter that drops everything
-    would fail: `wide` shares `line_count` with A and B alike.
+    would fail: `wide` shares `word_tally` with A and B alike.
     """
     _workspace(cfg, WIDE, A_ONLY)
 
     assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
 
     printed = capsys.readouterr().out
-    assert "line_count" in printed
+    assert "word_tally" in printed
     assert "secret_export" not in printed, "which only an agent out of their reach offers"
 
 
-#: An agent out of B's reach whose one tool is written `["*"]` -- "anyone who reaches
-#: this definition", which is an *and* with the definition's own line. At run time that
-#: `and` is held by the caller never opening the agent; a listing has no such gate, so it
-#: filters to the definitions the caller reaches before asking what those offer.
+#: An agent out of B's reach offering every tool, `["*"]`. At run time its own line is
+#: held by the caller never opening the agent; a listing has no such gate, and the
+#: definition's line narrows no entry of a field written `["*"]`, so it filters to the
+#: definitions the caller reaches before asking what those offer.
 A_ONLY_STAR = """name: starred
 description: An agent.
 source_ids: [A]
-tools:
-  - name: secret_export
-    source_ids: ["*"]
+tools: ["*"]
 system_prompt: |
   You do the task.
 """
@@ -1034,13 +1037,13 @@ NAMES_NO_TOOLS = GRANTS_EVERY_TOOL.replace('tools: ["*"]\n', "")
 
 @pytest.mark.parametrize("form", ["text", "json"])
 def test_a_star_entry_out_of_reach_stays_out_of_reach(form, cfg, at_the_command_line, capsys):
-    """A tool an unreachable agent offers to "anyone who reaches this definition" is
-    still absent, because this caller does not reach that definition.
+    """A tool an unreachable agent offers by `["*"]` is still absent, because this caller
+    does not reach that definition.
 
     Measured: reading the entries of every definition rather than only the reachable
     ones hands `secret_export` straight back, and nothing else in the suite notices --
-    every other audience here happens to name source ids, so the definition's own line
-    narrows the entry away a second time and covers for the missing filter.
+    every listed field here is narrowed by its definition's own line, which covers for
+    the missing filter.
     """
     _workspace(cfg, WIDE, A_ONLY_STAR)
 
@@ -1048,7 +1051,7 @@ def test_a_star_entry_out_of_reach_stays_out_of_reach(form, cfg, at_the_command_
 
     printed = capsys.readouterr().out
     assert "secret_export" not in printed
-    assert "line_count" in printed, "and the one `wide` shares with them is still there"
+    assert "word_tally" in printed, "and the one `wide` shares with them is still there"
 
 
 @pytest.mark.parametrize("form", ["text", "json"])
@@ -1065,7 +1068,7 @@ def test_an_agent_granting_every_tool_offers_the_whole_catalogue(
     assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
 
     printed = capsys.readouterr().out
-    assert "line_count" in printed
+    assert "word_tally" in printed
     assert "secret_export" in printed, "the star offers this one too"
 
 
@@ -1079,7 +1082,7 @@ def test_an_agent_naming_no_tools_offers_none(form, cfg, at_the_command_line, ca
     assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
 
     printed = capsys.readouterr().out
-    assert "line_count" not in printed
+    assert "word_tally" not in printed
     assert "secret_export" not in printed
 
 
@@ -1121,9 +1124,7 @@ def test_a_grant_written_the_long_way_still_reaches_its_caller(
 WIDE_AND_HANDS_WORK_ON = """name: wide
 description: An agent.
 source_ids: [A, B]
-tools:
-  - name: line_count
-    source_ids: [A, B]
+tools: [word_tally]
 builtin_tools: ["*"]
 subagents: [helper]
 system_prompt: |
@@ -1137,9 +1138,7 @@ system_prompt: |
 DECLARES_MORE_THAN_IT_CAN_HOLD = """name: helper
 description: A subagent.
 source_ids: [A, B]
-tools:
-  - name: secret_export
-    source_ids: [A, B]
+tools: [secret_export]
 system_prompt: |
   You do the part you are given.
 """
@@ -1156,7 +1155,7 @@ def test_a_tool_only_a_subagent_declares_is_not_offered_to_that_caller(
     every reached definition *declared*, and offered `secret_export` to `B` while a run
     as `B` handed its subagent nothing -- measured, through the real build. The promise
     is "an asset a caller's source ids do not reach"; declarations answer a different
-    sentence. `line_count` is asserted beside it because the agent grants that one to
+    sentence. `word_tally` is asserted beside it because the agent grants that one to
     `B`, so a filter that offered nothing would pass the first line alone.
 
     The agent has to *name* the subagent, which the first version of this fixture
@@ -1174,7 +1173,7 @@ def test_a_tool_only_a_subagent_declares_is_not_offered_to_that_caller(
 
     printed = capsys.readouterr().out
     assert "secret_export" not in printed, "no agent B reaches grants it"
-    assert "line_count" in printed, "and `wide` does, so this is not an empty answer"
+    assert "word_tally" in printed, "and `wide` does, so this is not an empty answer"
 
 
 #: An agent that hands work to one subagent, and the two it could have named. Both
@@ -1300,56 +1299,35 @@ def test_a_skill_only_a_subagent_declares_is_not_offered_to_that_caller(
     assert "spare" not in printed, "and nothing a caller reaches is told about this one"
 
 
-#: An agent open to everyone, whose one entry is for `A` alone and names its tool by a
-#: path it has moved from. Two faults in one line, which is what makes it useful: the
+#: An agent open to everyone naming a tool by a path it has moved from, where the tool's
+#: own lock is for `A` alone. Two faults in one line, which is what makes it useful: the
 #: tool is withheld from `B` and the *fault* was reported to them anyway.
 MOVED_BEHIND_AN_AUDIENCE = """name: boss
 description: An agent.
 source_ids: [A, B]
-tools:
-  - name: moved/elsewhere.py::secret_export
-    source_ids: [A]
+tools: [moved/elsewhere.py::line_count]
 system_prompt: |
   You do the task.
 """
 
 
-#: The same shape on the other raw reader: an entry for `A` alone naming a subagent the
-#: catalogue has no key for. `_unresolved_subagents` read `spec.subagents` as written,
-#: so the fault was reported to `B` as well -- about a name their own audience hides.
-UNRESOLVED_BEHIND_AN_AUDIENCE = """name: boss
+#: An agent open to everyone naming a subagent the catalogue has no key for.
+NAMES_A_GHOST = """name: boss
 description: An agent.
 source_ids: [A, B]
 builtin_tools: ["*"]
 tools: ["*"]
-subagents:
-  - name: ghost
-    source_ids: [A]
+subagents: [ghost]
 system_prompt: |
   You do the task.
 """
-
-
-@pytest.mark.parametrize("form", ["text", "json"])
-def test_an_unresolved_name_out_of_reach_is_not_reported_to_that_caller(
-    form, cfg, at_the_command_line, capsys
-):
-    """The second of the two readers that read a spec as written. Both leaked the same
-    way, and only one of them was guarded when the first was fixed.
-    """
-    _workspace(cfg, UNRESOLVED_BEHIND_AN_AUDIENCE)
-
-    code = main(["list", "--as", "B"] + (["--json"] if form == "json" else []))
-
-    assert "ghost" not in capsys.readouterr().out
-    assert code == 0, "and the exit status follows the view"
 
 
 def test_the_operator_is_still_told_which_definition_names_nothing(
     cfg, at_the_command_line, capsys
 ):
     """The control: the fault is real and the unscoped listing is where it is fixed."""
-    _workspace(cfg, UNRESOLVED_BEHIND_AN_AUDIENCE)
+    _workspace(cfg, NAMES_A_GHOST)
 
     assert main(["list"]) == 1
 
@@ -1363,7 +1341,7 @@ def test_a_fault_on_an_entry_out_of_reach_is_not_reported_to_that_caller(
 ):
     """`_moved_tools` read the spec as written: its keys were kept to the caller's
     reach and the names inside were not, so a listing that correctly withheld
-    `secret_export` from `tools` named it three sections down -- and exited 1 over a row
+    `line_count` from `tools` named it three sections down -- and exited 1 over a row
     that caller cannot act on.
 
     `decisions.md` logs that shape twice already: the field that leaked is the one whose
@@ -1374,7 +1352,7 @@ def test_a_fault_on_an_entry_out_of_reach_is_not_reported_to_that_caller(
     code = main(["list", "--as", "B"] + (["--json"] if form == "json" else []))
 
     printed = capsys.readouterr().out
-    assert "secret_export" not in printed
+    assert "line_count" not in printed
     assert code == 0, "and the exit status follows the view"
 
 
@@ -1388,7 +1366,7 @@ def test_the_operator_is_still_told_which_definition_moved_it(cfg, at_the_comman
 
     printed = capsys.readouterr().out
     assert "tools named by a path they have moved from" in printed
-    assert "secret_export" in printed
+    assert "line_count" in printed
 
 
 #: A skill an agent shares with both callers, and one only an agent out of B's reach is
@@ -1535,31 +1513,57 @@ def test_the_operator_sees_audiences_per_definition(policied, capsys):
     assert "tool line_count  [A]" in shown
 
 
-def test_the_operator_sees_a_roll_up_by_asset(policied, capsys):
-    """The question the files can no longer answer on their own."""
+#: Two agents telling one skill to different callers, since a skill is the one thing an
+#: entry may lock.
+TELLS_A = """name: narrow
+description: An agent.
+source_ids: [A, B]
+skills:
+  - name: routine
+    source_ids: [A]
+system_prompt: |
+  You do the task.
+"""
+
+TELLS_BOTH = """name: wide
+description: An agent.
+source_ids: [A, B]
+skills:
+  - name: routine
+    source_ids: [A, B]
+system_prompt: |
+  You do the task.
+"""
+
+
+def test_the_roll_up_shows_one_skill_at_two_audiences(cfg, at_the_command_line, capsys):
+    """The case it exists for: a use quietly wider than its neighbour."""
+    _workspace(cfg, TELLS_A, TELLS_BOTH, skills=("routine",))
+
+    assert main(["list"]) == 0
+
+    section = capsys.readouterr().out.split("by skill", 1)[1]
+    assert "routine" in section
+    assert "narrow  [A]" in section
+    assert "wide  [A, B]" in section
+
+
+def test_there_is_no_roll_up_by_tool(policied, capsys):
+    """A per-use roll-up of tools would print each locked tool a second time, beside
+    nothing that could differ from it.
+    """
     assert main(["list"]) == 0
 
     shown = capsys.readouterr().out
-    assert "by tool" in shown
-    assert "line_count" in shown.split("by tool", 1)[1]
-
-
-def test_the_roll_up_shows_one_tool_at_two_audiences(cfg, at_the_command_line, capsys):
-    """The case it exists for: a call site quietly wider than its neighbour."""
-    _workspace(cfg, NARROW, WIDE)
-
-    assert main(["list"]) == 0
-
-    section = capsys.readouterr().out.split("by tool", 1)[1]
-    assert "narrow  [A]" in section
-    assert "wide  [A, B]" in section
+    assert "tool line_count  [A]" in shown
+    assert "by tool" not in shown
 
 
 BOTH = """name: both
 description: An agent.
 source_ids: [{A, B}]
-tools:
-  - name: line_count
+skills:
+  - name: routine
     source_ids: [A, B]
 system_prompt: |
   You do the task.
@@ -1579,7 +1583,7 @@ def test_an_inline_requirement_reads_as_the_set_it_is_written_as(cfg, at_the_com
     the file said `all_of`, which was a third spelling of the same idea and ambiguous
     besides -- a source id may legally contain a `+`.
     """
-    _workspace(cfg, BOTH)
+    _workspace(cfg, BOTH, skills=("routine",))
 
     assert main(["list"]) == 0
 
@@ -1594,10 +1598,10 @@ def test_a_conjunction_is_spelled_the_same_way_wherever_it_appears(
     """The by-definition view and the roll-up print the same audience, and a reader
     comparing the two should not have to translate.
     """
-    _workspace(cfg, BOTH)
+    _workspace(cfg, BOTH, skills=("routine",))
 
     shown = capsys.readouterr().out if main(["list"]) == 0 else ""
-    before, after = shown.split("by tool", 1)
+    before, after = shown.split("by skill", 1)
     assert "[{A, B}]" in before
     assert "both  [A, B]" in after
 
@@ -1635,7 +1639,7 @@ def test_a_conjunction_survives_the_json_round_trip(cfg, at_the_command_line):
     from kingfisher.cli.listing import as_json
 
     _workspace(cfg, BOTH, NAMED,
-        vocabulary="source_ids:\n  A:\n  B:\n  ab: {A, B}\n",
+        vocabulary="source_ids:\n  A:\n  B:\n  ab: {A, B}\n", skills=("routine",),
     )
 
     # From the environment, not the fixture: the vocabulary is a file the
@@ -1652,8 +1656,8 @@ def test_a_conjunction_survives_the_json_round_trip(cfg, at_the_command_line):
 NARROWED = """name: narrowed
 description: An agent.
 source_ids: [A, B]
-tools:
-  - name: line_count
+skills:
+  - name: routine
     source_ids: [C]
 system_prompt: |
   You do the task.
@@ -1662,13 +1666,13 @@ system_prompt: |
 
 def test_an_entry_narrowing_past_its_definition_is_reported(cfg, at_the_command_line, capsys):
     """It used to be refused."""
-    _workspace(cfg, NARROWED, vocabulary="source_ids: [A, B, C]\n")
+    _workspace(cfg, NARROWED, vocabulary="source_ids: [A, B, C]\n", skills=("routine",))
 
     assert main(["list"]) == 0
 
     shown = capsys.readouterr().out
     assert "narrows past this definition's own audience" in shown
-    assert "agent narrowed: tool line_count  [C]" in shown
+    assert "agent narrowed: skill routine  [C]" in shown
 
 
 def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, at_the_command_line):
@@ -1677,15 +1681,15 @@ def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, at_the_command_line
     from kingfisher.core.access.reach import reaches
     from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 
-    _workspace(cfg, NARROWED, vocabulary="source_ids: [A, B, C]\n")
+    _workspace(cfg, NARROWED, vocabulary="source_ids: [A, B, C]\n", skills=("routine",))
     reach = config_from_env().access
     assert reach is not None
     spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["narrowed"]
 
-    assert spec.declares(reach.expand(["A", "C"])).tools == ("line_count",)
-    assert spec.declares(reach.expand(["A"])).tools == ()
+    assert spec.declares(reach.expand(["A", "C"])).skills == ("routine",)
+    assert spec.declares(reach.expand(["A"])).skills == ()
     # And the definition's own line still gates the agent itself: C alone opens
-    # nothing, so there is no way to reach the tool by holding only C.
+    # nothing, so there is no way to reach the skill by holding only C.
     assert not reaches(spec.source_ids, reach.expand(["C"]))
 
 
@@ -1695,7 +1699,6 @@ def test_a_callers_view_carries_no_audiences(policied, capsys):
 
     shown = capsys.readouterr().out
     assert "by definition" not in shown
-    assert "by tool" not in shown
 
 
 def test_a_callers_view_drops_an_agent_they_cannot_open(cfg, at_the_command_line, capsys):

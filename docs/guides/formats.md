@@ -159,7 +159,7 @@ true of every agent in the workspace.
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
 | `interrupt_on` | optional | Tools whose every call stops for a person before it runs — see [Approval gates](#approval-gates) |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
-| `source_ids` | optional | Who may open a session on this agent. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
+| `source_ids` | optional | Who may open a session on this agent. Unset means everyone. Also the default audience, and the ceiling, for its `skills` entries, the one entry that may say who it is for — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
 
 One rule covers every field that grants, and a subagent file follows it too:
 **leave a field out and you get none of it; write `["*"]` for everything
@@ -529,7 +529,7 @@ on the spot, so every entry after the first would be unreachable.
 | `subagents` | optional | Subagents this one may consult mid-job. Unset grants **none**. One level — see below |
 | `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the subagent runs whatever summoned it |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
-| `source_ids` | optional | Who may reach this subagent, wherever it is used. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
+| `source_ids` | optional | Who may reach this subagent, wherever it is used, and the only place that is said: a `subagents:` entry naming it takes no audience. Unset means everyone. Also the default audience, and the ceiling, for its `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
 | `datazone` | optional | The one datazone a caller must be in to reach this subagent. Unset means any — see [Datazones](#datazones--a-second-field-beside-source-ids) |
 
 ### A subagent that consults another
@@ -1086,7 +1086,7 @@ list` prints the mismatch under the subagent and `doctor` fails on
 is what grants its parts — a caller never names them, which is the point, since
 naming them would mean knowing they exist. Leaving `redactor` out of a request's
 `capabilities.subagents` declines the whole subagent; there is no finer lever, deliberately. For the same
-reason a bundled entry takes no `source_ids`: it reaches whoever reaches the
+reason a bundled `skills:` entry takes no `source_ids`: it reaches whoever reaches the
 subagent.
 
 **Only a subagent has a folder.** `source: bundled` in an agent file is refused,
@@ -1248,8 +1248,8 @@ it, not loading it is the mechanism working.
 ## Access — `source_ids:` in the definitions, `source_ids.yaml` for the vocabulary
 
 Which source ids may reach which agents, subagents, tools and skills. Optional:
-with no `source_ids.yaml`, kingfisher controls nothing by source id. A tool may also
-say who it admits, in its own file, through a `ToolSpec` — see
+with no `source_ids.yaml`, kingfisher controls nothing by source id. A tool says who
+it admits in its own file, through a `ToolSpec` — see
 [`tools.md`](tools.md#or-a-toolspec-when-the-tool-says-who-may-use-it).
 
 A source id is a name in this deployment's vocabulary and nothing else — not a
@@ -1262,10 +1262,11 @@ default, because a workspace that has not declared `sales_db` cannot read a
 definition that names it — copy `source_ids.yaml` first, then
 `kingfisher seed --all`.
 
-**Audiences live in the definitions.** An agent or a subagent says who may reach
-*it*, and may say who reaches each thing it holds. What is central is only the
-vocabulary — which names exist, and which contain which — and that file holds no
-policy at all.
+**Audiences live in the definitions.** Each thing says who may reach *it*, in its
+own file: an agent or a subagent on its `source_ids:` line, a tool in its
+`ToolSpec`. A skill has no file to say it in, so the definition offering it says
+it on the skill's entry. What is central is only the vocabulary — which names
+exist, and which contain which — and that file holds no policy at all.
 
 ```yaml
 # source_ids.yaml  — the whole file
@@ -1281,18 +1282,20 @@ source_ids:
 name: assistant
 description: Answers questions about the data in this workspace.
 source_ids: [A, B]                 # who may open a session on this agent
-builtin_tools: ["*"]
-tools:
-  - name: sql_query
-    source_ids: [A]                # this agent's sql_query is for A only
-  - name: http_fetch
-    source_ids: [A, B]
-subagents:
-  - name: reviewer
-    source_ids: [A]
-skills: [code-review]          # a plain list means "these, at my audience"
+builtin_tools: ["*"]               # here for `task`, which reaches reviewer
+tools: [sql_query, http_fetch]     # names: a tool's lock is in its own file
+subagents: [reviewer]              # names: a subagent's audience is its own line
+skills:
+  - name: audit
+    source_ids: [A]                # only A is told about this procedure
+  - code-review                    # a bare name means "at my audience"
 system_prompt: |
   ...
+```
+
+```python
+# tools/sql_query.py  — this tool is for A, in every agent that grants it
+TOOLS = [ToolSpec(sql_query, source_ids=["A"])]
 ```
 
 `source_ids.yaml` in `KINGFISHER_DEFINITIONS_DIR`, beside the definitions it governs,
@@ -1326,9 +1329,10 @@ input — there is no spelling of "give me everything" except `UNSCOPED`.
 ### The spellings, and one rule
 
 `source_ids:` on a definition is the **default audience** for everything it holds,
-and the **ceiling** on what any entry may say. That one rule covers every form
-the selection fields already had, so a definition written before audiences
-existed keeps its exact meaning once a `source_ids:` line is added above it:
+since what it holds is reached only through it, and the **ceiling** on what a
+`skills:` entry may say. That one rule covers every form the selection fields
+already had, so a definition written before audiences existed keeps its exact
+meaning once a `source_ids:` line is added above it:
 
 ```yaml
 source_ids: [A, B]
@@ -1340,16 +1344,19 @@ tools: [sql_query]         # a list — that tool, for A and B
 ```
 ```yaml
 source_ids: [A, B]
-tools:                     # the long form — per entry
-  - name: sql_query
+skills:                    # the long form — per entry
+  - name: audit
     source_ids: [A]            #   for A only
-  - name: http_fetch
+  - name: review
     source_ids: ["*"]          #   for anyone who reaches this definition
 ```
 
-**An entry is a name, or a mapping of `name` and `source_ids`** — the same shape
-`middlewares:` takes for its `settings`, so there is one long form to learn rather
-than one per field.
+A tool its own file locks is held to that as well, so `sql_query` above is for
+whoever opens this agent *and* passes the tool's `ToolSpec`.
+
+**A skills entry is a name, or a mapping of `name` and `source_ids`** — the same
+shape `middlewares:` takes for its `settings`, so there is one long form to learn
+rather than one per field.
 
 The field itself stays a list. Writing the whole field as a mapping keyed by name
 is refused, and the message shows the entry to write instead: YAML collapses
@@ -1357,16 +1364,16 @@ is refused, and the message shows the entry to write instead: YAML collapses
 of its audiences silently, with nothing able to refuse or report it.
 
 **Only the entries you restrict need one.** An entry that says nothing inherits
-the definition's own audience, so an agent holding five tools and restricting one
-writes one `source_ids:` line rather than five:
+the definition's own audience, so an agent told about five skills and restricting
+one writes one `source_ids:` line rather than five:
 
 ```yaml
 source_ids: [A, B]
-tools:
-  - name: sql_query
+skills:
+  - name: audit
     source_ids: [A]            # narrower than the definition
-  - http_fetch             # a bare name, so [A, B] — the definition's own
-  - line_count
+  - review                 # a bare name, so [A, B] — the definition's own
+  - code-review
 ```
 
 Mixing the two spellings in one list is the ordinary case, not a special one:
@@ -1378,21 +1385,20 @@ honest about an unrestricted name.
 line out is how you say "no restriction", so an empty one is an unfinished edit.
 ```yaml
 source_ids: [A, B]
-tools: []                  # none, as it always meant
+skills: []                 # none, as it always meant
 ```
 
 An entry's audience is always an **and** with the definition's own line. The
 only way to reach an entry is through the definition holding it, and a caller
-who cannot open the agent never gets as far as its tools — so `sql_query:
-source_ids: [A]` under `source_ids: [A, B]` means "opens this agent, *and*
-holds A".
+who cannot open the agent is never told about its skills — so `audit: source_ids:
+[A]` under `source_ids: [A, B]` means "opens this agent, *and* holds A".
 
 That makes a source id from outside the definition's line useful rather than wrong:
 
 ```yaml
 source_ids: [sales_db, audit_log]
-tools:
-  - name: export
+skills:
+  - name: pii-handling
     source_ids: [pii]        # anyone who opens this agent, and holds pii
 ```
 
@@ -1403,7 +1409,7 @@ would write by accident:
 access:
   narrows past this definition's own audience,
   so it reaches only callers holding both:
-    agent analyst: tool export  [pii]
+    agent analyst: skill pii-handling  [pii]
 ```
 
 Said rather than refused, because no rule can tell the two apart — `[pii]`
@@ -1415,32 +1421,36 @@ everyone reads an access list as meaning. `["*"]` is everyone.
 
 ### Which fields take an audience
 
-`tools`, `subagents` and `skills` — all three, and identically:
+On an entry, `skills` alone. A tool and a subagent each say who may use them in
+their own file, and an entry under `tools:` or `subagents:` that writes
+`source_ids` is refused at load, saying where the line goes instead:
 
 ```yaml
 source_ids: [A, B]
-builtin_tools: ["*"]          # takes no audience; here for `task`
-tools:
-  - name: sql_query
-    source_ids: [A]
-subagents:
-  - name: reviewer
-    source_ids: [A]
+builtin_tools: ["*"]         # here for `task`
+tools: [sql_query]           # the lock is ToolSpec(sql_query, source_ids=[...])
+subagents: [reviewer]        # the audience is reviewer.yaml's own source_ids:
 skills:
   - name: audit
     source_ids: [A]           # only A is told this procedure exists
-  - name: review
-    source_ids: [A, B]
 ```
 
+So who may use a tool in an agent is three checks, each in one place: whether the
+caller can open the agent, its own `source_ids:`; whether the agent lists the tool,
+its `tools:`; and whether the caller passes the tool's own lock. To answer "who can
+use `http_fetch`?" you read its tool file, not every agent that lists it. An agent
+still decides what it holds by listing it — leave a tool off and it is not this
+agent's. What that gives up is one tool locked differently in two agents, which
+listing covers when it comes up.
+
 A skill reaches the model by a different road from a tool — it is advertised
-through a middleware rather than registered as a callable — but the rule is the
-same, and a skill out of reach is not advertised at all.
+through a middleware rather than registered as a callable — and a skill out of
+reach is not advertised at all.
 
 Note what that is and is not, because a skill was never a boundary: removing it
 means the agent is not *told* about it. The file is still on disk, so this is
 guidance, and an agent holding `execute` can read anything. The boundary is the
-tools a skill's procedure would need, which have audiences of their own.
+tools a skill's procedure would need, which have locks of their own.
 
 **`builtin_tools` deliberately takes none.** deepagents registers its own tools
 itself, so kingfisher can filter them but never leave them out of a graph, and a
@@ -1452,31 +1462,28 @@ What gates the built-ins is which *agents* a source id may open: an agent declar
 `builtin_tools: [read_file, ls, glob, grep]` cannot yield the shell to anyone,
 whatever they ask for.
 
-### Audiences are per use-site
+### Who reaches what, in one listing
 
-An entry's audience is a property of *this definition's use of it*. `reviewer`
-may restrict `sql_query` to `[A]` while `analyst` opens it to `[A, B]`, and both
-are correct — they are different contexts. A tool its file wraps in a `ToolSpec` may
-also say who it admits, and every use of it is held to that as well.
-
-The cost is that there is no single line answering "who reaches `sql_query`?".
-`kingfisher list` answers it instead, with a roll-up beside the per-definition
-view: under each tool, the tool's own audience first and then every definition
-that narrows it, so a call site quietly wider than its neighbours is visible
-rather than something you would only find by grepping.
+A skills entry's audience is a property of *this definition's use of it*: `reviewer`
+may tell only `[A]` about `audit` while `analyst` tells `[A, B]`, and both are
+correct. So there is no single line answering "who is told about `audit`?", and
+`kingfisher list` answers it instead, with a roll-up by skill beside the
+per-definition view, so a use quietly wider than its neighbours is visible rather
+than something you would only find by grepping. A tool's lock and a subagent's
+audience are each one line, printed once:
 
 ```
 access — by definition
+  agent analyst  [sales_db, audit_log]
+      skill tabular-qa  [sales_db]
   subagent ledger  [*]  datazone: finance
   subagent reviewer  [A, B]
-      tool sql_query  [A]
   tool counter::count  [A]
   tool sql_query  [sales_db]
 
-access — by tool
-  sql_query
-      (the tool itself)  [sales_db]
-      reviewer  [A]
+access — by skill
+  tabular-qa
+      analyst  [sales_db]
 ```
 
 A datazone follows the source ids it is required beside, and a subagent's own tool
@@ -1503,9 +1510,8 @@ access:
 ### One grant, everywhere
 
 The caller's source ids bound the agent, its subagents, and their subagents alike. A
-subagent's own `source_ids:` is its intrinsic ceiling — "this one is sensitive
-wherever it is used" — and a parent's `subagents:` entry narrows it further for
-that parent's context. The two intersect; neither widens the other.
+subagent's own `source_ids:` is its audience — "this one is sensitive wherever it is
+used" — and the only one: a parent names it and says nothing about who reaches it.
 
 So a subagent whose tools are partly out of reach **runs with the rest**, and
 nothing tells the caller what it lacks — [out of reach reads as not
@@ -1515,11 +1521,12 @@ offered](#what-a-caller-can-see):
 # subagents/reviewer.yaml
 name: reviewer
 source_ids: [A, B, C]
-tools:
-  - name: sql_query
-    source_ids: [A, B]
-  - name: http_fetch
-    source_ids: [A, B, C]
+tools: [sql_query, http_fetch]
+```
+
+```python
+# tools/sql_query.py
+TOOLS = [ToolSpec(sql_query, source_ids=["A", "B"])]
 ```
 
 A caller in `C` gets a `reviewer` holding `http_fetch` and not `sql_query`.
@@ -1533,7 +1540,7 @@ subagent is never compiled, so its graph is never paid for either.
 
 ### Compiled subagents
 
-A Python-declared subagent may carry `source_ids` and per-tool audiences:
+A Python-declared subagent may carry `source_ids`, and lists its tools by name:
 
 ```python
 SUBAGENTS = [
@@ -1541,7 +1548,7 @@ SUBAGENTS = [
         "name": "profiler",
         "description": "...",
         "source_ids": ["A", "B"],
-        "tools": {"sql_query": {"source_ids": ["A"]}},
+        "tools": ["sql_query"],
         "build": _build,
     }
 ]
@@ -1550,10 +1557,12 @@ SUBAGENTS = [
 `source_ids` is a real boundary: whether a compiled subagent is built at all is
 kingfisher's decision, so there is nothing there for a graph to ignore.
 
-The per-tool audience narrows what is **handed to** `build`, with the caveat the
-plain `tools` list already carries: deepagents applies no allowlist to a graph it
-did not build, so a `build` that ignored what it was given could call anything it
-holds. `skills` and `subagents` are refused for a compiled subagent regardless —
+`tools` is a list of names, as in a file. A tool's own lock narrows what is
+**handed to** `build`, with the caveat the plain list already carries: deepagents
+applies no allowlist to a graph it did not build, so a `build` that ignored what
+it was given could call anything it holds. A mapping saying who may use each tool,
+`{"sql_query": {"source_ids": ["A"]}}`, is refused: the lock goes in the tool's
+file. `skills` and `subagents` are refused for a compiled subagent regardless —
 see `NOT_COMPILED`.
 
 ### What a caller can see

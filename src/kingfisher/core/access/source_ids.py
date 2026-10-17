@@ -11,15 +11,16 @@ from kingfisher.core.access.capabilities import ALL
 from kingfisher.core.definitions.fields import text, unrecognised
 from kingfisher.core.result import Listed
 
-#: The selection fields that may be written as a mapping of name to audience. Not
-#: `builtin_tools`: deepagents registers those, so kingfisher can filter them but never leave
-#: them out, and an audience there would promise a boundary nothing can hold.
+#: The selection fields a definition's own `source_ids:` narrows for a caller, since what it
+#: holds is reached only through it. Not `builtin_tools`: deepagents registers those, so
+#: kingfisher can filter them but never leave them out, and an audience there would promise a
+#: boundary nothing can hold.
 AUDIENCED: Final[tuple[str, ...]] = ("tools", "subagents", "skills")
 
 _WENT = (
-    "audiences live in the definition now: write `source_ids:` in the file itself, "
-    "and a mapping under `tools:`, `subagents:` or `skills:` to narrow one "
-    "entry further"
+    "audiences live in the definitions now: write `source_ids:` in the agent's or "
+    "subagent's own file, a tool's in its tool file as ToolSpec(tool, source_ids=[...]), "
+    "and a skill's on its `skills:` entry"
 )
 
 #: Sections the central format defined, refused rather than ignored: an upgrading
@@ -51,24 +52,20 @@ class Stated:
 
     #: The definition's own audience: who may reach it at all.
     source_ids: Audience = ALL
-    #: Field name -> entry name -> who reaches that entry there.
-    entries: Mapping[str, Mapping[str, Audience]] = field(default_factory=dict)
+    #: Skill name -> who this definition tells about it, for the entries saying.
+    skills: Mapping[str, Audience] = field(default_factory=dict)
     #: The one datazone a caller must be in to reach it, or `None` for any.
     datazone: str | None = None
 
     @property
     def says_nothing(self) -> bool:
         """Whether this definition restricts anyone at all."""
-        return self.source_ids == ALL and not self.entries and self.datazone is None
+        return self.source_ids == ALL and not self.skills and self.datazone is None
 
     @property
     def audience(self) -> Audience:
         """Who reaches the definition: its source ids, and its datazone as well."""
         return zoned(self.source_ids, self.datazone)
-
-    def of(self, field_name: str) -> Mapping[str, Audience]:
-        """One field's per-entry audiences, or nothing."""
-        return self.entries.get(field_name, {})
 
 
 class AccessError(ValueError):
@@ -166,11 +163,6 @@ def unlisted(written: Sequence[str | Sequence[str]]) -> Audience:
     return tuple(one if isinstance(one, str) else frozenset(one) for one in written)
 
 
-def _singular(field_name: str) -> str:
-    """`tools` -> `tool`. `skills` is the one that does not just lose an s."""
-    return "skill" if field_name == "skills" else field_name[:-1]
-
-
 def spell(audience: Audience) -> str:
     """One audience, written the way the formats and the listing write it."""
     if audience == ALL:
@@ -189,8 +181,8 @@ class AccessReport:
     #: name)`.
     unrestricted: tuple[tuple[str, str], ...] = ()
 
-    #: Entries naming a source id their definition's own audience never mentions, as
-    #: `(where, audience)`. Reached only by a caller holding one of each.
+    #: Skills entries naming a source id their definition's own audience never mentions,
+    #: as `(where, audience)`. Reached only by a caller holding one of each.
     narrowed: tuple[tuple[str, str], ...] = ()
 
     @property
@@ -291,12 +283,12 @@ class SourceIds:
 
     def narrowing_in(
         self,
-        audiences: Mapping[str, Mapping[str, Audience]],
+        skills: Mapping[str, Audience],
         *,
         source_ids: Audience,
         where: str,
     ) -> tuple[tuple[str, str], ...]:
-        """Entries naming a source id this definition's own audience never mentions.
+        """Skills entries naming a source id this definition's own audience never mentions.
 
         An entry's audience is already an and with the definition's, since an entry is reached
         only through its definition: `[pii]` under `[sales_db, audit_log]` means "whoever
@@ -306,9 +298,8 @@ class SourceIds:
             return ()
         admitted = self.mentions(source_ids)
         return tuple(
-            (f"{where}: {_singular(field_name)} {entry}", spell(audience))
-            for field_name, entries in audiences.items()
-            for entry, audience in entries.items()
+            (f"{where}: skill {entry}", spell(audience))
+            for entry, audience in skills.items()
             if audience != ALL and not (self.mentions(audience) & admitted)
         )
 
