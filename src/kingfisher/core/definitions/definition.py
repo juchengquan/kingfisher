@@ -39,7 +39,7 @@ from kingfisher.core.access.source_ids import Audience
 
 
 @dataclass(frozen=True, kw_only=True)
-class Definition:
+class SpecBase:
     """The fields an agent and a subagent declare identically."""
 
     name: str

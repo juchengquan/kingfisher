@@ -7505,6 +7505,12 @@ that omits it and always did, and nothing was watching the other door.
 `test_neither_kind_can_be_built_without_saying_what_it_instructs_with` is that door,
 and it is the one part of this work that would have been worth doing on its own.*
 
+*Renamed `SpecBase` from `Definition`. In this codebase a tool, a skill and a middleware
+are definitions too, so the bare name read as the base of every kind when it is the base
+of two; and `AgentDefinition`, the first name proposed, would have made a subagent a kind
+of agent beside an `AgentSpec` that already names one. `SpecBase` sits next to the two
+`*Spec` classes it is the parent of and claims nothing more. (2026-10-17.)*
+
 **Left for now: a `ToolSpec` a tool could be declared as.** Asked after the entry
 above, about the kind that has no spec at all. A tool is exported as an object and
 `Found` pairs it with where it came from; agents, subagents and skills each read a

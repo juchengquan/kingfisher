@@ -160,7 +160,7 @@ def test_every_reader_accepts_a_definition_with_nothing_wrong(reader):
 
 @pytest.mark.parametrize("kind", sorted(FORMATS))
 def test_neither_kind_can_be_built_without_saying_what_it_instructs_with(kind):
-    """A default on `Definition.system_prompt` and the whole suite stays green.
+    """A default on `SpecBase.system_prompt` and the whole suite stays green.
 
     Measured, on the commit that put the field there: adding `= ""` back to the base
     makes a promptless agent constructible -- the second way in that field's comment
