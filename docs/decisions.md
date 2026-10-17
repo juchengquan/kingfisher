@@ -3974,6 +3974,19 @@ matters is a path inside a script no rewrite sees -- and the folders are not giv
 environment variables, which the model would still have to choose to use. Reopen it on
 turns that keep missing after the correction. *(2026-10-17.)*
 
+**`read_file` reads 1,000 lines unless told otherwise, and says to read a file whole.**
+deepagents defaults to 100 lines and tells the model to page "instead of reading them
+whole". Measured over 71 trial turns, `read_file` was a third of every call, and 87% of
+reads named a limit themselves, mostly 100, copying the description; the turns that ran
+out of their 50 calls spent 121 calls reading. So the description changes with the
+default, through `FileTools`, which hands each graph's model a `read_file` saying 1,000
+and showing it as the default, and fills in 1,000 where a call names no limit. A limit the
+model names is left alone: it is a slice the model wanted. 1,000 lines of code of ordinary
+width stays under deepagents' cut of a read at 80,000 characters. deepagents is not
+patched for this, here or anywhere: its tools are changed from outside, as `ShellPaths`
+changes `execute`, each with a test that fails when an upgrade moves what it changes.
+*(2026-10-17, from the trial transcripts.)*
+
 **What the agent is told about the shell is said by the shell.** `system.md`,
 `capability_skills.md` and `ShellPaths` told every deployment's agent four things true
 only of kingfisher's own shell: it runs on the host in the session root, `TMPDIR` is the

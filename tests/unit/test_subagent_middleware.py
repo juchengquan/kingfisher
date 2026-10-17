@@ -215,6 +215,7 @@ def test_what_a_subagent_carries_is_pinned_here_and_only_here(cfg, session_dir):
         "HostPathGuard",
         "LargePdfGuard",
         "ShellPaths",
+        "FileTools",
         "WorkspaceToolErrors",
         # Beside the errors guard rather than anywhere else: both are about a
         # workspace tool call, and this one rewrites the arguments before the
@@ -243,6 +244,7 @@ def test_a_bare_definition_carries_only_the_guards_and_its_allowlist(cfg, sessio
         "HostPathGuard",
         "LargePdfGuard",
         "ShellPaths",
+        "FileTools",
         "WorkspaceToolErrors",
         "WorkspaceToolPaths",
         "ToolAllowlist",

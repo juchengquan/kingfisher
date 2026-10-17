@@ -12,6 +12,7 @@ from langchain_core.tools import BaseTool, StructuredTool, ToolException
 from kingfisher.core.agent.backend import shell_prompt_of, shell_runs_here
 from kingfisher.core.agent.host_paths import HostPathError
 from kingfisher.core.agent.middlewares.cut_replies import CutReplies
+from kingfisher.core.agent.middlewares.file_tools import FileTools
 from kingfisher.core.agent.middlewares.host_path_guard import HostPathGuard
 from kingfisher.core.agent.middlewares.large_pdf_guard import LargePdfGuard
 from kingfisher.core.agent.middlewares.recorder import Recorder
@@ -42,12 +43,12 @@ def tool_guards(  # noqa: PLR0913 -- `subagent` is the one way the agent's guard
     The agent, a subagent, and deepagents' `general-purpose` subagent, which is handed
     the agent's tools, all hold them; one builder, so none of them is left unguarded.
 
-    `CutReplies`, `HostPathGuard`, `LargePdfGuard` and `ShellPaths` go on every graph:
-    any model can stop at its cap and a cut call looks whole, the backend refuses a host
-    path on every run, `read_file` hands a PDF over whole, and a subagent holding
-    `execute` never sees `system.md`. `subagent` says what `CutReplies` does with an
-    agent it stops, the one way the graphs differ. The workspace-tool guards need
-    `names`, and translation needs `paths`.
+    `CutReplies`, `HostPathGuard`, `LargePdfGuard`, `ShellPaths` and `FileTools` go on every
+    graph: any model can stop at its cap and a cut call looks whole, the backend refuses a
+    host path on every run, `read_file` hands a PDF over whole, a subagent holding
+    `execute` never sees `system.md`, and every graph holds the file tools. `subagent`
+    says what `CutReplies` does with an agent it stops, the one way the graphs differ. The
+    workspace-tool guards need `names`, and translation needs `paths`.
 
     `recorder` is `None` where no turn keeps what is recorded; `backend`'s shell says
     what `ShellPaths` tells the model about it.
@@ -62,6 +63,7 @@ def tool_guards(  # noqa: PLR0913 -- `subagent` is the one way the agent's guard
     guards.append(HostPathGuard())
     guards.append(LargePdfGuard())
     guards.append(ShellPaths(layout, shell_prompt_of(backend), here=shell_runs_here(backend)))
+    guards.append(FileTools())
     if names:
         # In this order, which the subagent's stack is pinned to: translation rewrites
         # the arguments before anything after it judges them.
