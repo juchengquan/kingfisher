@@ -146,6 +146,34 @@ def tool_names(message: Any) -> tuple[str, ...]:
     return tool_calls(message)[0]
 
 
+def cut_off(message: Any) -> bool:
+    """Whether a reply stopped because it reached the model's output cap.
+
+    Read off the stop reason because nothing else shows it: a call cut partway arrives
+    with its arguments whole-looking, its JSON closed by langchain's streaming repair or
+    by the provider itself, as MiniMax-M3 does.
+    """
+    meta = getattr(message, "response_metadata", None) or {}
+    if meta.get("stop_reason") == "max_tokens":
+        return True
+    # The Responses API's way of saying it, which has no stop reason.
+    details = meta.get("incomplete_details") or {}
+    return meta.get("status") == "incomplete" and details.get("reason") == "max_output_tokens"
+
+
+def output_limit(message: Any) -> str:
+    """The cap a cut reply reached, as a phrase: its own output count, which is the cap."""
+    spent = usage_of(message)["output_tokens"]
+    return f"the {spent:,}-token output limit" if spent else "the output limit"
+
+
+def ended_cut_off(state: Any) -> Any | None:
+    """The agent's last reply where it was cut off at the output cap, else `None`."""
+    messages = (getattr(state, "values", None) or {}).get("messages") or ()
+    last = messages[-1] if messages else None
+    return last if isinstance(last, AIMessage) and cut_off(last) else None
+
+
 def _event_for(message: Any) -> RunEvent | None:
     if isinstance(message, ToolMessage):
         return RunEvent(
@@ -168,7 +196,13 @@ def _event_for(message: Any) -> RunEvent | None:
         # is a state shuffle, and announcing it would be noise.
         if not (names or message.text.strip() or getattr(message, "usage_metadata", None)):
             return None
-        return RunEvent(kind="model_call", tools=names, args=args, usage=usage_of(message))
+        return RunEvent(
+            kind="model_call",
+            tools=names,
+            args=args,
+            usage=usage_of(message),
+            cut_off=cut_off(message),
+        )
     return None
 
 

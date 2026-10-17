@@ -270,3 +270,14 @@ def out_of_steps(cfg: Config) -> RunEvent:
             f"(raise KINGFISHER_RECURSION_LIMIT)"
         ),
     )
+
+
+def out_of_tokens(reply: Any) -> RunEvent:
+    """The same event for a turn whose agent stopped on a reply cut off at its cap."""
+    return RunEvent(
+        kind="cut_short",
+        text=(
+            f"turn stopped: the agent's reply reached {runtime.output_limit(reply)} "
+            f"(max_tokens in models.yaml)"
+        ),
+    )

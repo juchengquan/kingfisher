@@ -132,6 +132,7 @@ from kingfisher.core.session.turn import (
     decision_discarded,
     decision_needed,
     out_of_steps,
+    out_of_tokens,
     overrun,
     turn_message,
 )
@@ -1176,6 +1177,12 @@ class Kingfisher(SessionMethods, Disposal):
                 # never left guessing what was in flight.
                 if turn.stop_reason == END_TURN:
                     turn.stop_reason = AWAITING
+            # Read off the state rather than the stream, so it is the reply the agent
+            # ended on and never a subagent's, whose own cut answer is its caller's to
+            # read.
+            if turn.stop_reason == END_TURN and (cut := runtime.ended_cut_off(snapshot)):
+                turn.stop_reason = "max_tokens"
+                turn.pending.append(out_of_tokens(cut))
             turn.kept = yield from self._keep(prepared, snapshot)
         finally:
             # The slot goes back however the turn ended -- answered, refused

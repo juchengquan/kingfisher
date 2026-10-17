@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A reply cut off at the output cap, after #830
+
+- **A turn can end with `stop_reason: max_tokens`.** The agent's last reply stopped at
+  its model's `max_tokens`, so the answer is cut off. `completed` is false, so
+  `run(delete_session=True)` keeps the session, and `kingfisher run` exits 1 as it does
+  for `max_steps`. A caller switching on `stop_reason` meets a value it has not seen.
+- **`RunEvent` has `cut_off`**, true on a `model_call` whose reply was cut, and the run
+  log's `model_call` line carries it as well.
+- **`tool_guards` takes `subagent=`**, with no default: what it does with an agent it
+  stops is the one way the agent's guards and a subagent's differ.
+
 ## Sessions, plugins and instructions, after #784
 
 The core-and-plugins work renamed what a deployment names and moved what the core does
