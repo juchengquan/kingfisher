@@ -211,6 +211,7 @@ def test_what_a_subagent_carries_is_pinned_here_and_only_here(cfg, session_dir):
 
     assert [type(m).__name__ for m in middleware_of(built, "reviewer")] == [
         "CutReplies",
+        "ModelUnavailableGuard",
         "HostPathGuard",
         "LargePdfGuard",
         "ShellPaths",
@@ -238,6 +239,7 @@ def test_a_bare_definition_carries_only_the_guards_and_its_allowlist(cfg, sessio
 
     assert [type(m).__name__ for m in middleware_of(built, "reviewer")] == [
         "CutReplies",
+        "ModelUnavailableGuard",
         "HostPathGuard",
         "LargePdfGuard",
         "ShellPaths",

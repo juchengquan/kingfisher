@@ -50,6 +50,7 @@ from kingfisher.core.session.turn import (
     Prepared,
     consume,
     decision_needed,
+    model_unavailable,
     out_of_steps,
     out_of_tokens,
     overrun,
@@ -266,6 +267,11 @@ class Running:
             turn.stop_reason = "max_steps"
             turn.ok = True
             turn.pending.append(out_of_steps(self.cfg))
+        except runtime.ModelUnavailableError as exc:
+            turn.answer = normalize_answer(turn.answer)
+            turn.stop_reason = "model_unavailable"
+            turn.ok = True
+            turn.pending.append(model_unavailable(exc.why))
         except Exception as exc:
             # Only a 401, which the person at the terminal can fix, becomes a one-line
             # error; the rest keep their traceback, so a bug still looks like one.

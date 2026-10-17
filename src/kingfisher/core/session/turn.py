@@ -245,6 +245,17 @@ def out_of_steps(cfg: Config) -> RunEvent:
     )
 
 
+def model_unavailable(why: str) -> RunEvent:
+    """The same event for a turn whose model the provider could not serve."""
+    return RunEvent(
+        kind="cut_short",
+        text=(
+            f"turn stopped: the model could not answer ({why}); run it again on this "
+            f"session to continue"
+        ),
+    )
+
+
 def out_of_tokens(reply: Any) -> RunEvent:
     """The same event for a turn whose agent stopped on a reply cut off at its cap."""
     return RunEvent(

@@ -38,6 +38,9 @@ STOP_REASONS: tuple[str, ...] = (
     "max_steps",
     # The agent's last reply stopped at its model's `max_tokens`, so the answer is cut off.
     "max_tokens",
+    # The provider could not serve a model call now -- a rate limit, an overload, a
+    # timeout -- so a later turn on the session may.
+    "model_unavailable",
     AWAITING,
 )
 

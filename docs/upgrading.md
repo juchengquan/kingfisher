@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A model that cannot answer now, after #853
+
+- **A turn can end with `stop_reason: model_unavailable`.** The provider could not serve
+  a model call -- a 429, a 5xx, a timeout, a dropped connection -- which escaped `run`
+  and `stream` as the SDK's own exception before. `completed` is false, the `cut_short`
+  event carries the status and the provider's message, and `kingfisher run` exits 1. A
+  caller switching on `stop_reason` meets a value it has not seen.
+- **A subagent whose model cannot answer no longer ends the turn.** Its `task` call comes
+  back to the parent as a failed tool result, and the parent carries on.
+
 ## The backend kit and its check take the layout, after #852
 
 - **`unrouted_denials(backend, layout)`** takes the `Layout` it checks against, with no

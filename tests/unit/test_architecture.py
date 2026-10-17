@@ -2973,6 +2973,10 @@ DEPLOYMENT_ERRORS = frozenset({
     "LoadError", "MiddlewareError", "ToolError",
 })
 
+#: Caused by the model's provider, and never raised to a caller: a turn ends on it as a
+#: stop, and a subagent's comes back to its parent as a failed `task` result.
+PROVIDER_ERRORS = frozenset({"ModelUnavailableError"})
+
 
 def _error_classes() -> set[str]:
     found = set()
@@ -2988,9 +2992,9 @@ def _error_classes() -> set[str]:
 
 def test_every_error_is_classified_by_who_caused_it():
     """So a new error cannot arrive unclassified and be a 500 by default."""
-    assert _error_classes() == CALLER_FACING_ERRORS | DEPLOYMENT_ERRORS, (
-        "a new error type must be added to CALLER_FACING_ERRORS or "
-        "DEPLOYMENT_ERRORS -- caller-facing ones must also be exported"
+    assert _error_classes() == CALLER_FACING_ERRORS | DEPLOYMENT_ERRORS | PROVIDER_ERRORS, (
+        "a new error type must be added to CALLER_FACING_ERRORS, DEPLOYMENT_ERRORS or "
+        "PROVIDER_ERRORS -- caller-facing ones must also be exported"
     )
 
 

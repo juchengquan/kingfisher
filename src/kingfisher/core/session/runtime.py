@@ -19,6 +19,61 @@ from kingfisher.core.session.transcript import Message, Role, ToolCall
 #: What langgraph raises out of `stream` when a turn uses up `recursion_limit`.
 OutOfSteps = GraphRecursionError
 
+#: A provider declining a request it may serve later: a rate limit or quota, and the
+#: 5xx range, where Anthropic's 529 "overloaded" sits. A 401 is a configuration error,
+#: and the rest of the 4xx range is a request that will fail the same way again.
+TOO_MANY_REQUESTS = 429
+SERVER_ERROR = 500
+
+#: Matched by name through the class's ancestry, so neither SDK -- nor httpx, which both
+#: send through -- is imported here.
+TIMED_OUT = frozenset({"APITimeoutError", "TimeoutException", "ModelTimeoutError"})
+UNREACHED = frozenset(
+    {"APIConnectionError", "NetworkError", "RemoteProtocolError", "ModelConnectionError"}
+)
+
+
+class ModelUnavailableError(Exception):
+    """A model call the provider could not serve now, which ends a turn as a stop."""
+
+    def __init__(self, why: str) -> None:
+        super().__init__(why)
+        self.why = why
+
+
+def unavailable(exc: BaseException) -> str | None:
+    """Why the provider could not answer, where trying again later can work, else `None`.
+
+    The causes are read too: langchain re-raises an SDK's error as one of its own.
+    """
+    seen: set[int] = set()
+    one: BaseException | None = exc
+    while one is not None and id(one) not in seen:
+        seen.add(id(one))
+        if isinstance(one, ModelUnavailableError):
+            return one.why
+        status = getattr(one, "status_code", None)
+        if isinstance(status, int) and (status == TOO_MANY_REQUESTS or status >= SERVER_ERROR):
+            return f"{status}: {_said(one)}"
+        names = {cls.__name__ for cls in type(one).__mro__}
+        # Before the connection check: both SDKs' timeout is a kind of connection error.
+        if names & TIMED_OUT or isinstance(one, TimeoutError):
+            return "the request timed out"
+        if names & UNREACHED or isinstance(one, ConnectionError):
+            return "the connection to the provider failed"
+        one = one.__cause__ or one.__context__
+    return None
+
+
+def _said(exc: BaseException) -> str:
+    """The provider's own words, from the body where it sent one."""
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        inner = body.get("error", body)
+        if isinstance(inner, dict) and isinstance(inner.get("message"), str):
+            return inner["message"][:PREVIEW]
+    return str(getattr(exc, "message", None) or exc)[:PREVIEW]
+
 #: How much of a tool result or message to keep on an event.
 PREVIEW = 300
 

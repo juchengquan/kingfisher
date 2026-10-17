@@ -2425,6 +2425,24 @@ argue for; translating provider failures at the harness boundary is the same cha
 the connection error that reaches the terminal the same way, and belongs with it.
 *(2026-10-14, from an architecture review.)*
 
+**A provider that cannot answer now stops the turn, and a subagent's tells its parent.**
+A 429, a 5xx -- Anthropic's 529 "overloaded" among them -- a timeout or a dropped
+connection escaped `run` as the SDK's own exception, and the command printed two
+tracebacks and exited 1, the code it keeps for a turn stopped at a bound. Measured on
+2026-10-17: a plan's rate limit took 16 of 21 parallel turns down that way. These are
+failures that may pass, so a turn now ends on one as a stop, `model_unavailable`, with
+the provider's words on its `cut_short` event and what it wrote kept, and running again
+on the session carries on. A 401 stays a configuration error, and any other 4xx and
+every bug keep their traceback. Recognised on the model call, by the status code and the
+error's type names through its causes: no SDK is imported, and a tool timing out on a
+request of its own is not taken for a model that cannot answer. A subagent's refused
+call comes back to its parent as a failed `task` result, a compiled subagent's raw error
+included, because the parent may go on without that part and stopping the turn threw
+the rest away. **Not taken: retrying in kingfisher.** The SDKs already retry twice with
+backoff and read the provider's retry-after; a second layer multiplies with theirs, up
+to nine requests for one call against a quota, and no measured failure has yet outlasted
+their window.
+
 ## What a tool returns
 
 **A workspace tool's return type is langchain's rule, and kingfisher adds none.**
