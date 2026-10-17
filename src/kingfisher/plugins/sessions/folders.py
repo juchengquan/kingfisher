@@ -6,7 +6,7 @@ import shutil
 from contextlib import suppress
 from pathlib import Path
 
-from kingfisher.core.layout import DEFAULT_LAYOUT
+from kingfisher.core.layout import Layout
 from kingfisher.core.session.model import UnknownSessionError
 from kingfisher.plugins.sessions.permissions import keep_tmp_private, unlock_and_retry
 
@@ -80,36 +80,29 @@ class LocalSessionDirs:
         return None
 
 
-def ensure_session_layout(
-    session_dir: Path,
-    session_dirs: tuple[str, ...] = DEFAULT_LAYOUT.session_dirs,
-    *,
-    memory: str = DEFAULT_LAYOUT.memory,
-    scratchpad: str = DEFAULT_LAYOUT.scratchpad,
-    saved_results: tuple[str, ...] = DEFAULT_LAYOUT.saved_results,
-) -> Path:
+def ensure_session_layout(session_dir: Path, layout: Layout) -> Path:
     """Every directory a session holds, and its memory scaffolded. Idempotent.
 
-    `memory` and `scratchpad` are also in `session_dirs`, and a renamed layout passes them
-    too: the steps that scaffold and harden them cannot pick them out of the tuple.
+    The layout is the deployment's, with no default: a call that forgot it would lay a
+    renamed deployment's sessions out under the names kingfisher ships.
     """
     session_dir = Path(session_dir).expanduser().resolve()
-    # `saved_results` before the first result: bubblewrap binds them read-only only where
+    # The saved results before the first result: bubblewrap binds them read-only only where
     # they exist when its fence is built, so one made mid-turn would be the shell's to write.
-    for name in (*session_dirs, DEFAULT_LAYOUT.harness, *saved_results):
+    for name in layout.made_dirs:
         (session_dir / name).mkdir(parents=True, exist_ok=True)
 
     # Not a chmod here: `permissions` is this package's one module that changes a mode.
-    keep_tmp_private(session_dir, scratchpad=scratchpad)
+    keep_tmp_private(session_dir, layout)
     # Last, so a session's own memory beats the scaffold.
-    scaffold_memory(session_dir, memory=memory)
+    scaffold_memory(session_dir, layout)
     return session_dir
 
 
-def scaffold_memory(session_dir: Path, *, memory: str = DEFAULT_LAYOUT.memory) -> None:
+def scaffold_memory(session_dir: Path, layout: Layout) -> None:
     """Give `/memory/AGENTS.md` text for an edit to anchor against: the agent saves memory
     with `edit_file`, which replaces existing text."""
-    agents_md = Path(session_dir) / memory / "AGENTS.md"
+    agents_md = Path(session_dir) / layout.memory / "AGENTS.md"
     if not agents_md.exists() or not agents_md.read_text(encoding="utf-8").strip():
         agents_md.write_text(AGENTS_SCAFFOLD, encoding="utf-8")
 

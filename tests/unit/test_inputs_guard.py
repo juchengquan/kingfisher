@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.core.layout import Layout
+from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.core.session.files import InputsError, place_inputs
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions, backend_at
@@ -109,6 +109,16 @@ def test_a_renamed_scratchpad_is_as_private_as_the_default_one(cfg):
         assert mode == 0o700, f"{layout.scratchpad} is {oct(mode)}"
 
 
+def test_a_renamed_inputs_folder_is_the_one_made_read_only(cfg):
+    """`open` hardening the shipped name would leave a renamed deployment's caller files
+    writable, with nothing to say so."""
+    made = replace(cfg, layout=MOVED)
+
+    LocalSessions().open(made, "s-moved")
+
+    assert not os.access(made.workspace / "sessions" / "s-moved" / MOVED.inputs, os.W_OK)
+
+
 def test_inputs_become_read_only_to_the_os(workspace):
     """The mode bits, which is all this is: a write from a process holding no fence is
     refused by the kernel.
@@ -119,10 +129,10 @@ def test_inputs_become_read_only_to_the_os(workspace):
     bits itself; what keeps `execute` out is a fence rule per mechanism, and
     `test_the_shell_cannot_lift_the_bits_on_the_callers_inputs` is what drives that.
     """
-    with writable_inputs(workspace) as inputs:
+    with writable_inputs(workspace, DEFAULT_LAYOUT) as inputs:
         (inputs / "input.csv").write_text("a,b\n1,2\n")
 
-    protect_inputs(workspace)
+    protect_inputs(workspace, DEFAULT_LAYOUT)
 
     with pytest.raises(PermissionError):
         (workspace / "inputs" / "input.csv").write_text("clobbered")
@@ -130,15 +140,15 @@ def test_inputs_become_read_only_to_the_os(workspace):
 
 def test_directory_write_bit_is_dropped_so_files_cannot_be_deleted(workspace):
     """Deletion is governed by the directory's write bit, not the file's."""
-    with writable_inputs(workspace) as inputs:
+    with writable_inputs(workspace, DEFAULT_LAYOUT) as inputs:
         (inputs / "input.csv").write_text("x")
-    protect_inputs(workspace)
+    protect_inputs(workspace, DEFAULT_LAYOUT)
 
     assert not os.access(workspace / "inputs", os.W_OK)
 
 
 def test_writable_inputs_restores_protection_afterwards(workspace):
-    with writable_inputs(workspace) as inputs:
+    with writable_inputs(workspace, DEFAULT_LAYOUT) as inputs:
         (inputs / "new.csv").write_text("y")
         assert os.access(inputs, os.W_OK)
 
@@ -146,8 +156,8 @@ def test_writable_inputs_restores_protection_afterwards(workspace):
 
 
 def test_protect_inputs_is_idempotent(workspace):
-    protect_inputs(workspace)
-    protect_inputs(workspace)
+    protect_inputs(workspace, DEFAULT_LAYOUT)
+    protect_inputs(workspace, DEFAULT_LAYOUT)
     assert not os.access(workspace / "inputs", os.W_OK)
 
 
@@ -167,12 +177,12 @@ def test_a_file_we_cannot_chmod_is_reported_not_raised(workspace, monkeypatch):
     """One file owned by another user used to abort the run -- and since this runs
     before anything else, every later run of that session too.
     """
-    with writable_inputs(workspace) as inputs:
+    with writable_inputs(workspace, DEFAULT_LAYOUT) as inputs:
         (inputs / "theirs.pdf").write_text("x")
         (inputs / "ours.csv").write_text("y")
 
     _refuse("theirs.pdf", monkeypatch)
-    failures = protect_inputs(workspace)
+    failures = protect_inputs(workspace, DEFAULT_LAYOUT)
 
     assert len(failures) == 1
     assert "theirs.pdf" in failures[0]
@@ -181,12 +191,12 @@ def test_a_file_we_cannot_chmod_is_reported_not_raised(workspace, monkeypatch):
 
 def test_the_rest_of_the_directory_is_still_hardened(workspace, monkeypatch):
     """Degrading is only acceptable if it degrades to *almost* protected."""
-    with writable_inputs(workspace) as inputs:
+    with writable_inputs(workspace, DEFAULT_LAYOUT) as inputs:
         (inputs / "theirs.pdf").write_text("x")
         (inputs / "ours.csv").write_text("y")
 
     _refuse("theirs.pdf", monkeypatch)
-    protect_inputs(workspace)
+    protect_inputs(workspace, DEFAULT_LAYOUT)
     monkeypatch.undo()
 
     assert not os.access(workspace / "inputs", os.W_OK)
@@ -198,11 +208,11 @@ def test_an_input_can_still_be_added_beside_a_file_we_do_not_own(workspace, monk
     """Refusing a new input because an unrelated old one belongs to someone else would
     be its own bug.
     """
-    with writable_inputs(workspace) as inputs:
+    with writable_inputs(workspace, DEFAULT_LAYOUT) as inputs:
         (inputs / "theirs.pdf").write_text("x")
 
     _refuse("theirs.pdf", monkeypatch)
-    with writable_inputs(workspace) as inputs:
+    with writable_inputs(workspace, DEFAULT_LAYOUT) as inputs:
         (inputs / "fresh.csv").write_text("a,b\n")
 
     monkeypatch.undo()
@@ -361,10 +371,10 @@ def test_removal_reaches_through_nested_hardened_directories(session_dir):
     """`protect_inputs` hardens every directory under `inputs/`, not just the top, so
     unlocking one level would strand anything deeper.
     """
-    with writable_inputs(session_dir) as inputs:
+    with writable_inputs(session_dir, DEFAULT_LAYOUT) as inputs:
         (inputs / "a" / "b").mkdir(parents=True)
         (inputs / "a" / "b" / "deep.csv").write_text("x")
-    protect_inputs(session_dir)
+    protect_inputs(session_dir, DEFAULT_LAYOUT)
 
     assert LocalSessionDirs().remove_tree(session_dir) is None
     assert not session_dir.exists()
@@ -372,9 +382,9 @@ def test_removal_reaches_through_nested_hardened_directories(session_dir):
 
 def test_a_directory_we_cannot_unlock_is_reported_not_raised(session_dir, monkeypatch):
     """The same degradation `protect_inputs` chose."""
-    with writable_inputs(session_dir) as inputs:
+    with writable_inputs(session_dir, DEFAULT_LAYOUT) as inputs:
         (inputs / "theirs.pdf").write_text("x")
-    protect_inputs(session_dir)
+    protect_inputs(session_dir, DEFAULT_LAYOUT)
     _refuse("inputs", monkeypatch)
 
     failure = LocalSessionDirs().remove_tree(session_dir)
@@ -388,9 +398,9 @@ def test_an_unrelated_failure_leaves_inputs_hardened(session_dir, monkeypatch):
     """Unlocking is for the one error it can fix."""
     import errno
 
-    with writable_inputs(session_dir) as inputs:
+    with writable_inputs(session_dir, DEFAULT_LAYOUT) as inputs:
         (inputs / "kept.csv").write_text("x")
-    protect_inputs(session_dir)
+    protect_inputs(session_dir, DEFAULT_LAYOUT)
 
     real = os.unlink
 

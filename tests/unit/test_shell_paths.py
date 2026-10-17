@@ -22,7 +22,7 @@ from kingfisher.core.agent.middlewares.shell_paths import (
     missed,
 )
 from kingfisher.core.agent.prompting import execute_line
-from kingfisher.core.layout import Layout
+from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.plugins import LocalSessions, ShellPrompt
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from kingfisher.plugins.sessions.shell import kingfishers_shell
@@ -246,6 +246,7 @@ class Sandboxed(LocalSessions):
             mine.routes,
             session_dir=mine._session_dir,
             workspace=mine.workspace,
+            layout=DEFAULT_LAYOUT,
         )
 
 

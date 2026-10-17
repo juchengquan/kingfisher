@@ -194,10 +194,9 @@ def fence_for(  # noqa: PLR0913 -- one argument per thing a fence is built from
         return BubblewrapRunner(
             argv_for(
                 session_dir,
+                cfg.layout,
                 readable=readable,
                 writable=writable,
-                inputs=cfg.layout.inputs,
-                saved_results=cfg.layout.saved_results,
             ),
             env=env,
         )
@@ -212,10 +211,9 @@ def fence_for(  # noqa: PLR0913 -- one argument per thing a fence is built from
     return LandlockRunner(
         policy_for(
             session_dir,
+            cfg.layout,
             readable=readable,
             writable=writable,
-            session_dirs=cfg.layout.session_dirs,
-            inputs=cfg.layout.inputs,
         ),
         cwd=session_dir,
         env=env,

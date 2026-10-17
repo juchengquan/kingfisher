@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import sys
 import types
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from kingfisher.core.interfaces import CommandResult
-from kingfisher.core.layout import HARNESS, OUTPUTS
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, OUTPUTS, Layout
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.sandbox import confinement
@@ -55,7 +55,7 @@ def sandlock(monkeypatch):
     return module
 
 
-def a_policy(tmp_path, **kwargs: Any) -> StubSandbox:
+def a_policy(tmp_path, layout: Layout = DEFAULT_LAYOUT, **kwargs: Any) -> StubSandbox:
     """A policy for a session that exists, laid out as `LocalSessions` requires.
 
     Through `ensure_session_layout` rather than a bare `mkdir`: the writable rules
@@ -63,8 +63,8 @@ def a_policy(tmp_path, **kwargs: Any) -> StubSandbox:
     empty list and every assertion below passes by saying nothing.
     """
     session = tmp_path / "sessions" / "s1"
-    ensure_session_layout(session)
-    return policy_for(session, **kwargs)
+    ensure_session_layout(session, layout)
+    return policy_for(session, layout, **kwargs)
 
 
 # -- what the policy says ---------------------------------------------------
@@ -77,6 +77,17 @@ def test_the_session_is_writable_and_nothing_above_it_is(sandlock, tmp_path):
     assert str(tmp_path / "sessions" / "s1" / OUTPUTS) in policy.fs_writable
     assert str(tmp_path / "sessions") not in policy.fs_writable
     assert str(tmp_path) not in policy.fs_writable
+
+
+def test_a_renamed_layout_is_fenced_by_its_own_names(sandlock, tmp_path):
+    """The one path no test ran with a renamed layout, where a grant spelled from the
+    defaults left every folder of a renamed session unwritable to the shell."""
+    moved = Layout(inputs="in", outputs="out", memory="mem", scratchpad="scratch")
+    session = tmp_path / "sessions" / "s1"
+
+    policy = a_policy(tmp_path, layout=moved)
+
+    assert set(policy.fs_writable) == {str(session / name) for name in ("out", "mem", "scratch")}
 
 
 def test_no_writable_rule_has_the_harness_underneath_it(sandlock, tmp_path):
@@ -180,7 +191,7 @@ def test_a_fence_that_could_not_be_built_says_so(sandlock, tmp_path, monkeypatch
     session = tmp_path / "sessions" / "s1"
     session.mkdir(parents=True)
 
-    result = LandlockRunner(policy_for(session), cwd=session).run("echo hi")
+    result = LandlockRunner(policy_for(session, DEFAULT_LAYOUT), cwd=session).run("echo hi")
 
     # Not the reason, because `subprocess` does not give one: it discards the
     # child's exception and reports "Exception occurred in preexec_fn." So the
@@ -200,7 +211,7 @@ def a_runner(sandlock, tmp_path, **kwargs):
     session = tmp_path / "sessions" / "s1"
     session.mkdir(parents=True, exist_ok=True)
     kwargs.setdefault("env", {"PATH": "/usr/bin:/bin:/usr/local/bin"})
-    return LandlockRunner(policy_for(session), cwd=session, **kwargs)
+    return LandlockRunner(policy_for(session, DEFAULT_LAYOUT), cwd=session, **kwargs)
 
 
 def test_a_command_runs_and_its_output_comes_back(sandlock, tmp_path):
@@ -368,7 +379,7 @@ def test_the_fence_follows_the_confinement_rather_than_deciding_again(sandlock, 
     from kingfisher.plugins.sessions.shell import fence_for
 
     session = tmp_path / "sessions" / "s1"
-    ensure_session_layout(session)
+    ensure_session_layout(session, DEFAULT_LAYOUT)
     unfenced = Confinement(wrap=_unwrapped, warning="nothing here")
     assert fence_for(cfg, session, unfenced, (), {}) is None
 
@@ -379,24 +390,19 @@ def test_the_fence_follows_the_confinement_rather_than_deciding_again(sandlock, 
 
 
 def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
-    """The two mechanisms must fence the same shell the same way."""
+    """The two mechanisms must fence the same shell the same way, by this deployment's
+    names: a renamed layout, because any two shipped ones compare equal."""
     from kingfisher.plugins.sessions.sandbox import bubblewrap, fence
     from kingfisher.plugins.sessions.sandbox.confinement import _unwrapped
     from kingfisher.plugins.sessions.shell import fence_for
 
-    seen: dict[str, tuple[Path, list[Path], list[Path], str | None]] = {}
-    saved: dict[str, object] = {}
+    seen: dict[str, tuple[Path, list[Path], list[Path], Layout]] = {}
 
     def recorder(mechanism, result):
-        # `inputs` reaches both fences and must be identical, so it is compared. The
-        # rest is one fence's alone: `session_dirs` is Landlock's -- bubblewrap binds
-        # the session whole and overlays the inputs leaf -- and `saved_results` is
-        # bubblewrap's, since Landlock cannot carve a folder out of the scratchpad it
-        # grants. Accepted here and left out of the comparison; the second is checked
-        # on its own below.
-        def fake(session_dir, *, readable=(), writable=(), inputs=None, **alone):
-            seen[mechanism] = (session_dir, list(readable), list(writable), inputs)
-            saved[mechanism] = alone.get("saved_results")
+        # The layout reaches both fences whole and is compared with the rest; each reads
+        # its own part of it.
+        def fake(session_dir, layout, *, readable=(), writable=()):
+            seen[mechanism] = (session_dir, list(readable), list(writable), layout)
             return result
 
         return fake
@@ -404,6 +410,7 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
     monkeypatch.setattr(bubblewrap, "argv_for", recorder("bubblewrap", ["bwrap"]))
     monkeypatch.setattr(fence, "policy_for", recorder("Landlock", object()))
 
+    cfg = replace(cfg, layout=Layout(inputs="in", scratchpad="work"))
     session = tmp_path / "sessions" / "s1"
     session.mkdir(parents=True)
     skills = tmp_path / "skills"
@@ -420,15 +427,15 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
         f"differently depending on the host: {seen}"
     )
     # And that the paths are the ones meant, so agreeing on nothing would fail.
-    _, readable, writable, _inputs = seen["Landlock"]
+    _, readable, writable, layout = seen["Landlock"]
     assert skills in readable, "the shared catalogue is what a skill's scripts are read from"
     assert writable == [], (
         "$TMPDIR is inside the session both fences already grant, so naming it again "
         "would grant a subpath of what is granted"
     )
-    assert saved["bubblewrap"] == cfg.layout.saved_results, (
-        "bubblewrap was not handed this layout's saved results, so the shell may write "
-        "the files a ledger row names"
+    assert seen["bubblewrap"][3] is layout is cfg.layout, (
+        "the fences were not handed this deployment's layout, so a renamed folder is "
+        "fenced by the name kingfisher ships"
     )
 
 
@@ -441,7 +448,7 @@ def test_every_directory_on_the_agent_s_path_is_reachable(cfg, tmp_path, monkeyp
     seen: dict[str, tuple[list[Path], list[Path]]] = {}
 
     def recorder(mechanism, result):
-        def fake(session_dir, *, readable=(), writable=(), inputs=None, session_dirs=None):
+        def fake(session_dir, layout, *, readable=(), writable=()):
             seen[mechanism] = ([Path(p) for p in readable], [Path(p) for p in writable])
             return result
 

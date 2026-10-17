@@ -21,7 +21,7 @@ def session(tmp_path):
     assertion in this file, and the line that makes it never runs. Measured: with
     `mkdir` alone the whole suite stayed green with that bind deleted.
     """
-    return ensure_session_layout(tmp_path / "sessions" / "s1")
+    return ensure_session_layout(tmp_path / "sessions" / "s1", DEFAULT_LAYOUT)
 
 
 def pairs(argv: list[str], flag: str) -> set[tuple[str, str]]:
@@ -55,7 +55,7 @@ def test_the_session_is_the_only_thing_written_to(session):
     `--bind / /` handed over the entire host: a mutation adding it was noticed by
     nothing in the suite, because the host root is neither of the two paths named.
     """
-    argv = argv_for(session)
+    argv = argv_for(session, DEFAULT_LAYOUT)
 
     assert pairs(argv, "--bind") == {(str(session), str(session))}
 
@@ -63,7 +63,7 @@ def test_the_session_is_the_only_thing_written_to(session):
 def test_another_session_is_not_bound_at_all(session):
     """Not denied -- absent."""
     sibling = str(session.parent / "s2")
-    argv = argv_for(session)
+    argv = argv_for(session, DEFAULT_LAYOUT)
 
     assert not any(sibling in word for word in argv)
 
@@ -76,7 +76,7 @@ def test_the_harness_is_read_only_and_lands_over_the_session(session):
     it above the session bind -- which the comment beside it says "would cover this
     again" -- each left the whole suite green.
     """
-    argv = argv_for(session)
+    argv = argv_for(session, DEFAULT_LAYOUT)
     guarded = [str(session / p) for p in (HARNESS, INPUTS, *DEFAULT_LAYOUT.saved_results)]
 
     # Every folder the shell may read and not write, as an exact set: one of them
@@ -93,15 +93,9 @@ def test_a_renamed_layout_binds_its_own_saved_results(tmp_path):
     bind whose folder is not there.
     """
     moved = Layout(scratchpad="work", tool_results="kept")
-    session = ensure_session_layout(
-        tmp_path / "sessions" / "s1",
-        moved.session_dirs,
-        memory=moved.memory,
-        scratchpad=moved.scratchpad,
-        saved_results=moved.saved_results,
-    )
+    session = ensure_session_layout(tmp_path / "sessions" / "s1", moved)
 
-    argv = argv_for(session, saved_results=moved.saved_results)
+    argv = argv_for(session, moved)
 
     bound = {source for source, _ in chosen(argv)}
     assert {str(session / "work" / "kept"), str(session / "work" / "large_tool_results")} <= bound
@@ -127,7 +121,7 @@ def test_the_catalogue_is_bound_read_only(session, tmp_path):
     """
     catalogue = tmp_path / "skills"
     catalogue.mkdir()
-    argv = argv_for(session, readable=[catalogue])
+    argv = argv_for(session, DEFAULT_LAYOUT, readable=[catalogue])
 
     assert (str(catalogue), str(catalogue)) in pairs(argv, "--ro-bind")
     assert not any(src == str(catalogue) for src, _ in pairs(argv, "--bind"))
@@ -135,14 +129,14 @@ def test_the_catalogue_is_bound_read_only(session, tmp_path):
 
 def test_the_network_is_closed_and_is_not_a_separate_choice(session):
     """`--unshare-all` includes the network namespace."""
-    assert "--unshare-all" in argv_for(session)
+    assert "--unshare-all" in argv_for(session, DEFAULT_LAYOUT)
 
 
 def test_proc_is_not_bound(session):
     """Measured with a token generated at runtime: through a bound `/proc` a sandboxed
     shell reads *other processes' command lines*.
     """
-    argv = argv_for(session)
+    argv = argv_for(session, DEFAULT_LAYOUT)
 
     assert "/proc" not in SYSTEM_PATHS
     assert not any(word == "/proc" for word in argv), "no bind, and no --proc"
@@ -150,7 +144,7 @@ def test_proc_is_not_bound(session):
 
 def test_dev_is_built_rather_than_bound(session):
     """`--dev` makes a fresh minimal one."""
-    argv = argv_for(session)
+    argv = argv_for(session, DEFAULT_LAYOUT)
 
     assert "--dev" in argv
     assert not any(src == "/dev" for src, _ in pairs(argv, "--ro-bind"))
@@ -161,7 +155,7 @@ def test_a_path_that_is_not_there_is_dropped(session, tmp_path):
     Debian -- the same finding that stopped the Landlock policy building, arriving
     through a different mechanism.
     """
-    argv = argv_for(session, readable=[tmp_path / "never-made"])
+    argv = argv_for(session, DEFAULT_LAYOUT, readable=[tmp_path / "never-made"])
 
     assert not any("never-made" in word for word in argv)
 
@@ -170,7 +164,7 @@ def test_the_command_starts_in_the_session(session):
     """`--chdir` rather than `subprocess`'s `cwd`, because the working directory has to
     be a path that exists *inside* the sandbox.
     """
-    argv = argv_for(session)
+    argv = argv_for(session, DEFAULT_LAYOUT)
 
     assert argv[argv.index("--chdir") + 1] == str(session)
 
@@ -221,12 +215,12 @@ def test_the_environment_is_given_rather_than_inherited(session, monkeypatch):
     import kingfisher.plugins.sessions.sandbox.linux as module
 
     monkeypatch.setattr(module.subprocess, "run", fake_run)
-    BubblewrapRunner(argv_for(session), env={"PATH": "/usr/bin"}).run("env")
+    BubblewrapRunner(argv_for(session, DEFAULT_LAYOUT), env={"PATH": "/usr/bin"}).run("env")
     # The empty case too, and it is the one that matters: `dict(env or ...)` returns
     # what it was given whenever that is truthy, so a runner built with no `env` is
     # the only call that can fall back to this process's. Written the other way
     # first, and a mutation inheriting `os.environ` passed it.
-    BubblewrapRunner(argv_for(session)).run("env")
+    BubblewrapRunner(argv_for(session, DEFAULT_LAYOUT)).run("env")
 
     assert handed == [{"PATH": "/usr/bin"}, {}]
 

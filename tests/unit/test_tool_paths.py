@@ -14,6 +14,7 @@ from kingfisher.core.agent.host_paths import HOST_ROOTS
 from kingfisher.core.agent.middlewares.workspace_tools import WorkspaceToolPaths
 from kingfisher.core.agent.session_paths import NOT_FOR_TOOLS
 from kingfisher.core.agent.tool_guards import guarded_tools
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins import backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import paths_in
@@ -32,7 +33,7 @@ def a_call(name: str = "line_count", **args: Any) -> Call:
 
 @pytest.fixture
 def session(cfg):
-    return ensure_session_layout(cfg.workspace / "sessions" / "mine")
+    return ensure_session_layout(cfg.workspace / "sessions" / "mine", DEFAULT_LAYOUT)
 
 
 @pytest.fixture

@@ -38,13 +38,7 @@ MOVED = Layout(
 
 def _laid_out(cfg, layout: Layout, session_id: str = "m") -> Path:
     """One session under `layout`, made the way `backend_at` requires it."""
-    return ensure_session_layout(
-        cfg.workspace / "sessions" / session_id,
-        layout.session_dirs,
-        memory=layout.memory,
-        scratchpad=layout.scratchpad,
-        saved_results=layout.saved_results,
-    )
+    return ensure_session_layout(cfg.workspace / "sessions" / session_id, layout)
 
 
 # -- the default reproduces the module -----------------------------------------

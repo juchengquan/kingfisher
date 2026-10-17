@@ -13,7 +13,7 @@ from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.interfaces import CommandResult
-from kingfisher.core.layout import HARNESS, PINNED_AGENT
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT
 from kingfisher.core.reporting import opening_events
 from kingfisher.core.request import Request
 from kingfisher.core.service import refused_credentials
@@ -801,7 +801,7 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     an_agent(cfg, "only")
     an_agent(cfg, "other")
     # A session whose files are not under the workspace at all.
-    elsewhere = ensure_session_layout(tmp_path / "for-one-turn" / "a-session")
+    elsewhere = ensure_session_layout(tmp_path / "for-one-turn" / "a-session", DEFAULT_LAYOUT)
     service = Kingfisher(cfg, sessions=LocalSessions())
 
     drive(service._agent_for(Request("go", agent="only"), harness_in(cfg, elsewhere)))

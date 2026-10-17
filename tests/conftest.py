@@ -15,6 +15,7 @@ from langchain_core.language_models.fake_chat_models import FakeMessagesListChat
 
 from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.config import Config, Endpoint, Landing, ModelProfile, Models, WireFormat
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.session.steps import drive
 from kingfisher.core.workspace import ensure_definitions, ensure_layout
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -98,7 +99,7 @@ def definitions(tmp_path):
 @pytest.fixture
 def session_dir(workspace):
     """One session's directory — the backend root."""
-    return ensure_session_layout(workspace / "sessions" / "test-session")
+    return ensure_session_layout(workspace / "sessions" / "test-session", DEFAULT_LAYOUT)
 
 
 #: The endpoint every fixture builds against. Port 9 is discard: a test that
@@ -236,13 +237,7 @@ def start(cfg, session_id: str) -> str:
     """
     from kingfisher.plugins.sessions.folders import ensure_session_layout
 
-    ensure_session_layout(
-        cfg.workspace / "sessions" / session_id,
-        cfg.layout.session_dirs,
-        memory=cfg.layout.memory,
-        scratchpad=cfg.layout.scratchpad,
-        saved_results=cfg.layout.saved_results,
-    )
+    ensure_session_layout(cfg.workspace / "sessions" / session_id, cfg.layout)
     return session_id
 
 
@@ -311,7 +306,7 @@ def _backend_in(cfg, session_dir: Path):
     from kingfisher.plugins.sessions.backend import backend_at
     from kingfisher.plugins.sessions.folders import ensure_session_layout
 
-    return backend_at(cfg, ensure_session_layout(Path(session_dir)))
+    return backend_at(cfg, ensure_session_layout(Path(session_dir), DEFAULT_LAYOUT))
 
 
 def harness_of(cfg, session_id: str):

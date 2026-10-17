@@ -47,7 +47,7 @@ from kingfisher.core.access.capabilities import ALL, CapabilityError, all_but
 from kingfisher.core.config import Config
 from kingfisher.core.definitions import seeding
 from kingfisher.core.definitions.seeding import SEED_HINT
-from kingfisher.core.layout import OUTPUTS
+from kingfisher.core.layout import DEFAULT_LAYOUT, OUTPUTS
 from kingfisher.core.session.runlog import usage_of
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -90,7 +90,7 @@ def _usage_summary(events: list[Any]) -> str:
 
 def prepare_smoke(cfg: Config, workspace: Path, session_id: str) -> list[str]:
     """Put the smoke's fixtures where the agent will look for them."""
-    directory = ensure_session_layout(cfg.sessions_root / session_id)
+    directory = ensure_session_layout(cfg.sessions_root / session_id, DEFAULT_LAYOUT)
 
     seeded = []
     if seed_sample_data(directory):

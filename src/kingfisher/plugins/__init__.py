@@ -24,8 +24,8 @@ _EXPORTS = {
     "DEFAULT_LAYOUT": "kingfisher.core.layout",
     "HostPathError": "kingfisher.core.agent.host_paths",
     "reject_host_path": "kingfisher.core.agent.host_paths",
-    "not_executing": "kingfisher.core.agent.usable_backend",
-    "uncovered": "kingfisher.core.agent.usable_backend",
+    "why_no_shell": "kingfisher.core.agent.usable_backend",
+    "unrouted_denials": "kingfisher.core.agent.usable_backend",
     "host_path": "kingfisher.core.agent.permitted_backend",
     "LocalSessions": "kingfisher.plugins.sessions.backend",
     "backend_at": "kingfisher.plugins.sessions.backend",
@@ -56,9 +56,9 @@ __all__ = [
     "backend_at",
     "host_path",
     "list_skills",
-    "not_executing",
     "reject_host_path",
-    "uncovered",
+    "unrouted_denials",
+    "why_no_shell",
 ]
 
 if TYPE_CHECKING:
@@ -68,8 +68,8 @@ if TYPE_CHECKING:
     from kingfisher.core.agent.permitted_backend import host_path as host_path
     from kingfisher.core.agent.prompting import InstructionsFile as InstructionsFile
     from kingfisher.core.agent.prompting import ShellPrompt as ShellPrompt
-    from kingfisher.core.agent.usable_backend import not_executing as not_executing
-    from kingfisher.core.agent.usable_backend import uncovered as uncovered
+    from kingfisher.core.agent.usable_backend import unrouted_denials as unrouted_denials
+    from kingfisher.core.agent.usable_backend import why_no_shell as why_no_shell
     from kingfisher.core.config import WireFormat as WireFormat
     from kingfisher.core.definitions.catalogue import Definitions as Definitions
     from kingfisher.core.definitions.skills.registry import list_skills as list_skills

@@ -207,13 +207,7 @@ def test_a_renamed_layout_records_under_its_own_scratchpad(ledgered):
             inputs="in", outputs="out", memory="mem", scratchpad="scratch", tool_results="results"
         ),
     )
-    session = ensure_session_layout(
-        moved.workspace / "sessions" / "s2",
-        moved.layout.session_dirs,
-        memory=moved.layout.memory,
-        scratchpad=moved.layout.scratchpad,
-        saved_results=moved.layout.saved_results,
-    )
+    session = ensure_session_layout(moved.workspace / "sessions" / "s2", moved.layout)
     Scripted.script.extend(
         [_calls(("web_search", {"query": "EV price war"}, "c1")), AIMessage(content="done")]
     )

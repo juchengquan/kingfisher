@@ -11,21 +11,69 @@ from pathlib import Path
 
 import pytest
 from deepagents.backends import FilesystemBackend
+from deepagents.backends.protocol import FileDownloadResponse, FileUploadResponse
 
 from kingfisher import Kingfisher
 from kingfisher.cli.__main__ import main
 from kingfisher.core.definitions.catalogue import bundled_skills_route
-from kingfisher.core.layout import SKILLS_ROUTE
+from kingfisher.core.layout import DEFAULT_LAYOUT, SKILLS_ROUTE, Layout
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from tests.checks.sessions import CONTRACT_SESSIONS, SESSIONS_CHECKS
 from tests.unit.test_run import StubAgent
 from tests.unit.test_session_files import Elsewhere
 
+#: A layout renaming every folder a deployment may, beside the shipped one.
+RENAMED = Layout(inputs="in", outputs="out", memory="mem", scratchpad="scratch")
 
-def test_the_default_keeps_the_contract(cfg):
+
+@pytest.mark.parametrize("layout", [DEFAULT_LAYOUT, RENAMED], ids=["shipped", "renamed"])
+def test_the_default_keeps_the_contract(cfg, layout):
+    """Under a renamed layout too, since a kit spelling the shipped folder names fails a
+    deployment that renamed them."""
+    made = replace(cfg, layout=layout)
     for check in SESSIONS_CHECKS:
-        check(lambda: (cfg, LocalSessions()))
+        check(lambda: (made, LocalSessions()))
+
+
+class OnlyItsOwnFolders(LocalSessions):
+    """A `Sessions` whose backend serves only the folders the layout names, as a stricter
+    deployment's may, where kingfisher's own serves any path in a session."""
+
+    def open(self, cfg, session_id, /, *, catalogue=None):
+        backend = super().open(cfg, session_id, catalogue=catalogue)
+        layout = cfg.layout
+        served = (layout.inputs_route, layout.outputs_route, layout.memory_route,
+                  layout.scratch_route)
+        upload, download = backend.upload_files, backend.download_files
+
+        def upload_files(files):
+            return [
+                upload([(path, body)])[0] if path.startswith(served)
+                else FileUploadResponse(path=path, error="permission_denied")
+                for path, body in files
+            ]
+
+        def download_files(paths):
+            return [
+                download([path])[0] if path.startswith(served)
+                else FileDownloadResponse(path=path, error="permission_denied")
+                for path in paths
+            ]
+
+        backend.upload_files = upload_files
+        backend.download_files = download_files
+        return backend
+
+
+def test_the_kit_writes_where_the_deployment_keeps_its_outputs(cfg):
+    """A kit spelling the shipped `/outputs` fails a deployment that renamed it, which
+    kingfisher's own sessions, serving any path, never show."""
+    made = replace(cfg, layout=RENAMED)
+    writing = ("a_session_is_there_on_the_next_turn", "aopen_reaches_the_session_open_does")
+
+    for check in (c for c in SESSIONS_CHECKS if c.__name__ in writing):
+        check(lambda: (made, OnlyItsOwnFolders()))
 
 
 def test_the_contract_is_not_quietly_empty():
@@ -343,6 +391,7 @@ def _rerouted(edit):
                 routes=edit(dict(built.routes)),
                 session_dir=built._session_dir,
                 workspace=built.workspace,
+                layout=DEFAULT_LAYOUT,
             )
 
     return Rerouted()

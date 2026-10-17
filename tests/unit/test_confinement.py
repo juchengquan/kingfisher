@@ -72,7 +72,7 @@ def _places(cfg) -> _Places:
 def test_off_is_warned_about_on_every_start(cfg, tmp_path):
     """An exposure nobody is reminded of is one nobody fixes."""
     chosen = confinement.resolve(
-        confinement.OFF, **_places(cfg)
+        confinement.OFF, **_places(cfg), layout=DEFAULT_LAYOUT
     )
 
     assert not chosen.confined
@@ -83,7 +83,7 @@ def test_off_is_warned_about_on_every_start(cfg, tmp_path):
 def test_external_is_silent_because_the_runtime_already_did_it(cfg, tmp_path):
     """A container that mounts only the workspace has provided the boundary."""
     chosen = confinement.resolve(
-        confinement.EXTERNAL, **_places(cfg)
+        confinement.EXTERNAL, **_places(cfg), layout=DEFAULT_LAYOUT
     )
 
     assert chosen.warning == ""
@@ -94,14 +94,14 @@ def test_an_unknown_mode_is_refused_rather_than_treated_as_off(cfg, tmp_path):
     """A typo in a deployment's env must not silently unconfine it."""
     with pytest.raises(ValueError, match="unknown shell sandbox mode"):
         confinement.resolve(
-            "sandbox", **_places(cfg)
+            "sandbox", **_places(cfg), layout=DEFAULT_LAYOUT
         )
 
 
 @macos
 def test_auto_confines_and_says_nothing(cfg, tmp_path):
     chosen = confinement.resolve(
-        confinement.AUTO, **_places(cfg)
+        confinement.AUTO, **_places(cfg), layout=DEFAULT_LAYOUT
     )
 
     assert chosen.confined
@@ -123,10 +123,10 @@ def test_the_profile_has_one_place_it_can_be(cfg):
     this checks is that there is one answer to where it lives.
     """
     first = confinement.resolve(
-        confinement.AUTO, **_places(cfg)
+        confinement.AUTO, **_places(cfg), layout=DEFAULT_LAYOUT
     )
     again = confinement.resolve(
-        confinement.AUTO, **_places(cfg)
+        confinement.AUTO, **_places(cfg), layout=DEFAULT_LAYOUT
     )
 
     assert first.profile == again.profile
@@ -143,10 +143,10 @@ def test_processes_configured_apart_keep_their_profiles_apart(cfg):
     wrote last, under rules its own configuration never asked for.
     """
     one = confinement.resolve(
-        confinement.AUTO, **_places(cfg), extra=("/opt/one",)
+        confinement.AUTO, **_places(cfg), extra=("/opt/one",), layout=DEFAULT_LAYOUT
     )
     other = confinement.resolve(
-        confinement.AUTO, **_places(cfg), extra=("/opt/other",)
+        confinement.AUTO, **_places(cfg), extra=("/opt/other",), layout=DEFAULT_LAYOUT
     )
 
     assert one.profile is not None
@@ -607,7 +607,7 @@ def workspace_in_the_home():
 @macos
 def test_the_shell_can_walk_into_a_workspace_that_lives_in_the_home(cfg, workspace_in_the_home):
     """Denying the home as a subpath denies the way *in* to the workspace too."""
-    session = ensure_session_layout(workspace_in_the_home / "sessions" / "s")
+    session = ensure_session_layout(workspace_in_the_home / "sessions" / "s", DEFAULT_LAYOUT)
     (session / "scratchpad" / "t001").mkdir(parents=True)
     backend = backend_at(replace(cfg, workspace=workspace_in_the_home), session)
 
@@ -622,7 +622,7 @@ def test_walking_in_does_not_open_the_home_it_walks_through(cfg, workspace_in_th
     """The way in is metadata only: the directories on it can be `stat`ed and nothing
     more.
     """
-    session = ensure_session_layout(workspace_in_the_home / "sessions" / "s")
+    session = ensure_session_layout(workspace_in_the_home / "sessions" / "s", DEFAULT_LAYOUT)
     secret = Path.home() / ".kingfisher-traversal-probe"
     secret.write_text("token", encoding="utf-8")
     backend = backend_at(replace(cfg, workspace=workspace_in_the_home), session)
@@ -640,7 +640,7 @@ def test_walking_in_does_not_open_the_home_it_walks_through(cfg, workspace_in_th
 def test_external_is_confined_elsewhere_rather_than_unconfined(cfg, tmp_path):
     """The distinction `EXTERNAL` exists for, made readable downstream."""
     chosen = confinement.resolve(
-        confinement.EXTERNAL, **_places(cfg)
+        confinement.EXTERNAL, **_places(cfg), layout=DEFAULT_LAYOUT
     )
 
     assert chosen.elsewhere
@@ -652,7 +652,7 @@ def test_external_is_confined_elsewhere_rather_than_unconfined(cfg, tmp_path):
 def test_nothing_configured_is_not_confined_elsewhere(cfg, tmp_path):
     """The other side, or the flag would say yes to everything."""
     chosen = confinement.resolve(
-        confinement.OFF, **_places(cfg)
+        confinement.OFF, **_places(cfg), layout=DEFAULT_LAYOUT
     )
 
     assert not chosen.elsewhere
@@ -1056,6 +1056,7 @@ def test_every_pattern_in_the_profile_still_means_the_path_it_is_about(name, tmp
         readable=(),
         writable=(workspace,),
         itself=workspace / ".kingfisher" / "shell.sb",
+        layout=DEFAULT_LAYOUT,
     )
 
     read = [_as_sbpl_reads_it(line) for line in text.splitlines() if "(regex " in line]
@@ -1094,7 +1095,7 @@ def test_a_renamed_inputs_leaf_is_the_one_the_profile_denies(tmp_path):
         readable=(),
         writable=(workspace,),
         itself=workspace / ".kingfisher" / "shell.sb",
-        session_inputs="vault",
+        layout=Layout(inputs="vault"),
     )
 
     denied = [
@@ -1125,7 +1126,7 @@ def test_a_renamed_layout_moves_the_saved_results_denies_with_it(tmp_path):
         readable=(),
         writable=(workspace,),
         itself=workspace / ".kingfisher" / "shell.sb",
-        saved_results=Layout(scratchpad="work", tool_results="kept").saved_results,
+        layout=Layout(scratchpad="work", tool_results="kept"),
     )
 
     denied = [
@@ -1155,6 +1156,7 @@ def test_what_stands_in_for_a_quote_cannot_reach_across_a_directory(tmp_path):
         readable=(),
         writable=(workspace,),
         itself=workspace / ".kingfisher" / "shell.sb",
+        layout=DEFAULT_LAYOUT,
     )
 
     denied = [
@@ -1181,7 +1183,7 @@ def test_the_fence_holds_for_a_workspace_whose_name_holds_a_quote(tmp_path, cfg)
     errno. That is the trap a review found in the rule this one is modelled on.
     """
     workspace = ensure_layout(tmp_path / 'my "work" stuff')
-    session = ensure_session_layout(workspace / "sessions" / "s1")
+    session = ensure_session_layout(workspace / "sessions" / "s1", DEFAULT_LAYOUT)
     (session / "inputs" / "given.txt").write_text("as written", encoding="utf-8")
     shell = backend_at(replace(cfg, workspace=workspace), session)
 
@@ -1211,6 +1213,7 @@ def test_an_authored_file_is_denied_by_its_exact_path(tmp_path):
         writable=(workspace,),
         itself=workspace / ".kingfisher" / "shell.sb",
         protected_files=(models,),
+        layout=DEFAULT_LAYOUT,
     )
 
     assert f'(deny file-write* (path "{models}"))' in text
@@ -1316,6 +1319,7 @@ def test_the_profile_refuses_itself_last(tmp_path):
         writable=(tmp_path / "ws",),
         itself=written,
         protected=(tmp_path / "ws" / "skills",),
+        layout=DEFAULT_LAYOUT,
     ).splitlines()
 
     # The session-folder denials that follow it are the same kind of rule over
@@ -1341,6 +1345,7 @@ def test_a_profile_is_replaced_rather_than_truncated(tmp_path):
         workspace=workspace,
         sessions_root=workspace / "sessions",
         kingfisher_dir=workspace / ".kingfisher",
+        layout=DEFAULT_LAYOUT,
     )
 
     assert chosen.profile is not None
@@ -1375,6 +1380,7 @@ def test_no_turn_can_read_the_profile_half_written(tmp_path, monkeypatch):
         workspace=workspace,
         sessions_root=workspace / "sessions",
         kingfisher_dir=workspace / ".kingfisher",
+        layout=DEFAULT_LAYOUT,
     ).profile
     assert path is not None
     whole = path.read_text(encoding="utf-8")
@@ -1393,6 +1399,7 @@ def test_no_turn_can_read_the_profile_half_written(tmp_path, monkeypatch):
         workspace=workspace,
         sessions_root=workspace / "sessions",
         kingfisher_dir=workspace / ".kingfisher",
+        layout=DEFAULT_LAYOUT,
     )
 
     assert seen == [whole], "the profile was not replaced by a rename over a whole file"
@@ -1494,6 +1501,7 @@ def test_concurrent_writers_do_not_share_one_scratch_file(tmp_path):
                 workspace=workspace,
                 sessions_root=workspace / "sessions",
                 kingfisher_dir=workspace / ".kingfisher",
+                layout=DEFAULT_LAYOUT,
             )
             for _ in range(writers)
         ]

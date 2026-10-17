@@ -10,7 +10,7 @@ import pytest
 from deepagents.backends import CompositeBackend
 from deepagents.backends.protocol import ReadResult
 
-from kingfisher.core.layout import SCRATCH_ROUTE
+from kingfisher.core.layout import DEFAULT_LAYOUT, SCRATCH_ROUTE
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, backend_at
 from tests.checks.backend import (
     BACKEND_CHECKS,
@@ -72,6 +72,7 @@ def test_a_backend_missing_a_route_a_deny_rule_names_is_caught(cfg, session_dir)
         routes={path: at for path, at in real.routes.items() if path != "/inputs/"},
         session_dir=session_dir,
         workspace=cfg.workspace,
+        layout=DEFAULT_LAYOUT,
     )
 
     with pytest.raises(AssertionError, match="/inputs/"):
@@ -94,6 +95,7 @@ def test_a_shell_that_cannot_see_what_the_tools_wrote_is_caught(cfg, session_dir
         routes=dict(real.routes),
         session_dir=session_dir,
         workspace=cfg.workspace,
+        layout=DEFAULT_LAYOUT,
     )
 
     with pytest.raises(AssertionError, match="one filesystem"):
@@ -136,6 +138,7 @@ def test_a_subclass_of_the_scoped_backend_keeps_the_scratchpad(cfg, session_dir)
         routes=dict(real.routes),
         session_dir=session_dir,
         workspace=cfg.workspace,
+        layout=DEFAULT_LAYOUT,
     )
 
     offloads_in_the_scratchpad(lambda: mine)
@@ -158,6 +161,7 @@ def test_a_host_path_refused_with_the_wrong_type_is_caught(cfg, session_dir):
         routes=dict(real.routes),
         session_dir=session_dir,
         workspace=cfg.workspace,
+        layout=DEFAULT_LAYOUT,
     )
 
     with pytest.raises(AssertionError, match="HostPathGuard does not catch"):
@@ -182,6 +186,7 @@ def test_a_backend_that_allows_host_paths_is_not_asked_to_refuse_them(cfg, sessi
         routes=dict(real.routes),
         session_dir=session_dir,
         workspace=cfg.workspace,
+        layout=DEFAULT_LAYOUT,
     )
 
     host_path_refusal(lambda: allows)

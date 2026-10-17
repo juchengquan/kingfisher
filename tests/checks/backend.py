@@ -14,7 +14,7 @@ from uuid import uuid4
 
 from deepagents.backends import CompositeBackend
 
-from kingfisher.plugins import DEFAULT_LAYOUT, HostPathError, not_executing, uncovered
+from kingfisher.plugins import DEFAULT_LAYOUT, HostPathError, unrouted_denials, why_no_shell
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -24,13 +24,13 @@ if TYPE_CHECKING:
 
 def execution_support(make: Callable[[], Any]) -> None:
     """The one failure with no symptom: deepagents drops `execute` and tells nobody."""
-    if (why := not_executing(make())) is not None:
+    if (why := why_no_shell(make())) is not None:
         raise AssertionError(why)
 
 
 def route_coverage(make: Callable[[], Any], scopes: tuple[str, ...] | None = None) -> None:
     """Otherwise the graph will not build, with a message that never says kingfisher."""
-    if (why := uncovered(make(), scopes)) is not None:
+    if (why := unrouted_denials(make(), scopes)) is not None:
         raise AssertionError(why)
 
 
@@ -51,7 +51,7 @@ def filesystem_consistency(make: Callable[[], Any]) -> None:
     on the error message quoting its own argument back.
     """
     backend = make()
-    if not_executing(backend) is not None:
+    if why_no_shell(backend) is not None:
         return
     body, name = uuid4().hex, uuid4().hex
     for virtual, write in (
@@ -125,7 +125,7 @@ def shell_denied(make: Callable[[], Any]) -> None:
     it, what is asserted is still only the file afterwards.
     """
     backend = make()
-    if not_executing(backend) is not None:
+    if why_no_shell(backend) is not None:
         return
     token = uuid4().hex
     written: list[str] = []

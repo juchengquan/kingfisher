@@ -18,7 +18,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.layout import HARNESS, PINNED_AGENT
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT
 from kingfisher.core.request import Request
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins import LocalSessions
@@ -142,7 +142,7 @@ def test_one_session_s_harness_is_not_denied_by_naming_another(cfg, workspace):
     somewhere in the middle of it."""
     from kingfisher.plugins.sessions.folders import ensure_session_layout
 
-    session = ensure_session_layout(workspace / "sessions" / "second")
+    session = ensure_session_layout(workspace / "sessions" / "second", DEFAULT_LAYOUT)
     decoy = session / "outputs" / ".harness"
     decoy.mkdir(parents=True, exist_ok=True)
     shell = backend_at(cfg, session)

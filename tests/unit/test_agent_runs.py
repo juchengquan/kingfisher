@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.prompting import system_prompt
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
 from kingfisher.core.session.steps import drive
@@ -34,7 +35,7 @@ def _session(cfg, session_id: str):
     lives inside the session rather than in a directory keyed by its name."""
     from kingfisher.plugins.sessions.folders import ensure_session_layout
 
-    return ensure_session_layout(cfg.workspace / "sessions" / session_id)
+    return ensure_session_layout(cfg.workspace / "sessions" / session_id, DEFAULT_LAYOUT)
 
 
 def _agents(cfg, *bodies: str) -> None:
