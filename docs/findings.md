@@ -48,6 +48,12 @@ wrong.*
   the conversation held at the last `values` are what tell a rewrite apart --
   `SeenMessages` in `core/session/runtime.py`, held by
   `tests/unit/test_rewritten_events.py`. *(2026-10-16, langgraph 1.2.15.)*
+- **A middleware reaches the `custom` stream from inside the model call.**
+  `request.runtime.stream_writer` on a `ModelRequest` is langgraph's writer for the
+  node, a no-op where nothing streams, and what it is handed arrives as a `custom`
+  chunk when it is written, ahead of the node's update. A subagent's arrives under its
+  namespace, as its tokens do, so `SubagentNames` names it. It is the one way to report
+  a model call the state never holds. *(2026-10-17, langgraph 1.2.15, langchain 1.4.5.)*
 - **Tool results arrive on the `messages` stream untruncated.** They must be
   skipped explicitly, or preview protection is bypassed and a 50KB file read
   reaches the terminal.

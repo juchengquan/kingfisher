@@ -2318,8 +2318,8 @@ deployment reads what to write. A deployment seeded before this keeps its own ro
 has to raise it itself. Noticing a call that stopped at the cap is the next entry.
 *(2026-10-16, from the transcript-clearing trials.)*
 
-**A reply cut off at the output cap has its cut call refused, and three cut replies in a
-row stop the agent.** The entry above said only a provider streaming arguments as raw
+**A reply cut off at the output cap has its cut call refused or its answer asked for
+again, and three cut replies in a row stop the agent.** The entry above said only a provider streaming arguments as raw
 text would save a shortened file. MiniMax-M3 does it itself: in live calls at caps of
 60 and 1,500 tokens it sent a cut call's arguments as one delta with the JSON already
 closed, and `write_file` arrived valid with its `content` stopping mid-word.
@@ -2350,9 +2350,22 @@ without asking, and fails once the model's own maximum is reached. Nothing in `s
 warns in advance, since the refusal arrives exactly when a cut happens and standing text
 is paid for on every call. It lives inside the model call and the tool call, because a
 hook beside them is a graph step and the recursion limit counts those. A subagent the
-workspace compiled itself gets none of it, as it gets none of `tool_guards`. A cut final
-answer ends the turn as it stands; asking the agent for a shorter one is the next change.
-*(2026-10-17, from a design session and live calls.)*
+workspace compiled itself gets none of it, as it gets none of `tool_guards`.
+
+A cut final answer is asked for again, shorter, with anything long put in a file under
+the deployment's outputs folder. Shorter rather than continued: stitching two replies into
+one answer is new logic, a model asked to continue tends to repeat itself at the seam, and
+at 32,768 tokens a cut answer is some 25,000 words, which belongs in a file anyway.
+Neither the cut answer nor the request reaches the conversation, because clearing never
+touches the agent's own text and the transcript would send it again on every later call;
+each request shows the model its latest attempt only. A cut call too broken to parse is
+asked again the same way, sent back as text, since a call with no result beside it is
+refused by the provider. These hidden attempts still count toward three, carried on the
+next reply the conversation keeps, or an agent alternating cut answers and cut writes
+would go well past three. Their text has already streamed to whoever is watching, so the
+middleware writes a `model_call` event to langgraph's `custom` stream at the cut, which
+kingfisher now asks for, and the shorter answer does not run straight on from the cut one
+with nothing between them. *(2026-10-17, from a design session and live calls.)*
 
 **`doctor` does check it, and the reason I said it could not was measured wrongly.**
 The paragraph here said the pair is only knowable from a built model, that building one

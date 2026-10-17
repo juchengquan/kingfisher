@@ -26,8 +26,13 @@ TOKEN_CHUNK_PARTS = 2
 
 #: The stream modes we ask for. `updates` drives progress events; `values` carries the
 #: full state, whose last emission holds the final answer; `messages` carries the
-#: model's output as it is generated.
-STREAM_MODES: list[StreamMode] = ["updates", "values", "messages"]
+#: model's output as it is generated; `custom` carries what kingfisher's own middleware
+#: reports of a reply that never reaches the state.
+STREAM_MODES: list[StreamMode] = ["updates", "values", "messages", "custom"]
+
+#: The key a middleware writes to the `custom` stream under, for a cut answer it asked
+#: again and so kept out of the state, where a `model_call` event is otherwise read from.
+CUT_OFF_MARK = "kingfisher.cut_off"
 
 
 def user_payload(text: str, history: tuple[Message, ...] = ()) -> dict[str, Any]:
@@ -167,6 +172,11 @@ def output_limit(message: Any) -> str:
     return f"the {spent:,}-token output limit" if spent else "the output limit"
 
 
+def cut_off_mark(reply: Any) -> dict[str, Any]:
+    """What the `custom` stream is handed for a cut reply the state will never hold."""
+    return {CUT_OFF_MARK: usage_of(reply)}
+
+
 def ended_cut_off(state: Any) -> Any | None:
     """The agent's last reply where it was cut off at the output cap, else `None`."""
     messages = (getattr(state, "values", None) or {}).get("messages") or ()
@@ -304,6 +314,10 @@ def events_in(
     if mode == "values":
         if seen is not None:
             seen.held(namespace, chunk)
+        return
+    if mode == "custom":
+        if isinstance(chunk, Mapping) and isinstance(usage := chunk.get(CUT_OFF_MARK), Mapping):
+            yield RunEvent(kind="model_call", usage=dict(usage), cut_off=True, agent=named)
         return
     if mode == "messages":
         if (

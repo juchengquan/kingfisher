@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A cut answer is asked for again, after #832
+
+- **A turn's graph is streamed with `custom` among its modes** as well as `updates`,
+  `values` and `messages`. A graph of your own, passed as `graph=`, is driven that way
+  too; a langgraph graph streams whatever its nodes write there, and kingfisher ignores
+  what it does not recognise.
+- **A `model_call` event can describe a reply the conversation never holds**: a final
+  answer cut off at the output cap, which kingfisher asked for again. It carries
+  `cut_off` and the call's usage, and no tools.
+
 ## A reply cut off at the output cap, after #830
 
 - **A turn can end with `stop_reason: max_tokens`.** The agent's last reply stopped at
