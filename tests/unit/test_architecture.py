@@ -1573,8 +1573,9 @@ WITNESSES: dict[str, dict[str, str]] = {
         "Landing": "document",
         "RunResult": "embedder",
         "RunEvent": "embedder",
-        # What `Kingfisher.sessions()` and `session()` return.
-        "SessionInfo": "embedder",
+        # What `Kingfisher.sessions()` lists and `session()` hands out, and the only
+        # way to ask one session's questions.
+        "Session": "embedder",
         # The four an approval gate needs. A turn that stops at one hands back
         # `PendingDecision`s on its result and cannot be continued without a `Resume`
         # carrying `Decision`s -- so a consumer that cannot name all three cannot answer
