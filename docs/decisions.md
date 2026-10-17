@@ -3938,6 +3938,16 @@ looking for the file with `ls`; after, each of the four was right on its next ca
 spelling moved too, from 7 host-absolute paths and 6 relative ones in 29 shell calls to
 2 and 9 in 27. *(2026-10-13.)*
 
+**Still rare, and still not worth rewriting the command.** Measured again on 2026-10-17
+over 21 real turns of two data tasks, while counting stray saves: 8 of 109 shell
+commands named a session folder the file tools' way, in 5 of the 21 turns, and all 8
+were answered with the correction. The one turn they cost anything ran out of its
+deployment's own cap of 20 tool calls with 3 of them spent here, and the cap is what lost
+its output. So the command is still not rewritten, for the reason above -- the miss that
+matters is a path inside a script no rewrite sees -- and the folders are not given
+environment variables, which the model would still have to choose to use. Reopen it on
+turns that keep missing after the correction. *(2026-10-17.)*
+
 **What the agent is told about the shell is said by the shell.** `system.md`,
 `capability_skills.md` and `ShellPaths` told every deployment's agent four things true
 only of kingfisher's own shell: it runs on the host in the session root, `TMPDIR` is the
@@ -4009,9 +4019,9 @@ no layout has is refused when the `ShellPrompt` is made rather than on the first
 `shell_prompt=` without a runner is refused: kingfisher's own shell describes itself, and
 `deployment_prompt` is where standing instructions go.
 
-The correction on a missed path stays kingfisher's own, since it spells the path from the
-session root and no other shell is known to start there; `ShellPaths` knows that shell by
-the identity of its `ShellPrompt`. Building this found a subagent's guards made without
+The correction on a missed path goes only to a shell that starts in the session root,
+since it spells the path from there: one whose `ShellPrompt` says `starts_in_session`,
+which kingfisher's own does. Building this found a subagent's guards made without
 the layout, so a renamed `inputs` reached a subagent's `execute` line as `/inputs`; they
 are handed it now. deepagents' own host paths were left for a change of their own, the
 next entry. *(2026-10-15.)*
