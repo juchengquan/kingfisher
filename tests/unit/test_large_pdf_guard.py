@@ -130,7 +130,7 @@ def test_the_advice_names_pdf_text_where_the_graph_holds_it_and_the_route_works(
 
 
 def test_an_agent_not_granted_pdf_text_is_not_told_to_call_it(cfg, session_dir):
-    """`tool_guards` is handed every tool the workspace defines, so advice read off its
+    """`standing_middleware` is handed every tool the workspace defines, so advice read off its
     names tells an agent granted none of them to call one it does not hold.
     """
     _with_pdf_text(cfg)

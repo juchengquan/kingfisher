@@ -1,4 +1,4 @@
-"""The guards every graph holding workspace tools is wrapped in."""
+"""The guards a compiled subagent's workspace tools carry on themselves."""
 
 from __future__ import annotations
 
@@ -6,71 +6,11 @@ import inspect
 from collections.abc import Sequence
 from typing import Any
 
-from langchain.agents.middleware import AgentMiddleware
 from langchain_core.tools import BaseTool, StructuredTool, ToolException
 
-from kingfisher.core.agent.backend import shell_prompt_of, shell_runs_here
 from kingfisher.core.agent.host_paths import HostPathError
-from kingfisher.core.agent.middlewares.cut_replies import CutReplies
-from kingfisher.core.agent.middlewares.file_tools import FileTools
-from kingfisher.core.agent.middlewares.host_path_guard import HostPathGuard
-from kingfisher.core.agent.middlewares.large_pdf_guard import LargePdfGuard
-from kingfisher.core.agent.middlewares.recorder import Recorder
-from kingfisher.core.agent.middlewares.shell_paths import ShellPaths
-from kingfisher.core.agent.middlewares.unavailable import ModelUnavailableGuard
-from kingfisher.core.agent.middlewares.workspace_tools import (
-    WorkspaceToolErrors,
-    WorkspaceToolPaths,
-)
 from kingfisher.core.agent.references import UnsafeReferenceError
 from kingfisher.core.agent.session_paths import SessionPaths, refusal_text
-from kingfisher.core.config import DEFAULT_LAYOUT
-from kingfisher.core.layout import Layout
-
-
-def tool_guards(  # noqa: PLR0913 -- `subagent` is the one way the agent's guards differ
-    # from a subagent's, and a parameter object would hide it from each call that says it.
-    names: frozenset[str],
-    paths: SessionPaths | None,
-    recorder: Recorder | None = None,
-    layout: Layout = DEFAULT_LAYOUT,
-    backend: Any = None,
-    *,
-    subagent: bool,
-) -> list[AgentMiddleware]:
-    """What every graph holding workspace tools gets wrapped in, built once.
-
-    The agent, a subagent, and deepagents' `general-purpose` subagent, which is handed
-    the agent's tools, all hold them; one builder, so none of them is left unguarded.
-
-    `CutReplies`, `HostPathGuard`, `LargePdfGuard`, `ShellPaths` and `FileTools` go on every
-    graph: any model can stop at its cap and a cut call looks whole, the backend refuses a
-    host path on every run, `read_file` hands a PDF over whole, a subagent holding
-    `execute` never sees `system.md`, and every graph holds the file tools. `subagent`
-    says what `CutReplies` does with an agent it stops, the one way the graphs differ. The
-    workspace-tool guards need `names`, and translation needs `paths`.
-
-    `recorder` is `None` where no turn keeps what is recorded; `backend`'s shell says
-    what `ShellPaths` tells the model about it.
-    """
-    # First, so it records the arguments the model wrote, before `WorkspaceToolPaths`
-    # rewrites them to host paths.
-    guards: list[AgentMiddleware] = [] if recorder is None else [recorder]
-    # Ahead of the rest, which have nothing to say about a call that is not run.
-    guards.append(CutReplies(subagent=subagent, outputs=layout.outputs_route))
-    # Inside `CutReplies`, so a refused call reaches it already as the stop it is.
-    guards.append(ModelUnavailableGuard())
-    guards.append(HostPathGuard())
-    guards.append(LargePdfGuard())
-    guards.append(ShellPaths(layout, shell_prompt_of(backend), here=shell_runs_here(backend)))
-    guards.append(FileTools())
-    if names:
-        # In this order, which the subagent's stack is pinned to: translation rewrites
-        # the arguments before anything after it judges them.
-        guards.append(WorkspaceToolErrors(names))
-        if paths is not None:
-            guards.append(WorkspaceToolPaths(names, paths))
-    return guards
 
 
 class GuardedTool(BaseTool):

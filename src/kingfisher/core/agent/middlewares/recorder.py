@@ -94,8 +94,9 @@ class Recorder(AgentMiddleware):
     """Record each successful tool result, keep it as a file in the session, and end
     what the model is handed with the result's id.
 
-    First in what `tool_guards` returns, ahead of `WorkspaceToolPaths`, so it records the
-    arguments the model wrote rather than the host paths they become. Sitting inside
+    Ahead of the guards in what `standing_middleware` returns, `WorkspaceToolPaths` among
+    them, so it records the arguments the model wrote rather than the host paths they
+    become. Sitting inside
     deepagents' eviction and seeing what a deployment's middleware left do not depend on it.
     """
 

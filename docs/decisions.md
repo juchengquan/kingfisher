@@ -695,16 +695,16 @@ none of it: deepagents fills a subagent spec that names no tools from the parent
 `general-purpose` held the agent's own tool objects with no host-path guard, no error
 guard and no path translation. A tool call through it reached the tool with the paths
 the model wrote, which is exactly the leak translation exists to close, and a failing
-tool raised instead of answering. `tool_guards` builds the three now and all three
-sites call it, so a fourth cannot be written half-right.
+tool raised instead of answering. `standing_middleware` builds the three now and all
+three sites call it, so a fourth cannot be written half-right.
 
 **A compiled subagent's tools are wrapped, because it is the fourth graph.**
-`tool_guards` reaches a graph through its middleware, and a compiled subagent has
-none -- deepagents runs it as given. The shipped `scribe` is what showed it: three
+`standing_middleware` reaches a graph through its middleware, and a compiled subagent
+has none -- deepagents runs it as given. The shipped `scribe` is what showed it: three
 path-taking tools handed to `show-your-work`, and the first call died on
 `log_levels('/data/api.log')` with `FileNotFoundError`, the run over. `GuardedTool`
-carries the translation and the error conversion on the tool objects, which is the
-one thing kingfisher still owns for a graph it did not build.
+carries the translation and the error conversion on the tool objects, which is the one
+thing kingfisher still owns for a graph it did not build.
 
 This reverses, for that path only, the reasoning `WorkspaceToolPaths` records --
 rewrite the call rather than wrap each tool, because the tools are not alike. They
@@ -717,6 +717,32 @@ did not build nothing catches one -- measured for `ToolException`, `ValueError` 
 `FileNotFoundError` alike, each ending the run -- so `handle_tool_error` converts it
 before it leaves the tool. That also keeps `ToolMessage.status` true, which
 `show_your_work` reads to report a call as failed. *(2026-09-18.)*
+
+**Middleware is standing, switched on by a setting, or offered, and what decides is
+whether kingfisher promises it.** Standing middleware is what kingfisher guarantees
+every caller on every graph it builds -- the guards, the allowlists, the recorder,
+result clearing, the PDF guard -- and `standing_middleware(kind)` builds all of it for
+the agent, a declared subagent and `general-purpose`, so what a graph is guaranteed is
+read in one place. Memory and the interpreter are neither: a deployment switches them by
+a setting, not a definition. Everything else is offered, and a definition names it. The
+order is one rule on every graph -- standing, then switched, then a subagent's helpers,
+then offered -- so whatever a deployment chose sees a call only after kingfisher has
+judged it and rewritten its paths. Memory and the interpreter used to sit between the
+guards and the allowlists; moved after every standing one, the full suite stayed green
+at 3,319, so that position was holding nothing. *(2026-10-17.)*
+
+**A compiled subagent is outside the promise, and that is said rather than closed.**
+deepagents runs it as given, so a guarantee reaches it only on its tools --
+`GuardedTool`'s paths and errors -- and at the `task` boundary, where only a declared
+subagent is reached and its answer is recorded. Closing it would mean wrapping a graph
+kingfisher did not build. *(2026-10-17.)*
+
+**`TodoListMiddleware` stays standing, for now.** Offered was the obvious place for a
+checklist no caller is promised, but `write_todos` is a built-in tool a request grants
+by name, and `build_agent` reads which tools are built in off the middleware its probe
+holds. Offered, the checklist would leave the probe, and `builtin_tools: [write_todos]`
+would name a tool that is not there. Moving it waits on the built-ins being read some
+other way. *(2026-10-17.)*
 
 **A call from `eval` is a fifth way to dispatch, and it met none of the guards.** With
 the sandbox wired, a narrowed request's `eval` holds `tools.<name>()` for each tool it
@@ -737,9 +763,10 @@ Three changes, each where its gap was:
 - **The granted workspace tools go in as `GuardedTool`s, built-ins as names.** This is
   the compiled-subagent exception above taken a second time, for its reason -- a call
   that never reaches `ToolNode` has no middleware to meet -- and not a reversal of
-  rewriting the call: every graph `tool_guards` reaches still rewrites. A built-in needs
-  no wrapper, because its refusal is the backend's. What a wrapped tool refuses or raises
-  comes back to the program as the tool's error text, and the turn goes on.
+  rewriting the call: every graph `standing_middleware` reaches still rewrites. A
+  built-in needs no wrapper, because its refusal is the backend's. What a wrapped tool
+  refuses or raises comes back to the program as the tool's error text, and the turn
+  goes on.
 - **A gated tool is left out of `tools.*`, and a gate on `task` turns `task()` off.**
   Gating `eval` instead would put a person in front of arithmetic, and the gated tool is
   still callable directly, behind its gate. The sandbox was re-wired only for a narrowed
@@ -2377,10 +2404,10 @@ without asking, and fails once the model's own maximum is reached. Nothing in `s
 warns in advance, since the refusal arrives exactly when a cut happens and standing text
 is paid for on every call. It lives inside the model call and the tool call, because a
 hook beside them is a graph step and the recursion limit counts those. A subagent the
-workspace compiled itself gets none of it, as it gets none of `tool_guards`. A cut call
-behind an approval gate is still put to the reviewer, since the gate reads every call
-and the refusal comes when the call would run; approving it runs nothing, and the two
-rarely meet, so the gate is left as it is.
+workspace compiled itself gets none of it, as it gets none of `standing_middleware`. A
+cut call behind an approval gate is still put to the reviewer, since the gate reads
+every call and the refusal comes when the call would run; approving it runs nothing, and
+the two rarely meet, so the gate is left as it is.
 
 A cut final answer is asked for again, shorter, with anything long written to a file under
 the deployment's outputs folder first and the answer naming it after, and a file is named
@@ -2609,24 +2636,24 @@ both -- their shared connection rule is the stated reason they are written as th
 *(2026-10-14, from an architecture review.)*
 
 **A PDF over 256 KB in a tool's result reaches the model as advice instead.**
-`LargePdfGuard`, in `tool_guards` on every graph kingfisher builds, swaps the block
-for a line saying how large the PDF is and why it was not handed over, and marks the
-call an error when nothing else came back. 256 KB because one PDF of about 500 KB
-springs the summarizer's trap on a model with no profile, and half leaves room for
-the conversation around it. Bytes rather than pages: they are what the summarizer
-counts, and pages would mean parsing every PDF a tool returns, in kingfisher's
-process, to decide whether to pass it on.
+`LargePdfGuard`, in `standing_middleware` on every graph kingfisher builds, swaps the
+block for a line saying how large the PDF is and why it was not handed over, and marks
+the call an error when nothing else came back. 256 KB because one PDF of about 500 KB
+springs the summarizer's trap on a model with no profile, and half leaves room for the
+conversation around it. Bytes rather than pages: they are what the summarizer counts,
+and pages would mean parsing every PDF a tool returns, in kingfisher's process, to
+decide whether to pass it on.
 
 **Every tool's result, not `read_file`'s.** A workspace tool returning a PDF block
 would step around a guard on one tool's name, and the check is a size on a block,
 the same whoever returned it.
 
-**It names `pdf_text` only where the model is offered it.** `tool_guards` is handed
-every tool the workspace defines, granted or not, so advice read off those names
+**It names `pdf_text` only where the model is offered it.** `standing_middleware` is
+handed every tool the workspace defines, granted or not, so advice read off those names
 told an agent granted none of them to call one it does not hold. The guard reads the
-tools off the model's own request instead, which is exact because a graph is built
-from its granted tools only. A call replayed on a resume follows no model call, and
-gets the advice with no tool named.
+tools off the model's own request instead, which is exact because a graph is built from
+its granted tools only. A call replayed on a resume follows no model call, and gets the
+advice with no tool named.
 
 **What it leaves.** A PDF small in bytes and long in pages still goes whole, and the
 provider counts it by the page. A subagent the workspace compiled itself is run as
@@ -2916,15 +2943,16 @@ and two collectors kept in step. The stream also replays results after a superse
 pause and carries results the approval step made up, each needing a filter that rests
 on how langgraph shapes its chunks. Middleware sees only real calls.
 
-**The recorder is first in `tool_guards`, and each thing that position gives is
-needed.** Inside deepagents' eviction, so it sees a long result whole and the id
-survives in the stub's tail. Ahead of `WorkspaceToolPaths`, so it records the arguments
-the model wrote rather than the host paths they become. Ahead of a deployment's
-middleware, which `build_agent` appends after `tool_guards`, so it records what the
-model was shown, a `ToolNote` reminder included. Moved, nothing fails a call; a test
-for each of the three is what goes red. The turn hands one collector to every graph it
-builds, with a lock because calls made together run on threads, and a context variable
-names the `task` call a subagent runs inside; `findings.md` has it reaching both loops.
+**The recorder is ahead of the guards in `standing_middleware`, and each thing that
+position gives is needed.** Inside deepagents' eviction, so it sees a long result whole
+and the id survives in the stub's tail. Ahead of `WorkspaceToolPaths`, so it records
+the arguments the model wrote rather than the host paths they become. Ahead of a
+deployment's middleware, which `build_agent` appends after `standing_middleware`, so it
+records what the model was shown, a `ToolNote` reminder included. Moved, nothing fails a
+call; a test for each of the three is what goes red. The turn hands one collector to
+every graph it builds, with a lock because calls made together run on threads, and a
+context variable names the `task` call a subagent runs inside; `findings.md` has it
+reaching both loops.
 
 **Ids run for the session, `A-` and at least four digits.** Not per turn, as the
 owner's plan had them: regeneration would reuse turn numbers, and a running number never
@@ -3339,11 +3367,11 @@ reads as the tool's.
 
 Left as it is, and written down instead. Telling the two apart needs a marker across
 the boundary -- something below the deployment block to tag the tool's own exceptions,
-and this guard converting only what is tagged -- which means interleaving `tool_guards`
-with the deployment middleware in each of the three graphs whose stacks are pinned to
-its order. That carries a decision rather than a correction: whether a hook that falls
-over should end every turn or none of them. The middleware guide says what happens
-today.
+and this guard converting only what is tagged -- which means interleaving
+`standing_middleware` with the deployment middleware in each of the three graphs whose
+stacks are pinned to its order. That carries a decision rather than a correction:
+whether a hook that falls over should end every turn or none of them. The middleware
+guide says what happens today.
 
 **The same placement hands a hook host paths.** Nearest the tool is below
 `WorkspaceToolPaths`, so a deployment's `wrap_tool_call` is handed the rewritten
@@ -3944,8 +3972,8 @@ with it.** deepagents' description of the tool says "Use absolute paths", and th
 only absolute paths a model knows are the file tools', which the shell reads from the
 host's root. `system.md` says otherwise, but a subagent is built with its own prompt
 and never sees it, and the description reaches every graph holding the shell. So
-`ShellPaths`, in `tool_guards`, replaces that line with the rule there -- appending it
-when deepagents has reworded the line, which
+`ShellPaths`, in `standing_middleware`, replaces that line with the rule there --
+appending it when deepagents has reworded the line, which
 `test_every_graph_holding_the_shell_is_told_its_paths_rather_than_absolute_ones` then
 fails on -- and
 appends a correction to an `execute` result whose error names a session folder spelt
@@ -4098,8 +4126,8 @@ reason: deepagents cannot know what that shell sees, and its `ShellPrompt` can.
 Taken out by block, matched on deepagents' heading, because the section arrives as a
 system-message block of its own; one that deepagents merged into other text would be
 left whole, and `test_deepagents_host_paths_reach_only_a_shell_on_this_host` would fail
-on it. `tool_guards` is handed the turn's backend rather than what was read off it, so
-the `execute` line and this section are asked of the same shell. *(2026-10-15.)*
+on it. `standing_middleware` is handed the turn's backend rather than what was read off
+it, so the `execute` line and this section are asked of the same shell. *(2026-10-15.)*
 
 **`HOME` is `scratch` too, and `.home` is gone.** The shell's `HOME` had a
 directory of its own so that whatever a tool caches under `~` would land in the
