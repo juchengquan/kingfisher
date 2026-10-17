@@ -59,9 +59,6 @@ CAPABILITY_FILES = {
 #: about the shell, because what is true of one depends on what runs it.
 SHELL_MARKER = "<!-- shell -->"
 
-#: What kingfisher's own shell says of itself: its section, its paragraph under skills,
-#: and its line in `execute`'s description.
-_HERE = ("shell_here.md", "shell_here_skills.md", "shell_here_execute.md")
 #: What is said of a shell that says nothing, which is only what holds wherever a
 #: shell runs. No `execute` line: deepagents' own stands.
 _ELSEWHERE = ("shell_elsewhere.md", "shell_elsewhere_skills.md")
@@ -138,6 +135,10 @@ class ShellPrompt:
     prompt: str | None = None
     skills: str | None = None
     execute: str | None = None
+    #: Whether the shell starts in the session folder, where a file-tool path less its
+    #: leading slash is a path it reaches. A command that misses one is then answered
+    #: with that spelling; a shell not known to start there is not told it.
+    starts_in_session: bool = False
 
     def __post_init__(self) -> None:
         # Here rather than when the prompt is rendered, which is a deployment's first
@@ -153,19 +154,6 @@ class ShellPrompt:
                     f"name {known}"
                 )
                 raise ValueError(msg)
-
-
-@lru_cache(maxsize=1)
-def kingfishers_shell() -> ShellPrompt:
-    """What kingfisher's own shell says of itself.
-
-    It runs on this host in the session root, with `TMPDIR` the scratchpad and
-    `KINGFISHER_SKILLS` the catalogue -- true of no other shell, a runner a deployment
-    supplies included: that is handed the command and nothing else, and starts wherever
-    it was started. One instance, which `ShellPaths` recognises by identity.
-    """
-    prompt, skills, execute = (_prompt_text(name).strip() for name in _HERE)
-    return ShellPrompt(prompt=prompt, skills=skills, execute=execute)
 
 
 @lru_cache(maxsize=1)

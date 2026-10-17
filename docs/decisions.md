@@ -6430,6 +6430,23 @@ places asked `LocalSessions` directly and were cut before anything moved, since 
 as another: it names every plugin, so it would be the back door.
 `test_no_plugin_imports_another`.
 
+**A plugin of kingfisher's own takes only what an outsider could.** `LocalSessions`
+reached twenty-five names no public address carried -- the folder names every
+deployment's sessions must honour among them -- and the kit in `tests/checks/`, which a
+plugin's author is told to copy, fifteen of its own. Whatever a default needs and an
+outsider cannot import is a gap in the plugin contract, so the gaps were closed rather
+than the default excused: the layout through `cfg.layout`, with `Layout` public;
+`Config.sessions_root` and `Config.kingfisher_dir`; `Definitions` public, saying where
+its skills are served; the checks kingfisher makes of a backend public for a plugin's
+own suite; a `ShellPrompt` that says it starts in the session, where the core had asked
+whether it was kingfisher's own by identity; and what only `LocalSessions` used, moved
+into it. `test_a_plugin_has_of_kingfisher_only_what_an_outsider_has` holds both. A
+plugin takes a name a door carries from the module that door takes it from, since it
+may not import its own door; the kit takes it through the door, since it leaves as
+written. **Not taken: shipping `LocalSessions` as a package of its own.** It needs
+nothing the core does not, `sandlock` is already an extra, and a second release would
+buy an install nobody has asked to skip.
+
 **Sessions are always named.** `Kingfisher`, `run()` and `stream()` refuse to run without
 them. The sessions plugin is the sandbox and decides where each caller's files are, so it
 has no default: a guess there is the leak a deployment replaced it to avoid. The command,

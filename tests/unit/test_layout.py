@@ -157,7 +157,8 @@ def test_the_shell_path_rule_and_matcher_follow_a_renamed_layout():
     file-tool path in its output. Both name session folders, so both move with them.
     """
     from kingfisher.core.agent.middlewares.shell_paths import _virtual, missed
-    from kingfisher.core.agent.prompting import execute_line, kingfishers_shell
+    from kingfisher.core.agent.prompting import execute_line
+    from kingfisher.plugins.sessions.shell import kingfishers_shell
 
     assert "`/in/data.csv` is `in/data.csv`" in (execute_line(kingfishers_shell(), MOVED) or "")
     virtual = _virtual(MOVED.session_dirs)

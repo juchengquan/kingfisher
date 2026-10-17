@@ -5,14 +5,16 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 from deepagents.backends import CompositeBackend, LocalShellBackend
 
 from kingfisher.core.agent.backend import shell_prompt_of
-from kingfisher.core.agent.prompting import kingfishers_shell, render_system_prompt
+from kingfisher.core.agent.prompting import render_system_prompt
 from kingfisher.core.layout import Layout
 from kingfisher.plugins import CommandResult, LocalSessions, ShellPrompt, backend_at
+from kingfisher.plugins.sessions.shell import kingfishers_shell
 
 #: What a command can see of the claims kingfisher's own wording makes.
 PROBE = 'echo "pwd=$(pwd)"; echo "tmp=$TMPDIR"; echo "skills=$KINGFISHER_SKILLS"'
@@ -171,8 +173,10 @@ def test_a_blank_no_layout_fills_is_refused_when_the_wording_is_made(part, blank
     held on `execute` alone, the same mistake in `prompt` reached the agent's own
     section.
     """
+    wording: dict[str, Any] = {part: f"- `/{blank}/x` is `x`."}
+
     with pytest.raises(ValueError, match=r"which no layout fills"):
-        ShellPrompt(**{part: f"- `/{blank}/x` is `x`."})
+        ShellPrompt(**wording)
 
 
 def test_every_blank_a_layout_fills_is_accepted_in_every_part():
