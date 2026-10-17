@@ -26,8 +26,9 @@ from functools import partial
 from pathlib import Path
 
 from kingfisher.core.config import Config
-from kingfisher.core.layout import DEFAULT_LAYOUT, SANDBOX_PROFILE
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins.sessions.sandbox.sandbox_exec import (
+    SANDBOX_PROFILE,
     fenced_sessions,
     profile,
     profile_path,

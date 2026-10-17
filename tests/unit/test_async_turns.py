@@ -29,7 +29,8 @@ def service(cfg, graph=None):
 
 
 def _claim(cfg, session_id: str) -> Path:
-    from kingfisher.core.layout import CLAIM, HARNESS
+    from kingfisher.core.layout import HARNESS
+    from kingfisher.plugins.sessions.backend import CLAIM
 
     return cfg.workspace / "sessions" / session_id / HARNESS / CLAIM
 

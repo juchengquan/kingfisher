@@ -6,7 +6,8 @@ from uuid import uuid4
 
 import pytest
 
-from kingfisher.core.session.model import Conversation, UnknownSessionError, session_dir
+from kingfisher.core.session.model import Conversation, UnknownSessionError
+from kingfisher.plugins.sessions.folders import session_dir
 
 #: One of each form of id that cannot name a session's folder: not one visible entry.
 UNNAMABLE = ("", ".", "..", ".hidden", ".harness", "../../escaped", "/etc", "a/b", "a\x00b")
@@ -40,7 +41,7 @@ def test_a_session_directory_is_the_default_backends_root(workspace):
     rooted at on kingfisher's own backend -- and naming the session inside one would
     address outside that root.
     """
-    assert session_dir(workspace, "s1") == workspace / "sessions" / "s1"
+    assert session_dir(workspace / "sessions", "s1") == workspace / "sessions" / "s1"
 
 
 @pytest.mark.parametrize("session_id", UNNAMABLE)
@@ -51,13 +52,13 @@ def test_an_id_that_cannot_name_a_folder_names_no_session(workspace, session_id)
     guards in every session, so a session called that could not write its own files.
     """
     with pytest.raises(UnknownSessionError, match="cannot name a session"):
-        session_dir(workspace, session_id)
+        session_dir(workspace / "sessions", session_id)
 
 
 @pytest.mark.parametrize("session_id", [uuid4().hex, "default", "q3-report", "Alice Smith"])
 def test_an_id_a_person_or_kingfisher_would_write_names_a_session(workspace, session_id):
     """The control beside the refusals: a rule refusing every id would pass all of them."""
-    assert session_dir(workspace, session_id) == workspace / "sessions" / session_id
+    assert session_dir(workspace / "sessions", session_id) == workspace / "sessions" / session_id
 
 
 def test_the_turn_message_names_both_forms_of_the_scratch_path(workspace):

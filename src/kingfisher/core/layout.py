@@ -35,15 +35,6 @@ LAYOUT_DIRS: tuple[str, ...] = (
     HARNESS_OWNED,
 )
 
-#: The sandbox profile's name, which `profile_path` puts a digest of its rules inside:
-#: `shell.<digest>.sb`.
-SANDBOX_PROFILE = "shell.sb"
-
-#: Where the shell's view of a catalogue with mounts is built, one directory per
-#: arrangement of it. Inside `HARNESS_OWNED` because the shell must read through it
-#: and never write it, and that directory is already both.
-SKILLS_VIEW = "skills-view"
-
 #: Created inside every session directory, which is the backend root. These are
 #: the names the agent addresses, so they mean the same thing in every session
 #: while pointing somewhere different in each. That is what makes one prompt serve
@@ -107,7 +98,6 @@ TRANSCRIPT_FILE = "transcript.jsonl"
 #: Here rather than beside the results it lists: a row names its file, and the agent
 #: must not be able to rewrite what a later turn reads back as true.
 LEDGER_FILE = "ledger.jsonl"
-CLAIM = "claim"
 #: Written only by a turn that stopped at an approval gate, and deleted the moment
 #: one is answered or superseded. Its presence *is* the mark that a session is
 #: waiting -- a second file saying so is a second thing to keep in step, and the
@@ -440,13 +430,3 @@ MARKER = f"{HARNESS_OWNED}/WORKSPACE"
 #: workspaces outlive config churn, a fingerprint of the configurable names belongs
 #: here and a mismatch refused.
 MARKER_TEXT = "kingfisher workspace\n"
-
-AGENTS_SCAFFOLD = """\
-# Project memory
-
-Durable facts about this project and how to work in it. Add entries below.
-
-## Conventions
-
-(none recorded yet)
-"""
