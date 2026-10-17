@@ -1412,28 +1412,13 @@ OUTSIDERS: dict[Path, bool] = {SRC / "plugins": False, REPO / "tests" / "checks"
 NOT_YET: dict[str, frozenset[str]] = {
     "src/kingfisher/plugins/sessions/backend.py": frozenset({
         "kingfisher.core.agent.backend:skill_mounts",
-        "kingfisher.core.agent.host_paths:reject_host_path",
         "kingfisher.core.agent.prompting:kingfishers_shell",
         "kingfisher.core.definitions.catalogue:Definitions",
         "kingfisher.core.definitions.catalogue:refuse_unmountable",
-        "kingfisher.core.layout:CLAIM",
-        "kingfisher.core.session.model:session_dir",
-        "kingfisher.core.session.model:still_held",
-    }),
-    "src/kingfisher/plugins/sessions/folders.py": frozenset({
-        "kingfisher.core.layout:AGENTS_SCAFFOLD",
-        "kingfisher.core.session.model:names_a_session",
-    }),
-    "src/kingfisher/plugins/sessions/sandbox/confinement.py": frozenset({
-        "kingfisher.core.layout:SANDBOX_PROFILE",
-    }),
-    "src/kingfisher/plugins/sessions/sandbox/sandbox_exec.py": frozenset({
-        "kingfisher.core.layout:SANDBOX_PROFILE",
     }),
     "src/kingfisher/plugins/sessions/shell.py": frozenset({
         "kingfisher.core.definitions.catalogue:Definitions",
         "kingfisher.core.definitions.skills.catalogue:LocalSkillRepository",
-        "kingfisher.core.layout:SKILLS_VIEW",
     }),
     "tests/checks/backend.py": frozenset({
         "kingfisher.core.agent.usable_backend:executes",
@@ -1814,6 +1799,9 @@ WITNESSES: dict[str, dict[str, str]] = {
         # `ports.md` tells a backend that refuses host paths to refuse them with this,
         # because it is the type `HostPathGuard` turns into a correction.
         "HostPathError": "document",
+        # And the refusal kingfisher's own backend makes, which `ports.md` offers a
+        # backend that wants to refuse host paths the same way.
+        "reject_host_path": "document",
     },
 }
 

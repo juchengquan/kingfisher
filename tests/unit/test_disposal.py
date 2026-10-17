@@ -5,8 +5,8 @@ from __future__ import annotations
 from kingfisher import Kingfisher
 from kingfisher.core.request import Request
 from kingfisher.core.session import retention
-from kingfisher.core.session.model import still_held
 from kingfisher.plugins import LocalSessions
+from kingfisher.plugins.sessions.backend import still_held
 from tests.conftest import Through, start
 from tests.unit.test_run import StubAgent
 

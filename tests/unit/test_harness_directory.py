@@ -18,11 +18,11 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.layout import CLAIM, HARNESS, PINNED_AGENT
+from kingfisher.core.layout import HARNESS, PINNED_AGENT
 from kingfisher.core.request import Request
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins import LocalSessions
-from kingfisher.plugins.sessions.backend import backend_at
+from kingfisher.plugins.sessions.backend import CLAIM, backend_at
 from tests.conftest import FakeToolCallingModel, Through, pin, start
 
 macos = pytest.mark.skipif(

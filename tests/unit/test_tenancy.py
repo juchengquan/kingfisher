@@ -102,7 +102,8 @@ def test_grants_are_unrestricted_by_default(cfg):
 
 def _claim(cfg, session_id: str) -> Path:
     """One session's turn slot, which lives inside the session it guards."""
-    from kingfisher.core.layout import CLAIM, HARNESS
+    from kingfisher.core.layout import HARNESS
+    from kingfisher.plugins.sessions.backend import CLAIM
 
     return cfg.workspace / "sessions" / session_id / HARNESS / CLAIM
 

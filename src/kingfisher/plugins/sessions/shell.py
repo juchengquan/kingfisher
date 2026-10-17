@@ -20,7 +20,6 @@ from kingfisher.core.config import Config
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
 from kingfisher.core.interfaces import CommandRunner
-from kingfisher.core.layout import SKILLS_VIEW
 from kingfisher.plugins.sessions.sandbox import confinement
 
 _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
@@ -54,6 +53,12 @@ def shell_env(
     skills = (catalogue or Definitions.from_config(cfg)).skills
     env["KINGFISHER_SKILLS"] = str(skills_view(skills, cfg.kingfisher_dir))
     return env
+
+
+#: Where the shell's view of a catalogue with mounts is built, one directory per
+#: arrangement of it. Inside `Config.kingfisher_dir` because the shell must read through
+#: it and never write it, and that directory is already both.
+SKILLS_VIEW = "skills-view"
 
 
 def skills_view(skills: LocalSkillRepository, kingfisher_dir: Path) -> Path:

@@ -25,6 +25,7 @@ _EXPORTS = {
     "Layout": "kingfisher.core.layout",
     "DEFAULT_LAYOUT": "kingfisher.core.layout",
     "HostPathError": "kingfisher.core.agent.host_paths",
+    "reject_host_path": "kingfisher.core.agent.host_paths",
     "LocalSessions": "kingfisher.plugins.sessions.backend",
     "backend_at": "kingfisher.plugins.sessions.backend",
     "JsonlRunEvents": "kingfisher.plugins.events",
@@ -51,10 +52,12 @@ __all__ = [
     "ShellSettings",
     "WireFormat",
     "backend_at",
+    "reject_host_path",
 ]
 
 if TYPE_CHECKING:
     from kingfisher.core.agent.host_paths import HostPathError as HostPathError
+    from kingfisher.core.agent.host_paths import reject_host_path as reject_host_path
     from kingfisher.core.agent.models import WIRE_FORMATS as WIRE_FORMATS
     from kingfisher.core.agent.prompting import InstructionsFile as InstructionsFile
     from kingfisher.core.agent.prompting import ShellPrompt as ShellPrompt

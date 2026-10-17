@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 import warnings
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -22,12 +22,12 @@ from kingfisher.core.agent.prompting import ShellPrompt, kingfishers_shell
 from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.catalogue import Definitions, refuse_unmountable
 from kingfisher.core.interfaces import CommandRunner, Sessions
-from kingfisher.core.layout import CLAIM, DEFAULT_LAYOUT
-from kingfisher.core.session.model import session_dir, still_held
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins.sessions.folders import (
     LocalSessionDirs,
     ensure_session_layout,
     session_bytes,
+    session_dir,
 )
 from kingfisher.plugins.sessions.permissions import protect_inputs, writable_inputs
 from kingfisher.plugins.sessions.sandbox import confinement
@@ -510,7 +510,23 @@ class LocalSessions(Sessions):
 
 def _where(cfg: Config, session_id: str) -> Path:
     """Where kingfisher's own backends keep one session of this workspace."""
-    return session_dir(cfg.workspace, session_id)
+    return session_dir(cfg.sessions_root, session_id)
+
+
+#: The turn lock's name, a directory in the session's `.harness`.
+CLAIM = "claim"
+
+
+def still_held(
+    entries: Sequence[tuple[str, float]], *, stale_after: float, now: float
+) -> tuple[str, ...]:
+    """Which of these claims somebody could still be holding.
+
+    Treating every claim as a turn in progress is what let a claim left behind by a
+    dead process exempt its session from retention permanently -- measured at ten
+    years idle, still there.
+    """
+    return tuple(name for name, taken in entries if now - taken < stale_after)
 
 
 def _claim_at(cfg: Config, session_id: str) -> Path:
