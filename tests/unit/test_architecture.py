@@ -1411,14 +1411,7 @@ OUTSIDERS: dict[Path, bool] = {SRC / "plugins": False, REPO / "tests" / "checks"
 #: the change that stops an import removes its line, and the table goes once it is empty.
 NOT_YET: dict[str, frozenset[str]] = {
     "src/kingfisher/plugins/sessions/backend.py": frozenset({
-        "kingfisher.core.agent.backend:skill_mounts",
         "kingfisher.core.agent.prompting:kingfishers_shell",
-        "kingfisher.core.definitions.catalogue:Definitions",
-        "kingfisher.core.definitions.catalogue:refuse_unmountable",
-    }),
-    "src/kingfisher/plugins/sessions/shell.py": frozenset({
-        "kingfisher.core.definitions.catalogue:Definitions",
-        "kingfisher.core.definitions.skills.catalogue:LocalSkillRepository",
     }),
     "tests/checks/backend.py": frozenset({
         "kingfisher.core.agent.usable_backend:executes",
@@ -1426,9 +1419,7 @@ NOT_YET: dict[str, frozenset[str]] = {
         "kingfisher.core.agent.usable_backend:uncovered",
     }),
     "tests/checks/sessions.py": frozenset({
-        "kingfisher.core.agent.backend:skill_mounts",
         "kingfisher.core.agent.permitted_backend:host_path",
-        "kingfisher.core.definitions.catalogue:Definitions",
         "kingfisher.core.definitions.skills:registry",
     }),
 }
@@ -1766,6 +1757,9 @@ WITNESSES: dict[str, dict[str, str]] = {
         # The type a runner returns. Nothing *imports* it in a snippet -- a runner's
         # `run` returns one, so a deployment cannot write the interface without it.
         "CommandResult": "interface",
+        # What `Sessions.open` is handed as `catalogue`. `ports.md` tells a plugin to
+        # take it, and where its skills must be served.
+        "Definitions": "document",
         # Kingfisher's own, which a plugin author builds on rather than implements.
         # `ports.md` shows subclassing the default, and `backend_at` for a backend over
         # a directory of its own; `formats.md` and `middleware.md` pass `LocalSessions`

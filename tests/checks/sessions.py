@@ -15,11 +15,9 @@ from typing import TYPE_CHECKING, Any
 
 from deepagents.backends import FilesystemBackend
 
-from kingfisher.core.agent.backend import skill_mounts
 from kingfisher.core.agent.permitted_backend import host_path
-from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skills import registry as skill_registry
-from kingfisher.plugins import DEFAULT_LAYOUT
+from kingfisher.plugins import DEFAULT_LAYOUT, Definitions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -168,7 +166,7 @@ def a_session_serves_the_skills_kingfisher_read(make: Callable[[], Any]) -> None
         # Source by source, because deepagents lists a source one level deep: a
         # skill in a catalogue folder is found only by listing that folder.
         *((DEFAULT_LAYOUT.skills_route, root, path) for _, path in skill_registry.sources(root)),
-        *((route, directory, skill_registry.ROOT) for route, directory in skill_mounts(catalogue)),
+        *((route, directory, skill_registry.ROOT) for route, directory in catalogue.skill_mounts()),
     ]
     read: set[tuple[str, str]] = set()
     served: set[tuple[str, str]] = set()

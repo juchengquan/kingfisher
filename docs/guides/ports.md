@@ -345,7 +345,10 @@ that otherwise report nothing.
 
 **Take `catalogue` even if you ignore it.** It is what lets a session see the skills
 your bundles ship, and an `open` that quietly drops it gets a backend that is
-perfectly well-formed and sees none of them. Nothing at runtime can see that mistake,
+perfectly well-formed and sees none of them. It is a `Definitions`, from
+`kingfisher.plugins`, and `catalogue.skill_mounts()` lists where your backend has to
+serve its skills: a route under `/skills/` and the directory behind it, one for each
+subagent's bundle and each mount. Nothing at runtime can see that mistake,
 which is why `Sessions` is a typed protocol rather than a line of prose —
 write the signature out and your type checker catches it.
 
