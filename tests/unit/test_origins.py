@@ -93,18 +93,19 @@ def test_the_seed_directory_is_never_derived(cfg, tmp_path):
     assert Origins.of(replace(cfg, assets=tmp_path)).seed == Origin("relocated", tmp_path)
 
 
-def test_sessions_are_supplied_where_the_setting_names_backends_to_build(cfg):
-    """The half a surface holding only a `Config` can answer, and the half that was
-    missing. `inventory` has no backends object to hand over, so it reported the derived
-    default -- and `kingfisher doctor` printed `sessions : ./sessions` three rows above
-    its own `sessions survive` row, which reads this same setting and knew better.
+def test_kingfishers_own_sessions_are_the_workspace_s_whoever_hands_them_over(cfg):
+    """The command hands `inventory` the sessions it runs on, kingfisher's own unless a
+    deployment names others -- and answering `<supplied>` for every object handed over
+    would tell each deployment on the default that its sessions were somewhere else.
     """
-    configured = replace(cfg, sessions_factory="acme.backends:build")
 
-    assert Origins.of(configured).sessions == Origin("supplied", None)
-    # The control: with nothing naming backends, the derived default is the right
-    # answer and must not become `<supplied>` for every deployment.
-    assert Origins.of(cfg).sessions == Origin("default", cfg.workspace / "sessions")
+    class Theirs(LocalSessions):
+        """By exact class, since a subclass may open its backend with anything changed."""
+
+    own = Origin("default", cfg.workspace / "sessions")
+
+    assert Origins.of(cfg, sessions=LocalSessions()).sessions == own
+    assert Origins.of(cfg, sessions=Theirs()).sessions == Origin("supplied", None)
 
 
 def test_sessions_are_the_workspace_s_own_unless_a_backend_says_otherwise(cfg):

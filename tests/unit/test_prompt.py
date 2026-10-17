@@ -17,7 +17,7 @@ from kingfisher.core.agent.prompting import (
 from kingfisher.core.layout import INPUTS, OUTPUTS, SCRATCH, TOOL_RESULTS_ROUTE, Layout
 from kingfisher.core.session.store import entry_id
 from kingfisher.core.session.turn import ledger_delta, ledger_index
-from kingfisher.plugins import backend_at
+from kingfisher.plugins import ShellSettings, backend_at
 from tests.conftest import FakeToolCallingModel, a_subagent
 
 
@@ -352,7 +352,6 @@ def test_the_half_the_prompt_still_claims_holds_with_no_fence_at_all(
     the deny rule whatever runs the shell, because it is a rule on the backend and not
     on the host.
     """
-    made = replace(cfg, shell_sandbox=sandbox)
     (session_dir / INPUTS / "given.csv").write_text("caller,data\n", encoding="utf-8")
     call = AIMessage(
         content="",
@@ -365,8 +364,8 @@ def test_the_half_the_prompt_still_claims_holds_with_no_fence_at_all(
         ],
     )
     graph = build_agent(
-        made,
-        backend=backend_at(made, session_dir),
+        cfg,
+        backend=backend_at(cfg, session_dir, shell=ShellSettings(sandbox=sandbox)),
         capabilities=Capabilities(builtin_tools=("write_file",)),
         model=FakeToolCallingModel(responses=[call, AIMessage(content="done")]),
     ).graph

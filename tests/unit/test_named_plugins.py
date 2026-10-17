@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import inspect
-from dataclasses import fields, replace
+from dataclasses import fields
 
 import pytest
 
@@ -14,6 +14,7 @@ from kingfisher.plugins import Plugins
 from tests.conftest import RecordedEvents
 
 HERE = __name__
+SETTING = "KINGFISHER_PLUGINS"
 
 
 def make_plugins() -> Plugins:
@@ -24,26 +25,25 @@ def make_keywords() -> dict[str, object]:
     return {"run_events": RecordedEvents()}
 
 
-def test_naming_nothing_hands_on_nothing(cfg):
+def test_naming_nothing_hands_on_nothing():
     """Unset, every plugin is kingfisher's own, so the command passes no keyword at all."""
-    assert configured_plugins(cfg).keywords() == {}
+    assert configured_plugins({}).keywords() == {}
+    assert configured_plugins({SETTING: "  "}).keywords() == {}, "blank is unset"
 
 
-def test_the_plugins_a_setting_names_are_what_the_command_hands_on(cfg):
+def test_the_plugins_a_setting_names_are_what_the_command_hands_on():
     """A deployment whose turns record their events elsewhere had every command run
     without them, because the command had nowhere to be told."""
-    named = replace(cfg, plugins_factory=f"{HERE}:make_plugins")
-
-    wiring = configured_plugins(named).keywords()
+    wiring = configured_plugins({SETTING: f" {HERE}:make_plugins "}).keywords()
 
     assert set(wiring) == {"run_events"}
     assert isinstance(wiring["run_events"], RecordedEvents)
 
 
-def test_a_setting_that_returns_keywords_instead_is_refused(cfg):
+def test_a_setting_that_returns_keywords_instead_is_refused():
     """A dict of keywords looks as if it would do, and is a second spelling nothing checks."""
     with pytest.raises(ConfigError, match="not a Plugins"):
-        configured_plugins(replace(cfg, plugins_factory=f"{HERE}:make_keywords"))
+        configured_plugins({SETTING: f"{HERE}:make_keywords"})
 
 
 def test_every_plugin_is_a_keyword_kingfisher_takes():

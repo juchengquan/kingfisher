@@ -260,13 +260,14 @@ def _require_layout(
         raise ValueError(msg)
 
 
-def backend_at(
+def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is built from
     cfg: Config,
     session_dir: Path,
     *,
     catalogue: Definitions | None = None,
     runner: CommandRunner | None = None,
     shell_prompt: ShellPrompt | None = None,
+    shell: confinement.ShellSettings | None = None,
 ) -> WorkspaceScopedBackend:
     """Kingfisher's own backend, rooted at one session directory on this host.
 
@@ -297,10 +298,13 @@ def backend_at(
     view = skills_view(skills, cfg.workspace) if skills.mounts else None
     every_skills_dir = (skills_dir, *skills.mounts.values(), *((view,) if view else ()))
 
-    confined = confinement.shell_confinement(cfg, skills=every_skills_dir)
-    env = shell_env(cfg, session_dir, catalogue=catalogue)
+    settings = shell if shell is not None else confinement.ShellSettings.from_env()
+    confined = confinement.shell_confinement(cfg, settings, skills=every_skills_dir)
+    env = shell_env(cfg, session_dir, path_extra=settings.path_extra, catalogue=catalogue)
     if runner is None:
-        chosen = fence_for(cfg, session_dir, confined, every_skills_dir, env)
+        chosen = fence_for(
+            cfg, session_dir, confined, every_skills_dir, env, path_extra=settings.path_extra
+        )
     else:
         # Said once, here, rather than left for a reader to work out from two
         # places. What confines the shell depends on what runs the command, and
@@ -321,7 +325,7 @@ def backend_at(
             "read and change the other sessions' files."
         )
         warnings.warn(said, stacklevel=1)
-    shell = ConfinedLocalShellBackend(
+    confined_shell = ConfinedLocalShellBackend(
         confined,
         runner=chosen,
         # The deployment's runner and not `chosen`, which is kingfisher's own fence on
@@ -375,7 +379,7 @@ def backend_at(
     })
 
     return WorkspaceScopedBackend(
-        default=shell,
+        default=confined_shell,
         routes=routes,
         session_dir=session_dir,
         workspace=cfg.workspace,
@@ -398,12 +402,16 @@ class LocalSessions(Sessions):
     #: `__init__` without calling this one still opens sessions.
     _runner: Callable[[Path], CommandRunner] | None = None
     _shell_prompt: ShellPrompt | None = None
+    #: How this shell is fenced. `None` reads the environment at each opening, which is
+    #: what a subclass that skips `__init__` gets.
+    shell: confinement.ShellSettings | None = None
 
     def __init__(
         self,
         *,
         runner: Callable[[Path], CommandRunner] | None = None,
         shell_prompt: ShellPrompt | None = None,
+        shell: confinement.ShellSettings | None = None,
     ) -> None:
         # A callable, and only a callable. A runner is built for one session --
         # kingfisher's own Landlock fence is, because its policy is generated from
@@ -422,6 +430,7 @@ class LocalSessions(Sessions):
         _refuse_wording_without_runner(runner, shell_prompt)
         self._runner = runner
         self._shell_prompt = shell_prompt
+        self.shell = shell if shell is not None else confinement.ShellSettings.from_env()
 
     def open(
         self,
@@ -447,7 +456,12 @@ class LocalSessions(Sessions):
         unprotected = protect_inputs(directory, cfg.layout.inputs)
         runner = self._runner(directory) if self._runner is not None else None
         built = backend_at(
-            cfg, directory, catalogue=catalogue, runner=runner, shell_prompt=self._shell_prompt
+            cfg,
+            directory,
+            catalogue=catalogue,
+            runner=runner,
+            shell_prompt=self._shell_prompt,
+            shell=self.shell,
         )
         built.unprotected = unprotected
         return built

@@ -45,6 +45,9 @@ needs_a_real_toolchain = pytest.mark.skipif(
     reason="the runner's python3 is Xcode's shim, not the project venv",
 )
 
+DEFAULT_SHELL = confinement.ShellSettings()
+UNFENCED = confinement.ShellSettings(sandbox=confinement.OFF)
+
 
 # -- choosing one ---------------------------------------------------------
 
@@ -164,7 +167,7 @@ def test_the_sessions_root_is_named_twice_only_where_it_is_somewhere_else(cfg, t
 
 
 def test_paths_a_deployment_put_on_path_stay_readable(cfg, tmp_path):
-    """`shell_path_extra` is a deployment saying "the agent may run these"."""
+    """`ShellSettings.path_extra` is a deployment saying "the agent may run these"."""
     roots = confinement.readable_roots(cfg.workspace, ("/opt/homebrew/bin",))
 
     assert Path("/opt/homebrew/bin") in roots
@@ -437,7 +440,7 @@ def test_off_really_does_leave_the_shell_open(cfg, session_dir):
     secret = Path.home() / ".kingfisher-confinement-probe-off"
     secret.write_text("token", encoding="utf-8")
     try:
-        backend = backend_at(replace(cfg, shell_sandbox=confinement.OFF), session_dir)
+        backend = backend_at(cfg, session_dir, shell=UNFENCED)
 
         assert "token" in str(backend.execute(f"cat {secret}").output)
     finally:
@@ -708,7 +711,7 @@ def test_a_supplied_runner_that_is_here_keeps_the_mechanism_and_adds_itself(cfg,
     confined = backend.default.confinement
 
     assert confined.supplied
-    assert confined.mechanism == confinement.shell_confinement(cfg).mechanism
+    assert confined.mechanism == confinement.shell_confinement(cfg, DEFAULT_SHELL).mechanism
 
 
 def test_no_supplied_runner_says_nothing_new(cfg, session_dir):
@@ -726,7 +729,7 @@ def test_an_unconfined_shell_is_warned_about_when_its_backend_is_built(cfg, sess
     exists, not that anything says it.
     """
     with pytest.warns(UserWarning, match="unconfined"):
-        backend_at(replace(cfg, shell_sandbox=confinement.OFF), session_dir)
+        backend_at(cfg, session_dir, shell=UNFENCED)
 
 
 def test_the_warning_is_said_once_however_many_places_build_a_backend(cfg, session_dir):
@@ -735,11 +738,10 @@ def test_the_warning_is_said_once_however_many_places_build_a_backend(cfg, sessi
     Two call sites rather than a loop: a loop is one location, and would stay green
     with the warning attributed to the caller, which repeats it for every site.
     """
-    off = replace(cfg, shell_sandbox=confinement.OFF)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("default")
-        backend_at(off, session_dir)
-        backend_at(off, session_dir)
+        backend_at(cfg, session_dir, shell=UNFENCED)
+        backend_at(cfg, session_dir, shell=UNFENCED)
 
     assert len([w for w in caught if "unconfined" in str(w.message)]) == 1
 
@@ -755,7 +757,7 @@ def test_a_shell_confined_elsewhere_is_not_warned_about(cfg, session_dir, mode, 
     """
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        backend_at(replace(cfg, shell_sandbox=mode), session_dir, runner=runner)
+        backend_at(cfg, session_dir, runner=runner, shell=confinement.ShellSettings(sandbox=mode))
 
     assert not [w for w in caught if "unconfined" in str(w.message)]
 
@@ -1198,7 +1200,7 @@ def test_an_authored_file_is_denied_by_its_real_path(cfg, tmp_path):
     link = tmp_path / "linked-definitions"
     link.symlink_to(cfg.definitions)
 
-    written = _written(confinement.shell_confinement(replace(cfg, definitions=link)))
+    written = _written(confinement.shell_confinement(replace(cfg, definitions=link), DEFAULT_SHELL))
     real = cfg.definitions.resolve() / "source_ids.yaml"
 
     assert f'(deny file-write* (path "{real}"))' in written
@@ -1214,7 +1216,7 @@ def test_a_catalogue_read_from_elsewhere_is_denied_where_it_was_read(cfg, tmp_pa
     elsewhere = tmp_path / "shared" / "models.yaml"
 
     built = replace(cfg, models=replace(cfg.models, source=elsewhere))
-    written = _written(confinement.shell_confinement(built))
+    written = _written(confinement.shell_confinement(built, DEFAULT_SHELL))
 
     assert f'(deny file-write* (path "{elsewhere.resolve()}"))' in written
 
@@ -1509,7 +1511,7 @@ def test_each_linux_fence_is_read_from_its_own_list_of_system_paths(cfg):
         "the two lists are identical, so this rule cannot tell them apart"
     )
 
-    landlock = confinement.shell_readable(cfg, confinement.LANDLOCK)
-    bwrap = confinement.shell_readable(cfg, confinement.BUBBLEWRAP)
+    landlock = confinement.shell_readable(cfg, DEFAULT_SHELL, confinement.LANDLOCK)
+    bwrap = confinement.shell_readable(cfg, DEFAULT_SHELL, confinement.BUBBLEWRAP)
 
     assert set(landlock) != set(bwrap)

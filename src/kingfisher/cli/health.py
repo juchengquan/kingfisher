@@ -22,6 +22,7 @@ from kingfisher.core.backing import MemoryBacking, memory_backing
 # everybody who runs `pip install kingfisher`. The command ships in this wheel, so it
 # takes each name where it lives.
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
+from kingfisher.core.origins import kingfishers_own
 from kingfisher.core.session.model import sessions_root
 from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.sandbox.confinement import (
@@ -123,7 +124,7 @@ def _key_source(endpoint: Any) -> str:
     return endpoint.key_env or "set in code"
 
 
-def _keys_file(cfg: Config) -> Iterator[Check]:
+def _keys_file(cfg: Config, sessions: object) -> Iterator[Check]:
     """Whether the agent's shell can read the keys file, by the fence that is running.
 
     A report and never a refusal: kingfisher keeps nothing from the shell for the
@@ -132,22 +133,22 @@ def _keys_file(cfg: Config) -> Iterator[Check]:
     path = cfg.models.keys_file
     if path is None:
         return
-    if cfg.sessions_factory:
+    if (shell := health_isolation.shell_of(sessions)) is None:
         yield Check(
             "keys file",
             "warn",
-            f"KINGFISHER_SESSIONS names {cfg.sessions_factory}, and "
-            f"nothing here can see whether its shell can read {path}",
+            f"the sessions in use are {health_isolation.named(sessions)}, and "
+            f"nothing here can see whether their shell can read {path}",
             "a shell on another machine cannot; one on this machine reads what its own "
             "fence allows",
         )
         return
-    mechanism = shell_confinement(cfg).mechanism
+    mechanism = shell_confinement(cfg, shell).mechanism
     reason = confinement.shell_reads(
         path,
         mechanism=mechanism,
         home=Path.home(),
-        readable=confinement.shell_readable(cfg, mechanism),
+        readable=confinement.shell_readable(cfg, shell, mechanism),
     )
     if reason is None:
         yield Check("keys file", "ok", f"{path}, which the sandbox keeps from the agent's shell")
@@ -181,7 +182,9 @@ def _keys_file_mode(cfg: Config) -> Iterator[Check]:
         )
 
 
-def _starting_environment(cfg: Config, from_dotenv: frozenset[str] | None) -> Iterator[Check]:
+def _starting_environment(
+    cfg: Config, from_dotenv: frozenset[str] | None, sessions: object
+) -> Iterator[Check]:
     """Keys that were in the environment before kingfisher started, where the shell reads it.
 
     On macOS a sandboxed shell reads any same-user process's environment as it started,
@@ -190,9 +193,10 @@ def _starting_environment(cfg: Config, from_dotenv: frozenset[str] | None) -> It
     than told something that may be wrong -- and so are sessions whose shell
     this cannot see.
     """
-    if from_dotenv is None or cfg.sessions_factory:
+    shell = health_isolation.shell_of(sessions)
+    if from_dotenv is None or shell is None:
         return
-    mechanism = shell_confinement(cfg).mechanism
+    mechanism = shell_confinement(cfg, shell).mechanism
     if mechanism == SANDBOX_EXEC:
         where = "on this Mac"
     elif mechanism in LINUX_FENCES:
@@ -267,7 +271,7 @@ def _devices(sessions: MemoryBacking, workspace: MemoryBacking) -> str:
     return f"sessions on {sessions.filesystem}, workspace on {workspace.filesystem}"
 
 
-def _at_rest(cfg: Config) -> Iterator[Check]:
+def _at_rest(cfg: Config, sessions: object) -> Iterator[Check]:
     """Whether sessions kept in memory can actually keep nothing.
 
     Measured against the sessions tree rather than the workspace, and the two are
@@ -289,10 +293,10 @@ def _at_rest(cfg: Config) -> Iterator[Check]:
     - Only a filesystem **smaller** than the limit gives a clean `ENOSPC` on a
       full one, which is a thing kingfisher can refuse on.
     """
-    sessions = memory_backing(_sessions_probe(cfg.workspace))
+    backing = memory_backing(_sessions_probe(cfg.workspace))
     workspace = memory_backing(cfg.workspace)
-    devices = _devices(sessions, workspace)
-    if not sessions.in_memory:
+    devices = _devices(backing, workspace)
+    if not backing.in_memory:
         # The one thing worth saying about a sessions tree on a disk, and only
         # because the workspace claims otherwise: every check below gates on
         # sessions, so without this the arrangement that breaks the promise
@@ -307,39 +311,39 @@ def _at_rest(cfg: Config) -> Iterator[Check]:
             )
         return
 
-    if sessions.swap_enabled:
+    if backing.swap_enabled:
         yield Check(
             "nothing at rest",
             "fail",
             f"{devices} — this cgroup permits swapping",
             "disable swap for the container (`--memory-swap` equal to `--memory`)",
         )
-    if sessions.fits is False:
+    if backing.fits is False:
         yield Check(
             "nothing at rest",
             "fail",
-            f"{devices} — {_mb(sessions.size_bytes)} of sessions against a memory limit of "
-            f"{_mb(sessions.limit_bytes)}; filling it swaps to disk, or kills the container",
+            f"{devices} — {_mb(backing.size_bytes)} of sessions against a memory limit of "
+            f"{_mb(backing.limit_bytes)}; filling it swaps to disk, or kills the container",
             "size the filesystem below the limit, leaving room for this process",
         )
-    elif sessions.fits is None:
+    elif backing.fits is None:
         yield Check(
             "nothing at rest",
             "warn",
             f"{devices} — and this process has no memory limit",
             "set one, so a full filesystem fails rather than exhausting the host",
         )
-    elif not sessions.swap_enabled:
+    elif not backing.swap_enabled:
         yield Check(
             "nothing at rest",
             "ok",
-            f"{devices} — {_mb(sessions.size_bytes)} under a "
-            f"{_mb(sessions.limit_bytes)} limit, no swap",
+            f"{devices} — {_mb(backing.size_bytes)} under a "
+            f"{_mb(backing.limit_bytes)} limit, no swap",
         )
 
     # Two things that only matter once sessions are in memory, and both are
     # silent until the moment they are expensive.
-    if cfg.sessions_factory is None:
+    if kingfishers_own(sessions, cfg):
         yield Check(
             "sessions survive",
             "fail",
@@ -350,7 +354,7 @@ def _at_rest(cfg: Config) -> Iterator[Check]:
         )
     else:
         yield Check(
-            "sessions survive", "ok", f"{devices} — kept by {cfg.sessions_factory}"
+            "sessions survive", "ok", f"{devices} — kept by {health_isolation.named(sessions)}"
         )
 
     if cfg.session_max_bytes is None:
@@ -358,16 +362,16 @@ def _at_rest(cfg: Config) -> Iterator[Check]:
             "session quota",
             "fail",
             f"{devices} — no KINGFISHER_SESSION_MAX_BYTES, and sessions share "
-            f"{_mb(sessions.size_bytes)} of memory; one can starve every other in "
+            f"{_mb(backing.size_bytes)} of memory; one can starve every other in "
             "this container",
             "set it below the filesystem size divided by the sessions you expect",
         )
-    elif sessions.size_bytes is not None and cfg.session_max_bytes > sessions.size_bytes:
+    elif backing.size_bytes is not None and cfg.session_max_bytes > backing.size_bytes:
         yield Check(
             "session quota",
             "warn",
             f"{devices} — one session may reach {_mb(cfg.session_max_bytes)} and the "
-            f"filesystem holds {_mb(sessions.size_bytes)}, so the quota can never bind",
+            f"filesystem holds {_mb(backing.size_bytes)}, so the quota can never bind",
             "lower it, or the limit is the filesystem and it arrives as a write failure",
         )
     else:
@@ -416,27 +420,37 @@ def _retired(environ: Mapping[str, str] | None = None) -> Iterator[Check]:
 
 
 def examine(
-    cfg: Config, found: Inventory | None = None, *, from_dotenv: frozenset[str] | None = None
+    cfg: Config,
+    found: Inventory | None = None,
+    *,
+    from_dotenv: frozenset[str] | None = None,
+    sessions: object | None = None,
 ) -> tuple[Check, ...]:
     """Every check, in the order somebody diagnosing would want them.
 
     `from_dotenv` is the names `.env` added, which only the command line knows.
+    `sessions` are the ones the command runs on, built from its settings when not given.
     """
+    if sessions is None:
+        # Here rather than at the top, for the reason `shell_of` gives.
+        from kingfisher.cli.configured import configured_sessions  # noqa: PLC0415
+
+        sessions = configured_sessions()
     checks: list[Check] = []
     try:
         # First, because it is the one check that explains another being wrong:
         # a setting that stopped being read looks exactly like one nobody set.
         checks += _retired()
         checks += _models(cfg)
-        checks += _keys_file(cfg)
+        checks += _keys_file(cfg, sessions)
         checks += _keys_file_mode(cfg)
-        checks += _starting_environment(cfg, from_dotenv)
+        checks += _starting_environment(cfg, from_dotenv, sessions)
         checks += _packs(cfg)
-        checks += _at_rest(cfg)
+        checks += _at_rest(cfg, sessions)
         if found is None:
-            found = inventory(cfg)
+            found = inventory(cfg, sessions=sessions)
         checks += health_definitions.checks(cfg, found)
-        checks += health_isolation.checks(cfg)
+        checks += health_isolation.checks(cfg, sessions)
     except ConfigError as exc:  # pragma: no cover -- belt and braces
         checks.append(Check("configuration", "fail", str(exc)))
     return tuple(checks)

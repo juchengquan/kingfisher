@@ -307,6 +307,30 @@ def test_the_definitions_can_be_shared_between_workspaces(env, tmp_path):
     assert one.catalogue_roots == other.catalogue_roots
 
 
+def _looked_up() -> set[str]:
+    """Every `KINGFISHER_` name read from the environment: the core's settings, the
+    shell's, and the sessions and plugins the command runs on.
+
+    Quoted, so this is a name a module looks *up* rather than one it mentions in a
+    comment -- which is the half the old rule got wrong. Asked of the modules rather
+    than spelled as paths: a rule naming `src/kingfisher/app/config.py` shipped one
+    rename after that directory stopped existing, and went red on main rather than at
+    review.
+    """
+    import re
+    from pathlib import Path as _Path
+
+    from kingfisher.cli import configured
+    from kingfisher.core import environment
+    from kingfisher.plugins.sessions.sandbox import confinement
+
+    return {
+        name
+        for module in (environment, confinement, configured)
+        for name in re.findall(r'"(KINGFISHER_[A-Z_]+)"', _Path(module.__file__).read_text())
+    }
+
+
 def test_the_file_shows_exactly_the_knobs_that_exist():
     """`.env.example` is the only place a deployment learns a knob exists -- and, since
     nothing anywhere warns about an unknown `KINGFISHER_` variable, the only place it
@@ -315,21 +339,13 @@ def test_the_file_shows_exactly_the_knobs_that_exist():
     import re
     from pathlib import Path as _Path
 
-    from kingfisher.core import environment as config_module
-
     # The repository, found by its marker rather than counted in parents: this
     # is two levels further up since the library moved under `packages/`, and a
     # count would have gone looking for `.env.example` inside the package.
     root = next(
         p for p in _Path(__file__).resolve().parents if (p / ".env.example").is_file()
     )
-    # Asked of the module rather than spelled as a path: this test shipped
-    # naming `src/kingfisher/app/config.py`, one rename after that directory
-    # stopped existing, and went red on main rather than at review.
-    source = _Path(config_module.__file__).read_text()
-    # Quoted, so this is a name the module looks *up* rather than one it
-    # mentions in a comment -- which is the half the old rule got wrong.
-    read = set(re.findall(r'"(KINGFISHER_[A-Z_]+)"', source))
+    read = _looked_up()
     # `#?` because a knob with no sensible default is shown commented out, and
     # a line nobody uncommented still documents it.
     shown = set(
@@ -337,7 +353,7 @@ def test_the_file_shows_exactly_the_knobs_that_exist():
     )
 
     assert shown == read, (
-        f"read by config.py but not shown in .env.example: {sorted(read - shown)}; "
+        f"read but not shown in .env.example: {sorted(read - shown)}; "
         f"shown in .env.example but read by nothing: {sorted(shown - read)}"
     )
 
@@ -350,9 +366,8 @@ def test_no_message_names_a_variable_nothing_reads():
 
     import kingfisher
     from kingfisher.cli import health
-    from kingfisher.core import environment as config_module
 
-    read = set(re.findall(r"KINGFISHER_[A-Z_]+", _Path(config_module.__file__).read_text()))
+    read = _looked_up()
     # A name `doctor` reports as retired is the one kind of message that names a
     # variable nothing reads *on purpose* -- saying so is the whole of what it is
     # for. Allowed rather than exempted by file, so a message inventing a name

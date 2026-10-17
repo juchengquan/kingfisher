@@ -568,10 +568,10 @@ def _configured(cfg: Config, *, log: Path | None = None) -> Kingfisher:
         configured_sessions,
     )
 
-    wiring = configured_plugins(cfg).keywords()
+    wiring = configured_plugins().keywords()
     if (kept := _kept_in(log)) is not None:
         wiring["run_events"] = kept
-    return Kingfisher(cfg, sessions=configured_sessions(cfg), **wiring)
+    return Kingfisher(cfg, sessions=configured_sessions(), **wiring)
 
 
 def _kept_in(log: Path | None) -> JsonlRunEvents | None:
@@ -787,7 +787,9 @@ def _list(*, as_document: bool = False, held: Held | None = None) -> int:
     # from the refusal that covers a *turn*: there is nothing to protect by
     # making an operator name themselves to read their own workspace.
     source_ids = held if isinstance(held, tuple) else None
-    found = inventory(cfg, source_ids=source_ids)
+    from kingfisher.cli.configured import configured_sessions  # noqa: PLC0415
+
+    found = inventory(cfg, source_ids=source_ids, sessions=configured_sessions())
     if as_document:
         print(json.dumps(as_json(found), indent=2, sort_keys=True))
     else:
@@ -1007,8 +1009,11 @@ def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = N
     # building its own is what made "your configuration is being ignored"
     # unsayable, since a catalogue resolved from `cfg` agrees with `cfg` by
     # construction.
-    found = inventory(cfg)
-    checks = examine(cfg, found, from_dotenv=from_dotenv)
+    from kingfisher.cli.configured import configured_sessions  # noqa: PLC0415
+
+    sessions = configured_sessions()
+    found = inventory(cfg, sessions=sessions)
+    checks = examine(cfg, found, from_dotenv=from_dotenv, sessions=sessions)
     origins = found.origins
     if as_document:
         # An object where this was a bare list of checks. The two forms of this

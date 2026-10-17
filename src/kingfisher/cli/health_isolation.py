@@ -7,6 +7,7 @@ from collections.abc import Iterator
 
 from kingfisher import Config
 from kingfisher.cli.check import Check
+from kingfisher.plugins import ShellSettings
 from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.sandbox.bubblewrap import bubblewrap_available
 from kingfisher.plugins.sessions.sandbox.confinement import (
@@ -92,7 +93,26 @@ def _what_this_host_could_do() -> str:
     )
 
 
-def _shell(cfg: Config) -> Iterator[Check]:
+def shell_of(sessions: object) -> ShellSettings | None:
+    """The shell settings of kingfisher's own sessions, or `None` for sessions whose
+    shell this command cannot see into.
+
+    By exact class, as `Kingfisher.origins` decides whose sessions they are: a subclass
+    can open its backend with anything changed, the fence included.
+    """
+    # Here rather than at the top: `LocalSessions` loads deepagents, and the command
+    # imports this module before it knows its verb.
+    from kingfisher.plugins import LocalSessions  # noqa: PLC0415
+
+    return sessions.shell if type(sessions) is LocalSessions else None
+
+
+def named(sessions: object) -> str:
+    """Whose sessions these are, as a reader can look them up."""
+    return f"{type(sessions).__module__}.{type(sessions).__qualname__}"
+
+
+def _shell(cfg: Config, sessions: object) -> Iterator[Check]:
     """What is keeping `execute` off the host, if anything.
 
     The check most worth having and the one that was hardest to reach: it lived
@@ -102,7 +122,7 @@ def _shell(cfg: Config) -> Iterator[Check]:
     it -- but silence would make an unconfined one look exactly like a confined
     one, which is how this went unnoticed until it was measured.
     """
-    confined = shell_confinement(cfg)
+    confined = shell_confinement(cfg, shell_of(sessions) or ShellSettings.from_env())
     if confined.confined:
         yield Check("shell", "ok", f"confined by {_mechanism(confined)}{FROM_CONFIG}")
     elif confined.elsewhere:
@@ -122,27 +142,26 @@ def _shell(cfg: Config) -> Iterator[Check]:
         )
 
 
-def _session_files(cfg: Config) -> Iterator[Check]:
+def _session_files(cfg: Config, sessions: object) -> Iterator[Check]:
     """Whether anything this command can see keeps the agent's shell out of `.harness`.
 
     Nothing signs what kingfisher keeps there -- the pinned agent, the conversation, a
     paused turn -- so a shell that can write it can rewrite them. Asked of what this
-    command can see: the sessions `KINGFISHER_SESSIONS` names, and
-    the sandbox. A deployment wiring its own backends, graph or runner in code is out of its
-    sight.
+    command can see: the sessions it runs on, and the sandbox. A deployment wiring its
+    own backends, graph or runner in code is out of its sight.
     A warning rather than a failure, because the deployment runs either way and may
     well be fenced by something this cannot look into.
     """
-    if cfg.sessions_factory:
+    if (shell := shell_of(sessions)) is None:
         yield Check(
             "session files",
             "warn",
-            f"KINGFISHER_SESSIONS names {cfg.sessions_factory}, "
-            "and nothing here can see whether its shell is kept out of .harness",
+            f"the sessions in use are {named(sessions)}, "
+            "and nothing here can see whether their shell is kept out of .harness",
             "check it with shell_denied, in kingfisher's tests/checks/backend.py: it "
             "drives the shell at /.harness",
         )
-    elif (why := harness_unfenced(cfg)) is not None:
+    elif (why := harness_unfenced(cfg, shell)) is not None:
         yield Check(
             "session files",
             "warn",
@@ -157,7 +176,7 @@ def _session_files(cfg: Config) -> Iterator[Check]:
         )
 
 
-def _linked_sessions(cfg: Config) -> Iterator[Check]:
+def _linked_sessions(cfg: Config, sessions: object) -> Iterator[Check]:
     """Sessions reached through a link, which a static profile cannot bind.
 
     `fenced_sessions` resolves the sessions root, so moving all of them with one
@@ -175,9 +194,9 @@ def _linked_sessions(cfg: Config) -> Iterator[Check]:
     fences are built from the session directory itself, so a link is followed when it
     is opened and the rules land on the real one.
     """
-    if cfg.sessions_factory:
+    if (shell := shell_of(sessions)) is None:
         return
-    if shell_confinement(cfg).mechanism != SANDBOX_EXEC:
+    if shell_confinement(cfg, shell).mechanism != SANDBOX_EXEC:
         return
     root = fenced_sessions(cfg.workspace)
     if not root.is_dir():
@@ -201,7 +220,7 @@ def _linked_sessions(cfg: Config) -> Iterator[Check]:
     )
 
 
-def _sessions_apart(cfg: Config) -> Iterator[Check]:
+def _sessions_apart(cfg: Config, sessions: object) -> Iterator[Check]:
     """Whether one session's agent can read and change another session's files.
 
     `shell` says what the host is exposed to; this says the consequence for the people
@@ -210,9 +229,9 @@ def _sessions_apart(cfg: Config) -> Iterator[Check]:
     Linux fence handing each turn its own session -- and for sessions this
     command cannot see into, whose contract asks it of them.
     """
-    if cfg.sessions_factory:
+    if (shell := shell_of(sessions)) is None:
         return
-    confined = shell_confinement(cfg)
+    confined = shell_confinement(cfg, shell)
     if confined.mechanism in LINUX_FENCES:
         return
     if confined.mechanism == SANDBOX_EXEC:
@@ -236,9 +255,9 @@ def _sessions_apart(cfg: Config) -> Iterator[Check]:
     )
 
 
-def checks(cfg: Config) -> Iterator[Check]:
+def checks(cfg: Config, sessions: object) -> Iterator[Check]:
     """These, in the order `examine` reports them."""
-    yield from _shell(cfg)
-    yield from _session_files(cfg)
-    yield from _linked_sessions(cfg)
-    yield from _sessions_apart(cfg)
+    yield from _shell(cfg, sessions)
+    yield from _session_files(cfg, sessions)
+    yield from _linked_sessions(cfg, sessions)
+    yield from _sessions_apart(cfg, sessions)

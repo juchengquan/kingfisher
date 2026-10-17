@@ -345,7 +345,7 @@ class Config:
     #: One field where there were five -- `models`, `endpoints`, `default_model`,
     #: `aliases`, `models_file` -- plus the two methods that read only those. A
     #: `Config` is a flat bag a deployment fills in, and the cluster has
-    #: invariants between its parts that siblings of `shell_sandbox` could not
+    #: invariants between its parts that siblings of `turn_timeout_s` could not
     #: express. See `Models`.
     models: Models
     #: Which source ids reach which agents, subagents and tools, or `None` where this
@@ -386,15 +386,6 @@ class Config:
     # which is why the loop's default executor -- 12 workers on an 8-CPU host --
     # was not enough.
     thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE
-    shell_path_extra: tuple[str, ...] = ()
-    # Who keeps `execute` out of the rest of the host. `auto` uses whatever the
-    # platform offers, `bubblewrap` asks for it even where Landlock would run,
-    # `external` says a container already does it, `off` opts out and is warned
-    # about on every start. On by default because an exposure nobody opted into
-    # is one nobody knows they have: measured unconfined, the shell could read
-    # this deployment's own API keys, `~/.aws` and the GitHub CLI's token, and a
-    # workspace tool that fetches a URL is one call away from sending them.
-    shell_sandbox: str = "auto"
     skills_mounts: Mapping[str, Path] = NO_MOUNTS
     # Where definitions are copied *from*, which is the opposite direction to
     # the definition roots. Carried here as well as on `WorkspacePaths` because
@@ -408,15 +399,6 @@ class Config:
     # inheriting a folder inside the workspace. One folder rather than one per kind:
     # several deployments point at it, and one path is what they agree on.
     definitions: Path = field(kw_only=True)
-    # The sessions the command line runs on, named rather than built here:
-    # `module:name` for something callable with no arguments that returns a
-    # `Sessions`. Only the command line reads it -- `Kingfisher` takes them as
-    # `sessions=` -- and it is what lets `kingfisher sessions` and `reap` see sessions
-    # a deployment's own keep somewhere else.
-    sessions_factory: str | None = None
-    # The other plugins the command line hands every `Kingfisher` it builds, named the
-    # same way: something returning a `Plugins`. Unset, each is kingfisher's own.
-    plugins_factory: str | None = None
     # What this deployment *wires*. Distinct from `Capabilities`, which is what a single
     # request may *use* of it -- and the distinction is not stylistic: these two flags
     # shape `render_system_prompt`, which is the cached prefix every turn is compared

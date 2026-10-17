@@ -360,7 +360,9 @@ def test_the_linux_fence_is_granted_the_view(mounted, session_dir, monkeypatch):
 
     handed = []
     monkeypatch.setattr(
-        backend, "fence_for", lambda cfg, session, confined, skills, env: handed.append(skills)
+        backend,
+        "fence_for",
+        lambda cfg, session, confined, skills, env, **kw: handed.append(skills),
     )
     backend_at(mounted, session_dir)
 

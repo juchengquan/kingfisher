@@ -26,6 +26,7 @@ _EXPORTS = {
     "LocalSessions": "kingfisher.plugins.sessions.backend",
     "backend_at": "kingfisher.plugins.sessions.backend",
     "JsonlRunEvents": "kingfisher.plugins.events",
+    "ShellSettings": "kingfisher.plugins.sessions.sandbox.confinement",
     "InstructionsFile": "kingfisher.core.agent.prompting",
     "WIRE_FORMATS": "kingfisher.core.agent.models",
 }
@@ -43,6 +44,7 @@ __all__ = [
     "RunEvents",
     "Sessions",
     "ShellPrompt",
+    "ShellSettings",
     "WireFormat",
     "backend_at",
 ]
@@ -62,6 +64,7 @@ if TYPE_CHECKING:
     from kingfisher.plugins.events import JsonlRunEvents as JsonlRunEvents
     from kingfisher.plugins.sessions.backend import LocalSessions as LocalSessions
     from kingfisher.plugins.sessions.backend import backend_at as backend_at
+    from kingfisher.plugins.sessions.sandbox.confinement import ShellSettings as ShellSettings
 
 
 def __getattr__(name: str) -> Any:

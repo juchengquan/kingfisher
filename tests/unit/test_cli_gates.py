@@ -67,12 +67,12 @@ def _drive(monkeypatch, result: RunResult) -> None:
     monkeypatch.setattr(
         importlib.import_module("kingfisher.cli.configured"),
         "configured_sessions",
-        lambda cfg: None,
+        lambda: None,
     )
     monkeypatch.setattr(
         importlib.import_module("kingfisher.cli.configured"),
         "configured_plugins",
-        lambda cfg: Plugins(),
+        Plugins,
     )
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Nothing())
     monkeypatch.setattr(cli, "show", lambda *a, **k: result)
@@ -186,12 +186,12 @@ def test_the_three_decisions_reach_the_library_as_written(monkeypatch):
     monkeypatch.setattr(
         importlib.import_module("kingfisher.cli.configured"),
         "configured_sessions",
-        lambda cfg: None,
+        lambda: None,
     )
     monkeypatch.setattr(
         importlib.import_module("kingfisher.cli.configured"),
         "configured_plugins",
-        lambda cfg: Plugins(),
+        Plugins,
     )
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Recording())
 
@@ -436,12 +436,12 @@ def test_log_reaches_the_service_on_both_verbs_that_run_a_turn(verb, tmp_path, m
     monkeypatch.setattr(
         importlib.import_module("kingfisher.cli.configured"),
         "configured_sessions",
-        lambda cfg: None,
+        lambda: None,
     )
     monkeypatch.setattr(
         importlib.import_module("kingfisher.cli.configured"),
         "configured_plugins",
-        lambda cfg: Plugins(),
+        Plugins,
     )
     monkeypatch.setattr(kingfisher, "Kingfisher", Recording)
     monkeypatch.setattr(cli, "show", lambda *a, **k: None)
@@ -471,10 +471,8 @@ def test_the_plugins_reach_the_service_and_log_replaces_their_run_events(tmp_pat
 
     monkeypatch.setattr(cli, "config_from_env", object)
     run = importlib.import_module("kingfisher.cli.configured")
-    monkeypatch.setattr(run, "configured_sessions", lambda cfg: None)
-    monkeypatch.setattr(
-        run, "configured_plugins", lambda cfg: Plugins(run_events=events)
-    )
+    monkeypatch.setattr(run, "configured_sessions", lambda: None)
+    monkeypatch.setattr(run, "configured_plugins", lambda: Plugins(run_events=events))
     monkeypatch.setattr(kingfisher, "Kingfisher", Recording)
     monkeypatch.setattr(cli, "show", lambda *a, **k: None)
 

@@ -16,10 +16,11 @@ anything that gets an injection into a document.
 from __future__ import annotations
 
 import ctypes
+import os
 import platform
 import shutil
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
@@ -251,12 +252,48 @@ def _keys_file(cfg: Config) -> tuple[Path, ...]:
     return () if cfg.models.keys_file is None else (cfg.models.keys_file,)
 
 
-def shell_confinement(cfg: Config, *, skills: tuple[Path, ...] | None = None) -> Confinement:
-    """The confinement this deployment will actually use, from its `Config`."""
+@dataclass(frozen=True)
+class ShellSettings:
+    """How kingfisher's own shell is fenced, and what it may run besides the system's.
+
+    `LocalSessions` reads them from `KINGFISHER_SHELL_SANDBOX` and
+    `KINGFISHER_SHELL_PATH_EXTRA` unless it is handed them, so the two variables mean
+    the same thing to the command and to a deployment building its own.
+    """
+
+    # Who keeps `execute` out of the rest of the host. `auto` uses whatever the
+    # platform offers, `bubblewrap` asks for it even where Landlock would run,
+    # `external` says a container already does it, `off` opts out and is warned
+    # about on every start. On by default because an exposure nobody opted into
+    # is one nobody knows they have: measured unconfined, the shell could read
+    # this deployment's own API keys, `~/.aws` and the GitHub CLI's token, and a
+    # workspace tool that fetches a URL is one call away from sending them.
+    sandbox: str = AUTO
+    #: Directories put on the shell's `PATH` ahead of the system's, and readable to it.
+    path_extra: tuple[str, ...] = ()
+
+    @classmethod
+    def from_env(cls, environ: Mapping[str, str] | None = None) -> ShellSettings:
+        """What the two variables say, in `environ` or in this process's environment."""
+        values = os.environ if environ is None else environ
+        return cls(
+            sandbox=values.get("KINGFISHER_SHELL_SANDBOX", AUTO),
+            path_extra=tuple(
+                part
+                for part in (values.get("KINGFISHER_SHELL_PATH_EXTRA") or "").split(":")
+                if part
+            ),
+        )
+
+
+def shell_confinement(
+    cfg: Config, shell: ShellSettings, *, skills: tuple[Path, ...] | None = None
+) -> Confinement:
+    """The confinement these shell settings give this deployment."""
     return resolve(
-        cfg.shell_sandbox,
+        shell.sandbox,
         workspace=cfg.workspace,
-        extra=cfg.shell_path_extra,
+        extra=shell.path_extra,
         skills=(cfg.skills_dir, *cfg.skills_mounts.values()) if skills is None else skills,
         definitions=tuple(cfg.catalogue_roots.values()),
         # The keys file joins them here rather than in `authored_files`, which names
@@ -282,12 +319,12 @@ def shell_confinement(cfg: Config, *, skills: tuple[Path, ...] | None = None) ->
 FENCES_HARNESS = (SANDBOX_EXEC, BUBBLEWRAP, LANDLOCK)
 
 
-def harness_unfenced(cfg: Config) -> str | None:
+def harness_unfenced(cfg: Config, shell: ShellSettings) -> str | None:
     """Why nothing kingfisher runs keeps the shell out of `.harness`, or `None`."""
-    if shell_confinement(cfg).mechanism in FENCES_HARNESS:
+    if shell_confinement(cfg, shell).mechanism in FENCES_HARNESS:
         return None
     return (
-        f"KINGFISHER_SHELL_SANDBOX is {cfg.shell_sandbox!r}, and nothing kingfisher "
+        f"KINGFISHER_SHELL_SANDBOX is {shell.sandbox!r}, and nothing kingfisher "
         "runs keeps the agent's shell out of .harness here"
     )
 
@@ -312,7 +349,7 @@ def readable_roots(workspace: Path, extra: tuple[str, ...] = (),
     return tuple(dict.fromkeys(p.resolve() for p in roots if str(p)))
 
 
-def shell_readable(cfg: Config, mechanism: str) -> tuple[Path, ...]:
+def shell_readable(cfg: Config, shell: ShellSettings, mechanism: str) -> tuple[Path, ...]:
     """What `mechanism` lets the shell read, from the lists each fence is built from.
 
     The session directory is left out: what asks this is about a file of the
@@ -320,14 +357,14 @@ def shell_readable(cfg: Config, mechanism: str) -> tuple[Path, ...]:
     """
     skills = (cfg.skills_dir, *cfg.skills_mounts.values())
     if mechanism == SANDBOX_EXEC:
-        return readable_roots(cfg.workspace, cfg.shell_path_extra, skills)
+        return readable_roots(cfg.workspace, shell.path_extra, skills)
     if mechanism in LINUX_FENCES:
         # Each fence's own list, not one shared: bubblewrap binds no `/proc` or `/dev`,
         # and one list serving both is how a mechanism gains a path it meant to deny.
         from kingfisher.plugins.sessions.sandbox import bubblewrap, fence  # noqa: PLC0415
 
         system = fence.SYSTEM_PATHS if mechanism == LANDLOCK else bubblewrap.SYSTEM_PATHS
-        granted = [*map(Path, system), *toolchain_roots(cfg.shell_path_extra), *map(Path, skills)]
+        granted = [*map(Path, system), *toolchain_roots(shell.path_extra), *map(Path, skills)]
         return tuple(dict.fromkeys(p.resolve() for p in granted if str(p)))
     return ()
 

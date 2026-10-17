@@ -508,6 +508,10 @@ def isolated_from_the_developer(monkeypatch):
     """
     for module in READS_DOTENV:
         monkeypatch.setattr(f"{module}.load_dotenv", refusing(repository_root() / ".env"))
+    # `LocalSessions` reads its shell's settings from here, so a developer who exported
+    # `off` would unfence every backend a test builds.
+    for setting in ("KINGFISHER_SHELL_SANDBOX", "KINGFISHER_SHELL_PATH_EXTRA"):
+        monkeypatch.delenv(setting, raising=False)
     with environment_restored():
         yield
 

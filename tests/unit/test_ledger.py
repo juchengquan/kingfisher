@@ -46,7 +46,7 @@ from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger, entry_id
 from kingfisher.core.session.transcript import from_json
 from kingfisher.core.session.turn import ledger_delta, ledger_index, turn_message
-from kingfisher.plugins import LocalSessions
+from kingfisher.plugins import LocalSessions, ShellSettings
 from kingfisher.plugins.sessions.backend import backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.sandbox.confinement import EXTERNAL
@@ -295,11 +295,10 @@ def test_the_file_tools_are_not_recorded_and_the_shell_is(ledgered):
     """What a file tool reads or writes is a file already, and a row for each would
     bury the rest -- but `execute` is not one of them, and its output is nowhere else.
     """
-    cfg = replace(ledgered, shell_sandbox=EXTERNAL)
-    (_session(cfg) / "outputs" / "notes.txt").write_text("alpha\n", encoding="utf-8")
+    (_session(ledgered) / "outputs" / "notes.txt").write_text("alpha\n", encoding="utf-8")
 
     result = _run(
-        cfg,
+        ledgered,
         _calls(
             ("write_file", {"file_path": "/outputs/new.txt", "content": "beta\n"}, "c1"),
             ("read_file", {"file_path": "/outputs/notes.txt"}, "c2"),
@@ -315,15 +314,15 @@ def test_the_file_tools_are_not_recorded_and_the_shell_is(ledgered):
             ("web_search", {"query": "EV"}, "c9"),
         ),
         AIMessage(content="done"),
-        kf=Kingfisher(cfg, sessions=LocalSessions()),
+        kf=Kingfisher(ledgered, sessions=LocalSessions(shell=ShellSettings(sandbox=EXTERNAL))),
     )
 
     # The control: every file tool ran and succeeded, so absent means skipped.
-    assert (_session(cfg) / "outputs" / "new.txt").read_text() == "gamma\n"
-    assert not (_session(cfg) / "outputs" / "notes.txt").exists()
+    assert (_session(ledgered) / "outputs" / "new.txt").read_text() == "gamma\n"
+    assert not (_session(ledgered) / "outputs" / "notes.txt").exists()
     assert sorted(e.tool for e in result.ledger) == ["execute", "web_search"]
     (shell,) = [e for e in result.ledger if e.tool == "execute"]
-    assert "recorded" in _read(cfg, shell.path)
+    assert "recorded" in _read(ledgered, shell.path)
 
 
 def test_a_failed_call_is_not_recorded(ledgered):
@@ -535,12 +534,13 @@ def test_what_the_shell_writes_beside_the_results_is_left_alone(ledgered):
     write never lands, and this is about what the sweep does with one that did.
     """
     _run(
-        replace(ledgered, shell_sandbox="off"),
+        ledgered,
         _calls(
             ("web_search", {"query": "EV"}, "c1"),
             ("execute", {"command": "printf mine > scratchpad/tool_results/notes.md"}, "c2"),
         ),
         AIMessage(content="done"),
+        kf=Kingfisher(ledgered, sessions=LocalSessions(shell=ShellSettings(sandbox="off"))),
     )
 
     assert _kept(ledgered) == ["A-0001-web_search.txt", "A-0002-execute.txt", "notes.md"]

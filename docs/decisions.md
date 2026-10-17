@@ -6398,6 +6398,20 @@ one `Plugins` object as the argument.** It would have changed more than a hundre
 say the same thing one level down, and wire formats do not fit it: they are applied as the
 configuration loads, where `doctor` checks every endpoint's `api:`.
 
+**`Config` holds what the core reads.** The shell's fence and what it adds to `PATH` are
+`LocalSessions`' settings, as `ShellSettings`, and the factories `KINGFISHER_SESSIONS` and
+`KINGFISHER_PLUGINS` name are the command's: nothing in the core read any of the four.
+`LocalSessions()` reads `KINGFISHER_SHELL_SANDBOX` and `KINGFISHER_SHELL_PATH_EXTRA` as it is
+built, so one `.env` still fences the command and a library deployment alike, and `shell=`
+decides in code instead. `doctor` and `kingfisher list` ask the sessions the command runs on
+whose they are and how their shell is fenced, as `Kingfisher.origins` does -- a report read
+from a setting printed a sessions path three rows above a check that knew better. **Not
+taken: a `Config.shell` record.** It keeps one plugin's settings on the core's record under
+another name, and a deployment on sessions of its own would still carry a fence nothing
+applies. **Not taken: leaving them flat.** `Config` was the record every surface could
+reach, so a setting landed there whoever read it, which is how the core's record came to
+configure a plugin and the command.
+
 **Two public addresses.** `kingfisher`, the front door, is for embedding and for tool
 files: `Config`, `Request`, the result types, `Session`, `Capabilities`, the errors,
 `run` and `stream`, seeding and `inventory`, `ToolContext` and `tool`. `kingfisher.plugins` is for

@@ -27,7 +27,11 @@ _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
 
 
 def shell_env(
-    cfg: Config, session_dir: Path, *, catalogue: Definitions | None = None
+    cfg: Config,
+    session_dir: Path,
+    *,
+    path_extra: tuple[str, ...] = (),
+    catalogue: Definitions | None = None,
 ) -> dict[str, str]:
     """The explicit allowlist handed to the shell — no credentials.
 
@@ -36,7 +40,7 @@ def shell_env(
     this machine, the shell could read `~/.aws` and `~/.config/gh` right through it.
     Keeping those closed is `confinement`'s job, not this function's.
     """
-    path_parts = [str(Path(sys.executable).parent), *cfg.shell_path_extra, *_BASE_PATH]
+    path_parts = [str(Path(sys.executable).parent), *path_extra, *_BASE_PATH]
     env = {
         "PATH": ":".join(path_parts),
         # Inside the session, so `reap` sweeps what tools cache under `~` and
@@ -157,12 +161,14 @@ def runs_locally(runner: Any) -> bool:
     return getattr(runner, "local", True)
 
 
-def fence_for(
+def fence_for(  # noqa: PLR0913 -- one argument per thing a fence is built from
     cfg: Config,
     session_dir: Path,
     confined: confinement.Confinement,
     skills: tuple[Path, ...],
     env: Mapping[str, str],
+    *,
+    path_extra: tuple[str, ...] = (),
 ) -> CommandRunner | None:
     """The Linux fence, when the confinement says there is one."""
     if confined.mechanism not in confinement.LINUX_FENCES:
@@ -182,7 +188,7 @@ def fence_for(
     # granting it hands every tenant back the directory this fence exists to take away
     # -- measured, before the fence: tenant B read tenant A's `outputs/secret.txt` with
     # `cat ../<A>/...`, exit 0.
-    readable = [*confinement.toolchain_roots(cfg.shell_path_extra), *skills]
+    readable = [*confinement.toolchain_roots(path_extra), *skills]
     # Nothing beyond the session, which both fences grant already: `TMPDIR` is
     # inside it now, so the writable set is exactly the session this turn owns.
     writable: list[Path] = []

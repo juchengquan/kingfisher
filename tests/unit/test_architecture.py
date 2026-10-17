@@ -739,9 +739,9 @@ def test_no_prose_counts_its_neighbours():
     Eleven were written and one had already broken: `config.py` said the
     definition roots were `None` "for a different reason than the two above",
     and the two were `state_root` and `scratch_root`, which left `Config` in a
-    later change. `shell_sandbox` is what sits above it now. Naming them instead
-    is what puts the claim in reach of `test_prose_names_class_attributes_that_exist`
-    and the module rule, neither of which can see a number.
+    later change. Naming them instead is what puts the claim in reach of
+    `test_prose_names_class_attributes_that_exist` and the module rule, neither of which
+    can see a number.
     """
     counting = []
     here = Path(__file__).resolve()
@@ -1661,6 +1661,10 @@ WITNESSES: dict[str, dict[str, str]] = {
         # in every snippet that builds a service.
         "LocalSessions": "document",
         "backend_at": "document",
+        # `ports.md` writes `LocalSessions(shell=ShellSettings(...))` for a fence decided in
+        # code rather than read from the environment, and `configuration.md` sends a
+        # reader of the two shell settings there.
+        "ShellSettings": "document",
         # The shipped pair behind two of the interfaces above, public so a deployment
         # can wrap one rather than reimplement it. `upgrading.md` records the move:
         # they were "not public anywhere" before this door existed.
@@ -3803,7 +3807,7 @@ def _reaches_resolve(tree: ast.AST) -> bool:
 
 
 def test_only_the_confinement_module_calls_resolve_directly():
-    """`shell_confinement` is the one place a `Config` becomes a confinement."""
+    """`shell_confinement` is the one place the shell's settings become a confinement."""
     # Production only. A test of `resolve` calls `resolve`, and exempting the
     # test tree is what lets that one keep testing the thing it is about.
     offenders = [
@@ -3815,7 +3819,7 @@ def test_only_the_confinement_module_calls_resolve_directly():
 
     assert not offenders, (
         f"{sorted(set(offenders))} call `confinement.resolve` directly — use "
-        "`shell_confinement(cfg)`, so one place decides what a Config means"
+        "`shell_confinement(cfg, shell)`, so one place decides what the settings mean"
     )
 
 

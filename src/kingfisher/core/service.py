@@ -98,7 +98,6 @@ from kingfisher.core.session.methods import SessionMethods
 from kingfisher.core.session.model import (
     Conversation,
     SessionBusyError,
-    sessions_root,
     unknown_session,
 )
 from kingfisher.core.session.runlog import LoggedRunEvents, RunLogger
@@ -219,12 +218,6 @@ def refused_credentials(exc: BaseException, cfg: Config) -> ConfigError | None:
         f"{where} rejected the key{supplied} (401). A value exported in the shell "
         f"overrides the one in .env, so check the environment before the file"
     )
-
-
-def _kingfishers_own(sessions: Sessions, cfg: Config) -> bool:
-    """Whether `sessions` keep them where kingfisher's own would, in the workspace."""
-    where = getattr(sessions, "where", None)
-    return callable(where) and where(cfg) == sessions_root(cfg.workspace)
 
 
 class Kingfisher(SessionMethods, Disposal):
@@ -376,7 +369,7 @@ class Kingfisher(SessionMethods, Disposal):
         return Origins.of(
             self.cfg,
             catalogue=self.catalogue,
-            sessions=None if _kingfishers_own(self._sessions, self.cfg) else self._sessions,
+            sessions=self._sessions,
         )
 
     def _held_for(self, source_ids: Held | None) -> frozenset[str] | None:
