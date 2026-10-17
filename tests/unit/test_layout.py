@@ -147,10 +147,10 @@ def test_the_memory_helpers_name_the_renamed_folder():
 
 
 def test_the_shell_path_rule_and_matcher_follow_a_renamed_layout():
-    """`ShellPaths` states the shell rule in `execute`'s description and spots a missed
+    """`BuiltinToolsMiddleware` states the shell rule in `execute`'s description and spots a missed
     file-tool path in its output. Both name session folders, so both move with them.
     """
-    from kingfisher.core.agent.middlewares.shell_paths import _virtual, missed
+    from kingfisher.core.agent.middlewares.builtin_tools import _virtual, missed
     from kingfisher.core.agent.prompting import execute_line
     from kingfisher.plugins.sessions.shell import kingfishers_shell
 

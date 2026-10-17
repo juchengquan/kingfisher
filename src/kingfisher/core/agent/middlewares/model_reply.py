@@ -1,5 +1,6 @@
-"""A reply the model stopped at its output cap: the call it was cut inside goes unrun, a cut
-answer is asked for again, shorter, and an agent cut off too often in a row is stopped."""
+"""A model call that did not end in a whole reply. Cut at the output cap: the call it was cut
+inside goes unrun, a cut answer is asked for again, shorter, and an agent cut off too often
+in a row is stopped. Refused by the provider: the turn's stop, or a subagent's failed task."""
 
 from __future__ import annotations
 
@@ -10,11 +11,14 @@ from langchain.agents.middleware import AgentMiddleware, ModelResponse
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher.core.agent.middlewares.results import failed
+from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.session.runtime import (
+    ModelUnavailableError,
     call_block_id,
     cut_off,
     cut_off_mark,
     output_limit,
+    unavailable,
     with_call_args,
 )
 
@@ -133,12 +137,37 @@ def _stopped(reply: AIMessage, *, subagent: bool) -> AIMessage:
     )
 
 
-class CutReplies(AgentMiddleware):
+def _raised(exc: Exception) -> Exception:
+    """What a model call's exception is raised as: a provider's refusal as the stop."""
+    why = None if isinstance(exc, ModelUnavailableError) else unavailable(exc)
+    return exc if why is None else ModelUnavailableError(why)
+
+
+def _handed_back(call: Any, exc: Exception) -> ToolMessage | None:
+    """A subagent's refused model call, as what its parent is told.
+
+    Raw provider errors as well as kingfisher's own: a compiled subagent runs with no
+    middleware of kingfisher's in front of its model.
+    """
+    if call.get("name") != TASK_TOOL or (why := unavailable(exc)) is None:
+        return None
+    whose = (call.get("args") or {}).get("subagent_type") or "the subagent"
+    return failed(
+        call,
+        f"Error: {whose!r} could not reach its model ({why}). Go on without it, or "
+        "say in your answer that this part could not be done.",
+    )
+
+
+class ModelReplyMiddleware(AgentMiddleware):
     """Refuse the call a reply was cut inside, ask again for a cut answer, and stop an
-    agent cut off too often.
+    agent cut off too often; raise a provider's refusal of a model call as the turn's
+    stop, and hand a subagent's back to its parent as a failed `task` result.
 
     Inside the model call and the tool call, never beside them: a `before_model` or
-    `after_model` hook is a graph step, and the recursion limit counts those.
+    `after_model` hook is a graph step, and the recursion limit counts those. A refusal
+    is read on the model call rather than on the turn's exception, so a tool that times
+    out on a request of its own is not taken for a model that cannot answer.
     """
 
     def __init__(self, *, subagent: bool, outputs: str) -> None:
@@ -198,26 +227,56 @@ class CutReplies(AgentMiddleware):
             return None
         return _refusal(reply, call)
 
+    def _called(self, handler: Callable[[Any], Any], request: Any) -> Any:
+        try:
+            return handler(request)
+        except Exception as exc:
+            raised = _raised(exc)
+            if raised is exc:
+                raise
+            raise raised from exc
+
+    async def _acalled(self, handler: Callable[[Any], Awaitable[Any]], request: Any) -> Any:
+        try:
+            return await handler(request)
+        except Exception as exc:
+            raised = _raised(exc)
+            if raised is exc:
+                raise
+            raise raised from exc
+
     def wrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
-        response, asked = handler(request), 0
+        response, asked = self._called(handler, request), 0
         while (again := self._again(request, response, asked)) is not None:
-            response, asked = handler(again), asked + 1
+            response, asked = self._called(handler, again), asked + 1
         return self._judged(request, response, asked)
 
     async def awrap_model_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        response, asked = await handler(request), 0
+        response, asked = await self._acalled(handler, request), 0
         while (again := self._again(request, response, asked)) is not None:
-            response, asked = await handler(again), asked + 1
+            response, asked = await self._acalled(handler, again), asked + 1
         return self._judged(request, response, asked)
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
-        refused = self._refused(request)
-        return refused if refused is not None else handler(request)
+        if (refused := self._refused(request)) is not None:
+            return refused
+        try:
+            return handler(request)
+        except Exception as exc:
+            if (told := _handed_back(request.tool_call, exc)) is None:
+                raise
+            return told
 
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        refused = self._refused(request)
-        return refused if refused is not None else await handler(request)
+        if (refused := self._refused(request)) is not None:
+            return refused
+        try:
+            return await handler(request)
+        except Exception as exc:
+            if (told := _handed_back(request.tool_call, exc)) is None:
+                raise
+            return told

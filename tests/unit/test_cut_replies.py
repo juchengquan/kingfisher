@@ -19,7 +19,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.cut_replies import CutReplies, cut_call
+from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware, cut_call
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.layout import HARNESS, TRANSCRIPT_FILE
 from kingfisher.core.session.runtime import cut_off, output_limit, with_call_args
@@ -502,7 +502,7 @@ def test_every_graph_kingfisher_builds_has_it_and_only_a_subagent_marks_its_answ
     built = build_agent(writing, backend=backend, agent=_spec(writing, "only"))
 
     def marks(middleware: Any) -> list[bool]:
-        return [one.subagent for one in middleware if isinstance(one, CutReplies)]
+        return [one.subagent for one in middleware if isinstance(one, ModelReplyMiddleware)]
 
     assert marks(built.middleware) == [False]
     specs = {spec["name"]: spec for spec in built.subagents or ()}
@@ -521,4 +521,4 @@ def test_it_adds_no_step_to_the_agents_loop(writing):
     # The witness that a hook is a node named for its class, without which a check for
     # this class's name would pass whatever the class held.
     assert "TodoListMiddleware.after_model" in nodes
-    assert not [one for one in nodes if CutReplies.__name__ in one]
+    assert not [one for one in nodes if ModelReplyMiddleware.__name__ in one]

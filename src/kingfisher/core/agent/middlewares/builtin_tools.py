@@ -1,14 +1,15 @@
-"""Telling whoever holds the shell how a file-tool path is spelled there, in the words
-the shell gives of itself."""
+"""deepagents' built-in tools as a model is handed them: what `execute`, `read_file` and
+`grep` say and what they are called with, changed from outside."""
 
 from __future__ import annotations
 
 import inspect
 import re
 from collections.abc import Awaitable, Callable
+from functools import cache
 from typing import Any
 
-from deepagents.middleware.filesystem import FilesystemMiddleware
+from deepagents.middleware.filesystem import DEFAULT_READ_LIMIT, FilesystemMiddleware
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
@@ -133,13 +134,126 @@ def _unmapped(request: Any) -> Any:
     return request.override(system_message=SystemMessage(content_blocks=kept))
 
 
-class ShellPaths(AgentMiddleware):
+READ_FILE = "read_file"
+GREP = "grep"
+
+#: The lines `read_file` returns when the model names no limit: under deepagents'
+#: 80,000-character cut for code of ordinary width, so most files come back in one call.
+READ_LINES = 1_000
+
+#: deepagents' advice to page, which its own 100-line default made necessary.
+PAGE = (
+    f"reads up to {DEFAULT_READ_LIMIT} lines starting from the beginning of the file. Use "
+    "`offset`/`limit` to page through large files instead of reading them whole."
+)
+
+#: What replaces it.
+WHOLE = (
+    f"reads up to {READ_LINES:,} lines from the start of the file; read a file whole when "
+    "it fits, and use `offset`/`limit` only beyond that."
+)
+
+#: deepagents' advice on several strings, untrue once `grep` splits `|` itself.
+SEPARATELY = (
+    'To match any of several strings, run a separate grep for each; `grep(pattern="foo|bar")` '
+    'searches for the literal text "foo|bar", and'
+)
+
+#: What replaces it.
+JOINED = (
+    'To match any of several strings, join them with `|`: `grep(pattern="foo|bar")` searches '
+    'for "foo" and for "bar", each literally, while'
+)
+
+
+@cache
+def _shown(schema: Any) -> dict[str, Any]:
+    """`schema` as the model is shown it, with `READ_LINES` as `limit`'s default."""
+    shown = schema.model_json_schema()
+    shown["properties"]["limit"]["default"] = READ_LINES
+    return shown
+
+
+def _replaced(description: str, theirs: str, ours: str, appended: str) -> str:
+    # Appended when deepagents has reworded its line, so ours still arrives and a test
+    # fails on the advice left beside it.
+    if theirs in description:
+        return description.replace(theirs, ours)
+    return f"{description}\n- {appended}"
+
+
+def _offered(tool: Any) -> Any:
+    if not isinstance(tool, BaseTool):
+        return tool
+    if tool.name == GREP:
+        return tool.model_copy(
+            update={"description": _replaced(tool.description, SEPARATELY, JOINED, JOINED)}
+        )
+    if tool.name != READ_FILE or not hasattr(tool.args_schema, "model_json_schema"):
+        return tool
+    # Only what the model is shown: the call is run by deepagents' own tool, whose
+    # default `_called` fills in.
+    described = _replaced(tool.description, PAGE, WHOLE, f"By default it {WHOLE}")
+    return tool.model_copy(
+        update={"description": described, "args_schema": _shown(tool.args_schema)}
+    )
+
+
+def alternatives(pattern: str) -> list[str] | None:
+    """The strings a `grep` pattern joins with `|`, or `None` where it is one string.
+
+    Not split where a part is empty, so `| a |`, a table cell, is still searched as written.
+    """
+    parts = pattern.split("|")
+    return parts if len(parts) > 1 and all(parts) else None
+
+
+def _parted(call: dict[str, Any], part: str, n: int) -> dict[str, Any]:
+    return {**call, "id": f"{call['id']}-{n}", "args": {**call["args"], "pattern": part}}
+
+
+def _joined(call: dict[str, Any], parts: list[str], answers: list[Any]) -> Any:
+    """One answer for the call the model made, each part's under a line naming it."""
+    if not all(isinstance(one, ToolMessage) for one in answers):
+        return answers[0]
+    said = [f"Searched `{call['args']['pattern']}` as separate literal parts."]
+    said += [f"matches for `{part}`:\n{one.text}" for part, one in zip(parts, answers, strict=True)]
+    failed = all(one.status == "error" for one in answers)
+    return ToolMessage(
+        content="\n\n".join(said),
+        tool_call_id=call["id"],
+        name=call.get("name"),
+        status="error" if failed else "success",
+    )
+
+
+def _limited(request: Any) -> Any:
+    """`request` with `READ_LINES` as the limit of a `read_file` call that names none."""
+    call = request.tool_call
+    if call.get("name") != READ_FILE or "limit" in (call.get("args") or {}):
+        return request
+    return request.override(tool_call={**call, "args": {**call["args"], "limit": READ_LINES}})
+
+
+def _split(request: Any) -> list[str] | None:
+    call = request.tool_call
+    if call.get("name") != GREP:
+        return None
+    return alternatives(str((call.get("args") or {}).get("pattern", "")))
+
+
+class BuiltinToolsMiddleware(AgentMiddleware):
     """Put the shell's own line in `execute`'s description, on kingfisher's own shell say
     how a missed path is spelt there, and keep deepagents' host paths from a shell that
-    is not on this host.
+    is not on this host; have `read_file` read 1,000 lines unless told otherwise, and
+    `grep` search each string of `a|b`, and say so.
 
-    The line goes in the description, not the system prompt: a subagent gets none of
-    `system.md`, and the description reaches every graph holding the shell.
+    The shell's line goes in the description, not the system prompt: a subagent gets none
+    of `system.md`, and the description reaches every graph holding the shell. At
+    deepagents' 100 lines, a third of every call a turn made was `read_file` paging, most
+    naming a limit of 100 because the description did: so the description changes with
+    the default, and a limit the model names is left as it is. `grep` is literal, and
+    models wrote `a|b` anyway, nearly always finding nothing and searching again.
     """
 
     def __init__(
@@ -160,7 +274,7 @@ class ShellPaths(AgentMiddleware):
         self._virtual = _virtual(layout.session_dirs)
 
     def _told(self, request: Any) -> Any:
-        tools = [_described(tool, self._rule) for tool in request.tools]
+        tools = [_offered(_described(tool, self._rule)) for tool in request.tools]
         if not all(new is old for new, old in zip(tools, request.tools, strict=True)):
             request = request.override(tools=tools)
         return request if self._here else _unmapped(request)
@@ -185,9 +299,23 @@ class ShellPaths(AgentMiddleware):
         return await handler(self._told(request))
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
-        return self._corrected(request, handler(request))
+        if (parts := _split(request)) is None:
+            return self._corrected(request, handler(_limited(request)))
+        call = request.tool_call
+        answers = [
+            handler(request.override(tool_call=_parted(call, part, n)))
+            for n, part in enumerate(parts)
+        ]
+        return _joined(call, parts, answers)
 
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        return self._corrected(request, await handler(request))
+        if (parts := _split(request)) is None:
+            return self._corrected(request, await handler(_limited(request)))
+        call = request.tool_call
+        answers = [
+            await handler(request.override(tool_call=_parted(call, part, n)))
+            for n, part in enumerate(parts)
+        ]
+        return _joined(call, parts, answers)

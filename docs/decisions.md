@@ -747,17 +747,24 @@ other way. *(2026-10-17.)*
 **Two pairs of standing middleware are one each now.** `HostPathGuard` and
 `WorkspaceToolErrors` each turned an exception into a failed result, three places apart;
 `ToolFailureMiddleware` does both, a workspace tool's exception first so it keeps its
-type, from the outer one's place, so a `grep` that `FileTools` runs as several searches
-fails once. `ToolAllowlist` and `DeclaredSubagentsOnly` each refused what a request was
-not granted; `GrantedOnlyMiddleware` is on every graph and grants everything where
-nothing was narrowed, as the declared-subagent check already was on the agent. Five more
-took the suffix -- `RecorderMiddleware`, `ResultClearingMiddleware`,
+type, from the outer one's place, so a `grep` that `BuiltinToolsMiddleware` runs as
+several searches fails once. `ToolAllowlist` and `DeclaredSubagentsOnly` each refused
+what a request was not granted; `GrantedOnlyMiddleware` is on every graph and grants
+everything where nothing was narrowed, as the declared-subagent check already was on the
+agent. Five more took the suffix -- `RecorderMiddleware`, `ResultClearingMiddleware`,
 `LargePdfMiddleware`, `WorkspaceToolPathsMiddleware`, `NarrowedSkillsMiddleware` -- so a
 class in the package says what it is. `results.failed` builds every failed result
 kingfisher's own hand back. The offered ones keep their own: `kingfisher` and
 `kingfisher.plugins` are the addresses a file in `assets/` may import, and everything
 else may move. A helper to append a line to a result was proposed beside it and not
-built, because only `ShellPaths` appends. *(2026-10-17.)*
+built, because only `BuiltinToolsMiddleware` appends. *(2026-10-17.)*
+
+**And two more pairs.** `CutReplies` and `ModelUnavailableGuard` each stood in front of
+the model call, one for a reply cut at the output cap and one for a call the provider
+refused; `ModelReplyMiddleware` does both, and reads a refusal on every call it makes,
+the asking again after a cut answer included. `ShellPaths` and `FileTools` each changed
+deepagents' built-in tools from outside, `execute` and then `read_file` and `grep`, and
+neither touched the other's; `BuiltinToolsMiddleware` does both. *(2026-10-17.)*
 
 **A call from `eval` is a fifth way to dispatch, and it met none of the guards.** With
 the sandbox wired, a narrowed request's `eval` holds `tools.<name>()` for each tool it
@@ -2394,25 +2401,25 @@ reached before the argument began. The only sign is the stop reason: `stop_reaso
 max_tokens` in the Anthropic format, and an incomplete status for `max_output_tokens` in
 the Responses API.
 
-`CutReplies` reads it. Only a reply's last call can be cut, so the calls before it run,
-and the last one is answered "Not run" with the limit it reached and a way round it:
-writing in parts. The content's last block is what was cut: text there means every call
-is whole, and a call too broken to parse there cuts none of the calls that run. Where a
-provider puts no calls in the content, the last call is refused, because refusing a whole
-call costs a retry and running a cut one saves a shortened file. The refused call keeps
-its short arguments, such as the path, and each one over 500 characters becomes a note
-of its length: clearing never shortens a call that failed, and the agent writes the text
-again in parts anyway, so the cut text was sent on every later call for nothing. Three
-cut replies in a row stop the agent on its text,
-with none of that reply's calls run: each cut reply spends the whole reservation, and one
-trial session retried a whole-file write a dozen times. In a row rather than per turn, so
-an agent writing a long report in parts may hit the cap now and then. The main agent's
-turn then ends with `max_tokens`. A subagent's answer goes back headed by a line saying it
-is cut off, and the turn goes on: the caller can work round a subagent's trouble, and
+`ModelReplyMiddleware` reads it. Only a reply's last call can be cut, so the calls
+before it run, and the last one is answered "Not run" with the limit it reached and a
+way round it: writing in parts. The content's last block is what was cut: text there
+means every call is whole, and a call too broken to parse there cuts none of the calls
+that run. Where a provider puts no calls in the content, the last call is refused,
+because refusing a whole call costs a retry and running a cut one saves a shortened
+file. The refused call keeps its short arguments, such as the path, and each one over
+500 characters becomes a note of its length: clearing never shortens a call that failed,
+and the agent writes the text again in parts anyway, so the cut text was sent on every
+later call for nothing. Three cut replies in a row stop the agent on its text, with none
+of that reply's calls run: each cut reply spends the whole reservation, and one trial
+session retried a whole-file write a dozen times. In a row rather than per turn, so an
+agent writing a long report in parts may hit the cap now and then. The main agent's turn
+then ends with `max_tokens`. A subagent's answer goes back headed by a line saying it is
+cut off, and the turn goes on: the caller can work round a subagent's trouble, and
 ending the turn would throw away the rest of it. A turn that ends on a cut reply reports
 `max_tokens` whatever led there, since its answer is cut off either way. Each cut is
-marked on the `model_call` run event and on the stream's `model_call` event, which is the
-only trace of a cut the agent got past.
+marked on the `model_call` run event and on the stream's `model_call` event, which is
+the only trace of a cut the agent got past.
 
 Retrying quietly with a higher cap was turned down: it overrides `models.yaml`, spends
 without asking, and fails once the model's own maximum is reached. Nothing in `system.md`
@@ -3987,20 +3994,19 @@ with it.** deepagents' description of the tool says "Use absolute paths", and th
 only absolute paths a model knows are the file tools', which the shell reads from the
 host's root. `system.md` says otherwise, but a subagent is built with its own prompt
 and never sees it, and the description reaches every graph holding the shell. So
-`ShellPaths`, in `standing_middleware`, replaces that line with the rule there --
-appending it when deepagents has reworded the line, which
+`BuiltinToolsMiddleware`, in `standing_middleware`, replaces that line with the rule
+there -- appending it when deepagents has reworded the line, which
 `test_every_graph_holding_the_shell_is_told_its_paths_rather_than_absolute_ones` then
-fails on -- and
-appends a correction to an `execute` result whose error names a session folder spelt
-the file tools' way. A correction rather than a rewrite of the command, because the
-miss the agent made despite `system.md` was a path inside a script the command ran,
-which no rewrite sees. Not a copy of `system.md`'s table in every subagent's prompt:
-it would contradict the description beside it, and cost every subagent the tokens.
-deepagents' own host mappings for routed mounts are left as they are; both spellings
-reach the same files. The description also says `timeout` is in seconds and its longest,
-on every shell: the line it replaces was the one that mentioned the timeout, and over 71
-trial turns models passed milliseconds, 5,000 to 40,000, each refused as past the hour
-deepagents allows. *(2026-10-17.)*
+fails on -- and appends a correction to an `execute` result whose error names a session
+folder spelt the file tools' way. A correction rather than a rewrite of the command,
+because the miss the agent made despite `system.md` was a path inside a script the
+command ran, which no rewrite sees. Not a copy of `system.md`'s table in every
+subagent's prompt: it would contradict the description beside it, and cost every
+subagent the tokens. deepagents' own host mappings for routed mounts are left as they
+are; both spellings reach the same files. The description also says `timeout` is in
+seconds and its longest, on every shell: the line it replaces was the one that mentioned
+the timeout, and over 71 trial turns models passed milliseconds, 5,000 to 40,000, each
+refused as past the hour deepagents allows. *(2026-10-17.)*
 
 Measured over ten real turns each way, five of an agent running its own script and five
 of it asking `reviewer` to work in the shell: turns with a miss did not fall, 3 before
@@ -4025,31 +4031,32 @@ deepagents defaults to 100 lines and tells the model to page "instead of reading
 whole". Measured over 71 trial turns, `read_file` was a third of every call, and 87% of
 reads named a limit themselves, mostly 100, copying the description; the turns that ran
 out of their 50 calls spent 121 calls reading. So the description changes with the
-default, through `FileTools`, which hands each graph's model a `read_file` saying 1,000
-and showing it as the default, and fills in 1,000 where a call names no limit. A limit the
-model names is left alone: it is a slice the model wanted. 1,000 lines of code of ordinary
-width stays under deepagents' cut of a read at 80,000 characters. deepagents is not
-patched for this, here or anywhere: its tools are changed from outside, as `ShellPaths`
-changes `execute`, each with a test that fails when an upgrade moves what it changes.
-*(2026-10-17, from the trial transcripts.)*
+default, through `BuiltinToolsMiddleware`, which hands each graph's model a `read_file`
+saying 1,000 and showing it as the default, and fills in 1,000 where a call names no
+limit. A limit the model names is left alone: it is a slice the model wanted. 1,000
+lines of code of ordinary width stays under deepagents' cut of a read at 80,000
+characters. deepagents is not patched for this, here or anywhere: its tools are changed
+from outside, `execute` among them, each with a test that fails when an upgrade moves
+what it changes. *(2026-10-17, from the trial transcripts.)*
 
 **`grep` searches each string of `a|b`, and says so.** deepagents' `grep` is literal and
 its description says so in capitals, with `foo|bar` as the example of what not to write.
 Over 71 trial turns, 97 searches written as regex found nothing, 63 of them alternations,
-and 85% were followed by another search. `FileTools` runs a pattern of non-empty strings
-joined by `|` as one literal search per string and answers once, each string's matches
-under a line naming it, and tells the model that is what `|` does. A pattern with an
-empty part, such as a table cell `| a |`, is searched as written, since an empty string
-matches everything. Escapes and anchors are left alone: deepagents' note already points
-at `rg` in the shell, and unescaping them would guess at what was meant. *(2026-10-17,
-from the trial transcripts.)*
+and 85% were followed by another search. `BuiltinToolsMiddleware` runs a pattern of
+non-empty strings joined by `|` as one literal search per string and answers once, each
+string's matches under a line naming it, and tells the model that is what `|` does. A
+pattern with an empty part, such as a table cell `| a |`, is searched as written, since
+an empty string matches everything. Escapes and anchors are left alone: deepagents' note
+already points at `rg` in the shell, and unescaping them would guess at what was meant.
+*(2026-10-17, from the trial transcripts.)*
 
 **What the agent is told about the shell is said by the shell.** `system.md`,
-`capability_skills.md` and `ShellPaths` told every deployment's agent four things true
-only of kingfisher's own shell: it runs on the host in the session root, `TMPDIR` is the
-scratchpad, `KINGFISHER_SKILLS` is the catalogue, and every session folder is in reach by
-dropping the slash. A deployment whose shell runs elsewhere reported it. The prompt was
-built from `Config` alone, so nothing about the backend could reach it.
+`capability_skills.md` and `BuiltinToolsMiddleware` told every deployment's agent four
+things true only of kingfisher's own shell: it runs on the host in the session root,
+`TMPDIR` is the scratchpad, `KINGFISHER_SKILLS` is the catalogue, and every session
+folder is in reach by dropping the slash. A deployment whose shell runs elsewhere
+reported it. The prompt was built from `Config` alone, so nothing about the backend
+could reach it.
 
 `runs_locally` cannot choose the wording. Measured on 2026-10-15 with the plainest runner
 a deployment writes, driven through `DefaultBackends(runner=...)`: local or not, it
@@ -4126,9 +4133,9 @@ next entry. *(2026-10-15.)*
 giving each routed folder's path on this host to any shell of its local class, and
 kingfisher's shell is that class whatever runner it holds -- so an agent whose commands
 ran on another machine was told to use paths only this one has, right beside a
-`ShellPrompt` telling it to check. `ShellPaths` takes the section out where the shell is
-not kingfisher's own on this host: a runner whose `local` is false, or a shell of a
-deployment's own. A local runner keeps it, since its paths are real there.
+`ShellPrompt` telling it to check. `BuiltinToolsMiddleware` takes the section out where
+the shell is not kingfisher's own on this host: a runner whose `local` is false, or a
+shell of a deployment's own. A local runner keeps it, since its paths are real there.
 
 Removed rather than corrected. Making a remote runner's shell a class deepagents reads
 as remote would have it say instead that those folders are out of the shell's reach,

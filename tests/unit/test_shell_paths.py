@@ -14,11 +14,11 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langgraph.types import Command
 
 from kingfisher import Kingfisher, Request
-from kingfisher.core.agent.middlewares.shell_paths import (
+from kingfisher.core.agent.middlewares.builtin_tools import (
     ABSOLUTE,
     MAPPINGS,
     TIMEOUT,
-    ShellPaths,
+    BuiltinToolsMiddleware,
     hint,
     missed,
 )
@@ -307,14 +307,14 @@ def test_deepagents_host_paths_reach_only_a_shell_on_this_host(shelled, backends
     assert "You check." in systems[1]
 
 def _asked(way: str, request: Any) -> Any:
-    """The request `ShellPaths` passes on, through whichever model hook `way` names.
+    """The request `BuiltinToolsMiddleware` passes on, through whichever model hook `way` names.
 
     Both ways, because the hook is two methods and the async one was reached by nothing:
     making `awrap_model_call` pass the request on untold left the whole suite green,
     while the same change to its sync twin reddened the rules above.
     """
     asked: list[Any] = []
-    middleware = ShellPaths(Layout(), kingfishers_shell(), here=False)
+    middleware = BuiltinToolsMiddleware(Layout(), kingfishers_shell(), here=False)
     if way == "sync":
         middleware.wrap_model_call(request, asked.append)
         return asked[0]
@@ -327,7 +327,7 @@ def _asked(way: str, request: Any) -> Any:
 
 
 def _handed_on(way: str, system: SystemMessage) -> SystemMessage:
-    """The system message `ShellPaths` passes to a shell that is not on this host.
+    """The system message `BuiltinToolsMiddleware` passes to a shell that is not on this host.
 
     Driven through the hook rather than the helper under it, because `here=False` is
     the whole of what the parametrized rule above covers and the branch is reached
@@ -386,13 +386,13 @@ MISSED = "tail: /inputs/api.log: No such file or directory"
 
 
 def _answered(way: str, name: str, result: Any) -> Any:
-    """What `ShellPaths` hands back for one tool's result, through the hook `way` names.
+    """What `BuiltinToolsMiddleware` hands back for one tool's result, through the hook `way` names.
 
     Both ways, because the correction is two methods and the async one was reached by
     nothing: making `awrap_tool_call` return the result uncorrected left the whole suite
     green, while the same change to its sync twin reddened the rules above.
     """
-    middleware = ShellPaths(Layout(), kingfishers_shell())
+    middleware = BuiltinToolsMiddleware(Layout(), kingfishers_shell())
     request = Call(tool_call={"name": name, "args": {}, "id": "c1"})
     if way == "sync":
         return middleware.wrap_tool_call(request, lambda _: result)
@@ -404,7 +404,7 @@ def _answered(way: str, name: str, result: Any) -> Any:
 
 
 def _told_tools(way: str, tools: list[Any]) -> list[Any]:
-    """The tools `ShellPaths` passes on, through whichever model hook `way` names."""
+    """The tools `BuiltinToolsMiddleware` passes on, through whichever model hook `way` names."""
     return list(
         _asked(
             way,
@@ -481,11 +481,11 @@ def test_a_shell_that_says_it_starts_in_the_session_is_corrected_whoever_said_it
     request = Call(tool_call={"name": "execute", "args": {}, "id": "c1"})
     starts_there = replace(THEIRS, starts_in_session=True)
 
-    corrected = ShellPaths(Layout(), starts_there).wrap_tool_call(
+    corrected = BuiltinToolsMiddleware(Layout(), starts_there).wrap_tool_call(
         request, lambda _: ToolMessage(MISSED, tool_call_id="c1")
     )
     # The control: the same shell, not saying it.
-    left = ShellPaths(Layout(), THEIRS).wrap_tool_call(
+    left = BuiltinToolsMiddleware(Layout(), THEIRS).wrap_tool_call(
         request, lambda _: ToolMessage(MISSED, tool_call_id="c1")
     )
 

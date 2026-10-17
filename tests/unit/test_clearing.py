@@ -34,7 +34,7 @@ from kingfisher.core.agent.middlewares.clearing import (
     ResultClearingMiddleware,
     high_mark,
 )
-from kingfisher.core.agent.middlewares.cut_replies import _refusal
+from kingfisher.core.agent.middlewares.model_reply import _refusal
 from kingfisher.core.agent.middlewares.recorder import (
     UNRECORDED,
     _arguments,
@@ -536,7 +536,7 @@ def test_text_a_reply_carries_twice_is_cleared_in_both():
 
 
 def _refused() -> str:
-    """The text of a call refused for being cut off, as `CutReplies` writes it."""
+    """The text of a call refused for being cut off, as `ModelReplyMiddleware` writes it."""
     spent = {"input_tokens": 1, "output_tokens": 2_000, "total_tokens": 2_001}
     cut = AIMessage(content="", usage_metadata=spent)
     return _refusal(cut, {"id": "x", "name": "write_file"}).text
