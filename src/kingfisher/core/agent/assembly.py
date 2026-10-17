@@ -79,7 +79,6 @@ from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.spec import RunOn
 from kingfisher.core.definitions.tools.spec import Found, own_audiences
 from kingfisher.core.layout import Layout
-from kingfisher.core.session.model import sessions_root
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -415,7 +414,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each paramet
     # before the rules are finished, and it reads them when it checks, so what is added
     # below -- memory declined, skills narrowed -- applies to both.
     under_rules = PermittedBackend(backend, permissions)
-    paths = SessionPaths(under_rules, sessions_root(cfg.workspace), cfg.layout)
+    paths = SessionPaths(under_rules, cfg.sessions_root, cfg.layout)
 
     # A bundle's tools as well as the catalogue's, since a subagent's calls are
     # recorded too and a bundled tool may say who it admits.

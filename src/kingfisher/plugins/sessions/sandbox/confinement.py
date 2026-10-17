@@ -26,7 +26,7 @@ from functools import partial
 from pathlib import Path
 
 from kingfisher.core.config import Config
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS_OWNED, SANDBOX_PROFILE
+from kingfisher.core.layout import DEFAULT_LAYOUT, SANDBOX_PROFILE
 from kingfisher.plugins.sessions.sandbox.sandbox_exec import (
     fenced_sessions,
     profile,
@@ -293,6 +293,8 @@ def shell_confinement(
     return resolve(
         shell.sandbox,
         workspace=cfg.workspace,
+        sessions_root=cfg.sessions_root,
+        kingfisher_dir=cfg.kingfisher_dir,
         extra=shell.path_extra,
         skills=(cfg.skills_dir, *cfg.skills_mounts.values()) if skills is None else skills,
         definitions=tuple(cfg.catalogue_roots.values()),
@@ -336,7 +338,7 @@ def toolchain_roots(extra: tuple[str, ...] = ()) -> tuple[Path, ...]:
     return tuple(dict.fromkeys(p.resolve() for p in roots if str(p)))
 
 
-def readable_roots(workspace: Path, extra: tuple[str, ...] = (),
+def readable_roots(workspace: Path, sessions_root: Path, extra: tuple[str, ...] = (),
                    skills: tuple[Path, ...] = ()) -> tuple[Path, ...]:
     """What has to stay readable for the shell to remain useful.
 
@@ -344,7 +346,7 @@ def readable_roots(workspace: Path, extra: tuple[str, ...] = (),
     through a link it is not under the workspace, and under the home folder a shell
     that cannot read its own session cannot even start in it.
     """
-    roots = [Path(workspace), fenced_sessions(workspace), *toolchain_roots(extra),
+    roots = [Path(workspace), fenced_sessions(sessions_root), *toolchain_roots(extra),
              *map(Path, skills)]
     return tuple(dict.fromkeys(p.resolve() for p in roots if str(p)))
 
@@ -357,7 +359,7 @@ def shell_readable(cfg: Config, shell: ShellSettings, mechanism: str) -> tuple[P
     """
     skills = (cfg.skills_dir, *cfg.skills_mounts.values())
     if mechanism == SANDBOX_EXEC:
-        return readable_roots(cfg.workspace, shell.path_extra, skills)
+        return readable_roots(cfg.workspace, cfg.sessions_root, shell.path_extra, skills)
     if mechanism in LINUX_FENCES:
         # Each fence's own list, not one shared: bubblewrap binds no `/proc` or `/dev`,
         # and one list serving both is how a mechanism gains a path it meant to deny.
@@ -390,7 +392,7 @@ def shell_reads(
     return "nothing kingfisher runs confines the agent's shell here"
 
 
-def writable_roots(workspace: Path) -> tuple[Path, ...]:
+def writable_roots(workspace: Path, sessions_root: Path) -> tuple[Path, ...]:
     """Everywhere the shell is allowed to write.
 
     The workspace, and the sessions root where that is somewhere else. `TMPDIR` used
@@ -401,12 +403,12 @@ def writable_roots(workspace: Path) -> tuple[Path, ...]:
     and why granting it is half a change.
     """
     root = Path(workspace).resolve()
-    sessions = fenced_sessions(workspace)
+    sessions = fenced_sessions(sessions_root)
     return (root,) if sessions.is_relative_to(root) else (root, sessions)
 
 
 def protected_roots(
-    workspace: Path, skills: tuple[Path, ...], definitions: tuple[Path, ...]
+    kingfisher_dir: Path, skills: tuple[Path, ...], definitions: tuple[Path, ...]
 ) -> tuple[Path, ...]:
     """Everywhere inside a writable root the shell must still not write.
 
@@ -419,7 +421,7 @@ def protected_roots(
     able to write.
     """
     roots = (
-        Path(workspace) / HARNESS_OWNED,
+        Path(kingfisher_dir),
         *map(Path, skills),
         *definitions,
     )
@@ -428,7 +430,7 @@ def protected_roots(
 
 def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
     # `profile` has: directories denied by `subpath` and files by `path` are not one list
-    mode: str, *, workspace: Path,
+    mode: str, *, workspace: Path, sessions_root: Path, kingfisher_dir: Path,
     extra: tuple[str, ...] = (), skills: tuple[Path, ...] = (),
     definitions: tuple[Path, ...] = (),
     authored: tuple[Path, ...] = (),
@@ -467,18 +469,18 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
     rules = partial(
         profile,
         home=home,
-        # Named separately from the writable roots it is usually the first
-        # of: `_session_folder_denial` builds a pattern under it, which needs the
-        # workspace itself rather than whatever happens to be writable.
-        workspace=workspace,
-        readable=readable_roots(workspace, extra, skills),
-        writable=writable_roots(workspace),
+        # Named separately from the writable roots: `_session_folder_denial` builds
+        # a pattern under it, which needs the sessions root itself rather than
+        # whatever happens to be writable.
+        sessions_root=sessions_root,
+        readable=readable_roots(workspace, sessions_root, extra, skills),
+        writable=writable_roots(workspace, sessions_root),
         # The catalogue is instructions the agent follows, so a writable one made a
         # skill something the agent could rewrite for every later request, including
         # in the other deployments sharing it. Read at the tool level too, by the deny
         # rule `kingfisher.core.layout` declares for this route; both are needed, because
         # the shell bypasses tool permissions entirely.
-        protected=protected_roots(workspace, skills, definitions),
+        protected=protected_roots(kingfisher_dir, skills, definitions),
         # Resolved, because the profile matches real paths and a workspace under
         # `/tmp` or `/var` is really under `/private`. A file that does not exist
         # yet is named anyway: the shell must not be the one to create it.
@@ -489,7 +491,7 @@ def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
     # Named for every rule but the one naming the file itself, which cannot be known
     # before the name is; the profile then refuses writes to itself, so the rules
     # cannot be rewritten by the shell they bind. See `profile`.
-    path = profile_path(workspace, rules(itself=Path(SANDBOX_PROFILE)))
+    path = profile_path(kingfisher_dir, rules(itself=Path(SANDBOX_PROFILE)))
     path.parent.mkdir(parents=True, exist_ok=True)
     write_atomically(path, rules(itself=path))
     return Confinement(wrap=wrapper(path), mechanism=SANDBOX_EXEC, profile=path)

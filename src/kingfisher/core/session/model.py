@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
+from kingfisher.core.layout import SESSIONS
+
 
 class UnknownSessionError(ValueError):
     """A request named a session that does not exist."""
@@ -40,11 +42,6 @@ class Turn:
 
     session_id: str
     id: str
-
-
-def sessions_root(workspace: Path | str) -> Path:
-    """Where a workspace keeps its sessions."""
-    return Path(workspace) / "sessions"
 
 
 #: The session a request naming none runs in. An ordinary id: naming it reaches the
@@ -90,7 +87,7 @@ def session_dir(workspace: Path | str, session_id: str) -> Path:
     # `open` makes folders where it points and `delete` removes them.
     if not names_a_session(session_id):
         raise unnamable_session(session_id)
-    return sessions_root(workspace) / session_id
+    return Path(workspace) / SESSIONS / session_id
 
 
 def known(entries: Sequence[tuple[str, float]]) -> tuple[tuple[str, float], ...]:

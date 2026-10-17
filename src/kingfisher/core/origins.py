@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
-from kingfisher.core.session.model import sessions_root
 
 if TYPE_CHECKING:
     from kingfisher.core.config import Config
@@ -191,7 +190,7 @@ def _source_ids(cfg: Config) -> Origin:
 def kingfishers_own(sessions: object, cfg: Config) -> bool:
     """Whether `sessions` keep them where kingfisher's own would, in the workspace."""
     where = getattr(sessions, "where", None)
-    return callable(where) and where(cfg) == sessions_root(cfg.workspace)
+    return callable(where) and where(cfg) == cfg.sessions_root
 
 
 def _sessions(cfg: Config, sessions: object | None) -> Origin:
@@ -204,4 +203,4 @@ def _sessions(cfg: Config, sessions: object | None) -> Origin:
     """
     if sessions is not None and not kingfishers_own(sessions, cfg):
         return Origin("supplied")
-    return Origin("default", cfg.workspace / "sessions")
+    return Origin("default", cfg.sessions_root)

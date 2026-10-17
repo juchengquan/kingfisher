@@ -142,7 +142,7 @@ def test_the_profile_denies_after_it_allows(tmp_path):
     """
     text = sandbox_exec.profile(
         home=tmp_path / "home",
-        workspace=tmp_path / "ws",
+        sessions_root=tmp_path / "ws" / "sessions",
         readable=(tmp_path / "ws",),
         writable=(tmp_path / "ws",),
         itself=tmp_path / "ws" / ".kingfisher" / "shell.sb",
@@ -160,8 +160,12 @@ def test_a_profile_with_nothing_protected_is_unchanged(tmp_path):
     """The parameter defaults to empty, so a caller that names nothing gets the profile
     it always got.
     """
-    args: dict[str, Any] = {"home": tmp_path / "home", "workspace": tmp_path / "ws",
-            "readable": (tmp_path / "ws",), "writable": (tmp_path / "ws",),
-            "itself": tmp_path / "ws" / ".kingfisher" / "shell.sb"}
+    args: dict[str, Any] = {
+        "home": tmp_path / "home",
+        "sessions_root": tmp_path / "ws" / "sessions",
+        "readable": (tmp_path / "ws",),
+        "writable": (tmp_path / "ws",),
+        "itself": tmp_path / "ws" / ".kingfisher" / "shell.sb",
+    }
 
     assert sandbox_exec.profile(**args) == sandbox_exec.profile(**args, protected=())

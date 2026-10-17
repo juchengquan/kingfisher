@@ -318,7 +318,7 @@ def test_without_mounts_the_shell_is_given_the_catalogue_itself(cfg, session_dir
 
 def test_the_view_holds_the_catalogue_and_every_mount(mounted):
     """Each entry of the catalogue and each mount, side by side, as `/skills/` has them."""
-    view = skills_view(Definitions.from_config(mounted).skills, mounted.workspace)
+    view = skills_view(Definitions.from_config(mounted).skills, mounted.kingfisher_dir)
 
     assert sorted(p.name for p in view.iterdir()) == ["local", "vendor"]
     assert (view / "vendor").resolve() == mounted.skills_mounts["vendor"].resolve()
@@ -328,10 +328,10 @@ def test_one_catalogue_is_one_view_and_a_changed_one_is_another(mounted):
     """Named for what it holds: turns share a view, and a skill added to the catalogue
     is not missing from the one the shell is given.
     """
-    first = skills_view(Definitions.from_config(mounted).skills, mounted.workspace)
-    again = skills_view(Definitions.from_config(mounted).skills, mounted.workspace)
+    first = skills_view(Definitions.from_config(mounted).skills, mounted.kingfisher_dir)
+    again = skills_view(Definitions.from_config(mounted).skills, mounted.kingfisher_dir)
     _skill(mounted.skills_dir, "added", "added")
-    changed = skills_view(Definitions.from_config(mounted).skills, mounted.workspace)
+    changed = skills_view(Definitions.from_config(mounted).skills, mounted.kingfisher_dir)
 
     assert first == again
     assert changed != first
@@ -343,11 +343,11 @@ def test_a_turn_that_loses_the_race_uses_the_winners_view(mounted, monkeypatch):
     and must neither raise nor leave its staging directory behind.
     """
     skills = Definitions.from_config(mounted).skills
-    built = skills_view(skills, mounted.workspace)
+    built = skills_view(skills, mounted.kingfisher_dir)
     real = Path.is_dir
     monkeypatch.setattr(Path, "is_dir", lambda self: False if self == built else real(self))
 
-    assert skills_view(skills, mounted.workspace) == built
+    assert skills_view(skills, mounted.kingfisher_dir) == built
     assert [p.name for p in built.parent.iterdir()] == [built.name]
 
 
@@ -366,6 +366,6 @@ def test_the_linux_fence_is_granted_the_view(mounted, session_dir, monkeypatch):
     )
     backend_at(mounted, session_dir)
 
-    view = skills_view(Definitions.from_config(mounted).skills, mounted.workspace)
+    view = skills_view(Definitions.from_config(mounted).skills, mounted.kingfisher_dir)
     assert view in handed[0]
     assert mounted.skills_mounts["vendor"] in handed[0]
