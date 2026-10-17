@@ -22,17 +22,7 @@ from kingfisher.core.agent.prompting import ShellPrompt, kingfishers_shell
 from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.catalogue import Definitions, refuse_unmountable
 from kingfisher.core.interfaces import CommandRunner, Sessions
-from kingfisher.core.layout import (
-    CLAIM,
-    HARNESS,
-    HARNESS_ROUTE,
-    INPUTS,
-    OFFLOADS,
-    SAVED_RESULTS,
-    SCRATCH_ROUTE,
-    SESSION_DIRS,
-    SKILLS_ROUTE,
-)
+from kingfisher.core.layout import CLAIM, DEFAULT_LAYOUT
 from kingfisher.core.session.model import session_dir, sessions_root, still_held
 from kingfisher.plugins.sessions.folders import (
     LocalSessionDirs,
@@ -193,7 +183,7 @@ class WorkspaceScopedBackend(CompositeBackend):
         *,
         session_dir: Path,
         workspace: Path,
-        artifacts_root: str = SCRATCH_ROUTE,
+        artifacts_root: str = DEFAULT_LAYOUT.scratch_route,
     ) -> None:
         # Where deepagents writes on its own -- a tool result too long to send, the
         # history its summarizer keeps. They are the agent's working material: returned
@@ -231,7 +221,7 @@ class InputsBackend(FilesystemBackend):
     permission bits to lift, and meets the same promise its own way.
     """
 
-    def __init__(self, session_dir: Path, inputs: str = INPUTS) -> None:
+    def __init__(self, session_dir: Path, inputs: str = DEFAULT_LAYOUT.inputs) -> None:
         super().__init__(root_dir=str(Path(session_dir) / inputs))
         self._session_dir = Path(session_dir)
         self._inputs = inputs
@@ -243,13 +233,13 @@ class InputsBackend(FilesystemBackend):
 
 def _require_layout(
     session_dir: Path,
-    session_dirs: tuple[str, ...] = SESSION_DIRS,
-    saved_results: tuple[str, ...] = SAVED_RESULTS,
+    session_dirs: tuple[str, ...] = DEFAULT_LAYOUT.session_dirs,
+    saved_results: tuple[str, ...] = DEFAULT_LAYOUT.saved_results,
 ) -> None:
     """Refuse a session directory that has not been made yet."""
     missing = [
         name
-        for name in (*session_dirs, HARNESS, *saved_results)
+        for name in (*session_dirs, DEFAULT_LAYOUT.harness, *saved_results)
         if not (session_dir / name).is_dir()
     ]
     if missing:
@@ -343,7 +333,7 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     layout = cfg.layout
     backing = {
         layout.inputs_route: lambda: InputsBackend(session_dir, layout.inputs),
-        SKILLS_ROUTE: lambda: FilesystemBackend(root_dir=str(skills_dir)),
+        layout.skills_route: lambda: FilesystemBackend(root_dir=str(skills_dir)),
         layout.memory_route: lambda: FilesystemBackend(
             root_dir=str(session_dir / layout.memory)
         ),
@@ -351,7 +341,7 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
         # `read_only_permissions`, and a rule is only expressible against a path
         # the composite routes -- so the mount is what makes the refusal legal,
         # not a way in.
-        HARNESS_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / HARNESS)),
+        layout.harness_route: lambda: FilesystemBackend(root_dir=str(session_dir / layout.harness)),
         # Mounted for the reason `.harness` is: a rule is only expressible against a
         # path the composite routes, so the mount is what makes the refusal legal.
         # Unlike `.harness` it is readable -- the agent is told to read a result back
@@ -360,7 +350,7 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
             root_dir=str(session_dir / layout.scratchpad / layout.tool_results)
         ),
         layout.offloads_route: lambda: FilesystemBackend(
-            root_dir=str(session_dir / layout.scratchpad / OFFLOADS)
+            root_dir=str(session_dir / layout.scratchpad / layout.offloads)
         ),
     }
     missing = [path for path in layout.routed_paths() if path not in backing]
@@ -525,4 +515,4 @@ def _where(cfg: Config, session_id: str) -> Path:
 
 def _claim_at(cfg: Config, session_id: str) -> Path:
     """Where kingfisher's own sessions keep one session's turn lock."""
-    return _where(cfg, session_id) / HARNESS / CLAIM
+    return _where(cfg, session_id) / cfg.layout.harness / CLAIM

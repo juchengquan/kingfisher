@@ -20,7 +20,6 @@ from kingfisher.core.layout import (
     MEMORY,
     OUTPUTS,
     ROUTES,
-    SAVED_RESULTS,
     SESSION_DIRS,
     Layout,
     denied_read_scopes,
@@ -70,7 +69,7 @@ def test_the_default_layout_is_the_module_constants():
         "/scratchpad/tool_results/",
         "/scratchpad/large_tool_results/",
     )
-    assert default.saved_results == SAVED_RESULTS
+    assert default.saved_results == ("scratchpad/tool_results", "scratchpad/large_tool_results")
 
 
 # -- a renamed layout derives everything from its leaves ------------------------

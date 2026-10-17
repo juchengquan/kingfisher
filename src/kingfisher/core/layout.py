@@ -79,10 +79,6 @@ TOOL_RESULTS = "tool_results"
 #: artifacts root -- there is no constant to read it off.
 OFFLOADS = "large_tool_results"
 
-#: The two folders a ledger row can name, as paths inside the session: what the fences
-#: refuse the shell, beside `.harness` and `inputs`.
-SAVED_RESULTS: tuple[str, ...] = (f"{SCRATCH}/{TOOL_RESULTS}", f"{SCRATCH}/{OFFLOADS}")
-
 #: Where skills live.
 SKILLS = "skills"
 
@@ -227,7 +223,7 @@ ROUTES: tuple[Route, ...] = (
     # overwrite at all. What the narrowing above it earns is that a draft a shell left
     # here is not deleted in the turn that wrote it, which is a different property.
     #
-    # The shell's half belongs to the fences, which take it from `SAVED_RESULTS`:
+    # The shell's half belongs to the fences, which take it from `Layout.saved_results`:
     # `sandbox-exec` and bubblewrap refuse this folder the way they refuse `.harness`,
     # while Landlock cannot while the folder sits inside a scratchpad it grants whole,
     # since a read-only grant under a writable parent is stepped over. Two of three is
@@ -372,7 +368,27 @@ class Layout:
         return _route(self.scratchpad, OFFLOADS)
 
     @property
+    def offloads(self) -> str:
+        """deepagents' folder for a result too long to send, under the scratchpad. Fixed."""
+        return OFFLOADS
+
+    @property
+    def harness(self) -> str:
+        """What kingfisher keeps about the session, which no layout renames."""
+        return HARNESS
+
+    @property
+    def harness_route(self) -> str:
+        return HARNESS_ROUTE
+
+    @property
+    def skills_route(self) -> str:
+        return SKILLS_ROUTE
+
+    @property
     def saved_results(self) -> tuple[str, ...]:
+        """The two folders a ledger row can name, as paths inside the session: what the
+        fences refuse the shell, beside `.harness` and the inputs."""
         return (f"{self.scratchpad}/{self.tool_results}", f"{self.scratchpad}/{OFFLOADS}")
 
     @property

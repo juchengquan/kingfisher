@@ -1417,52 +1417,21 @@ NOT_YET: dict[str, frozenset[str]] = {
         "kingfisher.core.definitions.catalogue:Definitions",
         "kingfisher.core.definitions.catalogue:refuse_unmountable",
         "kingfisher.core.layout:CLAIM",
-        "kingfisher.core.layout:HARNESS",
-        "kingfisher.core.layout:HARNESS_ROUTE",
-        "kingfisher.core.layout:INPUTS",
-        "kingfisher.core.layout:OFFLOADS",
-        "kingfisher.core.layout:SAVED_RESULTS",
-        "kingfisher.core.layout:SCRATCH_ROUTE",
-        "kingfisher.core.layout:SESSION_DIRS",
-        "kingfisher.core.layout:SKILLS_ROUTE",
         "kingfisher.core.session.model:session_dir",
         "kingfisher.core.session.model:sessions_root",
         "kingfisher.core.session.model:still_held",
     }),
     "src/kingfisher/plugins/sessions/folders.py": frozenset({
         "kingfisher.core.layout:AGENTS_SCAFFOLD",
-        "kingfisher.core.layout:HARNESS",
-        "kingfisher.core.layout:MEMORY",
-        "kingfisher.core.layout:SAVED_RESULTS",
-        "kingfisher.core.layout:SCRATCH",
-        "kingfisher.core.layout:SESSION_DIRS",
         "kingfisher.core.session.model:names_a_session",
-    }),
-    "src/kingfisher/plugins/sessions/permissions.py": frozenset({
-        "kingfisher.core.layout:INPUTS",
-        "kingfisher.core.layout:SCRATCH",
-    }),
-    "src/kingfisher/plugins/sessions/sandbox/bubblewrap.py": frozenset({
-        "kingfisher.core.layout:HARNESS",
-        "kingfisher.core.layout:INPUTS",
-        "kingfisher.core.layout:SAVED_RESULTS",
     }),
     "src/kingfisher/plugins/sessions/sandbox/confinement.py": frozenset({
         "kingfisher.core.layout:HARNESS_OWNED",
-        "kingfisher.core.layout:INPUTS",
         "kingfisher.core.layout:SANDBOX_PROFILE",
-        "kingfisher.core.layout:SAVED_RESULTS",
-    }),
-    "src/kingfisher/plugins/sessions/sandbox/fence.py": frozenset({
-        "kingfisher.core.layout:INPUTS",
-        "kingfisher.core.layout:SESSION_DIRS",
     }),
     "src/kingfisher/plugins/sessions/sandbox/sandbox_exec.py": frozenset({
-        "kingfisher.core.layout:HARNESS",
         "kingfisher.core.layout:HARNESS_OWNED",
-        "kingfisher.core.layout:INPUTS",
         "kingfisher.core.layout:SANDBOX_PROFILE",
-        "kingfisher.core.layout:SAVED_RESULTS",
         "kingfisher.core.session.model:sessions_root",
     }),
     "src/kingfisher/plugins/sessions/shell.py": frozenset({
@@ -1475,18 +1444,12 @@ NOT_YET: dict[str, frozenset[str]] = {
         "kingfisher.core.agent.usable_backend:executes",
         "kingfisher.core.agent.usable_backend:not_executing",
         "kingfisher.core.agent.usable_backend:uncovered",
-        "kingfisher.core.layout:HARNESS_ROUTE",
-        "kingfisher.core.layout:INPUTS_ROUTE",
-        "kingfisher.core.layout:OUTPUTS_ROUTE",
-        "kingfisher.core.layout:SCRATCH_ROUTE",
     }),
     "tests/checks/sessions.py": frozenset({
         "kingfisher.core.agent.backend:skill_mounts",
         "kingfisher.core.agent.permitted_backend:host_path",
         "kingfisher.core.definitions.catalogue:Definitions",
         "kingfisher.core.definitions.skills:registry",
-        "kingfisher.core.layout:OUTPUTS_ROUTE",
-        "kingfisher.core.layout:SKILLS_ROUTE",
     }),
 }
 
@@ -1833,6 +1796,10 @@ WITNESSES: dict[str, dict[str, str]] = {
         # code rather than read from the environment, and `configuration.md` sends a
         # reader of the two shell settings there.
         "ShellSettings": "document",
+        # `ports.md` sends a plugin to `cfg.layout` for the folders a session holds and
+        # the routes it serves, and names the type and the layout a `Config` defaults to.
+        "Layout": "document",
+        "DEFAULT_LAYOUT": "document",
         # The shipped pair behind two of the interfaces above, public so a deployment
         # can wrap one rather than reimplement it. `upgrading.md` records the move:
         # they were "not public anywhere" before this door existed.

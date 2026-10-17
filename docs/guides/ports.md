@@ -397,6 +397,12 @@ while refusing the agent's own writes: `LocalSessions` routes it to
 `InputsBackend`, which lifts the permission bits for kingfisher's upload alone, and
 a backend of yours meets the same promise its own way.
 
+**Those are the default names.** A `Config` may rename a session's folders, and what
+yours has to serve is what the `Config` it is handed says: `cfg.layout`, a `Layout`
+from `kingfisher.plugins`, with each folder's name and a route for each --
+`inputs_route`, `outputs_route`, `scratch_route`, `skills_route`, `harness_route` and
+the rest. `DEFAULT_LAYOUT` is the one a `Config` has unless told.
+
 **Open it once if you use it around a turn.** `kf.session(session_id).files()`
 builds a session's backend the way a turn does, through your sessions, and `run`,
 `stream`, `arun` and `astream` take it back as `files=` and run the turn on it rather

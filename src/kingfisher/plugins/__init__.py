@@ -22,6 +22,8 @@ _EXPORTS = {
     "WireFormat": "kingfisher.core.config",
     "Plugins": "kingfisher.core.plugins",
     "ShellPrompt": "kingfisher.core.agent.prompting",
+    "Layout": "kingfisher.core.layout",
+    "DEFAULT_LAYOUT": "kingfisher.core.layout",
     "HostPathError": "kingfisher.core.agent.host_paths",
     "LocalSessions": "kingfisher.plugins.sessions.backend",
     "backend_at": "kingfisher.plugins.sessions.backend",
@@ -32,6 +34,7 @@ _EXPORTS = {
 }
 
 __all__ = [
+    "DEFAULT_LAYOUT",
     "WIRE_FORMATS",
     "CommandResult",
     "CommandRunner",
@@ -39,6 +42,7 @@ __all__ = [
     "Instructions",
     "InstructionsFile",
     "JsonlRunEvents",
+    "Layout",
     "LocalSessions",
     "Plugins",
     "RunEvents",
@@ -60,6 +64,8 @@ if TYPE_CHECKING:
     from kingfisher.core.interfaces import Instructions as Instructions
     from kingfisher.core.interfaces import RunEvents as RunEvents
     from kingfisher.core.interfaces import Sessions as Sessions
+    from kingfisher.core.layout import DEFAULT_LAYOUT as DEFAULT_LAYOUT
+    from kingfisher.core.layout import Layout as Layout
     from kingfisher.core.plugins import Plugins as Plugins
     from kingfisher.plugins.events import JsonlRunEvents as JsonlRunEvents
     from kingfisher.plugins.sessions.backend import LocalSessions as LocalSessions

@@ -41,7 +41,7 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kingfisher.core.layout import HARNESS, INPUTS, SAVED_RESULTS
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins.sessions.sandbox.linux import MAX_OUTPUT_BYTES, outcome, present
 
 if TYPE_CHECKING:
@@ -82,8 +82,8 @@ def argv_for(
     *,
     readable: Iterable[Path | str] = (),
     writable: Iterable[Path | str] = (),
-    inputs: str = INPUTS,
-    saved_results: Iterable[str] = SAVED_RESULTS,
+    inputs: str = DEFAULT_LAYOUT.inputs,
+    saved_results: Iterable[str] = DEFAULT_LAYOUT.saved_results,
 ) -> list[str]:
     """The sandbox one session's commands run in, generated from it."""
     argv = ["bwrap"]
@@ -104,7 +104,11 @@ def argv_for(
     # The saved results as well, because a ledger row names its file and a later turn
     # reads that file back as what the tool returned.
     session = Path(session_dir)
-    guarded = [session / HARNESS, session / inputs, *(session / p for p in saved_results)]
+    guarded = [
+        session / DEFAULT_LAYOUT.harness,
+        session / inputs,
+        *(session / p for p in saved_results),
+    ]
     for path in present(guarded):
         argv += ["--ro-bind", str(path), str(path)]
     argv += [

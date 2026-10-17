@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 
-from kingfisher.core.layout import INPUTS, SCRATCH
+from kingfisher.core.layout import DEFAULT_LAYOUT
 
 
 def _drop_write_bits(path: Path) -> None:
@@ -33,7 +33,7 @@ def _unreachable(path: Path, error: OSError) -> str:
     return f"{path.name}: {error.strerror or error}"
 
 
-def keep_tmp_private(session_dir: Path, *, scratchpad: str = SCRATCH) -> None:
+def keep_tmp_private(session_dir: Path, *, scratchpad: str = DEFAULT_LAYOUT.scratchpad) -> None:
     """Give the session's `TMPDIR` the mode the shared scratch directory had.
 
     Here rather than in `sessions`, which creates the directory, because this
@@ -59,7 +59,7 @@ def keep_tmp_private(session_dir: Path, *, scratchpad: str = SCRATCH) -> None:
         (Path(session_dir) / scratchpad).chmod(0o700)
 
 
-def protect_inputs(session_dir: Path, inputs: str = INPUTS) -> tuple[str, ...]:
+def protect_inputs(session_dir: Path, inputs: str = DEFAULT_LAYOUT.inputs) -> tuple[str, ...]:
     """Make `inputs/` read-only at the OS level. Idempotent."""
     # The layout's name and not a spelling of it: `InputsBackend` uploads under the
     # same leaf, and a folder named here instead is one the upload never reaches.
@@ -78,7 +78,7 @@ def protect_inputs(session_dir: Path, inputs: str = INPUTS) -> tuple[str, ...]:
 
 
 @contextmanager
-def writable_inputs(session_dir: Path, inputs: str = INPUTS) -> Iterator[Path]:
+def writable_inputs(session_dir: Path, inputs: str = DEFAULT_LAYOUT.inputs) -> Iterator[Path]:
     """Temporarily make `inputs/` writable, for loading inputs."""
     inputs_dir = Path(session_dir) / inputs
     inputs_dir.mkdir(parents=True, exist_ok=True)

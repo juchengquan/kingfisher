@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher.core.interfaces import CommandResult
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, INPUTS_ROUTE, SAVED_RESULTS, Layout
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, INPUTS_ROUTE, Layout
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -1297,7 +1297,7 @@ def test_the_profile_refuses_itself_last(tmp_path):
     # different paths, so all of them have to sit after the allows. One per folder
     # refused that way -- `inputs`, `.harness` and the saved results -- and the profile
     # ends with them.
-    tail = lines[-(3 + len(SAVED_RESULTS)) :]
+    tail = lines[-(3 + len(DEFAULT_LAYOUT.saved_results)) :]
     assert f'(deny file-write* (path "{written}"))' in tail
     assert all("deny file-write*" in line for line in tail), tail
 

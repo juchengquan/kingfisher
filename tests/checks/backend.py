@@ -14,13 +14,7 @@ from uuid import uuid4
 
 from deepagents.backends import CompositeBackend
 
-from kingfisher.core.layout import (
-    HARNESS_ROUTE,
-    INPUTS_ROUTE,
-    OUTPUTS_ROUTE,
-    SCRATCH_ROUTE,
-)
-from kingfisher.plugins import HostPathError
+from kingfisher.plugins import DEFAULT_LAYOUT, HostPathError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -62,9 +56,9 @@ def filesystem_consistency(make: Callable[[], Any]) -> None:
         return
     body, name = uuid4().hex, uuid4().hex
     for virtual, write in (
-        (f"{OUTPUTS_ROUTE}{name}-tools.txt", lambda path: backend.write(path, body)),
+        (f"{DEFAULT_LAYOUT.outputs_route}{name}-tools.txt", lambda path: backend.write(path, body)),
         (
-            f"{OUTPUTS_ROUTE}{name}-shell.txt",
+            f"{DEFAULT_LAYOUT.outputs_route}{name}-shell.txt",
             lambda path: backend.execute(f"printf %s {body} > {path.lstrip('/')}"),
         ),
     ):
@@ -99,11 +93,12 @@ def offloads_in_the_scratchpad(make: Callable[[], Any]) -> None:
     """
     backend = make()
     root = backend.artifacts_root if isinstance(backend, CompositeBackend) else "/"
-    if root.rstrip("/") != SCRATCH_ROUTE.rstrip("/"):
+    scratch = DEFAULT_LAYOUT.scratch_route
+    if root.rstrip("/") != scratch.rstrip("/"):
         msg = (
             f"{type(backend).__name__} has deepagents write the tool results it evicts "
             f"and the history it summarizes under {root!r}, and the agent is told they "
-            f"are under {SCRATCH_ROUTE}. Pass artifacts_root={SCRATCH_ROUTE!r} to the "
+            f"are under {scratch}. Pass artifacts_root={scratch!r} to the "
             "CompositeBackend, as the one backend_at builds does"
         )
         raise AssertionError(msg)
@@ -136,8 +131,8 @@ def shell_denied(make: Callable[[], Any]) -> None:
     token = uuid4().hex
     written: list[str] = []
     for route, what in (
-        (HARNESS_ROUTE, "what kingfisher reads back and trusts"),
-        (INPUTS_ROUTE, "the caller's input"),
+        (DEFAULT_LAYOUT.harness_route, "what kingfisher reads back and trusts"),
+        (DEFAULT_LAYOUT.inputs_route, "the caller's input"),
     ):
         kept, fresh = f"{route}{token}-kept", f"{route}{token}-fresh"
         backend.upload_files([(kept, b"as written")])

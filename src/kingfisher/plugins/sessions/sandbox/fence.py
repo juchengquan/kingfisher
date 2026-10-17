@@ -41,7 +41,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.layout import INPUTS, SESSION_DIRS
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins.sessions.sandbox.linux import MAX_OUTPUT_BYTES, outcome, present
 
 if TYPE_CHECKING:
@@ -66,8 +66,8 @@ SYSTEM_PATHS: tuple[str, ...] = (
 def _session_writable(
     session_dir: Path,
     *,
-    session_dirs: tuple[str, ...] = SESSION_DIRS,
-    inputs: str = INPUTS,
+    session_dirs: tuple[str, ...] = DEFAULT_LAYOUT.session_dirs,
+    inputs: str = DEFAULT_LAYOUT.inputs,
 ) -> list[Path]:
     """Everywhere inside one session the shell may write: its directories, one by one.
 
@@ -96,8 +96,8 @@ def policy_for(
     *,
     readable: Iterable[Path | str] = (),
     writable: Iterable[Path | str] = (),
-    session_dirs: tuple[str, ...] = SESSION_DIRS,
-    inputs: str = INPUTS,
+    session_dirs: tuple[str, ...] = DEFAULT_LAYOUT.session_dirs,
+    inputs: str = DEFAULT_LAYOUT.inputs,
 ) -> Any:
     """The `Sandbox` one session's commands run under, generated from it.
 
