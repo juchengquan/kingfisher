@@ -163,7 +163,7 @@ agent will not load is reported, not refused.
 from there and from `core.agent.middlewares.narrowing`, so an upgrade
 that moved either meant the same edit in two files, and the async one was never
 pinned.
-`listed` and `alisted` are the only calls now; `test_skill_registry` pins both
+`list_skills` and `alist_skills` are the only calls now; `test_skill_registry` pins both
 names and fails if another module names either. A listing becomes a `Listed` where
 it arrives, so `name`, `path` and `description` are read off deepagents' metadata in
 one function rather than by key wherever an entry is used. The skills index hands
@@ -6437,8 +6437,8 @@ plugin's author is told to copy, fifteen of its own. Whatever a default needs an
 outsider cannot import is a gap in the plugin contract, so the gaps were closed rather
 than the default excused: the layout through `cfg.layout`, with `Layout` public;
 `Config.sessions_root` and `Config.kingfisher_dir`; `Definitions` public, saying where
-its skills are served; the checks kingfisher makes of a backend public for a plugin's
-own suite; a `ShellPrompt` that says it starts in the session, where the core had asked
+its skills are served; the checks kingfisher makes of a backend, and how it lists a
+skills source, public for a plugin's own suite; a `ShellPrompt` that says it starts in the session, where the core had asked
 whether it was kingfisher's own by identity; and what only `LocalSessions` used, moved
 into it. `test_a_plugin_has_of_kingfisher_only_what_an_outsider_has` holds both. A
 plugin takes a name a door carries from the module that door takes it from, since it

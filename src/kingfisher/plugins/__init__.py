@@ -20,6 +20,7 @@ _EXPORTS = {
     "CommandRunner": "kingfisher.core.interfaces",
     "CommandResult": "kingfisher.core.interfaces",
     "Definitions": "kingfisher.core.definitions.catalogue",
+    "list_skills": "kingfisher.core.definitions.skills.registry",
     "WireFormat": "kingfisher.core.config",
     "Plugins": "kingfisher.core.plugins",
     "ShellPrompt": "kingfisher.core.agent.prompting",
@@ -58,6 +59,7 @@ __all__ = [
     "WireFormat",
     "backend_at",
     "host_path",
+    "list_skills",
     "not_executing",
     "reject_host_path",
     "uncovered",
@@ -74,6 +76,7 @@ if TYPE_CHECKING:
     from kingfisher.core.agent.usable_backend import uncovered as uncovered
     from kingfisher.core.config import WireFormat as WireFormat
     from kingfisher.core.definitions.catalogue import Definitions as Definitions
+    from kingfisher.core.definitions.skills.registry import list_skills as list_skills
     from kingfisher.core.interfaces import CommandResult as CommandResult
     from kingfisher.core.interfaces import CommandRunner as CommandRunner
     from kingfisher.core.interfaces import Instructions as Instructions

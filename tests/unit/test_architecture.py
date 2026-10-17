@@ -1407,14 +1407,6 @@ def test_the_cross_plugin_rule_tells_its_own_from_another(tmp_path):
 #: from the module that door takes it from -- the object an outsider gets.
 OUTSIDERS: dict[Path, bool] = {SRC / "plugins": False, REPO / "tests" / "checks": True}
 
-#: What each file still takes that no door carries, as `module:name`. It only shrinks:
-#: the change that stops an import removes its line, and the table goes once it is empty.
-NOT_YET: dict[str, frozenset[str]] = {
-    "tests/checks/sessions.py": frozenset({
-        "kingfisher.core.definitions.skills:registry",
-    }),
-}
-
 
 def _past_the_doors(path: Path, *, as_written: bool) -> frozenset[str]:
     """What this file takes of kingfisher that no door carries: `module:name`, or the
@@ -1448,21 +1440,10 @@ def test_a_plugin_has_of_kingfisher_only_what_an_outsider_has():
         if (taken := _past_the_doors(path, as_written=as_written))
     }
 
-    new = {
-        path: sorted(more)
-        for path, taken in found.items()
-        if (more := taken - NOT_YET.get(path, frozenset()))
-    }
-    assert not new, (
-        f"{new} -- no door carries these: import a name a door carries, or make one public "
-        "on purpose, with a witness"
+    assert not found, (
+        f"{ {path: sorted(taken) for path, taken in found.items()} } -- no door carries "
+        "these: import a name a door carries, or make one public on purpose, with a witness"
     )
-    stopped = {
-        path: sorted(gone)
-        for path, names in NOT_YET.items()
-        if (gone := names - found.get(path, frozenset()))
-    }
-    assert not stopped, f"{stopped} are no longer taken -- remove them from NOT_YET"
 
 
 def test_the_outsider_rule_tells_a_door_s_name_from_a_private_one(tmp_path):
@@ -1793,6 +1774,9 @@ WITNESSES: dict[str, dict[str, str]] = {
         "not_executing": "document",
         "uncovered": "document",
         "host_path": "document",
+        # How deepagents will list one skills source, which `ports.md` offers for
+        # comparing what a backend serves with what kingfisher read.
+        "list_skills": "document",
     },
 }
 

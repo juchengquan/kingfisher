@@ -45,6 +45,21 @@ class Definitions:
         """What the agent will actually be told about, asked of deepagents."""
         return skill_registry.read(self.skills)
 
+    def skill_sources(self) -> tuple[tuple[str, Path, str], ...]:
+        """Every place the agent is given a skills index: `(route, folder, source)`.
+
+        The route the folder is served at, the folder on this host, and the source in
+        it deepagents lists -- the catalogue's root and each folder in it that holds
+        skills, then every mounted directory at its root. Listing each through a
+        session's backend and through the folder itself is how a backend is shown to
+        serve what kingfisher read.
+        """
+        root = self.skills.root
+        return (
+            *((SKILLS_ROUTE, root, path) for _, path in skill_registry.sources(root)),
+            *((route, folder, skill_registry.ROOT) for route, folder in self.skill_mounts()),
+        )
+
     def skill_mounts(self) -> tuple[tuple[str, Path], ...]:
         """`(route, directory)` for every skills directory mounted beneath the catalogue.
 

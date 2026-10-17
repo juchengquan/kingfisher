@@ -349,7 +349,10 @@ your bundles ship, and an `open` that quietly drops it gets a backend that is
 perfectly well-formed and sees none of them. It is a `Definitions`, from
 `kingfisher.plugins`, and `catalogue.skill_mounts()` lists where your backend has to
 serve its skills: a route under `/skills/` and the directory behind it, one for each
-subagent's bundle and each mount. Nothing at runtime can see that mistake,
+subagent's bundle and each mount. `catalogue.skill_sources()` adds the catalogue's own
+folders, as every place the agent is given a skills index, and `list_skills(backend,
+path)` lists one the way deepagents will: listing each through your backend and through
+the folder itself shows whether you serve what kingfisher read. Nothing at runtime can see that mistake,
 which is why `Sessions` is a typed protocol rather than a line of prose —
 write the signature out and your type checker catches it.
 
