@@ -2367,8 +2367,14 @@ is paid for on every call. It lives inside the model call and the tool call, bec
 hook beside them is a graph step and the recursion limit counts those. A subagent the
 workspace compiled itself gets none of it, as it gets none of `tool_guards`.
 
-A cut final answer is asked for again, shorter, with anything long put in a file under
-the deployment's outputs folder. Shorter rather than continued: stitching two replies into
+A cut final answer is asked for again, shorter, with anything long written to a file under
+the deployment's outputs folder first and the answer naming it after, and a file is named
+only once it is written. Measured on live turns at a 2,000-token cap: told to "put
+anything long in a file and say where it is", the agent named a file it never wrote; told
+to write it first, it still named one when the question had said to write no file. With
+the last sentence, two such turns wrote the file before naming it -- against the
+question's wish, which is the lesser fault, since the content is somewhere a caller can
+find. Shorter rather than continued: stitching two replies into
 one answer is new logic, a model asked to continue tends to repeat itself at the seam, and
 at 32,768 tokens a cut answer is some 25,000 words, which belongs in a file anyway.
 Neither the cut answer nor the request reaches the conversation, because clearing never
