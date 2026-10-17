@@ -10,10 +10,10 @@ dropped here.
 **Nothing is imported here, and that is the point rather than an omission.** This
 file runs before any kind's own `__init__`, so a convenience re-export is paid for
 by every import of every kind. One reaching a module that imports deepagents
-puts it in front of all of them: `kingfisher.core.definitions.skills` is 6ms and 65 modules
-today, and was 1,033ms and 3,124 behind such a line -- so `kingfisher seed` would
-import three provider SDKs to read a directory. Each module is imported by
-name instead, which is what `agents/__init__.py` already says about its own.
+puts it in front of all of them: `kingfisher.core.definitions.skills` takes a few
+milliseconds and a few dozen modules, and took a second and three thousand behind such a
+line -- so `kingfisher seed` would import the provider SDKs to read a directory. Each
+module is imported by name instead, which is what `agents/__init__.py` already says about its own.
 
 `importing.py` and `documents.py` are here and are not kinds. The first loads a
 workspace's own Python without putting it on the import path, and the kind
