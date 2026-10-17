@@ -16,7 +16,7 @@ from types import MappingProxyType
 from kingfisher.core.access.capabilities import ALL, Capabilities, bare_name
 from kingfisher.core.access.source_ids import AUDIENCED
 from kingfisher.core.definitions import fields
-from kingfisher.core.definitions.definition import Definition
+from kingfisher.core.definitions.definition import SpecBase
 
 # A `tools:` entry may be written `where::what`, so reading this format means
 # parsing a tool reference -- the format referring to itself, which is why the
@@ -78,10 +78,10 @@ REFUSED: Mapping[str, str] = MappingProxyType(
 
 
 @dataclass(frozen=True, kw_only=True)
-class AgentSpec(Definition):
+class AgentSpec(SpecBase):
     """One agent, once its definition has been read.
 
-    What it shares with a subagent is on `Definition`; `memory` is the whole of what
+    What it shares with a subagent is on `SpecBase`; `memory` is the whole of what
     only an agent has.
     """
 
@@ -100,14 +100,14 @@ class AgentSpec(Definition):
     #: worse than none because it reads as protection. An author who finds this too
     #: coarse wants an agent that was never granted `execute`.
     #:
-    #: Not on `Definition` and so not on a subagent: a subagent inherits its
+    #: Not on `SpecBase` and so not on a subagent: a subagent inherits its
     #: parent's, which is `REFUSED` in that format with the reason.
     interrupt_on: tuple[str, ...] = ()
 
     def declares(self, held: frozenset[str] | None = None) -> Capabilities:
         """What this agent holds, said as the narrowing a request is clamped by.
 
-        The five a subagent answers identically come from `Definition`; these three
+        The five a subagent answers identically come from `SpecBase`; these three
         are an agent's alone. `models` opens to everything because an agent decides
         which model its subagents may run, and `memory` is a field only it has.
 

@@ -23,7 +23,7 @@ from typing import Any
 from kingfisher.core.access.capabilities import ALL, Selection, bare_name
 from kingfisher.core.access.source_ids import AUDIENCED
 from kingfisher.core.definitions import fields
-from kingfisher.core.definitions.definition import Definition
+from kingfisher.core.definitions.definition import SpecBase
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.definitions.tools.spec import claimed_sources
 
@@ -50,10 +50,10 @@ class RunOn:
 
 
 @dataclass(frozen=True, kw_only=True)
-class SubagentSpec(Definition):
+class SubagentSpec(SpecBase):
     """One subagent, as the workspace defines it.
 
-    What it shares with an agent is on `Definition`; what is here is what only a
+    What it shares with an agent is on `SpecBase`; what is here is what only a
     subagent has -- the graph it may bring instead of a prompt, and the tools and
     skills of its own that come with it.
     """
