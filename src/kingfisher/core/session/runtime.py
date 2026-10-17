@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import replace
 from typing import Any
@@ -175,6 +176,46 @@ def output_limit(message: Any) -> str:
 def cut_off_mark(reply: Any) -> dict[str, Any]:
     """What the `custom` stream is handed for a cut reply the state will never hold."""
     return {CUT_OFF_MARK: usage_of(reply)}
+
+
+#: The content blocks that are calls, by the key each keeps its call's id under: the
+#: Anthropic format's, the Responses API's, and langchain's own.
+CALL_BLOCK_IDS = {"tool_use": "id", "function_call": "call_id", "tool_call": "id"}
+
+
+def call_block_id(block: Any) -> str | None:
+    """The id of the call a content block carries, or `None` for any other block."""
+    key = CALL_BLOCK_IDS.get(block.get("type")) if isinstance(block, dict) else None
+    return block.get(key) if key else None
+
+
+def with_call_args(message: AIMessage, call_id: str, update: Mapping[str, Any]) -> AIMessage:
+    """`message` with one call's arguments updated, in both the places it carries them.
+
+    `tool_calls` is what langchain-anthropic sends, and the call's block in the content
+    is what langchain counts in its place; langchain-openai sends its `function_call`
+    block instead. Changing only one copy sent the old arguments, or counted them, all
+    the same.
+    """
+    calls = [
+        {**call, "args": {**call["args"], **update}} if call["id"] == call_id else call
+        for call in message.tool_calls
+    ]
+    args = next(call["args"] for call in calls if call["id"] == call_id)
+    content = message.content
+    if isinstance(content, list):
+        content = [_block_with(block, call_id, args) for block in content]
+    return message.model_copy(update={"tool_calls": calls, "content": content})
+
+
+def _block_with(block: Any, call_id: str, args: Mapping[str, Any]) -> Any:
+    if call_block_id(block) != call_id:
+        return block
+    if block["type"] == "tool_use":
+        return {**{k: v for k, v in block.items() if k != "partial_json"}, "input": dict(args)}
+    if block["type"] == "function_call":
+        return {**block, "arguments": json.dumps(args)}
+    return {**block, "args": dict(args)}
 
 
 def ended_cut_off(state: Any) -> Any | None:

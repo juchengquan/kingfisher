@@ -2334,8 +2334,8 @@ has to raise it itself. Noticing a call that stopped at the cap is the next entr
 *(2026-10-16, from the transcript-clearing trials.)*
 
 **A reply cut off at the output cap has its cut call refused or its answer asked for
-again, and three cut replies in a row stop the agent.** The entry above said only a provider streaming arguments as raw
-text would save a shortened file. MiniMax-M3 does it itself: in live calls at caps of
+again, and three cut replies in a row stop the agent.** The entry above said only a
+provider streaming arguments as raw text would save a shortened file. MiniMax-M3 does it itself: in live calls at caps of
 60 and 1,500 tokens it sent a cut call's arguments as one delta with the JSON already
 closed, and `write_file` arrived valid with its `content` stopping mid-word.
 langchain's streaming repair closes a cut call the same way for any provider, so nothing
@@ -2346,10 +2346,14 @@ the Responses API.
 
 `CutReplies` reads it. Only a reply's last call can be cut, so the calls before it run,
 and the last one is answered "Not run" with the limit it reached and a way round it:
-writing in parts. Where the content has text after the last call, the cut came in the
-text and every call runs. Where the content holds no calls, as the Responses API's does
-not, the last call is refused, because refusing a whole call costs a retry and running a
-cut one saves a shortened file. Three cut replies in a row stop the agent on its text,
+writing in parts. The content's last block is what was cut: text there means every call
+is whole, and a call too broken to parse there cuts none of the calls that run. Where a
+provider puts no calls in the content, the last call is refused, because refusing a whole
+call costs a retry and running a cut one saves a shortened file. The refused call keeps
+its short arguments, such as the path, and each one over 500 characters becomes a note
+of its length: clearing never shortens a call that failed, and the agent writes the text
+again in parts anyway, so the cut text was sent on every later call for nothing. Three
+cut replies in a row stop the agent on its text,
 with none of that reply's calls run: each cut reply spends the whole reservation, and one
 trial session retried a whole-file write a dozen times. In a row rather than per turn, so
 an agent writing a long report in parts may hit the cap now and then. The main agent's
@@ -2357,15 +2361,18 @@ turn then ends with `max_tokens`. A subagent's answer goes back headed by a line
 is cut off, and the turn goes on: the caller can work round a subagent's trouble, and
 ending the turn would throw away the rest of it. A turn that ends on a cut reply reports
 `max_tokens` whatever led there, since its answer is cut off either way. Each cut is
-marked on the run log's `model_call` line and on the stream's `model_call` event, which
-is the only trace of a cut the agent got past.
+marked on the `model_call` run event and on the stream's `model_call` event, which is the
+only trace of a cut the agent got past.
 
 Retrying quietly with a higher cap was turned down: it overrides `models.yaml`, spends
 without asking, and fails once the model's own maximum is reached. Nothing in `system.md`
 warns in advance, since the refusal arrives exactly when a cut happens and standing text
 is paid for on every call. It lives inside the model call and the tool call, because a
 hook beside them is a graph step and the recursion limit counts those. A subagent the
-workspace compiled itself gets none of it, as it gets none of `tool_guards`.
+workspace compiled itself gets none of it, as it gets none of `tool_guards`. A cut call
+behind an approval gate is still put to the reviewer, since the gate reads every call
+and the refusal comes when the call would run; approving it runs nothing, and the two
+rarely meet, so the gate is left as it is.
 
 A cut final answer is asked for again, shorter, with anything long written to a file under
 the deployment's outputs folder first and the answer naming it after, and a file is named
@@ -2374,9 +2381,9 @@ anything long in a file and say where it is", the agent named a file it never wr
 to write it first, it still named one when the question had said to write no file. With
 the last sentence, two such turns wrote the file before naming it -- against the
 question's wish, which is the lesser fault, since the content is somewhere a caller can
-find. Shorter rather than continued: stitching two replies into
-one answer is new logic, a model asked to continue tends to repeat itself at the seam, and
-at 32,768 tokens a cut answer is some 25,000 words, which belongs in a file anyway.
+find. Shorter rather than continued: stitching two replies into one answer is new logic,
+a model asked to continue tends to repeat itself at the seam, and at 32,768 tokens a cut
+answer is some 25,000 words, which belongs in a file anyway.
 Neither the cut answer nor the request reaches the conversation, because clearing never
 touches the agent's own text and the transcript would send it again on every later call;
 each request shows the model its latest attempt only. A cut call too broken to parse is

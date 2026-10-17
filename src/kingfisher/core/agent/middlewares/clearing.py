@@ -3,7 +3,6 @@ once it grows large."""
 
 from __future__ import annotations
 
-import json
 import re
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
@@ -18,6 +17,7 @@ from kingfisher.core.agent.middlewares.cut_replies import NOT_RUN
 from kingfisher.core.agent.middlewares.recorder import _arguments
 from kingfisher.core.agent.models import summarizer_trigger
 from kingfisher.core.definitions.subagents import TASK_TOOL
+from kingfisher.core.session.runtime import with_call_args
 
 if TYPE_CHECKING:
     from kingfisher.core.result import LedgerEntry
@@ -331,33 +331,5 @@ def _file_text_cleared(call: Mapping[str, Any]) -> dict[str, str]:
 
 
 def _rewritten(call_id: str, cleared: Mapping[str, str]) -> Callable[[Any], Any]:
-    """What replaces one call's file text with `cleared` in the message holding it.
-
-    The call is written twice, and both copies change. `tool_calls` is what
-    langchain-anthropic sends, and the `tool_use` block in a reply's content is what
-    langchain counts in its place; langchain-openai sends a `function_call` block
-    instead of the call. Changing only one sent the text, or counted it, all the same.
-    """
-
-    def clear(message: AIMessage) -> AIMessage:
-        calls = [
-            {**call, "args": {**call["args"], **cleared}} if call["id"] == call_id else call
-            for call in message.tool_calls
-        ]
-        args = next(call["args"] for call in calls if call["id"] == call_id)
-        content = message.content
-        if isinstance(content, list):
-            content = [_block_cleared(block, call_id, args) for block in content]
-        return message.model_copy(update={"tool_calls": calls, "content": content})
-
-    return clear
-
-
-def _block_cleared(block: Any, call_id: str, args: Mapping[str, Any]) -> Any:
-    if not isinstance(block, dict):
-        return block
-    if block.get("type") == "tool_use" and block.get("id") == call_id:
-        return {**{k: v for k, v in block.items() if k != "partial_json"}, "input": dict(args)}
-    if block.get("type") == "function_call" and block.get("call_id") == call_id:
-        return {**block, "arguments": json.dumps(args)}
-    return block
+    """What replaces one call's file text with `cleared` in the message holding it."""
+    return lambda message: with_call_args(message, call_id, cleared)
