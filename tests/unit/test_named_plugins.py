@@ -11,13 +11,13 @@ from kingfisher import Kingfisher
 from kingfisher.cli.configured import configured_plugins
 from kingfisher.core.config import ConfigError
 from kingfisher.plugins import Plugins
-from tests.conftest import RecordedEvents, StubCheckpointer
+from tests.conftest import RecordedEvents
 
 HERE = __name__
 
 
 def make_plugins() -> Plugins:
-    return Plugins(run_events=RecordedEvents(), threads=StubCheckpointer())
+    return Plugins(run_events=RecordedEvents())
 
 
 def make_keywords() -> dict[str, object]:
@@ -36,7 +36,7 @@ def test_the_plugins_a_setting_names_are_what_the_command_hands_on(cfg):
 
     wiring = configured_plugins(named).keywords()
 
-    assert set(wiring) == {"run_events", "threads"}
+    assert set(wiring) == {"run_events"}
     assert isinstance(wiring["run_events"], RecordedEvents)
 
 

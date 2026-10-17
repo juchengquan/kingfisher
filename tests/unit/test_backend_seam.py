@@ -15,7 +15,7 @@ from kingfisher.core.request import Request
 from kingfisher.core.run import run, stream
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins.sessions.backend import LocalSessions, WorkspaceScopedBackend, backend_at
-from tests.conftest import StubCheckpointer, an_agent, harness_in
+from tests.conftest import an_agent, harness_in
 from tests.unit.test_run import StubAgent
 from tests.unit.test_session_files import Elsewhere as KeptElsewhere
 
@@ -68,7 +68,7 @@ def test_a_service_with_no_filesystem_named_is_refused(cfg):
     service without learning there was a sandbox in it at all.
     """
     with pytest.raises(TypeError, match="required keyword-only argument: 'sessions'"):
-        Kingfisher(cfg, threads=StubCheckpointer())  # ty: ignore[missing-argument]
+        Kingfisher(cfg)  # ty: ignore[missing-argument]
 
 
 def test_a_pre_built_graph_is_refused_without_backends_named(cfg):
@@ -78,7 +78,7 @@ def test_a_pre_built_graph_is_refused_without_backends_named(cfg):
     looks.
     """
     with pytest.raises(TypeError, match="required keyword-only argument: 'sessions'"):
-        Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())  # ty: ignore[missing-argument]
+        Kingfisher(cfg, graph=StubAgent("ok"))  # ty: ignore[missing-argument]
 
 
 @pytest.mark.parametrize("graph", [None, StubAgent("ok")], ids=["alone", "beside-a-graph"])
@@ -87,7 +87,7 @@ def test_the_one_liners_refuse_to_run_without_backends_named(cfg, door, graph):
     """A default here would be the core picking what a deployment's agents run on, and
     beside a graph, a guess about the one thing only the graph's builder knows."""
     with pytest.raises(TypeError, match="required keyword-only argument: 'sessions'"):
-        door(Request("t"), cfg=cfg, graph=graph, checkpointer=StubCheckpointer())
+        door(Request("t"), cfg=cfg, graph=graph)
 
 
 def test_a_pre_built_graph_reaches_its_session_through_the_backends_named(cfg, tmp_path):
@@ -98,7 +98,7 @@ def test_a_pre_built_graph_reaches_its_session_through_the_backends_named(cfg, t
     source.write_text("alpha\n")
     remote = tmp_path / "remote"
     kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=KeptElsewhere(remote), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=KeptElsewhere(remote)
     )
 
     session_id = kf.run(Request("t", inputs=(source,))).session_id
@@ -117,7 +117,7 @@ def test_a_plain_factory_function_is_refused_with_the_way_forward(cfg):
         return LocalSessions().open(cfg_, session_id, catalogue=catalogue)
 
     with pytest.raises(TypeError, match="subclass LocalSessions"):
-        Kingfisher(cfg, sessions=mine, threads=StubCheckpointer())  # ty: ignore[invalid-argument-type]
+        Kingfisher(cfg, sessions=mine)  # ty: ignore[invalid-argument-type]
 
 
 def test_a_backend_instance_is_refused_where_session_backends_belong(cfg):
@@ -127,7 +127,7 @@ def test_a_backend_instance_is_refused_where_session_backends_belong(cfg):
     usually separating.
     """
     with pytest.raises(TypeError, match="rooted at a session"):
-        Kingfisher(cfg, sessions=NotABackend(), threads=StubCheckpointer())  # ty: ignore[invalid-argument-type]
+        Kingfisher(cfg, sessions=NotABackend())  # ty: ignore[invalid-argument-type]
 
 
 def test_a_backend_is_opened_per_turn_for_the_session_it_is_for(cfg, session_dir):
@@ -248,7 +248,7 @@ def test_a_session_beside_a_pre_built_graph_is_refused_an_unusable_backend(cfg):
         def open(self, cfg_, session_id, /, *, catalogue=None):
             return NotABackend()
 
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=Mine(), threads=StubCheckpointer())
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=Mine())
 
     with pytest.raises(ConfigError, match="not recognised by deepagents"):
         kf.run(Request("t"))

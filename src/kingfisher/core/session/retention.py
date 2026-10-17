@@ -14,12 +14,8 @@ class SweepResult:
     #: `SweepPlan.busy` gives.
     busy: int = 0
     #: Sessions that could not be fully removed, with why. Surfaced rather than
-    #: swallowed: a checkpointer that cannot delete at all should be visible.
+    #: swallowed: sessions that cannot delete at all should be visible.
     failures: tuple[str, ...] = ()
-    #: Threads deleted because no session owned them any more. Reported separately
-    #: from `removed` because they are not sessions this sweep decided to end --
-    #: they are residue from ones that ended some other way.
-    orphans: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -53,17 +49,6 @@ def expired(
     return SweepPlan(
         doomed=doomed, kept=len(entries) - len(doomed), busy=len(spared)
     )
-
-
-def orphaned(names: Sequence[str], sessions: Sequence[str]) -> tuple[str, ...]:
-    """Names no session owns any more -- threads and claims alike.
-
-    Both accumulate silently, because nothing but this looks for them. Measured on
-    one real workspace: after reaping all 55 sessions, 132 threads and 1,894
-    checkpoints remained, owned by nothing.
-    """
-    live = set(sessions)
-    return tuple(sorted(n for n in set(names) if n not in live))
 
 
 def apply(

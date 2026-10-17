@@ -10,7 +10,7 @@ from kingfisher.core.run import Request, stream
 from kingfisher.core.session import runtime
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
-from tests.conftest import FakeToolCallingModel, StubCheckpointer, start
+from tests.conftest import FakeToolCallingModel, start
 from tests.unit.test_run import StubAgent
 
 
@@ -60,7 +60,6 @@ def _events(cfg, session_dir, name="s"):
             cfg=cfg,
             graph=_two_level(cfg, session_dir),
             sessions=LocalSessions(),
-            checkpointer=StubCheckpointer(),
         )
     )
 
@@ -127,7 +126,6 @@ def test_a_run_without_subagents_renders_exactly_as_before(cfg):
             cfg=cfg,
             graph=StubAgent("42", updates=[{"agent": {"messages": [AIMessage(content="hi")]}}]),
             sessions=LocalSessions(),
-            checkpointer=StubCheckpointer(),
         )
     )
 
@@ -166,7 +164,6 @@ def test_a_turn_cut_short_after_a_subagent_reports_no_subagent_answer(cfg):
             cfg=replace(cfg, turn_timeout_s=0),
             graph=_SubagentSpeaksFirst(),
             sessions=LocalSessions(),
-            checkpointer=StubCheckpointer(),
         )
     )
 

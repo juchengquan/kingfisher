@@ -22,8 +22,6 @@ class Plugins:
     callable returning one of these, and the command passes on each field that is set.
     """
 
-    #: A langgraph checkpointer every session shares, or a factory given a session id.
-    threads: Any = None
     run_events: RunEvents | None = None
     middlewares: Mapping[str, Callable[..., Any]] | None = None
     instructions: Instructions | None = None

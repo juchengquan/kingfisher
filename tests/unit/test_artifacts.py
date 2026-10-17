@@ -12,7 +12,7 @@ from kingfisher.core.run import Request, run
 from kingfisher.core.session.files import collect_artifacts, read_artifact
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions, backend_at
-from tests.conftest import StubCheckpointer, start
+from tests.conftest import start
 from tests.unit.test_run import StubAgent
 
 #: A deployment that renamed every leaf it may rename. The rules below pair it with
@@ -37,12 +37,12 @@ def test_what_a_turn_produced_comes_back_under_the_layout_it_was_produced_in(
     cfg = replace(cfg, layout=layout)
     start(cfg, "s")
     run(Request("t", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
-        sessions=LocalSessions(), checkpointer=StubCheckpointer())
+        sessions=LocalSessions())
     session = cfg.workspace / "sessions" / "s"
     (session / layout.outputs / "report.md").write_text("the answer\n", encoding="utf-8")
 
     again = run(Request("t2", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
-                sessions=LocalSessions(), checkpointer=StubCheckpointer())
+                sessions=LocalSessions())
 
     assert f"{layout.outputs}/report.md" in again.artifacts
     assert f"{layout.memory}/AGENTS.md" in again.artifacts
@@ -74,7 +74,6 @@ def test_what_the_turn_left_in_derived_comes_back(cfg):
         cfg=cfg,
         graph=StubAgent("ok"),
         sessions=LocalSessions(),
-        checkpointer=StubCheckpointer(),
     )
     session = cfg.workspace / "sessions" / "s"
     (session / "outputs" / "model.pkl").write_bytes(b"fitted")
@@ -84,7 +83,6 @@ def test_what_the_turn_left_in_derived_comes_back(cfg):
         cfg=cfg,
         graph=StubAgent("ok"),
         sessions=LocalSessions(),
-        checkpointer=StubCheckpointer(),
     )
 
     assert "outputs/model.pkl" in again.artifacts
@@ -99,7 +97,6 @@ def test_memory_is_reported_too(cfg):
         cfg=cfg,
         graph=StubAgent("ok"),
         sessions=LocalSessions(),
-        checkpointer=StubCheckpointer(),
     )
 
     assert "memory/AGENTS.md" in result.artifacts
@@ -113,7 +110,6 @@ def test_run_scratch_is_not_reported(cfg):
         cfg=cfg,
         graph=StubAgent("ok"),
         sessions=LocalSessions(),
-        checkpointer=StubCheckpointer(),
     )
     session = cfg.workspace / "sessions" / result.session_id
     (session / "scratchpad" / "scratch.txt").write_text("intermediate")
@@ -123,7 +119,6 @@ def test_run_scratch_is_not_reported(cfg):
         cfg=cfg,
         graph=StubAgent("ok"),
         sessions=LocalSessions(),
-        checkpointer=StubCheckpointer(),
     )
 
     assert not any(path.startswith("scratchpad/") for path in again.artifacts)
@@ -140,7 +135,6 @@ def test_inputs_are_not_reported(cfg):
         cfg=cfg,
         graph=StubAgent("ok"),
         sessions=LocalSessions(),
-        checkpointer=StubCheckpointer(),
     )
 
     assert session.is_dir()

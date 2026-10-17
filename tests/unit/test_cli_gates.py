@@ -463,7 +463,7 @@ def test_the_plugins_reach_the_service_and_log_replaces_their_run_events(tmp_pat
     from kingfisher.plugins.events import JsonlRunEvents
 
     handed: list[dict[str, object]] = []
-    events, threads = RecordedEvents(), object()
+    events = RecordedEvents()
 
     class Recording(_Nothing):
         def __init__(self, *args, **kwargs) -> None:
@@ -473,7 +473,7 @@ def test_the_plugins_reach_the_service_and_log_replaces_their_run_events(tmp_pat
     run = importlib.import_module("kingfisher.cli.configured")
     monkeypatch.setattr(run, "configured_sessions", lambda cfg: None)
     monkeypatch.setattr(
-        run, "configured_plugins", lambda cfg: Plugins(run_events=events, threads=threads)
+        run, "configured_plugins", lambda cfg: Plugins(run_events=events)
     )
     monkeypatch.setattr(kingfisher, "Kingfisher", Recording)
     monkeypatch.setattr(cli, "show", lambda *a, **k: None)
@@ -483,6 +483,4 @@ def test_the_plugins_reach_the_service_and_log_replaces_their_run_events(tmp_pat
 
     plain, logged = handed
     assert plain["run_events"] is events
-    assert plain["threads"] is threads
     assert isinstance(logged["run_events"], JsonlRunEvents)
-    assert logged["threads"] is threads

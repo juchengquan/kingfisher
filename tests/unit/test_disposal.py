@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
-
-import pytest
-
 from kingfisher import Kingfisher
 from kingfisher.core.request import Request
 from kingfisher.core.session import retention
 from kingfisher.core.session.model import still_held
 from kingfisher.plugins import LocalSessions
-from tests.conftest import StubCheckpointer, Through, start
+from tests.conftest import Through, start
 from tests.unit.test_run import StubAgent
 
 # The two helpers both halves of the old file build against, left where the other
@@ -42,50 +38,13 @@ def test_a_turn_disposes_of_nothing(cfg):
     assert (cfg.workspace / "sessions" / quiet).is_dir()
 
 
-def test_delete_session_removes_the_directory_and_the_thread(cfg, way):
-    threads = StubCheckpointer()
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=threads)
+def test_delete_session_removes_the_directory(cfg, way):
+    """Deleting a session through the service leaves nothing of it on disk."""
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
     session_id = kf.run(Request("go")).session_id
 
     assert Through(kf, way).delete_session(session_id) is None
     assert not (cfg.workspace / "sessions" / session_id).exists()
-    assert threads.deleted == [session_id]
-
-
-class AwaitedCheckpointer(StubCheckpointer):
-    """A saver with an async delete of its own, as langgraph's in-memory one has."""
-
-    async def adelete_thread(self, thread_id: str) -> None:
-        self.deleted.append(f"awaited {thread_id}")
-
-
-class SyncOnlyCheckpointer(StubCheckpointer):
-    """langgraph's base saver, whose `adelete_thread` raises `NotImplementedError`."""
-
-    async def adelete_thread(self, thread_id: str) -> None:
-        raise NotImplementedError
-
-
-@pytest.mark.parametrize(
-    ("saver", "deleted"),
-    [(AwaitedCheckpointer, "awaited s"), (SyncOnlyCheckpointer, "s"), (StubCheckpointer, "s")],
-    ids=["its own async delete", "the base class's that raises", "none at all"],
-)
-def test_an_async_delete_awaits_the_saver_where_it_can_and_falls_back_where_not(
-    cfg, saver, deleted
-):
-    """Refused, a saver that is sync throughout -- which langgraph's base class answers
-    for with `NotImplementedError` -- would make `adelete_session` fail where
-    `delete_session` works. Awaited only that far, one with a real async delete would
-    hold a thread it never needed.
-    """
-    threads = saver()
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=threads)
-    start(cfg, "s")
-
-    assert asyncio.run(kf.adelete_session("s")) is None
-    assert threads.deleted == [deleted]
-    assert not (cfg.workspace / "sessions" / "s").exists()
 
 
 def test_deleting_an_unknown_session_is_not_an_error(cfg, way):
@@ -124,89 +83,6 @@ def test_a_session_named_with_a_backslash_is_swept_like_any_other(cfg):
     assert set(result.removed) == {odd, plain}
 
 
-# -- threads that outlived their session -----------------------------------
-
-
-class ListingCheckpointer(StubCheckpointer):
-    """A store that can also say which threads it holds, as a real one can."""
-
-    def __init__(self, held: tuple[str, ...]) -> None:
-        super().__init__()
-        self.held = held
-
-    # Named `list` because that is the saver's own method, which is what
-    # `SharedThreads.ids` looks for. It shadows the builtin inside this class, so
-    # `held` is annotated as a tuple rather than a `list[str]` that would
-    # resolve to this method.
-    def list(self, _config):
-        from types import SimpleNamespace
-
-        return [
-            SimpleNamespace(config={"configurable": {"thread_id": t}}) for t in self.held
-        ]
-
-
-def test_a_thread_whose_session_is_gone_is_deleted(cfg):
-    """`discard` takes the thread and the directory together, so a swept session leaves
-    neither.
-    """
-    import time
-
-    threads = ListingCheckpointer(held=("ghost-a", "ghost-b"))
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=threads)
-
-    result = kf.reap(older_than_seconds=0, now=time.time())
-
-    assert set(result.orphans) == {"ghost-a", "ghost-b"}
-    assert set(threads.deleted) == {"ghost-a", "ghost-b"}
-
-
-def test_a_thread_whose_session_still_exists_is_left_alone(cfg):
-    """The reconciliation must not eat live conversations."""
-    live = start(cfg, "live")
-
-    threads = ListingCheckpointer(held=(live, "ghost"))
-    kf2 = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=threads)
-    result = kf2.reap(older_than_seconds=10_000, now=1_000)  # nothing expired
-
-    assert result.removed == ()
-    assert result.orphans == ("ghost",)
-    assert live not in threads.deleted
-    assert (cfg.workspace / "sessions" / live).is_dir()
-
-
-def test_orphans_are_reported_apart_from_sessions_this_sweep_ended(cfg):
-    """They are not sessions this call decided to end; they are residue from ones that
-    ended some other way, and a janitor's log should tell them apart.
-    """
-    import time
-
-    doomed = start(cfg, "doomed")
-
-    threads = ListingCheckpointer(held=("ghost",))
-    result = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=threads
-    ).reap(
-        older_than_seconds=0, now=time.time()
-    )
-
-    assert result.removed == (doomed,)
-    assert result.orphans == ("ghost",)
-
-
-def test_a_store_that_cannot_enumerate_still_sweeps(cfg):
-    """A saver need answer nothing but `delete_thread`; `list` is asked for, not required."""
-    import time
-
-    kf = service(cfg)
-    idle = start(cfg, "idle")
-
-    result = kf.reap(older_than_seconds=0, now=time.time())
-
-    assert result.removed == (idle,)
-    assert result.orphans == ()
-
-
 # -- a sweep and a session in use -----------------------------------------
 #
 # `expired` names sessions "untouched for longer than X" and reads one
@@ -222,7 +98,7 @@ def test_a_turn_records_that_its_session_was_used(cfg):
     import time
 
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     session = start(cfg, "s")
     directory = cfg.workspace / "sessions" / session
@@ -244,7 +120,7 @@ def test_a_sweep_keeps_a_session_that_has_a_turn_running(cfg):
     import time
 
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     session = start(cfg, "s")
     directory = cfg.workspace / "sessions" / session
@@ -265,7 +141,7 @@ def test_a_busy_session_does_not_shelter_an_idle_one(cfg):
     import time
 
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     busy = start(cfg, "busy")
     idle = start(cfg, "idle")
@@ -441,12 +317,6 @@ def test_reopening_a_deleted_id_is_not_refused_as_busy(cfg, way):
     assert kf.run(Request("go", session_id="reused")).answer == "ok"
 
 
-def test_a_live_claim_is_never_residue_whatever_its_age(cfg):
-    """The domain half, and the line between the two questions."""
-    assert retention.orphaned(("a", "b"), ("b",)) == ("a",)
-    assert retention.orphaned(("a",), ("a",)) == ()
-
-
 def test_the_staleness_rule_needs_no_filesystem():
     ordered = still_held((("fresh", 100.0), ("old", 10.0)), stale_after=50.0, now=120.0)
 
@@ -492,7 +362,6 @@ def test_a_turn_stopped_at_a_bound_keeps_its_session(cfg):
         replace(cfg, turn_timeout_s=0),
         graph=SlowAgent(steps=5),
         sessions=LocalSessions(),
-        threads=StubCheckpointer(),
     )
 
     result = kf.run(Request("go"), delete_session=True)

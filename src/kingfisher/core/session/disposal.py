@@ -1,15 +1,11 @@
-"""Getting rid of a session, and everything it left in other places.
+"""Getting rid of a session: one by name, or every one idle long enough.
 
-A session is two things in two places: what its backend holds, and a thread in a
-checkpointer. Removing one means removing both, and missing one does not fail -- it
-accumulates. One real workspace held 132 orphaned threads after every session had been
-deleted; a process that died mid-turn left a session ten years idle and still there.
+A process that died mid-turn once left a session ten years idle and still there, which
+is why a claim spares a session only while a turn could still be holding it.
 """
 
 from __future__ import annotations
 
-from contextlib import suppress
-from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.session import retention
@@ -20,7 +16,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from kingfisher.core.config import Config
-    from kingfisher.core.session.checkpointing import SharedThreads
 
 
 class Disposal:
@@ -30,13 +25,12 @@ class Disposal:
     #: than assumed: a mixin that read `self._sessions` without saying so would be a
     #: contract nothing checks, which is the shape this repository distrusts.
     cfg: Config
-    _shared: SharedThreads | None
     _sessions: Any
     _known_steps: Callable[[], Steps[tuple[str, ...]]]
 
     def delete_session(self, session_id: str) -> str | None:
-        """Dispose of one session: its thread, and everything its backend holds.
-        Returns a failure, or None.
+        """Dispose of one session and everything its backend holds. Returns a failure,
+        or None.
         """
         return drive(self._delete_session_steps(session_id))
 
@@ -65,21 +59,10 @@ class Disposal:
         # it removed nothing.
         idle = retention.expired(entries, age, now)
         plan = retention.expired(entries, age, now, busy=self._busy(idle.doomed, now=now))
-        result = retention.apply(plan, lambda session_id: drive(self._discard_steps(session_id)))
-        return self._reconcile_threads(result)
+        return retention.apply(plan, lambda session_id: drive(self._discard_steps(session_id)))
 
     def _discard_steps(self, session_id: str) -> Steps[str | None]:
-        """The thread, then the session. A failure, or None.
-
-        The thread first: a session whose files went and whose thread stayed is the
-        residue `_reconcile_threads` exists to find, where one whose thread went and
-        whose files stayed is only a session that forgot its checkpoint.
-        """
-        if self._shared is not None:
-            try:
-                yield changing(self._shared, "forget", session_id)
-            except Exception as exc:  # noqa: BLE001 -- reported, not swallowed
-                return f"{session_id}: thread not deleted ({type(exc).__name__})"
+        """The session, through its backend. A failure, or None."""
         failure = yield changing(self._sessions, "delete", self.cfg, session_id)
         return f"{session_id}: {failure}" if failure else None
 
@@ -97,24 +80,3 @@ class Disposal:
                 self.cfg, session_id, stale_after=self.cfg.claim_stale_after, now=now
             )
         )
-
-    def _reconcile_threads(self, result: SweepResult) -> SweepResult:
-        """Delete threads no session owns, and fold them into the result.
-
-        `_discard_steps` takes the thread and the session together, so a swept session
-        leaves neither behind. A session that goes any other way -- deleted by hand,
-        or one that could not be removed until deleting learned to unlock `/inputs` --
-        leaves its thread forever, because nothing else looks. One real workspace held
-        132 such threads and 1,894 checkpoints after every session had been reaped.
-        """
-        shared = self._shared
-        held = None if shared is None else shared.ids()
-        if shared is None or held is None:
-            return result
-
-        dropped = []
-        for thread in retention.orphaned(held, drive(self._known_steps())):
-            with suppress(Exception):
-                shared.forget(thread)
-                dropped.append(thread)
-        return replace(result, orphans=tuple(dropped))

@@ -1,10 +1,9 @@
 """What the core asks of the world, as interfaces a deployment may implement itself.
 
 `Sessions`, with the `CommandRunner` a session's shell may hand its commands to;
-`RunEvents`; and `Instructions`. The conversation store and middleware are upstream
-types used as they are -- langgraph's `BaseCheckpointSaver` and langchain's
-`AgentMiddleware` -- and a wire format is a `WireFormat` in configuration rather than
-something implemented.
+`RunEvents`; and `Instructions`. Middleware is langchain's `AgentMiddleware`, used as it
+is, and a wire format is a `WireFormat` in configuration rather than something
+implemented. The conversation is not here at all: kingfisher keeps it in the session.
 """
 
 from __future__ import annotations

@@ -73,16 +73,6 @@ class RecordedEvents:
         return [event for event in self.events if event["event"] == name]
 
 
-class StubCheckpointer:
-    """Records thread deletions so the sweep can be asserted on."""
-
-    def __init__(self) -> None:
-        self.deleted: list[str] = []
-
-    def delete_thread(self, thread_id: str) -> None:
-        self.deleted.append(thread_id)
-
-
 @pytest.fixture
 def workspace(tmp_path):
     return ensure_layout(tmp_path / "ws")

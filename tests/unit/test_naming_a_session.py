@@ -15,7 +15,6 @@ from kingfisher.core.layout import HARNESS, PINNED_AGENT, SESSION_DIRS
 from kingfisher.core.request import Decision, Resume
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
-from tests.conftest import StubCheckpointer
 from tests.unit.test_files_for import DOORS, _turn
 from tests.unit.test_run import StubAgent
 
@@ -28,7 +27,7 @@ DEFAULT = "default"
 
 def _service(cfg) -> Kingfisher:
     return Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=StubCheckpointer()
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
 
 

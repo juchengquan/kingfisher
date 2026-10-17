@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
+from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher
 from kingfisher.core.config import Config
@@ -20,7 +20,8 @@ from kingfisher.core.layout import HARNESS, TRANSCRIPT_FILE
 from kingfisher.core.request import Request
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import session_bytes
-from tests.conftest import StubCheckpointer, Through
+from tests.conftest import Through, an_agent
+from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
 
 TRANSCRIPT = f"{HARNESS}/{TRANSCRIPT_FILE}"
@@ -119,90 +120,6 @@ def test_deleting_a_session_takes_its_conversation_with_it(cfg, way):
     assert not directory.exists()
 
 
-# -- who owns the connection ---------------------------------------------
-
-
-def test_an_injected_store_is_used_as_it_is_and_not_closed(cfg):
-    """A deployment's own store outlives every turn."""
-    store = StubCheckpointer()
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=store)
-
-    kf.run(Request("go"))
-    kf.run(Request("go"))
-
-    assert kf.threads is store
-    # The injected store is what the graph ran on; the transcript is written
-    # regardless, because it is kingfisher's record rather than the saver's.
-    assert all((p / TRANSCRIPT).is_file() for p in (cfg.workspace / "sessions").iterdir())
-
-
-def test_a_factory_is_asked_once_per_session(cfg):
-    """The seam an async deployment uses: given a session, hand back a saver.
-
-    Given its id, not a directory on this host: a session its backend keeps elsewhere
-    has none here, and a factory handed one would put the saver beside nothing.
-    """
-    seen: list[object] = []
-
-    def factory(session_id):
-        seen.append(session_id)
-        return StubCheckpointer()
-
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=factory)
-    first = kf.run(Request("a"))
-    kf.run(Request("b", session_id=first.session_id))
-
-    assert seen == [first.session_id, first.session_id]
-
-
-def test_the_connection_does_not_outlive_the_turn(cfg):
-    """A database per session is a file descriptor per session."""
-    closed: list[object] = []
-
-    class Recorder(StubCheckpointer):
-        def __init__(self) -> None:
-            super().__init__()
-            self.conn = self
-
-        def close(self) -> None:
-            closed.append(self)
-
-    kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=lambda _id: Recorder()
-    )
-    kf.run(Request("go"))
-
-    assert len(closed) == 1, "the saver this service opened was not released"
-
-
-def test_a_turn_that_fails_to_build_closes_the_saver_it_opened(cfg):
-    """The saver is opened beside the build, and a build that raised left it open with
-    nothing holding it to close -- the turn never existed, so no turn's end ran.
-    """
-    from kingfisher.core.access.capabilities import Capabilities
-
-    closed: list[object] = []
-
-    class Recorder(StubCheckpointer):
-        def __init__(self) -> None:
-            super().__init__()
-            self.conn = self
-
-        def close(self) -> None:
-            closed.append(self)
-
-    kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=lambda _id: Recorder()
-    )
-    # A supplied graph cannot be narrowed, so asking it to be is a build that raises.
-    narrowed = Request("go", capabilities=Capabilities(builtin_tools=("read_file",)))
-
-    with pytest.raises(ValueError, match="pre-built graph"):
-        kf.run(narrowed)
-
-    assert len(closed) == 1, "the saver opened for a turn that failed to build stayed open"
-
-
 def test_a_sweep_needs_no_thread_store_at_all(cfg):
     """`reap` deleted threads because they lived elsewhere."""
     import time
@@ -213,20 +130,7 @@ def test_a_sweep_needs_no_thread_store_at_all(cfg):
     swept = kf.reap(older_than_seconds=0, now=time.time())
 
     assert result.session_id in swept.removed
-    assert swept.orphans == ()
     assert swept.failures == ()
-
-
-def test_the_default_and_a_factory_both_survive_two_turns(cfg):
-    """The two shapes this service opens for itself, driven rather than inspected."""
-    for injected in [None, "factory"]:
-        threads = None if injected is None else (lambda _dir: StubCheckpointer())
-        kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions(), threads=threads)
-
-        first = kf.run(Request("one"))
-        second = kf.run(Request("two", session_id=first.session_id))
-
-        assert second.answer == "ok"
 
 
 # -- or no conversation at all --------------------------------------------
@@ -264,20 +168,15 @@ def test_files_survive_a_stateless_turn(cfg):
     assert (directory / "outputs" / "kept.txt").read_text() == "still here"
 
 
-def test_the_flag_wins_over_an_injected_store(cfg):
-    """A deployment that says it wants no conversation means it whatever it wired
-    earlier -- otherwise the flag would be advisory.
-    """
+def test_with_conversation_off_a_turn_runs_on_no_saver(cfg):
+    """A saver nobody reads from would be state kept for nothing, and a gated agent
+    would find somewhere to pause that no resume could reach."""
     from dataclasses import replace as replace_cfg
 
-    store = StubCheckpointer()
     stateless = replace_cfg(cfg, conversation_enabled=False)
-    service = Kingfisher(stateless, graph=StubAgent("ok"), sessions=LocalSessions(), threads=store)
+    service = Kingfisher(stateless, graph=StubAgent("ok"), sessions=LocalSessions())
 
-    saver, release = service._checkpointer_for("anything")
-
-    assert saver is None
-    assert release is None
+    assert service._checkpointer() is None
 
 
 def test_conversation_is_on_unless_a_deployment_says_otherwise(cfg):
@@ -349,3 +248,20 @@ def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
         "last turn's plan reached this one -- the agent resumes holding a checklist "
         "it did not write, for a task the caller may have dropped"
     )
+
+
+def test_a_follow_up_turn_hands_the_model_the_earlier_exchange_once(scripted):
+    """A saver that remembered earlier turns, beside the transcript replayed into each
+    one, showed the model every earlier exchange twice -- measured, on a store a
+    deployment passed as `threads=`."""
+    an_agent(scripted, "plain")
+    kf = Kingfisher(scripted, sessions=LocalSessions())
+    Scripted.script.extend([AIMessage(content="first answer"), AIMessage(content="second")])
+    kf.run(Request("first question", agent="plain", session_id="p"))
+    Scripted.heard.clear()
+
+    kf.run(Request("second question", agent="plain", session_id="p"))
+
+    said = [str(message.content) for message in Scripted.heard[-1]]
+    assert sum("first question" in text for text in said) == 1, said
+    assert said.count("first answer") == 1, said

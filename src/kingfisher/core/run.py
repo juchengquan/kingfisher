@@ -31,27 +31,22 @@ def _service(
     *,
     graph: Any,
     sessions: Sessions,
-    checkpointer: Any,
     run_events: Any,
 ) -> Kingfisher:
     return Kingfisher(
         cfg,
         graph=graph,
         sessions=sessions,
-        threads=checkpointer,
         run_events=run_events,
     )
 
 
-def stream(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
-    # takes, named again here so that changing one does not cost a caller the
-    # whole constructor
+def stream(
     request: str | Request,
     *,
     sessions: Sessions,
     cfg: Config | None = None,
     graph: Any | None = None,
-    checkpointer: Any | None = None,
     run_events: Any | None = None,
 ) -> Iterator[RunEvent]:
     """Run one task, yielding progress as it happens.
@@ -60,20 +55,16 @@ def stream(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
         cfg,
         graph=graph,
         sessions=sessions,
-        checkpointer=checkpointer,
         run_events=run_events,
     ).stream(request)
 
 
-def run(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
-    # takes, named again here so that changing one does not cost a caller the
-    # whole constructor
+def run(
     request: str | Request,
     *,
     sessions: Sessions,
     cfg: Config | None = None,
     graph: Any | None = None,
-    checkpointer: Any | None = None,
     run_events: Any | None = None,
 ) -> RunResult:
     """Run one task to completion and return where its outputs landed.
@@ -82,7 +73,6 @@ def run(  # noqa: PLR0913 -- one parameter per collaborator `Kingfisher`
         cfg,
         graph=graph,
         sessions=sessions,
-        checkpointer=checkpointer,
         run_events=run_events,
     ).run(request)
 
