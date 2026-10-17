@@ -8,9 +8,10 @@ from typing import Any
 
 import pytest
 from deepagents.backends import CompositeBackend
-from deepagents.backends.protocol import ReadResult
+from deepagents.backends.protocol import ReadResult, WriteResult
 
-from kingfisher.core.layout import DEFAULT_LAYOUT, SCRATCH_ROUTE
+from kingfisher.core.layout import DEFAULT_LAYOUT, SCRATCH_ROUTE, Layout
+from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, backend_at
 from tests.checks.backend import (
     BACKEND_CHECKS,
@@ -30,7 +31,42 @@ def test_kingfishers_own_backend_keeps_the_contract(cfg, session_dir):
     would pass with every route wrong.
     """
     for check in BACKEND_CHECKS:
-        check(lambda: backend_at(cfg, session_dir))
+        check(lambda: (cfg, backend_at(cfg, session_dir)))
+
+
+#: A layout renaming every folder a deployment may.
+RENAMED = Layout(inputs="in", outputs="out", memory="mem", scratchpad="tmp")
+
+
+def test_the_kit_holds_a_backend_to_its_deployment_s_folder_names(cfg):
+    """A kit spelling the shipped names fails a deployment that renamed its folders."""
+    made = replace(cfg, layout=RENAMED)
+
+    for check in BACKEND_CHECKS:
+        check(lambda: (made, LocalSessions().open(made, "renamed")))
+
+
+def test_the_kit_reads_and_writes_where_the_deployment_keeps_its_outputs(cfg):
+    """kingfisher's backend serves any path in a session, so only one whose file tools
+    reach the layout's folders alone shows a kit spelling the shipped `/outputs`."""
+    made = replace(cfg, layout=RENAMED)
+    backend = LocalSessions().open(made, "strict")
+    served = (RENAMED.outputs_route, RENAMED.memory_route, RENAMED.scratch_route,
+              RENAMED.inputs_route)
+    write, read = backend.write, backend.read
+
+    def write_served(path, content):
+        return write(path, content) if path.startswith(served) else WriteResult(error="denied")
+
+    def read_served(path, *args, **kwargs):
+        if path.startswith(served):
+            return read(path, *args, **kwargs)
+        return ReadResult(error="denied")
+
+    backend.write = write_served
+    backend.read = read_served
+
+    filesystem_consistency(lambda: (made, backend))
 
 
 def test_the_contract_is_not_quietly_empty():
@@ -59,7 +95,7 @@ def test_a_backend_that_inherits_nothing_is_caught(cfg, session_dir):
     real = backend_at(cfg, session_dir)
 
     with pytest.raises(AssertionError, match="not recognised by deepagents"):
-        execution_support(lambda: NotRecognised(real))
+        execution_support(lambda: (cfg, NotRecognised(real)))
 
 
 def test_a_backend_missing_a_route_a_deny_rule_names_is_caught(cfg, session_dir):
@@ -76,7 +112,7 @@ def test_a_backend_missing_a_route_a_deny_rule_names_is_caught(cfg, session_dir)
     )
 
     with pytest.raises(AssertionError, match="/inputs/"):
-        route_coverage(lambda: thinned)
+        route_coverage(lambda: (cfg, thinned))
 
 
 def test_a_shell_that_cannot_see_what_the_tools_wrote_is_caught(cfg, session_dir):
@@ -99,7 +135,7 @@ def test_a_shell_that_cannot_see_what_the_tools_wrote_is_caught(cfg, session_dir
     )
 
     with pytest.raises(AssertionError, match="one filesystem"):
-        filesystem_consistency(lambda: blind)
+        filesystem_consistency(lambda: (cfg, blind))
 
 
 def test_a_composite_of_a_deployment_s_own_puts_deepagents_files_at_the_root(cfg, session_dir):
@@ -110,7 +146,7 @@ def test_a_composite_of_a_deployment_s_own_puts_deepagents_files_at_the_root(cfg
     own = CompositeBackend(default=real.default, routes=dict(real.routes))
 
     with pytest.raises(AssertionError, match=re.escape(f"artifacts_root={SCRATCH_ROUTE!r}")):
-        offloads_in_the_scratchpad(lambda: own)
+        offloads_in_the_scratchpad(lambda: (cfg, own))
 
 
 def test_the_root_is_read_only_off_a_composite_as_deepagents_reads_it(cfg, session_dir):
@@ -121,7 +157,7 @@ def test_the_root_is_read_only_off_a_composite_as_deepagents_reads_it(cfg, sessi
     assert carried.artifacts_root == SCRATCH_ROUTE
 
     with pytest.raises(AssertionError, match="under '/'"):
-        offloads_in_the_scratchpad(lambda: carried)
+        offloads_in_the_scratchpad(lambda: (cfg, carried))
 
 
 def test_a_subclass_of_the_scoped_backend_keeps_the_scratchpad(cfg, session_dir):
@@ -141,7 +177,7 @@ def test_a_subclass_of_the_scoped_backend_keeps_the_scratchpad(cfg, session_dir)
         layout=DEFAULT_LAYOUT,
     )
 
-    offloads_in_the_scratchpad(lambda: mine)
+    offloads_in_the_scratchpad(lambda: (cfg, mine))
 
 
 def test_a_host_path_refused_with_the_wrong_type_is_caught(cfg, session_dir):
@@ -165,7 +201,7 @@ def test_a_host_path_refused_with_the_wrong_type_is_caught(cfg, session_dir):
     )
 
     with pytest.raises(AssertionError, match="HostPathGuard does not catch"):
-        host_path_refusal(lambda: wrong)
+        host_path_refusal(lambda: (cfg, wrong))
 
 
 def test_a_backend_that_allows_host_paths_is_not_asked_to_refuse_them(cfg, session_dir):
@@ -189,7 +225,7 @@ def test_a_backend_that_allows_host_paths_is_not_asked_to_refuse_them(cfg, sessi
         layout=DEFAULT_LAYOUT,
     )
 
-    host_path_refusal(lambda: allows)
+    host_path_refusal(lambda: (cfg, allows))
 
 
 def test_the_kit_is_run_against_the_real_tree_not_a_composite_of_its_own(cfg, session_dir):

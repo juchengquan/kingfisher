@@ -59,9 +59,11 @@ Kingfisher holds its own implementations to every promise with plain functions t
 raise `AssertionError`, in this repository's `tests/checks/`: `runner.py` for a
 `CommandRunner`, `sessions.py` for a `Sessions`, and `backend.py` for what its `open`
 returns. They ship with no wheel, and copying them is the shortest way to hold yours to
-the same. Most do more than read: a backend is checked by writing files through it, and
-a runner by running commands, one of which waits a second for a timeout. Run those
-where you would run an integration test.
+the same. A sessions check and a backend check each take a `make` returning a fresh
+`(Config, thing)` pair, because what they hold you to is that deployment's layout. Most
+do more than read: a backend is checked by writing files through it, and a runner by
+running commands, one of which waits a second for a timeout. Run those where you would
+run an integration test.
 
 They are worth running even if yours looks obviously correct. Sessions that hand
 every session the same storage pass every functional test you are likely to write,
@@ -508,8 +510,8 @@ or the graph will not build: deepagents refuses `permissions=` outright on a
 backend that executes unless every rule is scoped to a route.
 
 Both are yours to ask before kingfisher does: `why_no_shell(backend)` and
-`unrouted_denials(backend)`, from `kingfisher.plugins`, each say why a backend would be
-refused, or answer `None`.
+`unrouted_denials(backend, cfg.layout)`, from `kingfisher.plugins`, each say why a backend
+would be refused, or answer `None`.
 
 **The other four stay yours**, in `tests/checks/backend.py`: that the backend reads
 back what it was given, keeps deepagents' offloads in the scratchpad, keeps the shell

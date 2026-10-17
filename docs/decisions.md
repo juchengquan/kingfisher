@@ -6519,8 +6519,14 @@ all of them at once. `Layout.made_dirs` and `Layout.shell_read_only` name the tw
 of folders each spelled out in two places: what a session is made with, and what every
 fence keeps the shell from writing. The checks kingfisher makes of a backend are named
 for what they answer, `why_no_shell` and `unrouted_denials`, and `Definitions` lists
-its skills as named tuples, since a plugin's author reads them cold. *(2026-10-17, from a
-review of the plugin work.)*
+its skills as named tuples, since a plugin's author reads them cold. The same held for
+the public `unrouted_denials`, which checked the shipped layout's paths when given none,
+and for the backend kit, whose checks were handed a backend alone: the check takes the
+`Layout`, and each kit check's `make` returns `(Config, backend)` as the sessions kit's
+does. Kingfisher's own backend serves any path in a session, so a kit spelling a shipped
+name passes against it either way; each kit is also driven against a backend serving
+only the layout's folders, which is where that shows. *(2026-10-17, from a review of
+the plugin work.)*
 
 **Sessions are always named.** `Kingfisher`, `run()` and `stream()` refuse to run without
 them. The sessions plugin is the sandbox and decides where each caller's files are, so it

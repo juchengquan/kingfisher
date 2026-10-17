@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The backend kit and its check take the layout, after #852
+
+- **`unrouted_denials(backend, layout)`** takes the `Layout` it checks against, with no
+  default: left out, it checked the shipped layout's paths, the wrong ones for a renamed
+  deployment. Pass `cfg.layout`.
+- **Each check in `tests/checks/backend.py` takes a `make` returning `(cfg, backend)`**,
+  as the sessions kit's do, and reads the folders from `cfg.layout`. `route_coverage`
+  no longer takes `scopes`. A copy of the kit wants the same change.
+
 ## The plugin checks are named for what they answer, after #850
 
 - **`not_executing` is `why_no_shell`, and `uncovered` is `unrouted_denials`**, from

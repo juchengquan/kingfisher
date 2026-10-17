@@ -266,4 +266,4 @@ def test_the_backend_kingfisher_builds_satisfies_what_it_refuses_others_for(
     asserting on a backend of this test's own making, which would go on passing
     whatever the checks became.
     """
-    refuse_unusable_backend(backend_at(cfg, session_dir))
+    refuse_unusable_backend(backend_at(cfg, session_dir), cfg.layout)
