@@ -1,4 +1,5 @@
-"""The Session aggregate: a conversation and the turns inside it."""
+"""What a session is inside kingfisher: its conversation and turns, the refusals that
+name one, and where kingfisher's own sessions keep their folders."""
 
 from __future__ import annotations
 
@@ -92,26 +93,9 @@ def session_dir(workspace: Path | str, session_id: str) -> Path:
     return sessions_root(workspace) / session_id
 
 
-@dataclass(frozen=True)
-class SessionInfo:
-    """One session, as something outside kingfisher asks about it."""
-
-    id: str
-    #: When a turn last ran here, as a unix timestamp.
-    #:
-    #: A turn writes *inside* a session, so this timestamp is meaningful only
-    #: because a turn now records it explicitly -- left to the filesystem, a
-    #: conversation in daily use looked untouched, which is what made retention
-    #: sweep live sessions.
-    last_used: float
-
-
-def known(entries: Sequence[tuple[str, float]]) -> tuple[SessionInfo, ...]:
-    """Every session there is, most recently used first."""
-    return tuple(
-        SessionInfo(id=name, last_used=modified)
-        for name, modified in sorted(entries, key=lambda entry: -entry[1])
-    )
+def known(entries: Sequence[tuple[str, float]]) -> tuple[tuple[str, float], ...]:
+    """Every `(id, last_used)` the sessions list, most recently used first."""
+    return tuple(sorted(entries, key=lambda entry: -entry[1]))
 
 
 def still_held(
@@ -128,7 +112,7 @@ def still_held(
 
 
 @dataclass(frozen=True)
-class Session:
+class Conversation:
     """A conversation. Owns its turns and its own disposal.
 
     An id and nothing else: where a session is kept is its backend's to know, and

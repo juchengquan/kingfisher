@@ -43,13 +43,13 @@ def test_delete_session_removes_the_directory(cfg, way):
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
     session_id = kf.run(Request("go")).session_id
 
-    assert Through(kf, way).delete_session(session_id) is None
+    assert Through(kf, way).delete(session_id) is None
     assert not (cfg.workspace / "sessions" / session_id).exists()
 
 
 def test_deleting_an_unknown_session_is_not_an_error(cfg, way):
     """A caller that retries a delete should not have to care."""
-    assert Through(service(cfg), way).delete_session("never-existed") is None
+    assert Through(service(cfg), way).delete("never-existed") is None
 
 
 def test_reap_disposes_of_the_idle_and_leaves_the_rest(cfg):
@@ -300,7 +300,7 @@ def test_deleting_a_session_takes_its_claim_with_it(cfg, way):
     claim = _claim(cfg, session)
     claim.mkdir(parents=True, exist_ok=True)
 
-    Through(kf, way).delete_session(session)
+    Through(kf, way).delete(session)
 
     assert not claim.exists()
 
@@ -310,7 +310,7 @@ def test_reopening_a_deleted_id_is_not_refused_as_busy(cfg, way):
     kf = service(cfg)
     start(cfg, "reused")
     _claim(cfg, "reused").mkdir(parents=True, exist_ok=True)
-    Through(kf, way).delete_session("reused")
+    Through(kf, way).delete("reused")
 
     start(cfg, "reused")
 

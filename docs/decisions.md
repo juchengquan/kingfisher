@@ -6387,8 +6387,8 @@ say the same thing one level down, and wire formats do not fit it: they are appl
 configuration loads, where `doctor` checks every endpoint's `api:`.
 
 **Two public addresses.** `kingfisher`, the front door, is for embedding and for tool
-files: `Config`, `Request`, the result types, `Capabilities`, the errors, `run` and
-`stream`, seeding and `inventory`, `ToolContext` and `tool`. `kingfisher.plugins` is for
+files: `Config`, `Request`, the result types, `Session`, `Capabilities`, the errors,
+`run` and `stream`, seeding and `inventory`, `ToolContext` and `tool`. `kingfisher.plugins` is for
 writing a plugin: `Sessions`, `RunEvents`, `Instructions` and `CommandRunner`, the records
 they speak in -- `CommandResult`, `WireFormat`, `Plugins`, `ShellPrompt`, `HostPathError`
 -- and what kingfisher ships to fill them: `LocalSessions`, `backend_at`, `JsonlRunEvents`,
@@ -6397,6 +6397,27 @@ deprecation window: at 0.1.0 a caller on an old spelling changes one import line
 are lazy tables: `import kingfisher` is 5.0ms, 4.8 of it `typing` and `importlib`, and
 `kingfisher.plugins` 5.1ms, against 909ms and 3,143 modules for `Kingfisher`. *(Measured
 2026-10-17, Python 3.12.7, best of seven fresh interpreters.)*
+
+**One session, one handle, checked once.** `Kingfisher` keeps what is asked of the
+service as a whole -- `run`, `stream` and their async twins, `session`, `sessions`, `reap`
+and `origins` -- and what is asked of one session is asked of the `Session` that
+`session` hands out: `pending`, `artifact`, `files`, `size` and `delete`, each with an `a`
+twin. It replaced `SessionInfo` and five pairs of methods taking a session id, and the
+point was the caller check: `pending` and `artifact` took `source_ids`, while
+`delete_session`, `session_size` and `files_for` took none, so whether a caller could act
+on a session depended on which method was asked. `session` checks once, when it hands a
+session out. A session's agent is fixed when it opens and the caller's source ids are
+fixed then, so no method could ask again and be answered differently; a session deleted
+since answers `UnknownSessionError`, except to `delete`, which finds nothing to do.
+`None` answers both a session that is not there and one this caller cannot reach, so a
+leaked id is worth nothing, and `create=True`, which makes a session as `files_for` did,
+still answers `None` for one that exists out of reach. The handle keeps the backend it
+opened, so a narrowed read is one opening rather than two sandboxes. `held_for` and
+`agent_named` became private first: nothing outside the service called them.
+
+**Not taken: `s.run(...)` on the handle.** Beside `kf.run(Request(...))` it would be two
+ways to start a turn, and a first turn makes its session, which no handle exists for
+yet. *(2026-10-17.)*
 
 **Not on it: `LoggedRunEvents`.** It is what a `Kingfisher` handed no run events uses, so
 naming it gives a deployment nothing, and it loads langgraph: 279ms and 834 modules, where

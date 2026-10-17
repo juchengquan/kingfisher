@@ -68,7 +68,7 @@ _EXPORTS = {
     "RunOn": "kingfisher.core.definitions.subagents.spec",
     "RunEvent": "kingfisher.core.result",
     "RunResult": "kingfisher.core.result",
-    "SessionInfo": "kingfisher.core.session.model",
+    "Session": "kingfisher.core.session.handle",
     "definitions_source": "kingfisher.core.definitions.seeding",
     "ensure_definitions": "kingfisher.core.workspace",
     "kinds_at": "kingfisher.core.definitions.seeding",
@@ -113,8 +113,8 @@ __all__ = [
     "RunOn",
     "RunResult",
     "Seeded",
+    "Session",
     "SessionBusyError",
-    "SessionInfo",
     "SubagentError",
     "ToolContext",
     "UnknownSessionError",
@@ -172,9 +172,9 @@ if TYPE_CHECKING:
     from kingfisher.core.run import run as run
     from kingfisher.core.run import stream as stream
     from kingfisher.core.service import Kingfisher as Kingfisher
+    from kingfisher.core.session.handle import Session as Session
     from kingfisher.core.session.model import QuotaExceededError as QuotaExceededError
     from kingfisher.core.session.model import SessionBusyError as SessionBusyError
-    from kingfisher.core.session.model import SessionInfo as SessionInfo
     from kingfisher.core.session.model import UnknownSessionError as UnknownSessionError
     from kingfisher.core.workspace import ensure_definitions as ensure_definitions
 

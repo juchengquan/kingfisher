@@ -325,10 +325,12 @@ own files at the session root — see *deepagents' own files* below.
 A plain function is refused with a `TypeError` that says to do this: it can build a
 backend, and cannot say which sessions there are.
 
-**The async path asks for each method's `a`-prefixed twin.** `Kingfisher.asession`,
-`apending` and `aartifact` open a session with `aopen` and list them with
-`asessions`; `adelete_session` deletes one with `adelete`; and a turn on `astream`
-also records the session used with `amark_used` and checks its quota with `asize`.
+**The async path asks for each method's `a`-prefixed twin.** `Kingfisher.asession`
+and `asessions` list sessions with `asessions`, and open one with `aopen` where a
+caller is named; a `Session`'s `apending`, `aartifact` and `afiles` open it with
+`aopen`, `asize` asks `asize`, and `adelete` deletes it with `adelete`; and a turn on
+`astream` also records the session used with `amark_used` and checks its quota with
+`asize`.
 `Sessions` carries all five, running the sync method on kingfisher's thread
 pool, so a class that subclasses it — `LocalSessions` does — has them already.
 Override one where it is a round trip you can await: the async path then holds no
@@ -395,16 +397,17 @@ while refusing the agent's own writes: `LocalSessions` routes it to
 `InputsBackend`, which lifts the permission bits for kingfisher's upload alone, and
 a backend of yours meets the same promise its own way.
 
-**Open it once if you use it around a turn.** `Kingfisher.files_for(session_id)`
-builds a session's backend the way a turn does, through your sessions,
-and `run`, `stream`, `arun` and `astream` take it back
-as `files=` and run the turn on it rather than opening another. Where each `open`
-is a sandbox, that is one sandbox rather than two. `afiles_for` is the same for a
-caller on an event loop, opening it with `aopen`. The request has to run in the
-session they were opened for -- a request naming none runs in `default`. A session no
-turn has made yet is made, so a caller can place its inputs before the first turn.
-`files_for` does not ask who you are acting for, so hand what it returns only to code
-entitled to that session; the turn still checks the caller it is given.
+**Open it once if you use it around a turn.** `kf.session(session_id).files()`
+builds a session's backend the way a turn does, through your sessions, and `run`,
+`stream`, `arun` and `astream` take it back as `files=` and run the turn on it rather
+than opening another. Where each `open` is a sandbox, that is one sandbox rather than
+two -- and the `Session` keeps the one it opened, so asking it again opens nothing.
+`afiles` is the same for a caller on an event loop, opening it with `aopen`. The
+request has to run in the session they were opened for -- a request naming none runs
+in `default`. `kf.session(session_id, create=True)` makes a session no turn has made
+yet, so a caller can place its inputs before the first turn. The caller named to
+`kf.session` is checked there, once; hand what `files()` returns only to code entitled
+to that session, and the turn still checks the caller it is given.
 
 **And what it keeps about the session, under `/.harness`.** The agent the session is
 pinned to, its conversation, and a turn paused at an approval gate are all written

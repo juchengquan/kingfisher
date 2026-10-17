@@ -322,7 +322,7 @@ def test_a_deleted_session_stops_being_listed(cfg, way):
     kept = start(cfg, "kept")
     gone = start(cfg, "gone")
 
-    Through(kf, way).delete_session(gone)
+    Through(kf, way).delete(gone)
 
     assert [s.id for s in kf.sessions()] == [kept]
     assert Through(kf, way).session(gone) is None
@@ -339,7 +339,8 @@ def test_what_comes_back_names_no_path(cfg):
 
     (info,) = kf.sessions()
 
-    assert {f.name for f in dataclasses.fields(info)} == {"id", "last_used"}
+    public = {f.name for f in dataclasses.fields(info) if not f.name.startswith("_")}
+    assert public == {"id", "last_used"}
 
 
 def test_the_ordering_rule_needs_no_filesystem():
@@ -348,8 +349,8 @@ def test_the_ordering_rule_needs_no_filesystem():
     """
     ordered = known((("old", 1.0), ("newest", 9.0), ("middle", 5.0)))
 
-    assert [s.id for s in ordered] == ["newest", "middle", "old"]
-    assert ordered[0].last_used == 9.0
+    assert [name for name, _ in ordered] == ["newest", "middle", "old"]
+    assert ordered[0][1] == 9.0
 
 
 def test_the_read_path_and_the_sweep_see_the_same_sessions(cfg):

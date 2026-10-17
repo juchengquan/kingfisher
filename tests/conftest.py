@@ -253,31 +253,55 @@ def way(request) -> str:
 
 
 class Through:
-    """The session methods that have async twins, on `kf`, through the way `way` names."""
+    """A session's methods, on the `Session` `kf` hands out, through the way `way` names.
+
+    Shorthand for the two calls a test would otherwise write each time, and both ways
+    with one spelling. A session the caller is handed no `Session` for answers as a wrong
+    id does, with `UnknownSessionError`. `delete` and `files` act for nobody in
+    particular, as an operator's housekeeping does, and `files` makes a session that is
+    not there yet.
+    """
 
     def __init__(self, kf, way: str) -> None:
         self._kf = kf
         self._awaited = way == "async"
 
-    def _through(self, name: str, *args, **kwargs):
+    def session(self, session_id: str, **kwargs):
         if self._awaited:
-            return asyncio.run(getattr(self._kf, f"a{name}")(*args, **kwargs))
-        return getattr(self._kf, name)(*args, **kwargs)
+            return asyncio.run(self._kf.asession(session_id, **kwargs))
+        return self._kf.session(session_id, **kwargs)
 
-    def session(self, *args, **kwargs):
-        return self._through("session", *args, **kwargs)
+    def _on(self, session_id: str, method: str, *args, **session_kwargs):
+        from kingfisher.core.session.model import unknown_session
 
-    def pending(self, *args, **kwargs):
-        return self._through("pending", *args, **kwargs)
+        handle = self.session(session_id, **session_kwargs)
+        if handle is None:
+            raise unknown_session(session_id)
+        if self._awaited:
+            return asyncio.run(getattr(handle, f"a{method}")(*args))
+        return getattr(handle, method)(*args)
 
-    def artifact(self, *args, **kwargs):
-        return self._through("artifact", *args, **kwargs)
+    def pending(self, session_id: str, *, source_ids=None):
+        return self._on(session_id, "pending", source_ids=source_ids)
 
-    def delete_session(self, *args, **kwargs):
-        return self._through("delete_session", *args, **kwargs)
+    def artifact(self, session_id: str, name: str, *, source_ids=None):
+        return self._on(session_id, "artifact", name, source_ids=source_ids)
 
-    def files_for(self, *args, **kwargs):
-        return self._through("files_for", *args, **kwargs)
+    def size(self, session_id: str, *, source_ids=None):
+        return self._on(session_id, "size", source_ids=source_ids)
+
+    def delete(self, session_id: str):
+        from kingfisher.core.access.source_ids import UNSCOPED
+
+        handle = self.session(session_id, source_ids=UNSCOPED)
+        if handle is None:
+            return None
+        return asyncio.run(handle.adelete()) if self._awaited else handle.delete()
+
+    def files(self, session_id: str):
+        from kingfisher.core.access.source_ids import UNSCOPED
+
+        return self._on(session_id, "files", source_ids=UNSCOPED, create=True)
 
 
 def _backend_in(cfg, session_dir: Path):

@@ -74,7 +74,7 @@ definitions folder. `kingfisher sessions` shows what the workspace is holding �
 per session, how long it has been idle and what it costs — and `kingfisher reap`
 deletes the ones it is finished with. `kingfisher artifact --session ID
 outputs/report.html` fetches one file a turn produced, by the name the run
-reported — `Kingfisher.artifact(session_id, name)` from Python. What the turn's tools
+reported — `kf.session(session_id).artifact(name)` from Python. What the turn's tools
 returned is on `RunResult.ledger`, one entry a result, a subagent's own calls
 included, each naming the file in the session's scratchpad it was kept in. A run
 that should leave nothing behind can say so at the time: `kingfisher run
