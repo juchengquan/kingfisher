@@ -134,7 +134,7 @@ def test_a_request_that_names_no_agent_is_refused_once_the_workspace_has_any(cfg
     service = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(CapabilityError, match="names no agent"):
-        service.agent_named(None)
+        service._agent_named(None)
 
 
 def test_the_refusal_lists_what_the_workspace_actually_offers(cfg):
@@ -142,7 +142,7 @@ def test_the_refusal_lists_what_the_workspace_actually_offers(cfg):
     service = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(CapabilityError, match="cheap-one, narrow"):
-        service.agent_named("analyst")
+        service._agent_named("analyst")
 
 
 def test_an_empty_workspace_is_told_how_to_get_one(cfg):
@@ -150,13 +150,13 @@ def test_an_empty_workspace_is_told_how_to_get_one(cfg):
     service = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(CapabilityError, match="kingfisher seed"):
-        service.agent_named("analyst")
+        service._agent_named("analyst")
 
 
 def test_naming_one_is_required_even_where_there_is_nothing_to_name(cfg):
     """No default, and no exemption for an empty workspace either."""
     with pytest.raises(CapabilityError, match="names no agent"):
-        Kingfisher(cfg, sessions=LocalSessions()).agent_named(None)
+        Kingfisher(cfg, sessions=LocalSessions())._agent_named(None)
 
 
 def test_the_request_carries_the_name_and_nothing_more(cfg):

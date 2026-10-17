@@ -375,7 +375,7 @@ class Kingfisher(SessionMethods, Disposal):
             sessions=None if _kingfishers_own(self._sessions, self.cfg) else self._sessions,
         )
 
-    def held_for(self, source_ids: Held | None) -> frozenset[str] | None:
+    def _held_for(self, source_ids: Held | None) -> frozenset[str] | None:
         """The caller's expanded source ids, or `None` where nothing narrows."""
         return access.held_by(self.access, source_ids)
 
@@ -583,7 +583,7 @@ class Kingfisher(SessionMethods, Disposal):
         """
         kept = (yield from agent_started_with(harness)) if pinned is _UNSET else pinned
         if kept is None:
-            spec = self.agent_named(request.agent, source_ids=source_ids)
+            spec = self._agent_named(request.agent, source_ids=source_ids)
             yield from self._pin_agent_in(harness, request.agent)
             return spec
 
@@ -597,7 +597,7 @@ class Kingfisher(SessionMethods, Disposal):
             raise CapabilityError(msg)
         return started
 
-    def agent_named(
+    def _agent_named(
         self, name: str | None, *, source_ids: Held | None = None
     ) -> AgentSpec | None:
         """The agent this request asked for, out of the catalogue."""
@@ -656,7 +656,7 @@ class Kingfisher(SessionMethods, Disposal):
         if files is None:
             files = yield from self._files_for(session.id)
         harness = HarnessFiles(files, session.id)
-        held = self.held_for(source_ids)
+        held = self._held_for(source_ids)
         # Read once, for both of its readers: whether this caller reaches the session,
         # here, and which agent the turn runs, below. Not read where neither asks -- a
         # supplied graph under no policy.
@@ -739,7 +739,7 @@ class Kingfisher(SessionMethods, Disposal):
         # the expression is a mouthful. `None` for a run with no policy or an
         # `UNSCOPED` one: both see the whole workspace, so there is nothing to
         # filter the report against.
-        held = self.held_for(source_ids)
+        held = self._held_for(source_ids)
         # What an earlier turn stopped on: the state this turn answers, or a pause it
         # supersedes and drops now. Before the graph is built, because a resume runs
         # on a saver that already holds the pause.

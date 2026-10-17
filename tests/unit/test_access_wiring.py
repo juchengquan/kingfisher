@@ -94,8 +94,8 @@ def built(kf, source_ids, name: str):
     session = session_at(kf, name)
     assembled = build_agent(
         kf.cfg,
-        agent=kf.agent_named("surveyor", source_ids=held),
-        held=kf.held_for(held),
+        agent=kf._agent_named("surveyor", source_ids=held),
+        held=kf._held_for(held),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf._effective_grants(held),
         catalogue=kf.catalogue,
@@ -119,7 +119,7 @@ def test_a_call_that_does_not_say_who_is_calling_is_refused(policied):
 def test_unscoped_runs_without_a_caller_and_says_so_at_the_call(policied):
     """The opt-out is a value someone typed, so a review can find it."""
     kf = Kingfisher(policied, sessions=LocalSessions())
-    assert kf.held_for(UNSCOPED) is None
+    assert kf._held_for(UNSCOPED) is None
 
 
 def test_an_unknown_source_id_is_refused(policied):
@@ -128,14 +128,14 @@ def test_an_unknown_source_id_is_refused(policied):
     """
     kf = Kingfisher(policied, sessions=LocalSessions())
     with pytest.raises(AccessError, match="unknown source id"):
-        kf.held_for(("Q",))
+        kf._held_for(("Q",))
 
 
 def test_naming_source_ids_where_there_is_no_vocabulary_is_refused(cfg):
     """A caller naming source ids against a deployment that declares none is confused, and
     silently ignoring them is how they stay confused.
 
-    Asked of `held_for` rather than of `_effective_grants`, because the refusal moved
+    Asked of `_held_for` rather than of `_effective_grants`, because the refusal moved
     into the door both of them share: a turn came through here and the listing did not,
     so `kingfisher list --as marketing` printed the whole catalogue and exited zero on
     the deployment a turn was refused against. It is the state `decisions.md` describes
@@ -144,7 +144,7 @@ def test_naming_source_ids_where_there_is_no_vocabulary_is_refused(cfg):
     """
     kf = Kingfisher(cfg, sessions=LocalSessions())
     with pytest.raises(AccessError, match="declares no source ids"):
-        kf.held_for(("A",))
+        kf._held_for(("A",))
     # And still refused at the door a turn comes through, which is what moved.
     with pytest.raises(AccessError, match="declares no source ids"):
         kf._effective_grants(("A",))
@@ -154,8 +154,8 @@ def test_a_list_of_source_ids_narrows_exactly_as_a_tuple_does(policied):
     """The trap that folding `for_groups` in had to disarm."""
     kf = Kingfisher(policied, sessions=LocalSessions())
 
-    assert kf.held_for(["A"]) == kf.held_for(("A",))
-    assert kf.held_for(["A"]) is not None, "a list read as no opinion at all"
+    assert kf._held_for(["A"]) == kf._held_for(("A",))
+    assert kf._held_for(["A"]) is not None, "a list read as no opinion at all"
 
 
 def test_a_bare_string_of_source_ids_is_refused_rather_than_spelled_out(policied):
@@ -165,7 +165,7 @@ def test_a_bare_string_of_source_ids_is_refused_rather_than_spelled_out(policied
     kf = Kingfisher(policied, sessions=LocalSessions())
 
     with pytest.raises(AccessError, match="not a string"):
-        kf.held_for("A")
+        kf._held_for("A")
 
 
 def test_the_refusal_names_what_was_asked_for_and_what_to_do(cfg):
@@ -176,7 +176,7 @@ def test_the_refusal_names_what_was_asked_for_and_what_to_do(cfg):
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(AccessError) as caught:
-        kf.held_for(["marketing", "sales"])
+        kf._held_for(["marketing", "sales"])
 
     said = str(caught.value)
     assert "marketing, sales" in said
@@ -194,11 +194,11 @@ def test_meaning_no_caller_is_still_how_you_say_it(cfg):
     """
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
-    assert kf.held_for(UNSCOPED) is None
-    assert kf.held_for(None) is None
+    assert kf._held_for(UNSCOPED) is None
+    assert kf._held_for(None) is None
     # An empty sequence too: it names no caller to be wrong about, which is a
     # different thing from naming one the deployment cannot honour.
-    assert kf.held_for([]) is None
+    assert kf._held_for([]) is None
     assert kf._effective_grants(UNSCOPED) is not None
     assert kf._effective_grants(None) is not None
 
@@ -209,7 +209,7 @@ def test_a_declared_caller_is_still_expanded(cfg):
     """
     kf = Kingfisher(replace(cfg, access=vocabulary()), sessions=LocalSessions())
 
-    assert kf.held_for(["A"]) is not None
+    assert kf._held_for(["A"]) is not None
 
 
 def test_one_function_reads_what_shape_a_caller_s_source_ids_are_in():
@@ -250,7 +250,7 @@ def test_a_deployment_without_a_vocabulary_is_unchanged(cfg):
     """
     kf = Kingfisher(cfg, sessions=LocalSessions())
     assert kf.access is None
-    assert kf.held_for(None) is None
+    assert kf._held_for(None) is None
 
 
 def test_resolving_the_same_source_ids_twice_gives_the_same_grant(policied):
@@ -351,7 +351,7 @@ def reported(kf, source_ids, name: str, *, asked_for: Capabilities | None = None
 
     session = session_at(kf, name)
     held_names = tuple(source_ids) if source_ids is not UNSCOPED else source_ids
-    held = kf.held_for(held_names)
+    held = kf._held_for(held_names)
     request = Request(task="t", agent="surveyor")
     allowed = kf._effective_grants(held_names)
     if asked_for is not None:
@@ -516,8 +516,8 @@ def _refused_listing(cfg, source_ids):
     with pytest.raises(CapabilityError, match=r"unknown tool\(s\): line_counts;") as refused:
         build_agent(
             kf.cfg,
-            agent=kf.agent_named("surveyor", source_ids=source_ids),
-            held=kf.held_for(source_ids),
+            agent=kf._agent_named("surveyor", source_ids=source_ids),
+            held=kf._held_for(source_ids),
             backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
             capabilities=kf._effective_grants(source_ids),
             catalogue=kf.catalogue,
@@ -573,8 +573,8 @@ def _subagents_offered(cfg, source_ids) -> set[str]:
     with pytest.raises(CapabilityError, match=r"unknown subagent\(s\): ghost;") as refused:
         build_agent(
             kf.cfg,
-            agent=kf.agent_named("surveyor", source_ids=source_ids),
-            held=kf.held_for(source_ids),
+            agent=kf._agent_named("surveyor", source_ids=source_ids),
+            held=kf._held_for(source_ids),
             backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
             capabilities=kf._effective_grants(source_ids),
             catalogue=kf.catalogue,
@@ -678,8 +678,8 @@ def test_a_definition_naming_a_real_tool_out_of_reach_is_not_refused(
 
     built = build_agent(
         kf.cfg,
-        agent=kf.agent_named("surveyor", source_ids=("A",)),
-        held=kf.held_for(("A",)),
+        agent=kf._agent_named("surveyor", source_ids=("A",)),
+        held=kf._held_for(("A",)),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf._effective_grants(("A",)),
         catalogue=kf.catalogue,
@@ -779,7 +779,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         capabilities=grants,
         checkpointer=None,
         agent=drive(kf._agent_for(request, harness_in(kf.cfg, session), source_ids=held)),
-        held=kf.held_for(held),
+        held=kf._held_for(held),
         files=drive(kf._files_for(session.name)),
     ).graph
     from kingfisher.core.reporting import withheld_by_kind
@@ -790,8 +790,8 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
             kf.cfg,
             graph,
             kf.catalogue,
-            agent=kf.agent_named("surveyor", source_ids=held),
-            held=kf.held_for(held),
+            agent=kf._agent_named("surveyor", source_ids=held),
+            held=kf._held_for(held),
         )
     )
     assert "execute" in kinds.get("builtin tool", ())
@@ -836,11 +836,11 @@ def with_skills(cfg):
 def test_a_skill_audience_narrows_the_selection(with_skills):
     kf = Kingfisher(with_skills, sessions=LocalSessions())
 
-    assert kf.agent_named("skilled", source_ids=UNSCOPED).declares(
-        kf.held_for(("A",))
+    assert kf._agent_named("skilled", source_ids=UNSCOPED).declares(
+        kf._held_for(("A",))
     ).skills == ("audit", "review")
-    assert kf.agent_named("skilled", source_ids=UNSCOPED).declares(
-        kf.held_for(("B",))
+    assert kf._agent_named("skilled", source_ids=UNSCOPED).declares(
+        kf._held_for(("B",))
     ).skills == ("review",)
 
 
@@ -855,7 +855,7 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
         capabilities=kf._effective_grants(held),
         checkpointer=None,
         agent=drive(kf._agent_for(request, harness_in(kf.cfg, session), source_ids=held)),
-        held=kf.held_for(held),
+        held=kf._held_for(held),
         files=drive(kf._files_for(session.name)),
     )
     narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
@@ -878,7 +878,7 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
         capabilities=grants,
         checkpointer=None,
         agent=agent,
-        held=kf.held_for(held),
+        held=kf._held_for(held),
         files=drive(kf._files_for(session.name)),
     ).graph
     report = withheld_by_kind(
@@ -887,7 +887,7 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
         graph,
         kf.catalogue,
         agent=agent,
-        held=kf.held_for(held),
+        held=kf._held_for(held),
     )
     return dict(report).get("skill", ())
 
@@ -986,7 +986,7 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
         capabilities=kf._effective_grants(held),
         checkpointer=None,
         agent=drive(kf._agent_for(request, harness_in(kf.cfg, session), source_ids=held)),
-        held=kf.held_for(held),
+        held=kf._held_for(held),
         files=drive(kf._files_for(session.name)),
     )
     narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
@@ -1115,8 +1115,8 @@ def delegated(cfg, source_ids: tuple[str, ...]):
     session = session_at(kf, "as-" + "".join(source_ids))
     return build_agent(
         kf.cfg,
-        agent=kf.agent_named("boss", source_ids=source_ids),
-        held=kf.held_for(source_ids),
+        agent=kf._agent_named("boss", source_ids=source_ids),
+        held=kf._held_for(source_ids),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf._effective_grants(source_ids),
         catalogue=kf.catalogue,
