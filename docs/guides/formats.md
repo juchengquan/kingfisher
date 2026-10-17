@@ -1561,7 +1561,11 @@ A session pins its agent for life, and a session id is a bearer credential.
 Checked only at the open, holding one would be a durable grant to an agent you
 may not open, and a caller who lost a source id would keep running what they had. So:
 
-- A leaked session id grants nothing its holder could not open themselves.
+- A leaked session id runs no agent its holder could not open themselves. It does
+  hand over the conversation: its holder is shown everything earlier in it, results
+  from tools their own source ids do not reach included. Kingfisher has no users to
+  tell apart, so keeping each session id to the people allowed to read it is the
+  caller's job, as deciding their source ids is.
 - A demotion takes effect on the caller's next turn, and an in-flight
   conversation on an agent they can no longer reach stops being usable. That is
   intended, not a bug — it is the same answer as "you may not run this agent",

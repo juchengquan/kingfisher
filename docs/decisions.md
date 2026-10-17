@@ -1747,6 +1747,21 @@ word the one an id nobody issued gets, so holding a real id teaches nothing: not
 whose the session is, not which agent it runs, not whether a turn is running in
 it. *(2026-09-15.)*
 
+**Who may continue a session is the caller's to decide.** A caller holding another's
+session id, and reaching its agent, continues that conversation and is shown all of it.
+Measured on 2026-10-17: a caller holding `B` was shown a result from a tool only `A`
+may use, which `A` had run earlier in the same session. Three fixes were weighed and
+turned down. Gating a session on the stamps its results carry leaves out what carries
+no stamp, the caller's own uploads and the conversation itself. Pinning a session to
+whoever started it decides who owns a conversation, which kingfisher cannot know.
+Hiding the results alone cannot hold, because the model's own replies repeat them.
+Kingfisher has no users, only the source ids a call names, and it trusts those as
+given; which person owns which conversation is the deployment's knowledge, beside
+which source ids that person holds. So source ids decide what a turn may use -- its
+agent, tools and subagents -- and never what the conversation already holds. The check
+above stays, because it is about what the turn runs, and so do the stamps, as the
+record a caller reads off `RunResult.ledger`. *(2026-10-17.)*
+
 **One reader of what a caller says.** `held_for` was where a list stopped being
 read as nobody in particular, and two readers never asked it: naming an agent and
 reading a session each tested for a tuple, so `["B"]` opened an agent restricted
