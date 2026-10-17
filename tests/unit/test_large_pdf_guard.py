@@ -16,7 +16,7 @@ from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.large_pdf_guard import (
     MAX_PDF_BYTES,
-    LargePdfGuard,
+    LargePdfMiddleware,
 )
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import a_pdf, repository_root, tools_dir
@@ -188,7 +188,7 @@ def test_a_call_after_no_model_call_names_no_tool():
     """A call replayed on a resume follows no model call here, and a guard that
     guessed would name a tool the graph may not hold.
     """
-    guard = LargePdfGuard()
+    guard = LargePdfMiddleware()
     data = "A" * (4 * (MAX_PDF_BYTES // 3 + 1024))
     result = ToolMessage(
         content=[{"type": "file", "base64": data, "mime_type": "application/pdf"}],

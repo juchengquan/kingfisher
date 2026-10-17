@@ -362,7 +362,7 @@ def test_a_subagent_consults_its_helper_end_to_end(cfg, session_dir):
 
 
 def test_a_nested_agent_gets_no_unrestricted_subagent(cfg, session_dir):
-    """`DeclaredSubagentsOnly` is applied to the main agent and nowhere else.
+    """`GrantedOnlyMiddleware` is applied to the main agent and nowhere else.
 
     Measured rather than reasoned: `create_deep_agent` adds it, and
     `SubAgentMiddleware` does not. So the backstop stays where it is -- and this is

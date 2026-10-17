@@ -9,7 +9,10 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.core.agent.middlewares.narrowing import (
+    GrantedOnlyMiddleware,
+    NarrowedSkillsMiddleware,
+)
 from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, a_subagent, middleware_of
 
@@ -59,9 +62,9 @@ def test_a_subagent_gets_no_skills_when_the_deployment_switched_them_off(
         capabilities=Capabilities(subagents=("reviewer",), skills=("tabular-qa",)),
     )
 
-    assert not [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
+    assert not [m for m in built.middleware if type(m).__name__ == "NarrowedSkillsMiddleware"]
     kinds = [type(m).__name__ for m in middleware_of(built, "reviewer")]
-    assert "NarrowedSkills" not in kinds, f"the subagent was told about skills: {kinds}"
+    assert "NarrowedSkillsMiddleware" not in kinds, f"the subagent was told about skills: {kinds}"
 
 
 def test_a_subagent_still_gets_them_when_the_deployment_wired_them(cfg, session_dir):
@@ -73,7 +76,7 @@ def test_a_subagent_still_gets_them_when_the_deployment_wired_them(cfg, session_
     built = build(cfg, session_dir, subagents=("reviewer",), skills=ALL)
 
     kinds = [type(m).__name__ for m in middleware_of(built, "reviewer")]
-    assert "NarrowedSkills" in kinds, kinds
+    assert "NarrowedSkillsMiddleware" in kinds, kinds
 
 
 # -- the field ------------------------------------------------------------
@@ -86,7 +89,9 @@ def test_a_definition_can_name_the_skills_its_subagent_gets(cfg, session_dir):
 
     built = build(cfg, session_dir, subagents=("reviewer",))
 
-    (scoped,) = [m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkills)]
+    (scoped,) = [
+        m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkillsMiddleware)
+    ]
     assert set(scoped._allowed) == {"catalogue::tabular-qa"}
 
 
@@ -105,7 +110,9 @@ def test_a_subagent_may_name_a_skill_by_its_full_identity(cfg, session_dir):
 
     built = build(cfg, session_dir, subagents=("reviewer",))
 
-    (scoped,) = [m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkills)]
+    (scoped,) = [
+        m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkillsMiddleware)
+    ]
     assert set(scoped._allowed) == {"incident::postmortem"}
 
 
@@ -124,7 +131,9 @@ def test_a_subagent_is_actually_told_about_the_skill_it_named(cfg, session_dir):
 
     built = build(cfg, session_dir, subagents=("reviewer",))
 
-    (scoped,) = [m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkills)]
+    (scoped,) = [
+        m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkillsMiddleware)
+    ]
     rendered = scoped._format_skills_list(scoped._qualified())
     assert "tabular-qa" in rendered
     assert "code-review" not in rendered  # and only the one it named
@@ -139,7 +148,9 @@ def test_omitting_skills_grants_none(cfg, session_dir):
 
     built = build(cfg, session_dir, subagents=("reviewer",))
 
-    assert not [m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkills)]
+    assert not [
+        m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkillsMiddleware)
+    ]
 
 
 def test_omitting_tools_still_inherits(cfg, session_dir):
@@ -150,7 +161,10 @@ def test_omitting_tools_still_inherits(cfg, session_dir):
 
     built = build(cfg, session_dir, subagents=("reviewer",))
 
-    assert not [m for m in middleware_of(built, "reviewer") if isinstance(m, ToolAllowlist)]
+    (granted,) = [
+        m for m in middleware_of(built, "reviewer") if isinstance(m, GrantedOnlyMiddleware)
+    ]
+    assert granted._allowed is None
 
 
 def test_both_can_be_named_together(cfg, session_dir):
@@ -170,9 +184,9 @@ def test_both_can_be_named_together(cfg, session_dir):
     asked_for = [
         type(m).__name__
         for m in middleware
-        if type(m).__name__ in {"ToolAllowlist", "NarrowedSkills"}
+        if type(m).__name__ in {"GrantedOnlyMiddleware", "NarrowedSkillsMiddleware"}
     ]
-    assert asked_for == ["ToolAllowlist", "NarrowedSkills"]
+    assert asked_for == ["GrantedOnlyMiddleware", "NarrowedSkillsMiddleware"]
 
 
 # -- the two refusals -----------------------------------------------------
@@ -203,7 +217,9 @@ def test_a_subagent_cannot_reach_past_the_request(cfg, session_dir):
 
     built = build(cfg, session_dir, subagents=("reviewer",), skills=("tabular-qa",))
 
-    (scoped,) = [m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkills)]
+    (scoped,) = [
+        m for m in middleware_of(built, "reviewer") if isinstance(m, NarrowedSkillsMiddleware)
+    ]
     assert set(scoped._allowed) == {"catalogue::tabular-qa"}, (
         "the subagent kept a skill its caller lacked"
     )

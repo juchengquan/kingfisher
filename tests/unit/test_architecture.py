@@ -1586,7 +1586,7 @@ def test_kingfisher_keeps_its_own_middleware_in_one_package():
     # The witness that the walk follows a base rather than matching a name: it is the
     # one class here that never says `AgentMiddleware`. Without it, a walk that found
     # nothing would pass the assertion below on an empty mapping.
-    assert "NarrowedSkills" in {name for _, name in found}, f"the walk found only {found}"
+    assert "NarrowedSkillsMiddleware" in {name for _, name in found}, f"the walk found only {found}"
 
     elsewhere = sorted(
         f"{module}.{name}" for module, name in found if not module.startswith(f"{OWN_MIDDLEWARE}.")
@@ -1763,7 +1763,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         # on its runner or on its own sandbox; nothing here has a shell of that kind.
         "ShellPrompt": "document",
         # `ports.md` tells a backend that refuses host paths to refuse them with this,
-        # because it is the type `HostPathGuard` turns into a correction.
+        # because it is the type `ToolFailureMiddleware` turns into a correction.
         "HostPathError": "document",
         # And the refusal kingfisher's own backend makes, which `ports.md` offers a
         # backend that wants to refuse host paths the same way.

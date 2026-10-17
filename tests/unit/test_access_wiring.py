@@ -16,7 +16,7 @@ from kingfisher.cli.__main__ import main
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.access.source_ids import UNSCOPED, AccessError, parse
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.narrowing import ToolAllowlist
+from kingfisher.core.agent.middlewares.narrowing import GrantedOnlyMiddleware
 from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
@@ -859,7 +859,7 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
         held=kf._held_for(held),
         files=drive(kf._files_for(session.name)),
     )
-    narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
+    narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkillsMiddleware"]
     advertised = {name for m in narrowed for name in m._allowed}
 
     assert not any(name.endswith("::audit") for name in advertised)
@@ -990,7 +990,7 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
         held=kf._held_for(held),
         files=drive(kf._files_for(session.name)),
     )
-    narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkills"]
+    narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkillsMiddleware"]
     advertised = {name for m in narrowed for name in m._allowed}
 
     assert any(name.endswith("::audit") for name in advertised)
@@ -1137,9 +1137,9 @@ def holding(built, name: str) -> dict[str, set[str]]:
         "helpers": set(),
     }
     for one in middleware_of(built, name):
-        if isinstance(one, ToolAllowlist):
+        if isinstance(one, GrantedOnlyMiddleware):
             found["allowed"] = set(one._allowed)
-        elif type(one).__name__ == "NarrowedSkills":
+        elif type(one).__name__ == "NarrowedSkillsMiddleware":
             found["skills"] = {skill.rsplit("::", 1)[-1] for skill in one._allowed}
         elif isinstance(one, SubAgentMiddleware):
             found["helpers"] = {helper["name"] for helper in one._subagents}
@@ -1713,7 +1713,7 @@ def results_shown() -> dict[str, str]:
 
 
 def test_a_task_out_of_reach_reads_what_a_task_to_a_typo_reads(delegating, scripted):
-    """Both refusals of a `task` -- `DeclaredSubagentsOnly` at the agent, deepagents' own
+    """Both refusals of a `task` -- `GrantedOnlyMiddleware` at the agent, deepagents' own
     inside a subagent -- list what was built, so either would tell `insider` from
     `ghost` the moment it listed or worded the two apart.
     """

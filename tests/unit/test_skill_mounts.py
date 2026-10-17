@@ -12,7 +12,7 @@ from langchain_core.messages import AIMessage
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.backend import skills_sources
-from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills
+from kingfisher.core.agent.middlewares.narrowing import NarrowedSkillsMiddleware
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skills import registry as skill_registry
@@ -137,7 +137,7 @@ def test_the_index_reaches_a_mount_through_the_backend(mounted, session_dir):
     a missing route shows as a skill that never loads.
     """
     registry = Definitions.from_config(mounted).registry
-    middleware = NarrowedSkills(
+    middleware = NarrowedSkillsMiddleware(
         allowed=("vendor::lookup",),
         backend=backend_at(mounted, session_dir),
         sources=skills_sources(registry.folders),

@@ -8,7 +8,7 @@ from langchain_core.tools import tool
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.kinds.subagents import as_subagent
 from kingfisher.core.agent.kinds.tools import _ToolSurface
-from kingfisher.core.agent.middlewares.narrowing import ToolAllowlist
+from kingfisher.core.agent.middlewares.narrowing import GrantedOnlyMiddleware
 from kingfisher.core.definitions import seeding
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
@@ -303,7 +303,7 @@ PROBE = (Found(tool=probe, source="probe.py"),)
 
 
 class _Request:
-    """The one thing `ToolAllowlist` reads off a model request, and the one it calls to
+    """The one thing `GrantedOnlyMiddleware` reads off a model request, and the one it calls to
     hand back a narrowed copy.
     """
 
@@ -352,7 +352,9 @@ def test_a_subagents_long_form_grant_survives_the_ceiling(cfg):
         spec, cfg, catalogue=PROBE, tools=("probe",), builtin_tools=("read_file",)
     )
 
-    allowlists = [one for one in built.get("middleware", ()) if isinstance(one, ToolAllowlist)]
+    allowlists = [
+        one for one in built.get("middleware", ()) if isinstance(one, GrantedOnlyMiddleware)
+    ]
     assert allowlists, "a subagent naming one tool is restricted to it"
 
     # Through the middleware rather than into its set: what matters is that the

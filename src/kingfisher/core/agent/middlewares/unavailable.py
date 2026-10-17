@@ -8,6 +8,7 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
+from kingfisher.core.agent.middlewares.results import failed
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.session.runtime import ModelUnavailableError, unavailable
 
@@ -54,14 +55,10 @@ class ModelUnavailableGuard(AgentMiddleware):
         if call.get("name") != TASK_TOOL or (why := unavailable(exc)) is None:
             return None
         whose = (call.get("args") or {}).get("subagent_type") or "the subagent"
-        return ToolMessage(
-            content=(
-                f"Error: {whose!r} could not reach its model ({why}). Go on without it, or "
-                "say in your answer that this part could not be done."
-            ),
-            tool_call_id=call.get("id", ""),
-            name=TASK_TOOL,
-            status="error",
+        return failed(
+            call,
+            f"Error: {whose!r} could not reach its model ({why}). Go on without it, or "
+            "say in your answer that this part could not be done.",
         )
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:

@@ -33,7 +33,7 @@ def _size(count: int) -> str:
     return f"{count / KB / KB:.1f} MB"
 
 
-class LargePdfGuard(AgentMiddleware):
+class LargePdfMiddleware(AgentMiddleware):
     """Replace a PDF too large to read whole with advice on reading it in parts."""
 
     def __init__(self) -> None:
@@ -43,7 +43,7 @@ class LargePdfGuard(AgentMiddleware):
         self._offered: frozenset[str] | None = None
 
     def _seen(self, request: Any) -> Any:
-        # Before `ToolAllowlist` narrows, which is right: a graph holds only its granted
+        # Before `GrantedOnlyMiddleware` narrows, which is right: a graph holds only its granted
         # workspace tools. Not the catalogue's names: `standing_middleware` gets every tool, granted
         # or not.
         self._offered = frozenset(

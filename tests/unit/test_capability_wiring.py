@@ -22,7 +22,10 @@ from kingfisher.core.agent.assembly import (
     build_agent,
 )
 from kingfisher.core.agent.backend import skills_sources
-from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.core.agent.middlewares.narrowing import (
+    GrantedOnlyMiddleware,
+    NarrowedSkillsMiddleware,
+)
 from kingfisher.core.agent.prompting import memory_guidelines
 from kingfisher.core.layout import MEMORY
 from kingfisher.plugins import LocalSessions
@@ -75,9 +78,9 @@ def test_no_capabilities_means_no_filtering(cfg, session_dir):
         backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
 
-    names = {type(m).__name__ for m in built.middleware}
-    assert "ToolAllowlist" not in names
-    assert "NarrowedSkills" not in names
+    (granted,) = [m for m in built.middleware if isinstance(m, GrantedOnlyMiddleware)]
+    assert granted._allowed is None
+    assert "NarrowedSkillsMiddleware" not in {type(m).__name__ for m in built.middleware}
     assert not declared_subagents(built)
 
 
@@ -124,7 +127,7 @@ def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, session_di
         capabilities=Capabilities(skills=("other",)),
     )
 
-    scoped = [m for m in built.middleware if isinstance(m, NarrowedSkills)]
+    scoped = [m for m in built.middleware if isinstance(m, NarrowedSkillsMiddleware)]
     assert len(scoped) == 1
     # Passing `skills=` would make deepagents build its own unfiltered
     # SkillsMiddleware alongside ours; ours has to be the only one.
@@ -159,7 +162,7 @@ def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, session_dir):
     )
 
     assert built.skills == skills_sources()
-    assert not any(isinstance(m, NarrowedSkills) for m in built.middleware)
+    assert not any(isinstance(m, NarrowedSkillsMiddleware) for m in built.middleware)
     # The unconditional routes and nothing skill-specific: a request that
     # granted no skills adds no per-skill denials.
     assert {r.paths[0] for r in built.permissions} == {
@@ -232,7 +235,34 @@ def test_an_unnamed_tool_survives_the_allowlist():
             self.tools = kwargs["tools"]
             return self
 
-    assert ToolAllowlist(("read_file",))._filter(Request()).tools == [unnamed]
+    assert GrantedOnlyMiddleware(("read_file",))._filter(Request()).tools == [unnamed]
+
+
+class _Call:
+    """The shape `_refuse` reads: one tool call."""
+
+    def __init__(self, name: str, **args: str) -> None:
+        self.tool_call = {"name": name, "args": args, "id": "c1"}
+
+
+def test_a_grant_of_nothing_in_particular_refuses_nothing():
+    """`None` read as an empty grant, so an unrestricted request, which still carries
+    the check on every graph, could call nothing."""
+    granted = GrantedOnlyMiddleware()
+
+    assert granted._refuse(_Call("execute")) is None
+    assert granted._refuse(_Call("task", subagent_type="anyone")) is None
+
+
+def test_a_task_outside_both_grants_is_refused_for_the_tool():
+    """Told which subagents it may use when it may not call `task` at all, a model
+    goes on trying them."""
+    granted = GrantedOnlyMiddleware(("read_file",), subagents=("helper",))
+
+    refusal = granted._refuse(_Call("task", subagent_type="helper"))
+
+    assert refusal is not None
+    assert "task is not available" in refusal.content
 
 
 def test_an_injected_graph_cannot_honour_capabilities(cfg, session_dir):
@@ -351,7 +381,7 @@ def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, session_dir):
     # By type rather than by position. A subagent carries guards it did not ask
     # for -- the host-path correction, and the workspace tools' own failures --
     # and this test is about the allowlist its definition produced.
-    (allowlist,) = [m for m in subagent["middleware"] if isinstance(m, ToolAllowlist)]
+    (allowlist,) = [m for m in subagent["middleware"] if isinstance(m, GrantedOnlyMiddleware)]
     assert allowlist._allowed == {"read_file", "glob"}
 
 
@@ -620,7 +650,7 @@ TOOLS = [shout]
 def test_a_plain_function_is_withheld_when_the_grant_withholds_it(cfg, session_dir):
     """The grant is the security boundary, and it matches on a name.
 
-    `ToolAllowlist` reads `.name` and deliberately *keeps* anything it cannot identify,
+    `GrantedOnlyMiddleware` reads `.name` and deliberately *keeps* anything it cannot identify,
     and a plain function has `__name__` and no `.name` -- so whether a withheld one is
     really withheld rests on deepagents wrapping it before the allowlist ever sees it.
     """

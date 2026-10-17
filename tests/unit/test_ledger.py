@@ -27,7 +27,7 @@ from assets.middlewares.tool_note import ToolNote
 from kingfisher import Kingfisher, Request
 from kingfisher.core.access.source_ids import parse
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.recorder import Recorder
+from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
 from kingfisher.core.agent.prompting import render_system_prompt
 from kingfisher.core.layout import (
     HARNESS,
@@ -381,7 +381,7 @@ def test_a_tool_whose_name_is_all_punctuation_still_gets_a_named_file(ledgered):
 
 
 def test_the_arguments_recorded_are_the_ones_the_model_wrote(ledgered):
-    """`WorkspaceToolPaths` rewrites a `path` into a host path, and recorded after it
+    """`WorkspaceToolPathsMiddleware` rewrites a `path` into a host path, and recorded after it
     the row would show the agent a path it was never told and may not use.
     """
     (_session(ledgered) / "inputs" / "notes.txt").write_text("a\nb\n", encoding="utf-8")
@@ -1179,7 +1179,7 @@ def test_a_command_is_stamped_in_a_copy_that_keeps_the_rest_of_it(ledgered):
     earlier = ToolMessage(content="passed up beside it", tool_call_id="t0", name="task")
     answer = ToolMessage(content="thin margins", tool_call_id="t1", name="task")
     returned = Command(update={"messages": [earlier, answer], "todos": ["kept"]}, goto="model")
-    recorder = Recorder(
+    recorder = RecorderMiddleware(
         Ledger("turn", KeptLedger()), backend_at(ledgered, _session(ledgered)), None
     )
 

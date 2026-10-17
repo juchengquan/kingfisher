@@ -56,8 +56,8 @@ from kingfisher.core.agent.kinds.tools import (
     _resolve_tools,
     registered_tools,
 )
-from kingfisher.core.agent.middlewares.clearing import ResultClearing, high_mark
-from kingfisher.core.agent.middlewares.recorder import Audiences, Recorder
+from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware, high_mark
+from kingfisher.core.agent.middlewares.recorder import Audiences, RecorderMiddleware
 from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.models import build_model, model_named
 from kingfisher.core.agent.permitted_backend import PermittedBackend
@@ -354,7 +354,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         else {}
     )
 
-    def recording(definition: object | None) -> Recorder | None:
+    def recording(definition: object | None) -> RecorderMiddleware | None:
         """A recorder for one graph, reading access off `definition`'s audiences.
 
         It saves through the turn's backend, not `under_rules`: the results folder is
@@ -364,14 +364,14 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         if ledger is None:
             return None
         audiences = Audiences.of(definition, own=own) if cfg.access is not None else None
-        return Recorder(ledger, backend, audiences, cfg.layout.tool_results_route)
+        return RecorderMiddleware(ledger, backend, audiences, cfg.layout.tool_results_route)
 
     running, mark = _running(agent, cfg, capabilities.endpoints, model)
     # The agent's alone, and only with a ledger for its handles to name.
     clearing = (
         None
         if ledger is None
-        else ResultClearing(ledger, high_mark(running, mark), cfg.layout.offloads_route)
+        else ResultClearingMiddleware(ledger, high_mark(running, mark), cfg.layout.offloads_route)
     )
     # Filled in kingfisher's order once the grant is known; the probe reads it before.
     middleware: list[Any] = []

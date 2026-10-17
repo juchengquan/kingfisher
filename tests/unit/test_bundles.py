@@ -12,7 +12,10 @@ from kingfisher.cli.listing import failed, render
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.backend import skills_sources
-from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.core.agent.middlewares.narrowing import (
+    GrantedOnlyMiddleware,
+    NarrowedSkillsMiddleware,
+)
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.agents import reading as agent_reading
 from kingfisher.core.definitions.agents.spec import AgentError
@@ -439,7 +442,7 @@ def test_a_private_tool_is_in_the_subagents_allowlist(cfg, session_dir):
 
     subagent = built_subagent(cfg, session_dir)
 
-    (allowlist,) = [m for m in subagent["middleware"] if isinstance(m, ToolAllowlist)]
+    (allowlist,) = [m for m in subagent["middleware"] if isinstance(m, GrantedOnlyMiddleware)]
     assert "probe" in allowlist._allowed
     assert "shared" in allowlist._allowed
 
@@ -614,7 +617,7 @@ def test_a_subagent_is_told_about_the_skill_in_its_own_folder(cfg, session_dir):
 
     subagent = built_subagent(cfg, session_dir)
 
-    (narrowed,) = [m for m in subagent["middleware"] if isinstance(m, NarrowedSkills)]
+    (narrowed,) = [m for m in subagent["middleware"] if isinstance(m, NarrowedSkillsMiddleware)]
     assert any(key.endswith("sampling") for key in narrowed._allowed)
     assert "sampling" in narrowed._format_skills_list(narrowed._qualified())
 
@@ -664,7 +667,9 @@ def test_a_skill_in_a_subfolder_of_a_subagents_folder_is_neither_granted_nor_sho
     )
 
     (index,) = [
-        m for m in subagent_of(built, "carrier")["middleware"] if isinstance(m, NarrowedSkills)
+        m
+        for m in subagent_of(built, "carrier")["middleware"]
+        if isinstance(m, NarrowedSkillsMiddleware)
     ]
     shown = index._format_skills_list(index.before_agent({}, None, {})["skills_metadata"])
     assert "**top**" in shown and "carrier::top" in index._allowed
@@ -711,7 +716,7 @@ def test_a_skill_the_definition_does_not_list_is_not_indexed(cfg, session_dir):
 
     subagent = built_subagent(cfg, session_dir)
 
-    (narrowed,) = [m for m in subagent["middleware"] if isinstance(m, NarrowedSkills)]
+    (narrowed,) = [m for m in subagent["middleware"] if isinstance(m, NarrowedSkillsMiddleware)]
     assert any(key.endswith("sampling") for key in narrowed._allowed)
     assert not any(key.endswith("unlisted") for key in narrowed._allowed)
 
@@ -1582,6 +1587,8 @@ def test_the_shipped_bundle_takes_nothing_from_the_catalogue(
     )
 
     (allowlist,) = [
-        m for m in subagent_of(built, "redactor")["middleware"] if isinstance(m, ToolAllowlist)
+        m
+        for m in subagent_of(built, "redactor")["middleware"]
+        if isinstance(m, GrantedOnlyMiddleware)
     ]
     assert set(allowlist._allowed) == {"ls", "glob", "grep", "mask_secrets"}

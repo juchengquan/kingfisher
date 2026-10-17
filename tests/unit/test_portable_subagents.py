@@ -17,7 +17,10 @@ from langchain_core.runnables import RunnableLambda
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.core.agent.middlewares.narrowing import (
+    GrantedOnlyMiddleware,
+    NarrowedSkillsMiddleware,
+)
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.definitions.subagents.rules import miscounted
@@ -274,7 +277,7 @@ def test_builtin_tools_stay_narrowed_for_a_portable_subagent(cfg, session_dir):
         ),
     )
 
-    (allowlist,) = [m for m in subagent["middleware"] if isinstance(m, ToolAllowlist)]
+    (allowlist,) = [m for m in subagent["middleware"] if isinstance(m, GrantedOnlyMiddleware)]
     assert "execute" not in allowlist._allowed
 
 
@@ -290,7 +293,7 @@ def test_a_carried_skill_reaches_the_subagent_that_brought_it(cfg, session_dir):
 
     subagent = built(cfg, session_dir)
 
-    (skills,) = [m for m in subagent["middleware"] if isinstance(m, NarrowedSkills)]
+    (skills,) = [m for m in subagent["middleware"] if isinstance(m, NarrowedSkillsMiddleware)]
     assert any("sampling" in one for one in skills._allowed)
 
 
@@ -548,7 +551,7 @@ def test_a_subagent_with_one_axis_open_builds_in_a_workspace_with_no_tools(
 
     subagent = built(cfg, session_dir, Capabilities(subagents=("surveyor",)))
 
-    (allowlist,) = [m for m in subagent["middleware"] if isinstance(m, ToolAllowlist)]
+    (allowlist,) = [m for m in subagent["middleware"] if isinstance(m, GrantedOnlyMiddleware)]
     if "builtin_tools: []" in text:
         assert "read_file" not in allowlist._allowed
     else:

@@ -97,7 +97,7 @@ where it covers pre-built graphs.
 - **The index is kept from a conversation's first turn**, measured on 2026-10-01 by
   driving two turns of one conversation with a skill added between them. The second
   turn's index did not list it, even when that turn's request granted it by name and
-  the grant was accepted. `NarrowedSkills.before_agent` returns early when the state
+  the grant was accepted. `NarrowedSkillsMiddleware.before_agent` returns early when the state
   already holds `skills_metadata`, and the state is checkpointed.
 - **Listing is cheap on this host:** about 2 ms for the five skills in
   `assets/skills`, the median of twenty reads through `core.definitions.skills.registry`.

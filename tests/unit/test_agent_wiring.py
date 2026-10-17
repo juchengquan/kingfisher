@@ -211,7 +211,7 @@ def test_the_agents_middleware_runs_after_the_narrowing_kingfisher_applied(
 
     names = [type(m).__name__ for m in built.middleware]
     assert names[-1] == "_Audit", f"the deployment's middleware is not last: {names}"
-    assert "ToolAllowlist" in names, "nothing narrowed, so this proves nothing"
+    assert "GrantedOnlyMiddleware" in names, "nothing narrowed, so this proves nothing"
 
 
 def test_an_agent_naming_middleware_nothing_registered_is_refused(cfg, session_dir):

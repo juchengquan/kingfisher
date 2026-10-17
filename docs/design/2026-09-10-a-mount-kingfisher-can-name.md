@@ -240,7 +240,7 @@ because a run only ever exercises its own kernel's. The same move
 
 Nothing, at runtime. There is no cure available in-process, so there is no
 machinery worth building for one: `ENOTCONN` reaches the model through
-`WorkspaceToolErrors` as an ordinary tool error it can read and route around,
+`ToolFailureMiddleware` as an ordinary tool error it can read and route around,
 which is what that middleware exists for.
 
 What is enforced is the start: every mount is probed with a call that raises,

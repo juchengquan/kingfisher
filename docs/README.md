@@ -99,7 +99,7 @@ decisions move to `decisions.md`, anything it measured about upstream moves to
 
 Two are worth naming, because between them they are the failure this rule exists
 to prevent. *A tool failure is not a crash* sat here saying **designed, not
-implemented** while `WorkspaceToolErrors` and its test file had been in the tree
+implemented** while `ToolFailureMiddleware` and its test file had been in the tree
 for some time. *Nothing at rest on this machine* was audited decision by decision
 on 2026-09-01 and still reported "no store port in `core/interfaces.py`" six days
 after one shipped, and was removed on 2026-09-04 once each remaining claim was

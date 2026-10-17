@@ -85,7 +85,7 @@ def test_narrowing_one_axis_does_not_cost_the_other():
 
 
 def test_narrowing_neither_axis_means_no_allowlist_at_all():
-    """Not an empty one, and the difference is what `ToolAllowlist` enforces."""
+    """Not an empty one, and the difference is what `GrantedOnlyMiddleware` enforces."""
     assert WORKSPACE.permitted(ALL, ALL) is None
     assert WORKSPACE.permitted(ALL, ()) == ("read_file", "execute")
 

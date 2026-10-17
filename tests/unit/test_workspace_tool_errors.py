@@ -12,7 +12,7 @@ import asyncio
 import pytest
 from langchain_core.messages import ToolMessage
 
-from kingfisher.core.agent.middlewares.workspace_tools import WorkspaceToolErrors
+from kingfisher.core.agent.middlewares.tool_failure import ToolFailureMiddleware
 from kingfisher.plugins import backend_at
 
 
@@ -32,7 +32,7 @@ def _raises(exc: BaseException):
 
 def test_a_workspace_tools_exception_becomes_a_failed_tool_result():
     """The failure this was written for."""
-    guard = WorkspaceToolErrors(frozenset({"csv_profile"}))
+    guard = ToolFailureMiddleware(frozenset({"csv_profile"}))
 
     answer = guard.wrap_tool_call(
         _Request("csv_profile"), _raises(FileNotFoundError("/inputs/orders.csv"))
@@ -48,16 +48,41 @@ def test_the_message_names_the_exception_type():
     """A workspace tool is somebody else's code and its exceptions were not written to
     be read by a model.
     """
-    guard = WorkspaceToolErrors(frozenset({"probe"}))
+    guard = ToolFailureMiddleware(frozenset({"probe"}))
 
     answer = guard.wrap_tool_call(_Request("probe"), _raises(FileNotFoundError("/inputs/x")))
 
     assert "FileNotFoundError" in answer.content
 
 
+def test_a_workspace_tool_refusing_a_host_path_still_names_the_type():
+    """The host-path case checked first, so a workspace tool's refusal lost the type
+    that says it was the tool's own."""
+    from kingfisher.core.agent.host_paths import HostPathError
+
+    guard = ToolFailureMiddleware(frozenset({"probe"}))
+
+    answer = guard.wrap_tool_call(_Request("probe"), _raises(HostPathError("/etc/hosts")))
+
+    assert "HostPathError: /etc/hosts" in answer.content
+
+
+def test_a_built_in_refusing_a_host_path_is_handed_back_as_said():
+    """The correction `reject_host_path` writes is for the model, so it goes back as
+    written."""
+    from kingfisher.core.agent.host_paths import HostPathError
+
+    guard = ToolFailureMiddleware()
+
+    answer = guard.wrap_tool_call(_Request("read_file"), _raises(HostPathError("use /inputs")))
+
+    assert answer.content == "Error: use /inputs"
+    assert answer.status == "error"
+
+
 def test_a_built_in_tool_is_left_exactly_as_it_was():
     """The half that keeps this narrow."""
-    guard = WorkspaceToolErrors(frozenset({"csv_profile"}))
+    guard = ToolFailureMiddleware(frozenset({"csv_profile"}))
 
     with pytest.raises(FileNotFoundError):
         guard.wrap_tool_call(_Request("read_file"), _raises(FileNotFoundError("/inputs/x")))
@@ -65,14 +90,14 @@ def test_a_built_in_tool_is_left_exactly_as_it_was():
 
 def test_a_tool_that_works_is_untouched():
     """The negative control."""
-    guard = WorkspaceToolErrors(frozenset({"probe"}))
+    guard = ToolFailureMiddleware(frozenset({"probe"}))
 
     assert guard.wrap_tool_call(_Request("probe"), lambda _r: "the answer") == "the answer"
 
 
 def test_an_interrupt_is_not_a_tool_telling_the_model_something():
     """`BaseException` is deliberately outside the catch."""
-    guard = WorkspaceToolErrors(frozenset({"probe"}))
+    guard = ToolFailureMiddleware(frozenset({"probe"}))
 
     with pytest.raises(KeyboardInterrupt):
         guard.wrap_tool_call(_Request("probe"), _raises(KeyboardInterrupt()))
@@ -90,7 +115,7 @@ def test_the_async_path_behaves_the_same():
     """Both halves exist because the harness uses both, and a guard that held on one
     would be absent exactly when a service is serving.
     """
-    guard = WorkspaceToolErrors(frozenset({"csv_profile"}))
+    guard = ToolFailureMiddleware(frozenset({"csv_profile"}))
 
     answer = asyncio.run(guard.awrap_tool_call(_Request("csv_profile"), _araises))
 
@@ -99,7 +124,7 @@ def test_the_async_path_behaves_the_same():
 
 
 def test_the_async_path_leaves_a_built_in_alone_too():
-    guard = WorkspaceToolErrors(frozenset({"csv_profile"}))
+    guard = ToolFailureMiddleware(frozenset({"csv_profile"}))
 
     with pytest.raises(FileNotFoundError):
         asyncio.run(guard.awrap_tool_call(_Request("read_file"), _araises))
@@ -121,10 +146,10 @@ TOOLS = [probe_one]
 '''
 
 
-def _guard_in(built) -> WorkspaceToolErrors | None:
+def _guard_in(built) -> ToolFailureMiddleware | None:
     """The guard the build handed to `create_deep_agent`, if it added one."""
     for entry in built.middleware or ():
-        if isinstance(entry, WorkspaceToolErrors):
+        if isinstance(entry, ToolFailureMiddleware):
             return entry
     return None
 
@@ -140,17 +165,20 @@ def test_the_build_guards_the_names_the_workspace_defined(cfg, session_dir):
     built = build_agent(cfg, backend=backend_at(cfg, session_dir), model=_a_model())
 
     guard = _guard_in(built)
-    assert guard is not None, "the build installed no WorkspaceToolErrors"
+    assert guard is not None, "the build installed no ToolFailureMiddleware"
     assert "probe_one" in guard.names
 
 
-def test_a_workspace_with_no_tools_installs_no_guard(cfg, session_dir):
-    """Nothing to guard, so nothing added."""
+def test_a_workspace_with_no_tools_hands_back_no_exception_of_its_own(cfg, session_dir):
+    """The guard handed names when the workspace defined no tools, so some other tool's
+    exception became a failed result rather than its own report."""
     from kingfisher.core.agent.assembly import build_agent
 
     built = build_agent(cfg, backend=backend_at(cfg, session_dir), model=_a_model())
 
-    assert _guard_in(built) is None
+    guard = _guard_in(built)
+    assert guard is not None
+    assert guard.names == frozenset()
 
 
 def _a_model():

@@ -99,7 +99,7 @@ class _Item:
     frees: int
 
 
-class ResultClearing(AgentMiddleware):
+class ResultClearingMiddleware(AgentMiddleware):
     """Swap older results and file text for handles in the conversation itself, once it
     has grown past the high mark, from inside each model call.
 

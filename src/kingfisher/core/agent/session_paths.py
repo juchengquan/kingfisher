@@ -36,7 +36,7 @@ def _strings_in(value: Any) -> Iterator[str]:
 class SessionPaths:
     """One session, and what a tool call's arguments mean against it.
 
-    Shared by `WorkspaceToolPaths` and `GuardedTool`, which must answer identically; a
+    Shared by `WorkspaceToolPathsMiddleware` and `GuardedTool`, which must answer identically; a
     second copy of `real` is the one that drifts. Holds the turn's backend under its
     rules, not a session directory, so paths follow the backend's own mapping.
     """
