@@ -64,6 +64,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # adds to it.
     standing: list[AgentMiddleware[Any, Any, Any]] = [] if clearing is None else [clearing]
     if kind == "agent":
+        # Outside `BuiltinToolsMiddleware`, which takes its prose out where `write_todos`
+        # was not granted.
         standing.append(TodoListMiddleware())
     # Ahead of the guards, so it records the arguments the model wrote, before
     # `WorkspaceToolPathsMiddleware` rewrites them to host paths.
@@ -78,8 +80,11 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # as the call the model made, when its path is refused.
     standing.append(ToolFailureMiddleware(names))
     standing.append(LargePdfMiddleware())
+    granted = None if tools is None else tuple(tools)
     standing.append(
-        BuiltinToolsMiddleware(layout, shell_prompt_of(backend), here=shell_runs_here(backend))
+        BuiltinToolsMiddleware(
+            layout, shell_prompt_of(backend), here=shell_runs_here(backend), tools=granted
+        )
     )
     # Translation rewrites the arguments before anything after it judges them.
     if names and paths is not None:
@@ -88,7 +93,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # narrowed anything: a subagent a future deepagents adds does not arrive unrestricted.
     standing.append(
         GrantedOnlyMiddleware(
-            None if tools is None else tuple(tools),
+            granted,
             subagents=None if reachable is None else tuple(reachable),
             subject=tools_subject,
         )

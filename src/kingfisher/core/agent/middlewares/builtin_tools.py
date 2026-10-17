@@ -1,5 +1,6 @@
 """deepagents' built-in tools as a model is handed them: what `execute`, `read_file` and
-`grep` say and what they are called with, changed from outside."""
+`grep` say, what they are called with, and what the system message says of them, changed
+from outside."""
 
 from __future__ import annotations
 
@@ -11,13 +12,14 @@ from typing import Any
 
 from deepagents.middleware.filesystem import DEFAULT_READ_LIMIT, FilesystemMiddleware
 from langchain.agents.middleware import AgentMiddleware
+from langchain.agents.middleware.todo import WRITE_TODOS_SYSTEM_PROMPT
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
-from kingfisher.core.agent.prompting import ShellPrompt, execute_line
+from kingfisher.core.agent.prompting import EXECUTE, ShellPrompt, execute_line
 from kingfisher.core.layout import DEFAULT_LAYOUT, SESSION_DIRS, Layout
 
-EXECUTE = "execute"
+WRITE_TODOS = "write_todos"
 
 #: deepagents' advice in `execute`'s description, wrong on kingfisher's own shell: the
 #: only absolute paths a model knows are the file tools', and that shell reads `/inputs`
@@ -40,6 +42,9 @@ TIMEOUT = f"- `timeout` is in seconds, {_LONGEST:,} at most."
 #: How deepagents opens the section of host paths it appends to the system prompt where the
 #: backend executes. It is a block of its own, so it can be taken out whole.
 MAPPINGS = "## Shell paths vs. virtual paths"
+
+#: How `TodoListMiddleware` opens what it appends, a block of its own too.
+TODOS = WRITE_TODOS_SYSTEM_PROMPT.lstrip().splitlines()[0]
 
 
 def _virtual(session_dirs: tuple[str, ...]) -> re.Pattern[str]:
@@ -114,21 +119,23 @@ def _ruled(description: str, rule: str | None) -> str:
     return f"{description}\n\n{rule}"
 
 
-def _is_mappings(block: Any) -> bool:
-    return block.get("type") == "text" and str(block.get("text", "")).lstrip().startswith(MAPPINGS)
+def _opens(block: Any, headings: tuple[str, ...]) -> bool:
+    return block.get("type") == "text" and str(block.get("text", "")).lstrip().startswith(
+        headings
+    )
 
 
-def _unmapped(request: Any) -> Any:
-    """`request` without deepagents' section of host paths.
+def _without(request: Any, headings: tuple[str, ...]) -> Any:
+    """`request` without the system-message sections opening with one of `headings`.
 
     By block, not by cutting text: a section merged into other prose is left whole rather
     than the prose around it losing its tail.
     """
     system = request.system_message
-    if system is None:
+    if system is None or not headings:
         return request
     blocks = list(system.content_blocks)
-    kept = [block for block in blocks if not _is_mappings(block)]
+    kept = [block for block in blocks if not _opens(block, headings)]
     if len(kept) == len(blocks):
         return request
     return request.override(system_message=SystemMessage(content_blocks=kept))
@@ -246,14 +253,17 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     """Put the shell's own line in `execute`'s description, on kingfisher's own shell say
     how a missed path is spelt there, and keep deepagents' host paths from a shell that
     is not on this host; have `read_file` read 1,000 lines unless told otherwise, and
-    `grep` search each string of `a|b`, and say so.
+    `grep` search each string of `a|b`, and say so; and say nothing of the shell or of
+    `write_todos` to a graph not granted it.
 
     The shell's line goes in the description, not the system prompt: a subagent gets none
     of `system.md`, and the description reaches every graph holding the shell. At
     deepagents' 100 lines, a third of every call a turn made was `read_file` paging, most
     naming a limit of 100 because the description did: so the description changes with
     the default, and a limit the model names is left as it is. `grep` is literal, and
-    models wrote `a|b` anyway, nearly always finding nothing and searching again.
+    models wrote `a|b` anyway, nearly always finding nothing and searching again. The
+    prose deepagents and langchain add of a tool arrives whether or not the graph holds
+    it, and a model told of a tool calls it, each call spent on a refusal.
     """
 
     def __init__(
@@ -262,22 +272,34 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         shell: ShellPrompt | None = None,
         *,
         here: bool = True,
+        tools: tuple[str, ...] | None = None,
     ) -> None:
         super().__init__()
         # Whether the shell runs on this host; where not, deepagents' section names paths it
         # does not have.
         self._here = here
+        # The graph's allowlist, not the tools in the request: this runs ahead of
+        # `GrantedOnlyMiddleware`, and every tool is still in the request here.
+        self._granted = None if tools is None else frozenset(tools)
         self._rule = execute_line(shell, layout)
         # Only where the shell starts in the session root: the correction spells paths as it
         # reads them.
         self._corrects = shell is not None and shell.starts_in_session
         self._virtual = _virtual(layout.session_dirs)
 
+    def _holds(self, name: str) -> bool:
+        return self._granted is None or name in self._granted
+
     def _told(self, request: Any) -> Any:
         tools = [_offered(_described(tool, self._rule)) for tool in request.tools]
         if not all(new is old for new, old in zip(tools, request.tools, strict=True)):
             request = request.override(tools=tools)
-        return request if self._here else _unmapped(request)
+        untold = []
+        if not (self._here and self._holds(EXECUTE)):
+            untold.append(MAPPINGS)
+        if not self._holds(WRITE_TODOS):
+            untold.append(TODOS)
+        return _without(request, tuple(untold))
 
     def _corrected(self, request: Any, result: Any) -> Any:
         if not self._corrects:

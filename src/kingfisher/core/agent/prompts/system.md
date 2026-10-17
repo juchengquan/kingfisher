@@ -19,17 +19,7 @@ same thing in every session and on every machine:
   summarized away under `/{{scratchpad}}/conversation_history/`: search there when you
   need one back and nothing names its path.
 
-## The file tools
-
-The file tools (`ls`, `read_file`, `write_file`, `edit_file`, `delete`, `glob`, `grep`)
-take virtual paths rooted at the workspace, so an input file is `/{{inputs}}/<name>`.
 Tools this workspace defines take these same virtual paths.
-
-A host path is not a file-tool path. Passing an absolute host path such as
-`/tmp/scratch.py` to `write_file` is refused, and the error names the virtual path
-to use instead. Left unguarded the leading `/` reads as the workspace root, so the
-whole path is recreated *inside* the workspace: the write reports success and the
-file is not where you think it is.
 
 What you write while working goes in one of two places:
 
@@ -40,6 +30,8 @@ What you write while working goes in one of two places:
 Nothing else in the session is yours to write: `/{{inputs}}` is the caller's, and what
 kingfisher keeps about the session is its own. Anywhere else you are given to write is
 said so below, where it is given.
+
+<!-- file tools -->
 
 <!-- shell -->
 

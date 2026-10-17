@@ -161,7 +161,8 @@ Things to know:
   section on the shell, in place of kingfisher's. `skills` follows the skills section,
   so it is shown only where skills are on. `execute` replaces deepagents' "Use absolute
   paths…" line in the tool's description, and is the only part a subagent sees: a
-  subagent is built without the system prompt. Kingfisher's own are
+  subagent is built without the system prompt. An agent not granted `execute` is
+  told none of the three. Kingfisher's own are
   `src/kingfisher/plugins/sessions/prompts/shell_here.md`, `shell_here_skills.md` and
   `shell_here_execute.md`.
 - **A part left `None` is said the neutral way**, claiming only what holds wherever a
@@ -185,7 +186,8 @@ Things to know:
   deepagents adds a "Shell paths vs. virtual paths" section giving each routed folder's
   path here. It stays for kingfisher's own shell and for a runner whose `local` is
   true, and is removed for a runner that runs elsewhere and for a shell of your own,
-  so your `ShellPrompt` is the only thing the agent is told about where files are.
+  so your `ShellPrompt` is the only thing the agent is told about where files are. An
+  agent or subagent not granted `execute` is never sent it.
 
 ## `RunEvents` — where each turn's record goes
 
