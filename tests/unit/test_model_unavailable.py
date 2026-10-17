@@ -10,7 +10,7 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher import Kingfisher, Request
-from kingfisher.core.agent.middlewares.unavailable import ModelUnavailableGuard
+from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware
 from kingfisher.core.session.runtime import ModelUnavailableError, unavailable
 from kingfisher.plugins import LocalSessions
 from tests.conftest import an_agent, start, subagents_dir
@@ -75,6 +75,7 @@ def test_a_failure_that_will_not_pass_is_left_alone(exc):
 class Call:
     def __init__(self, name: str, **args: Any) -> None:
         self.tool_call = {"name": name, "args": args, "id": "c1"}
+        self.state = {"messages": []}
 
 
 def _raising(exc: Exception):
@@ -86,7 +87,7 @@ def _raising(exc: Exception):
 
 def test_a_refused_model_call_is_raised_as_the_stop_and_another_as_itself():
     """Raised as kingfisher's own, so the turn can end on it without catching a tool's."""
-    guard = ModelUnavailableGuard()
+    guard = ModelReplyMiddleware(subagent=False, outputs="/outputs")
 
     with pytest.raises(ModelUnavailableError, match="429: rate limited"):
         guard.wrap_model_call(None, _raising(RefusedError(429)))
@@ -97,7 +98,7 @@ def test_a_refused_model_call_is_raised_as_the_stop_and_another_as_itself():
 def test_only_a_task_call_hands_a_refusal_back():
     """A tool's own timeout is the tool's failure, not a model that cannot answer; and a
     compiled subagent's raw provider error is handed back as a declared one's is."""
-    guard = ModelUnavailableGuard()
+    guard = ModelReplyMiddleware(subagent=False, outputs="/outputs")
 
     told = guard.wrap_tool_call(Call("task", subagent_type="helper"), _raising(RefusedError(429)))
     assert isinstance(told, ToolMessage)
@@ -151,6 +152,17 @@ def test_a_refused_model_call_stops_the_turn_rather_than_raising(refusing, way):
 
     assert result.stop_reason == "model_unavailable"
     assert not result.completed
+
+
+@pytest.mark.parametrize("way", ["sync", "async"])
+def test_a_refusal_of_the_asking_again_after_a_cut_answer_is_the_stop_too(refusing, way):
+    """The refusal read only on the first call a reply takes, so a provider refusing the
+    second asking raised its SDK's exception out of the turn."""
+    from tests.unit.test_cut_replies import reply
+
+    result = _turn(refusing, reply(text="The findings are: first, the"), RefusedError(429), way=way)
+
+    assert result.stop_reason == "model_unavailable"
 
 
 def test_the_stop_says_what_the_provider_said(refusing):

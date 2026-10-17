@@ -10,11 +10,11 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.file_tools import (
+from kingfisher.core.agent.middlewares.builtin_tools import (
     JOINED,
     READ_LINES,
     WHOLE,
-    FileTools,
+    BuiltinToolsMiddleware,
     alternatives,
 )
 from kingfisher.plugins import LocalSessions
@@ -153,4 +153,4 @@ def test_it_adds_no_step_to_the_agents_loop(reading):
     nodes = build_agent(cfg, backend=backend).graph.get_graph().nodes
 
     assert "TodoListMiddleware.after_model" in nodes, "hooks are not nodes named for their class"
-    assert not [one for one in nodes if FileTools.__name__ in one]
+    assert not [one for one in nodes if BuiltinToolsMiddleware.__name__ in one]

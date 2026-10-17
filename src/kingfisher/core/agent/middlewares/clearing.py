@@ -13,7 +13,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately
 from langgraph.types import Command
 
-from kingfisher.core.agent.middlewares.cut_replies import NOT_RUN
+from kingfisher.core.agent.middlewares.model_reply import NOT_RUN
 from kingfisher.core.agent.middlewares.recorder import _arguments
 from kingfisher.core.agent.models import summarizer_trigger
 from kingfisher.core.definitions.subagents import TASK_TOOL

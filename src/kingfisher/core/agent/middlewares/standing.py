@@ -8,18 +8,16 @@ from typing import Any, Literal
 from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
 
 from kingfisher.core.agent.backend import shell_prompt_of, shell_runs_here
+from kingfisher.core.agent.middlewares.builtin_tools import BuiltinToolsMiddleware
 from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware
-from kingfisher.core.agent.middlewares.cut_replies import CutReplies
-from kingfisher.core.agent.middlewares.file_tools import FileTools
 from kingfisher.core.agent.middlewares.large_pdf_guard import LargePdfMiddleware
+from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware
 from kingfisher.core.agent.middlewares.narrowing import (
     GrantedOnlyMiddleware,
     NarrowedSkillsMiddleware,
 )
 from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
-from kingfisher.core.agent.middlewares.shell_paths import ShellPaths
 from kingfisher.core.agent.middlewares.tool_failure import ToolFailureMiddleware
-from kingfisher.core.agent.middlewares.unavailable import ModelUnavailableGuard
 from kingfisher.core.agent.middlewares.workspace_tools import WorkspaceToolPathsMiddleware
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.layout import Layout
@@ -69,15 +67,14 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     if recorder is not None:
         standing.append(recorder)
     # Ahead of the rest, which have nothing to say about a call that is not run.
-    standing.append(CutReplies(subagent=kind != "agent", outputs=layout.outputs_route))
-    # Inside `CutReplies`, so a refused call reaches it already as the stop it is.
-    standing.append(ModelUnavailableGuard())
-    # Outside `FileTools`, so a `grep` it runs as several searches fails once, as the call
-    # the model made, when its path is refused.
+    standing.append(ModelReplyMiddleware(subagent=kind != "agent", outputs=layout.outputs_route))
+    # Outside `BuiltinToolsMiddleware`, so a `grep` it runs as several searches fails once,
+    # as the call the model made, when its path is refused.
     standing.append(ToolFailureMiddleware(names))
     standing.append(LargePdfMiddleware())
-    standing.append(ShellPaths(layout, shell_prompt_of(backend), here=shell_runs_here(backend)))
-    standing.append(FileTools())
+    standing.append(
+        BuiltinToolsMiddleware(layout, shell_prompt_of(backend), here=shell_runs_here(backend))
+    )
     # Translation rewrites the arguments before anything after it judges them.
     if names and paths is not None:
         standing.append(WorkspaceToolPathsMiddleware(names, paths))

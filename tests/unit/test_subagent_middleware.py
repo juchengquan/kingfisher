@@ -210,12 +210,10 @@ def test_what_a_subagent_carries_is_pinned_here_and_only_here(cfg, session_dir):
     )
 
     assert [type(m).__name__ for m in middleware_of(built, "reviewer")] == [
-        "CutReplies",
-        "ModelUnavailableGuard",
+        "ModelReplyMiddleware",
         "ToolFailureMiddleware",
         "LargePdfMiddleware",
-        "ShellPaths",
-        "FileTools",
+        "BuiltinToolsMiddleware",
         # Ahead of the entries below: it rewrites the arguments before they decide
         # anything about them.
         "WorkspaceToolPathsMiddleware",
@@ -237,12 +235,10 @@ def test_a_bare_definition_carries_only_the_guards_and_its_allowlist(cfg, sessio
     built = build(cfg, subagents=("reviewer",))
 
     assert [type(m).__name__ for m in middleware_of(built, "reviewer")] == [
-        "CutReplies",
-        "ModelUnavailableGuard",
+        "ModelReplyMiddleware",
         "ToolFailureMiddleware",
         "LargePdfMiddleware",
-        "ShellPaths",
-        "FileTools",
+        "BuiltinToolsMiddleware",
         "WorkspaceToolPathsMiddleware",
         "GrantedOnlyMiddleware",
     ]
