@@ -94,6 +94,10 @@ default: MiniMax-M3
 #                package has a profile for, or one declaring its own below.
 #   timeout_s    default 120. Bounds silence, not total generation: kingfisher
 #                streams, and the read clock resets on every chunk.
+#   max_retries  unset, which is the SDK's own: 2 for both shipped formats. How
+#                many more times a call the provider refused or could not answer
+#                is tried, with the SDK's backoff and the provider's retry-after.
+#                A turn whose last try is refused stops as model_unavailable.
 #   temperature  unset
 #   top_p        unset
 #   clear_results_at

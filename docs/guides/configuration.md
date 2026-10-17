@@ -226,12 +226,15 @@ The class is named as `module:Class` and imported only when a model is built.
 Its package has to be installed; kingfisher installs only the two it ships.
 
 `Landing` is the part to get right. kingfisher passes every class the same
-keywords — `model`, `base_url`, `api_key`, `max_tokens`, `timeout` — and each
-class keeps them under its own attribute names. `Landing` says which, and a model
+keywords — `model`, `base_url`, `api_key`, `max_tokens`, `timeout`, and
+`max_retries` where a model sets it — and each class keeps them under its own
+attribute names. `Landing` says which, and a model
 that did not keep a value there is refused as it is built. That refusal is the
 point: a class handed a keyword it does not know moves it aside with a warning
 and builds anyway, so a URL it did not keep sends your prompts, and the gateway's
-key, to the vendor's default host.
+key, to the vendor's default host. `max_retries` is the one a `Landing` may leave
+out, for a class with nowhere to keep it; a model setting it on that format is
+refused.
 
 A name kingfisher already ships is refused rather than replaced, so an existing
 `api: anthropic` cannot quietly start meaning your class. `extra` on a `WireFormat`
