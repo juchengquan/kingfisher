@@ -14,7 +14,7 @@ from kingfisher.core.agent.middlewares.narrowing import (
     NarrowedSkillsMiddleware,
 )
 from kingfisher.plugins import backend_at
-from tests.conftest import FakeToolCallingModel, a_subagent, middleware_of
+from tests.conftest import FakeToolCallingModel, a_subagent, middleware_of, tools_dir
 
 
 def define(cfg, body: str, name: str = "reviewer") -> None:
@@ -140,8 +140,8 @@ def test_a_subagent_is_actually_told_about_the_skill_it_named(cfg, session_dir):
 
 
 def test_omitting_skills_grants_none(cfg, session_dir):
-    """Not what omitting `tools` means, and the asymmetry is the point: a subagent's
-    body is already its procedure.
+    """A subagent's body is already its procedure, so an index it never asked for would
+    only crowd its context.
     """
     offer_skills(cfg, "tabular-qa")
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n")
@@ -153,11 +153,37 @@ def test_omitting_skills_grants_none(cfg, session_dir):
     ]
 
 
-def test_omitting_tools_still_inherits(cfg, session_dir):
-    """The other half of the asymmetry, so a change to one is not read as licence to
-    change the other.
+def test_omitting_tools_grants_none(cfg, session_dir):
+    """The same rule as skills: an allowlist of `None` lets every tool through, which is
+    the shell for a subagent whose file never asked for it.
+
+    With a workspace tool to hand, or a reader granting every workspace tool for a missing
+    `tools:` still leaves this allowlist empty in a workspace that defines none.
     """
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "peek.py").write_text(
+        'def peek(path: str) -> str:\n    """Read a file."""\n    return ""\n\n\nTOOLS = [peek]\n',
+        encoding="utf-8",
+    )
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n")
+
+    built = build(cfg, session_dir, subagents=("reviewer",))
+
+    (granted,) = [
+        m for m in middleware_of(built, "reviewer") if isinstance(m, GrantedOnlyMiddleware)
+    ]
+    assert granted._allowed == set()
+
+
+def test_writing_the_star_on_both_tool_lines_lets_every_tool_through(cfg, session_dir):
+    """The control: an allowlist that was empty whatever the file said passes the test
+    above.
+    """
+    define(
+        cfg,
+        'name: reviewer\ndescription: d\nbuiltin_tools: ["*"]\ntools: ["*"]\n'
+        "system_prompt: |\n  You review.\n",
+    )
 
     built = build(cfg, session_dir, subagents=("reviewer",))
 

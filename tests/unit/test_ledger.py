@@ -50,7 +50,14 @@ from kingfisher.plugins import LocalSessions, ShellSettings
 from kingfisher.plugins.sessions.backend import backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.sandbox.confinement import EXTERNAL
-from tests.conftest import FakeToolCallingModel, an_agent, start, subagents_dir, tools_dir
+from tests.conftest import (
+    EVERY_TOOL,
+    FakeToolCallingModel,
+    an_agent,
+    start,
+    subagents_dir,
+    tools_dir,
+)
 from tests.unit.scripted import Scripted
 
 TOOLS = '''
@@ -122,7 +129,7 @@ def ledgered(scripted):
     (tools_dir(scripted) / "probe.py").write_text(TOOLS, encoding="utf-8")
     subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
     (subagents_dir(scripted) / "researcher.yaml").write_text(RESEARCHER, encoding="utf-8")
-    an_agent(scripted, subagents="[researcher]")
+    an_agent(scripted, subagents="[researcher]", **EVERY_TOOL)
     start(scripted, "s")
     return scripted
 
@@ -401,7 +408,7 @@ def test_what_a_deployments_middleware_left_is_recorded(ledgered):
     """The model reads the result with a deployment's reminder on it, and a row of
     anything else would be a record of a result nobody was shown.
     """
-    an_agent(ledgered, subagents="[researcher]", middlewares="[tool-note]")
+    an_agent(ledgered, subagents="[researcher]", middlewares="[tool-note]", **EVERY_TOOL)
     kf = Kingfisher(ledgered, sessions=LocalSessions(), middlewares={"tool-note": ToolNote})
 
     result = _run(
@@ -490,7 +497,7 @@ def test_a_paused_turn_keeps_its_rows_before_its_state(ledgered):
     """A turn that stops at a gate has run real calls, and its resume carries on from
     the state it left: unkept, their rows are lost and the resume numbers over them.
     """
-    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
+    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]", **EVERY_TOOL)
     backends = _Ordered()
     kf = Kingfisher(ledgered, sessions=backends)
 
@@ -868,7 +875,7 @@ def test_a_nested_helpers_results_belong_to_the_run_that_started_it(ledgered):
     """
     (subagents_dir(ledgered) / "researcher.yaml").write_text(DELEGATING, encoding="utf-8")
     (subagents_dir(ledgered) / "checker.yaml").write_text(CHECKER, encoding="utf-8")
-    an_agent(ledgered, subagents="[researcher, checker]")
+    an_agent(ledgered, subagents="[researcher, checker]", **EVERY_TOOL)
 
     result = _run(
         ledgered,
@@ -958,6 +965,7 @@ VOCABULARY = "source_ids: [public, finance]\n"
 AUDIENCED_AGENT = """name: only
 description: An agent.
 source_ids: [public, finance]
+builtin_tools: ["*"]
 subagents: [researcher]
 tools:
   - name: web_search
@@ -1370,7 +1378,7 @@ def test_the_next_message_lists_what_was_recorded_since_the_last_one(ledgered):
     the turn that paused: stopping at the resume loses the paused turn's results, and
     reaching further lists again what an earlier message already did.
     """
-    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
+    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]", **EVERY_TOOL)
     kf = Kingfisher(ledgered, sessions=LocalSessions())
     _run(ledgered, _calls(("web_search", {"query": "one"}, "c1")), AIMessage("done"), kf=kf)
     paused = _run(
@@ -1401,7 +1409,7 @@ def test_a_resume_says_so_on_its_closing_line_and_an_asked_turn_does_not(ledgere
     """The mark is how the next delta finds the last user message: a resume without it
     hides the turn it paused, and an asked turn with it reaches into the one before.
     """
-    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
+    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]", **EVERY_TOOL)
     kf = Kingfisher(ledgered, sessions=LocalSessions())
     paused = _run(ledgered, _calls(("sql_query", {"query": "select 1"}, "c1")), kf=kf)
     Scripted.script.append(AIMessage(content="done"))
@@ -1449,7 +1457,7 @@ def test_a_superseded_subagents_results_are_listed_as_never_answered(ledgered):
     """A new request drops a subagent paused at a gate. What it read is real and kept,
     but its answer never comes, so there is nothing for its results to sit under.
     """
-    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
+    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]", **EVERY_TOOL)
     paused = _run(
         ledgered,
         _task("t1"),
@@ -1570,7 +1578,7 @@ def test_a_resume_of_a_summarised_turn_is_marked_summarised_too(ledgered):
     """A resume carries on the paused turn's conversation, summary and all: unmarked, the
     next message lists a delta for a conversation whose earlier lines are gone.
     """
-    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
+    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]", **EVERY_TOOL)
     cfg = _windowed(ledgered)
     kf = Kingfisher(cfg, sessions=LocalSessions())
     # Half before the paused turn, which its summary replaces.
@@ -1746,7 +1754,7 @@ def test_a_resume_is_rolled_up_with_the_turn_it_answered(ledgered):
     Through real turns, because the grouping is read back from the closing lines the
     turns themselves wrote, and a hand-written ledger would only agree with itself.
     """
-    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]")
+    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]", **EVERY_TOOL)
     cfg = _windowed(ledgered)
     kf = Kingfisher(cfg, sessions=LocalSessions())
     paused = _say(

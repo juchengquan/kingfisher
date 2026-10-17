@@ -28,16 +28,16 @@
 #     )
 name: assistant
 description: General-purpose agent for a workspace with no particular specialism.
-# No `builtin_tools:` and no `tools:`, which is how this format says *all of
-# them* -- every tool deepagents brings, and every tool this workspace defines,
-# `web_search` and `http_fetch` among them. Leaving them out is the one place
-# omission grants rather than withholds, and the reason is that an agent can do
-# nothing at all without tools.
-#
-# The other two fields work the other way: omit `skills` or `subagents` and you
-# get none. So this file names them, and that asymmetry is the whole of the
-# format's omission rule -- tools are what an agent needs to *act*, skills and
-# subagents are what it needs to *know* and to *ask*.
+# Every tool deepagents brings, and every tool this workspace defines,
+# `web_search` and `http_fetch` among them. `["*"]` is how this format says
+# *all of them*, and it has to be said: leave a line out and the agent holds
+# nothing from that list. Every grant field reads that way -- the two tool
+# lists, `skills`, `subagents`, `middlewares` -- so a forgotten line shows on
+# the first turn as an agent that cannot act, rather than as one quietly
+# holding the shell and every tool somebody adds to the workspace later.
+builtin_tools: ["*"]
+tools: ["*"]
+# Every skill the workspace offers, by the same star.
 skills: ["*"]
 # The subagents that ship beside this file. Naming them is what makes them
 # reachable: a request narrows what an agent declares and can never widen it,
@@ -102,8 +102,8 @@ middlewares:
 # deployment wired it and off if it did not.
 
 # Required, and the third of the three fields that are: `name`, `description`,
-# this. Every field above has an answer without being written -- a tool field
-# left out inherits, `skills` left out grants none -- and this one does not.
+# this. Every field above has an answer without being written -- left out, a
+# grant field grants none -- and this one does not.
 # `system.md` describes the harness and `PROMPT.md` describes the workspace;
 # neither has heard of this agent, so a file without a prompt is a list of tools
 # with nothing anywhere saying what they are for.

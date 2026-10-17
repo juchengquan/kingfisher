@@ -12,7 +12,7 @@ from kingfisher.core import service as service_module
 from kingfisher.core.interfaces import CommandResult
 from kingfisher.plugins.sessions.backend import LocalSessions
 from kingfisher.plugins.sessions.folders import session_dir
-from tests.conftest import Through, an_agent, start
+from tests.conftest import EVERY_TOOL, Through, an_agent, start
 from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
 from tests.unit.test_session import UNNAMABLE
@@ -127,7 +127,7 @@ def test_a_turn_handed_its_files_opens_no_others(cfg, monkeypatch, door, way):
         return StubAgent("ok")
 
     monkeypatch.setattr(service_module, "build_agent", build)
-    named = an_agent(cfg)
+    named = an_agent(cfg, **EVERY_TOOL)
     counting = Counting()
     kf = Kingfisher(cfg, sessions=counting)
     start(cfg, "s")
@@ -144,7 +144,7 @@ def test_the_callers_backend_is_the_one_the_agent_works_in(scripted, tmp_path):
     """The control on a backend where a second open is a second place: the agent reads
     what the caller put in through `files` and the caller reads back what it wrote.
     """
-    an_agent(scripted)
+    an_agent(scripted, **EVERY_TOOL)
     Scripted.script.extend([
         _calls("read_file", file_path="/inputs/brief.md"),
         _calls("write_file", file_path="/outputs/report.txt", content="made from the brief"),
@@ -172,7 +172,7 @@ def test_files_for_the_default_session_serve_a_request_naming_none(cfg, monkeypa
     `default`, which is the session naming none names -- or opening another beside them.
     """
     monkeypatch.setattr(service_module, "build_agent", lambda *a, **kw: StubAgent("ok"))
-    named = an_agent(cfg)
+    named = an_agent(cfg, **EVERY_TOOL)
     counting = Counting()
     kf = Kingfisher(cfg, sessions=counting)
     files = kf.session("default", create=True).files()

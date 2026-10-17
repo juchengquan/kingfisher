@@ -311,6 +311,8 @@ def test_the_subagent_carries_on_to_an_answer(cfg, session_dir):
 
 NESTS = """name: helper
 description: Consults another, which calls the tool that fails.
+builtin_tools: ["*"]
+tools: ["*"]
 subagents: [deeper]
 system_prompt: |
   You ask deeper.

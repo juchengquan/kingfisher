@@ -184,8 +184,8 @@ def test_activating_a_subagent_passes_its_definition_through(cfg, session_dir):
     (subagent,) = declared_subagents(built)
     assert subagent["name"] == "reviewer"
     assert subagent["system_prompt"] == "You review analyses."
-    # Unset in the definition, so absent here — deepagents then inherits.
-    assert "tools" not in subagent
+    # Set though empty: absent, deepagents would hand the subagent the agent's own tools.
+    assert subagent["tools"] == []
     assert "model" not in subagent
 
 
@@ -377,7 +377,8 @@ def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, session_dir):
     )
 
     (subagent,) = declared_subagents(built)
-    assert "tools" not in subagent  # names here would raise inside ToolNode
+    # Its built-ins arrive by middleware; a name here would raise inside ToolNode.
+    assert subagent["tools"] == []
     # By type rather than by position. A subagent carries guards it did not ask
     # for -- the host-path correction, and the workspace tools' own failures --
     # and this test is about the allowlist its definition produced.

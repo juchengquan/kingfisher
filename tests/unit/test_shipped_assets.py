@@ -672,17 +672,27 @@ def typed_preset(shipped):
 
 def test_the_typed_preset_writes_only_what_deepagents_types(shipped):
     """`versions` ships to show a spec written for deepagents loading as written, and a
-    key of kingfisher's -- `builtin_tools`, `metadata` -- would load just as well and
-    leave it showing nothing.
+    key of kingfisher's -- `builtin_tools`, `metadata` -- in the package's own dict
+    would load just as well and leave it showing nothing.
 
     Read off the TypedDict here as well as by `ty`, because deleting the annotation
     silences `ty` and the file still loads.
     """
-    (spec,) = typed_preset(shipped).SUBAGENTS
+    spec = typed_preset(shipped).versions_subagent
 
     assert set(spec) <= set(get_type_hints(SubAgent))
     assert SubAgent.__required_keys__ <= set(spec)
     assert all(isinstance(one, str) for one in spec["skills"])
+
+
+def test_the_deployments_half_adds_the_built_ins_and_nothing_else(shipped):
+    """The TypedDict has no word for built-ins and a spec without one holds none, so the
+    module's own `SUBAGENTS` adds that key, and only that key, to the package's dict.
+    """
+    module = typed_preset(shipped)
+    (exported,) = module.SUBAGENTS
+
+    assert exported == {**module.versions_subagent, "builtin_tools": ["*"]}
 
 
 def test_the_typed_preset_is_handed_its_tool_and_shown_its_skill(
@@ -1807,6 +1817,7 @@ def _read_under_compact(shipped, cfg, session_dir, model: _Reader) -> list[str]:
                 name="reader",
                 description="an agent that reads files",
                 system_prompt="You read.",
+                builtin_tools=ALL,
                 middlewares=("compact",),
             ),
             model=model,

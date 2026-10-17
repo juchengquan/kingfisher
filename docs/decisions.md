@@ -612,7 +612,41 @@ starts and snapshotted into it. *(2026-08-18, `agents-as-definitions.md`.)*
 **Omission means different things on different axes, deliberately.** The tool
 fields inherit everything available; `skills`, `subagents` and `middlewares` omit
 to none. Tools are what an agent needs to *act*; the others are what it needs to
-know and to ask. *(2026-08-18, `agents-as-definitions.md`.)*
+know and to ask. *(2026-08-18, `agents-as-definitions.md`. Reversed 2026-10-18,
+next entry.)*
+
+**Reversed: omission means different things on different axes.** Leaving out
+`tools:` or `builtin_tools:` granted everything available -- the shell among it, and
+every tool file added to the workspace afterwards -- while `skills`, `subagents` and
+`middlewares` left out granted none. Every grant field reads the same now: unset is
+none, `["*"]` is all, and `[]` stays an explicit none. That holds in every format: an
+agent file, a subagent file, a portable `SUBAGENTS` entry, whose missing
+`builtin_tools` granted every built-in, and one with `build`, whose missing `tools`
+granted every workspace tool. `builtin_tools` stays refused beside `build`.
+
+Three reasons. **A forgotten line fails closed:** under the old rule it silently
+granted everything, where an agent that cannot act shows it on its first turn. **It
+fits source-id locks:** tools carry locks for source ids, and a default handing every
+new tool to every agent works against them. **One rule:** `tools`, `builtin_tools`,
+`skills`, `subagents` and `middlewares` read alike, so there is no asymmetry for a
+reader to be told about.
+
+What did not change: the `Capabilities` a caller passes still read unset as no
+narrowing -- only what a definition file means moved. Every shipped definition that
+left a line out gained `["*"]`, so none behaves differently on the day; narrowing any
+of them is a decision of its own. `versions` is typed to deepagents' `SubAgent`, which
+has no word for built-ins, so its module adds the key the way a deployment's file
+would -- `{**versions_subagent, "builtin_tools": ["*"]}` -- and a package written to
+that type now arrives holding no built-in until the deployment names some.
+
+Two things moved with it. A definition naming subagents with `builtin_tools` left out
+holds no `task`, so the load-time refusal covers it, saying the line was left out
+rather than that a list leaves `task` out. And a subagent's `tools` is always set, to
+an empty list when nothing is granted: deepagents reads a missing key as the parent's
+tools, so a subagent granted none was built holding the agent's tool objects, and
+"none" held only because its allowlist filtered them -- driven, with the parent's tool
+seen arriving before the filter. `general-purpose` is still handed the parent's, which
+is what it is for. *(2026-10-18.)*
 
 **A subagent names its skills; `["*"]` is refused there and taken on an agent.**
 The star resolves to whatever the request granted, and a subagent is handed a
@@ -825,6 +859,10 @@ naming anything while `builtin_tools` is a list without `task`. An omitted list 
 `["*"]` hold it. A *request* narrowing `task` away is left alone and still narrowed at
 the call, because there the caller chose it and the file is not wrong. Both shipped
 agents hold `task`. *(2026-10-12.)*
+
+An omitted list holds it no longer: since a tool field left out grants none, it holds
+no `task` and is refused too, in words of its own -- *Reversed: omission means different
+things on different axes* has the rest. *(2026-10-18.)*
 
 **A subagent may not list `eval`.** The entry on calls from `eval` left this open: with
 the sandbox wired, a subagent listing it loaded and was built without it, and without
@@ -1712,6 +1750,10 @@ for it:
 `skills:` unset means *none* while `tools:` unset means *all*, and the filter needs to
 know nothing about that difference: it reads what the definition resolved to for this
 caller. *(2026-09-27, from an architecture review.)*
+
+Both mean none now, so it is `["*"]` that ends the walk and an unset `tools:` offers
+nothing; the filter still reads what the definition resolved to, and needed no change.
+*(2026-10-18.)*
 
 **Nor for the faults, until 2026-10-13.** Three rounds had settled what a scoped view
 carries and the faults were in none of them. `broken` -- the complaint `undeclared_in`

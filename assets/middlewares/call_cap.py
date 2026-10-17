@@ -58,8 +58,8 @@ fresh workspace working at the cost of filing an agent somewhere no agent
 repository could read it.
 
 An agent that names nothing gets nothing: `middlewares` omits to none, like
-`skills` and `subagents` and unlike the two tool axes. A name this deployment
-did not register is refused when the agent is built, not discovered mid-run.
+every other grant field. A name this deployment did not register is refused
+when the agent is built, not discovered mid-run.
 
 ## Two names, two classes, and why that is the whole lesson
 
