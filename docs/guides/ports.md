@@ -452,6 +452,20 @@ which keeps deepagents' own note of each folder's path here; a shell that does n
 is taken to run elsewhere. And `where(cfg)` on your sessions, the folder they are kept
 in on this host, which the origins line reports; without it they are `<supplied>`.
 
+**The fence comes from the environment unless you say.** `LocalSessions()` reads
+`KINGFISHER_SHELL_SANDBOX` and `KINGFISHER_SHELL_PATH_EXTRA` as it is built, so the
+command and your code fence the same way from one `.env`. To decide in code, hand it the
+settings, and neither variable is read:
+
+```python
+from kingfisher.plugins import LocalSessions, ShellSettings
+
+sessions = LocalSessions(shell=ShellSettings(sandbox="external", path_extra=("/opt/tools/bin",)))
+```
+
+`kingfisher doctor` builds its sessions from the environment, so it reports a fence chosen
+this way only where the two agree.
+
 For the command line, name it with `KINGFISHER_SESSIONS`; without it,
 `kingfisher sessions`, `reap` and `artifact` run on `LocalSessions`.
 

@@ -20,8 +20,8 @@ replaced the four layers began.
 
 ## Sessions, plugins and instructions, after #784
 
-The core-and-plugins work renamed what a deployment names and moved two things out of
-`Config`. Every change refuses the old spelling rather than reading it.
+The core-and-plugins work renamed what a deployment names and moved what the core does
+not read out of `Config`. Every change refuses the old spelling rather than reading it.
 
 | Before | Now |
 |---|---|
@@ -33,6 +33,9 @@ The core-and-plugins work renamed what a deployment names and moved two things o
 | `Adapter`, `ADAPTERS`, `Endpoint.adapter`, `KINGFISHER_ADAPTERS_FACTORY` | `WireFormat`, `WIRE_FORMATS`, `Endpoint.wire_format`, `KINGFISHER_WIRE_FORMATS` |
 | `Config.deployment_prompt`, and `PROMPT.md` in the workspace | `INSTRUCTIONS.md` beside the definitions, or `instructions=` on `Kingfisher`: an object with `text(cfg) -> str` |
 | The repository Protocols in `core/interfaces.py` | Gone. Definitions are read from a directory; stage yours into one |
+| `Config.shell_sandbox`, `Config.shell_path_extra` | `LocalSessions(shell=ShellSettings(sandbox=..., path_extra=(...)))`, with `ShellSettings` from `kingfisher.plugins`. `LocalSessions()` reads `KINGFISHER_SHELL_SANDBOX` and `KINGFISHER_SHELL_PATH_EXTRA` itself, so a deployment that sets them changes nothing |
+| `Config.sessions_factory`, `Config.plugins_factory` | Gone: only the command read them, and it reads `KINGFISHER_SESSIONS` and `KINGFISHER_PLUGINS` itself |
+| `inventory(cfg)` answering `<supplied>` where `KINGFISHER_SESSIONS` was set | `inventory(cfg, sessions=...)`: the origins line asks the sessions it is handed, and with none answers the workspace's own |
 | `catalogue=` and `grants=` on `Kingfisher` | `Config.definitions`, pointed at the folder you staged, and `Config.grants` |
 | `COMMAND_RUNNER_CONTRACT`, `BACKEND_CONTRACT`, `SESSION_BACKENDS_CONTRACT` from `kingfisher` | Gone from the package. The same checks are in this repository's `tests/checks/`, to copy; the promises they hold are on each interface's docstring |
 | `kf.pending(id)`, `kf.artifact(id, name)`, `kf.files_for(id)`, `kf.session_size(id)`, `kf.delete_session(id)` and their `a` twins; `SessionInfo` | On the `Session` that `kf.session(id, source_ids=...)` hands out: `.pending()`, `.artifact(name)`, `.files()`, `.size()` and `.delete()`, each with an `a` twin. `kf.session` answers `None` for a session that is not there or not this caller's, and `create=True` makes one, which is what `files_for` did. `kf.sessions(source_ids=...)` lists only what a caller reaches. `Session` replaces `SessionInfo`, with the same `id` and `last_used` |

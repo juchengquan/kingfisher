@@ -776,6 +776,7 @@ def inventory(
     catalogue: Definitions | None = None,
     source_ids: Iterable[str] | None = None,
     datazone: str | None = None,
+    sessions: object | None = None,
 ) -> Inventory:
     """Ask the workspace what it offers, through the catalogue a run would use."""
     resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
@@ -927,7 +928,7 @@ def inventory(
         # The resolved catalogue, not `cfg` -- so a deployment that staged its
         # definitions somewhere is listed as it is rather than as it was
         # configured, which is the difference the record was built for.
-        origins=Origins.of(cfg, catalogue=resolved),
+        origins=Origins.of(cfg, catalogue=resolved, sessions=sessions),
         agents=MappingProxyType(dict(for_caller)),
         agent_sources=reaching("agents", agent_sources),
         # Membership in the names above, in both views -- the chains are keyed from

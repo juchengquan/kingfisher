@@ -7,15 +7,13 @@ Where kingfisher can see neither, `doctor` says so; a turn still runs.
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.layout import HARNESS, PAUSED_STATE, PINNED_AGENT
 from kingfisher.core.request import Decision, DecisionError, Resume
-from kingfisher.plugins import LocalSessions, backend_at
+from kingfisher.plugins import LocalSessions, ShellSettings, backend_at
 from tests.checks.backend import shell_denied
 from tests.conftest import an_agent, start
 from tests.unit.scripted import Scripted
@@ -47,13 +45,17 @@ class _WrappingTheDefault(LocalSessions):
     """Returns exactly what the default does, and is still not the default."""
 
 
+class _TheirOwn:
+    """A deployment's own sessions, whose shell nothing here can see into."""
+
+
 @pytest.mark.parametrize(
     "wiring",
     [
-        lambda cfg: {"graph": StubAgent("ok"), "sessions": LocalSessions()},
-        lambda cfg: {"sessions": _WrappingTheDefault()},
-        lambda cfg: {"sessions": LocalSessions(runner=lambda _d: Elsewhere())},
-        lambda cfg: {"sessions": LocalSessions(), "cfg": replace(cfg, shell_sandbox="off")},
+        lambda: {"graph": StubAgent("ok"), "sessions": LocalSessions()},
+        lambda: {"sessions": _WrappingTheDefault()},
+        lambda: {"sessions": LocalSessions(runner=lambda _d: Elsewhere())},
+        lambda: {"sessions": LocalSessions(shell=ShellSettings(sandbox="off"))},
     ],
     ids=["graph", "wrapped-default", "runner", "sandbox-off"],
 )
@@ -61,9 +63,7 @@ def test_a_deployment_kingfisher_cannot_see_into_still_starts(cfg, wiring):
     """Each of these was refused at construction until it set a key. Whether its shell
     is kept out of `.harness` is now the deployment's to know, and `doctor`'s to say.
     """
-    given = wiring(cfg)
-
-    Kingfisher(given.pop("cfg", cfg), **given)
+    Kingfisher(cfg, **wiring())
 
 
 def test_a_paused_turn_cut_short_is_refused_with_a_reason(cfg):
@@ -98,10 +98,10 @@ def test_the_kit_catches_a_shell_that_can_write_the_harness(cfg, session_dir):
     false, and a deployment author reading it was being told a folder was safe that
     two commands take.
     """
-    unfenced = replace(cfg, shell_sandbox="off")
+    unfenced = ShellSettings(sandbox="off")
 
     with pytest.raises(AssertionError) as caught:
-        shell_denied(lambda: backend_at(unfenced, session_dir))
+        shell_denied(lambda: backend_at(cfg, session_dir, shell=unfenced))
 
     said = str(caught.value)
     assert "/.harness" in said and "/inputs" in said, said
@@ -114,30 +114,29 @@ def test_the_kit_passes_where_a_fence_holds_both_folders(cfg, session_dir):
     """
     from kingfisher.plugins.sessions.sandbox import confinement
 
-    if confinement.shell_confinement(cfg).mechanism != confinement.SANDBOX_EXEC:
+    if confinement.shell_confinement(cfg, ShellSettings()).mechanism != confinement.SANDBOX_EXEC:
         pytest.skip("no fence here to hold them")
 
     shell_denied(lambda: backend_at(cfg, session_dir))
 
 
 @pytest.mark.parametrize(
-    ("change", "because"),
+    ("sessions", "because"),
     [
-        ({"shell_sandbox": "off"}, "'off'"),
-        (
-            {"sessions_factory": "deployment.backends:Remote"},
-            "KINGFISHER_SESSIONS",
-        ),
+        (LocalSessions(shell=ShellSettings(sandbox="off")), "'off'"),
+        (_TheirOwn(), "test_harness_trust._TheirOwn"),
+        # By exact class: a subclass's `open` can build the backend with any fence.
+        (_WrappingTheDefault(), "test_harness_trust._WrappingTheDefault"),
     ],
-    ids=["sandbox-off", "own-backend"],
+    ids=["sandbox-off", "own-backend", "wrapped-default"],
 )
-def test_doctor_warns_where_nothing_it_can_see_keeps_the_shell_out(cfg, change, because):
+def test_doctor_warns_where_nothing_it_can_see_keeps_the_shell_out(cfg, sessions, because):
     """A warning and never a failure: the deployment runs, and may well be fenced by
     something this command cannot see. What it can say is where to look.
     """
     from kingfisher.cli.health_isolation import _session_files
 
-    (check,) = _session_files(replace(cfg, **change))
+    (check,) = _session_files(cfg, sessions)
 
     assert check.verdict == "warn"
     assert because in check.detail
@@ -148,10 +147,10 @@ def test_doctor_is_satisfied_where_the_sandbox_keeps_the_shell_out(cfg):
     from kingfisher.cli.health_isolation import _session_files
     from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced
 
-    if harness_unfenced(cfg) is not None:
+    if harness_unfenced(cfg, ShellSettings()) is not None:
         pytest.skip("no sandbox kingfisher applies itself is available on this host")
 
-    (check,) = _session_files(cfg)
+    (check,) = _session_files(cfg, LocalSessions())
 
     assert check.verdict == "ok"
 

@@ -103,6 +103,12 @@ prompt rewritten, for the same reason.
 | `KINGFISHER_SHELL_SANDBOX` | `auto` uses whatever the platform offers, `bubblewrap` asks for bubblewrap even where Landlock would run, `external` says the runtime already confines this process, `off` opts out and warns on every start. | `auto` |
 | `KINGFISHER_SHELL_PATH_EXTRA` | Extra directories on the agent's `PATH`, which is how it reaches something like `/opt/homebrew/bin`. | empty |
 
+`LocalSessions` reads both as it is built, so they reach every service on kingfisher's
+own sessions, the command's and yours. Code that decides instead passes
+`LocalSessions(shell=ShellSettings(...))`, which reads neither -- see
+[`ports.md`](ports.md#sessions--the-filesystem-the-agent-runs-against). Sessions of your
+own fence their shell themselves, and neither setting reaches them.
+
 `execute` reaches the whole host filesystem regardless of the virtual paths the
 file tools use, so this is the boundary rather than a tidying preference. A
 container that mounts only the workspace has already provided one and should say

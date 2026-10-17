@@ -16,7 +16,7 @@ from kingfisher.cli.__main__ import main
 from kingfisher.cli.health import examine, worst
 from kingfisher.core.inventory import inventory
 from kingfisher.core.service import Kingfisher
-from kingfisher.plugins import LocalSessions
+from kingfisher.plugins import LocalSessions, ShellSettings
 from kingfisher.plugins.sessions.sandbox.confinement import LINUX_FENCES
 from tests.conftest import an_agent, middlewares_dir, subagents_dir, tools_dir, verbs
 
@@ -47,6 +47,15 @@ def read_file(text: str) -> str:
 
 TOOLS = [read_file]
 '''
+
+
+def _shelled(sandbox):
+    """Kingfisher's own sessions, their shell fenced as `sandbox` says."""
+    return LocalSessions(shell=ShellSettings(sandbox=sandbox))
+
+
+class Remote:
+    """A deployment's own sessions, whose shell nothing here can see into."""
 
 
 def test_a_healthy_workspace_passes_everything(cfg):
@@ -262,11 +271,8 @@ def test_a_clean_catalogue_says_its_subagent_references_are_fine(cfg, shipped):
 
 def test_an_unconfined_shell_warns_and_does_not_fail(cfg, capsys, monkeypatch):
     """The distinction the exit code turns on."""
-    from dataclasses import replace
 
-    unconfined = replace(cfg, shell_sandbox="off")
-
-    checks = {check.name: check for check in examine(unconfined)}
+    checks = {check.name: check for check in examine(cfg, sessions=_shelled("off"))}
 
     assert checks["shell"].verdict == "warn"
     assert worst(tuple(checks.values())) == "warn"
@@ -278,11 +284,10 @@ def test_an_unconfined_shell_is_reported_once_rather_than_warned_about_too(cfg):
     time above it, as a bare `UserWarning`, from a shell nothing ran.
     """
     import warnings
-    from dataclasses import replace
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        checks = {check.name: check for check in examine(replace(cfg, shell_sandbox="off"))}
+        checks = {check.name: check for check in examine(cfg, sessions=_shelled("off"))}
 
     assert checks["shell"].verdict == "warn", "the control: the report itself stays"
     assert not [w for w in caught if "unconfined" in str(w.message)]
@@ -343,7 +348,7 @@ def test_the_exit_code_separates_will_not_run_from_worth_knowing(cfg, monkeypatc
     with monkeypatch.context() as fenced:
         _confined_as(fenced, mechanism="Landlock")
         ok = examine(cfg)
-    warned = examine(replace(cfg, shell_sandbox="off"))
+    warned = examine(cfg, sessions=_shelled("off"))
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
     failed = examine(cfg)
@@ -1029,9 +1034,9 @@ def test_no_quota_fails_only_once_memory_is_shared(cfg, monkeypatch, tmp_path):
         monkeypatch, filesystem="tmpfs", size_bytes=300 * 1024**2,
         limit_bytes=400 * 1024**2, swap_enabled=False,
     )
-    wired = replace(cfg, sessions_factory="mystores:build", session_max_bytes=None)
+    wired = replace(cfg, session_max_bytes=None)
 
-    check = {c.name: c for c in examine(wired)}["session quota"]
+    check = {c.name: c for c in examine(wired, sessions=Remote())}["session quota"]
 
     assert check.verdict == "fail"
 
@@ -1044,11 +1049,9 @@ def test_a_quota_larger_than_the_filesystem_warns_that_it_cannot_bind(cfg, monke
         monkeypatch, filesystem="tmpfs", size_bytes=100 * 1024**2,
         limit_bytes=400 * 1024**2, swap_enabled=False,
     )
-    wired = replace(
-        cfg, sessions_factory="mystores:build", session_max_bytes=1024 * 1024**2
-    )
+    wired = replace(cfg, session_max_bytes=1024 * 1024**2)
 
-    check = {c.name: c for c in examine(wired)}["session quota"]
+    check = {c.name: c for c in examine(wired, sessions=Remote())}["session quota"]
 
     assert check.verdict == "warn"
 
@@ -1067,9 +1070,8 @@ def test_a_runtime_confined_shell_reads_as_ok_rather_than_a_warning(cfg, monkeyp
     """`KINGFISHER_SHELL_SANDBOX=external` is a deployment saying a container already
     mounts only the workspace.
     """
-    from dataclasses import replace
 
-    check = {c.name: c for c in examine(replace(cfg, shell_sandbox="external"))}["shell"]
+    check = {c.name: c for c in examine(cfg, sessions=_shelled("external"))}["shell"]
 
     assert check.verdict == "ok"
     assert "runtime" in check.detail
@@ -1092,13 +1094,12 @@ def test_an_unconfined_shell_is_told_what_this_kernel_could_do(cfg, monkeypatch)
     """The point of step 1: an operator learns where they stand rather than only that
     they are somewhere bad.
     """
-    from dataclasses import replace
 
     monkeypatch.setattr(health_isolation.platform, "system", lambda: "Linux")
     monkeypatch.setattr(health_isolation.platform, "release", lambda: "6.12.0")
     monkeypatch.setattr(health_isolation.confinement, "landlock_abi", lambda: 6)
 
-    check = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"]
+    check = {c.name: c for c in examine(cfg, sessions=_shelled("off"))}["shell"]
 
     assert check.verdict == "warn"
     assert "6.12.0" in check.remedy and "ABI 6" in check.remedy
@@ -1108,13 +1109,12 @@ def test_a_kernel_below_the_full_ruleset_is_told_it_is_below(cfg, monkeypatch):
     """S6: a fence that quietly becomes weaker on a different node is worse than one
     that says so.
     """
-    from dataclasses import replace
 
     monkeypatch.setattr(health_isolation.platform, "system", lambda: "Linux")
     monkeypatch.setattr(health_isolation.platform, "release", lambda: "6.1.0")
     monkeypatch.setattr(health_isolation.confinement, "landlock_abi", lambda: 4)
 
-    remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
+    remedy = {c.name: c for c in examine(cfg, sessions=_shelled("off"))}["shell"].remedy
 
     assert "ABI 4" in remedy
     assert "below" in remedy and "weaker" in remedy
@@ -1124,13 +1124,12 @@ def test_a_kernel_with_no_landlock_is_not_offered_one(cfg, monkeypatch):
     """The answer that changes what an operator should do: no fence is coming on this
     host, so the container is the only boundary available.
     """
-    from dataclasses import replace
 
     monkeypatch.setattr(health_isolation.platform, "system", lambda: "Linux")
     monkeypatch.setattr(health_isolation.platform, "release", lambda: "5.10.0")
     monkeypatch.setattr(health_isolation.confinement, "landlock_abi", lambda: None)
 
-    remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
+    remedy = {c.name: c for c in examine(cfg, sessions=_shelled("off"))}["shell"].remedy
 
     assert "no Landlock" in remedy
     assert "external" in remedy
@@ -1140,7 +1139,6 @@ def test_a_kernel_that_can_fence_is_told_what_is_missing_rather_than_to_wait(cfg
     """The remedy told a kernel that could already be fenced to wait "until that is
     wired", beside a warning from the fence naming the one package that was missing.
     """
-    from dataclasses import replace
 
     monkeypatch.setattr(health_isolation.platform, "system", lambda: "Linux")
     monkeypatch.setattr(health_isolation.platform, "release", lambda: "6.12.0")
@@ -1151,7 +1149,7 @@ def test_a_kernel_that_can_fence_is_told_what_is_missing_rather_than_to_wait(cfg
     # against the other one -- green here, red in CI.
     monkeypatch.setattr(health_isolation.confinement, "sandlock_minimum", lambda: None)
 
-    remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
+    remedy = {c.name: c for c in examine(cfg, sessions=_shelled("off"))}["shell"].remedy
 
     assert "kingfisher[fence]" in remedy
     assert "wired" not in remedy
@@ -1160,14 +1158,13 @@ def test_a_kernel_that_can_fence_is_told_what_is_missing_rather_than_to_wait(cfg
 
 def test_a_kernel_ready_to_fence_is_told_the_one_setting_that_turns_it_on(cfg, monkeypatch):
     """`off` on a host with Landlock and `sandlock` both in place is one setting away."""
-    from dataclasses import replace
 
     monkeypatch.setattr(health_isolation.platform, "system", lambda: "Linux")
     monkeypatch.setattr(health_isolation.platform, "release", lambda: "6.12.0")
     monkeypatch.setattr(health_isolation.confinement, "landlock_abi", lambda: 6)
     monkeypatch.setattr(health_isolation.confinement, "landlock_ready", lambda: True)
 
-    remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
+    remedy = {c.name: c for c in examine(cfg, sessions=_shelled("off"))}["shell"].remedy
 
     assert "KINGFISHER_SHELL_SANDBOX=auto" in remedy
     assert "kingfisher[fence]" not in remedy
@@ -1178,7 +1175,6 @@ def test_the_warning_and_the_remedy_name_the_same_missing_piece(cfg, monkeypatch
     remedy is doctor's. Faked once, at the fence, so a reading of the kernel of
     doctor's own would show here as the two disagreeing.
     """
-    from dataclasses import replace
 
     from kingfisher.plugins.sessions.sandbox import bubblewrap
 
@@ -1189,7 +1185,7 @@ def test_the_warning_and_the_remedy_name_the_same_missing_piece(cfg, monkeypatch
     monkeypatch.setattr(health_isolation.confinement, "sandlock_minimum", lambda: None)
     monkeypatch.setattr(bubblewrap, "bubblewrap_available", lambda: False)
 
-    check = {c.name: c for c in examine(replace(cfg, shell_sandbox="auto"))}["shell"]
+    check = {c.name: c for c in examine(cfg, sessions=_shelled("auto"))}["shell"]
 
     assert check.verdict == "warn"
     assert "sandlock" in check.detail
@@ -1360,7 +1356,7 @@ def _fenced_by(monkeypatch, mechanism):
     seen = Confinement(wrap=lambda command: command, mechanism=mechanism)
     # Both readers: the keys-file checks and the session-paths checks each ask.
     for module in (health, health_isolation):
-        monkeypatch.setattr(module, "shell_confinement", lambda cfg, **kw: seen)
+        monkeypatch.setattr(module, "shell_confinement", lambda cfg, shell, **kw: seen)
 
 
 def _row(checks, name):
@@ -1444,7 +1440,7 @@ def test_with_no_fence_a_keys_file_is_readable_wherever_it_is(cfg, tmp_path, mon
     _fenced_by(monkeypatch, "")
     hidden = tmp_path / ".config" / "kingfisher" / "keys.yaml"
 
-    check = _row(examine(_with_keys_file(cfg, hidden, shell_sandbox="off")), "keys file")
+    check = _row(examine(_with_keys_file(cfg, hidden), sessions=_shelled("off")), "keys file")
 
     assert check is not None and check.verdict == "warn"
 
@@ -1458,12 +1454,10 @@ def test_session_backends_doctor_cannot_see_into_are_said_so(cfg, tmp_path, monk
     monkeypatch.setenv("HOME", str(tmp_path))
     _fenced_by(monkeypatch, SANDBOX_EXEC)
     hidden = tmp_path / ".config" / "kingfisher" / "keys.yaml"
-    named = _with_keys_file(cfg, hidden, sessions_factory="deployment:Remote")
-
-    check = _row(examine(named), "keys file")
+    check = _row(examine(_with_keys_file(cfg, hidden), sessions=Remote()), "keys file")
 
     assert check is not None and check.verdict == "warn"
-    assert "KINGFISHER_SESSIONS" in check.detail
+    assert "test_doctor.Remote" in check.detail
 
 
 def test_a_session_reached_through_a_link_of_its_own_is_named(cfg, tmp_path, monkeypatch):
@@ -1576,7 +1570,6 @@ def test_a_linked_session_is_not_named_for_backends_doctor_cannot_see_into(
     """The sessions directory on this host is not theirs, so what is in it says nothing
     about where their sessions are -- the answer `session files` already gives them.
     """
-    from dataclasses import replace
 
     from kingfisher.plugins.sessions.sandbox.confinement import SANDBOX_EXEC
 
@@ -1584,9 +1577,7 @@ def test_a_linked_session_is_not_named_for_backends_doctor_cannot_see_into(
     far = tmp_path / "far"
     far.mkdir()
     (cfg.workspace / "sessions" / "strayed").symlink_to(far)
-    theirs = replace(cfg, sessions_factory="deployment:Remote")
-
-    assert _row(examine(theirs), "session paths") is None
+    assert _row(examine(cfg, sessions=Remote()), "session paths") is None
 
 
 def test_a_keys_file_other_users_can_read_is_warned_about(cfg, tmp_path):
@@ -1657,7 +1648,7 @@ def _confined_as(monkeypatch, **seen):
     from kingfisher.plugins.sessions.sandbox.confinement import Confinement
 
     confined = Confinement(wrap=lambda command: command, **seen)
-    monkeypatch.setattr(health_isolation, "shell_confinement", lambda cfg, **kw: confined)
+    monkeypatch.setattr(health_isolation, "shell_confinement", lambda cfg, shell, **kw: confined)
 
 
 @pytest.mark.parametrize(
@@ -1695,9 +1686,6 @@ def test_session_backends_doctor_cannot_see_into_are_left_to_their_contract(cfg,
     """Whether they keep sessions apart is theirs to show, and `tests/checks/sessions.py`
     asks them; a third "cannot see" line on every check of such a deployment is noise.
     """
-    from dataclasses import replace
 
     _confined_as(monkeypatch, warning="unconfined")
-    named = replace(cfg, sessions_factory="deployment:Remote")
-
-    assert _row(examine(named), "sessions apart") is None
+    assert _row(examine(cfg, sessions=Remote()), "sessions apart") is None

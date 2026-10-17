@@ -661,9 +661,7 @@ def test_an_unconfined_shell_says_what_it_means_for_the_other_sessions(cfg, sess
     """Most programs running kingfisher never run `doctor`; this warning is what they see.
     It named what the host was exposed to and not that each session could reach the rest.
     """
-    from dataclasses import replace
-
-    from kingfisher.plugins.sessions.backend import backend_at
+    from kingfisher.plugins import ShellSettings, backend_at
 
     with pytest.warns(UserWarning, match="read and change the other sessions' files"):
-        backend_at(replace(cfg, shell_sandbox="off"), session_dir)
+        backend_at(cfg, session_dir, shell=ShellSettings(sandbox="off"))

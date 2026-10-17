@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
+from kingfisher.core.session.model import sessions_root
 
 if TYPE_CHECKING:
     from kingfisher.core.config import Config
@@ -187,20 +188,20 @@ def _source_ids(cfg: Config) -> Origin:
     )
 
 
+def kingfishers_own(sessions: object, cfg: Config) -> bool:
+    """Whether `sessions` keep them where kingfisher's own would, in the workspace."""
+    where = getattr(sessions, "where", None)
+    return callable(where) and where(cfg) == sessions_root(cfg.workspace)
+
+
 def _sessions(cfg: Config, sessions: object | None) -> Origin:
     """Where sessions are: the workspace's own directory, or a deployment's own backends.
 
-    Two ways of asking, because the callers have different things to ask with.
-    `Kingfisher` hands over the object it was built with, tested by identity against
-    `LocalSessions` -- a subclass may return its backend with anything changed. A
-    surface holding only a `Config` has no object, so it reads the setting that would
-    have built one.
-
-    `inventory` had nothing to pass and got the derived default, so `kingfisher doctor`
-    printed `sessions : ./sessions` three rows above its own `sessions survive` check,
-    which reads this same setting and knew better. Both now answer `<supplied>`, which
-    is what the library answers for the same deployment.
+    Asked of the sessions in use, never of the setting that built them: `kingfisher
+    doctor` once printed `sessions : ./sessions` three rows above its own `sessions
+    survive` check, because one read a setting and the other an object. `None` is a
+    caller that has none to say, and is answered with the workspace's own.
     """
-    if sessions is not None or cfg.sessions_factory is not None:
+    if sessions is not None and not kingfishers_own(sessions, cfg):
         return Origin("supplied")
     return Origin("default", cfg.workspace / "sessions")

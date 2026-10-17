@@ -144,11 +144,6 @@ class Environment:
             if self.optional_text(old):
                 msg = f"{old} was renamed {new}; set that instead"
                 raise ConfigError(msg)
-        path_extra = tuple(
-            part
-            for part in (self.values.get("KINGFISHER_SHELL_PATH_EXTRA") or "").split(":")
-            if part
-        )
         paths = self.paths()
         # `require` only ever raises here, in the words every required setting gets.
         workspace = paths.workspace or Path(self.require("KINGFISHER_WORKSPACE"))
@@ -194,12 +189,8 @@ class Environment:
             session_ttl_s=self.number("KINGFISHER_SESSION_TTL_S", 7 * 24 * 3600),
             recursion_limit=self.number("KINGFISHER_RECURSION_LIMIT", 150),
             thread_pool_size=self.number("KINGFISHER_THREAD_POOL_SIZE", DEFAULT_THREAD_POOL_SIZE),
-            shell_path_extra=path_extra,
-            shell_sandbox=self.values.get("KINGFISHER_SHELL_SANDBOX", "auto"),
             skills_mounts=paths.skills_mounts,
             assets=paths.assets,
-            sessions_factory=self.optional_text("KINGFISHER_SESSIONS"),
-            plugins_factory=self.optional_text("KINGFISHER_PLUGINS"),
             skills_enabled=self.flag("KINGFISHER_SKILLS_ENABLED"),
             memory_enabled=self.flag("KINGFISHER_MEMORY_ENABLED"),
             interpreter_enabled=self.flag("KINGFISHER_INTERPRETER_ENABLED"),

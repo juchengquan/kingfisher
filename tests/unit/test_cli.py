@@ -6,7 +6,6 @@ import argparse
 import io
 import re
 import tokenize
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -412,12 +411,10 @@ def test_a_warning_of_kingfishers_own_is_one_plain_line(cfg, session_dir, monkey
     Raised by the real `LocalSessions` rather than a `warnings.warn` here, because a
     warning this file raises is attributed to this file and would test the other branch.
     """
-    from dataclasses import replace
-
-    from kingfisher.plugins import backend_at
+    from kingfisher.plugins import ShellSettings, backend_at
 
     def turn():
-        backend_at(replace(cfg, shell_sandbox="off"), session_dir)
+        backend_at(cfg, session_dir, shell=ShellSettings(sandbox="off"))
         yield _finished()
 
     _ran(monkeypatch, turn(), cfg)
@@ -678,11 +675,9 @@ def test_no_surface_names_the_workspace_directory_when_backends_keep_sessions(
     # A factory that really builds, because the command builds it. Named rather than
     # faked for that reason: `configured_sessions` imports the dotted path, so a
     # plausible-looking string would fail before any of this is reached.
-    configured = replace(
-        cfg, sessions_factory="tests.unit.test_named_backend:make_backends"
-    )
-    _looking_at(monkeypatch, configured)
-    derived = str(configured.workspace / "sessions")
+    monkeypatch.setenv("KINGFISHER_SESSIONS", "tests.unit.test_named_backend:make_backends")
+    _looking_at(monkeypatch, cfg)
+    derived = str(cfg.workspace / "sessions")
 
     main(["sessions"])
     listing = capsys.readouterr().out
@@ -699,20 +694,20 @@ def test_no_surface_names_the_workspace_directory_when_backends_keep_sessions(
 def test_the_library_and_the_commands_agree_on_where_sessions_are(cfg, monkeypatch):
     """`Kingfisher.origins` asked the backends it was built with and the commands derived
     a path from the workspace, so the same deployment got two answers depending on which
-    door it came through. The setting is what a surface holding only a `Config` can ask.
+    door it came through. Both ask the sessions in use, the command the ones it names.
     """
+    from kingfisher.cli.configured import configured_sessions
     from kingfisher.core.inventory import inventory
 
-    configured = replace(cfg, sessions_factory="acme.backends:build")
-    _looking_at(monkeypatch, configured)
+    monkeypatch.setenv("KINGFISHER_SESSIONS", "tests.unit.test_named_backend:make_backends")
 
     class Theirs(LocalSessions):
         """A deployment's own, which is what makes `origins` answer `<supplied>`: told
         apart by identity, since a subclass may return its backend with anything changed.
         """
 
-    through_the_library = Kingfisher(configured, sessions=Theirs()).origins.sessions
-    through_a_command = inventory(configured).origins.sessions
+    through_the_library = Kingfisher(cfg, sessions=Theirs()).origins.sessions
+    through_a_command = inventory(cfg, sessions=configured_sessions()).origins.sessions
 
     assert through_the_library == through_a_command == Origin("supplied", None)
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -139,22 +138,13 @@ def test_a_factory_that_raises_is_left_alone():
 # -- what the command line gets ----------------------------------------------
 
 
-def test_naming_nothing_is_the_default(cfg):
-    assert type(configured_sessions(cfg)) is LocalSessions
+def test_naming_nothing_is_the_default():
+    assert type(configured_sessions({})) is LocalSessions
+    assert type(configured_sessions({SETTING: "  "})) is LocalSessions, "blank is unset"
 
 
-def test_a_named_factory_is_what_the_command_line_runs_on(cfg):
-    named = replace(cfg, sessions_factory=f"{HERE}:make_backends")
-
-    assert isinstance(configured_sessions(named), Recording)
-
-
-def test_the_variable_reaches_the_config(tmp_path: Path):
-    read = Environment(
-        {"KINGFISHER_WORKSPACE": str(tmp_path), SETTING: f" {HERE}:make_backends "}
-    )
-
-    assert read.optional_text(SETTING) == f"{HERE}:make_backends"
+def test_a_named_factory_is_what_the_command_line_runs_on():
+    assert isinstance(configured_sessions({SETTING: f" {HERE}:make_backends "}), Recording)
 
 
 # -- the settings this replaced -----------------------------------------------

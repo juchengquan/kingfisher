@@ -480,7 +480,7 @@ def _fenced_by(monkeypatch, mechanism: str) -> None:
     monkeypatch.setattr(
         confinement,
         "shell_confinement",
-        lambda cfg, *, skills=None: Confinement(wrap=_unwrapped, mechanism=mechanism),
+        lambda cfg, shell, *, skills=None: Confinement(wrap=_unwrapped, mechanism=mechanism),
     )
 
 
