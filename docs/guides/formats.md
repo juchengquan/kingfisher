@@ -1424,14 +1424,35 @@ whatever they ask for.
 
 ### Audiences are per use-site
 
-A tool's audience is a property of *this definition's use of it*, not of the
-tool. `reviewer` may restrict `sql_query` to `[A]` while `analyst` opens it to
-`[A, B]`, and both are correct — they are different contexts.
+An entry's audience is a property of *this definition's use of it*. `reviewer`
+may restrict `sql_query` to `[A]` while `analyst` opens it to `[A, B]`, and both
+are correct — they are different contexts. A tool made with `kingfisher.tool` may
+also say who it admits, and every use of it is held to that as well.
 
 The cost is that there is no single line answering "who reaches `sql_query`?".
 `kingfisher list` answers it instead, with a roll-up beside the per-definition
-view, so a call site quietly wider than its neighbours is visible rather than
-something you would only find by grepping.
+view: under each tool, the tool's own audience first and then every definition
+that narrows it, so a call site quietly wider than its neighbours is visible
+rather than something you would only find by grepping.
+
+```
+access — by definition
+  subagent ledger  [*]  datazone: finance
+  subagent reviewer  [A, B]
+      tool sql_query  [A]
+  tool counter::count  [A]
+  tool sql_query  [sales_db]
+
+access — by tool
+  sql_query
+      (the tool itself)  [sales_db]
+      reviewer  [A]
+```
+
+A datazone follows the source ids it is required beside, and a subagent's own tool
+is named for its subagent, `counter::count`. `--json` carries the same, under
+`audiences`. Run with `--as`, the listing shows none of this: what a caller reaches
+is theirs to see, and the policy is not.
 
 ### No `source_ids:` line means everyone
 

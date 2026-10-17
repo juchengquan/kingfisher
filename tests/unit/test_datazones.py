@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import replace
 
 import pytest
@@ -312,6 +313,21 @@ def test_the_command_line_names_a_datazone(zoned, at_the_command_line, capsys):
 
     assert main(["list", "--as", "A", "--datazone", "hr"]) == 0
     assert "payroll" not in capsys.readouterr().out
+
+
+def test_the_operator_listing_says_each_datazone(zoned, at_the_command_line, capsys):
+    """`ledger` writes no `source_ids:`, so without its datazone the operator was shown
+    `[*]` -- everyone -- for a subagent only the finance datazone reaches.
+    """
+    assert main(["list"]) == 0
+    shown = capsys.readouterr().out
+    assert "subagent ledger  [*]  datazone: finance" in shown
+    assert "tool payroll  [*]  datazone: finance" in shown
+
+    assert main(["list", "--json"]) == 0
+    audiences = json.loads(capsys.readouterr().out)["audiences"]
+    assert audiences["subagents"]["ledger"] == {"source_ids": ["*"], "datazone": "finance"}
+    assert audiences["tools"]["payroll"] == {"source_ids": ["*"], "datazone": "finance"}
 
 
 def test_a_saved_result_is_stamped_with_its_datazone():

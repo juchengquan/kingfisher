@@ -249,6 +249,27 @@ def test_a_subagents_own_tool_is_held_back_from_a_caller_it_shuts_out(policied):
     assert _private_tools(kf.catalogue, "counter", held=frozenset({"B"})) == ()
 
 
+def test_the_operator_listing_says_who_each_tool_admits(policied):
+    """No agent file says it, so the operator's audit view named neither tool, and the
+    roll-up answering "who reaches `line_count`?" left out the one line that bounds it.
+    """
+    from kingfisher.cli.listing import as_json, render
+
+    subagents = policied.catalogue_roots["subagents"]
+    subagents.mkdir(parents=True, exist_ok=True)
+    (subagents / "counter.py").write_text(CARRIER, encoding="utf-8")
+    found = inventory(policied)
+    shown = "\n".join(render(found))
+
+    assert "\n  tool line_count  [A]\n" in shown
+    assert "\n  tool counter::count  [A]\n" in shown, "a subagent's own, named for it"
+    assert "\n  line_count\n      (the tool itself)  [A]" in shown.split("by tool", 1)[1]
+    assert as_json(found)["audiences"]["tools"] == {
+        "line_count": {"source_ids": ["A"]},
+        "counter::count": {"source_ids": ["A"]},
+    }
+
+
 def test_an_unrestricted_grant_still_gets_an_allowlist_without_the_tool():
     """An unrestricted request has no allowlist at all, so without one the only thing
     between a shut-out caller and the tool would be that nothing registered it.
