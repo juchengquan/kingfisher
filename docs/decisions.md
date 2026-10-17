@@ -1362,6 +1362,14 @@ call naming no caller is refused. No startup refusal for an agent naming a tool 
 another datazone: the tool is left out of that caller's build, and for a caller in the
 tool's own datazone the same agent works. *(2026-10-16.)*
 
+**The operator's listing prints both.** A tool's own audience is a line of its own,
+`tool sql_query  [sales_db]`, and the first line under that tool in the roll-up, since
+every grant of it is held there. A subagent's own tool is named `counter::count`: the
+file `audienced_tools` keys it by sits inside a folder the key does not name, which
+sends a reader to look for it in `tools/`. A datazone is printed beside the source ids,
+not folded into them, because a subagent writing only `datazone: finance` was listed as
+`[*]` -- everyone. *(2026-10-17.)*
+
 **Reversed: a central `access.yaml` listing every asset by name.** Built in full
 -- vocabulary, per-asset audiences, reconciliation against the catalogue, two
 load reports -- then replaced within the same branch. What killed it was not

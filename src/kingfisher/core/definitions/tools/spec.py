@@ -153,6 +153,12 @@ def out_of_reach(found: Sequence[Found], held: frozenset[str] | None) -> frozens
     )
 
 
+def audienced(found: Sequence[Found]) -> dict[str, Found]:
+    """The tools that say who they admit, as a grant would write them."""
+    among = _by_name(found)
+    return {written_form(one, among=among): one for one in found if one.audience != ALL}
+
+
 def admitted(granted: Callable[[str], bool], *, shut: frozenset[str]) -> Callable[[str], bool]:
     """A grant's answer about one tool, less the tools `out_of_reach` names."""
     return lambda name: granted(name) and name not in shut

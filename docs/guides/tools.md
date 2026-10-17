@@ -143,9 +143,10 @@ start. With no `source_ids.yaml` at all, the line has no effect.
 It holds **whichever agent grants the tool**. An agent's own entry can narrow it
 further — `{name: sql_query, source_ids: [senior]}` means `sales_db` *and*
 `senior` — and nothing an agent writes can widen it. A caller it shuts out does
-not get the tool, and is not shown it by `kingfisher list` or the run report. A
-result the tool produces is recorded in the session's ledger under the tool's
-audience as well as the agent's.
+not get the tool, and is not shown it by `kingfisher list` or the run report. The
+operator's `kingfisher list`, with no `--as`, prints the line itself, as `tool
+sql_query  [sales_db]`. A result the tool produces is recorded in the session's
+ledger under the tool's audience as well as the agent's.
 
 `datazone="finance"` says the one datazone a caller must also be in — see
 *Datazones* in [`formats.md`](formats.md). Left out, it is any.

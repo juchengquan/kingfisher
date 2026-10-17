@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Container, Iterable, Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
@@ -26,8 +27,10 @@ from kingfisher.core.definitions.tools.spec import (
     Found,
     Offering,
     admitted,
+    audienced,
     out_of_reach,
     placed,
+    reference,
     split_reference,
 )
 from kingfisher.core.origins import Origin, Origins
@@ -254,7 +257,9 @@ class Inventory:
     #: What the policy and the catalogue disagree about. Empty when they agree.
     access_report: AccessReport = field(default_factory=AccessReport)
     #: Definition kind -> name -> {"source_ids": ..., "tools": {...}, ...}, for
-    #: every definition that says anything about who reaches what.
+    #: every definition that says anything about who reaches what. A tool that says who
+    #: it admits is one, named as a grant writes it, and a subagent's own as
+    #: `subagent::tool`.
     #:
     #: Carried rather than looked up by the printer: a renderer that reached for
     #: the specs would be a second place deciding what a workspace offers, and
@@ -552,11 +557,13 @@ def _access(
     agents: Mapping[str, object],
     subagents: Mapping[str, object],
     tools: Mapping[str, object],
+    named_tools: Mapping[str, Found],
 ) -> tuple[dict[str, Mapping[str, Stated]], AccessReport, dict[str, str]]:
     """What the definitions say, and what restricts nobody."""
     stated = {
         "agents": _audiences(agents, kind="agent"),
         "subagents": _audiences(subagents, kind="subagent"),
+        "tools": _audiences(named_tools, kind="tool"),
     }
     if cfg.access is None:
         return stated, AccessReport(), {}
@@ -606,6 +613,24 @@ def _audienced_tools(resolved: Definitions) -> Mapping[str, Found]:
         return resolved.audienced_tools
     except (ToolError, CapabilityError, SubagentError):
         return {}
+
+
+def _named_tools(resolved: Definitions) -> dict[str, Found]:
+    """The tools that say who they admit, named as the rest of a listing names them.
+
+    A subagent's own under its subagent's name: `audienced_tools` keys it by a file
+    inside a folder the key does not name, which sends a reader to look in `tools/`.
+    """
+    named: dict[str, Found] = {}
+    # Apart, so a bundle that will not load still leaves the catalogue's tools said.
+    with suppress(ToolError, CapabilityError):
+        named.update(audienced(resolved.tools.found))
+    with suppress(ToolError, CapabilityError, SubagentError):
+        for owner, bundle in resolved.bundled_tools.items():
+            named.update(
+                {reference(owner, name): one for name, one in audienced(bundle.found).items()}
+            )
+    return named
 
 
 def _shut_out(resolved: Definitions, held: frozenset[str] | None) -> frozenset[str]:
@@ -796,7 +821,11 @@ def inventory(
         agents_error = str(exc)
 
     stated, report, broken = _access(
-        cfg, agents=defined_agents, subagents=specs, tools=_audienced_tools(resolved)
+        cfg,
+        agents=defined_agents,
+        subagents=specs,
+        tools=_audienced_tools(resolved),
+        named_tools=_named_tools(resolved),
     )
     reaching = _reaching(held, stated)
     scoped = held is not None
@@ -831,10 +860,9 @@ def inventory(
         *(_subject("agent", name) for name in for_caller),
         *(_subject("subagent", name) for name in for_caller_subagents),
     }
-    # The catalogues that audience nothing themselves, filtered by what the definitions
-    # this caller reaches offer them -- not by an audience of their own. A
-    # `reaching("tools", ...)` stood here and could filter nothing: `_access` builds
-    # audiences for agents and subagents, and no `tools` key was ever put there to find.
+    # The catalogues, filtered by what the definitions this caller reaches offer them.
+    # A tool's own audience is the `shut=` below, and `reaching("tools", ...)` would ask
+    # only that half: a tool no definition in reach offers passes it.
     #
     # Reachable definitions rather than all of them, which is the load-bearing half: an
     # entry may be written `["*"]`, meaning anyone who reaches *this definition*, and at

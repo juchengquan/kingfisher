@@ -15,7 +15,7 @@ from kingfisher.core.access.capabilities import ALL
 # the one worth naming: a renderer beside a format looks odd until you see that the block
 # a refusal prints is the block a listing prints, so a name two files define reads the
 # same in both. Shared for that reason, not promised for it.
-from kingfisher.core.access.source_ids import AUDIENCED, Audience, spell
+from kingfisher.core.access.source_ids import AUDIENCED, Audience, Stated, spell
 from kingfisher.core.definitions.seeding import SEED_HINT
 from kingfisher.core.definitions.skills.catalogue import SKILL_LAYOUT
 from kingfisher.core.definitions.tools.spec import offered, split_reference
@@ -193,6 +193,13 @@ def _who(audience: Audience) -> str:
     return f"[{spell(audience)}]"
 
 
+def _said(stated: Stated) -> str:
+    """What a definition says of who reaches it, its datazone included."""
+    # Beside the audience rather than folded into it: `[*]` alone reads as everyone.
+    zone = "" if stated.datazone is None else f"  datazone: {stated.datazone}"
+    return f"{_who(stated.source_ids)}{zone}"
+
+
 def _singular(field_name: str) -> str:
     """`tools` -> `tool`. `skills` is the one that does not just lose an s."""
     return "skill" if field_name == "skills" else field_name[:-1]
@@ -217,7 +224,7 @@ def _access(found: Inventory) -> Iterator[str]:
     for kind, definitions in found.audiences.items():
         for name, stated in definitions.items():
             said = True
-            yield f"  {kind[:-1]} {name}  {_who(stated.source_ids)}"
+            yield f"  {kind[:-1]} {name}  {_said(stated)}"
             for field_name in AUDIENCED:
                 for entry, audience in stated.of(field_name).items():
                     yield f"      {_singular(field_name)} {entry}  {_who(audience)}"
@@ -230,20 +237,23 @@ def _access(found: Inventory) -> Iterator[str]:
 
 def _rollup(found: Inventory) -> Iterator[str]:
     """Every asset carrying an audience anywhere, and where it carries it."""
-    where: dict[str, dict[str, list[tuple[str, Audience]]]] = {}
+    where: dict[str, dict[str, list[str]]] = {}
+    # First under its name, because every grant of the tool below is held to it.
+    for name, stated in found.audiences.get("tools", {}).items():
+        where.setdefault("tools", {})[name] = [f"(the tool itself)  {_said(stated)}"]
     for definitions in found.audiences.values():
         for name, stated in definitions.items():
             for field_name in AUDIENCED:
                 for entry, audience in stated.of(field_name).items():
                     where.setdefault(field_name, {}).setdefault(entry, []).append(
-                        (name, audience)
+                        f"{name}  {_who(audience)}"
                     )
     for field_name, entries in where.items():
         yield f"\naccess — by {_singular(field_name)}"
         for entry, sites in sorted(entries.items()):
             yield f"  {entry}"
-            for name, audience in sites:
-                yield f"      {name}  {_who(audience)}"
+            for site in sites:
+                yield f"      {site}"
 
 
 def _skills(found: Inventory) -> Iterator[str]:
@@ -435,6 +445,7 @@ def as_json(found: Inventory) -> dict[str, object]:
             kind: {
                 name: {
                     "source_ids": _audience_json(stated.source_ids),
+                    **({} if stated.datazone is None else {"datazone": stated.datazone}),
                     **{
                         field_name: {
                             entry: _audience_json(who) for entry, who in entries.items()
