@@ -17,6 +17,7 @@ from kingfisher.core.agent.middlewares.narrowing import (
     NarrowedSkillsMiddleware,
 )
 from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
+from kingfisher.core.agent.middlewares.step_budget import STEPS_PER_CALL, StepBudgetMiddleware
 from kingfisher.core.agent.middlewares.tool_failure import ToolFailureMiddleware
 from kingfisher.core.agent.middlewares.workspace_tools import WorkspaceToolPathsMiddleware
 from kingfisher.core.agent.session_paths import SessionPaths
@@ -35,6 +36,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     paths: SessionPaths | None,
     layout: Layout,
     backend: Any,
+    step_limit: int,
     recorder: RecorderMiddleware | None = None,
     clearing: ResultClearingMiddleware | None = None,
     tools: Sequence[str] | None = None,
@@ -48,7 +50,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     Built here and nowhere else, so what kingfisher guarantees on a graph is read in one
     place. `names` are the workspace tools the graph holds; `tools` narrows what it is
     offered and `skills` its skills index, each `None` where nothing narrows; `clearing`
-    and `reachable` are the agent's alone.
+    and `reachable` are the agent's alone. `step_limit` is the turn's, which reaches only the
+    agent's own run, so a subagent is held to it in model calls.
     """
     if kind != "agent" and (clearing is not None or reachable is not None):
         msg = f"result clearing and the declared-subagent check are the agent's, not a {kind}'s"
@@ -66,6 +69,9 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # `WorkspaceToolPathsMiddleware` rewrites them to host paths.
     if recorder is not None:
         standing.append(recorder)
+    standing.append(
+        StepBudgetMiddleware(calls=None if kind == "agent" else step_limit // STEPS_PER_CALL)
+    )
     # Ahead of the rest, which have nothing to say about a call that is not run.
     standing.append(ModelReplyMiddleware(subagent=kind != "agent", outputs=layout.outputs_route))
     # Outside `BuiltinToolsMiddleware`, so a `grep` it runs as several searches fails once,

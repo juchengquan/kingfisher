@@ -78,6 +78,7 @@ def test_the_agent_is_wrapped_in_standing_then_switched_then_offered(cfg, sessio
         "ResultClearingMiddleware",
         "TodoListMiddleware",
         "RecorderMiddleware",
+        "StepBudgetMiddleware",
         "ModelReplyMiddleware",
         "ToolFailureMiddleware",
         "LargePdfMiddleware",
@@ -98,6 +99,7 @@ def test_general_purpose_is_wrapped_in_standing_then_offered(cfg, session_dir):
 
     assert [type(m).__name__ for m in subagent_of(built, "general-purpose")["middleware"]] == [
         "RecorderMiddleware",
+        "StepBudgetMiddleware",
         "ModelReplyMiddleware",
         "ToolFailureMiddleware",
         "LargePdfMiddleware",
@@ -121,5 +123,11 @@ def test_what_is_the_agents_alone_is_refused_elsewhere(cfg, kind, given):
     `general-purpose` a skills index of its own when it shares the agent's."""
     with pytest.raises(ValueError, match="agent"):
         standing_middleware(
-            kind, names=frozenset(), paths=None, layout=cfg.layout, backend=None, **given
+            kind,
+            names=frozenset(),
+            paths=None,
+            layout=cfg.layout,
+            backend=None,
+            step_limit=cfg.recursion_limit,
+            **given,
         )
