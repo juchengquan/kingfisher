@@ -55,8 +55,9 @@ class Audiences:
     #: By the name a call dispatches on, which is how a tool reaches a recorder.
     tools: Mapping[str, Audience]
     #: Each tool's own audience, by the same name, where it states one. Without it a
-    #: result is stamped at whatever the definition offered the tool at, and a later
-    #: caller the tool itself shuts out is shown what it found.
+    #: result is stamped at whatever the definition offered the tool at, wider than the
+    #: tool admits -- and the stamp is what a caller deciding who may read a session
+    #: reads.
     own: Mapping[str, Audience] = field(default_factory=dict)
 
     @classmethod
