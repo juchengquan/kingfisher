@@ -101,10 +101,12 @@ a mapping could not express that.
 
 ## What it is not
 
-Not a budget. `execution_timeout_s` bounds one command, `recursion_limit` bounds
-graph steps and `turn_timeout_s` bounds the wall clock; this bounds tool calls,
-which is a different axis from all three and stops nothing that does not call a
-tool. A model that spends a turn thinking passes it untouched.
+Not the turn's budget. `execution_timeout_s` bounds one command,
+`recursion_limit` bounds graph steps, `turn_timeout_s` bounds the wall clock, and
+kingfisher's own step budget tells an agent near that limit how many model calls
+it has left and holds a subagent to the same budget. This bounds tool calls, a
+different axis from all four: one model call can ask for several tool calls at
+once, and a model that spends a turn thinking passes it untouched.
 
 Per turn rather than per session, and by construction rather than by choice: the
 agent is built once per turn, so the factory runs once per turn and the count
