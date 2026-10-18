@@ -1118,6 +1118,249 @@ def test_a_grant_written_the_long_way_still_reaches_its_caller(
     assert "secret_export" not in printed, "and not the one no definition offers them"
 
 
+# -- what each definition holds ------------------------------------------------------
+
+#: Naming each grant, `word_tally` the long way, and handing work to two subagents.
+LISTS_ITS_TOOLS = """name: lister
+description: An agent.
+source_ids: [A, B]
+builtin_tools: [task, read_file, ls]
+tools: [kit.py::word_tally, line_count]
+subagents: [itemiser, taker]
+system_prompt: |
+  You do the task.
+"""
+
+#: `["*"]` on every grant.
+GRANTS_EVERYTHING = """name: greedy
+description: An agent.
+source_ids: [A, B]
+builtin_tools: ["*"]
+tools: ["*"]
+subagents: ["*"]
+system_prompt: |
+  You do the task.
+"""
+
+#: Neither tool line, which grants none.
+HOLDS_NO_TOOLS = """name: bare
+description: An agent.
+source_ids: [A, B]
+system_prompt: |
+  You do the task.
+"""
+
+#: A subagent's own tool locked to `A`, as a tool file writes the lock.
+SEALED = '''
+from kingfisher import ToolSpec
+
+
+def sealed(path: str) -> str:
+    """Does a thing."""
+    return ""
+
+
+TOOLS = [ToolSpec(sealed, source_ids=["A"])]
+'''
+
+
+def _subagents_holding_tools(cfg) -> None:
+    """One subagent naming its tools, one granted every tool, and a compiled one.
+
+    `itemiser` names a catalogue tool locked to `A` and owns one locked to `A`, so a
+    caller holding `B` has one of each kind to be kept from.
+    """
+    root = subagents_dir(cfg)
+    _private(root / "itemiser" / "tools" / "tally.py", "tally")
+    (root / "itemiser" / "tools" / "sealed.py").write_text(SEALED, encoding="utf-8")
+    (root / "itemiser" / "itemiser.yaml").write_text(
+        "name: itemiser\ndescription: A subagent.\nsource_ids: [A, B]\n"
+        "builtin_tools: [read_file]\n"
+        "tools: [word_tally, line_count, {name: tally, source: bundled},"
+        " {name: sealed, source: bundled}]\nsystem_prompt: |\n  Go.\n",
+        encoding="utf-8",
+    )
+    _private(root / "taker" / "tools" / "own_count.py", "own_count")
+    (root / "taker" / "taker.yaml").write_text(
+        'name: taker\ndescription: A subagent.\nsource_ids: [A, B]\nbuiltin_tools: ["*"]\n'
+        'tools: ["*", {name: own_count, source: bundled}]\nsystem_prompt: |\n  Go.\n',
+        encoding="utf-8",
+    )
+    (root / "assembled.py").write_text(
+        "def build(model, tools):\n    return None\n\n\n"
+        "SUBAGENTS = [{'name': 'assembled', 'description': 'A compiled one.', "
+        "'build': build, 'tools': ['word_tally']}]\n",
+        encoding="utf-8",
+    )
+
+
+def _grant_lines(printed: str, header: str) -> dict[str, str]:
+    """The grant lines under the definition whose own line starts with `header`.
+
+    Split on the colon alone, so a line printed with nothing after it is still read.
+    """
+    lines = printed.splitlines()
+    at = next(i for i, line in enumerate(lines) if line.startswith(header))
+    held = {}
+    for line in lines[at + 1 :]:
+        if not line.startswith("      "):
+            break
+        label, said, names = line.strip().partition(":")
+        if said and label in ("tools", "builtin tools", "subagents"):
+            held[label] = names.strip()
+    return held
+
+
+def test_an_agent_lists_the_tools_it_holds_as_the_catalogue_spells_them(
+    cfg, at_the_command_line, capsys
+):
+    """No line said which tools an agent holds, so "who can use `word_tally`?" meant
+    opening every agent file -- and printed as written, `kit.py::word_tally` would read
+    as a tool other than the catalogue's `word_tally`.
+    """
+    _workspace(cfg, LISTS_ITS_TOOLS)
+    _subagents_holding_tools(cfg)
+
+    assert main(["list"]) == 0
+
+    assert _grant_lines(capsys.readouterr().out, "  lister — ") == {
+        "tools": "line_count, word_tally",
+        "builtin tools": "ls, read_file, task",
+        "subagents": "itemiser, taker",
+    }
+
+
+def test_a_star_shows_itself_beside_what_it_covers_today(cfg, at_the_command_line, capsys):
+    """Expanded alone, `["*"]` read as a fixed list, and a tool added tomorrow would
+    reach the agent with nothing in the listing saying it would.
+    """
+    _workspace(cfg, GRANTS_EVERYTHING)
+    _subagents_holding_tools(cfg)
+
+    assert main(["list"]) == 0
+
+    held = _grant_lines(capsys.readouterr().out, "  greedy — ")
+    assert held["tools"] == "* — today line_count, secret_export, word_tally"
+    assert held["subagents"] == "* — today assembled, itemiser, taker"
+    assert held["builtin tools"].startswith("* — today ")
+    assert "read_file" in held["builtin tools"]
+
+
+def test_an_agent_granting_no_tools_prints_no_tool_lines(cfg, at_the_command_line, capsys):
+    """A line printed for a field left out would read as a grant, of the empty list or
+    of everything, where leaving it out grants none.
+    """
+    _workspace(cfg, HOLDS_NO_TOOLS)
+
+    assert main(["list"]) == 0
+
+    assert _grant_lines(capsys.readouterr().out, "  bare — ") == {}
+
+
+def test_a_subagent_lists_its_own_grants_and_leaves_its_star_to_its_caller(
+    cfg, at_the_command_line, capsys
+):
+    """A subagent's star expanded to the catalogue would name tools it never gets past
+    the agent calling it, and its own tools printed bare would read as the catalogue's.
+    """
+    _workspace(cfg, LISTS_ITS_TOOLS)
+    _subagents_holding_tools(cfg)
+
+    assert main(["list"]) == 0
+
+    printed = capsys.readouterr().out
+    assert _grant_lines(printed, "  itemiser ") == {
+        "tools": "itemiser::sealed, itemiser::tally, line_count, word_tally",
+        "builtin tools": "read_file",
+    }
+    assert _grant_lines(printed, "  taker ") == {
+        "tools": "* — whatever the calling agent holds, plus taker::own_count",
+        "builtin tools": "* — whatever the calling agent holds",
+    }
+    # Handed no built-in, so no line says it holds one.
+    assert _grant_lines(printed, "  assembled ") == {"tools": "word_tally"}
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_a_scoped_listing_drops_a_locked_tool_from_the_definition_granting_it(
+    form, cfg, at_the_command_line, capsys
+):
+    """The `tools` section kept `line_count` and `sealed` from a caller their locks shut
+    out, and a grant line read straight off each file would hand both back.
+
+    The caller holding `A` is the control, and `word_tally` beside it the half a filter
+    dropping everything would fail.
+    """
+    _workspace(cfg, LISTS_ITS_TOOLS, GRANTS_EVERYTHING)
+    _subagents_holding_tools(cfg)
+    as_json = ["--json"] if form == "json" else []
+
+    seen = {}
+    for caller in ("A", "B"):
+        assert main(["list", "--as", caller, *as_json]) == 0
+        printed = capsys.readouterr().out
+        if form == "json":
+            document = json.loads(printed)
+            seen[caller] = {
+                "lister": ", ".join(document["agent_tools"]["lister"]["names"]),
+                "greedy": ", ".join(document["agent_tools"]["greedy"]["names"]),
+                "itemiser": ", ".join(document["subagent_tools"]["itemiser"]["names"]),
+            }
+        else:
+            seen[caller] = {
+                "lister": _grant_lines(printed, "  lister — ")["tools"],
+                "greedy": _grant_lines(printed, "  greedy — ")["tools"].removeprefix(
+                    "* — today "
+                ),
+                "itemiser": _grant_lines(printed, "  itemiser ")["tools"],
+            }
+
+    assert seen["B"] == {
+        "lister": "word_tally",
+        "greedy": "secret_export, word_tally",
+        "itemiser": "itemiser::tally, word_tally",
+    }
+    assert seen["A"] == {
+        "lister": "line_count, word_tally",
+        "greedy": "line_count, secret_export, word_tally",
+        "itemiser": "itemiser::sealed, itemiser::tally, line_count, word_tally",
+    }
+
+
+def test_the_json_carries_each_grant_as_a_star_beside_its_names(
+    cfg, at_the_command_line, capsys
+):
+    """A bare list cannot say `["*"]`, so a script read an agent granted every subagent as
+    one naming today's, and `--json` carried no tool grant at all.
+    """
+    _workspace(cfg, LISTS_ITS_TOOLS, GRANTS_EVERYTHING, HOLDS_NO_TOOLS)
+    _subagents_holding_tools(cfg)
+
+    assert main(["list", "--json"]) == 0
+
+    document = json.loads(capsys.readouterr().out)
+    assert document["agent_subagents"]["greedy"] == {
+        "every": True,
+        "names": ["assembled", "itemiser", "taker"],
+    }
+    assert document["agent_subagents"]["lister"] == {"every": False, "names": ["itemiser", "taker"]}
+    assert document["agent_subagents"]["bare"] == {"every": False, "names": []}
+    assert document["agent_tools"]["greedy"] == {
+        "every": True,
+        "names": ["line_count", "secret_export", "word_tally"],
+    }
+    assert document["agent_tools"]["bare"] == {"every": False, "names": []}
+    assert document["agent_builtin_tools"]["lister"] == {
+        "every": False,
+        "names": ["ls", "read_file", "task"],
+    }
+    assert document["agent_builtin_tools"]["bare"] == {"every": False, "names": []}
+    # A subagent's star names only what it holds besides, since the rest is its caller's.
+    assert document["subagent_tools"]["taker"] == {"every": True, "names": ["taker::own_count"]}
+    assert document["subagent_builtin_tools"]["taker"] == {"every": True, "names": []}
+    assert document["subagent_builtin_tools"]["assembled"] == {"every": False, "names": []}
+
+
 #: An agent that grants one tool to both callers and hands work to `helper`. Both
 #: halves are load-bearing: the grant makes the answer non-empty, and naming the
 #: subagent is what puts its declarations in front of the walk at all.

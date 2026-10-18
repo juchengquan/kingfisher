@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.core.inventory import Inventory, inventory
+from kingfisher.core.inventory import Grant, Inventory, inventory
 from tests.conftest import subagents_dir, tools_dir
 
 A_TOOL = '''
@@ -66,8 +66,8 @@ def test_an_agent_taking_every_subagent_lists_every_subagent(cfg):
 
     found = inventory(cfg)
 
-    assert found.agent_subagents["everything"] == ("alpha", "beta")
-    assert found.agent_subagents["one"] == ("alpha",)
+    assert found.agent_subagents["everything"] == Grant(every=True, names=("alpha", "beta"))
+    assert found.agent_subagents["one"] == Grant(names=("alpha",))
 
 
 def test_an_agent_lists_the_subagents_it_activates_and_not_their_helpers(cfg):
@@ -95,8 +95,8 @@ def test_an_agent_lists_the_subagents_it_activates_and_not_their_helpers(cfg):
 
     found = inventory(cfg)
 
-    assert found.agent_subagents["one"] == ("reviewer",)
-    assert found.agent_subagents["both"] == ("reviewer", "second-opinion")
+    assert found.agent_subagents["one"].names == ("reviewer",)
+    assert found.agent_subagents["both"].names == ("reviewer", "second-opinion")
 
 
 def test_the_names_a_subtraction_uses_are_the_names_the_listing_shows(cfg):

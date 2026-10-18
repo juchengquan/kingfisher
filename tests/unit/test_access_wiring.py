@@ -1334,7 +1334,7 @@ def test_a_caller_every_audience_admits_is_told_about_each_subagent(
     assert {"insider", "ledger"} <= told(delegating, ("A",), subagents=("reviewer",))["withheld"]
     assert told(delegating, ("A",))["indistinct"] == {"insider", "plain-helper"}
     assert {"insider", "ledger"} <= set(
-        json.loads(listed(capsys, "A", as_json=True))["agent_subagents"]["boss"]
+        json.loads(listed(capsys, "A", as_json=True))["agent_subagents"]["boss"]["names"]
     )
     printed = listed(capsys, "A")
     assert "insider" in printed

@@ -900,6 +900,24 @@ or subagent's lock is one line in its own file with nothing that could differ fr
 while a skills entry is a lock per use, and a use wider than its neighbours is what a
 roll-up shows. *(2026-10-17.)*
 
+**Who holds a tool is printed under each holder.** With the lock in the tool's file,
+the question the listing left open was the other half -- which agents list `http_fetch`
+-- and answering it meant opening every agent file. So each agent and each subagent
+prints a `tools:` and a `builtin tools:` line, beside the `subagents:` line an agent
+already had. Under the holder rather than as a roll-up by tool, because there is only
+one way to hold a tool now, by listing it, and a roll-up would print that list a second
+time sorted the other way. A tool is spelt as the workspace tools section spells it, so
+the same tool reads the same under every agent whichever way each file wrote it.
+
+A star prints as itself beside what it covers today, `* — today csv_profile, ...`: the
+names alone read as a fixed list, and a star also covers what is added tomorrow. A
+subagent's star is not expanded, `* — whatever the calling agent holds`, because a
+subagent is never handed more than its caller, which differs by caller; its `--json`
+`names` hold only its own tools, the part it holds whoever calls it. A scoped listing
+answers each line from the same `offers_tool` the `tools` section is filtered by,
+rather than reading each file again: a second answer to what a caller reaches would
+hand back under its agent the tool that section had just withheld. *(2026-10-18.)*
+
 **Reversed: a `tools:` or `subagents:` entry says who reaches that one.** Written long,
 `{name: X, source_ids: [...]}`, an entry was a lock per agent: an *and* with the
 definition's own line and with the thing's own lock; a compiled subagent wrote it as a
