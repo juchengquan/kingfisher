@@ -18,6 +18,35 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A definition naming skills holds `read_file`, after #877
+
+- **A file whose `skills:` names anything is refused at startup unless its
+  `builtin_tools` holds `read_file`**, the tool a skill is opened with. That covers an
+  agent, a subagent and a Python subagent's portable entry, and names, `["*"]` and
+  `source: bundled` entries alike, whether or not `KINGFISHER_SKILLS_ENABLED` is on:
+
+  ```
+  redactor.yaml: skills names redaction, and builtin_tools leaves out 'read_file', the
+  tool a skill is opened with. Naming one does not grant it, so every time the model
+  opened a skill it would be refused. Add read_file to builtin_tools, or write
+  builtin_tools: ['*'] for every built-in
+  ```
+
+  Add `read_file` to `builtin_tools`, write `builtin_tools: ["*"]`, or drop the skills
+  and put what they say in the prompt. A `SubAgent` taken bare from a package has no
+  `builtin_tools`, so wrap it: `{**spec, "builtin_tools": ["read_file", "ls"]}`.
+- **A request whose `Capabilities.builtin_tools` leaves out `read_file` is told of no
+  skills**: no skills index, no skills section in the prompt and no shell paragraph on
+  skills, for the agent and for each subagent, its own skills included. The run no
+  longer reports skills as withheld from such a request.
+- **The shipped `redactor` has no skill.** Its procedure is in its `system_prompt` and
+  `subagents/redactor/skills/` is gone, since it holds no `read_file` on purpose. A
+  workspace seeded from `assets/` keeps the old `redactor.yaml`, now refused, and the old
+  skill folder, which the new file does not list and which is refused too. Seeding copies
+  and never deletes, so delete `subagents/redactor/skills/` from the definitions folder,
+  then run `kingfisher seed --all`. Carry across any edits to the seeded copies first,
+  since seeding overwrites them.
+
 ## `kingfisher list` shows what each definition holds, and `--json` writes a grant as an object, after #873
 
 - **`agent_subagents` maps each agent to `{"every": ..., "names": [...]}`**, not to a

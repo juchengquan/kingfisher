@@ -440,7 +440,7 @@ def test_a_carried_skills_folder_is_not_reported_as_abandoned(cfg):
         "from pathlib import Path\n\n"
         "HERE = Path(__file__).parent\n\n"
         "SUBAGENTS = [{'name': 'surveyor', 'description': 'd', "
-        "'system_prompt': 'Go.', "
+        "'system_prompt': 'Go.', 'builtin_tools': ['read_file'], "
         "'skills': HERE / 'assets' / 'skills'}]\n",
         encoding="utf-8",
     )

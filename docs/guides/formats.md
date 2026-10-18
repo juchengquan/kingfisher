@@ -152,7 +152,7 @@ true of every agent in the workspace.
 | `system_prompt` | required | This agent's own instruction, added after the two documents above. Write it as a literal block — `system_prompt: \|` — so your line breaks survive |
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table below. `["*"]` is all of them. Unset grants **none**, as `[]` does |
 | `tools` | optional | The tools *your* workspace defines. `["*"]` is all of them. Unset grants **none**, as `[]` does |
-| `skills` | optional | Which procedures it is told about. Unset grants **none**; write `["*"]` for every skill the workspace offers |
+| `skills` | optional | Which procedures it is told about. Unset grants **none**; write `["*"]` for every skill the workspace offers. `builtin_tools` has to hold `read_file`, the tool a skill is opened with |
 | `subagents` | optional | Subagents it may consult. Unset grants **none**; `["*"]` is every subagent the workspace offers. `builtin_tools` has to hold `task`, the tool one is called through |
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
 | `model` | optional | One entry in your `models.yaml`. Unset runs the `default:` there. A list is refused |
@@ -344,6 +344,11 @@ Four things worth knowing before you restrict this list:
 
 - **`read_file` is close to mandatory.** The filesystem tooling assumes it. An
   allowlist without it produces an agent that cannot see its own workspace.
+  It is also how a skill is opened: the model sees an index and reads the
+  skill it picks. A definition whose `skills:` names any while its
+  `builtin_tools` does not hold `read_file` — a list without it, or no line at
+  all — is refused when the catalogue loads, and a request narrowing it away is
+  told of no skills, neither the index nor the prompt's paragraphs on them.
 - **Omitting `task` disables subagents** however many you activate — `task` is
   how delegation happens. A definition whose `subagents:` names any while its
   `builtin_tools` does not hold `task` — a list without it, or no line at all —
@@ -559,7 +564,7 @@ on the spot, so every entry after the first would be unreachable.
 | `system_prompt` | required | The subagent's whole instruction, written after `\|` |
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table above. `["*"]` is all of them. Unset grants **none**, as `[]` does. `eval` is refused here: the code sandbox is the agent's alone, and no subagent is handed it |
 | `tools` | optional | The tools *your* workspace defines. `["*"]` is all of them. Unset grants **none**, as `[]` does. An entry written `{name: x, source: bundled}` comes from this subagent's own folder instead — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
-| `skills` | optional | Which procedures it is told about. Unset grants **none**, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it. `source: bundled` works here too |
+| `skills` | optional | Which procedures it is told about. Unset grants **none**, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it. `source: bundled` works here too. `builtin_tools` has to hold `read_file`, the tool a skill is opened with |
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
 | `subagents` | optional | Subagents this one may consult mid-job. Unset grants **none**. One level — see below |
 | `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the subagent runs whatever summoned it |
@@ -979,7 +984,8 @@ guesses.
 
 `builtin_tools` is the exception, and deliberately. Those are deepagents' tools
 rather than the definition's, so a request or agent that withheld `execute` still
-withholds it. A package cannot grant itself a shell.
+withholds it. A package cannot grant itself a shell. A definition carrying `skills`
+has to list `read_file` there, the tool a skill is opened with, or it is refused.
 
 `kingfisher seed` ships `timestamps/` as a worked example.
 
@@ -1006,7 +1012,8 @@ saw it is out of reach of what a request grants. Write `build` instead — see
 *Compiled subagents* below.
 
 The type also cannot say two things this format can. With no `builtin_tools`, the
-subagent holds none of deepagents' tools — it cannot so much as read a file. Your
+subagent holds none of deepagents' tools — it cannot so much as read a file, and one
+carrying `skills` is refused, since a skill is opened with `read_file`. Your
 deployment's file adds the key where it takes the spec, and the package's dict stays
 a `SubAgent`:
 
@@ -1092,8 +1099,6 @@ subagents/
     redactor.yaml          name: redactor  — the folder is named after this
     tools/
       mask_secrets.py
-    skills/
-      redaction/SKILL.md
 ```
 
 That is the rule for which folder is whose: **a folder is a bundle when it holds a
@@ -1111,17 +1116,20 @@ where it comes from:
 ```yaml
 name: redactor
 description: Quotes from files that may hold credentials, with secrets masked first. Use before quoting an untrusted file.
-builtin_tools: ["*"]
+builtin_tools: [ls, glob, grep]   # no read_file: raw text never enters the transcript
 tools:
   - name: mask_secrets
     source: bundled       # subagents/redactor/tools/
-skills:
-  - name: redaction
-    source: bundled       # subagents/redactor/skills/
 system_prompt: |
-  You quote from files that may contain credentials. Follow the `redaction`
-  skill; it is the whole procedure.
+  You quote from files that may contain credentials. `mask_secrets` first,
+  always; never read a file you are about to quote from any other way.
 ```
+
+A skill of its own sits in `skills/` beside `tools/` and is listed the same way,
+`{name: sampling, source: bundled}` under `skills:`. Like any skill it is opened
+with `read_file`, so the definition has to hold that. `redactor` holds no
+`read_file`, on purpose, so its procedure is its prompt; `kingfisher seed` ships
+`timestamps/` as the subagent with a skill of its own.
 
 `source` takes `shared`, the catalogue's own `tools/` or `skills/`, and
 `bundled`, this subagent's folder. A plain name means `shared`, so every other
@@ -1193,8 +1201,14 @@ definition. A grouping folder cannot be called either of them.
 ```
 subagents
   redactor  (redactor/redactor.yaml) — Quotes from files that may contain credentials…
+      tools: redactor::mask_secrets
+      builtin tools: glob, grep, ls
       mask_secrets  [private tool]
-      redaction  [private skill]
+  timestamps  (timestamps/timestamps.py) — Finds dates in a file, normalises them…
+      tools: timestamps::iso_timestamp
+      builtin tools: glob, grep, ls, read_file
+      iso_timestamp  [private tool, carried]
+      iso-8601  [private skill, carried]
 ```
 
 **Two limits, stated rather than discovered.**
@@ -1347,7 +1361,7 @@ source_ids:
 name: assistant
 description: Answers questions about the data in this workspace.
 source_ids: [A, B]                 # who may open a session on this agent
-builtin_tools: ["*"]               # here for `task`, which reaches reviewer
+builtin_tools: ["*"]               # `task` reaches reviewer, `read_file` a skill
 tools: [sql_query, http_fetch]     # names: a tool's lock is in its own file
 subagents: [reviewer]              # names: a subagent's audience is its own line
 skills:
@@ -1409,6 +1423,7 @@ tools: [sql_query]         # a list — that tool, for A and B
 ```
 ```yaml
 source_ids: [A, B]
+builtin_tools: [read_file] # what a skill is opened with
 skills:                    # the long form — per entry
   - name: audit
     source_ids: [A]            #   for A only
@@ -1434,6 +1449,7 @@ one writes one `source_ids:` line rather than five:
 
 ```yaml
 source_ids: [A, B]
+builtin_tools: [read_file]
 skills:
   - name: audit
     source_ids: [A]            # narrower than the definition
@@ -1462,6 +1478,7 @@ That makes a source id from outside the definition's line useful rather than wro
 
 ```yaml
 source_ids: [sales_db, audit_log]
+builtin_tools: [read_file]
 skills:
   - name: pii-handling
     source_ids: [pii]        # anyone who opens this agent, and holds pii
@@ -1492,7 +1509,7 @@ their own file, and an entry under `tools:` or `subagents:` that writes
 
 ```yaml
 source_ids: [A, B]
-builtin_tools: ["*"]         # here for `task`
+builtin_tools: ["*"]         # `task` and `read_file`, for the lines below
 tools: [sql_query]           # the lock is ToolSpec(sql_query, source_ids=[...])
 subagents: [reviewer]        # the audience is reviewer.yaml's own source_ids:
 skills:

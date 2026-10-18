@@ -16,6 +16,7 @@ from typing import Any, Required, TypedDict
 from kingfisher.core.access.capabilities import ALL, Selection, bare_name
 from kingfisher.core.definitions import fields
 from kingfisher.core.definitions.definition import SpecBase
+from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.definitions.tools.spec import claimed_sources
 
@@ -407,6 +408,12 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
     # this, holds no built-in until the deployment's own file adds one.
     builtin = read.selection(entry.get("builtin_tools"), absent=None, key="builtin_tools")
     _refuse_the_sandbox(builtin, source=source)
+    carried = _carried(entry, read)
+    # Named by directory: the skills in one are not read until the catalogue is.
+    folders = tuple(str(one) for one in carried.get("skills", ()))
+    if (complaint := unopenable_skills(builtin, folders)) is not None:
+        msg = f"{source}: {complaint}"
+        raise SubagentError(msg)
     return SubagentSpec(
         name=fields.text(entry["name"]),
         description=fields.text(entry["description"]),
@@ -414,7 +421,7 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
         builtin_tools=builtin,
         # No catalogue names, whatever it wrote: it holds what it carried and nothing else.
         tools=None,
-        carried=_carried(entry, read),
+        carried=carried,
         metadata=read.mapping(entry.get("metadata"), key="metadata"),
         source_ids=read.source_ids(entry.get("source_ids")),
         datazone=read.datazone(entry.get("datazone")),
@@ -533,6 +540,32 @@ def uncallable_helpers(builtin_tools: Selection, subagents: Selection) -> str | 
     )
 
 
+def opens_skills(builtin_tools: Selection) -> bool:
+    """Whether a grant of built-ins holds the tool a skill is opened with."""
+    return builtin_tools == ALL or READ_FILE in (builtin_tools or ())
+
+
+def unopenable_skills(builtin_tools: Selection, skills: Selection) -> str | None:
+    """Why a definition could never open the skills it names, or `None` if it can.
+
+    `uncallable_helpers`'s sibling, worded alike, and asked by the same readers.
+    """
+    if not skills or opens_skills(builtin_tools):
+        return None
+    named = "every skill" if skills == ALL else ", ".join(skills)
+    said = (
+        f"builtin_tools is left out, which grants no built-in -- not even {READ_FILE!r}"
+        if builtin_tools is None
+        else f"builtin_tools leaves out {READ_FILE!r}"
+    )
+    return (
+        f"skills names {named}, and {said}, the tool a skill is opened with. Naming one "
+        f"does not grant it, so every time the model opened a skill it would be refused. "
+        f"Add {READ_FILE} to builtin_tools, or write builtin_tools: [{ALL!r}] for every "
+        f"built-in"
+    )
+
+
 def _refuse_the_sandbox(builtin_tools: Selection, *, source: str) -> None:
     """Refuse a subagent listing the code sandbox's tool, whether or not one is wired.
 
@@ -602,8 +635,11 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         locked=fields.SUBAGENT_LOCK,
     )
     # At load: otherwise only the call shows it, as an error the model reads and works
-    # around, and nobody who could fix the file sees it.
-    if (complaint := uncallable_helpers(builtin, written_subagents)) is not None:
+    # around, and nobody who could fix the file sees it. Bundled skills are opened alike.
+    complaint = uncallable_helpers(builtin, written_subagents) or unopenable_skills(
+        builtin, (*(written_skills or ()), *own_skills)
+    )
+    if complaint is not None:
         msg = f"{source.name}: {complaint}"
         raise SubagentError(msg)
     source_ids = reader.source_ids(document.get("source_ids"))

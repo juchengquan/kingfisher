@@ -52,7 +52,8 @@ def test_a_subagent_gets_no_skills_when_the_deployment_switched_them_off(
     catalogue -- and `doctor` reported that none would be offered.
     """
     offer_skills(cfg, "tabular-qa")
-    define(cfg, "name: reviewer\ndescription: d\nskills: [tabular-qa]\n"
+    define(cfg, "name: reviewer\ndescription: d\nbuiltin_tools: [read_file]\n"
+        "skills: [tabular-qa]\n"
         "system_prompt: |\n  You review.\n")
 
     built = build_agent(
@@ -70,7 +71,8 @@ def test_a_subagent_gets_no_skills_when_the_deployment_switched_them_off(
 def test_a_subagent_still_gets_them_when_the_deployment_wired_them(cfg, session_dir):
     """The control, so the test above is the switch rather than the wiring."""
     offer_skills(cfg, "tabular-qa")
-    define(cfg, "name: reviewer\ndescription: d\nskills: [tabular-qa]\n"
+    define(cfg, "name: reviewer\ndescription: d\nbuiltin_tools: [read_file]\n"
+        "skills: [tabular-qa]\n"
         "system_prompt: |\n  You review.\n")
 
     built = build(cfg, session_dir, subagents=("reviewer",), skills=ALL)
@@ -84,7 +86,8 @@ def test_a_subagent_still_gets_them_when_the_deployment_wired_them(cfg, session_
 
 def test_a_definition_can_name_the_skills_its_subagent_gets(cfg, session_dir):
     offer_skills(cfg, "tabular-qa", "code-review")
-    define(cfg, "name: reviewer\ndescription: d\nskills: [tabular-qa]\n"
+    define(cfg, "name: reviewer\ndescription: d\nbuiltin_tools: [read_file]\n"
+        "skills: [tabular-qa]\n"
         "system_prompt: |\n  You review.\n")
 
     built = build(cfg, session_dir, subagents=("reviewer",))
@@ -105,7 +108,8 @@ def test_a_subagent_may_name_a_skill_by_its_full_identity(cfg, session_dir):
     (cfg.skills_dir / "incident" / "postmortem" / "SKILL.md").write_text(
         "---\nname: postmortem\ndescription: A procedure.\n---\nBody.\n", encoding="utf-8"
     )
-    define(cfg, "name: reviewer\ndescription: d\nskills: [incident::postmortem]\n"
+    define(cfg, "name: reviewer\ndescription: d\nbuiltin_tools: [read_file]\n"
+        "skills: [incident::postmortem]\n"
         "system_prompt: |\n  You review.\n")
 
     built = build(cfg, session_dir, subagents=("reviewer",))
@@ -126,7 +130,8 @@ def test_a_subagent_is_actually_told_about_the_skill_it_named(cfg, session_dir):
     renders the list.
     """
     offer_skills(cfg, "tabular-qa", "code-review")
-    define(cfg, "name: reviewer\ndescription: d\nskills: [tabular-qa]\n"
+    define(cfg, "name: reviewer\ndescription: d\nbuiltin_tools: [read_file]\n"
+        "skills: [tabular-qa]\n"
         "system_prompt: |\n  You review.\n")
 
     built = build(cfg, session_dir, subagents=("reviewer",))
@@ -222,7 +227,8 @@ def test_a_definition_naming_an_unknown_skill_fails_loudly(cfg, session_dir):
     """A mistake in the definition, so it raises -- the same way `build_agent` already
     refuses a request naming a skill nothing defines.
     """
-    define(cfg, "name: reviewer\ndescription: d\nskills: [nonesuch]\n"
+    define(cfg, "name: reviewer\ndescription: d\nbuiltin_tools: [read_file]\n"
+        "skills: [nonesuch]\n"
         "system_prompt: |\n  You review.\n")
 
     with pytest.raises(CapabilityError, match="names unknown skill"):
@@ -236,7 +242,7 @@ def test_a_subagent_cannot_reach_past_the_request(cfg, session_dir):
     offer_skills(cfg, "tabular-qa", "code-review")
     define(
         cfg,
-        "name: reviewer\ndescription: d\n"
+        "name: reviewer\ndescription: d\nbuiltin_tools: [read_file]\n"
         "skills: [tabular-qa, code-review]\n"
         "system_prompt: |\n  You review.\n",
     )
@@ -259,10 +265,14 @@ def test_the_field_parses_in_both_yaml_forms():
     parsed now that a definition is read as YAML.
     """
     inline = a_subagent(
-        "name: r\ndescription: d\nskills: [a, b]\nsystem_prompt: |\n  Body.\n", "r.md"
+        "name: r\ndescription: d\nbuiltin_tools: [read_file]\nskills: [a, b]\n"
+        "system_prompt: |\n  Body.\n",
+        "r.md",
     )
     block = a_subagent(
-        "name: r\ndescription: d\nskills:\n  - a\n  - b\nsystem_prompt: |\n  Body.\n", "r.md"
+        "name: r\ndescription: d\nbuiltin_tools: [read_file]\nskills:\n  - a\n  - b\n"
+        "system_prompt: |\n  Body.\n",
+        "r.md",
     )
 
     assert inline.skills == block.skills == ("a", "b")

@@ -35,8 +35,8 @@ skills:
   - incident::postmortem
   - incident::timeline
 # The two subagents no other shipped agent names, and a subagent no agent names
-# is one nothing can call. `redactor` brings the tool and skill in its own
-# folder whatever this file grants; `show-your-work` is a compiled graph.
+# is one nothing can call. `redactor` brings the tool in its own folder
+# whatever this file grants; `show-your-work` is a compiled graph.
 subagents: [redactor, show-your-work]
 system_prompt: |
   You write up incidents that are already resolved.

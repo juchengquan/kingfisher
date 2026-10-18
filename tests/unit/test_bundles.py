@@ -354,9 +354,12 @@ def owner(*, shared=None, tools=("probe",), skills=()):
 
     `shared` entries are YAML as written -- `'"*"'` for every catalogue tool -- and
     `None` leaves the line to hold only the bundled ones, so a definition listing
-    nothing at all has no `tools:` line and inherits.
+    nothing at all has no `tools:` line and inherits. A skill brings `read_file`, the
+    tool it is opened with.
     """
     lines = ["name: surveyor", "description: Surveys files."]
+    if skills:
+        lines.append("builtin_tools: [read_file]")
     for field, plain, own in (("tools", shared or (), tools), ("skills", (), skills)):
         entries = [*plain, *(f"{{name: {one}, source: bundled}}" for one in own)]
         if entries:
@@ -545,7 +548,9 @@ def test_two_sources_may_still_both_ship_one_skill_name():
     name is ambiguous can actually be seen.
     """
     spec = a_subagent(
-        SUBAGENT + "skills:\n  - research::lookup\n  - legal::lookup\n", "surveyor.yaml"
+        SUBAGENT + "builtin_tools: [read_file]\nskills:\n  - research::lookup\n"
+        "  - legal::lookup\n",
+        "surveyor.yaml",
     )
 
     assert spec.skills == ("research::lookup", "legal::lookup")
@@ -655,6 +660,7 @@ def test_a_skill_in_a_subfolder_of_a_subagents_folder_is_neither_granted_nor_sho
         "name": "carrier",
         "description": "Carries its own skills.",
         "system_prompt": "Go.",
+        "builtin_tools": ["read_file"],
         "skills": [str(carried)],
     }
     (subagents / "carrier.py").write_text(f"SUBAGENTS = [{entry!r}]\n", encoding="utf-8")
@@ -1447,7 +1453,7 @@ def test_a_compiled_subagents_bundled_skill_is_reported_as_reaching_nothing(cfg)
 
 def test_an_assembled_subagents_bundled_skill_is_not_reported_as_stranded(cfg):
     """The control. The note is about graphs, not about bundles -- pointed at every
-    bundled skill it would fire on the shipped `redactor`, whose skill arrives.
+    bundled skill it would fire on the shipped `timestamps`, whose skill arrives.
     """
     workspace_with_bundle(cfg, definition=OWN_TOOL_AND_SKILL)
     with_private_skill(cfg)
@@ -1522,7 +1528,6 @@ def test_the_shipped_bundle_is_a_bundle(shipped):
     # own anything.
     assert set(bundles) == {"redactor", "timestamps", "versions", "quarters"}
     assert bundles["redactor"].tools is not None
-    assert bundles["redactor"].skills
     assert bundles["redactor"].root is not None
     assert bundles["timestamps"].root is None
     assert bundles["timestamps"].tools is not None
@@ -1542,7 +1547,7 @@ def test_the_shipped_bundle_lists_what_it_holds(workspace_with_presets):
     catalogue = Definitions.from_config(workspace_with_presets).warm()
     spec = catalogue.subagents.specs["redactor"]
 
-    assert spec.bundled == {"tools": ("mask_secrets",), "skills": ("redaction",)}
+    assert spec.bundled == {"tools": ("mask_secrets",), "skills": ()}
     # Driven: `warm` above is what refuses a stale list, so reaching this line is the
     # assertion. Named anyway, because a `warm()` whose refusal moved elsewhere would
     # leave the two lines above passing on a definition nothing checked.

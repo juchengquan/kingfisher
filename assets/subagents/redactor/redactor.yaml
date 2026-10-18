@@ -3,9 +3,9 @@ description: Quotes from files that may contain credentials, with secrets masked
 # **This definition is a bundle, and the folder is what makes it one.**
 #
 # `subagents/redactor/` holds a definition whose `name` is `redactor`, so the
-# folder belongs to it: what is in `redactor/tools/` and `redactor/skills/` can
-# reach this subagent and nothing else. A folder that names no definition is
-# just organisation, which is what `analysis/profiler.yaml` next door is.
+# folder belongs to it: what is in `redactor/tools/` can reach this subagent and
+# nothing else. A folder that names no definition is just organisation, which is
+# what `analysis/profiler.yaml` next door is.
 #
 # A bundle folder holds exactly one definition. `redactor/helper.yaml` would be
 # refused, because "is `helper` inside the bundle or beside it" has no honest
@@ -14,6 +14,10 @@ builtin_tools: [ls, glob, grep]
 # `read_file` is deliberately absent. This subagent exists so that a file's raw
 # text never enters the transcript, and a subagent holding both tools would have
 # the careful path and the careless one side by side.
+#
+# Which is why its procedure is the prompt below and not a skill: a skill is
+# opened with `read_file`, so a definition naming one without it is refused.
+# `timestamps/` and `versions/` are the subagents that bundle a skill.
 #
 # `source: bundled` is what takes a tool from this folder rather than from the
 # shared `tools/`, and only what is listed arrives. The list and the folder must
@@ -26,9 +30,6 @@ builtin_tools: [ls, glob, grep]
 # what it returns.
 tools:
   - name: mask_secrets
-    source: bundled
-skills:
-  - name: redaction
     source: bundled
 # Keys of your own, which nothing in a run reads. A script checking that every
 # subagent names an owner does, and a subagent handling credentials is the one
@@ -45,11 +46,28 @@ system_prompt: |
   whether it holds a secret. Your job is that the answer they get is useful and
   that the raw text never reaches it.
 
-  Follow the `redaction` skill. It is short and it is the whole procedure.
+  1. `mask_secrets` first, always. Never read a file you are about to quote from
+     any other way -- the point is that the unmasked text never enters the
+     transcript.
+  2. Read the header it returns. `0 masked` and `12 masked` are different
+     answers and the caller needs to know which they got. It also says how many
+     lines it read *of how many the file has* -- `200 of 1001` means the other
+     801 were never looked at, so "this file is clean" is not something you can
+     say yet. Raise `max_lines` and call it again before reporting on a file it
+     did not finish.
+  3. Quote the smallest span that makes your point. A masked file is safer than
+     an unmasked one, not safe.
+  4. Say what you masked. "Three lines contained credentials" is information; a
+     clean-looking excerpt that quietly dropped them is a misleading one.
 
   Report what you masked as plainly as what you found. A caller who cannot tell
   "this file held nothing sensitive" from "I removed the sensitive parts" will
   eventually treat the second as the first.
+
+  The patterns are crude, and they are meant to be. Anything shaped unlike an
+  `api_key = ...` line survives them -- a base64 blob, a private key body, a
+  credential in prose. Treat the output as *less* dangerous, never as safe, and
+  say so when you report it.
 
   You do not decide whether a file should have been read. You were asked for its
   contents; say what is in it, safely, and let the caller judge the rest.

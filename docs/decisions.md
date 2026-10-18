@@ -480,6 +480,17 @@ anything while `builtin_tools` is a list without `task` or is left out. A *reque
 narrowing `task` away is still narrowed at the call, because there the caller chose it.
 *(2026-10-12.)*
 
+**A definition naming skills has to hold the tool that opens them.** A skill is offered as
+an index and read with `read_file`, as deepagents' own prompt says, so without it every
+skill the model opens is a refused call. The shipped `redactor` named its bundled skill
+while holding no `read_file`, deliberately, and carries its procedure in its prompt now.
+Both formats and a portable Python entry refuse `skills:` naming anything, bundled entries
+and `["*"]` included, while `builtin_tools` leaves `read_file` out, beside the `task` rule
+and whatever the skills switch says. A *request* narrowing it away is told of no skills --
+no index, no skills text in the prompt, none reported withheld -- and a subagent loses its
+own as well, though those skip the switch: an index it cannot follow is only refusals.
+`general-purpose`, measured, is handed no skills index. *(2026-10-18.)*
+
 **A subagent may not list `eval`.** No subagent holds the sandbox in any configuration:
 deepagents builds a subagent's stack from its own spec, `general-purpose` carries the
 guards, the allowlist and registered middleware, a nested helper's tools leave `eval`

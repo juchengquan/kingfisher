@@ -349,7 +349,9 @@ def test_an_entry_with_no_audience_inherits_the_definitions():
 def test_declaring_with_no_caller_is_what_it_always_was():
     """A deployment with no vocabulary, or an UNSCOPED call."""
     spec = _read(
-        MINIMAL.rstrip() + "\nsource_ids: [A]\nskills:\n  - name: audit\n    source_ids: [B]\n",
+        MINIMAL.rstrip()
+        + "\nsource_ids: [A]\nbuiltin_tools: [read_file]\n"
+        + "skills:\n  - name: audit\n    source_ids: [B]\n",
         "plain.yaml",
     )
 
@@ -385,7 +387,8 @@ def test_an_entry_audience_outside_the_definitions_own_is_recorded_not_judged():
     """
     spec = _read(
         MINIMAL.rstrip()
-        + "\nsource_ids: [A, B]\nskills:\n  - name: audit\n    source_ids: [C]\n",
+        + "\nsource_ids: [A, B]\nbuiltin_tools: [read_file]\n"
+        + "skills:\n  - name: audit\n    source_ids: [C]\n",
         "plain.yaml",
     )
 
@@ -410,7 +413,8 @@ def test_only_the_restricted_entries_need_an_audience():
     """The ergonomics of the long form, and the reason an entry may stay short."""
     spec = _read(
         MINIMAL.rstrip()
-        + "\nsource_ids: [A, B]\nskills:\n  - name: audit\n    source_ids: [A]\n"
+        + "\nsource_ids: [A, B]\nbuiltin_tools: [read_file]\n"
+        + "skills:\n  - name: audit\n    source_ids: [A]\n"
         + "  - review\n  - triage\n",
         "plain.yaml",
     )

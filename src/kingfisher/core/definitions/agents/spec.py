@@ -12,7 +12,7 @@ from kingfisher.core.definitions import fields
 from kingfisher.core.definitions.definition import SpecBase
 
 # Other kinds' vocabulary: a `tools:` entry may be a `where::what` tool reference.
-from kingfisher.core.definitions.subagents.spec import uncallable_helpers
+from kingfisher.core.definitions.subagents.spec import uncallable_helpers, unopenable_skills
 from kingfisher.core.definitions.tools.spec import claimed_sources
 
 DIRECTORY = "agents"
@@ -138,8 +138,11 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     )
     builtin = read.selection(document.get("builtin_tools"), absent=None, key="builtin_tools")
     # At load: at the call the allowlist refuses `task`, and the model quietly answers
-    # without its subagents.
-    if (complaint := uncallable_helpers(builtin, written_subagents)) is not None:
+    # without its subagents -- or `read_file`, and it spends a call on every skill it opens.
+    complaint = uncallable_helpers(builtin, written_subagents) or unopenable_skills(
+        builtin, written_skills
+    )
+    if complaint is not None:
         msg = f"{source.name}: {complaint}"
         raise AgentError(msg)
     source_ids = read.source_ids(document.get("source_ids"))

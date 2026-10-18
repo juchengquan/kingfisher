@@ -43,6 +43,12 @@ SHARED_FIELDS = sorted(
 HEAD = "name: n\ndescription: d\nsystem_prompt: |\n  Go.\n"
 REQUIRED = frozenset(yaml.safe_load(HEAD))
 
+
+def opening(key: str) -> str:
+    """Every built-in beside `key`, so a field is read on its own terms: without
+    `read_file`, any `skills:` is refused by both formats in one sentence, and agrees."""
+    return "" if key == "builtin_tools" else 'builtin_tools: ["*"]\n'
+
 #: Keys a definition writes that reach the spec through a *derived* field
 #: instead of one named after them. `model:` is read into `wanted`, which is the
 #: derived field the resolution works on, so it has no field of its own.
@@ -237,6 +243,7 @@ DOCUMENTS = {
         "source_ids: [A, B]\n"
     ),
     "entries with an audience and settings": HEAD + (
+        "builtin_tools: [read_file]\n"
         "tools:\n  - name: fetch\n  - csv_profile\n"
         "skills:\n  - name: tabular-qa\n    source_ids: [B]\n"
         "subagents: [reviewer]\n"
@@ -255,6 +262,7 @@ DOCUMENTS = {
     "one name twice": HEAD + "tools: [fetch, fetch]\n",
     "an entry key misspelled": HEAD + "tools:\n  - name: fetch\n    sourceids: [A]\n",
     "entries saying they are shared": HEAD + (
+        "builtin_tools: [read_file]\n"
         "tools:\n  - name: fetch\n    source: shared\n"
         "skills:\n  - name: tabular-qa\n    source: shared\n    source_ids: [A]\n"
     ),
@@ -265,6 +273,9 @@ DOCUMENTS = {
     "metadata that is not a mapping": HEAD + "metadata: [owner]\n",
     "subagents named and no task to call them with": HEAD + (
         "builtin_tools: [read_file]\nsubagents: [reviewer]\n"
+    ),
+    "skills named and no read_file to open them with": HEAD + (
+        "builtin_tools: [grep]\nskills: [tabular-qa]\n"
     ),
     "a blank description": "name: n\ndescription: ''\nsystem_prompt: |\n  Go.\n",
     "no description": "name: n\nsystem_prompt: |\n  Go.\n",
@@ -325,8 +336,8 @@ def test_the_star_is_the_only_place_the_formats_part():
     parted = {
         key
         for key in SHARED_KEYS - REQUIRED
-        if _outcome("agent", HEAD + f'{key}: ["*"]\n')
-        != _outcome("subagent", HEAD + f'{key}: ["*"]\n')
+        if _outcome("agent", HEAD + opening(key) + f'{key}: ["*"]\n')
+        != _outcome("subagent", HEAD + opening(key) + f'{key}: ["*"]\n')
     }
 
     assert parted == PART_ON_THE_STAR
@@ -345,7 +356,7 @@ def test_bundled_is_the_only_source_the_formats_part_on():
     assert SOURCES, "no sources to try -- this checks nothing"
 
     def written(key: str, source: str) -> str:
-        return HEAD + f"{key}:\n  - name: x\n    source: {source}\n"
+        return HEAD + opening(key) + f"{key}:\n  - name: x\n    source: {source}\n"
 
     outcomes = {
         (key, source): (

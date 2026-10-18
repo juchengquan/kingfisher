@@ -197,7 +197,9 @@ def a_portable_subagent_carrying_one_skill_name_twice(cfg):
         _write(directory / "lookup" / "SKILL.md", "---\nname: lookup\ndescription: d\n---\n")
     _write(
         _root(cfg, "subagents") / "p.py",
-        PORTABLE.format(extra=f", 'skills': [{str(one)!r}, {str(two)!r}]"),
+        PORTABLE.format(
+            extra=f", 'builtin_tools': ['read_file'], 'skills': [{str(one)!r}, {str(two)!r}]"
+        ),
     )
 
 
@@ -304,7 +306,7 @@ REFUSALS: dict[str, Refusal] = {
     "core/definitions/subagents/spec.py::_carried": Refusal(
         2, defect=a_portable_subagent_carrying_tools_that_are_not_a_list),
     "core/definitions/subagents/spec.py::_portable": Refusal(
-        2, defect=a_portable_subagent_naming_a_model),
+        3, defect=a_portable_subagent_naming_a_model),
     # The required fields of both Python declarations, in one body since the compiled
     # one had only half of it. Filed on the *blank* name rather than the missing one:
     # that is the refusal this function added, and what this table is for is proving

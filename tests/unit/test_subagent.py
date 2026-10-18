@@ -221,6 +221,7 @@ def test_every_known_field_still_parses():
     body = (
         "name: reviewer\n"
         "description: d\n"
+        "builtin_tools: [read_file]\n"
         "tools: [read_file]\n"
         "skills: [tabular-qa]\n"
         "middlewares: [audit]\n"
