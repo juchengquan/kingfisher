@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.cli.health import examine, worst
 from kingfisher.cli.listing import failed, render
-from kingfisher.core.access.capabilities import Capabilities
+from kingfisher.core.access.capabilities import ALL, Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.backend import skills_sources
 from kingfisher.core.agent.middlewares.narrowing import (
@@ -1415,6 +1415,7 @@ def test_a_compiled_subagents_bundle_wins_a_name_the_catalogue_also_defines(cfg,
             description="A compiled subagent.",
             system_prompt="",
             build=build,
+            tools=ALL,
         ),
         cfg,
         catalogue=LocalToolRepository(tmp_path / "shared").found,

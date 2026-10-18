@@ -460,13 +460,14 @@ def _told(cfg, *script: AIMessage, **agent: str) -> list[str]:
 @pytest.mark.parametrize(
     ("granted", "told"),
     [
-        ({}, set(SECTIONS)),
+        ({"builtin_tools": '["*"]'}, set(SECTIONS)),
+        ({}, set()),
         ({"builtin_tools": "[]"}, set()),
         ({"builtin_tools": "[read_file]"}, {"## The file tools"}),
         ({"builtin_tools": "[execute]"}, {"## The shell", MAPPINGS}),
         ({"builtin_tools": "[write_todos]"}, {TODOS}),
     ],
-    ids=["unrestricted", "none", "read_file", "execute", "write_todos"],
+    ids=["every", "left out", "none", "read_file", "execute", "write_todos"],
 )
 def test_an_agent_is_told_only_of_the_built_in_tools_it_holds(scripted, granted, told):
     """An agent granted `builtin_tools: []` was still told of the file tools, the shell,
@@ -491,7 +492,7 @@ def test_the_file_tools_section_names_only_the_file_tools_held(scripted):
 @pytest.mark.parametrize(
     ("subagent", "agent"),
     [
-        ("reader", {"subagents": "[reader]"}),
+        ("reader", {"subagents": "[reader]", "builtin_tools": '["*"]'}),
         ("general-purpose", {"builtin_tools": "[read_file, task]"}),
     ],
 )

@@ -20,8 +20,8 @@ builtin_tools: [ls, glob, grep]
 # match: a file added to `redactor/tools/` and not listed here stops the
 # catalogue loading, and so does renaming `redactor` out from under the folder.
 #
-# Nothing shared is listed, so this subagent gets no catalogue tool. Left out
-# entirely, the line would be every catalogue tool -- `sql_query` returning rows
+# Nothing shared is listed, so this subagent gets no catalogue tool. A `"*"`
+# here would be every catalogue tool -- `sql_query` returning rows
 # unmasked among them -- on the one subagent whose job is being careful with
 # what it returns.
 tools:

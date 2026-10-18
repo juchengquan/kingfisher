@@ -65,6 +65,7 @@ FANOUT = """\
 name: fanout
 description: Dispatches the namer delegate from inside the sandbox.
 builtin_tools: [eval, task]
+tools: ["*"]
 subagents: [namer]
 system_prompt: |
   You run workflows in the JavaScript sandbox. When a task asks for a loop,

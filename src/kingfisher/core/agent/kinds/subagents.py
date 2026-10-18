@@ -320,10 +320,10 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     if middleware:
         subagent["middleware"] = middleware
 
-    if mine or private or tool_objects is not None:
-        # Objects, not names: names raise inside `ToolNode`. The whole set goes in and
-        # `GrantedOnlyMiddleware` decides.
-        subagent["tools"] = [one.tool for one in (*private, *mine)] + list(tool_objects or [])
+    # Objects, not names: names raise inside `ToolNode`. The whole set goes in and
+    # `GrantedOnlyMiddleware` decides. Set even when empty: deepagents reads a missing key
+    # as "the parent's tools", and a subagent granted none would be built holding them.
+    subagent["tools"] = [one.tool for one in (*private, *mine)] + list(tool_objects or [])
 
     # An instance, not a name: deepagents' `init_chat_model` would infer its own provider and
     # read credentials from the environment, around the catalogue and the profile's params.

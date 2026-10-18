@@ -49,7 +49,14 @@ from kingfisher.core.session.store import KeptLedger
 from kingfisher.core.session.transcript import from_json
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
-from tests.conftest import FakeToolCallingModel, an_agent, start, subagents_dir, tools_dir
+from tests.conftest import (
+    EVERY_TOOL,
+    FakeToolCallingModel,
+    an_agent,
+    start,
+    subagents_dir,
+    tools_dir,
+)
 from tests.unit.scripted import Scripted
 
 #: About 2,000 tokens, which a mark of 1,000 clears at once.
@@ -716,7 +723,7 @@ TOOLS = [bulky, loud]
 def bulky(scripted):
     tools_dir(scripted).mkdir(parents=True, exist_ok=True)
     (tools_dir(scripted) / "probe.py").write_text(TOOLS, encoding="utf-8")
-    an_agent(scripted)
+    an_agent(scripted, **EVERY_TOOL)
     start(scripted, "s")
     return scripted
 
@@ -830,9 +837,12 @@ def test_only_the_main_agent_of_a_turn_kingfisher_built_clears(bulky):
     a build no turn keeps has no ledger for a handle to name."""
     subagents_dir(bulky).mkdir(parents=True, exist_ok=True)
     (subagents_dir(bulky) / "helper.yaml").write_text(
-        "name: helper\ndescription: Helps.\nsystem_prompt: |\n  You help.\n", encoding="utf-8"
+        "name: helper\ndescription: Helps.\n"
+        'builtin_tools: ["*"]\ntools: ["*"]\n'
+        "system_prompt: |\n  You help.\n",
+        encoding="utf-8",
     )
-    an_agent(bulky, subagents="[helper]")
+    an_agent(bulky, subagents="[helper]", **EVERY_TOOL)
     backend = backend_at(bulky, bulky.workspace / "sessions" / "s")
     agent = _spec(bulky, "only")
 

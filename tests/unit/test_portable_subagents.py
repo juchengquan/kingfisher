@@ -15,7 +15,7 @@ from deepagents import CompiledSubAgent, SubAgent
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
-from kingfisher.core.access.capabilities import Capabilities
+from kingfisher.core.access.capabilities import ALL, Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.narrowing import (
     GrantedOnlyMiddleware,
@@ -207,10 +207,10 @@ def test_the_shape_decides_the_rules_rather_than_where_the_entry_came_from():
 
 
 def test_a_portable_declaration_is_granted_no_workspace_tool(cfg, session_dir):
-    """`SubagentSpec.tools` defaults to `ALL`, which means *inherit whatever the
-    request granted* -- and a portable entry has no `tools:` key to say otherwise
-    with. Left at the default, an imported subagent would be handed the deployment's
-    whole catalogue: the request below grants `shared`, and `shared` must not arrive.
+    """A portable entry's `tools` carries objects and never names, so it can grant no
+    catalogue tool -- read as the request's `ALL`, an imported subagent would be handed
+    the deployment's whole catalogue: the request below grants `shared`, and `shared`
+    must not arrive.
     """
     write_portable(cfg)
 
@@ -228,6 +228,22 @@ def test_the_spec_says_none_rather_than_staying_quiet(cfg):
     spec = LocalSubagentRepository(cfg.definitions / "subagents").specs["surveyor"]
 
     assert spec.tools is None
+
+
+def test_a_portable_declaration_naming_no_built_ins_is_granted_none():
+    """deepagents' `SubAgent` has no word for built-ins, so a package written to it would
+    otherwise arrive holding the shell without a line anywhere asking for it.
+    """
+    entry = {"name": "surveyor", "description": "d", "system_prompt": "Go."}
+
+    assert declared(entry, "surveyor.py").builtin_tools is None
+
+
+def test_a_portable_declaration_asks_for_every_built_in_with_the_star():
+    """The control: a reader granting nothing whatever was written passes the test above."""
+    entry = {"name": "surveyor", "description": "d", "system_prompt": "Go."}
+
+    assert declared({**entry, "builtin_tools": ["*"]}, "surveyor.py").builtin_tools == ALL
 
 
 # -- atomic ------------------------------------------------------------------
@@ -519,20 +535,23 @@ def test_the_helper_refusal_points_at_a_key_that_exists():
 
 # -- one tool axis everything, the other nothing ------------------------------
 
-#: Each leaves one axis at `ALL` and the other empty, which is every portable
-#: subagent's default: it may use the host's built-ins and holds no workspace tool.
+#: Each leaves one axis at `ALL` and the other empty, as a portable subagent asking for
+#: every built-in has it: it never holds a workspace tool.
 ONE_AXIS_OPEN = {
-    "portable, default": (
+    "portable, every built-in": (
         "surveyor.py",
-        "SUBAGENTS = [{'name': 'surveyor', 'description': 'd', 'system_prompt': 'Go.'}]\n",
+        "SUBAGENTS = [{'name': 'surveyor', 'description': 'd', 'system_prompt': 'Go.', "
+        "'builtin_tools': ['*']}]\n",
     ),
     "document, no workspace tools": (
         "surveyor.yaml",
-        "name: surveyor\ndescription: d\nsystem_prompt: |\n  Go.\ntools: []\n",
+        'name: surveyor\ndescription: d\nsystem_prompt: |\n  Go.\nbuiltin_tools: ["*"]\n'
+        "tools: []\n",
     ),
     "document, no built-ins": (
         "surveyor.yaml",
-        "name: surveyor\ndescription: d\nsystem_prompt: |\n  Go.\nbuiltin_tools: []\n",
+        "name: surveyor\ndescription: d\nsystem_prompt: |\n  Go.\nbuiltin_tools: []\n"
+        'tools: ["*"]\n',
     ),
 }
 

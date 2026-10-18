@@ -47,7 +47,8 @@ run(Request(
 `agent` is required; there is no default. Leaving a *capability* unset means
 *no opinion* — everything that agent declares, which is not the same as
 everything the workspace holds: an agent that names three tools cannot be asked
-for a fourth. Passing an empty tuple means *none*. Naming something that does
+for a fourth. Passing an empty tuple means *none*. A definition file reads the
+other way round: a field it leaves out grants none. Naming something that does
 not exist raises `CapabilityError` at build time rather than running with
 quietly less than you asked for.
 
@@ -149,10 +150,10 @@ true of every agent in the workspace.
 | `name` | required | What a request names it by. Authoritative — the filename is not |
 | `description` | required | Single line. Nothing reads it at run time; it is how somebody chooses between your agents in `kingfisher list` |
 | `system_prompt` | required | This agent's own instruction, added after the two documents above. Write it as a literal block — `system_prompt: \|` — so your line breaks survive |
-| `builtin_tools` | optional | deepagents' own set, listed in the tools table below. Unset means all of them; `[]` means none |
-| `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none |
+| `builtin_tools` | optional | deepagents' own set, listed in the tools table below. `["*"]` is all of them. Unset grants **none**, as `[]` does |
+| `tools` | optional | The tools *your* workspace defines. `["*"]` is all of them. Unset grants **none**, as `[]` does |
 | `skills` | optional | Which procedures it is told about. Unset grants **none**; write `["*"]` for every skill the workspace offers |
-| `subagents` | optional | Subagents it may consult. Unset grants **none**; `["*"]` is every subagent the workspace offers. A `builtin_tools` list has to include `task`, the tool one is called through |
+| `subagents` | optional | Subagents it may consult. Unset grants **none**; `["*"]` is every subagent the workspace offers. `builtin_tools` has to hold `task`, the tool one is called through |
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
 | `model` | optional | One entry in your `models.yaml`. Unset runs the `default:` there. A list is refused |
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
@@ -160,11 +161,17 @@ true of every agent in the workspace.
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 | `source_ids` | optional | Who may open a session on this agent. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
 
-One rule covers all four, and a subagent file follows it too: **leave a tool
-field out and you get everything available to you; leave `skills` or `subagents`
-out and you get none.** Tools are what an agent needs to *act* and it can do
-nothing without them; skills and subagents are what it needs to *know* and
-*ask*, and most agents need neither.
+One rule covers every field that grants, and a subagent file follows it too:
+**leave a field out and you get none of it; write `["*"]` for everything
+available to you.** A forgotten line fails closed: the agent visibly cannot act
+on its first turn, rather than quietly holding the shell and every tool somebody
+adds to the workspace later. So an agent meant to hold every tool says so on
+both lines:
+
+```yaml
+builtin_tools: ["*"]
+tools: ["*"]
+```
 
 ### An agent grants the helpers its subagents may consult
 
@@ -309,7 +316,8 @@ Four things worth knowing before you restrict this list:
   allowlist without it produces an agent that cannot see its own workspace.
 - **Omitting `task` disables subagents** however many you activate — `task` is
   how delegation happens. A definition whose `subagents:` names any while its
-  `builtin_tools` leaves `task` out is refused when the catalogue loads.
+  `builtin_tools` does not hold `task` — a list without it, or no line at all —
+  is refused when the catalogue loads.
 - **`execute` is the one that matters for isolation.** It bypasses the
   filesystem permission layer entirely, so a request that activates the shell
   can reach anything the process can, including skills it did not activate. Deny
@@ -424,6 +432,7 @@ look like, so asking them for a path would make your layout part of your API.
 name: reviewer
 description: Re-checks numeric claims against the files they came from. Use before reporting figures you computed once.
 builtin_tools: [read_file, glob, grep]
+tools: ["*"]
 system_prompt: |
   You verify claims. You do not improve prose or add analysis — another
   agent has already done that work and you are the check on it.
@@ -432,7 +441,7 @@ system_prompt: |
   the caller's number, and whether they match.
 ```
 
-That is a whole definition: three required fields, one optional, nothing else
+That is a whole definition: three required fields, two optional, nothing else
 needed.
 
 ### Two tool lists, not one
@@ -448,16 +457,13 @@ builtin_tools: [read_file, glob]   # named, so only these two
 tools: [http_fetch]                # and this one, costing no built-in
 ```
 
-**Omitting a list means all of it. An empty list means none.** That difference
-does real work: the shipped `extractor` writes `tools: []`, because
-"read-only"
-has to keep meaning read-only rather than quietly growing whatever the
-workspace adds later.
-
-To say "all of them" out loud, write `["*"]`:
+**`["*"]` means all of it. Leaving a list out means none, and so does an empty
+one.** The two say the same thing to kingfisher and different things to a
+reader: the shipped `extractor` writes `tools: []`, so "read-only" is visibly
+meant rather than a line somebody forgot.
 
 ```yaml
-builtin_tools: ["*"]   # same as leaving the line out, said on purpose
+builtin_tools: ["*"]   # every built-in; leave the line out for none
 ```
 
 A list, because every selection here is a list. Bare `"*"` is refused by name —
@@ -516,9 +522,9 @@ on the spot, so every entry after the first would be unreachable.
 | `name` | required | What a request activates it by. Authoritative — the filename is not |
 | `description` | required | Single line. This is what the parent agent sees when deciding whether to delegate, so write it as a trigger, not a title |
 | `system_prompt` | required | The subagent's whole instruction, written after `\|` |
-| `builtin_tools` | optional | deepagents' own set, listed in the tools table above. Unset means all of them; `[]` means none. `eval` is refused here: the code sandbox is the agent's alone, and no subagent is handed it |
-| `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none. An entry written `{name: x, source: bundled}` comes from this subagent's own folder instead — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
-| `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it. `source: bundled` works here too |
+| `builtin_tools` | optional | deepagents' own set, listed in the tools table above. `["*"]` is all of them. Unset grants **none**, as `[]` does. `eval` is refused here: the code sandbox is the agent's alone, and no subagent is handed it |
+| `tools` | optional | The tools *your* workspace defines. `["*"]` is all of them. Unset grants **none**, as `[]` does. An entry written `{name: x, source: bundled}` comes from this subagent's own folder instead — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
+| `skills` | optional | Which procedures it is told about. Unset grants **none**, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it. `source: bundled` works here too |
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
 | `subagents` | optional | Subagents this one may consult mid-job. Unset grants **none**. One level — see below |
 | `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the subagent runs whatever summoned it |
@@ -531,15 +537,17 @@ on the spot, so every entry after the first would be unreachable.
 A subagent can hit a question of a different kind mid-job — `reviewer` doubting
 one figure, when checking figures is not what it is for. It can ask for help:
 
-One more line in `reviewer.yaml`:
+One more line in `reviewer.yaml`, and `task` on its `builtin_tools`:
 
 ```yaml
+builtin_tools: [read_file, glob, grep, task]
 subagents: [second-opinion]
 ```
 
-If `reviewer` lists its `builtin_tools`, `task` has to be on that list too. It is the
-tool a helper is called through, and naming a helper does not grant it, so a list
-without it is refused when the catalogue loads.
+`task` is the tool a helper is called through, and naming a helper does not grant
+it, so a definition naming one without `task` is refused when the catalogue loads —
+whether its list leaves `task` out or it has no `builtin_tools` line at all, which
+grants no built-in.
 
 And the subagent it names, which is an ordinary definition — the only thing
 that makes it a helper is being named above:
@@ -702,11 +710,11 @@ tools:
 ```
 
 **A field not in the table above is an error, not a field that gets ignored.**
-Ignoring one is indistinguishable from honouring it: `tolls:` hands a subagent
-*every* tool its parent had, because unset `tools` means inherit. A near miss is
-named — *did you mean 'tools'?* — and the fields deepagents knows but this format
-declines each say why, since "unknown field" reads as an omission worth working
-around.
+Ignoring one is indistinguishable from honouring it: `tolls: [sql_query]` leaves
+`tools` unset, and the subagent would hold no tool with nothing saying why. A near
+miss is named — *did you mean 'tools'?* — and the fields deepagents knows but this
+format declines each say why, since "unknown field" reads as an omission worth
+working around.
 
 Skills take the opposite rule, deliberately: kingfisher does not own that
 format, so an unrecognised key there is left alone.
@@ -763,6 +771,7 @@ SUBAGENTS = [
     {
         "name": "show-your-work",
         "description": "Answers, then reports exactly which tools it ran.",
+        "tools": ["*"],                  # left out, the graph is handed none
         "build": _build,
     }
 ]
@@ -962,13 +971,24 @@ saw it is out of reach of what a request grants. Write `build` instead — see
 *Compiled subagents* below.
 
 The type also cannot say two things this format can. With no `builtin_tools`, the
-subagent gets every built-in the request granted — still narrowed by the request,
-but a subagent that should only read has only its prompt asking it to. With no
-`metadata`, it cannot record where it came from. Needing either is the point to
-add the key and stop annotating the dict as a `SubAgent`.
+subagent holds none of deepagents' tools — it cannot so much as read a file. Your
+deployment's file adds the key where it takes the spec, and the package's dict stays
+a `SubAgent`:
+
+```python
+# subagents/acme.py
+from acme_agents import versions_subagent
+
+SUBAGENTS = [{**versions_subagent, "builtin_tools": ["read_file", "ls", "glob", "grep"]}]
+```
+
+What it names is still narrowed by the request. With no `metadata`, it cannot record
+where it came from. Needing that, or wanting the package to choose its own built-ins,
+is the point to add the key and stop annotating the dict as a `SubAgent`.
 
 `kingfisher seed` ships `versions/` as a worked example, annotated as a `SubAgent`
-so that `ty` refuses any key the TypedDict does not define.
+so that `ty` refuses any key the TypedDict does not define, with its own module
+adding `builtin_tools` the way a deployment's file would.
 
 #### When it wants a helper of its own
 
@@ -1016,7 +1036,7 @@ That is the rule for which folder is whose: **a folder is a bundle when it holds
 definition whose `name` matches the folder.** A folder that names no definition is ordinary
 grouping — `subagents/analysis/profiler.yaml` is unchanged by any of this.
 
-**Why you would.** An agent that omits `tools:` gets *every* tool the catalogue
+**Why you would.** An agent writing `tools: ["*"]` gets *every* tool the catalogue
 holds, so anything in `tools/` is something the top-level agent can call. A
 bundle is the only place a capability can sit that it cannot. It is how a
 subagent comes to be trusted with something its caller is not.
@@ -1027,6 +1047,7 @@ where it comes from:
 ```yaml
 name: redactor
 description: Quotes from files that may hold credentials, with secrets masked first. Use before quoting an untrusted file.
+builtin_tools: ["*"]
 tools:
   - name: mask_secrets
     source: bundled       # subagents/redactor/tools/
@@ -1260,6 +1281,7 @@ source_ids:
 name: assistant
 description: Answers questions about the data in this workspace.
 source_ids: [A, B]                 # who may open a session on this agent
+builtin_tools: ["*"]
 tools:
   - name: sql_query
     source_ids: [A]                # this agent's sql_query is for A only
@@ -1310,7 +1332,7 @@ existed keeps its exact meaning once a `source_ids:` line is added above it:
 
 ```yaml
 source_ids: [A, B]
-tools:                     # omitted — every tool, for A and B
+tools: ["*"]               # every tool, for A and B
 ```
 ```yaml
 source_ids: [A, B]
@@ -1397,6 +1419,7 @@ everyone reads an access list as meaning. `["*"]` is everyone.
 
 ```yaml
 source_ids: [A, B]
+builtin_tools: ["*"]          # takes no audience; here for `task`
 tools:
   - name: sql_query
     source_ids: [A]

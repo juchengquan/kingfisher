@@ -55,9 +55,9 @@ def offers(
     """Whether any definition this caller reaches offers them one entry of a catalogue.
 
     The grant's half only: a tool's own audience is an and this cannot see, which callers
-    take out with `core.definitions.tools.spec.out_of_reach` as well. A definition leaving
-    the field unset ends the walk, offering everything: `ALL` is the string `"*"`, and a
-    union would collect the character. `same` compares two spellings of one entry.
+    take out with `core.definitions.tools.spec.out_of_reach` as well. A definition writing
+    `["*"]` ends the walk, offering everything: `ALL` is the string `"*"`, and a union would
+    collect the character. `same` compares two spellings of one entry.
 
     `specs` is the agents a caller reaches, not every definition: a subagent never widens,
     so a name only a subagent declares is one the caller gets by no path. The listing and

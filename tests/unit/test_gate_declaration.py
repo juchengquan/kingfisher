@@ -22,7 +22,7 @@ from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.documents import DefinitionText
 from kingfisher.plugins import backend_at
-from tests.conftest import FakeToolCallingModel, tools_dir
+from tests.conftest import EVERY_TOOL, FakeToolCallingModel, tools_dir
 
 WRITES = [
     AIMessage(
@@ -53,7 +53,8 @@ _DEFAULT: Any = object()
 
 
 def _agent(**fields: str) -> Any:
-    written = "".join(f"{key}: {value}\n" for key, value in fields.items())
+    # Every tool, so a gate has a held tool to fire on and a call it lets through runs.
+    written = "".join(f"{key}: {value}\n" for key, value in {**EVERY_TOOL, **fields}.items())
     return read(
         DefinitionText(
             f"name: gatekeeper\ndescription: An agent.\n{written}system_prompt: |\n  Go.\n",

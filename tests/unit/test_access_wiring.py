@@ -52,6 +52,7 @@ VOCABULARY = "source_ids: [A, B]\n"
 AGENT = """name: surveyor
 description: An agent.
 source_ids: [A, B]
+builtin_tools: ["*"]
 tools:
   - name: line_count
     source_ids: [A]
@@ -456,6 +457,8 @@ def test_a_caller_is_told_only_of_what_a_definition_they_reach_offers(policied_w
 
 
 A_PLAIN_SUBAGENT = """name: {name}
+builtin_tools: ["*"]
+tools: ["*"]
 description: A subagent.
 source_ids: [A, B]
 system_prompt: |
@@ -553,6 +556,8 @@ SURVEYOR_NAMING_A_GHOST = AGENT + "subagents: [helper, ghost]\n"
 HIDDEN_AGENT = """name: hidden
 description: An agent for B alone.
 source_ids: [B]
+builtin_tools: ["*"]
+tools: ["*"]
 subagents: [theirs]
 system_prompt: |
   You do the task.
@@ -811,6 +816,8 @@ Do it.
 SKILLED = """name: skilled
 description: Holds two skills at different audiences.
 source_ids: [A, B]
+builtin_tools: ["*"]
+tools: ["*"]
 skills:
   - name: audit
     source_ids: [A]
@@ -1022,6 +1029,7 @@ skills:
   - name: audit
     source_ids: [A, B]
   - name: review
+builtin_tools: ["*"]
 subagents:
   - name: second-opinion
     source_ids: [A, B]
@@ -1077,6 +1085,8 @@ BOSS = """name: boss
 description: Delegates.
 source_ids: [A, B, C]
 skills: [audit, review]
+builtin_tools: ["*"]
+tools: ["*"]
 subagents: [reviewer, second-opinion, plain-helper, insider, profiler, ledger]
 system_prompt: |
   You delegate.
@@ -1214,6 +1224,8 @@ def test_a_caller_every_audience_admits_gets_everything_each_subagent_names(dele
 GATEKEEPER = """name: gatekeeper
 description: Delegates less.
 source_ids: [A, B, C]
+builtin_tools: ["*"]
+tools: ["*"]
 subagents:
   - name: plain-helper
     source_ids: [A]
@@ -1357,6 +1369,8 @@ def test_a_caller_every_audience_admits_is_told_about_each_subagent(
 GHOSTLY = """name: ghostly
 description: Names a subagent nothing defines.
 source_ids: [A, B, C]
+builtin_tools: ["*"]
+tools: ["*"]
 subagents: [plain-helper, ghost]
 system_prompt: |
   You delegate.
@@ -1365,6 +1379,8 @@ system_prompt: |
 OPENER = """name: opener
 description: Offers every subagent, so a request may name any.
 source_ids: [A, B, C]
+builtin_tools: ["*"]
+tools: ["*"]
 subagents: ["*"]
 system_prompt: |
   You delegate.
@@ -1373,6 +1389,8 @@ system_prompt: |
 ASKER = """name: asker
 description: Delegates to a subagent whose helper is a typo.
 source_ids: [A, B, C]
+builtin_tools: ["*"]
+tools: ["*"]
 subagents: [helpless]
 system_prompt: |
   You delegate.
@@ -1381,6 +1399,8 @@ system_prompt: |
 HELPLESS = """name: helpless
 description: Names a helper nothing defines.
 source_ids: [A, B, C]
+builtin_tools: ["*"]
+tools: ["*"]
 subagents: [plain-helper, ghost]
 system_prompt: |
   You help.
@@ -1652,6 +1672,8 @@ def test_naming_the_other_x_reads_what_a_typo_reads(two_of_x):
 SHADY = """name: shady
 description: Names a subagent nothing defines, behind an audience.
 source_ids: [A, B, C]
+builtin_tools: ["*"]
+tools: ["*"]
 subagents:
   - plain-helper
   - name: ghost

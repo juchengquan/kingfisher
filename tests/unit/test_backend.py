@@ -370,7 +370,8 @@ def test_a_subagent_gets_the_correction_too(cfg, session_dir):
 
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "writer.yaml").write_text(
-        "name: writer\ndescription: Writes a file.\nsystem_prompt: |\n  You write files.\n",
+        'name: writer\ndescription: Writes a file.\nbuiltin_tools: ["*"]\ntools: ["*"]\n'
+        "system_prompt: |\n  You write files.\n",
         encoding="utf-8",
     )
 

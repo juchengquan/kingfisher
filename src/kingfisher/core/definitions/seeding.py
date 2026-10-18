@@ -26,16 +26,19 @@ def starter_agent(agents: Path) -> str:
     they are standing, and write a file nothing reads.
     """
     return f"""\
-An agent is a file in {agents}/, and three fields are required. A minimal one:
+An agent is a file in {agents}/, and three fields are required. A minimal one,
+holding every tool:
 
     # {agents / "helper.yaml"}
     name: helper
     description: General-purpose agent.
+    builtin_tools: ["*"]
+    tools: ["*"]
     system_prompt: |
       You work in this workspace, on whatever the caller asks for.
 
-Omitting `tools:` grants every tool there is; omitting `skills:` and
-`subagents:` grants none. See docs/guides/formats.md for the rest."""
+Leave out `builtin_tools:` or `tools:` and it holds none of them, as with
+`skills:` and `subagents:`; ["*"] is all. See docs/guides/formats.md for the rest."""
 
 
 @runtime_checkable

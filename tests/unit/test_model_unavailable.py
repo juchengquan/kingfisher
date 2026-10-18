@@ -13,7 +13,7 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware
 from kingfisher.core.session.runtime import ModelUnavailableError, unavailable
 from kingfisher.plugins import LocalSessions
-from tests.conftest import an_agent, start, subagents_dir
+from tests.conftest import EVERY_TOOL, an_agent, start, subagents_dir
 from tests.unit.scripted import Scripted
 
 
@@ -127,7 +127,7 @@ def refusing(scripted, monkeypatch):
         return original(self, messages, stop, run_manager, **kwargs)
 
     monkeypatch.setattr(Scripted, "_generate", generate)
-    an_agent(scripted)
+    an_agent(scripted, **EVERY_TOOL)
     start(scripted, "s")
     return scripted
 
@@ -191,9 +191,12 @@ def test_a_subagents_refused_call_is_handed_back_and_the_turn_goes_on(refusing, 
     heard; it is the parent's to go on without that part."""
     subagents_dir(refusing).mkdir(parents=True, exist_ok=True)
     (subagents_dir(refusing) / "helper.yaml").write_text(
-        "name: helper\ndescription: Helps.\nsystem_prompt: |\n  You help.\n", encoding="utf-8"
+        "name: helper\ndescription: Helps.\n"
+        'builtin_tools: ["*"]\ntools: ["*"]\n'
+        "system_prompt: |\n  You help.\n",
+        encoding="utf-8",
     )
-    an_agent(refusing, subagents="[helper]")
+    an_agent(refusing, subagents="[helper]", **EVERY_TOOL)
     asked = {"description": "go", "subagent_type": "helper"}
     to_helper = AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}])
 

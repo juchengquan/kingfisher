@@ -16,7 +16,7 @@ from kingfisher.core.agent.references import UnsafeReferenceError
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.plugins import LocalSessions, ShellSettings
 from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced
-from tests.conftest import FakeToolCallingModel, an_agent, start, tools_dir
+from tests.conftest import EVERY_TOOL, FakeToolCallingModel, an_agent, start, tools_dir
 from tests.unit.scripted import Scripted
 from tests.unit.test_session_files import Elsewhere, ElsewhereFiles
 
@@ -41,7 +41,7 @@ def _said(events) -> str:
 def _with_the_tool(cfg) -> None:
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "first_line.py").write_text(FIRST_LINE, encoding="utf-8")
-    an_agent(cfg)
+    an_agent(cfg, **EVERY_TOOL)
 
 
 # -- through a turn ----------------------------------------------------------
