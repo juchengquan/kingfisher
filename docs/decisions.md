@@ -422,13 +422,14 @@ raised, because nothing in a graph kingfisher did not build catches one -- measu
 
 **Middleware is standing, switched on by a setting, or offered, and what decides is
 whether kingfisher promises it.** Standing is what every caller is guaranteed on every
-graph -- the guards, the allowlists, the recorder, result clearing, the PDF guard --
-built by `standing_middleware` for the agent, a declared subagent and `general-purpose`.
-Memory and the interpreter are switched by a setting; everything else is offered, and a
-definition names it. The order is standing, switched, a subagent's helpers, offered, so
-whatever a deployment chose sees a call only after kingfisher has judged it and
-rewritten its paths. Moving memory and the interpreter after every standing one left
-all 3,319 tests green, so their old place held nothing. *(2026-10-17.)*
+graph -- the guards, the allowlists, the recorder, result clearing, the attachments
+guard -- built by `standing_middleware` for the agent, a declared subagent and
+`general-purpose`. Memory and the interpreter are switched by a setting; everything
+else is offered, and a definition names it. The order is standing, switched, a
+subagent's helpers, offered, so whatever a deployment chose sees a call only after
+kingfisher has judged it and rewritten its paths. Moving memory and the interpreter
+after every standing one left all 3,319 tests green, so their old place held nothing.
+*(2026-10-17.)*
 
 **A compiled subagent is outside the promise, and that is said rather than closed.** A
 guarantee reaches it only on its tools, through `GuardedTool`, and at the `task`
@@ -1649,15 +1650,39 @@ database, which "does it import" had covered, and holds connections closed:
 `with sqlite3.connect(...)` commits and does *not* close, so every call leaked one;
 `closing` is what a read wants. *(2026-10-14, from an architecture review.)*
 
-**A PDF over 256 KB in a tool's result reaches the model as advice instead.**
-`LargePdfMiddleware`, in `standing_middleware`, swaps the block for a line saying how
-large the PDF is and why, an error when nothing else came back. 256 KB because one PDF of
-about 500 KB springs the summarizer's trap on a model with no profile, and half leaves
-room for the conversation. Bytes, because the summarizer counts them and pages would mean
-parsing every PDF a tool returns.
+**A file in a tool's result the model may not take is replaced by a line saying what it
+was.** `AttachmentsMiddleware`, in `standing_middleware`, reads every block carrying a
+file in every tool's result -- a guard on `read_file`'s name is stepped around by a
+workspace tool -- and in the message a `Command` carries. The rest of the result is kept,
+and the call is an error only when nothing else came back. It sits inside the recorder:
+outside, the recorder saved a 0-byte row for a replaced PDF and its stamp left the call
+reading as a success. *(2026-10-13; images, other files and `read_file` 2026-10-19.)*
 
-**Every tool's result, not `read_file`'s.** A guard on one tool's name is stepped around
-by a workspace tool returning a PDF block.
+**A PDF over 256 KB, known by its type in whatever block carries it.** One PDF of about
+500 KB springs the summarizer's trap on a model with no profile, and half leaves room for
+the conversation. Bytes, because the summarizer counts them and pages would mean parsing
+every PDF a tool returns. By type, because a 1 MB PDF in an `image` block, or inside a
+`Command`, was handed over whole.
+
+**An image over 5 MB of base64.** That is what a provider measures, and the smallest
+limit: Bedrock and Google Cloud take 5 MB an image, Anthropic's API 10. Past it the
+request is refused, and every later one while the image stays in the conversation. The
+summarizer is no bound, counting an image at a flat 85 tokens: ten 6 MB images in one
+turn sent 84 million characters and it never fired.
+
+**Any other `file` block, whatever its size.** A 2 MB `.pptx` was counted as about
+700,000 tokens, then dropped from the request by deepagents'
+`UnsupportedContentMiddleware`, which told the model under `read_file`'s name that it
+does not support file content, whichever tool returned it. Only OpenAI's Responses API
+is sent one, and the summarizer counts it there too. A reference by URL or file id
+carries nothing to count, and passes.
+
+**`read_file` is not run on audio, video, or a `.ppt` or `.pptx`.** The kinds are
+deepagents' own reading of the extension, which counts `.mkv` as video. Langgraph turns a
+block list holding audio or video into one JSON string before any middleware sees it, so
+a 4 MB `.mp3` reached the model as 5.6 million characters of text, and only refusing the
+call stops it; a `.pptx` is the block above. The refusal says to call a tool that reads
+that kind of file, if the model holds one.
 
 **It names `pdf_text` only where the model is offered it.** `standing_middleware` is
 handed every tool the workspace defines, granted or not, so the guard reads the tools off
@@ -1665,10 +1690,8 @@ the model's own request instead. A call replayed on a resume follows no model ca
 gets the advice with no tool named.
 
 **What it leaves.** A PDF small in bytes and long in pages still goes whole. A subagent
-the workspace compiled itself has no kingfisher middleware, so its `read_file` is
-unguarded. A `Command` passes untouched. Other blocks counted by their base64 -- a
-`.pptx` `file` block, audio -- are left for whoever first meets a large one.
-*(2026-10-13.)*
+the workspace compiled itself has no kingfisher middleware, so neither its `read_file`
+nor its tools are guarded. *(2026-10-13.)*
 
 **`pdf_pages` saves a page range as a smaller PDF, for a model that reads PDFs.**
 `pdf_text` leaves out a chart, a table's layout and a scanned page; a slice small enough
@@ -1677,10 +1700,10 @@ only a red rectangle, as a turn sends it, it described the rectangle, its colour
 place. MiniMax-M2.5 read the text and found that page blank. MiniMax's API reference
 lists no document block for either; the live call settled it.
 
-**A slice past 256 KB is refused, not saved.** `LargePdfMiddleware` would replace it with
-advice, a file the model is told to open and never sees. The tool keeps its own copy of
-the limit, since a shipped tool is written against the public API; a test holds the copy
-to the guard's.
+**A slice past 256 KB is refused, not saved.** `AttachmentsMiddleware` would replace
+it with advice, a file the model is told to open and never sees. The tool keeps its own
+copy of the limit, since a shipped tool is written against the public API; a test holds
+the copy to the guard's.
 
 **Copied, not drawn.** Drawing is PDFium, native code in kingfisher's process outside
 every sandbox, and a model that reads PDFs draws the page itself. pypdf copies pages and
@@ -2165,7 +2188,7 @@ disagreed, in the entry above. `GuardedCallsMiddleware` keeps both, the translat
 around itself alone, and sits where the conversion sat, outside
 `BuiltinToolsMiddleware`, so a split `grep` whose path is refused fails once
 (`test_a_split_grep_whose_path_is_refused_fails_once`). That moved the translation out
-past `LargePdfMiddleware` and `BuiltinToolsMiddleware`, which read no workspace tool's
+past `AttachmentsMiddleware` and `BuiltinToolsMiddleware`, which read no workspace tool's
 arguments: the guards' tests passed with only the class's name and the pinned stacks
 changed. *(2026-10-19.)*
 

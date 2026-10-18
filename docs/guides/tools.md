@@ -216,16 +216,32 @@ wrong shape does not raise; it tells the model something unhelpful, in a
 transcript nobody reads until the answer is already wrong. A string and a list of
 blocks are the only returns where you decide what it says.
 
-One block is not shown as returned. A PDF `file` block over 256 KB, from any tool,
-reaches the model as a line saying how large it is and how to read it instead: sent
-whole, it would go out again with every model call after it, and can end the turn.
-Return a PDF that large as a path, the way
+Three kinds of file are not shown as returned, from any tool. Each reaches the model
+as a line saying what it was instead, and the rest of the result is kept; the call
+reads as failed only when nothing else came back.
+
+- **a PDF over 256 KB**, whatever block carries it: a `file` block, an `image` block or
+  a data URL. Sent whole, it would go out again with every model call after it, and
+  can end the turn.
+- **an image over 5 MB of base64**, the most Bedrock and Google Cloud take in one
+  image. Past it the provider refuses the request, and every one after it while the
+  image stays in the conversation.
+- **any other `file` block**, a `.pptx` or `application/octet-stream`: no model here is
+  handed one. The line tells the model to use a tool it holds that can read it.
+
+A message a tool writes itself is read the same way, inside a `Command` too. Return a
+file that large, or of that kind, as a path, the way
 [a tool that creates a file](#a-tool-that-creates-a-file) does.
 
+**`read_file` is not run on audio, video, or a `.ppt` or `.pptx`.** The model is told
+the file can't be handed to it here, and to call a tool it holds that can read that
+kind of file on the same path. A tool that transcribes audio or pulls the text out of
+slides is that tool: it takes the path, and returns text.
+
 **`pdf_text` is a name kingfisher looks for.** When the model holds a tool called
-`pdf_text`, that line also tells it to call `pdf_text` and read the saved text a
-range at a time. Name a tool of your own that way to get the recommendation;
-called anything else, the line advises without naming a tool.
+`pdf_text`, the line for a large PDF also tells it to call `pdf_text` and read the
+saved text a range at a time. Name a tool of your own that way to get the
+recommendation; called anything else, the line advises without naming a tool.
 
 Two shapes escape the coercion: a `ToolMessage` or a langgraph `Command` is
 returned as-is and never wrapped, so a tool can write its own result or update
