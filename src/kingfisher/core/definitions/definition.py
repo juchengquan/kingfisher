@@ -60,7 +60,7 @@ class SpecBase:
     #: wherever it is used.
     source_ids: Audience = ALL
     #: Skill name -> who is told about it, for the `skills:` entries written long. Only
-    #: skills: a skill has no file of its own to say it in, where a tool and a subagent do.
+    #: skills: a lock in a skill's own file would be read by the model with it.
     skill_audiences: Mapping[str, Audience] = field(
         default_factory=dict, metadata={"derived": True}
     )

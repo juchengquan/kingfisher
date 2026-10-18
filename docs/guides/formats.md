@@ -1298,8 +1298,9 @@ definition that names it — copy `source_ids.yaml` first, then
 
 **Audiences live in the definitions.** Each thing says who may reach *it*, in its
 own file: an agent or a subagent on its `source_ids:` line, a tool in its
-`ToolSpec`. A skill has no file to say it in, so the definition offering it says
-it on the skill's entry. What is central is only the vocabulary — which names
+`ToolSpec`. A skill's own file is `SKILL.md`, which the model reads whole and a
+vendor's pack does not let you edit, so the definition offering it says it on the
+skill's entry. What is central is only the vocabulary — which names
 exist, and which contain which — and that file holds no policy at all.
 
 ```yaml

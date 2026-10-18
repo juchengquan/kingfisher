@@ -838,8 +838,8 @@ Not changed: deepagents' own tool descriptions, which are deferred. *(2026-10-18
 **An audience lives in the definition it is about.** An agent or subagent writes
 `source_ids:` for who may reach it, a tool writes its lock in its own file, and an
 entry of `skills:` may be written long -- `{name: X, source_ids: [...]}` -- for who
-is told about that one, since a skill has no file of its own to say it in. One central
-file, `source_ids.yaml`, holds the vocabulary -- names only, no policy; `contains` is a
+is told about that one, since a skill's own file is `SKILL.md`, which the model reads
+whole and a deployment may not own. One central file, `source_ids.yaml`, holds the vocabulary -- names only, no policy; `contains` is a
 retired spelling there and refused. An audience resolves into an ordinary
 `Capabilities`, so nothing downstream changed: an ungranted tool is never attached to
 the graph and an ungranted subagent is never compiled. *(2026-08-31.)*
@@ -912,13 +912,26 @@ tool's lock. **Per-agent control is by listing.** The one case lost is the same 
 locked differently in two agents, which the deployment this was decided for does not
 need.
 
-`skills:` keeps the long form, having no file to lock in. A long `tools:` or
-`subagents:` entry writing `source_ids` is refused at load, saying where the lock goes,
-as is a compiled subagent's `tools` mapping and a long `subagents:` entry with nothing
-beside its name. A ledger stamp is the definition's own audience joined with the tool's
+`skills:` keeps the long form, for the reasons *Not taken: a skill's lock in its own
+`SKILL.md`* gives. A long `tools:` or `subagents:` entry writing `source_ids` is refused
+at load, saying where the lock goes, as is a compiled subagent's `tools` mapping and a
+long `subagents:` entry with nothing beside its name. A ledger stamp is the definition's own audience joined with the tool's
 lock. The shipped `analyst` grants `auditor` bare, so an `audit_log` caller of `analyst`
 reaches it, which `auditor`'s own line already admits. *(2026-08-31. Reversed
 2026-10-18.)*
+
+**Not taken: a skill's lock in its own `SKILL.md`.** Until 2026-10-18 the reason given
+for the entry was that a skill has no file of its own, which is not true. The Agent
+Skills frontmatter has a `metadata:` map, which deepagents parses and leaves out of the
+listing it shows the model, so a lock there could be read. Three things keep it on the
+entry. The listing tells the agent to read `SKILL.md`, frontmatter and all, so the
+policy would be in the model's context, where a caller is otherwise shown none of it. A
+vendor's skill pack is a file the deployment does not edit, so the entry is the one
+place it controls -- the reason `ToolSpec` wraps a tool rather than changing it. And the
+format is deepagents', unchanged, whose `metadata` holds strings only, so a requirement
+written as a set `{a, b}` would need a spelling of its own. Little is lost: a skill was
+never a boundary, and the locks that matter are on the tools its procedure needs.
+*(2026-10-18.)*
 
 **Reversed: a central `access.yaml` listing every asset by name.** Built in full --
 vocabulary, per-asset audiences, reconciliation against the catalogue, two load reports

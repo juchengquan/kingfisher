@@ -35,7 +35,8 @@ replaced the four layers began.
   agents.** An agent still decides what it holds by listing it, so leave a tool or a
   subagent off the agents that should not hold it.
 - **A `skills:` entry keeps its long form**, `{name: tabular-qa, source_ids: [A]}`, since
-  a skill has no file of its own to say it in.
+  a skill's own file is `SKILL.md`, which the model reads whole and a deployment may not
+  own.
 - **`kingfisher list` rolls up skills only.** The roll-ups by tool and by subagent are
   gone, a tool's lock stays a line of its own, `tool sql_query  [sales_db]`, and a
   definition in `--json`'s `audiences` carries a `skills` key and never `tools` or

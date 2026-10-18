@@ -33,8 +33,9 @@ tools:
 # read-only builtin set cannot hand anyone the shell, whoever they are.
 #
 # **A `skills:` entry is the one entry that may say who it is for**, because a
-# skill has no file of its own to say it in. Written long, `{name, source_ids}`,
-# beside the plain names; a bare name inherits the line at the top.
+# skill's own file is `SKILL.md`, which the model reads whole and a deployment may
+# not own. Written long, `{name, source_ids}`, beside the plain names; a bare name
+# inherits the line at the top.
 skills:
   # Narrower than this definition, and an **and** with it: a caller holding only
   # `audit_log` opens this agent and is never told the profiling procedure
