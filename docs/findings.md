@@ -332,16 +332,16 @@ for the next reader who reaches for one.*
   `count_tokens_approximately` scores an image block at a flat 85 tokens and any
   other block at its `repr` over four, so a 0.5 MB PDF counts as 174,790 tokens and
   a 2 MB one as 699,078. A model with no profile -- MiniMax-M3 through
-  `ChatAnthropic` has none -- gets a flat 170,000-token trigger and a `keep` of six
-  messages, so one such read trips the summarizer with the PDF as the newest
-  message, which it keeps. At 0.7.6 `ContextOverflowError` was caught only around the
-  call made when the summarizer did *not* fire, so the call carrying the summary and
-  the PDF had no retry. From 0.7.22 every call goes through `_call_with_budget`: an
-  overflow, or a request over 95% of the window less the output tokens, clips the
-  trailing tool results and retries once. The clip cuts a `read_file` result to its
-  text blocks -- none, for a PDF -- and tells the model to page with `offset` and
-  `limit`, which `read_file` ignores for a PDF. *(2026-10-13, deepagents 0.7.6 and
-  0.7.22, langchain-core 1.5.5 and 1.6.10.)*
+  `ChatAnthropic`, unless its row declares one, as the shipped template's does -- gets
+  a flat 170,000-token trigger and a `keep` of six messages, so one such read trips
+  the summarizer with the PDF as the newest message, which it keeps. At 0.7.6
+  `ContextOverflowError` was caught only around the call made when the summarizer did
+  *not* fire, so the call carrying the summary and the PDF had no retry. From 0.7.22
+  every call goes through `_call_with_budget`: an overflow, or a request over 95% of
+  the window less the output tokens, clips the trailing tool results and retries once.
+  The clip cuts a `read_file` result to its text blocks -- none, for a PDF -- and
+  tells the model to page with `offset` and `limit`, which `read_file` ignores for a
+  PDF. *(2026-10-13, deepagents 0.7.6 and 0.7.22, langchain-core 1.5.5 and 1.6.10.)*
 - **A model's profile sizes the summarizer, and one passed in replaces langchain's.**
   `ChatAnthropic` built without `profile=` fills it from langchain's own table:
   `claude-sonnet-4-5` arrives with a full profile of 24 keys, `max_input_tokens`
@@ -350,7 +350,8 @@ for the next reader who reaches for one.*
   the class keeps that dict as given: `{"max_input_tokens": 120000}` on
   `claude-sonnet-4-5` is the whole profile, `pdf_inputs` and `tool_calling` gone with
   the rest. A row's `extra:` reaches the constructor, so `extra: {profile: ...}` in
-  `models.yaml` is this.
+  `models.yaml` is this: the template declares one on `MiniMax-M3`, and with none of
+  langchain's to replace, it is that model's whole profile.
 
   **That number is the table's, not this model's, and the table moved.** This read
   1,000,000 until 2026-10-14, measured against langchain-anthropic 1.5.6 and true

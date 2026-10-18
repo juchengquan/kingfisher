@@ -38,6 +38,12 @@ One request carried out in one session, from start to finish. A session runs one
 time, and a turn may stop partway to wait for an approval.
 _Avoid_: run, step, call
 
+**Workspace**:
+The folder for what sessions make: the sessions themselves, kept there by kingfisher's own
+Sessions, and kingfisher's own state beside them. Not where definitions are, which people
+write and kingfisher only reads: that is the definitions folder.
+_Avoid_: state folder, data folder, root
+
 ### The plugins
 
 **Sessions**:
@@ -93,3 +99,23 @@ _Avoid_: access file, access policy
 A label a caller is in at most one of, and a definition may require. Checked beside source ids,
 never as one of them.
 _Avoid_: zone, data zone, region
+
+### Tools
+
+**Built-in tool**:
+A tool that comes with the agent, for a definition to grant or leave out: the file tools, the
+shell, the checklist, and handing work to a subagent. Not one a deployment supplies, which is
+a workspace tool.
+_Avoid_: core tool, native tool, standard tool
+
+**Workspace tool**:
+A tool a deployment supplies itself rather than a built-in one, shared by its definitions or
+kept by one subagent as its own. The name is older than the definitions folder; such a tool
+is kept there now, not in the workspace.
+_Avoid_: custom tool, user tool, plugin tool
+
+**Attachment**:
+A file a tool's result carries in a block of its own rather than as text: a PDF, an image,
+audio or video, or any other kind. Not the result's text, even where that names a file, and
+not a file a caller sends with a request.
+_Avoid_: file block, media, binary
