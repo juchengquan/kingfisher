@@ -17,6 +17,7 @@ from kingfisher.core.agent.middlewares.builtin_tools import GREP, READ_FILE
 from kingfisher.core.agent.middlewares.model_reply import NOT_RUN
 from kingfisher.core.agent.middlewares.recorder import _arguments
 from kingfisher.core.agent.models import summarizer_trigger
+from kingfisher.core.agent.prompting import FILE_TOOLS
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.session.runtime import with_call_args
 
@@ -38,10 +39,6 @@ KEEP_RECENT = 3
 #: A pass runs only if it could free this fraction of the high mark, or once what cannot be
 #: cleared nears the low mark every call is a pass that frees little and costs the cache.
 WORTH = 1 / 4
-
-#: deepagents' file tools. What one returned is a file's text or a listing of files,
-#: and calling it again gets that back.
-FILE_TOOLS = frozenset({"ls", "glob", "grep", "read_file", "write_file", "edit_file", "delete"})
 
 #: The arguments that carry a file's text, by the file tool they belong to.
 FILE_TEXT = {"write_file": ("content",), "edit_file": ("old_string", "new_string")}
@@ -242,6 +239,8 @@ class ResultClearingMiddleware(AgentMiddleware):
             row := rows.get(stamp.group(1))
         ) is not None and row.call == result.tool_call_id:
             return self._row_handle(row, text)
+        # What a file tool returned is a file's text or a listing of files, and calling it
+        # again gets that back.
         if result.name in FILE_TOOLS:
             args = (call or {}).get("args") or {}
             called = f"{result.name} {_arguments(args)}" if args else str(result.name)

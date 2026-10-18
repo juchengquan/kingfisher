@@ -16,11 +16,9 @@ from langchain.agents.middleware.todo import WRITE_TODOS_SYSTEM_PROMPT
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
-from kingfisher.core.agent.prompting import EXECUTE, ShellPrompt, execute_line
+from kingfisher.core.agent.prompting import EXECUTE, WRITE_TODOS, ShellPrompt, execute_line
 from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.layout import DEFAULT_LAYOUT, SESSION_DIRS, Layout
-
-WRITE_TODOS = "write_todos"
 
 #: deepagents' advice in `execute`'s description, wrong on kingfisher's own shell: the
 #: only absolute paths a model knows are the file tools', and that shell reads `/inputs`
