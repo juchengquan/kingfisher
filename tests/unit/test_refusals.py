@@ -223,6 +223,18 @@ def a_tool_module_defining_a_name_twice(cfg):
     )
 
 
+def a_tool_spec_giving_a_description_its_tool_ignores(cfg):
+    _write(
+        _root(cfg, "tools") / "fixed.py",
+        "from langchain_core.tools import BaseTool\n\nfrom kingfisher import ToolSpec\n\n\n"
+        "class Described:\n    @property\n    def description(self) -> str:\n"
+        '        return "Always this."\n\n\n'
+        "class Fixed(Described, BaseTool):\n    name: str = 'fixed'\n\n"
+        "    def _run(self, x: str) -> str:\n        return x\n\n\n"
+        "TOOLS = [ToolSpec(Fixed(), description='Something else.')]\n",
+    )
+
+
 def a_subagent_naming_a_tool_that_moved(cfg):
     _write(_root(cfg, "tools") / "here.py", TOOL.format(n="probe"))
     _write(
@@ -319,6 +331,8 @@ REFUSALS: dict[str, Refusal] = {
         1, defect=a_tool_module_defining_a_name_twice),
     "core/definitions/tools/catalogue.py::refuse_untoollike": Refusal(
         2, defect=a_portable_subagent_carrying_a_class),
+    "core/definitions/tools/catalogue.py::_as_named": Refusal(
+        3, defect=a_tool_spec_giving_a_description_its_tool_ignores),
     "core/definitions/tools/spec.py::Offering.refuse_moved": Refusal(
         1, defect=a_subagent_naming_a_tool_that_moved),
     "core/definitions/subagents/rules.py::refuse_miscounted": Refusal(

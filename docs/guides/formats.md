@@ -324,10 +324,11 @@ Four things worth knowing before you restrict this list:
 Python you write, imported from the `tools/` directory in the definitions folder
 and added to the built-in set. A module declares `TOOLS`, the list it contributes, and a tool
 is a LangChain tool — from `@tool`, from a `BaseTool` subclass you instantiate,
-or a plain function.
+or a plain function. A `ToolSpec` holding any of them may also say who may use it,
+or give it another name.
 
-Writing one is [`guides/tools.md`](tools.md): the three shapes, what a tool may
-return, folders and packages, and every refusal the loader has. What a
+Writing one is [`guides/tools.md`](tools.md): the three shapes and `ToolSpec`, what a
+tool may return, folders and packages, and every refusal the loader has. What a
 *definition* says about one is here.
 
 ### Two tools with the same name
@@ -910,10 +911,12 @@ format for it anyway.
 #### What it carries is its own
 
 `tools` and `skills` here hold the things rather than naming them — a folder's
-contents, for a definition that has no folder. They reach that subagent and nothing
-else: its tools are in no catalogue, so no agent can be granted them and no request
-can narrow them away. That is what an imported subagent being **atomic** means. You
-use it, or you do not; there is no third option where you take it apart.
+contents, for a definition that has no folder. An entry of `tools` may be a
+`ToolSpec`, as one of a tool file's `TOOLS` may, and what it says holds here too. They
+reach that subagent and nothing else: its tools are in no catalogue, so no agent can be
+granted them and no request can narrow them away. That is what an imported subagent
+being **atomic** means. You use it, or you do not; there is no third option where you
+take it apart.
 
 `skills` is a directory, or a list of them — the list being deepagents' own
 `SubAgent["skills"]`, so a spec written to that TypedDict loads as it is. Each is a
@@ -1224,9 +1227,9 @@ it, not loading it is the mechanism working.
 ## Access — `source_ids:` in the definitions, `source_ids.yaml` for the vocabulary
 
 Which source ids may reach which agents, subagents, tools and skills. Optional:
-with no `source_ids.yaml`, kingfisher controls nothing by source id. A tool written
-with `kingfisher.tool` may also say who it admits, in its own file — see
-[`tools.md`](tools.md#or-kingfishertool-when-the-tool-says-who-may-use-it).
+with no `source_ids.yaml`, kingfisher controls nothing by source id. A tool may also
+say who it admits, in its own file, through a `ToolSpec` — see
+[`tools.md`](tools.md#or-a-toolspec-when-the-tool-says-who-may-use-it).
 
 A source id is a name in this deployment's vocabulary and nothing else — not a
 path a definition was read from, and not a data file a run is handed. Nothing
@@ -1430,7 +1433,7 @@ whatever they ask for.
 
 An entry's audience is a property of *this definition's use of it*. `reviewer`
 may restrict `sql_query` to `[A]` while `analyst` opens it to `[A, B]`, and both
-are correct — they are different contexts. A tool made with `kingfisher.tool` may
+are correct — they are different contexts. A tool its file wraps in a `ToolSpec` may
 also say who it admits, and every use of it is held to that as well.
 
 The cost is that there is no single line answering "who reaches `sql_query`?".
@@ -1692,7 +1695,7 @@ kf.run(Request(task="...", agent="analyst"), source_ids=["sales_db"], datazone="
 
 `kingfisher run`, `decide` and `list` take `--datazone NAME` beside `--as`. In
 Python, a subagent declared without `build` writes `"datazone": "finance"`, and a
-tool writes `kingfisher.tool(fn, datazone="finance")`.
+tool file writes `ToolSpec(tool, datazone="finance")`.
 
 - **It is an *and* with everything else.** A caller has to pass the subagent's or
   tool's `source_ids` *and* be in its datazone.

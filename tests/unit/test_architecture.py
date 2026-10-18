@@ -1133,7 +1133,7 @@ def test_compiled_files_are_not_mistaken_for_modules(tmp_path):
 #: Measured, not declared -- every entry is a package some module imports today.
 THIRD_PARTY: dict[str, frozenset[str]] = {
     # The agent runtime, which building one request's graph speaks to throughout.
-    # `core/session`, `core/definitions/skills` and
+    # `core/session`, `core/definitions/skills`, `core/definitions/tools` and
     # `core/definitions/middlewares` reach it too, and their entries below say so --
     # an upgrade is still a list of files rather than a search, and the list spans
     # more than one directory.
@@ -1158,12 +1158,14 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # outside, and inverting it behind a port would put one implementation behind an
     # interface derived from it.
     "core/definitions/skills": frozenset({"deepagents"}),
-    # Nothing, since the route to the runtime moved out: reading a tool roster off a
-    # compiled langgraph object is `core.agent.kinds.tools` now.
-    "core/definitions/tools": frozenset(),
-    # Nothing, for the same move: turning a spec into the `SubAgent` deepagents
-    # expects cannot be done without naming the type, and it is done in
-    # `core.agent.kinds.subagents` now.
+    # `core.definitions.tools.catalogue` gives a tool the name or description its
+    # `ToolSpec` writes as the directory is read rather than at the first turn, so one
+    # that does not take is refused at startup, which cannot be done without naming the
+    # type.
+    "core/definitions/tools": frozenset({"langchain_core"}),
+    # Nothing, since the route to the runtime moved out: turning a spec into the
+    # `SubAgent` deepagents expects cannot be done without naming the type, and it is
+    # done in `core.agent.kinds.subagents` now.
     "core/definitions/subagents": frozenset(),
     # Nothing, and this one never had anything: an agent's runtime half is
     # `core/agent/assembly.py`, which is not this package's.
@@ -1691,9 +1693,9 @@ WITNESSES: dict[str, dict[str, str]] = {
         # hands a tool the turn's backend. A tool file is in a deployment's workspace,
         # so nothing in this repository imports the name and nothing ever will.
         "ToolContext": "document",
-        # `tools.md` writes `kingfisher.tool(...)` for a tool that says who may use it, in
-        # a tool file of the deployment's own, as `ToolContext` above is.
-        "tool": "document",
+        # `tools.md` writes `ToolSpec(...)` for a tool that says who may use it or what it
+        # is called, in a tool file of the deployment's own, as `ToolContext` above is.
+        "ToolSpec": "document",
         # The type of `Kingfisher.run`'s `source_ids=`. `UNSCOPED` is one of its two
         # members and is documented; the type that admits it cannot be private.
         "Held": "embedder",
@@ -2213,9 +2215,15 @@ def test_the_cycle_finder_finds_one_in_this_tree():
 
 
 #: What building or running an agent loads, and what makes it cost a second and about
-#: 3,100 modules to import. `langchain_core` is not here: `kingfisher.tool` subclasses
-#: its `StructuredTool`, and every tool file that says who may use it imports that name.
-AGENT_RUNTIME = ("deepagents", "langgraph", "langchain", "langchain_openai", "langchain_anthropic")
+#: 3,100 modules to import.
+AGENT_RUNTIME = (
+    "deepagents",
+    "langgraph",
+    "langchain",
+    "langchain_core",
+    "langchain_openai",
+    "langchain_anthropic",
+)
 
 #: The modules a deployment imports by name.
 PUBLIC = ("kingfisher", "kingfisher.plugins")
