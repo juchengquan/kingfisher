@@ -7,9 +7,10 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from langchain.agents.middleware import AgentMiddleware, ModelResponse
+from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from kingfisher.core.agent.middlewares.replies import last_reply, replaced, text_of
 from kingfisher.core.agent.middlewares.results import failed
 from kingfisher.core.session.runtime import (
     ModelUnavailableError,
@@ -83,20 +84,9 @@ def _cut_in_a_row(messages: Any) -> int:
     return count
 
 
-def _reply(response: Any) -> AIMessage | None:
-    return next((one for one in reversed(response.result) if isinstance(one, AIMessage)), None)
-
-
 def _gives_up(first: Any, asked: int) -> bool:
     """Whether the reply in hand, being cut, is the one too many in a row."""
     return _cut_in_a_row(first.messages) + asked + 1 >= GIVE_UP
-
-
-def _replaced(response: Any, reply: AIMessage, by: AIMessage) -> Any:
-    return ModelResponse(
-        result=[by if one is reply else one for one in response.result],
-        structured_response=response.structured_response,
-    )
 
 
 def _refusal(reply: AIMessage, call: Any) -> ToolMessage:
@@ -109,18 +99,6 @@ def _refusal(reply: AIMessage, call: Any) -> ToolMessage:
     )
 
 
-def _text_of(reply: AIMessage, heading: str = "") -> AIMessage:
-    """A reply as text alone, with none of its calls: a call sent back with no result
-    beside it is refused by the provider."""
-    return AIMessage(
-        content=heading + reply.text,
-        id=reply.id,
-        name=reply.name,
-        response_metadata=reply.response_metadata,
-        usage_metadata=reply.usage_metadata,
-    )
-
-
 def _stopped(reply: AIMessage, *, subagent: bool) -> AIMessage:
     """The reply an agent stops on: its text, and none of its calls.
 
@@ -128,8 +106,8 @@ def _stopped(reply: AIMessage, *, subagent: bool) -> AIMessage:
     says so in its text too, since its text is all its caller is handed.
     """
     if not subagent:
-        return _text_of(reply)
-    return _text_of(
+        return text_of(reply)
+    return text_of(
         reply,
         f"[Incomplete: this subagent's replies reached {output_limit(reply)} "
         f"{GIVE_UP} times in a row, and the answer below is cut off.]\n\n",
@@ -168,7 +146,7 @@ class ModelReplyMiddleware(AgentMiddleware):
         streamed to whoever is watching, so the cut is reported there, where the answer
         starts over.
         """
-        reply = _reply(response)
+        reply = last_reply(response)
         if reply is None or not cut_off(reply) or reply.tool_calls or _gives_up(first, asked):
             return None
         write = getattr(first.runtime, "stream_writer", None)
@@ -182,19 +160,19 @@ class ModelReplyMiddleware(AgentMiddleware):
             f"{self.outputs}, then answer with a summary and the file's path. Name a file "
             "only after you have written it."
         )
-        return first.override(messages=[*first.messages, _text_of(reply), HumanMessage(note)])
+        return first.override(messages=[*first.messages, text_of(reply), HumanMessage(note)])
 
     def _judged(self, first: Any, response: Any, asked: int) -> Any:
-        reply = _reply(response)
+        reply = last_reply(response)
         if reply is None or not cut_off(reply):
             return response
         if _gives_up(first, asked):
-            return _replaced(response, reply, _stopped(reply, subagent=self.subagent))
+            return replaced(response, reply, _stopped(reply, subagent=self.subagent))
         kept = reply if (cut := cut_call(reply)) is None else _unrun(reply, cut)
         if asked:
             meta = {**kept.response_metadata, ASKED_BEFORE: asked}
             kept = kept.model_copy(update={"response_metadata": meta})
-        return response if kept is reply else _replaced(response, reply, kept)
+        return response if kept is reply else replaced(response, reply, kept)
 
     def _refused(self, request: Any) -> ToolMessage | None:
         call = request.tool_call
