@@ -1160,8 +1160,10 @@ stay, as the record a caller reads off `RunResult.ledger`. *(2026-10-17.)*
 
 **One reader of what a caller says.** Naming an agent and reading a session each tested
 for a tuple, so `["B"]` opened an agent restricted to `A`, and `"B"` got through both.
-`core.access.checks.held_by` is the only place the shape of `source_ids` is read, and
-`test_one_function_reads_what_shape_a_caller_s_source_ids_are_in` holds that.
+`core.access.checks.held_by` is the only place that decides what a shape of `source_ids`
+means, and `test_one_function_reads_what_shape_a_caller_s_source_ids_are_in` holds that
+across the package. `with_datazone` is the one other reader, and asks only whether it may
+append a datazone, leaving a bare string for `held_by` to refuse.
 *(2026-09-15.)*
 
 **One walk of the definitions, for three questions.** `audit` reports what a policy
