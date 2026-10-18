@@ -4,11 +4,13 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, SystemMessage
 
+from kingfisher import Kingfisher, Request
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.kinds.subagents import as_subagent
+from kingfisher.core.agent.middlewares.builtin_tools import MAPPINGS, TODOS
 from kingfisher.core.agent.prompting import (
     render_system_prompt,
     system_prompt,
@@ -16,9 +18,10 @@ from kingfisher.core.agent.prompting import (
 from kingfisher.core.layout import INPUTS, OUTPUTS, SCRATCH, TOOL_RESULTS_ROUTE, Layout
 from kingfisher.core.session.store import entry_id
 from kingfisher.core.session.turn import ledger_delta, ledger_index
-from kingfisher.plugins import ShellSettings, backend_at
+from kingfisher.plugins import LocalSessions, ShellSettings, backend_at
 from kingfisher.plugins.sessions.shell import kingfishers_shell
-from tests.conftest import FakeToolCallingModel, a_subagent
+from tests.conftest import FakeToolCallingModel, a_subagent, an_agent, start, subagents_dir
+from tests.unit.scripted import Scripted
 
 
 def test_base_prompt_names_no_dataset_and_no_domain():
@@ -426,3 +429,88 @@ def test_the_instructions_lead_the_agents_own_line(cfg):
     prompt = system_prompt(cfg, "Agent note.", instructions="House rule.")
 
     assert prompt.index("House rule.") < prompt.index("Agent note.")
+
+
+# -- told only of the tools it holds --------------------------------------------
+
+#: How each section about a built-in tool opens: kingfisher's two, deepagents' host paths
+#: and langchain's checklist.
+SECTIONS = ("## The file tools", "## The shell", MAPPINGS, TODOS)
+
+READER = """name: reader
+description: Reads.
+builtin_tools: [read_file]
+system_prompt: |
+  You read.
+"""
+
+
+def _told(cfg, *script: AIMessage, **agent: str) -> list[str]:
+    """The system message each model call of one turn was sent, in order: driven through
+    a real turn, since two of the sections arrive only on the way to the model.
+    """
+    an_agent(cfg, **agent)
+    Scripted.script.extend(script or (AIMessage("done"),))
+    Kingfisher(cfg, sessions=LocalSessions()).run(
+        Request("go", agent="only", session_id=start(cfg, "s"))
+    )
+    return [m.text for heard in Scripted.heard for m in heard if isinstance(m, SystemMessage)]
+
+
+@pytest.mark.parametrize(
+    ("granted", "told"),
+    [
+        ({}, set(SECTIONS)),
+        ({"builtin_tools": "[]"}, set()),
+        ({"builtin_tools": "[read_file]"}, {"## The file tools"}),
+        ({"builtin_tools": "[execute]"}, {"## The shell", MAPPINGS}),
+        ({"builtin_tools": "[write_todos]"}, {TODOS}),
+    ],
+    ids=["unrestricted", "none", "read_file", "execute", "write_todos"],
+)
+def test_an_agent_is_told_only_of_the_built_in_tools_it_holds(scripted, granted, told):
+    """An agent granted `builtin_tools: []` was still told of the file tools, the shell,
+    its host paths and `write_todos`, and a model told of a tool calls it and is refused.
+    """
+    (system,) = _told(scripted, **granted)
+
+    assert {section for section in SECTIONS if section in system} == told
+    assert "You do the task." in system
+
+
+def test_the_file_tools_section_names_only_the_file_tools_held(scripted):
+    """Named whole, the section told an agent holding `read_file` and `grep` of five
+    file tools it does not hold.
+    """
+    (system,) = _told(scripted, builtin_tools="[grep, read_file]")
+
+    assert "The file tools (`read_file`, `grep`)\n" in system
+    assert "`write_file`" not in system
+
+
+@pytest.mark.parametrize(
+    ("subagent", "agent"),
+    [
+        ("reader", {"subagents": "[reader]"}),
+        ("general-purpose", {"builtin_tools": "[read_file, task]"}),
+    ],
+)
+def test_a_subagent_is_not_told_of_a_shell_it_does_not_hold(scripted, subagent, agent):
+    """deepagents hands a subagent its host paths ahead of the allowlist that takes
+    `execute` away, so one granted `read_file` alone was told how to reach its files
+    from a shell it could not call.
+    """
+    subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(scripted) / "reader.yaml").write_text(READER, encoding="utf-8")
+    asks = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "task", "args": {"description": "read", "subagent_type": subagent}, "id": "t"}
+        ],
+    )
+
+    systems = _told(scripted, asks, AIMessage("read"), AIMessage("done"), **agent)
+
+    assert len(systems) == 3
+    assert "You are kingfisher" not in systems[1]
+    assert MAPPINGS not in systems[1]

@@ -1345,6 +1345,25 @@ fit the registry mechanically either: an entry there is built from defaults a
 deployment stored, and these are built per request from the names that request
 resolved and the backend it runs on.
 
+**An agent is told only of the built-in tools it was granted.** Its system message was
+the same whatever it held: one granted `builtin_tools: []` still read kingfisher's
+sections on the file tools and the shell, deepagents' host paths and langchain's
+`write_todos` prose, because `GrantedOnlyMiddleware` takes a tool out of the request and
+none of what describes it. A model told of a tool it does not hold calls it, and each
+call is spent on a refusal. So the file tools' section appears where one is held and
+names only those, and the shell's two, with deepagents' host paths, where `execute` is.
+The grant read is the allowlist `GrantedOnlyMiddleware` filters by -- the agent's and
+`general-purpose`'s `permitted`, a subagent's ceiling -- not the tools in the request:
+deepagents and langchain add their prose ahead of that filter, while every tool is still
+offered, and kingfisher's own is written when the graph is built. `BuiltinToolsMiddleware`
+takes theirs out by block, as it already took the host paths from a shell elsewhere.
+`TodoListMiddleware` stays on the stack, for the reason its entry gives, and only its
+prose goes. A grant that changes the prompt changes the tool list too, which Anthropic
+caches ahead of the system prompt, so following it loses no cache that was not already
+lost. Where to write, and that workspace tools take the same paths, moved from the file
+tools' section to the session's: they hold for an agent with only the shell.
+*(2026-10-18.)*
+
 ## Source-id access
 
 **An audience lives in the definition it is about.** An agent or subagent writes

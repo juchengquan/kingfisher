@@ -461,14 +461,18 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         # not offer, and which decisions a pause allows is decided where it is read.
         extras["interrupt_on"] = dict.fromkeys(gated, True)
 
-    def assemble(extra_tools: tuple[Any, ...]) -> Assembled:
+    def assemble(
+        extra_tools: tuple[Any, ...], granted: tuple[str, ...] | None = None
+    ) -> Assembled:
         # One mapping for the call and the record, so the record cannot describe a
         # build that did not happen.
         attached: dict[str, Any] = {
             "model": running,
             "backend": backend,
+            # Told of the tools it was granted, which only the last build knows: the
+            # probe's prompt is never sent.
             "system_prompt": system_prompt(
-                cfg, agent.system_prompt if agent else "", shell, instructions
+                cfg, agent.system_prompt if agent else "", shell, instructions, granted
             ),
             "middleware": middleware,
             "permissions": permissions,
@@ -709,4 +713,4 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         ),
     ]
 
-    return assemble(surface.carried)
+    return assemble(surface.carried, permitted)
