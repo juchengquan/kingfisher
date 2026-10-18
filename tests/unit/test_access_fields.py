@@ -2,78 +2,91 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
 import pytest
 
 from kingfisher.core.access.capabilities import ALL
+from kingfisher.core.definitions.agents.reading import read as read_agent
 from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.definitions.documents import DefinitionText
 from kingfisher.core.definitions.fields import Reader
+from kingfisher.core.definitions.subagents.spec import SubagentError, declared
+from tests.conftest import a_subagent
 
 read = Reader(source="x.yaml", error=AgentError)
 
 
+def audienced(value: object, **asked: Any) -> tuple[object, object]:
+    """What `skills:` selects and who reaches each entry: the one field whose entries say."""
+    selected, audiences, _ = read.sourced(value, **asked)
+    return selected, audiences
+
+
 def test_a_list_is_a_selection_with_no_audiences():
-    assert read.audienced(["a", "b"], absent=ALL, key="tools") == (("a", "b"), {})
+    assert audienced(["a", "b"], absent=ALL, key="skills") == (("a", "b"), {})
 
 
 def test_omitted_is_the_absent_value_with_no_audiences():
-    assert read.audienced(None, absent=ALL, key="tools") == (ALL, {})
+    assert audienced(None, absent=ALL, key="skills") == (ALL, {})
 
 
 def test_omitted_respects_the_fields_own_absent_value():
     """`tools` inherits everything when omitted; `skills` grants none."""
-    assert read.audienced(None, absent=None, key="skills") == (None, {})
+    assert audienced(None, absent=None, key="skills") == (None, {})
 
 
 def test_star_still_means_everything():
-    assert read.audienced(["*"], absent=ALL, key="tools") == (ALL, {})
+    assert audienced(["*"], absent=ALL, key="skills") == (ALL, {})
 
 
 def test_an_empty_list_still_means_none():
-    assert read.audienced([], absent=ALL, key="tools") == ((), {})
+    assert audienced([], absent=ALL, key="skills") == ((), {})
 
 
 def test_entries_select_their_names_and_carry_their_audiences():
-    selected, audiences = read.audienced(
+    selected, audiences = audienced(
         [
-            {"name": "sql_query", "source_ids": ["A"]},
-            {"name": "http_fetch", "source_ids": ["*"]},
+            {"name": "audit", "source_ids": ["A"]},
+            {"name": "review", "source_ids": ["*"]},
         ],
         absent=ALL,
-        key="tools",
+        key="skills",
     )
-    assert selected == ("sql_query", "http_fetch")
-    assert audiences == {"sql_query": ("A",), "http_fetch": ALL}
+    assert selected == ("audit", "review")
+    assert audiences == {"audit": ("A",), "review": ALL}
 
 
 def test_the_field_level_mapping_is_refused_and_says_what_to_write():
     """The shape this field used to take, and the reason it stopped."""
-    with pytest.raises(AgentError, match=r"name: sql_query, source_ids"):
-        read.audienced({"sql_query": {"source_ids": ["A"]}}, absent=ALL, key="tools")
+    with pytest.raises(AgentError, match=r"name: audit, source_ids"):
+        audienced({"audit": {"source_ids": ["A"]}}, absent=ALL, key="skills")
 
 
 def test_an_entry_that_is_neither_a_name_nor_a_mapping_is_refused():
     """`- [A]` has no reading."""
     with pytest.raises(AgentError, match="neither a name nor a mapping"):
-        read.audienced([["A"]], absent=ALL, key="tools")
+        audienced([["A"]], absent=ALL, key="skills")
 
 
 def test_an_entry_that_states_no_audience_inherits_the_definitions():
     """What makes the mapping form usable: only the entries you actually restrict carry
     a `source_ids:` line, and the rest are selected and left to inherit.
     """
-    selected, audiences = read.audienced(
-        [{"name": "sql_query", "source_ids": ["A"]}, "http_fetch", {"name": "line_count"}],
+    selected, audiences = audienced(
+        [{"name": "audit", "source_ids": ["A"]}, "review", {"name": "triage"}],
         absent=ALL,
-        key="tools",
+        key="skills",
     )
-    assert selected == ("sql_query", "http_fetch", "line_count")
-    assert audiences == {"sql_query": ("A",)}
+    assert selected == ("audit", "review", "triage")
+    assert audiences == {"audit": ("A",)}
 
 
 def test_long_entries_that_restrict_nothing_are_just_names():
     """The degenerate case reads as what it is, rather than being refused."""
-    assert read.audienced(
-        [{"name": "a"}, {"name": "b"}], absent=ALL, key="tools"
+    assert audienced(
+        [{"name": "a"}, {"name": "b"}], absent=ALL, key="skills"
     ) == (("a", "b"), {})
 
 
@@ -82,7 +95,7 @@ def test_a_mistyped_entry_key_is_refused_with_a_suggestion():
     in one is catchable.
     """
     with pytest.raises(AgentError, match="did you mean 'source_ids'"):
-        read.audienced([{"name": "sql_query", "sorce_ids": ["A"]}], absent=ALL, key="tools")
+        audienced([{"name": "audit", "sorce_ids": ["A"]}], absent=ALL, key="skills")
 
 
 def test_a_bare_string_audience_is_refused_rather_than_iterated():
@@ -90,7 +103,7 @@ def test_a_bare_string_audience_is_refused_rather_than_iterated():
     which is the mistake `selection` refuses one level up.
     """
     with pytest.raises(AgentError, match="a list of names"):
-        read.audienced([{"name": "sql_query", "source_ids": "A"}], absent=ALL, key="tools")
+        audienced([{"name": "audit", "source_ids": "A"}], absent=ALL, key="skills")
 
 
 def test_an_empty_entry_audience_is_refused():
@@ -98,55 +111,55 @@ def test_an_empty_entry_audience_is_refused():
     the line out -- so an empty one is an unfinished edit.
     """
     with pytest.raises(AgentError, match="Leave the line out"):
-        read.audienced([{"name": "sql_query", "source_ids": []}], absent=ALL, key="tools")
+        audienced([{"name": "audit", "source_ids": []}], absent=ALL, key="skills")
 
 
 def test_a_star_mixed_with_names_is_refused():
     with pytest.raises(AgentError, match="cannot mean both"):
-        read.audienced([{"name": "sql_query", "source_ids": ["*", "A"]}], absent=ALL, key="tools")
+        audienced([{"name": "audit", "source_ids": ["*", "A"]}], absent=ALL, key="skills")
 
 
 def test_an_entry_may_not_be_named_the_star():
     """The star is a property of the field, not of an entry."""
     with pytest.raises(AgentError, match="does not take"):
-        read.audienced([{"name": "*", "source_ids": ["A"]}], absent=ALL, key="tools")
+        audienced([{"name": "*", "source_ids": ["A"]}], absent=ALL, key="skills")
 
 
 def test_a_name_written_twice_is_refused_rather_than_collapsed():
     """The reason this field stopped taking a mapping, asserted here."""
-    with pytest.raises(AgentError, match="names 'sql_query' twice"):
-        read.audienced(
+    with pytest.raises(AgentError, match="names 'audit' twice"):
+        audienced(
             [
-                {"name": "sql_query", "source_ids": ["A"]},
-                {"name": "sql_query", "source_ids": ["B"]},
+                {"name": "audit", "source_ids": ["A"]},
+                {"name": "audit", "source_ids": ["B"]},
             ],
             absent=ALL,
-            key="tools",
+            key="skills",
         )
 
 
 def test_a_bare_name_and_the_same_name_written_long_are_still_twice():
     """The spellings mix in one list, so the check is on names and not shapes."""
-    with pytest.raises(AgentError, match="names 'sql_query' twice"):
-        read.audienced(
-            ["sql_query", {"name": "sql_query", "source_ids": ["A"]}], absent=ALL, key="tools"
+    with pytest.raises(AgentError, match="names 'audit' twice"):
+        audienced(
+            ["audit", {"name": "audit", "source_ids": ["A"]}], absent=ALL, key="skills"
         )
 
 
 def test_the_source_is_named_in_every_refusal():
     with pytest.raises(AgentError, match=r"x\.yaml"):
-        read.audienced([{"name": "sql_query", "source_ids": []}], absent=ALL, key="tools")
+        audienced([{"name": "audit", "source_ids": []}], absent=ALL, key="skills")
 
 
 # -- requiring several source ids at once ---------------------------------------
 
 
 def test_a_requirement_is_one_entry_of_an_entry_audience():
-    assert read.audienced(
-        [{"name": "sql_query", "source_ids": ["admin", {"finance": None, "senior": None}]}],
+    assert audienced(
+        [{"name": "audit", "source_ids": ["admin", {"finance": None, "senior": None}]}],
         absent=ALL,
-        key="tools",
-    ) == (("sql_query",), {"sql_query": ("admin", frozenset({"finance", "senior"}))})
+        key="skills",
+    ) == (("audit",), {"audit": ("admin", frozenset({"finance", "senior"}))})
 
 
 def test_a_requirement_with_a_value_after_a_name_is_refused():
@@ -156,10 +169,10 @@ def test_a_requirement_with_a_value_after_a_name_is_refused():
     `all_of: {finance: senior}` behaved before it was refused.
     """
     with pytest.raises(AgentError, match=r"\{a, b\}, not \{a: b\}"):
-        read.audienced(
-            [{"name": "sql_query", "source_ids": [{"finance": True}]}],
+        audienced(
+            [{"name": "audit", "source_ids": [{"finance": True}]}],
             absent=ALL,
-            key="tools",
+            key="skills",
         )
 
 
@@ -167,11 +180,11 @@ def test_a_requirement_of_one_is_that_one_name():
     """Not special-cased: a set of one is satisfied by holding one, which is what the
     bare name means.
     """
-    _, audiences = read.audienced(
-        [{"name": "sql_query", "source_ids": [{"finance": None}]}], absent=ALL, key="tools"
+    _, audiences = audienced(
+        [{"name": "audit", "source_ids": [{"finance": None}]}], absent=ALL, key="skills"
     )
 
-    assert audiences["sql_query"] == (frozenset({"finance"}),)
+    assert audiences["audit"] == (frozenset({"finance"}),)
 
 
 def test_an_empty_requirement_is_refused():
@@ -179,8 +192,8 @@ def test_an_empty_requirement_is_refused():
     writing a set of names was reaching for.
     """
     with pytest.raises(AgentError, match="requires nothing"):
-        read.audienced(
-            [{"name": "sql_query", "source_ids": [{}]}], absent=ALL, key="tools"
+        audienced(
+            [{"name": "audit", "source_ids": [{}]}], absent=ALL, key="skills"
         )
 
 
@@ -190,10 +203,10 @@ def test_the_retired_keyword_is_refused_by_name():
     quietly narrowed to nobody, so it is refused pointing at the shape that replaced it.
     """
     with pytest.raises(AgentError, match=r"write the requirement as the set it is"):
-        read.audienced(
-            [{"name": "sql_query", "source_ids": [{"all_of": ["A", "B"]}]}],
+        audienced(
+            [{"name": "audit", "source_ids": [{"all_of": ["A", "B"]}]}],
             absent=ALL,
-            key="tools",
+            key="skills",
         )
 
 
@@ -202,8 +215,8 @@ def test_a_requirement_written_as_the_whole_audience_is_refused():
     audience being a set -- and the refusal shows the brackets.
     """
     with pytest.raises(AgentError, match=r"\[\{A, B\}\]"):
-        read.audienced(
-            [{"name": "sql_query", "source_ids": {"A": None, "B": None}}], absent=ALL, key="tools"
+        audienced(
+            [{"name": "audit", "source_ids": {"A": None, "B": None}}], absent=ALL, key="skills"
         )
 
 
@@ -212,8 +225,8 @@ def test_the_retired_keyword_is_named_when_it_is_the_whole_audience_too():
     both -- `source_ids: {all_of: [A, B]}` is a mapping before it is anything else.
     """
     with pytest.raises(AgentError, match=r"\[\{A, B\}\]"):
-        read.audienced(
-            [{"name": "sql_query", "source_ids": {"all_of": ["A", "B"]}}], absent=ALL, key="tools"
+        audienced(
+            [{"name": "audit", "source_ids": {"all_of": ["A", "B"]}}], absent=ALL, key="skills"
         )
 
 
@@ -222,10 +235,10 @@ def test_everyone_cannot_be_part_of_a_requirement():
     source id, and there is no way to tell which was meant.
     """
     with pytest.raises(AgentError, match="everyone"):
-        read.audienced(
-            [{"name": "sql_query", "source_ids": [{"*": None, "A": None}]}],
+        audienced(
+            [{"name": "audit", "source_ids": [{"*": None, "A": None}]}],
             absent=ALL,
-            key="tools",
+            key="skills",
         )
 
 
@@ -285,3 +298,114 @@ def test_a_definitions_own_line_still_takes_a_single_unbracketed_name():
     nested in a mapping where a bare string reads as an unfinished edit.
     """
     assert read.source_ids("analysts") == ("analysts",)
+
+
+# -- the two fields whose entries say nothing about who may use them -------------
+
+HEAD = "name: x\ndescription: d\nsource_ids: [A, B]\nsystem_prompt: |\n  Go.\n"
+
+#: Each reader a `tools:` or `subagents:` list is written to, and the error it raises.
+FORMATS = {
+    "agent": (lambda text: read_agent(DefinitionText(text, Path("x.yaml"))), AgentError),
+    "subagent": (lambda text: a_subagent(text, "x.yaml"), SubagentError),
+}
+
+
+@pytest.mark.parametrize("kind", sorted(FORMATS))
+def test_a_tools_entry_saying_who_may_use_it_is_refused_toward_the_tools_file(kind):
+    """A `tools:` entry's audience was a second lock beside the tool's own, so who may use
+    a tool had to be read off every agent granting it.
+    """
+    reader, error = FORMATS[kind]
+
+    with pytest.raises(error, match=r"ToolSpec\(tool, source_ids=\[\.\.\.\]\)") as refused:
+        reader(HEAD + "tools:\n  - line_count\n  - name: sql_query\n    source_ids: [A]\n")
+
+    assert "tools entry 'sql_query' writes source_ids" in str(refused.value)
+    assert str(refused.value).endswith("Write the entry as - sql_query")
+
+
+def test_a_bundled_tools_entry_keeps_its_source_in_the_remedy():
+    """A remedy saying to write the bare name would move a bundled tool to the catalogue."""
+    with pytest.raises(SubagentError, match=r"- \{name: probe, source: bundled\}$"):
+        a_subagent(
+            HEAD + "tools:\n  - name: probe\n    source: bundled\n    source_ids: [A]\n",
+            "x.yaml",
+        )
+
+
+@pytest.mark.parametrize("kind", sorted(FORMATS))
+def test_a_subagents_entry_saying_who_may_reach_it_is_refused_toward_its_own_line(kind):
+    """A `subagents:` entry's audience was a second lock beside the subagent's own line,
+    so who reaches a subagent had to be read off every definition naming it.
+    """
+    reader, error = FORMATS[kind]
+
+    with pytest.raises(error, match=r"subagents entry 'auditor' writes source_ids") as refused:
+        reader(HEAD + "subagents:\n  - name: auditor\n    source_ids: [A]\n")
+
+    assert "the source_ids: line in its own file" in str(refused.value)
+
+
+def test_a_subagents_entry_written_long_with_nothing_beside_its_name_is_refused():
+    """With no audience to carry, the long form would be a second spelling of a name."""
+    with pytest.raises(AgentError, match=r"subagents entry 'auditor' is written long"):
+        read_agent(DefinitionText(HEAD + "subagents:\n  - name: auditor\n", Path("x.yaml")))
+
+
+@pytest.mark.parametrize("field", ["tools", "subagents"])
+def test_a_field_written_as_a_mapping_is_told_to_be_a_list_of_names(field):
+    """The mapping refusal taught the long form with `source_ids`, which is itself refused."""
+    with pytest.raises(AgentError, match=rf"write {field}: \[auditor\]") as refused:
+        read_agent(
+            DefinitionText(HEAD + f"{field}:\n  auditor:\n    source_ids: [A]\n", Path("x.yaml"))
+        )
+
+    assert "source_ids: [...]}" not in str(refused.value)
+
+
+def _build(model: object, tools: object) -> object:
+    """Never called: `declared` only checks that `build` can be."""
+    return object()
+
+
+def test_a_compiled_subagents_tools_mapping_is_refused_toward_a_list_of_names():
+    """A Python-declared subagent could write each tool's audience as a mapping, a per-agent
+    lock nothing else in the format may write.
+    """
+    with pytest.raises(SubagentError, match=r"write tools: \[sql_query\]") as refused:
+        declared(
+            {
+                "name": "profiler",
+                "description": "Profiles.",
+                "tools": {"sql_query": {"source_ids": ["A"]}},
+                "build": _build,
+            },
+            "graphs.py",
+        )
+
+    assert "ToolSpec(tool, source_ids=[...])" in str(refused.value)
+
+
+def test_a_compiled_subagents_tools_list_names_its_tools():
+    """The control: a refusal of every compiled `tools` would pass the rule above."""
+    spec = declared(
+        {"name": "profiler", "description": "Profiles.", "tools": ["sql_query"], "build": _build},
+        "graphs.py",
+    )
+
+    assert spec.tools == ("sql_query",)
+
+
+@pytest.mark.parametrize("kind", sorted(FORMATS))
+def test_a_skills_entry_still_says_who_is_told_about_it(kind):
+    """A skill has no file of its own to lock it, so refusing its long form with the other
+    two would leave a skill no way to be kept from anyone.
+    """
+    reader, _ = FORMATS[kind]
+
+    spec = reader(HEAD + "skills:\n  - name: tabular-qa\n    source_ids: [A]\n  - code-review\n")
+
+    assert spec.skill_audiences == {"tabular-qa": ("A",)}
+    assert spec.declares(frozenset({"B"})).skills == ("code-review",)
+    assert spec.declares(frozenset({"A"})).skills == ("tabular-qa", "code-review")

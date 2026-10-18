@@ -59,6 +59,12 @@ source_ids:
   # The other operation this file can express, and the opposite of the list
   # above. The braces are the whole difference.
   #
+  # No file in this set names it: it is here as the example. A definition names
+  # it as it names any source id -- `source_ids: [sales_db_pii]` on a subagent, or
+  # `ToolSpec(tool, source_ids=["sales_db_pii"])` in a tool's file -- and a
+  # one-off writes the same requirement inline, `[{sales_db, pii}]`. Reuse decides
+  # between them: a requirement two files share should change in one place.
+  #
   # A list says what holding a name *grants*. A set says what a caller must
   # hold for a name to *apply*: `sales_db_pii` is not something anybody is
   # given -- it is what holding `sales_db` and `pii` together adds up to.

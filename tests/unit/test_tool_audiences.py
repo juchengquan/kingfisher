@@ -248,22 +248,6 @@ def test_an_agent_granting_every_tool_still_leaves_it_out(policied):
     assert "line_count" not in built(kf, ("B",))
 
 
-def test_an_agents_entry_can_narrow_the_tools_audience_and_never_widen_it(policied):
-    """`[B]` on the entry is an **and** with the tool's `[A]`, not a replacement."""
-    agents = policied.catalogue_roots["agents"]
-    (agents / "surveyor.yaml").write_text(
-        AGENT.replace(
-            "tools: [line_count]\n", "tools:\n  - name: line_count\n    source_ids: [B]\n"
-        ),
-        encoding="utf-8",
-    )
-    kf = Kingfisher(policied, sessions=LocalSessions())
-
-    assert "line_count" not in built(kf, ("B",)), "the entry widened the tool"
-    assert "line_count" not in built(kf, ("A",)), "the entry was ignored"
-    assert "line_count" in built(kf, ("A", "B"))
-
-
 def test_the_listing_agrees_with_the_build(policied):
     """A listing naming a tool the build withholds tells a caller it exists."""
     assert "line_count" in inventory(policied, source_ids=["A"]).tools
@@ -287,12 +271,14 @@ def test_a_saved_result_is_stamped_no_wider_than_its_tool():
 
     class Definition:
         source_ids = ("A", "B")
-        audiences: dict[str, Any] = {}
 
-    stamps = Audiences.of(Definition(), own={"line_count": ("A",)})
+    stamps = Audiences.of(Definition(), own={"line_count": ("A",), "export": ("C",)})
 
     assert stamps.offered("line_count") == ("A",)
     assert stamps.offered("other") == ("A", "B"), "a tool saying nothing keeps the grant's"
+    # Joined with the definition's own line rather than replacing it: the result was
+    # produced by whoever opened the agent *and* passed the tool's lock.
+    assert stamps.offered("export") == (frozenset({"A", "C"}), frozenset({"B", "C"}))
 
 
 #: A portable subagent carrying the tool itself, so it arrives as an object, not a file.
@@ -332,9 +318,7 @@ def test_a_subagents_own_tool_is_held_back_from_a_caller_it_shuts_out(policied):
 
 
 def test_the_operator_listing_says_who_each_tool_admits(policied):
-    """No agent file says it, so the operator's audit view named neither tool, and the
-    roll-up answering "who reaches `line_count`?" left out the one line that bounds it.
-    """
+    """No agent file says it, so the operator's audit view named neither tool."""
     from kingfisher.cli.listing import as_json, render
 
     subagents = policied.catalogue_roots["subagents"]
@@ -345,7 +329,6 @@ def test_the_operator_listing_says_who_each_tool_admits(policied):
 
     assert "\n  tool line_count  [A]\n" in shown
     assert "\n  tool counter::count  [A]\n" in shown, "a subagent's own, named for it"
-    assert "\n  line_count\n      (the tool itself)  [A]" in shown.split("by tool", 1)[1]
     assert as_json(found)["audiences"]["tools"] == {
         "line_count": {"source_ids": ["A"]},
         "counter::count": {"source_ids": ["A"]},

@@ -18,7 +18,6 @@ from langgraph.types import Command
 from kingfisher.core.access.reach import stated
 from kingfisher.core.access.source_ids import Audience, jointly, listed, unlisted
 from kingfisher.core.definitions.subagents import TASK_TOOL
-from kingfisher.core.definitions.tools.spec import split_reference
 from kingfisher.core.layout import TOOL_RESULTS_ROUTE
 from kingfisher.core.result import MAIN, WORKING, LedgerEntry, Listed
 
@@ -45,32 +44,25 @@ LINE_LIMIT = 100
 
 @dataclass(frozen=True)
 class Audiences:
-    """Who one definition offers each of its tools to."""
+    """Who one definition offers each of its tools to: whoever opens it, held to the
+    tool's own lock."""
 
+    #: The definition's own audience, its datazone included.
     default: Audience
-    #: By the name a call dispatches on, which is how a tool reaches a recorder.
-    tools: Mapping[str, Audience]
-    #: Each tool's own audience, where it states one. Without it a result is stamped wider
-    #: than the tool admits, and the stamp decides who may read a session.
+    #: Each tool's own audience by the name a call dispatches on, where it states one.
+    #: Without it a result is stamped wider than the tool admits.
     own: Mapping[str, Audience] = field(default_factory=dict)
 
     @classmethod
     def of(
         cls, definition: object | None, *, own: Mapping[str, Audience] | None = None
     ) -> Audiences:
-        """The definition's own audience, and each `tools:` entry's where it wrote one."""
-        said = stated(definition)
-        return cls(
-            default=said.audience,
-            tools={split_reference(name)[1]: who for name, who in said.of("tools").items()},
-            own=own or {},
-        )
+        return cls(default=stated(definition).audience, own=own or {})
 
     def offered(self, tool: str) -> Audience:
-        granted = self.tools.get(tool, self.default)
         if (own := self.own.get(tool)) is None:
-            return granted
-        return jointly((granted, own))
+            return self.default
+        return jointly((self.default, own))
 
 
 @contextmanager

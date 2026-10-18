@@ -10,7 +10,6 @@ from typing import Protocol, runtime_checkable
 
 import yaml
 
-from kingfisher.core.access.source_ids import AUDIENCED
 from kingfisher.core.config import ConfigError, definition_roots_for
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.workspace import ensure_definitions
@@ -147,14 +146,14 @@ def source_ids_named(text: str) -> tuple[str, ...]:
 
     found: list[str] = []
     _collect(parsed.get("source_ids"), into=found)
-    for field_name in AUDIENCED:
-        entries = parsed.get(field_name)
-        # Names, or `{name, source_ids}` mappings. Walking the wrong shape finds nothing,
-        # silently: it looks like a definition naming no source id.
-        if isinstance(entries, (list, tuple)):
-            for entry in entries:
-                if isinstance(entry, dict):
-                    _collect(entry.get("source_ids"), into=found)
+    entries = parsed.get("skills")
+    # Names, or `{name, source_ids}` mappings. Walking the wrong shape finds nothing,
+    # silently: it looks like a definition naming no source id. Only `skills:` entries:
+    # one under `tools:` or `subagents:` is refused at load, whatever it names.
+    if isinstance(entries, (list, tuple)):
+        for entry in entries:
+            if isinstance(entry, dict):
+                _collect(entry.get("source_ids"), into=found)
     return tuple(dict.fromkeys(found))
 
 

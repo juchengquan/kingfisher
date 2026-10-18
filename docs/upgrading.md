@@ -18,6 +18,36 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A tool's lock is in its file, a subagent's on its own line, and only a skill's on an entry, after #868
+
+- **A `tools:` entry may no longer say who may use the tool.** `{name: sql_query,
+  source_ids: [A]}`, in an agent, a subagent or a Python subagent's `tools`, is refused
+  at load. Write the lock in the tool's file, `TOOLS = [ToolSpec(sql_query,
+  source_ids=["A"])]`, and the entry as `- sql_query`. The lock then holds in every agent
+  granting the tool. `{name: probe, source: bundled}` still lists a subagent's own tool.
+- **A `subagents:` entry may no longer say who reaches the subagent.** `{name: auditor,
+  source_ids: [A]}` is refused, and so is a long entry with nothing beside its name.
+  Write `- auditor`, and narrow the subagent's own `source_ids:` line if it needs it.
+- **A Python-declared subagent's `tools` is a list of names.** The mapping
+  `{"sql_query": {"source_ids": ["A"]}}` is refused: write `["sql_query"]` and lock the
+  tool in its file.
+- **What this gives up is one tool, or one subagent, locked differently in two
+  agents.** An agent still decides what it holds by listing it, so leave a tool or a
+  subagent off the agents that should not hold it.
+- **A `skills:` entry keeps its long form**, `{name: tabular-qa, source_ids: [A]}`, since
+  a skill has no file of its own to say it in.
+- **`kingfisher list` rolls up skills only.** The roll-ups by tool and by subagent are
+  gone, a tool's lock stays a line of its own, `tool sql_query  [sales_db]`, and a
+  definition in `--json`'s `audiences` carries a `skills` key and never `tools` or
+  `subagents`. The startup report of an entry narrowing past its definition names
+  skills entries only.
+- **A result's ledger stamp is the definition's own audience joined with the tool's
+  lock.** An entry's audience used to stand in for the definition's.
+- **The shipped `analyst` and `auditor` no longer list `http_fetch`, and `analyst`
+  names `auditor` bare**, so a caller holding only `audit_log` now reaches `auditor`
+  through `analyst`. `sales_db_pii` stays in `source_ids.yaml` as the example of a
+  requirement, named by no shipped definition.
+
 ## A tool field left out grants nothing, after #867
 
 - **Leaving out `tools:` or `builtin_tools:` grants none**, as leaving out `skills:`,

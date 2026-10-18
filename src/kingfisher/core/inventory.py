@@ -182,7 +182,7 @@ class Inventory:
     access: SourceIds | None = None
     #: What the policy and the catalogue disagree about. Empty when they agree.
     access_report: AccessReport = field(default_factory=AccessReport)
-    #: Definition kind -> name -> {"source_ids": ..., "tools": {...}, ...}, for every
+    #: Definition kind -> name -> who reaches it and each skill it narrows, for every
     #: definition saying who reaches what, a tool named as a grant writes it and a
     #: subagent's own as `subagent::tool`. Carried so no renderer reads the specs itself.
     audiences: Mapping[str, Mapping[str, Stated]] = _NO_AUDIENCES
@@ -399,7 +399,7 @@ def _unresolved_subagents(
             _subject(kind, name): missing
             for kind, specs in (("agent", resolved.agents.specs), ("subagent", defined))
             for name, spec in specs.items()
-            # As this caller reaches them: a name an entry audience keeps from them is not
+            # As this caller reaches them: a name in a definition they cannot open is not
             # theirs to be told. `*` is every key, so it cannot name a missing one.
             if isinstance(written := spec.declares(held).subagents, tuple)
             and (missing := unoffered(written, offered=defined))
@@ -709,8 +709,8 @@ def inventory(
         *(_subject("subagent", name) for name in for_caller_subagents),
     }
     # The catalogues, kept to what the definitions this caller reaches offer, not only by a
-    # tool's own audience, which is `shut=`. Reachable definitions only: an entry written
-    # `["*"]` means anyone reaching *this definition*, which a run gates by the caller
+    # tool's own audience, which is `shut=`. Reachable definitions only: a field written
+    # `["*"]` is narrowed by no definition's own line, which a run gates by the caller
     # opening it and a listing must gate here. Agents, not the subagents they reach: a
     # subagent only narrows what reached it.
     reached_agents = [spec for name, spec in defined_agents.items() if name in for_caller]

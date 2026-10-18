@@ -8,7 +8,6 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.core.access.capabilities import ALL, Capabilities, bare_name
-from kingfisher.core.access.source_ids import AUDIENCED
 from kingfisher.core.definitions import fields
 from kingfisher.core.definitions.definition import SpecBase
 
@@ -119,17 +118,23 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
 
     # `source: shared` is accepted so an entry reads the same here as in a subagent file.
     # Absent grants none on both tool axes, as everywhere: a forgotten line fails closed.
-    written_tools, tool_audiences, _ = read.sourced(
-        document.get("tools"), absent=None, key="tools", same=bare_name, refuse_bundled=_NO_FOLDER
+    written_tools, _, _ = read.sourced(
+        document.get("tools"),
+        absent=None,
+        key="tools",
+        same=bare_name,
+        refuse_bundled=_NO_FOLDER,
+        locked=fields.TOOL_LOCK,
     )
     written_skills, skill_audiences, _ = read.sourced(
         document.get("skills"), absent=None, key="skills", refuse_bundled=_NO_FOLDER
     )
-    written_subagents, subagent_audiences = read.audienced(
+    written_subagents = read.names_only(
         # No `refuse_all`: `["*"]` loops only for a subagent, which would name itself.
         document.get("subagents"),
         absent=None,
         key="subagents",
+        locked=fields.SUBAGENT_LOCK,
     )
     builtin = read.selection(document.get("builtin_tools"), absent=None, key="builtin_tools")
     # At load: at the call the allowlist refuses `task`, and the model quietly answers
@@ -137,13 +142,6 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     if (complaint := uncallable_helpers(builtin, written_subagents)) is not None:
         msg = f"{source.name}: {complaint}"
         raise AgentError(msg)
-    audiences = {
-        name: entries
-        for name, entries in zip(
-            AUDIENCED, (tool_audiences, subagent_audiences, skill_audiences), strict=True
-        )
-        if entries
-    }
     source_ids = read.source_ids(document.get("source_ids"))
     # No audience, deliberately: `middlewares` names code the deployment registered,
     # which is granted rather than reachable.
@@ -161,7 +159,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         skills=written_skills,
         subagents=written_subagents,
         source_ids=source_ids,
-        audiences=audiences,
+        skill_audiences=skill_audiences,
         middlewares=written_middleware,
         middleware_settings=middleware_settings,
         wanted=fields.wanted_model(document, read),

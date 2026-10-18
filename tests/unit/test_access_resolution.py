@@ -90,15 +90,15 @@ def test_none_passes_through_untouched():
 
 
 def narrowing(entry, *, source_ids, vocab=None):
-    """What the vocabulary says one entry audience asks beyond its definition."""
+    """What the vocabulary says one skills entry asks beyond its definition."""
     return (vocab or vocabulary()).narrowing_in(
-        {"tools": {"sql_query": entry}}, source_ids=source_ids, where="x.yaml"
+        {"audit": entry}, source_ids=source_ids, where="x.yaml"
     )
 
 
 def test_an_entry_outside_the_definitions_own_audience_is_reported():
     """Reported, not refused."""
-    assert narrowing(("C",), source_ids=("A", "B")) == (("x.yaml: tool sql_query", "C"),)
+    assert narrowing(("C",), source_ids=("A", "B")) == (("x.yaml: skill audit", "C"),)
 
 
 def test_an_overlapping_entry_is_not_narrowing():
@@ -130,7 +130,7 @@ def test_a_compound_does_not_narrow_beside_either_part():
 
 def test_a_compound_sharing_no_part_narrows():
     both = SourceIds(names={n: (n,) for n in ("A", "B", "C", "A+B")}, compounds={"A+B": ("A", "B")})
-    assert narrowing(("C",), source_ids=("A+B",), vocab=both) == (("x.yaml: tool sql_query", "C"),)
+    assert narrowing(("C",), source_ids=("A+B",), vocab=both) == (("x.yaml: skill audit", "C"),)
 
 
 def test_the_second_requirement_a_narrowing_states_actually_works():

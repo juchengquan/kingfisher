@@ -76,8 +76,8 @@ class FoundTool:
 
     tool: Any
     source: str
-    #: Who the tool admits by itself, whichever definition grants it -- an **and** on
-    #: every grant, so an agent's entry can narrow it and never widen it.
+    #: Who the tool admits, whichever definition grants it: an **and** on every grant, and
+    #: the only lock the tool has, since a `tools:` entry takes none.
     source_ids: Audience = ALL
     #: The one datazone a caller must be in to use it, or `None` for any.
     datazone: str | None = None

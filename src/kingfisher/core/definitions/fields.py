@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from difflib import get_close_matches
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 
 from kingfisher.core.access.capabilities import ALL, SEPARATOR, Selection
 
@@ -42,6 +42,17 @@ def _spelled(extra: tuple[str, ...]) -> str:
 #: only repeat or contradict the thing's own, and a contradiction makes it unreachable.
 ON_THE_THING: Mapping[str, str] = MappingProxyType(
     {"datazone": "write it in the tool's or subagent's own file, the one place it means one thing"}
+)
+
+#: Why a `tools:` or `subagents:` entry says nothing about who may use it: each thing has one
+#: lock, in its own file, so who may use it is read in one place and not off every agent.
+TOOL_LOCK = (
+    "a tool's lock is in its own file, as ToolSpec(tool, source_ids=[...]) in its "
+    "TOOLS, and holds wherever the tool is granted"
+)
+SUBAGENT_LOCK = (
+    "a subagent's audience is the source_ids: line in its own file, and holds "
+    "wherever it is used"
 )
 
 
@@ -144,9 +155,9 @@ class Reader:
             # offered to nobody and reported nowhere.
             msg = (
                 f"{self.source}: {key} is a mapping; this field takes a list. A "
-                f"mapping says who reaches each entry, and only tools, subagents "
-                f"and skills may say that -- builtin tools are registered by "
-                f"deepagents, so they can be filtered but never left out of a graph"
+                f"mapping says who reaches each entry, and only a skills entry may "
+                f"say that -- builtin tools are registered by deepagents, so they "
+                f"can be filtered but never left out of a graph"
             )
             raise self.error(msg)
 
@@ -195,18 +206,22 @@ class Reader:
         key: str,
         extra: tuple[str, ...],
         same: Callable[[str], str] | None = None,
+        locked: str | None = None,
     ) -> tuple[list[str], dict[str, Mapping[str, object]]]:
         """The names a list field wrote, and what each entry carried beside one.
 
         `same` says when two spellings are one entry. Tools pass it, since `a.py::fetch`
         and `fetch` dispatch as one name; skills do not, since `source::name` is a skill's
-        identity, and the catalogue is where a bare name's ambiguity can be seen.
+        identity, and the catalogue is where a bare name's ambiguity can be seen. `locked`
+        is why an entry may not say who may use it, for a field whose things say it.
         """
         written: list[str] = []
         carried: dict[str, Mapping[str, object]] = {}
         dispatches = same or (lambda name: name)
         for position, entry in enumerate(value, start=1):
-            name = self._entry_name(entry, position=position, key=key, extra=extra)
+            name = self._entry_name(
+                entry, position=position, key=key, extra=extra, locked=locked
+            )
             dispatched = dispatches(name)
             clash = next((n for n in written if dispatches(n) == dispatched), None)
             if clash is not None:
@@ -224,16 +239,36 @@ class Reader:
         return written, carried
 
     def _entry_name(
-        self, entry: object, *, position: int, key: str, extra: tuple[str, ...]
+        self,
+        entry: object,
+        *,
+        position: int,
+        key: str,
+        extra: tuple[str, ...],
+        locked: str | None = None,
     ) -> str:
         """The name one entry carries, whichever way that entry was written."""
         if isinstance(entry, str):
             return entry.strip()
         if not isinstance(entry, Mapping):
+            form = f"a name, or a mapping of 'name' and {_spelled(extra)}" if extra else "a name"
             msg = (
                 f"{self.source}: {key} entry {position} is neither a name nor a "
-                f"mapping (got {type(entry).__name__}); an entry is a name, or a "
-                f"mapping of 'name' and {_spelled(extra)}"
+                f"mapping (got {type(entry).__name__}); an entry is {form}"
+            )
+            raise self.error(msg)
+
+        # Before the unknown-key check, which would offer `source` for `source_ids`. With no
+        # `extra`, a long entry has nothing to carry but the audience it may not.
+        if locked is not None and ("source_ids" in entry or not extra):
+            named = text(entry.get("name")) or f"<entry {position}>"
+            # What the entry may still carry, so `source: bundled` survives the remedy.
+            kept = "".join(f", {k}: {text(v)}" for k, v in entry.items() if k in extra)
+            written = f"{{name: {named}{kept}}}" if kept else named
+            said = "writes source_ids" if "source_ids" in entry else "is written long"
+            msg = (
+                f"{self.source}: {key} entry {named!r} {said}, which a {key} entry does "
+                f"not take: {locked}. Write the entry as - {written}"
             )
             raise self.error(msg)
 
@@ -248,8 +283,8 @@ class Reader:
             msg = (
                 f"{self.source}: {key} entry {position} is a mapping with no "
                 f"'name'. Written long, an entry is {{name: <a name>, {extra[0]}: ...}} "
-                f"-- the {extra[0]} are for the name, so there is nothing to attach "
-                f"them to without one"
+                f"-- what it carries is for the name, so there is nothing to attach "
+                f"it to without one"
             )
             raise self.error(msg)
 
@@ -383,7 +418,7 @@ class Reader:
         *,
         key: str,
         entry: str,
-        known: tuple[str, ...] = entry_fields("source_ids"),
+        known: tuple[str, ...],
     ) -> Audience | None:
         """One entry's audience, written `{source_ids: [...]}`, or `None` for none."""
         where = f"{self.source}: {key} entry {entry!r}"
@@ -409,39 +444,48 @@ class Reader:
             return None
         return self.audience_list(raw["source_ids"], where=f"{where}: source_ids", lone_name=False)
 
-    def audienced(
+    def _refuse_mapping(
+        self, value: Mapping[object, object], *, key: str, locked: str | None
+    ) -> NoReturn:
+        """Refuse a whole field written as a mapping keyed by name.
+
+        Refused rather than read: YAML collapses `{a: X, a: Y}` before any reader runs, so
+        one of two audiences for a name would vanish unreported.
+        """
+        if locked is not None:
+            listed = ", ".join(str(one) for one in value) or "<name>"
+            msg = (
+                f"{self.source}: {key} is a mapping; this field takes a list of names -- "
+                f"write {key}: [{listed}]. Nothing beside a name here says who may use "
+                f"it: {locked}"
+            )
+            raise self.error(msg)
+        first = next(iter(value), "<name>")
+        msg = (
+            f"{self.source}: {key} is a mapping; this field takes a list. An "
+            f"entry that says who it is for is written long -- "
+            f"- {{name: {first}, source_ids: [...]}} -- beside the plain names, "
+            f"which is the same shape 'middlewares' takes for its settings"
+        )
+        raise self.error(msg)
+
+    def names_only(
         self,
         value: object,
         *,
         absent: Selection,
         key: str,
         refuse_all: str | None = None,
-    ) -> tuple[Selection, Mapping[str, Audience]]:
-        """A selection, and who reaches each entry of it."""
+        locked: str,
+    ) -> Selection:
+        """A selection whose entries are names and nothing else; `locked` says why."""
         if isinstance(value, Mapping):
-            # Refused rather than read: YAML collapses `{a: X, a: Y}` before any reader runs,
-            # so one of two audiences for a name would vanish unreported.
-            first = next(iter(value), "<name>")
-            msg = (
-                f"{self.source}: {key} is a mapping; this field takes a list. An "
-                f"entry that says who it is for is written long -- "
-                f"- {{name: {first}, source_ids: [...]}} -- beside the plain names, "
-                f"which is the same shape 'middlewares' takes for its settings"
-            )
-            raise self.error(msg)
+            self._refuse_mapping(value, key=key, locked=locked)
         if not isinstance(value, (list, tuple)):
-            # A bare `"*"`, one name, or nothing: none can carry an audience.
-            return self.selection(value, absent=absent, key=key, refuse_all=refuse_all), {}
-
-        written, carried = self._entries(value, key=key, extra=("source_ids",))
-        stated = {
-            name: self._audience(entry, key=key, entry=name) for name, entry in carried.items()
-        }
-        # Back through `selection`, so the star, mixing and absence are decided in one place.
-        chosen = self.selection(written, absent=absent, key=key, refuse_all=refuse_all)
-        # Only entries that stated an audience carry one; the rest fall back to the
-        # definition's own, as a plain name does.
-        return chosen, {n: a for n, a in stated.items() if a is not None}
+            return self.selection(value, absent=absent, key=key, refuse_all=refuse_all)
+        # Through `_entries`, which refuses an entry written long and a name written twice.
+        written, _ = self._entries(value, key=key, extra=(), locked=locked)
+        return self.selection(written, absent=absent, key=key, refuse_all=refuse_all)
 
     def sourced(  # noqa: PLR0913 -- separate questions about one field; an object hides which
         self,
@@ -452,23 +496,24 @@ class Reader:
         refuse_all: str | None = None,
         refuse_bundled: str | None = None,
         same: Callable[[str], str] | None = None,
+        locked: str | None = None,
     ) -> tuple[Selection, Mapping[str, Audience], tuple[str, ...]]:
-        """What `audienced` answers for the shared entries, and the bundled ones apart.
+        """The shared entries and who reaches each, and the bundled entries apart.
 
         Apart because nothing narrows a bundled entry: in the selection, a grant that
-        omits it would read as having removed it.
+        omits it would read as having removed it. `locked` is why no entry may say who
+        reaches it, which leaves the middle answer empty.
         """
+        if isinstance(value, Mapping):
+            self._refuse_mapping(value, key=key, locked=locked)
         if not isinstance(value, (list, tuple)):
-            # A mapping, a bare `"*"`, one name, or nothing: none can say where it comes from.
-            return (
-                *self.audienced(value, absent=absent, key=key, refuse_all=refuse_all),
-                (),
-            )
+            # A bare `"*"`, one name, or nothing: none can carry anything beside a name.
+            return self.selection(value, absent=absent, key=key, refuse_all=refuse_all), {}, ()
 
-        extra = ("source_ids", "source")
+        extra = ("source",) if locked is not None else ("source_ids", "source")
         # Both sources through one `_entries`, so a name written shared and bundled is
         # refused as written twice: a subagent dispatches by name.
-        written, carried = self._entries(value, key=key, extra=extra, same=same)
+        written, carried = self._entries(value, key=key, extra=extra, same=same, locked=locked)
         bundled = tuple(
             name for name, entry in carried.items() if self._source(entry, key=key) == BUNDLED
         )

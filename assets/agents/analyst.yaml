@@ -18,69 +18,13 @@ source_ids: [sales_db, audit_log]
 # `task` is how it reaches `auditor` below. Naming a subagent does not grant the
 # tool that calls one, and a list without it is refused at load.
 builtin_tools: [read_file, ls, glob, grep, task]
-# **Only the entry that is actually restricted carries an audience**, and that
-# is the point of this file.
-#
-# The list selects exactly as it always did -- these four tools and no others.
-# What the long form adds is a place to say who one of them is for, written
-# beside the plain names rather than instead of them:
-#
-#     tools: [sql_query, http_fetch, csv_profile::csv_profile, line_count]
-#
-# is the same field with nothing restricted. An entry left as a bare name
-# inherits this definition's own `source_ids:` above, so restricting one tool
-# is one entry and the others are untouched -- which is what lets you start
-# with the list and add an audience later without rewriting the field.
-#
-# It is the shape `middlewares:` takes for its settings, and deliberately: an
-# entry is a name, or a mapping of `name` and the one thing that field lets a
-# name carry. One long form to learn rather than one per field.
+# Names, and nothing beside them: who may use a tool is said once, in the tool's
+# own file. `tools/sql_query.py` declares `ToolSpec(sql_query, source_ids=["sales_db"])`,
+# so a caller holding only `audit_log` opens this agent and runs it without the
+# database, and so does every other agent granting it. An entry here saying who
+# it is for is refused at load. What this agent decides is which tools it lists.
 tools:
-  # Bare, and still narrower than this definition: `tools/sql_query.py` says
-  # itself that it is for `sales_db`. A caller holding only `audit_log` opens
-  # this agent and runs it without the database; one holding `sales_db` gets
-  # the whole set. The tool's own line holds whichever agent grants it, so it
-  # is written once, beside the database it guards.
   - sql_query
-  # **A tool that takes two things at once.** Leaving the workspace to fetch
-  # something is for a caller holding `sales_db` who also holds `pii` -- not
-  # either, both.
-  #
-  # Named in `source_ids.yaml` rather than written out, because the same
-  # requirement is on `subagents/auditor.yaml` too. One-off, it would be spelled
-  # inline and read the same way:
-  #
-  #     source_ids: [{sales_db, pii}]
-  #
-  # Same shape, same meaning; the named form is just a name for it. Reuse is what
-  # decides between them -- a requirement on two definitions should change in
-  # one place.
-  #
-  # The list around it is still an `or`. `[sales_db_pii, audit_log]` would
-  # mean "both of those, or else `audit_log`", which is how an exception is
-  # written next to a requirement -- and `[{sales_db, pii}, audit_log]` says the
-  # same thing without the name.
-  #
-  # An entry audience is an **and** with the definition's, always: the only
-  # way to reach a tool is through the agent holding it, and a caller who
-  # cannot open this agent never gets here. So `[sales_db_pii]` means "opens
-  # this agent, and holds both".
-  #
-  # Which is why naming a source id from *outside* the line above is allowed
-  # and useful. `source_ids: [pii]` would mean "anyone who opens this agent,
-  # and holds `pii`" -- a second requirement rather than a mistake. Startup
-  # reports it, under `narrows past this definition's own audience`, because
-  # the same line is what somebody trying to *widen* would write by accident.
-  # Only the author knows which, so it is said rather than vetoed.
-  - name: http_fetch
-    source_ids: [sales_db_pii]
-  # Bare names, so `[sales_db, audit_log]` -- this definition's own. Say
-  # nothing and you inherit; there is no way to spell "nobody" here, and
-  # `source_ids: []` is refused as the unfinished edit it almost always is.
-  #
-  # Left short on purpose. An unrestricted entry has nothing to attach, so it
-  # writes nothing -- the long form is for the entries that need it, and mixing
-  # the two in one list is the ordinary case rather than a special one.
   - csv_profile::csv_profile
   - line_count
 # No `builtin_tools` audience, and there cannot be one: deepagents registers its
@@ -88,40 +32,27 @@ tools:
 # What gates them is the line at the top of this file -- an agent declaring a
 # read-only builtin set cannot hand anyone the shell, whoever they are.
 #
-# **The same long form, on the other two fields that take one.** `tools:` above
-# is where an audience is most often wanted, but nothing about it is special:
-# `skills:` and `subagents:` read identically, and one long form across all
-# three is the whole reason the entry is `{name, source_ids}` rather than a
-# shape per field.
+# **A `skills:` entry is the one entry that may say who it is for**, because a
+# skill has no file of its own to say it in. Written long, `{name, source_ids}`,
+# beside the plain names; a bare name inherits the line at the top.
 skills:
-  # Narrower than this definition. A caller holding only `audit_log` opens this
-  # agent and is never told the profiling procedure exists; one holding
-  # `sales_db` is.
+  # Narrower than this definition, and an **and** with it: a caller holding only
+  # `audit_log` opens this agent and is never told the profiling procedure
+  # exists; one holding `sales_db` is.
   #
   # Worth being exact about what that does and does not buy. Removing a skill
   # means the agent is not *told* about it -- the file is still on disk, and a
   # skill was never a boundary. The boundary is the tools the procedure would
-  # need, which carry audiences of their own, two fields up.
+  # need, which carry locks of their own, in their own files.
   - name: tabular-qa
     source_ids: [sales_db]
-  # Bare, so it inherits `[sales_db, audit_log]` -- reviewing the code that
-  # produced a figure is for whoever may open this agent at all.
   - code-review
+# Names only, as under `tools:`. A subagent says who reaches it in its own file,
+# and that holds wherever it is used: `subagents/auditor.yaml` is for three
+# source ids, and `subagents/quarters.py` for `sales_db` callers in the `emea`
+# datazone.
 subagents:
-  # A subagent, restricted the same way. `auditor` is reachable by three source
-  # ids in its own file; this line says which of them may reach it *through
-  # this agent*, which is the sense in which an audience is a property of the
-  # use rather than of the thing used.
-  #
-  # `kingfisher list` prints a roll-up by subagent for exactly that reason: the
-  # same auditor may be opened wider somewhere else, and a call site quietly
-  # wider than its neighbours is what the roll-up exists to show.
-  - name: auditor
-    source_ids: [sales_db]
-  # Bare, and still the narrowest subagent here: `subagents/quarters.py` says itself
-  # that it is for `sales_db` callers in the `emea` datazone. Nothing written on
-  # this line could widen that -- an entry is an **and** with what the subagent
-  # says -- so there is nothing for this agent to repeat.
+  - auditor
   - quarters
 memory: false
 system_prompt: |
@@ -130,9 +61,7 @@ system_prompt: |
   Check what you have before planning around it. If `sql_query` is not among
   your tools, this caller may not reach the database through you, and the
   answer is to work from the files or to say what you cannot check -- not to
-  ask for the tool, which will not arrive. The same goes for `http_fetch`:
-  without it, an external source cannot be consulted, and the honest report
-  says which figures went unchecked for that reason.
+  ask for the tool, which will not arrive.
 
   That is the ordinary case rather than a failure. Two people run this agent
   and one of them is holding fewer tools than the other; the report should be

@@ -13,7 +13,6 @@ from types import MappingProxyType
 from typing import Any
 
 from kingfisher.core.access.capabilities import ALL, Selection, bare_name
-from kingfisher.core.access.source_ids import AUDIENCED
 from kingfisher.core.definitions import fields
 from kingfisher.core.definitions.definition import SpecBase
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
@@ -331,12 +330,11 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     where = Path(source)
     read = fields.Reader(source=where.name, error=SubagentError)
     wanted = fields.wanted_model(entry, read)
-    # Absent grants none, as in a document: `["*"]` asks for every tool the request granted.
-    written_tools, tool_audiences, own_tools = read.sourced(
-        entry.get("tools"), absent=None, key="tools", same=bare_name
+    # A list of names, as a file writes it, and absent grants none: `["*"]` asks for every
+    # tool the request granted. What each tool admits is in the tool's own file.
+    written_tools, _, own_tools = read.sourced(
+        entry.get("tools"), absent=None, key="tools", same=bare_name, locked=fields.TOOL_LOCK
     )
-    # Only `tools`: `NOT_COMPILED` refuses the other fields that carry an audience.
-    audiences = {"tools": tool_audiences} if tool_audiences else {}
     source_ids = read.source_ids(entry.get("source_ids"))
     return SubagentSpec(
         name=fields.text(entry["name"]),
@@ -353,7 +351,6 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         wanted=wanted,
         metadata=read.mapping(entry.get("metadata"), key="metadata"),
         source_ids=source_ids,
-        audiences=audiences,
         datazone=read.datazone(entry.get("datazone")),
     )
 
@@ -545,8 +542,8 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
 
     # Kept as written, `where::what` and all: two folders may each define a `fetch`, and
     # only the reference says which. `Offering.permitted` flattens it for the allowlist.
-    written_tools, tool_audiences, own_tools = reader.sourced(
-        document.get("tools"), absent=None, key="tools", same=bare_name
+    written_tools, _, own_tools = reader.sourced(
+        document.get("tools"), absent=None, key="tools", same=bare_name, locked=fields.TOOL_LOCK
     )
     # Read as the agent format reads it: settings must mean the same in either file.
     written_middleware, middleware_settings = reader.selection_with_settings(
@@ -563,7 +560,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             "and arrives as none. Name the procedures this one uses"
         ),
     )
-    written_subagents, subagent_audiences = reader.audienced(
+    written_subagents = reader.names_only(
         document.get("subagents"),
         absent=None,
         key="subagents",
@@ -571,19 +568,13 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             "it would mean every definition in the catalogue, which includes this "
             "one, so it is always a loop. Name the subagents this one consults"
         ),
+        locked=fields.SUBAGENT_LOCK,
     )
     # At load: otherwise only the call shows it, as an error the model reads and works
     # around, and nobody who could fix the file sees it.
     if (complaint := uncallable_helpers(builtin, written_subagents)) is not None:
         msg = f"{source.name}: {complaint}"
         raise SubagentError(msg)
-    audiences = {
-        name: entries
-        for name, entries in zip(
-            AUDIENCED, (tool_audiences, subagent_audiences, skill_audiences), strict=True
-        )
-        if entries
-    }
     source_ids = reader.source_ids(document.get("source_ids"))
 
     return SubagentSpec(
@@ -601,6 +592,6 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         wanted=wanted,
         metadata=reader.mapping(document.get("metadata"), key="metadata"),
         source_ids=source_ids,
-        audiences=audiences,
+        skill_audiences=skill_audiences,
         datazone=reader.datazone(document.get("datazone")),
     )

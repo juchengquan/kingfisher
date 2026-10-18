@@ -39,9 +39,11 @@ called *Sessions and storage*.
 ## The definition format
 
 **An entry is a name, or a mapping of `name` and what that field lets a name
-carry.** `source_ids` for `tools`, `skills` and `subagents`, with `source` beside it
-on `tools` and `skills`; `settings` for `middlewares`. One long form, whichever field it belongs to, read through one
-loop -- so a reader who has met one has met the other.
+carry.** `source_ids` for `skills`, `source` for `tools` and `skills`, `settings` for
+`middlewares`; a `subagents:` entry is a name alone. One long form, whichever field it
+belongs to, read through one loop -- so a reader who has met one has met the other.
+`tools` and `subagents` entries took `source_ids` too until 2026-10-18 -- *Source-id
+access* has why that went.
 
 It replaced a field-level mapping keyed by name, and not for tidiness. **That
 shape could not see a name written twice.** YAML collapses `{a: X, a: Y}` before
@@ -1405,19 +1407,21 @@ tools' section to the session's: they hold for an agent with only the shell.
 ## Source-id access
 
 **An audience lives in the definition it is about.** An agent or subagent writes
-`source_ids:` for who may reach it, and an entry of `tools:`, `subagents:` or
-`skills:` may be written long -- `{name: X, source_ids: [...]}` -- for who reaches
-that one. One central
+`source_ids:` for who may reach it, a tool writes its lock in its own file, and an
+entry of `skills:` may be written long -- `{name: X, source_ids: [...]}` -- for who
+is told about that one, since a skill has no file of its own to say it in. One central
 file, `source_ids.yaml`, holds the vocabulary -- names only, no policy. It held
 `contains` as well, which is a retired spelling now and refused.
 An audience resolves into an ordinary `Capabilities`, so nothing downstream
 changed: an ungranted tool is never attached to the graph and an ungranted
-subagent is never compiled. *(2026-08-31.)*
+subagent is never compiled. *(2026-08-31. Entries of `tools:` and `subagents:` took an
+audience too until 2026-10-18 -- see *Reversed: a `tools:` or `subagents:` entry says
+who reaches that one*, below.)*
 
 The rule that makes it safe to add to an existing definition: **`source_ids:` is the
-default audience for everything the definition holds, and the ceiling on what any
-entry may say.** So an omitted or plain-list `tools:` keeps its exact meaning, and
-an entry is always an *and* with the definition's own line -- the only way to
+default audience for everything the definition holds, and the ceiling on what a
+`skills:` entry may say.** So an omitted or plain-list `tools:` keeps its exact meaning,
+and a skills entry is always an *and* with the definition's own line -- the only way to
 reach an entry is through the definition holding it, so naming a source id from
 outside that line adds a second requirement rather than replacing the first. A definition with no `source_ids:` line is reachable by everyone, and the report of
 every such definition is built at startup -- default-open must not also be silent.
@@ -1425,10 +1429,11 @@ It is `kingfisher list` that prints it; a plain start says nothing.
 
 **A tool may say who may use it, in its own file.** A tool its file writes as
 `ToolSpec(tool, source_ids=[...])` carries an audience of its own, and it is an
-**and** on every grant of that tool: an agent's entry can narrow it, and nothing an
-agent writes can widen it. It is the rule a definition's entries already follow --
-the only way to reach an entry is through the definition holding it -- carried one
-level further down, to the thing the audience is actually about. A deployment whose
+**and** on every grant of that tool: nothing an agent writes can widen it, and since
+2026-10-18 nothing an agent writes can narrow it either -- it is the tool's only lock.
+It is the rule a definition's entries already follow -- the only way to reach an entry
+is through the definition holding it -- carried one level further down, to the thing
+the audience is actually about. A deployment whose
 tools are written in Python had nowhere else to put it: the translation from its own
 tool record to a LangChain tool dropped the field, and writing it on every agent that
 grants the tool is the line one of them forgets.
@@ -1478,12 +1483,45 @@ another datazone: the tool is left out of that caller's build, and for a caller 
 tool's own datazone the same agent works. *(2026-10-16.)*
 
 **The operator's listing prints both.** A tool's own audience is a line of its own,
-`tool sql_query  [sales_db]`, and the first line under that tool in the roll-up, since
-every grant of it is held there. A subagent's own tool is named `counter::count`: the
+`tool sql_query  [sales_db]`. A subagent's own tool is named `counter::count`: the
 file `audienced_tools` keys it by sits inside a folder the key does not name, which
 sends a reader to look for it in `tools/`. A datazone is printed beside the source ids,
 not folded into them, because a subagent writing only `datazone: finance` was listed as
 `[*]` -- everyone. *(2026-10-17.)*
+
+The tool's line was also the first under that tool in a roll-up by tool, beside every
+agent entry narrowing it, until 2026-10-18. With no entry able to lock a tool or a
+subagent, those two roll-ups would print each lock a second time beside nothing that
+could differ from it, so they went. Skills keep theirs: a skills entry is still a lock
+per use, and a use quietly wider than its neighbours is still what a roll-up shows.
+
+**Reversed: a `tools:` or `subagents:` entry says who reaches that one.** Written long,
+`{name: X, source_ids: [...]}`, an entry was a lock per agent: an *and* with the
+definition's own line and with the thing's own lock -- a tool's `ToolSpec`, a
+subagent's own `source_ids:`. A compiled subagent wrote the same thing in Python, as a
+`tools` mapping of name to audience. Each thing has one lock now, in its own file, and
+an entry is its name.
+
+**One place to read.** To answer "who can use `http_fetch`?" one reads its tool file,
+not every agent that lists it -- and a lock written on each agent's entry is the line
+one of them forgets, the argument that moved the tool's own lock into its file on
+2026-10-16. Who may use a tool in an agent is three checks, each in one obvious place:
+whether the caller can open the agent, whether the agent lists the tool, and whether
+the caller passes the tool's lock. **Per-agent control is by listing.** An agent can
+always leave a tool or a subagent off its list; the one case lost is the same tool
+locked differently by source id in two agents, which the deployment this was decided
+for does not need, and which listing covers when one does.
+
+`skills:` keeps the long form, because a skill has no file of its own to lock it in --
+its entry is the only place one can be written, and the definition's own line stays
+the default and the ceiling for it. A long `tools:` or `subagents:` entry writing
+`source_ids` is refused at load, saying where the lock goes, and so is a compiled
+subagent's `tools` mapping; a long `subagents:` entry with nothing beside its name is
+refused with them, having nothing left to carry. A result's ledger stamp became the
+definition's own audience joined with the tool's lock, where an entry's audience had
+stood in for the definition's. The shipped `analyst` grants `auditor` bare, so an
+`audit_log` caller of `analyst` reaches it, which `auditor`'s own line already admits.
+*(2026-08-31. Reversed 2026-10-18.)*
 
 **Reversed: a central `access.yaml` listing every asset by name.** Built in full
 -- vocabulary, per-asset audiences, reconciliation against the catalogue, two

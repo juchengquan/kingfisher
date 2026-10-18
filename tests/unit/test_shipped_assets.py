@@ -1045,11 +1045,8 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
             ("call-cap-strict", "call-cap-generous", "tool-note", "compact"),
         ),
         "subagents/sweeper.yaml": ("middlewares", ("call-cap-generous", "tool-note")),
-        "agents/analyst.yaml": ("source_ids", ("sales_db", "audit_log", "sales_db_pii")),
-        "subagents/auditor.yaml": (
-            "source_ids",
-            ("sales_db", "audit_log", "warehouse", "sales_db_pii"),
-        ),
+        "agents/analyst.yaml": ("source_ids", ("sales_db", "audit_log")),
+        "subagents/auditor.yaml": ("source_ids", ("sales_db", "audit_log", "warehouse")),
     }
 
     # And everything else still arrives, which is the half that would break
@@ -1508,17 +1505,21 @@ def test_the_shipped_quarters_is_for_sales_db_callers_in_emea(shipped):
 
 
 def test_an_entry_that_states_nothing_inherits(shipped):
-    """`analyst.yaml` restricts some tools and leaves others bare -- which is the rule most
+    """`analyst.yaml` narrows one skill and leaves the other bare -- which is the rule most
     likely to be got wrong, so it is asserted rather than only commented.
     """
     specs = LocalAgentRepository(shipped / "agents").specs
     source_ids = _vocabulary(shipped)
     analyst = specs["analyst"]
 
-    # One entry carries an audience; the other three say nothing and inherit. The
-    # definition's half only: `sql_query` says `sales_db` itself, which is the tool's
-    # half and is asserted by `test_the_shipped_database_tool_says_who_it_is_for`.
-    assert analyst.audiences["tools"] == {"http_fetch": ("sales_db_pii",)}
+    assert analyst.skill_audiences == {"tabular-qa": ("sales_db",)}
+    assert analyst.declares(source_ids.expand(["audit_log"])).skills == ("code-review",)
+    assert analyst.declares(source_ids.expand(["sales_db"])).skills == (
+        "tabular-qa",
+        "code-review",
+    )
+    # Every tools entry is a name: `sql_query` says `sales_db` itself, which is asserted
+    # by `test_the_shipped_database_tool_says_who_it_is_for`.
     assert analyst.declares(source_ids.expand(["audit_log"])).tools == (
         "sql_query",
         "csv_profile::csv_profile",
@@ -1537,41 +1538,19 @@ def test_the_shipped_database_tool_says_who_it_is_for(shipped):
 
 
 def test_a_shipped_requirement_takes_both_source_ids_at_once(shipped):
-    """The set case, asserted against the files rather than described."""
-    specs = LocalAgentRepository(shipped / "agents").specs
+    """The example file's claim that a `warehouse` holding `pii` derives the compound, and
+    one alone does not, said the opposite for as long as the prose existed with every
+    test still green.
+    """
     source_ids = _vocabulary(shipped)
-    analyst = specs["analyst"]
 
-    assert analyst.declares(source_ids.expand(["sales_db"])).tools == (
-        "sql_query",
-        "csv_profile::csv_profile",
-        "line_count",
-    )
-    assert analyst.declares(source_ids.expand(["sales_db", "pii"])).tools == (
-        "sql_query",
-        "http_fetch",
-        "csv_profile::csv_profile",
-        "line_count",
-    )
-    # Senior alone is not a role here, so it reaches the agent through nothing.
-    assert not analyst.declares(source_ids.expand(["pii"])).tools
-    # The claim the example file makes about `warehouse` in prose, driven rather
-    # than read: covering `sales_db` is not being classified for it, but
-    # expansion runs first, so a `warehouse` holding `pii` derives the compound
-    # without ever holding `sales_db` by name -- and alone derives nothing,
-    # because nothing here hands out `pii`. The file said the opposite of this
-    # for as long as the prose existed, with every test still green.
-    assert analyst.declares(source_ids.expand(["warehouse", "pii"])).tools == (
-        "sql_query",
-        "http_fetch",
-        "csv_profile::csv_profile",
-        "line_count",
-    )
-    assert analyst.declares(source_ids.expand(["warehouse"])).tools == (
-        "sql_query",
-        "csv_profile::csv_profile",
-        "line_count",
-    )
+    assert "sales_db_pii" in source_ids.expand(["sales_db", "pii"])
+    assert "sales_db_pii" not in source_ids.expand(["sales_db"])
+    assert "sales_db_pii" not in source_ids.expand(["pii"])
+    # Covering `sales_db` is not being classified for it, but expansion runs first, so a
+    # `warehouse` holding `pii` derives the compound without holding `sales_db` by name.
+    assert "sales_db_pii" in source_ids.expand(["warehouse", "pii"])
+    assert "sales_db_pii" not in source_ids.expand(["warehouse"])
 
 
 def test_a_shipped_compound_cannot_be_presented_by_a_caller(shipped):
@@ -1582,29 +1561,22 @@ def test_a_shipped_compound_cannot_be_presented_by_a_caller(shipped):
         _vocabulary(shipped).expand(["sales_db_pii"])
 
 
-def test_the_long_entry_form_is_shown_on_every_field_that_takes_one(shipped):
-    """`tools`, `subagents` and `skills` read identically, and the set showed that on
-    one of the three.
-    """
+def test_the_set_shows_an_audience_on_a_skills_entry(shipped):
+    """No preset would show the one entry that may still say who it is for."""
     import yaml
 
-    written = {
-        field: set()
-        for field in ("tools", "subagents", "skills")
-    }
-    for path in sorted((shipped / "agents").rglob("*.yaml")) + sorted(
-        (shipped / "subagents").rglob("*.yaml")
-    ):
-        document = yaml.safe_load(path.read_text(encoding="utf-8"))
-        if not isinstance(document, dict):
-            continue
-        for field, files in written.items():
-            entries = document.get(field)
-            if isinstance(entries, list) and any(isinstance(e, dict) for e in entries):
-                files.add(path.name)
+    shown = [
+        path.name
+        for path in sorted((shipped / "agents").rglob("*.yaml"))
+        + sorted((shipped / "subagents").rglob("*.yaml"))
+        if isinstance(document := yaml.safe_load(path.read_text(encoding="utf-8")), dict)
+        and any(
+            isinstance(entry, dict) and "source_ids" in entry
+            for entry in document.get("skills") or ()
+        )
+    ]
 
-    missing = sorted(field for field, files in written.items() if not files)
-    assert not missing, f"no preset shows the long form on: {', '.join(missing)}"
+    assert shown, "no preset writes source_ids on a skills entry"
 
 
 def test_a_bare_entry_sits_beside_a_long_one(shipped):
@@ -1617,10 +1589,9 @@ def test_a_bare_entry_sits_beside_a_long_one(shipped):
         (shipped / "agents" / "analyst.yaml").read_text(encoding="utf-8")
     )
 
-    for field in ("tools", "skills"):
-        entries = document[field]
-        assert any(isinstance(e, str) for e in entries), f"{field}: no bare entry"
-        assert any(isinstance(e, dict) for e in entries), f"{field}: no long entry"
+    entries = document["skills"]
+    assert any(isinstance(e, str) for e in entries), "skills: no bare entry"
+    assert any(isinstance(e, dict) for e in entries), "skills: no long entry"
 
 
 def test_the_other_presets_still_restrict_nobody(shipped):

@@ -236,11 +236,15 @@ DOCUMENTS = {
         "metadata: {owner: data-eng}\n"
         "source_ids: [A, B]\n"
     ),
-    "entries with audiences and settings": HEAD + (
-        "tools:\n  - name: fetch\n    source_ids: [A]\n  - csv_profile\n"
+    "entries with an audience and settings": HEAD + (
+        "tools:\n  - name: fetch\n  - csv_profile\n"
         "skills:\n  - name: tabular-qa\n    source_ids: [B]\n"
-        "subagents:\n  - name: reviewer\n    source_ids: [A]\n"
+        "subagents: [reviewer]\n"
         "middlewares:\n  - name: audit\n    settings: {limit: 3}\n"
+    ),
+    "a tools entry with an audience": HEAD + "tools:\n  - name: fetch\n    source_ids: [A]\n",
+    "a subagents entry with an audience": HEAD + (
+        "subagents:\n  - name: reviewer\n    source_ids: [A]\n"
     ),
     "the star, where both take it": HEAD + (
         'builtin_tools: ["*"]\ntools: ["*"]\nmiddlewares: ["*"]\nsource_ids: ["*"]\n'
@@ -251,8 +255,8 @@ DOCUMENTS = {
     "one name twice": HEAD + "tools: [fetch, fetch]\n",
     "an entry key misspelled": HEAD + "tools:\n  - name: fetch\n    sourceids: [A]\n",
     "entries saying they are shared": HEAD + (
-        "tools:\n  - name: fetch\n    source: shared\n    source_ids: [A]\n"
-        "skills:\n  - name: tabular-qa\n    source: shared\n"
+        "tools:\n  - name: fetch\n    source: shared\n"
+        "skills:\n  - name: tabular-qa\n    source: shared\n    source_ids: [A]\n"
     ),
     "a source that is neither": HEAD + "tools:\n  - name: fetch\n    source: private\n",
     "settings that are not a mapping": HEAD + (

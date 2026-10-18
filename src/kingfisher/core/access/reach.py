@@ -38,9 +38,7 @@ def stated(spec: object) -> Stated:
     """
     return Stated(
         source_ids=getattr(spec, "source_ids", ALL),
-        entries={
-            field: dict(entries) for field, entries in getattr(spec, "audiences", {}).items()
-        },
+        skills=dict(getattr(spec, "skill_audiences", {})),
         datazone=getattr(spec, "datazone", None),
     )
 
@@ -128,7 +126,8 @@ def narrowed_for(spec: object, held: frozenset[str] | None) -> dict[str, Selecti
 
     `held` of `None` is no caller to narrow for, and every selection comes back as written.
     Not a `Capabilities`: an agent widens `models` where a subagent leaves it unset, so the
-    axes no audience touches stay with the definition.
+    axes no audience touches stay with the definition. Only a skill may narrow past the
+    definition's own line: a tool's lock is applied from its file, a subagent's from its own.
     """
     said = stated(spec)
     return {
@@ -136,7 +135,7 @@ def narrowed_for(spec: object, held: frozenset[str] | None) -> dict[str, Selecti
         if held is None
         else reaching(
             getattr(spec, field),
-            audiences=said.of(field),
+            audiences=said.skills if field == "skills" else {},
             default=said.source_ids,
             held=held,
         )
