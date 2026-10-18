@@ -365,7 +365,10 @@ Four things worth knowing before you restrict this list:
   `glob` only beside `read_file`, and an agent holding none is told to call the tool
   again. With memory on, it is told to save with `edit_file`, or `write_file` where
   it lacks that; holding neither, as `operator.yaml` does, it is told its memory can
-  be read but not added to. The shell does not count as a way to save.
+  be read but not added to. The shell does not count as a way to save. The tools'
+  own descriptions follow it as well: `execute`'s advice to search with `grep` and
+  `glob` and read with `read_file`, `grep`'s pointer to the shell, and `ls`'s and
+  `write_file`'s to `read_file` and `edit_file` name only the tools held.
 
 ### Workspace tools
 
