@@ -51,18 +51,7 @@ its place, covering the whole session: the results that followed each of the lat
 few messages, listed the same way, and for each earlier message that had any, one line
 giving the range of their ids and how many results each tool returned.
 
-Each of those files is under `/{{scratchpad}}/{{tool_results}}/`, or under
-`/{{scratchpad}}/large_tool_results/` for a result too long to show you whole. Read one
-back with `read_file`, which reads a range of lines, or search them with `grep`, rather
-than calling the tool again. To find an older result by its id, `glob` for `A-0042-*`
-in `/{{scratchpad}}/{{tool_results}}/`; a result too long to show you whole is named after its
-call instead, and ends in its `[A-0042]` line, so `grep` for that in
-`/{{scratchpad}}/large_tool_results/`.
-
-Once the conversation is long, an older result may be cleared to a short handle saying
-what it was, how long it was and where the whole of it is, and the text of a file you
-wrote or edited to a line saying the file holds it. Read that file, `grep` for the id
-where the handle says to, or call the tool again; a file may have changed since.
+<!-- tool results -->
 
 <!-- capabilities -->
 
