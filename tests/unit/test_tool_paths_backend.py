@@ -185,7 +185,7 @@ def test_a_subagent_is_handed_the_parents_paths_on_any_backend(cfg, tmp_path):
     )
 
     def translating(stack):
-        return [m for m in stack if type(m).__name__ == "WorkspaceToolPathsMiddleware"]
+        return [m for m in stack if type(m).__name__ == "GuardedCallsMiddleware"]
 
     (theirs,) = translating(middleware_of(built, "reviewer"))
     (mine,) = translating(built.middleware)

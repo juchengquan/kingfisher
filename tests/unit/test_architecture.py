@@ -1769,7 +1769,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         # on its runner or on its own sandbox; nothing here has a shell of that kind.
         "ShellPrompt": "document",
         # `ports.md` tells a backend that refuses host paths to refuse them with this,
-        # because it is the type `ToolFailureMiddleware` turns into a correction.
+        # because it is the type `GuardedCallsMiddleware` turns into a correction.
         "HostPathError": "document",
         # And the refusal kingfisher's own backend makes, which `ports.md` offers a
         # backend that wants to refuse host paths the same way.
