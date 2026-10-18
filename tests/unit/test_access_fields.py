@@ -399,8 +399,8 @@ def test_a_compiled_subagents_tools_list_names_its_tools():
 
 @pytest.mark.parametrize("kind", sorted(FORMATS))
 def test_a_skills_entry_still_says_who_is_told_about_it(kind):
-    """A skill has no file of its own to lock it, so refusing its long form with the other
-    two would leave a skill no way to be kept from anyone.
+    """A skill's lock goes nowhere else -- its `SKILL.md` is read whole by the model -- so
+    refusing its long form with the other two would leave it no way to be kept from anyone.
     """
     reader, _ = FORMATS[kind]
 
