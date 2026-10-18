@@ -2014,6 +2014,14 @@ is named by call id, and a later call with the same id overwrites it, so a path 
 name another call's result where a search finds nothing. A tool that offloads its own
 output hands the recorder the stub, and is named by our copy.
 
+**A handle names only a tool the agent holds.** The path goes to an agent holding
+`read_file`, the search to one holding `grep`, and any other is told to call the tool
+that made the result again. A model told to `grep` calls `grep` whatever it holds, and
+without it spends the step on a refusal. One holding `read_file` but not `grep` is not
+given an offloaded result's path, for the reason above. The grant is the one
+`BuiltinToolsMiddleware` and `GrantedOnlyMiddleware` get, so a handle never names a
+tool they take away. *(2026-10-18.)*
+
 **The marks.** The high mark is the model entry's `clear_results_at`, or else the smaller
 of 64,000 tokens and half the summariser's trigger, read from
 `compute_summarization_defaults` and never copied, so a small window still clears first.

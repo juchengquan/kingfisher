@@ -13,6 +13,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately
 from langgraph.types import Command
 
+from kingfisher.core.agent.middlewares.builtin_tools import GREP, READ_FILE
 from kingfisher.core.agent.middlewares.model_reply import NOT_RUN
 from kingfisher.core.agent.middlewares.recorder import _arguments
 from kingfisher.core.agent.models import summarizer_trigger
@@ -113,7 +114,13 @@ class ResultClearingMiddleware(AgentMiddleware):
     another pass.
     """
 
-    def __init__(self, ledger: Ledger, high: int, offloads_route: str) -> None:
+    def __init__(
+        self,
+        ledger: Ledger,
+        high: int,
+        offloads_route: str,
+        tools: tuple[str, ...] | None = None,
+    ) -> None:
         super().__init__()
         #: The turn's, whose rows say where each result with an id is kept.
         self._ledger = ledger
@@ -121,6 +128,12 @@ class ResultClearingMiddleware(AgentMiddleware):
         self._low = high // 2
         #: This layout's `/scratchpad/large_tool_results/`, as the model addresses it.
         self._offloads = offloads_route
+        # The graph's grant, not `request.tools`: this runs before `GrantedOnlyMiddleware`
+        # narrows them.
+        self._granted = None if tools is None else frozenset(tools)
+
+    def _holds(self, name: str) -> bool:
+        return self._granted is None or name in self._granted
 
     def wrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         request, update = self._cleared(request)
@@ -238,17 +251,24 @@ class ResultClearingMiddleware(AgentMiddleware):
         return None
 
     def _row_handle(self, row: LedgerEntry, text: str) -> str | None:
-        """A recorded result's handle, naming where its whole text is kept.
+        """A recorded result's handle, naming where its whole text is kept to an agent
+        holding the tool that reaches it there, and the call that made it to any other.
 
         An offloaded one is named by a search for its id, not by its file: deepagents names
-        that file after the call id, which a later call with the same id overwrites.
+        that file after the call id, which a later call with the same id overwrites. So an
+        agent without `grep` is not handed the path instead, even one holding `read_file`.
         """
+        again = f"call {row.tool} again to see it"
         if (row.path is not None and row.path.startswith(self._offloads)) or (
             text.startswith(EVICTED) and row.size > len(text.encode("utf-8"))
         ):
-            where = f"offloaded: grep for [{row.id}] under {self._offloads}"
+            where = (
+                f"offloaded: grep for [{row.id}] under {self._offloads}"
+                if self._holds(GREP)
+                else again
+            )
         elif row.path is not None:
-            where = f"full result: {row.path}"
+            where = f"full result: {row.path}" if self._holds(READ_FILE) else again
         else:
             return None
         return f"{row.summary}\n({row.size:,} bytes, cleared; {where})\n[{row.id}]"
