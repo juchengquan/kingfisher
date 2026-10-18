@@ -61,7 +61,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
         msg = "general-purpose is given the agent's skills index, and narrows none of its own"
         raise ValueError(msg)
 
-    # One grant for the handles and both guards, so a handle never names a tool they refuse.
+    # One grant for the handles and the filter, so a handle never names a tool it refuses.
     granted = None if tools is None else tuple(tools)
     # First, so it measures the request deepagents' summariser counted, before anything
     # adds to it.
@@ -81,20 +81,10 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     )
     # Ahead of the rest, which have nothing to say about a call that is not run.
     standing.append(ModelReplyMiddleware(subagent=kind != "agent", outputs=layout.outputs_route))
-    # Outside `BuiltinToolsMiddleware`, so a `grep` it runs as several searches fails once,
-    # as the call the model made, when its path is refused.
-    standing.append(ToolFailureMiddleware(names))
-    standing.append(LargePdfMiddleware())
-    standing.append(
-        BuiltinToolsMiddleware(
-            layout, shell_prompt_of(backend), here=shell_runs_here(backend), tools=granted
-        )
-    )
-    # Translation rewrites the arguments before anything after it judges them.
-    if names and paths is not None:
-        standing.append(WorkspaceToolPathsMiddleware(names, paths))
     # On every graph, narrowed or not. The agent's checks `task` whether or not this caller
     # narrowed anything: a subagent a future deepagents adds does not arrive unrestricted.
+    # Ahead of the tools' own middleware, which read what it leaves in the request, so an
+    # ungranted call is refused before anything splits or translates it.
     standing.append(
         GrantedOnlyMiddleware(
             granted,
@@ -102,6 +92,16 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
             subject=tools_subject,
         )
     )
+    # Outside `BuiltinToolsMiddleware`, so a `grep` it runs as several searches fails once,
+    # as the call the model made, when its path is refused.
+    standing.append(ToolFailureMiddleware(names))
+    standing.append(LargePdfMiddleware())
+    standing.append(
+        BuiltinToolsMiddleware(layout, shell_prompt_of(backend), here=shell_runs_here(backend))
+    )
+    # Translation rewrites the arguments before anything after it judges them.
+    if names and paths is not None:
+        standing.append(WorkspaceToolPathsMiddleware(names, paths))
     if skills is not None:
         standing.append(
             NarrowedSkillsMiddleware(

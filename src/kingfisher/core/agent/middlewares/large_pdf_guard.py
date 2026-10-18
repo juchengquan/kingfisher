@@ -43,9 +43,8 @@ class LargePdfMiddleware(AgentMiddleware):
         self._offered: frozenset[str] | None = None
 
     def _seen(self, request: Any) -> Any:
-        # Before `GrantedOnlyMiddleware` narrows, which is right: a graph holds only its granted
-        # workspace tools. Not the catalogue's names: `standing_middleware` gets every tool, granted
-        # or not.
+        # Inside `GrantedOnlyMiddleware`, so these are the tools the model may call. Not the
+        # catalogue's names: `standing_middleware` gets every tool, granted or not.
         self._offered = frozenset(
             name for tool in request.tools if isinstance(name := getattr(tool, "name", None), str)
         )
