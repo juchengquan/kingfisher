@@ -11,7 +11,9 @@ import asyncio
 
 import pytest
 from langchain_core.messages import ToolMessage
+from langchain_core.tools import ToolException
 
+from kingfisher.core.agent.host_paths import HostPathError
 from kingfisher.core.agent.middlewares.tool_failure import ToolFailureMiddleware
 from kingfisher.plugins import backend_at
 
@@ -379,3 +381,132 @@ def test_a_converted_failure_still_reaches_the_run_log(cfg, session_dir):
         "the model stopped being told, which is what this guard is for"
     )
     assert sink.named("tool_error"), "the run log lost its only record of a tool that failed"
+
+
+# -- through the stack, where the guards meet -------------------------------
+#
+# Driven through what `standing_middleware` builds, not one guard alone: the translator
+# caught every error raised below it, and no test of a single class could see that.
+
+
+def _through(stack, call: dict, tool, way: str):
+    """What the model reads back for `call`, through each tool hook of `stack` in the
+    order langchain composes them, the first outermost."""
+    from functools import partial
+
+    from langchain.agents.middleware import AgentMiddleware, ToolCallRequest
+    from langchain.tools import ToolRuntime
+    from langchain_core.messages.tool import tool_call
+
+    state = {"messages": []}
+    runtime = ToolRuntime(
+        state=state,
+        context=None,
+        config={},
+        stream_writer=lambda _chunk: None,
+        tool_call_id=call["id"],
+        store=None,
+    )
+    request = ToolCallRequest(
+        tool_call=tool_call(name=call["name"], args=call["args"], id=call["id"]),
+        tool=tool,
+        state=state,
+        runtime=runtime,
+    )
+    hooked = [
+        one for one in stack if type(one).wrap_tool_call is not AgentMiddleware.wrap_tool_call
+    ]
+    if way == "sync":
+        handler = partial(_ran, tool)
+        for one in reversed(hooked):
+            handler = partial(one.wrap_tool_call, handler=handler)
+        return handler(request)
+    ahandler = partial(_aran, tool)
+    for one in reversed(hooked):
+        ahandler = partial(one.awrap_tool_call, handler=ahandler)
+    return asyncio.run(ahandler(request))
+
+
+def _ran(tool, request):
+    return tool.invoke({"type": "tool_call", **request.tool_call})
+
+
+async def _aran(tool, request):
+    return await tool.ainvoke({"type": "tool_call", **request.tool_call})
+
+
+@pytest.fixture
+def paths(cfg, session_dir):
+    from tests.conftest import paths_in
+
+    return paths_in(cfg, session_dir)
+
+
+@pytest.fixture
+def stack(cfg, session_dir, paths):
+    """The agent's standing middleware on a graph holding one workspace tool, `probe`."""
+    from kingfisher.core.agent.middlewares.standing import standing_middleware
+
+    return standing_middleware(
+        "agent",
+        names=frozenset({"probe"}),
+        paths=paths,
+        layout=cfg.layout,
+        backend=backend_at(cfg, session_dir),
+        step_limit=cfg.recursion_limit,
+    )
+
+
+def _raising(exc: BaseException):
+    """A workspace tool that raises `exc` whatever it is asked."""
+    from langchain_core.tools import tool
+
+    @tool
+    def probe(note: str) -> str:
+        """Raise what the test hands it."""
+        raise exc
+
+    return probe
+
+
+def test_a_built_in_refusing_a_host_path_reads_as_written_beside_a_workspace_tool(stack, way):
+    """On a graph holding a workspace tool, the translator caught `read_file`'s refusal
+    first and appended its own rule, after a doubled full stop."""
+    refused = _raising(HostPathError("'/Users/me/x.csv' is a host path. Use '/inputs/x.csv'."))
+    call = {"name": "read_file", "args": {"note": "x"}, "id": "c1"}
+
+    answer = _through(stack, call, refused, way)
+
+    assert answer.content == "Error: '/Users/me/x.csv' is a host path. Use '/inputs/x.csv'."
+    assert answer.status == "error"
+
+
+#: What the workspace tool raises in each case, and the argument it is called with.
+FAILURES = {
+    "its-own-error": (FileNotFoundError("/inputs/orders.csv"), "x"),
+    "its-own-host-path": (HostPathError("/etc/hosts"), "x"),
+    "its-own-tool-exception": (ToolException("name a file under /inputs/, not the folder"), "x"),
+    "a-refused-path": (RuntimeError("never reached"), "/proc/self/environ"),
+}
+
+
+@pytest.mark.parametrize("case", list(FAILURES))
+def test_a_workspace_tool_fails_alike_through_the_stack_and_on_a_compiled_subagent(
+    stack, paths, way, case
+):
+    """`SessionPaths` says the two must answer identically, and through the stack a tool's
+    own host-path refusal came back as the translator's rule and its `ToolException` with
+    a type in front."""
+    from kingfisher.core.agent.tool_guards import guarded_tools
+
+    raised, note = FAILURES[case]
+    probe = _raising(raised)
+    call = {"name": "probe", "args": {"note": note}, "id": "c1"}
+
+    middleware = _through(stack, call, probe, way)
+    guarded = guarded_tools([probe], paths)[0]
+    called = {"type": "tool_call", **call}
+    compiled = guarded.invoke(called) if way == "sync" else asyncio.run(guarded.ainvoke(called))
+
+    assert (middleware.content, middleware.status) == (compiled.content, compiled.status)
+    assert middleware.status == "error"

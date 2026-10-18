@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware
+from kingfisher.core.agent.middlewares.tool_failure import ToolFailureMiddleware
 from kingfisher.core.session.runtime import ModelUnavailableError, unavailable
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, start, subagents_dir
@@ -98,7 +99,7 @@ def test_a_refused_model_call_is_raised_as_the_stop_and_another_as_itself():
 def test_only_a_task_call_hands_a_refusal_back():
     """A tool's own timeout is the tool's failure, not a model that cannot answer; and a
     compiled subagent's raw provider error is handed back as a declared one's is."""
-    guard = ModelReplyMiddleware(subagent=False, outputs="/outputs")
+    guard = ToolFailureMiddleware()
 
     told = guard.wrap_tool_call(Call("task", subagent_type="helper"), _raising(RefusedError(429)))
     assert isinstance(told, ToolMessage)

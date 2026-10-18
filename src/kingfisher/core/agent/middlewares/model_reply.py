@@ -1,6 +1,6 @@
 """A model call that did not end in a whole reply. Cut at the output cap: the call it was cut
 inside goes unrun, a cut answer is asked for again, shorter, and an agent cut off too often
-in a row is stopped. Refused by the provider: the turn's stop, or a subagent's failed task."""
+in a row is stopped. Refused by the provider: the turn's stop."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from langchain.agents.middleware import AgentMiddleware, ModelResponse
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher.core.agent.middlewares.results import failed
-from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.session.runtime import (
     ModelUnavailableError,
     call_block_id,
@@ -143,26 +142,10 @@ def _raised(exc: Exception) -> Exception:
     return exc if why is None else ModelUnavailableError(why)
 
 
-def _handed_back(call: Any, exc: Exception) -> ToolMessage | None:
-    """A subagent's refused model call, as what its parent is told.
-
-    Raw provider errors as well as kingfisher's own: a compiled subagent runs with no
-    middleware of kingfisher's in front of its model.
-    """
-    if call.get("name") != TASK_TOOL or (why := unavailable(exc)) is None:
-        return None
-    whose = (call.get("args") or {}).get("subagent_type") or "the subagent"
-    return failed(
-        call,
-        f"Error: {whose!r} could not reach its model ({why}). Go on without it, or "
-        "say in your answer that this part could not be done.",
-    )
-
-
 class ModelReplyMiddleware(AgentMiddleware):
     """Refuse the call a reply was cut inside, ask again for a cut answer, and stop an
     agent cut off too often; raise a provider's refusal of a model call as the turn's
-    stop, and hand a subagent's back to its parent as a failed `task` result.
+    stop, which `ToolFailureMiddleware` hands back to a subagent's parent.
 
     Inside the model call and the tool call, never beside them: a `before_model` or
     `after_model` hook is a graph step, and the recursion limit counts those. A refusal
@@ -260,23 +243,10 @@ class ModelReplyMiddleware(AgentMiddleware):
         return self._judged(request, response, asked)
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
-        if (refused := self._refused(request)) is not None:
-            return refused
-        try:
-            return handler(request)
-        except Exception as exc:
-            if (told := _handed_back(request.tool_call, exc)) is None:
-                raise
-            return told
+        return self._refused(request) or handler(request)
 
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        if (refused := self._refused(request)) is not None:
-            return refused
-        try:
-            return await handler(request)
-        except Exception as exc:
-            if (told := _handed_back(request.tool_call, exc)) is None:
-                raise
-            return told
+        refused = self._refused(request)
+        return refused if refused is not None else await handler(request)
