@@ -1502,9 +1502,12 @@ refused anyway, since a refused call costs a retry and a cut one saves a shorten
 Its arguments over 500 characters become notes of their length, or the cut text is resent
 on every later call. Three in a row stop the agent, each having spent the whole
 reservation -- in a row, not per turn, so writing in parts may hit the cap now and then.
-The main agent's turn ends `max_tokens`; a subagent's answer goes back headed as cut off
-and the turn goes on, because the caller can work round it. Each cut is marked on the
-`model_call` events, the only trace of a cut the agent got past.
+Cut replies are counted in the saved conversation, not the request, since the step
+budget's warning goes last in the request and ended the count at none: a 10-call subagent
+near its budget was asked twice more after its third. The main agent's turn ends
+`max_tokens`; a subagent's answer goes back headed as cut off and the turn goes on,
+because the caller can work round it. Each cut is marked on the `model_call` events, the
+only trace of a cut the agent got past.
 
 **Not taken: retrying quietly with a higher cap** -- it overrides `models.yaml`, spends
 without asking, and fails at the model's own maximum. Nor standing text in `system.md`,

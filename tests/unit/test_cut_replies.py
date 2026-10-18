@@ -20,6 +20,7 @@ from langchain_core.messages import AIMessage
 from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware, cut_call
+from kingfisher.core.agent.middlewares.step_budget import warning
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.layout import HARNESS, TRANSCRIPT_FILE
 from kingfisher.core.session.runtime import cut_off, output_limit, with_call_args
@@ -421,6 +422,49 @@ def test_a_subagent_that_gives_up_hands_back_its_cut_answer_marked_and_the_turn_
     )
     assert result.stop_reason == "end_turn"
     assert result.answer == "done"
+
+
+def test_a_subagent_told_its_budget_is_stopped_by_its_third_cut_reply_at_once(writing, way):
+    """The bug: the step budget's note, put last in the request, ended the count of cut
+    replies at none, so a subagent near its budget was asked twice more after its third and
+    still handed back "3 times in a row"."""
+    subagents_dir(writing).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(writing) / "helper.yaml").write_text(
+        "name: helper\ndescription: Helps.\n"
+        'builtin_tools: ["*"]\ntools: ["*"]\n'
+        "system_prompt: |\n  You help.\n",
+        encoding="utf-8",
+    )
+    an_agent(writing, subagents="[helper]", **EVERY_TOOL)
+    # A budget of 10 model calls, which tells the subagent from its 9th.
+    cfg = replace(writing, recursion_limit=30)
+    asked = {"description": "go", "subagent_type": "helper"}
+    to_helper = AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}])
+    listings = [
+        AIMessage(content="", tool_calls=[{"name": "ls", "args": {"path": "/"}, "id": f"l{n}"}])
+        for n in range(6)
+    ]
+
+    _turn(
+        cfg,
+        to_helper,
+        *listings,
+        reply(write(1)),
+        reply(write(2)),
+        reply(text="The report so far"),
+        AIMessage("done"),
+        AIMessage("x"),
+        way=way,
+    )
+
+    # The witness that the third was asked with the note last, without which this passes
+    # whatever the count reads.
+    assert Scripted.heard[9][-1].text == warning(1)
+    assert _said(cfg)["t1"].startswith(
+        "[Incomplete: this subagent's replies reached the 32,768-token output limit 3 times "
+        "in a row, and the answer below is cut off.]\n\nThe report so far"
+    )
+    assert len(Scripted.script) == 1, "the third cut answer was asked for again"
 
 
 def test_each_cut_is_recorded_on_its_model_call(writing):

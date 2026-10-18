@@ -86,7 +86,9 @@ def _cut_in_a_row(messages: Any) -> int:
 
 def _gives_up(first: Any, asked: int) -> bool:
     """Whether the reply in hand, being cut, is the one too many in a row."""
-    return _cut_in_a_row(first.messages) + asked + 1 >= GIVE_UP
+    # The stored conversation, not the request: the step budget's note, put last in the
+    # request outside this middleware, would end the count at none.
+    return _cut_in_a_row(first.state.get("messages", ())) + asked + 1 >= GIVE_UP
 
 
 def _refusal(reply: AIMessage, call: Any) -> ToolMessage:
