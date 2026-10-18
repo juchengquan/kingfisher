@@ -101,7 +101,7 @@ class RecorderMiddleware(AgentMiddleware):
     ) -> None:
         super().__init__()
         self._ledger = ledger
-        #: The turn's backend under the turn's rules, as a tool's own save goes through.
+        #: The turn's backend itself: the file tools' rules deny the folder this writes.
         self._backend = backend
         #: `None` where no `source_ids.yaml` is in force.
         self._audiences = audiences
