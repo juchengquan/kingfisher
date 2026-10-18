@@ -550,8 +550,8 @@ def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session
     # asserted an empty list, which was the defect: deepagents hands this subagent the
     # agent's own tools, and it held them with nothing wrapped around them.
     assert kinds == [
-        "StepBudgetMiddleware", "ModelReplyMiddleware", "ToolFailureMiddleware",
-        "LargePdfMiddleware", "BuiltinToolsMiddleware", "GrantedOnlyMiddleware",
+        "StepBudgetMiddleware", "ModelReplyMiddleware", "GrantedOnlyMiddleware",
+        "ToolFailureMiddleware", "LargePdfMiddleware", "BuiltinToolsMiddleware",
     ], kinds
 
 

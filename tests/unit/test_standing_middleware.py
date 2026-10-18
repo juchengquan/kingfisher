@@ -81,11 +81,11 @@ def test_the_agent_is_wrapped_in_standing_then_switched_then_offered(cfg, sessio
         "RecorderMiddleware",
         "StepBudgetMiddleware",
         "ModelReplyMiddleware",
+        "GrantedOnlyMiddleware",
         "ToolFailureMiddleware",
         "LargePdfMiddleware",
         "BuiltinToolsMiddleware",
         "WorkspaceToolPathsMiddleware",
-        "GrantedOnlyMiddleware",
         "NarrowedSkillsMiddleware",
         "MemoryMiddleware",
         "CodeInterpreterMiddleware",
@@ -102,11 +102,11 @@ def test_general_purpose_is_wrapped_in_standing_then_offered(cfg, session_dir):
         "RecorderMiddleware",
         "StepBudgetMiddleware",
         "ModelReplyMiddleware",
+        "GrantedOnlyMiddleware",
         "ToolFailureMiddleware",
         "LargePdfMiddleware",
         "BuiltinToolsMiddleware",
         "WorkspaceToolPathsMiddleware",
-        "GrantedOnlyMiddleware",
         "_Offered",
     ]
 
@@ -132,3 +132,36 @@ def test_what_is_the_agents_alone_is_refused_elsewhere(cfg, kind, given):
             step_limit=cfg.recursion_limit,
             **given,
         )
+
+
+def test_an_ungranted_call_is_refused_once_before_anything_splits_it(cfg, session_dir, way):
+    """The grant filter sat innermost, so an ungranted `grep` of `alpha|beta` was split in
+    two first and the model read a refusal under a heading for each part."""
+    from langchain_core.tools import tool
+
+    from tests.unit.test_workspace_tool_errors import _through
+
+    stack = standing_middleware(
+        "agent",
+        names=frozenset(),
+        paths=None,
+        layout=cfg.layout,
+        backend=backend_at(cfg, session_dir),
+        step_limit=cfg.recursion_limit,
+        tools=("read_file",),
+    )
+    searched: list[str] = []
+
+    @tool
+    def grep(pattern: str) -> str:
+        """Stands in for deepagents' own, which the filter must not reach."""
+        searched.append(pattern)
+        return "found"
+
+    call = {"name": "grep", "args": {"pattern": "alpha|beta"}, "id": "c1"}
+    answer = _through(stack, call, grep, way)
+
+    assert answer.content == (
+        "Error: grep is not available for this request. Available tools: read_file."
+    )
+    assert searched == []

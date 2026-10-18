@@ -254,7 +254,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     how a missed path is spelt there, and keep deepagents' host paths from a shell that
     is not on this host; have `read_file` read 1,000 lines unless told otherwise, and
     `grep` search each string of `a|b`, and say so; and say nothing of the shell or of
-    `write_todos` to a graph not granted it.
+    `write_todos` to a graph not holding it.
 
     The shell's line goes in the description, not the system prompt: a subagent gets none
     of `system.md`, and the description reaches every graph holding the shell. At
@@ -272,32 +272,30 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         shell: ShellPrompt | None = None,
         *,
         here: bool = True,
-        tools: tuple[str, ...] | None = None,
     ) -> None:
         super().__init__()
         # Whether the shell runs on this host; where not, deepagents' section names paths it
         # does not have.
         self._here = here
-        # The graph's allowlist, not the tools in the request: this runs ahead of
-        # `GrantedOnlyMiddleware`, and every tool is still in the request here.
-        self._granted = None if tools is None else frozenset(tools)
         self._rule = execute_line(shell, layout)
         # Only where the shell starts in the session root: the correction spells paths as it
         # reads them.
         self._corrects = shell is not None and shell.starts_in_session
         self._virtual = _virtual(layout.session_dirs)
 
-    def _holds(self, name: str) -> bool:
-        return self._granted is None or name in self._granted
-
     def _told(self, request: Any) -> Any:
         tools = [_offered(_described(tool, self._rule)) for tool in request.tools]
         if not all(new is old for new, old in zip(tools, request.tools, strict=True)):
             request = request.override(tools=tools)
+        # Inside `GrantedOnlyMiddleware`, so the request holds only what was granted.
+        held = {
+            tool.get("name") if isinstance(tool, dict) else getattr(tool, "name", None)
+            for tool in request.tools
+        }
         untold = []
-        if not (self._here and self._holds(EXECUTE)):
+        if not (self._here and EXECUTE in held):
             untold.append(MAPPINGS)
-        if not self._holds(WRITE_TODOS):
+        if WRITE_TODOS not in held:
             untold.append(TODOS)
         return _without(request, tuple(untold))
 

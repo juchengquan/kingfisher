@@ -813,18 +813,21 @@ registry: its entries are built from stored defaults, and these per request from
 names it resolved and its backend.
 
 **An agent is told only of the built-in tools it was granted.** One granted
-`builtin_tools: []` still read the sections on the file tools and the shell,
-deepagents' host paths and langchain's `write_todos` prose, because
-`GrantedOnlyMiddleware` takes a tool out of the request and none of what describes it --
-and a model told of a tool calls it, spending each call on a refusal. The file tools'
-section now names only those held, and the shell's, with the host paths, appears where
-`execute` is. The grant read is the allowlist `GrantedOnlyMiddleware` filters by, not
-the request's tools, since deepagents and langchain write their prose before that
-filter; `BuiltinToolsMiddleware` takes theirs out by block, and only `TodoListMiddleware`'s
-prose goes. A grant that changes the prompt changes the tool list too, which Anthropic
-caches ahead of the system prompt, so no cache is lost that was not already. Where to
-write moved to the session's section, since it holds for an agent with only the shell.
-*(2026-10-18.)*
+`builtin_tools: []` still read the sections on the file tools and the shell, deepagents'
+host paths and langchain's `write_todos` prose, because `GrantedOnlyMiddleware` takes a
+tool out of the request and none of what describes it -- and a model told of a tool
+calls it, spending each call on a refusal. The file tools' section now names only those
+held, and the shell's, with the host paths, appears where `execute` is. deepagents and
+langchain write their prose whatever the grant, and `BuiltinToolsMiddleware` takes
+theirs out by block, reading what the request holds: `GrantedOnlyMiddleware` sits just
+inside `ModelReplyMiddleware`, ahead of the tools' own middleware, so the request they
+see holds only what was granted, and an ungranted call is refused once, where a `grep`
+of `a|b` was split in two and refused twice. Result clearing alone is handed the grant,
+being first so it measures what the summariser counted. `TodoListMiddleware` itself
+stays, and only its prose goes. A grant that changes the prompt changes the tool list
+too, which Anthropic caches ahead of the system prompt, so no cache is lost that was not
+already. Where to write moved to the session's section, since it holds for an agent with
+only the shell. *(2026-10-18.)*
 
 The rule holds sentence by sentence too. *What your tools returned* sent every agent to
 `read_file`, `grep` and `glob` to see a saved result again, and with memory on, the memory
