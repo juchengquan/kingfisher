@@ -20,6 +20,8 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.builtin_tools import (
     ABSOLUTE,
     EDIT_FILE,
+    EXACT_INDENT,
+    FROM_READ,
     GREP,
     JOINED,
     LS,
@@ -295,6 +297,17 @@ def test_edit_file_never_claims_to_check_that_the_file_was_read(reading, grant):
     assert "errors otherwise" not in said, "deepagents reworded it"
     assert (READ_FIRST in said) is ("read_file" in grant)
     assert ("before editing" in said) is ("read_file" in grant)
+
+
+@pytest.mark.parametrize("grant", ["[edit_file, read_file]", "[edit_file]"])
+def test_edit_file_speaks_of_the_read_output_only_to_a_reader(reading, grant):
+    """`edit_file` told an agent without `read_file` to keep the indentation "from the read
+    output" and leave out its status header, output it could never have seen."""
+    said = _said_to(reading, grant)[EDIT_FILE]
+
+    assert (FROM_READ in said) is ("read_file" in grant)
+    assert (EXACT_INDENT in said) is ("read_file" not in grant)
+    assert ("read output" in said) is ("read_file" in grant), "deepagents reworded it"
 
 
 @pytest.mark.parametrize("subagent", ["helper", "general-purpose"])

@@ -842,7 +842,8 @@ deepagents' own tool descriptions name only held tools too, in its wording where
 variant: it picks `execute`'s and `grep`'s itself, but from every built-in, since it runs
 before the grant is applied. `edit_file`'s claim to error on a file not read first was
 false for every agent -- it checks only the path and permissions -- so it becomes a reason
-to read first, and goes where `read_file` is not held. *(2026-10-18.)*
+to read first, and goes where `read_file` is not held; its indentation line, which speaks
+of the read output, keeps only the indentation there. *(2026-10-18.)*
 
 ## Source-id access
 
@@ -2041,8 +2042,7 @@ output hands the recorder the stub, and is named by our copy.
 that made the result again. A model told to `grep` calls `grep` whatever it holds, and
 without it spends the step on a refusal. One holding `read_file` but not `grep` is not
 given an offloaded result's path, for the reason above. The grant is the one
-`BuiltinToolsMiddleware` and `GrantedOnlyMiddleware` get, so a handle never names a
-tool they take away. A handle keeps its wording once written, so a later request on the
+`GrantedOnlyMiddleware` filters by, so a handle never names a tool it takes away. A handle keeps its wording once written, so a later request on the
 session holding fewer tools may be pointed at one it lacks: it is refused once, told what
 it holds. Accepted rather than re-worded per call, for a grant that shrank between turns.
 *(2026-10-18.)*
