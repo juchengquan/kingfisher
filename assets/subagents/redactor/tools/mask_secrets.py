@@ -11,7 +11,7 @@ returns file contents, which is a bulk read wearing a safety feature: handed to
 the main agent it is a way to pull a whole file into the answer while *looking*
 like the careful option, and the masking says nothing about whether that file
 should have been read at all. It is only the right tool inside the procedure
-next door in `skills/redaction/`, and the folder is what keeps the two together.
+`redactor.yaml` next door sets out, and the folder is what keeps the two together.
 
 A catalogue tool could not express that. An agent writing `tools: ["*"]`
 holds every tool there is, so anything in `tools/` is something the top-level

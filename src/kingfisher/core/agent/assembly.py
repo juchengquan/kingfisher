@@ -70,7 +70,7 @@ from kingfisher.core.agent.usable_backend import refuse_unusable_backend
 from kingfisher.core.config import DEFAULT_LAYOUT, Config
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.definitions.subagents.spec import RunOn
+from kingfisher.core.definitions.subagents.spec import RunOn, opens_skills
 from kingfisher.core.definitions.tools.spec import FoundTool, own_audiences
 from kingfisher.core.layout import Layout
 
@@ -384,8 +384,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     narrowed_sources: list[Any] = []
     extras: dict[str, Any] = {}
 
-    # One answer to "are skills on", for this agent and every subagent it builds.
-    skills_on = cfg.skills_enabled
+    # One answer to "are skills on", for this agent's index and prompt and every subagent it
+    # builds. A grant without `read_file` gets none: each skill it tried would be refused.
+    skills_on = cfg.skills_enabled and opens_skills(capabilities.builtin_tools)
 
     def remembering(tools: Sequence[str] | None) -> MemoryMiddleware:
         """The memory middleware, telling an agent granted `tools` what it saves with."""
@@ -478,7 +479,12 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             # Told of the tools it was granted, which only the last build knows: the
             # probe's prompt is never sent.
             "system_prompt": system_prompt(
-                cfg, agent.system_prompt if agent else "", shell, instructions, granted
+                cfg,
+                agent.system_prompt if agent else "",
+                shell,
+                instructions,
+                granted,
+                skills=skills_on,
             ),
             "middleware": middleware,
             "permissions": permissions,

@@ -16,6 +16,7 @@ from kingfisher.core.agent.kinds.tools import (
     workspace_tool_names,
 )
 from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.subagents.spec import opens_skills
 from kingfisher.core.definitions.tools.spec import Offering, admitted, out_of_reach, placed
 from kingfisher.core.result import RunEvent
 
@@ -78,15 +79,17 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
         # Measured against what a definition in reach offers, not the whole catalogue:
         # else a caller who narrowed their grant is told every name nothing in reach offers.
         ("tool", "tools", lambda: tuple(n for n in workspace if offers_tool(n))),
-        # `cfg` as well as the request: with skills switched off the agent is told of
-        # none, and a report of one "not granted" says the others were.
+        # `cfg` and `read_file` as well as the request: with skills switched off, or no
+        # way to open one, the agent is told of none, and one "not granted" says others were.
         (
             "skill",
             "skills",
             lambda: tuple(
                 name
                 for name in (
-                    available_skills(cfg, catalogue=catalogue) if cfg.skills_enabled else ()
+                    available_skills(cfg, catalogue=catalogue)
+                    if cfg.skills_enabled and opens_skills(allowed.builtin_tools)
+                    else ()
                 )
                 if offers_skill(name)
             ),

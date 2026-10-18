@@ -1887,6 +1887,23 @@ def test_a_shipped_agent_says_every_builtin_with_the_star(shipped):
     assert LocalAgentRepository(shipped / "agents").specs["scribe"].builtin_tools == ALL
 
 
+def test_redactor_carries_its_procedure_rather_than_a_skill_it_cannot_open(shipped):
+    """`redactor` named a bundled `redaction` skill and holds no `read_file`, so every
+    attempt to follow its prompt to that skill was refused.
+    """
+    from kingfisher.core.definitions.skills import READ_FILE
+
+    spec = LocalSubagentRepository(shipped / "subagents").specs["redactor"]
+
+    assert spec.skills is None
+    assert spec.bundled["skills"] == ()
+    assert READ_FILE not in (spec.builtin_tools or ())
+    # The procedure and its caveat, moved into the prompt rather than lost with the file.
+    assert "`mask_secrets` first, always" in spec.system_prompt
+    assert "*less* dangerous, never as safe" in spec.system_prompt
+    assert READ_FILE not in spec.system_prompt, "it names a tool this subagent does not hold"
+
+
 def test_every_shipped_subagent_is_named_by_some_agent(shipped):
     """A subagent no agent names is a definition nothing can call.
 

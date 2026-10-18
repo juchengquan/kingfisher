@@ -17,6 +17,7 @@ from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
 from kingfisher.core.agent.prompting import EXECUTE, ShellPrompt, execute_line
+from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.layout import DEFAULT_LAYOUT, SESSION_DIRS, Layout
 
 WRITE_TODOS = "write_todos"
@@ -141,7 +142,6 @@ def _without(request: Any, headings: tuple[str, ...]) -> Any:
     return request.override(system_message=SystemMessage(content_blocks=kept))
 
 
-READ_FILE = "read_file"
 GREP = "grep"
 
 #: The lines `read_file` returns when the model names no limit: under deepagents'

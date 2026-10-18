@@ -26,7 +26,12 @@ from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.subagents.rules import resolved_model
-from kingfisher.core.definitions.subagents.spec import RunOn, SubagentError, SubagentSpec
+from kingfisher.core.definitions.subagents.spec import (
+    RunOn,
+    SubagentError,
+    SubagentSpec,
+    opens_skills,
+)
 from kingfisher.core.definitions.tools.spec import FoundTool, Offering, select, split_reference
 
 if TYPE_CHECKING:
@@ -277,6 +282,10 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     if private:
         owned = {one.name for one in private}
         mine = tuple(one for one in mine if one.name not in owned)
+    # Asked of its own built-ins under the ceiling: a skill is opened with `read_file`, so
+    # without it every entry of the index, its bundle's too, is a refused call waiting.
+    if not opens_skills(narrowed(spec.builtin_tools, by=builtin_tools)):
+        skills, private_skills = None, None
     # No parent middleware reaches a subagent, so its skills index is its own
     # (`SubAgent.skills` takes paths, not names). A bundle's skills are folded in first:
     # `skills` defaults to none, and a subagent must still be told about the skills it ships.

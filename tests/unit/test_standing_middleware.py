@@ -52,6 +52,7 @@ def _everything(cfg, session_dir):
             name="probed",
             description="an agent with everything",
             system_prompt="You work.",
+            builtin_tools=("read_file", "task", "eval"),
             middlewares=("offered",),
             skills=("tabular-qa",),
             subagents=("helper",),

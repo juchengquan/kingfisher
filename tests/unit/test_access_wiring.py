@@ -927,6 +927,7 @@ def test_a_skill_in_reach_is_still_reported_when_the_request_left_it_out(with_sk
 DECLARES_ITS_OWN = """name: helper
 description: A subagent.
 source_ids: [A, B]
+builtin_tools: [read_file]
 skills: [spare]
 system_prompt: |
   You help.

@@ -374,6 +374,7 @@ def skilled(cfg, tmp_path):
         "name": "carrier",
         "description": "Carries a skill of its own.",
         "system_prompt": "Go.",
+        "builtin_tools": ["read_file"],
         "skills": [str(carried)],
     }
     (subagents / "carrier.py").write_text(f"SUBAGENTS = [{entry!r}]\n", encoding="utf-8")

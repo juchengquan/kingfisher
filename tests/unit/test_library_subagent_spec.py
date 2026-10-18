@@ -71,11 +71,13 @@ def installed(tmp_path, monkeypatch):
 
 
 def _deploy(cfg):
-    """The deployment's whole opt-in: one module re-exporting the package's spec."""
+    """The deployment's whole opt-in: one module re-exporting the package's spec, with
+    the `read_file` its skills are opened with, which a `SubAgent` has no word for."""
     for kind in ("skills", "subagents", "tools"):
         cfg.catalogue_roots[kind].mkdir(parents=True, exist_ok=True)
     (cfg.catalogue_roots["subagents"] / "agent_tools.py").write_text(
-        "from agent_tools_fixture import subagent_spec\n\nSUBAGENTS = [subagent_spec]\n",
+        "from agent_tools_fixture import subagent_spec\n\n"
+        "SUBAGENTS = [{**subagent_spec, 'builtin_tools': ['read_file']}]\n",
         encoding="utf-8",
     )
     return cfg.catalogue_roots["subagents"]

@@ -352,21 +352,24 @@ def behind_instructions(prompt: str, instructions: str) -> str:
     return _joined(instructions, prompt) if instructions.strip() else prompt
 
 
-def system_prompt(
+def system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt describes
     cfg: Config | None = None,
     agent: str = "",
     shell: ShellPrompt | None = None,
     instructions: str = "",
     tools: Collection[str] | None = None,
+    *,
+    skills: bool = True,
 ) -> str:
     """The assembled prompt: the harness, then the deployment's instructions, then the
     agent's own line.
 
     `shell` is what the backend's shell says of itself, which only the backend knows.
-    `tools` is the agent's allowlist, `None` where nothing narrows it.
+    `tools` is the agent's allowlist, `None` where nothing narrows it. `skills` is
+    `False` where the build offers no skills index, so the prompt describes none.
     """
     return render_system_prompt(
-        skills_enabled=bool(cfg and cfg.skills_enabled),
+        skills_enabled=bool(cfg and cfg.skills_enabled) and skills,
         memory_enabled=bool(cfg and cfg.memory_enabled),
         extra=behind_instructions(agent, instructions),
         layout=cfg.layout if cfg else DEFAULT_LAYOUT,

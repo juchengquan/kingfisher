@@ -404,7 +404,10 @@ def test_a_skills_entry_still_says_who_is_told_about_it(kind):
     """
     reader, _ = FORMATS[kind]
 
-    spec = reader(HEAD + "skills:\n  - name: tabular-qa\n    source_ids: [A]\n  - code-review\n")
+    spec = reader(
+        HEAD + "builtin_tools: [read_file]\n"
+        "skills:\n  - name: tabular-qa\n    source_ids: [A]\n  - code-review\n"
+    )
 
     assert spec.skill_audiences == {"tabular-qa": ("A",)}
     assert spec.declares(frozenset({"B"})).skills == ("code-review",)

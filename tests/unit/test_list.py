@@ -641,6 +641,7 @@ def _subagents_out_of_reach(cfg) -> None:
     _skill(folder / "skills" / "group" / "buried", "buried")
     (folder / "shadowy.yaml").write_text(
         "name: shadowy\ndescription: A subagent.\nsource_ids: [A]\n"
+        "builtin_tools: [read_file]\n"
         "tools: [{name: hushhush, source: bundled}, {name: line_count, source: bundled}]\n"
         "skills: [{name: quietly, source: bundled}]\nsystem_prompt: |\n  Go.\n",
         encoding="utf-8",
@@ -835,8 +836,12 @@ def test_a_scoped_listing_carries_only_the_skill_faults_it_reaches(
     survives. Driven with the skills switch off, which is where the fault fields are
     reported from anyway.
     """
-    reaches_it = NARROW.replace("system_prompt:", "skills: [shown]\nsystem_prompt:")
-    out_of_reach = A_ONLY.replace("system_prompt:", "skills: [concealed]\nsystem_prompt:")
+    reaches_it = NARROW.replace(
+        "system_prompt:", "builtin_tools: [read_file]\nskills: [shown]\nsystem_prompt:"
+    )
+    out_of_reach = A_ONLY.replace(
+        "system_prompt:", "builtin_tools: [read_file]\nskills: [concealed]\nsystem_prompt:"
+    )
     _workspace(cfg, reaches_it, out_of_reach)
     for folder, declares in (("shown_dir", "shown"), ("concealed_dir", "concealed")):
         where = cfg.skills_dir / folder
@@ -1512,6 +1517,7 @@ system_prompt: |
 DECLARES_A_SKILL = """name: helper
 description: A subagent.
 source_ids: [A, B]
+builtin_tools: [read_file]
 skills: [spare]
 system_prompt: |
   You do the part you are given.
@@ -1618,6 +1624,7 @@ def test_the_operator_is_still_told_which_definition_moved_it(cfg, at_the_comman
 SHARES_SKILL = """name: sharer
 description: An agent.
 source_ids: [A, B]
+builtin_tools: [read_file]
 skills: [routine]
 system_prompt: |
   You do the task.
@@ -1626,6 +1633,7 @@ system_prompt: |
 KEEPS_SKILL = """name: keeper
 description: An agent.
 source_ids: [A]
+builtin_tools: [read_file]
 skills: [procedure]
 system_prompt: |
   You do the task.
@@ -1666,6 +1674,7 @@ def test_the_operator_sees_a_skill_no_caller_reaches(cfg, at_the_command_line, c
 QUALIFIED_SKILL = """name: qualifier
 description: An agent.
 source_ids: [A, B]
+builtin_tools: [read_file]
 skills: [catalogue::routine]
 system_prompt: |
   You do the task.
@@ -1761,6 +1770,7 @@ def test_the_operator_sees_audiences_per_definition(policied, capsys):
 TELLS_A = """name: narrow
 description: An agent.
 source_ids: [A, B]
+builtin_tools: [read_file]
 skills:
   - name: routine
     source_ids: [A]
@@ -1771,6 +1781,7 @@ system_prompt: |
 TELLS_BOTH = """name: wide
 description: An agent.
 source_ids: [A, B]
+builtin_tools: [read_file]
 skills:
   - name: routine
     source_ids: [A, B]
@@ -1805,6 +1816,7 @@ def test_there_is_no_roll_up_by_tool(policied, capsys):
 BOTH = """name: both
 description: An agent.
 source_ids: [{A, B}]
+builtin_tools: [read_file]
 skills:
   - name: routine
     source_ids: [A, B]
@@ -1899,6 +1911,7 @@ def test_a_conjunction_survives_the_json_round_trip(cfg, at_the_command_line):
 NARROWED = """name: narrowed
 description: An agent.
 source_ids: [A, B]
+builtin_tools: [read_file]
 skills:
   - name: routine
     source_ids: [C]
