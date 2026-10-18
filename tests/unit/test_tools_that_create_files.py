@@ -17,7 +17,7 @@ import pytest
 from pypdf import PdfReader
 
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.large_pdf_guard import MAX_PDF_BYTES
+from kingfisher.core.agent.middlewares.attachments import MAX_PDF_BYTES
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.plugins import backend_at
 from tests.conftest import a_pdf, on_backend, repository_root

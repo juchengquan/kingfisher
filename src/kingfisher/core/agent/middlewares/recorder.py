@@ -8,16 +8,16 @@ import re
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
-from langgraph.types import Command
 
 from kingfisher.core.access.reach import stated
 from kingfisher.core.access.source_ids import Audience, jointly, listed, unlisted
 from kingfisher.core.agent.middlewares.recorded import arguments, stamp, summary
+from kingfisher.core.agent.middlewares.results import answer_in, answered
 from kingfisher.core.agent.prompting import FILE_TOOLS, WRITE_TODOS
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.layout import TOOL_RESULTS_ROUTE
@@ -108,7 +108,7 @@ class RecorderMiddleware(AgentMiddleware):
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         with _running(request.tool_call):
             result = handler(request)
-        answer = _answer_in(result, request.tool_call.get("id"))
+        answer = answer_in(result, request.tool_call.get("id"))
         if answer is None or (made := self._recorded(request.tool_call, answer)) is None:
             return result
         entry, content = made
@@ -124,7 +124,7 @@ class RecorderMiddleware(AgentMiddleware):
     ) -> Any:
         with _running(request.tool_call):
             result = await handler(request)
-        answer = _answer_in(result, request.tool_call.get("id"))
+        answer = answer_in(result, request.tool_call.get("id"))
         if answer is None or (made := self._recorded(request.tool_call, answer)) is None:
             return result
         entry, content = made
@@ -202,16 +202,6 @@ class RecorderMiddleware(AgentMiddleware):
         self._ledger.unkept(entry)
 
 
-def _answer_in(result: Any, call_id: Any) -> ToolMessage | None:
-    """The message that answers this call, inside the `Command` `task` returns too."""
-    if isinstance(result, ToolMessage):
-        return result
-    if not isinstance(result, Command) or not isinstance(result.update, Mapping):
-        return None
-    found = [one for one in result.update.get("messages") or () if isinstance(one, ToolMessage)]
-    return next((one for one in found if one.tool_call_id == call_id), None)
-
-
 def _stamped(result: Any, answer: ToolMessage, number: str) -> Any:
     """The result with its id as a last line, in what the model is handed.
 
@@ -228,10 +218,7 @@ def _stamped(result: Any, answer: ToolMessage, number: str) -> Any:
             else [*content, {"type": "text", "text": mark}]
         }
     )
-    if result is answer:
-        return marked
-    messages = [marked if one is answer else one for one in result.update["messages"]]
-    return replace(result, update={**result.update, "messages": messages})
+    return answered(result, answer, marked)
 
 
 #: A tool's name may come from an MCP server or a module author, and the file name

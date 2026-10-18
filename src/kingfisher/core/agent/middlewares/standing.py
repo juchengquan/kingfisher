@@ -8,13 +8,13 @@ from typing import Any, Literal
 from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
 
 from kingfisher.core.agent.backend import shell_prompt_of, shell_runs_here
+from kingfisher.core.agent.middlewares.attachments import AttachmentsMiddleware
 from kingfisher.core.agent.middlewares.builtin_tools import BuiltinToolsMiddleware
 from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware
 from kingfisher.core.agent.middlewares.guarded_calls import (
     GuardedCallsMiddleware,
     WorkspaceToolFailureMiddleware,
 )
-from kingfisher.core.agent.middlewares.large_pdf_guard import LargePdfMiddleware
 from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware
 from kingfisher.core.agent.middlewares.narrowing import (
     GrantedOnlyMiddleware,
@@ -107,7 +107,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # as the call the model made, when its path is refused. Its translation rewrites the
     # arguments before anything after it judges them.
     standing.append(GuardedCallsMiddleware(names, paths))
-    standing.append(LargePdfMiddleware())
+    # Inside the recorder, so a call whose only file was replaced fails and leaves no row.
+    standing.append(AttachmentsMiddleware())
     standing.append(
         BuiltinToolsMiddleware(layout, shell_prompt_of(backend), here=shell_runs_here(backend))
     )
