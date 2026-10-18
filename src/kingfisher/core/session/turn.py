@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.core.agent.middlewares.recorded import readable_size
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.core.result import LedgerEntry, PendingDecision, RunEvent
 from kingfisher.core.session import runtime
@@ -103,8 +104,6 @@ def turn_message(
     )
 
 
-_KB = 1024
-
 #: How many of the latest exchanges that recorded anything the index lists in full.
 IN_FULL = 5
 
@@ -173,20 +172,7 @@ def _listed(entries: Sequence[LedgerEntry]) -> list[str]:
 
 def _delta_line(entry: LedgerEntry) -> str:
     called = f"{entry.tool} {entry.args}" if entry.args else entry.tool
-    return f"{entry.id} {called} -> {_size(entry.size)}  {entry.path or 'not kept'}"
-
-
-def _size(size: int) -> str:
-    """Bytes under a KB, the nearest KB under an MB, and MB to a tenth.
-
-    The unit is chosen after rounding, so a size just short of an MB never reads as
-    1024 KB.
-    """
-    if size < _KB:
-        return f"{size} B"
-    if (kb := (size + _KB // 2) // _KB) < _KB:
-        return f"{kb} KB"
-    return f"{size / (_KB * _KB):.1f} MB"
+    return f"{entry.id} {called} -> {readable_size(entry.size)}  {entry.path or 'not kept'}"
 
 
 def consume(  # noqa: PLR0913 -- a chunk, the answer so far, and what the stream taught

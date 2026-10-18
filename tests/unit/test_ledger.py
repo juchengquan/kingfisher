@@ -27,6 +27,7 @@ from assets.middlewares.tool_note import ToolNote
 from kingfisher import Kingfisher, Request
 from kingfisher.core.access.source_ids import parse
 from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.middlewares.recorded import summary
 from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
 from kingfisher.core.agent.prompting import render_system_prompt
 from kingfisher.core.layout import (
@@ -240,6 +241,29 @@ def test_a_result_that_is_json_is_kept_as_json(ledgered):
     (entry,) = result.ledger
     assert entry.path == "/scratchpad/tool_results/A-0001-sql_query.json"
     assert json.loads(_read(ledgered, entry.path)) == {"rows": [[1, "a"], [2, "b"]]}
+
+
+#: An image and a PDF of 400 KB each, and an image held by its URL, whose size is unknown.
+_IMAGE = {"type": "image", "base64": "A" * 546_134, "mime_type": "image/png"}
+_PDF = {"type": "file", "base64": "A" * 546_134, "mime_type": "application/pdf"}
+_LINKED = {"type": "image", "url": "https://example.com/chart.png"}
+
+
+@pytest.mark.parametrize(
+    ("blocks", "said"),
+    [
+        ([_PDF], "a PDF of 400 KB was not kept"),
+        ([_IMAGE, _IMAGE], "2 images of 800 KB in all were not kept"),
+        ([_IMAGE, _PDF], "2 attachments of 800 KB in all were not kept"),
+        ([{"type": "audio", "base64": "A" * 4_096}], "a file of 3 KB was not kept"),
+        ([_IMAGE, _LINKED], "2 images were not kept"),
+    ],
+    ids=["a PDF", "two images", "two kinds", "another kind", "one held by URL"],
+)
+def test_a_row_names_what_its_saved_copy_left_out_by_kind_count_and_size(blocks, said):
+    """A row that names several attachments by one's kind, or totals only those it can
+    measure, tells its reader the wrong thing was lost."""
+    assert summary("export", "", "", blocks) == f"export (text only; {said})"
 
 
 def test_the_next_turn_numbers_on_from_the_ledger_it_found(ledgered):

@@ -883,6 +883,35 @@ def test_an_offloaded_results_handle_finds_it_after_the_turn(bulky):
     assert found[0].read_text(encoding="utf-8").startswith("row 00000")
 
 
+CHART = '''
+def chart() -> list:
+    """Return a chart's caption and the chart, a 3 KB image."""
+    return [
+        {"type": "text", "text": "Revenue by month"},
+        {"type": "image", "base64": "A" * 4_096, "mime_type": "image/png"},
+    ]
+
+
+TOOLS = [chart]
+'''
+
+
+def test_a_result_carrying_an_image_says_its_saved_copy_is_the_text_alone(bulky):
+    """An image result was saved as its text alone while its row and handle called that
+    file the full result, sending the agent to read back an image that was never kept."""
+    (tools_dir(bulky) / "chart.py").write_text(CHART, encoding="utf-8")
+    cfg = _marked(bulky, clear_results_at=12_000)
+
+    bulky_calls = (_one("bulky", n, n=n) for n in range(1, 7))
+    result = _turn(cfg, _one("chart", 0), *bulky_calls, AIMessage(content="done"))
+
+    chart, text_only = result.ledger[:2]
+    assert chart.summary == "chart -- Revenue by month (text only; an image of 3 KB was not kept)"
+    assert text_only.summary == f"bulky n=1 -- row 1-0000 {'y' * 70}"
+    said = next(one.content for one in _transcript(cfg) if one.call_id == "c0")
+    assert said == f"{chart.summary}\n(16 bytes, cleared; full result: {chart.path})\n[A-0001]"
+
+
 def test_the_summariser_counts_the_cleared_conversation(bulky, way):
     """What clearing is for: from the call after a pass, the summariser counts the
     conversation it rewrote. Fifteen results that would have tripped it on a
