@@ -6,9 +6,11 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from langchain.agents.middleware import AgentMiddleware, ModelResponse
+from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.config import get_config
+
+from kingfisher.core.agent.middlewares.replies import last_reply, replaced, text_of
 
 #: The share of a run's steps after which the agent is told what is left.
 WARN_AT = 0.8
@@ -56,15 +58,10 @@ def _made(request: Any) -> int:
 
 def _stopped(reply: AIMessage, calls: int) -> AIMessage:
     """A subagent's last allowed reply as text alone, saying it stopped there."""
-    return AIMessage(
-        content=(
-            f"[Stopped: this subagent reached its limit of {calls} model calls, and the answer "
-            f"below is what it had then.]\n\n{reply.text}"
-        ),
-        id=reply.id,
-        name=reply.name,
-        response_metadata=reply.response_metadata,
-        usage_metadata=reply.usage_metadata,
+    return text_of(
+        reply,
+        f"[Stopped: this subagent reached its limit of {calls} model calls, and the answer "
+        "below is what it had then.]\n\n",
     )
 
 
@@ -98,11 +95,10 @@ class StepBudgetMiddleware(AgentMiddleware):
         """A subagent's last allowed reply, without the calls it may no longer make."""
         if self.calls is None or _made(request) + 1 < self.calls:
             return response
-        reply = next((one for one in reversed(response.result) if isinstance(one, AIMessage)), None)
+        reply = last_reply(response)
         if reply is None or not reply.tool_calls:
             return response
-        held = [_stopped(reply, self.calls) if one is reply else one for one in response.result]
-        return ModelResponse(result=held, structured_response=response.structured_response)
+        return replaced(response, reply, _stopped(reply, self.calls))
 
     def wrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         return self._held(request, handler(self._told(request)))
