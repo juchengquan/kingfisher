@@ -220,14 +220,22 @@ Three kinds of file are not shown as returned, from any tool. Each reaches the m
 as a line saying what it was instead, and the rest of the result is kept; the call
 reads as failed only when nothing else came back.
 
-- **a PDF over 256 KB**, whatever block carries it: a `file` block, an `image` block or
-  a data URL. Sent whole, it would go out again with every model call after it, and
-  can end the turn.
+- **a PDF past what the turn holds**, whatever block carries it: a `file` block, an
+  `image` block or a data URL. A turn holds PDFs up to half of where deepagents
+  summarises the model's conversation: 249 KB on a model with no profile, 130 to
+  159 KB on a 128k window by its `max_tokens`, 1.2 MB on a 1M one. Every PDF already
+  open in the turn counts, so ten invoices of 200 KB are not ten passes. Sent whole,
+  a PDF goes out again with every model call after it, and can end the turn.
 - **an image over 5 MB of base64**, the most Bedrock and Google Cloud take in one
-  image. Past it the provider refuses the request, and every one after it while the
-  image stays in the conversation.
+  image, or **past 10 MB of images in the turn**, half the 20 MB Bedrock takes in a
+  request. Past the first the provider refuses the request, and every one after it
+  while the image stays in the conversation.
 - **any other `file` block**, a `.pptx` or `application/octet-stream`: no model here is
   handed one. The line tells the model to use a tool it holds that can read it.
+
+A turn here is one graph's: a subagent counts what it opens, against its own model.
+Each turn starts with nothing open: an earlier turn's results come back as their text
+alone.
 
 A message a tool writes itself is read the same way, inside a `Command` too. Return a
 file that large, or of that kind, as a path, the way

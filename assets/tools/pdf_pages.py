@@ -18,10 +18,11 @@ from langchain_core.tools import tool
 
 from kingfisher import ToolContext
 
-#: The largest PDF kingfisher hands the model whole; a larger one is replaced with
-#: advice, so a slice past this is one the model would never see. A test holds it to
-#: the guard's own limit, and the docstring below names it too.
-MAX_SLICE_BYTES = 256 * 1024
+#: The PDF bytes kingfisher lets a turn hold open on a model with no profile. The guard's
+#: own limit follows each graph's model and what the turn already holds, which no tool can
+#: know, so a slice under this may still be replaced, with advice saying why. A test holds
+#: it to the guard's, and the docstring below names it too.
+MAX_SLICE_BYTES = 255_000
 
 KB = 1024
 
@@ -102,7 +103,7 @@ def pdf_pages(
 
     `file_path` is the same virtual path the file tools take, such as
     `/inputs/report.pdf`. `pages` names the pages, such as `7` or `3-5,9`. A slice
-    larger than 256 KB cannot be handed to you whole, so it is refused rather than
+    larger than 249 KB may not be handed to you whole, so it is refused rather than
     saved: ask for fewer pages.
 
     `save_as` is where the slice is saved, a full virtual path such as

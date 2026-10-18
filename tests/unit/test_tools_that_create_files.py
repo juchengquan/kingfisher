@@ -17,10 +17,14 @@ import pytest
 from pypdf import PdfReader
 
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.attachments import MAX_PDF_BYTES
+from kingfisher.core.agent.middlewares.attachments import pdf_allowance
+from kingfisher.core.agent.models import summarizer_trigger
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.plugins import backend_at
-from tests.conftest import a_pdf, on_backend, repository_root
+from tests.conftest import FakeToolCallingModel, a_pdf, on_backend, repository_root
+
+#: The PDF bytes a turn holds open on a model with no profile, read off the guard's own rule.
+UNPROFILED_PDF_BYTES = pdf_allowance(summarizer_trigger(FakeToolCallingModel(responses=[])))
 
 SALES = (
     "region,sales\n"
@@ -557,7 +561,7 @@ def test_the_slice_holds_exactly_the_pages_asked_for(tools, handed, session_dir)
 
 @pytest.mark.parametrize(("texts", "says"), [
     ([f"page {n} " + "x" * 1500 for n in range(1, 201)], "ask for fewer pages"),
-    (["x" * (MAX_PDF_BYTES + 1024)], "page 1 alone is"),
+    (["x" * (UNPROFILED_PDF_BYTES + 1024)], "page 1 alone is"),
 ])
 def test_a_slice_too_large_to_read_whole_is_refused_and_nothing_is_written(
     texts, says, tools, handed, session_dir
@@ -574,11 +578,11 @@ def test_a_slice_too_large_to_read_whole_is_refused_and_nothing_is_written(
     assert _saved(handed, f"/scratchpad/big.p{pages}.pdf") is None
 
 
-def test_the_slice_limit_is_the_one_the_guard_applies(tools):
-    """Set below the guard, the tool refuses slices the model could have read; set
-    above, it saves slices the guard will replace with advice.
+def test_the_slice_limit_is_what_the_guard_holds_with_no_profile(tools):
+    """Set below the guard's allowance with no profile, the tool refuses slices such a
+    model could have read; set above, it saves slices the guard will replace with advice.
     """
-    assert tools["pdf_pages"].func.__globals__["MAX_SLICE_BYTES"] == MAX_PDF_BYTES
+    assert tools["pdf_pages"].func.__globals__["MAX_SLICE_BYTES"] == UNPROFILED_PDF_BYTES
 
 
 @pytest.mark.parametrize(("pages", "says"), [

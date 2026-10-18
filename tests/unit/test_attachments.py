@@ -10,26 +10,47 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from kingfisher import Kingfisher, Request
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.attachments import (
     MAX_IMAGE_CHARS,
-    MAX_PDF_BYTES,
+    MAX_TURN_IMAGE_CHARS,
     MB,
     AttachmentsMiddleware,
+    pdf_allowance,
 )
+from kingfisher.core.agent.middlewares.recorded import readable_size
+from kingfisher.core.agent.models import summarizer_trigger
+from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
-from tests.conftest import a_pdf, repository_root, tools_dir
+from tests.conftest import (
+    EVERY_TOOL,
+    FakeToolCallingModel,
+    a_pdf,
+    an_agent,
+    repository_root,
+    start,
+    subagents_dir,
+    tools_dir,
+)
+from tests.unit.scripted import Scripted
 from tests.unit.test_offloads import _Shown
 
-#: Past the limit by a margin, and not a PDF anything parses: `read_file` goes by the
-#: extension and never opens it.
-LARGE = b"%PDF-1.4\n" + b"0" * (MAX_PDF_BYTES + 44 * 1024)
+KB = 1024
+
+#: What deepagents' summariser fires at on a model with no profile, as `_Shown` has none.
+UNPROFILED = summarizer_trigger(FakeToolCallingModel(responses=[]))
+
+#: Past the allowance with no profile by a margin, and not a PDF anything parses:
+#: `read_file` goes by the extension and never opens it.
+LARGE = b"%PDF-1.4\n" + b"0" * (300 * KB)
 
 DECK = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
@@ -42,7 +63,7 @@ from langchain_core.messages import ToolMessage
 from langchain_core.tools import InjectedToolCallId
 from langgraph.types import Command
 
-PDF = base64.b64encode(b"%PDF-1.4" + b"0" * {MAX_PDF_BYTES + 44 * 1024}).decode()
+PDF = base64.b64encode(b"%PDF-1.4" + b"0" * {300 * KB}).decode()
 URL = "data:application/pdf;base64," + PDF
 
 
@@ -170,7 +191,7 @@ def test_the_advice_names_pdf_text_where_the_graph_holds_it_and_the_route_works(
     _with_pdf_text(cfg)
     pages = [f"page {n} " + "x" * 1500 for n in range(1, 201)]
     (session_dir / "inputs" / "big.pdf").write_bytes(big := a_pdf(*pages))
-    assert len(big) > MAX_PDF_BYTES, "not large enough to be refused"
+    assert len(big) > pdf_allowance(UNPROFILED), "not large enough to be refused"
     model = _calls(
         ("read_file", {"file_path": "/inputs/big.pdf"}),
         ("pdf_text", {"file_path": "/inputs/big.pdf"}),
@@ -345,8 +366,8 @@ def test_a_call_after_no_model_call_names_no_tool():
     """A call replayed on a resume follows no model call here, and a guard that
     guessed would name a tool the graph may not hold.
     """
-    guard = AttachmentsMiddleware()
-    data = "A" * (4 * (MAX_PDF_BYTES // 3 + 1024))
+    guard = AttachmentsMiddleware(UNPROFILED)
+    data = "A" * (400 * KB)
     result = ToolMessage(
         content=[{"type": "file", "base64": data, "mime_type": "application/pdf"}],
         tool_call_id="c1",
@@ -374,7 +395,7 @@ def test_a_replaced_pdf_is_a_failed_call_and_leaves_no_saved_row(cfg, session_di
     from kingfisher.core.session.store import KeptLedger
     from tests.unit.test_workspace_tool_errors import _through
 
-    data = "A" * (4 * (MAX_PDF_BYTES // 3 + 1024))
+    data = "A" * (400 * KB)
 
     @tool(response_format="content_and_artifact")
     def export_pdf(note: str):
@@ -390,13 +411,14 @@ def test_a_replaced_pdf_is_a_failed_call_and_leaves_no_saved_row(cfg, session_di
         layout=cfg.layout,
         backend=backend,
         step_limit=cfg.recursion_limit,
+        trigger=UNPROFILED,
         recorder=RecorderMiddleware(ledger, backend, None, cfg.layout.tool_results_route),
     )
     call = {"name": "export_pdf", "args": {"note": "x"}, "id": "c1"}
 
     answer = _through(stack, call, export_pdf, way)
 
-    assert answer.text.startswith("export_pdf's result is a 259 KB PDF"), answer.text
+    assert answer.text.startswith("export_pdf's result is a 300 KB PDF"), answer.text
     assert answer.status == "error"
     assert ledger.entries == ()
 
@@ -405,10 +427,13 @@ def test_the_guide_states_the_limits_the_guard_applies():
     """An author returning a file under a limit the guide names and the guard does not
     learns of it only from a model that never saw the file.
     """
-    guide = (repository_root() / "docs" / "guides" / "tools.md").read_text(encoding="utf-8")
+    guide = " ".join(
+        (repository_root() / "docs" / "guides" / "tools.md").read_text(encoding="utf-8").split()
+    )
 
-    assert f"a PDF over {MAX_PDF_BYTES // 1024} KB" in guide
+    assert f"{readable_size(pdf_allowance(UNPROFILED))} on a model with no profile" in guide
     assert f"an image over {MAX_IMAGE_CHARS // MB} MB of base64" in guide
+    assert f"past {MAX_TURN_IMAGE_CHARS // MB} MB of images in the turn" in guide
 
 
 def test_a_slice_pdf_pages_saves_is_handed_over_whole(cfg, session_dir):
@@ -430,3 +455,185 @@ def test_a_slice_pdf_pages_saves_is_handed_over_whole(cfg, session_dir):
     assert not _files([_answer(model, "c1")]), "the whole document was handed over"
     assert _answer(model, "c2").text.startswith("Saved big.p2.pdf (PDF, ")
     assert [b["mime_type"] for b in _files([_answer(model, "c3")])] == ["application/pdf"]
+
+
+def _pdf_of(session_dir, name: str, size: int) -> dict:
+    """A PDF of exactly `size` bytes in the session's inputs, and the call reading it."""
+    (session_dir / "inputs" / name).write_bytes(b"%PDF-1.4\n" + b"0" * (size - 9))
+    return {"file_path": f"/inputs/{name}"}
+
+
+def _together(*calls: tuple[str, dict]) -> _Shown:
+    """A model asking for every call in one reply, then answering."""
+    asked = [{"name": name, "args": args, "id": f"c{n}"} for n, (name, args) in enumerate(calls, 1)]
+    return _Shown(responses=[AIMessage(content="", tool_calls=asked), AIMessage(content="done")])
+
+
+def test_pdfs_each_under_the_allowance_are_stopped_where_together_they_pass_it(
+    cfg, session_dir
+):
+    """Judged one file at a time, ten 200 KB invoices each passed, and from the third on
+    deepagents' summariser ran before every model call."""
+    model = _calls(*(("read_file", _pdf_of(session_dir, f"p{n}.pdf", 100 * KB)) for n in (1, 2, 3)))
+
+    _run(cfg, session_dir, model)
+
+    assert [len(_files([_answer(model, f"c{n}")])) for n in (1, 2, 3)] == [1, 1, 0]
+    assert _answer(model, "c3").text == (
+        "/inputs/p3.pdf is a 100 KB PDF, and the PDFs already open in this turn take up "
+        "200 KB of the 249 KB a turn holds. Work from its text, or from a part of it, instead."
+    )
+
+
+def test_images_each_under_5_mb_are_stopped_where_together_they_pass_10(cfg, session_dir):
+    """Judged one at a time, four 4.5 MB images each passed, and together went out with every
+    model call after them: 18 MB of a request Bedrock refuses past 20."""
+    each = 4_718_592  # 4.5 MB of base64
+    for n in (1, 2, 3):
+        (session_dir / "inputs" / f"photo{n}.jpg").write_bytes(os.urandom(each * 3 // 4))
+    model = _calls(*(("read_file", {"file_path": f"/inputs/photo{n}.jpg"}) for n in (1, 2, 3)))
+
+    _run(cfg, session_dir, model)
+
+    assert [len(_files([_answer(model, f"c{n}")])) for n in (1, 2, 3)] == [1, 1, 0]
+    assert _answer(model, "c3").text == (
+        "/inputs/photo3.jpg is a 4.5 MB image. The images already open in this turn total "
+        "9.0 MB, and a turn holds at most 10 MB; work from those, or say what is left."
+    )
+
+
+@pytest.mark.parametrize(
+    ("window", "size", "whole"),
+    [
+        (None, 200, True),
+        (128_000, 200, False),
+        (None, 300, False),
+        (1_000_000, 300, True),
+    ],
+    ids=["no profile holds 200 KB", "128k does not", "no profile refuses 300 KB", "1M holds it"],
+)
+def test_what_a_turn_holds_follows_the_graphs_own_model(cfg, session_dir, window, size, whole):
+    """One limit for every model is more than a 128k window's summariser lets through, and a
+    fraction of what a 1M window holds."""
+    model = _calls(("read_file", _pdf_of(session_dir, "doc.pdf", size * KB)))
+    if window is not None:
+        model.profile = {"max_input_tokens": window}
+
+    _run(cfg, session_dir, model)
+
+    answer = _answer(model)
+    assert bool(_files([answer])) is whole, answer.text
+    if not whole:
+        assert answer.text.startswith(f"/inputs/doc.pdf is a {size} KB PDF, too large to hand")
+
+
+def test_calls_asked_for_together_count_what_each_other_handed_over(cfg, session_dir, way):
+    """Each call asked for in one reply runs against the conversation as it was before any
+    of them answered, so three 100 KB PDFs read at once all went out whole, past the
+    249 KB a turn holds."""
+    model = _together(
+        *(("read_file", _pdf_of(session_dir, f"p{n}.pdf", 100 * KB)) for n in (1, 2, 3))
+    )
+
+    _run(cfg, session_dir, model, wait=way == "async")
+
+    answers = [_answer(model, f"c{n}") for n in (1, 2, 3)]
+    assert sorted(len(_files([one])) for one in answers) == [0, 1, 1]
+    (stopped,) = [one for one in answers if not _files([one])]
+    assert "already open in this turn take up 200 KB of the 249 KB" in stopped.text
+
+
+def test_another_run_calling_its_model_leaves_this_runs_tally_alone():
+    """Reset at every model call, the tally of one run's calls in flight is wiped when a
+    second run of the same subagent calls its model, as two `task` calls at once do, and
+    the first run's next PDF goes out past the total."""
+    guard = AttachmentsMiddleware(UNPROFILED)
+
+    def asking(*ids: str, message: str) -> list:
+        calls = [{"name": "export_pdf", "args": {}, "id": one} for one in ids]
+        return [HumanMessage("go"), AIMessage(content="", id=message, tool_calls=calls)]
+
+    first, second = asking("a1", "a2", message="m-a"), asking("b1", message="m-b")
+
+    def read(conversation: list, call_id: str, size: int) -> ToolMessage:
+        data = "A" * (4 * (size // 3))
+        result = ToolMessage(
+            content=[{"type": "file", "base64": data, "mime_type": "application/pdf"}],
+            tool_call_id=call_id,
+        )
+        call = {"name": "export_pdf", "args": {}, "id": call_id}
+        request = SimpleNamespace(tool_call=call, state={"messages": conversation})
+        return guard.wrap_tool_call(request, lambda _: result)
+
+    assert _files([read(first, "a1", 200 * KB)]), "the first PDF was not handed over"
+    guard.wrap_model_call(SimpleNamespace(tools=[], state={"messages": second}), lambda r: r)
+
+    assert "take up 200 KB of the 249 KB" in read(first, "a2", 100 * KB).text
+
+
+HELPER = (
+    "name: helper\ndescription: Reads.\nmodel: cheap-model\n"
+    'builtin_tools: ["read_file"]\n'
+    "system_prompt: |\n  You read.\n"
+)
+
+
+def _first_shown(call_id: str) -> ToolMessage:
+    """The result of `call_id` as a `Scripted` model was first handed it."""
+    return next(
+        one
+        for heard in Scripted.heard
+        for one in heard
+        if isinstance(one, ToolMessage) and one.tool_call_id == call_id
+    )
+
+
+def test_a_subagent_on_another_model_holds_what_its_own_model_holds(scripted):
+    """Held to the agent's allowance, a subagent on a 1M window was refused a 300 KB PDF
+    its own summariser is nowhere near."""
+    models = dict(scripted.models.models)
+    models["cheap-model"] = replace(
+        models["cheap-model"], extra={"profile": {"max_input_tokens": 1_000_000}}
+    )
+    cfg = replace(scripted, models=replace(scripted.models, models=models))
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "helper.yaml").write_text(HELPER, encoding="utf-8")
+    an_agent(cfg, subagents="[helper]", **EVERY_TOOL)
+    read = _pdf_of(cfg.workspace / "sessions" / start(cfg, "s"), "big.pdf", 300 * KB)
+    asked = {"description": "read it", "subagent_type": "helper"}
+    Scripted.script.extend([
+        AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}]),
+        AIMessage(content="", tool_calls=[{"name": "read_file", "args": read, "id": "s1"}]),
+        AIMessage("it holds zeros"),
+        AIMessage(content="", tool_calls=[{"name": "read_file", "args": read, "id": "c2"}]),
+        AIMessage("done"),
+    ])
+
+    Kingfisher(cfg, sessions=LocalSessions()).run(Request("go", agent="only", session_id="s"))
+
+    assert _files([_first_shown("s1")]), "the subagent was held to the agent's allowance"
+    assert _first_shown("c2").text.startswith("/inputs/big.pdf is a 300 KB PDF, too large")
+
+
+def test_a_new_turn_holds_no_pdf_an_earlier_turn_opened(scripted):
+    """Carried into the next turn, the total would refuse a PDF in a turn holding none: what
+    an earlier turn opened comes back as its result's text alone."""
+    an_agent(scripted, **EVERY_TOOL)
+    folder = scripted.workspace / "sessions" / start(scripted, "s")
+    # Both before the first turn, which leaves the inputs read-only.
+    reads = [_pdf_of(folder, f"p{n}.pdf", 200 * KB) for n in (1, 2)]
+    service = Kingfisher(scripted, sessions=LocalSessions())
+    for n, read in enumerate(reads, 1):
+        Scripted.script.extend([
+            AIMessage(content="", tool_calls=[{"name": "read_file", "args": read, "id": f"r{n}"}]),
+            AIMessage("read"),
+        ])
+        service.run(Request("go", agent="only", session_id="s"))
+
+    second = next(heard for heard in Scripted.heard if any(
+        isinstance(one, ToolMessage) and one.tool_call_id == "r2" for one in heard
+    ))
+    assert any(isinstance(one, ToolMessage) and one.tool_call_id == "r1" for one in second), (
+        "the earlier turn was not replayed, so this passes whatever the total carries"
+    )
+    assert _files([_first_shown("r2")]), "the second turn's PDF was refused"

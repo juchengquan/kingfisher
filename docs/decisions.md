@@ -1656,19 +1656,43 @@ file in every tool's result -- a guard on `read_file`'s name is stepped around b
 workspace tool -- and in the message a `Command` carries. The rest of the result is kept,
 and the call is an error only when nothing else came back. It sits inside the recorder:
 outside, the recorder saved a 0-byte row for a replaced PDF and its stamp left the call
-reading as a success. *(2026-10-13; images, other files and `read_file` 2026-10-19.)*
+reading as a success. *(2026-10-13; images, other files, `read_file` and the turn's
+totals 2026-10-19.)*
 
-**A PDF over 256 KB, known by its type in whatever block carries it.** One PDF of about
-500 KB springs the summarizer's trap on a model with no profile, and half leaves room for
-the conversation. Bytes, because the summarizer counts them and pages would mean parsing
-every PDF a tool returns. By type, because a 1 MB PDF in an `image` block, or inside a
+**PDFs up to half the graph's summariser trigger in a turn, known by their type in
+whatever block carries them.** The trap is the conversation's size, not one file's: ten
+200 KB invoices each passed a 256 KB limit, and from the third the summariser ran before
+every model call. So a turn holds `pdf_allowance(summarizer_trigger(model))` of PDF, half
+the trigger as the summariser counts a PDF, a token per four characters of base64, which
+is three bytes a token: 249 KB with no profile, where the trap measured about 478 KB; 130
+to 159 KB on a 128k window by its `max_tokens`; 185 KB for claude-sonnet-4-5's 200k at its
+default 64k reservation; 332 KB for gpt-5; 1.2 MB for the template's MiniMax-M3. One PDF
+past it is past it. The graph's own model, because one figure for all was more than a
+128k window lets through and a fraction of a 1M one. Counted from the graph's saved
+conversation, what the summariser has folded away included, so it can come out high and
+never low; it starts each turn at nothing, since an earlier turn comes back as its
+results' text. Bytes, because the summarizer counts them and pages would mean parsing every
+PDF a tool returns. By type, because a 1 MB PDF in an `image` block, or inside a
 `Command`, was handed over whole.
 
-**An image over 5 MB of base64.** That is what a provider measures, and the smallest
-limit: Bedrock and Google Cloud take 5 MB an image, Anthropic's API 10. Past it the
-request is refused, and every later one while the image stays in the conversation. The
-summarizer is no bound, counting an image at a flat 85 tokens: ten 6 MB images in one
-turn sent 84 million characters and it never fired.
+**An image over 5 MB of base64, or past 10 MB of them in a turn.** 5 MB is what a provider
+measures, and the smallest limit: Bedrock and Google Cloud take 5 MB an image, Anthropic's
+API 10. Past it the request is refused, and every later one while the image stays in the
+conversation. The summarizer is no bound, counting an image at a flat 85 tokens: ten 6 MB
+images in one turn sent 84 million characters and it never fired. The total is half the
+20 MB Bedrock takes in a request, counted as the PDFs are: four images of 4.5 MB each
+passed alone, and together put 18 MB in every call after them.
+
+**Calls asked for together count what each other handed over.** Each runs against the
+conversation as it stood before any of them answered: three reads asked for in one reply
+each saw no other's result, on three threads in a sync turn, and three 100 KB PDFs went
+out whole. So the guard keeps what it handed over for calls not yet in the conversation,
+under a lock, by the message that asked for them, and drops it at the next model call of
+the run holding that message. By message rather than since the last model call: two
+`task` calls to one subagent run two conversations through one instance, as a pre-built
+graph runs every session, and one run's model call would wipe what the other's calls in
+flight had handed over. Kept apart, each run is held to its own conversation, which is
+what its model is sent. Which call of a batch is stopped is the order they finish in.
 
 **Any other `file` block, whatever its size.** A 2 MB `.pptx` was counted as about
 700,000 tokens, then dropped from the request by deepagents'
@@ -1700,10 +1724,14 @@ only a red rectangle, as a turn sends it, it described the rectangle, its colour
 place. MiniMax-M2.5 read the text and found that page blank. MiniMax's API reference
 lists no document block for either; the live call settled it.
 
-**A slice past 256 KB is refused, not saved.** `AttachmentsMiddleware` would replace
-it with advice, a file the model is told to open and never sees. The tool keeps its own
-copy of the limit, since a shipped tool is written against the public API; a test holds
-the copy to the guard's.
+**A slice past 249 KB is refused, not saved**, what a turn holds on a model with no
+profile. Saved, `AttachmentsMiddleware` may replace it with advice, a file the model is
+told to open and never sees. The guard's own limit follows each graph's model and what the
+turn already holds, neither of which a tool can know, so this is the figure it applies
+with nothing declared: on a smaller allowance the guard replaces a slice with advice
+saying so, and on a larger one the model asks for fewer pages than it needed to. The tool
+keeps its own copy, since a shipped tool is written against the public API; a test holds
+the copy to the guard's rule.
 
 **Copied, not drawn.** Drawing is PDFium, native code in kingfisher's process outside
 every sandbox, and a model that reads PDFs draws the page itself. pypdf copies pages and
