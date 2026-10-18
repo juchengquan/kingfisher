@@ -2014,6 +2014,10 @@ file tool's names the call that gets it back; a write or edit says the file hold
 current text. The latest batch and the three most recent clearable results stay whole.
 Settled with the owner after four real sessions were measured. *(2026-10-16.)*
 
+**The recorder and clearing stay two classes**, because the recorder runs alone on every
+subagent; what they share is how a record is written -- a row's arguments and summary,
+and the id a result ends in -- in `core.agent.middlewares.recorded`. *(2026-10-19.)*
+
 **The scope is what was resent, not what was saved.** Of what four four-turn MiniMax
 sessions resent per call, ledger results were 14.7%, file reads 36.5%, write and edit
 text 30.7%. Those last have the file, so their handle points at it and says it may have

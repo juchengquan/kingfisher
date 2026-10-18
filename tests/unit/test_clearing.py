@@ -35,11 +35,8 @@ from kingfisher.core.agent.middlewares.clearing import (
     high_mark,
 )
 from kingfisher.core.agent.middlewares.model_reply import _refusal
-from kingfisher.core.agent.middlewares.recorder import (
-    UNRECORDED,
-    _arguments,
-    _summary,
-)
+from kingfisher.core.agent.middlewares.recorded import arguments, stamp, summary
+from kingfisher.core.agent.middlewares.recorder import UNRECORDED
 from kingfisher.core.agent.models import summarizer_trigger
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.layout import HARNESS, OFFLOADS_ROUTE, TOOL_RESULTS_ROUTE, TRANSCRIPT_FILE
@@ -112,16 +109,16 @@ class Talk:
     ) -> ToolMessage:
         content = text
         if name not in UNRECORDED and status != "error":
-            written = _arguments(args)
+            written = arguments(args)
             entry = self.ledger.add(
                 lambda number: LedgerEntry(
                     id=number, turn="t", call=at, run=None, role=MAIN, tool=name,
                     args=written, access=None, size=len(text.encode("utf-8")),
                     path=f"{TOOL_RESULTS_ROUTE}{number}-{name}.txt",
-                    summary=_summary(name, written, text),
+                    summary=summary(name, written, text),
                 )
             )
-            content = f"{text}\n[{entry.id}]"
+            content = f"{text}{stamp(entry.id)}"
         return ToolMessage(
             content=content, tool_call_id=at, name=name, status=status, id=self._id()
         )

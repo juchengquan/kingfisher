@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from deepagents.backends import CompositeBackend
 from deepagents.backends.utils import sanitize_tool_call_id
 
+from kingfisher.core.agent.middlewares.recorded import stamp
 from kingfisher.core.layout import TOOL_RESULTS_ROUTE
 from kingfisher.core.session.steps import Steps, changing, reading
 from kingfisher.core.session.store import (
@@ -142,7 +143,7 @@ def _repointed(files: Any, entries: tuple[LedgerEntry, ...]) -> Steps[tuple[Ledg
     def claimed(entry: LedgerEntry) -> str | None:
         """The offloaded file this row is the length of, or `None` for no match."""
         name = sanitize_tool_call_id(entry.call)
-        whole = entry.size + len(f"\n[{entry.id}]")
+        whole = entry.size + len(stamp(entry.id))
         return f"{under}{name}" if offloaded.get(name) == whole else None
 
     # Counted over the whole turn before any row is pointed: one row cannot see a tie.
