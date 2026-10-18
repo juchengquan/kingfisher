@@ -123,7 +123,7 @@ def _raised(exc: Exception) -> Exception:
 class ModelReplyMiddleware(AgentMiddleware):
     """Refuse the call a reply was cut inside, ask again for a cut answer, and stop an
     agent cut off too often; raise a provider's refusal of a model call as the turn's
-    stop, which `ToolFailureMiddleware` hands back to a subagent's parent.
+    stop, which `GuardedCallsMiddleware` hands back to a subagent's parent.
 
     Inside the model call and the tool call, never beside them: a `before_model` or
     `after_model` hook is a graph step, and the recursion limit counts those. A refusal

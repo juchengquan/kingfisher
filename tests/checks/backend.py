@@ -164,7 +164,7 @@ def host_path_refusal(make: Callable[[], Any]) -> None:
     underneath, so naming one means the model confused the two views. Inside a sandbox
     of its own, `/etc/passwd` is an ordinary file and refusing it would be wrong -- so
     this asks nothing of a backend that allows it. What it does ask is that a backend
-    which *does* refuse raises `HostPathError`, because `ToolFailureMiddleware` catches that
+    which *does* refuse raises `HostPathError`, because `GuardedCallsMiddleware` catches that
     type and nothing else: refuse with anything else and a mistake the model could
     have corrected reaches it as a failed turn.
     """
@@ -176,7 +176,7 @@ def host_path_refusal(make: Callable[[], Any]) -> None:
     except Exception as refused:
         msg = (
             f"reading a host path was refused with {type(refused).__name__}, which "
-            "ToolFailureMiddleware does not catch -- it catches HostPathError and turns it "
+            "GuardedCallsMiddleware does not catch -- it catches HostPathError and turns it "
             "into a correction the model can act on. Raise "
             "kingfisher.plugins.HostPathError, or do not "
             f"refuse. Got: {refused}"

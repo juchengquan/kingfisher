@@ -551,7 +551,7 @@ def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session
     # agent's own tools, and it held them with nothing wrapped around them.
     assert kinds == [
         "StepBudgetMiddleware", "ModelReplyMiddleware", "GrantedOnlyMiddleware",
-        "ToolFailureMiddleware", "LargePdfMiddleware", "BuiltinToolsMiddleware",
+        "GuardedCallsMiddleware", "LargePdfMiddleware", "BuiltinToolsMiddleware",
     ], kinds
 
 
@@ -832,10 +832,9 @@ def test_every_graph_holding_the_workspace_tools_carries_the_same_guards(
         cfg, session_dir, subagents=("helper",), builtin_tools=("task",)
     )
     guards = [
-        "ToolFailureMiddleware",
+        "GuardedCallsMiddleware",
         "LargePdfMiddleware",
         "BuiltinToolsMiddleware",
-        "WorkspaceToolPathsMiddleware",
     ]
 
     for where, stack in (

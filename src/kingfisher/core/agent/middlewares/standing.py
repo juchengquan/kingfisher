@@ -10,6 +10,7 @@ from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
 from kingfisher.core.agent.backend import shell_prompt_of, shell_runs_here
 from kingfisher.core.agent.middlewares.builtin_tools import BuiltinToolsMiddleware
 from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware
+from kingfisher.core.agent.middlewares.guarded_calls import GuardedCallsMiddleware
 from kingfisher.core.agent.middlewares.large_pdf_guard import LargePdfMiddleware
 from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware
 from kingfisher.core.agent.middlewares.narrowing import (
@@ -18,8 +19,6 @@ from kingfisher.core.agent.middlewares.narrowing import (
 )
 from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
 from kingfisher.core.agent.middlewares.step_budget import STEPS_PER_CALL, StepBudgetMiddleware
-from kingfisher.core.agent.middlewares.tool_failure import ToolFailureMiddleware
-from kingfisher.core.agent.middlewares.workspace_tools import WorkspaceToolPathsMiddleware
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.layout import Layout
 
@@ -76,7 +75,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
         # was not granted.
         standing.append(TodoListMiddleware())
     # Ahead of the guards, so it records the arguments the model wrote, before
-    # `WorkspaceToolPathsMiddleware` rewrites them to host paths.
+    # `GuardedCallsMiddleware` rewrites them to host paths.
     if recorder is not None:
         standing.append(recorder)
     standing.append(
@@ -96,15 +95,13 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
         )
     )
     # Outside `BuiltinToolsMiddleware`, so a `grep` it runs as several searches fails once,
-    # as the call the model made, when its path is refused.
-    standing.append(ToolFailureMiddleware(names))
+    # as the call the model made, when its path is refused. Its translation rewrites the
+    # arguments before anything after it judges them.
+    standing.append(GuardedCallsMiddleware(names, paths))
     standing.append(LargePdfMiddleware())
     standing.append(
         BuiltinToolsMiddleware(layout, shell_prompt_of(backend), here=shell_runs_here(backend))
     )
-    # Translation rewrites the arguments before anything after it judges them.
-    if names and paths is not None:
-        standing.append(WorkspaceToolPathsMiddleware(names, paths))
     if skills is not None:
         standing.append(
             NarrowedSkillsMiddleware(

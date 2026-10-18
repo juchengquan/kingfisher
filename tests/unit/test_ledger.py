@@ -388,7 +388,7 @@ def test_a_tool_whose_name_is_all_punctuation_still_gets_a_named_file(ledgered):
 
 
 def test_the_arguments_recorded_are_the_ones_the_model_wrote(ledgered):
-    """`WorkspaceToolPathsMiddleware` rewrites a `path` into a host path, and recorded after it
+    """`GuardedCallsMiddleware` rewrites a `path` into a host path, and recorded after it
     the row would show the agent a path it was never told and may not use.
     """
     (_session(ledgered) / "inputs" / "notes.txt").write_text("a\nb\n", encoding="utf-8")

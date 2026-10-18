@@ -412,7 +412,7 @@ agent's tool objects with no host-path guard, no error guard and no path transla
 middleware -- deepagents runs it as given -- and the shipped `show-your-work`'s first
 path-taking call died with `FileNotFoundError`, ending the run. `GuardedTool` carries
 the translation and error conversion on the tool objects, reversing for that path only
-the reasoning `WorkspaceToolPathsMiddleware` records, that the call is rewritten because
+the reasoning `GuardedCallsMiddleware` records, that the call is rewritten because
 the tools are not alike. So the wrapper normalises: a plain function becomes the tool
 `create_agent` would make, and a `BaseTool` keeps its `args_schema`, since a wrapper
 advertising `**kwargs` tells the model the wrong arguments. A refusal is returned, not
@@ -440,7 +440,7 @@ built in off the middleware its probe holds, so an offered checklist would leave
 probe and `builtin_tools: [write_todos]` would name a tool that is not there. Moving it
 waits on the built-ins being read some other way. *(2026-10-17.)*
 
-**Two pairs of standing middleware are one each now.** `ToolFailureMiddleware` turns
+**Two pairs of standing middleware are one each now.** `GuardedCallsMiddleware` turns
 both kinds of exception into a failed result, a workspace tool's first so it keeps its
 type, from the outer place, so a `grep` that `BuiltinToolsMiddleware` runs as several
 searches fails once. `GrantedOnlyMiddleware` refuses both what a request was not granted
@@ -1552,7 +1552,7 @@ window.
 ## What a tool returns
 
 **A workspace tool's return type is langchain's rule, and kingfisher adds none.**
-Nothing reads a return annotation, and `ToolFailureMiddleware` catches exceptions and
+Nothing reads a return annotation, and `GuardedCallsMiddleware` catches exceptions and
 passes values through: a dict reaches the model as `json.dumps`, and a `Command` is
 applied by the graph, not wrapped.
 
@@ -1837,7 +1837,7 @@ superseded pause and carries results the approval step made up, each needing a f
 how langgraph shapes its chunks. Middleware sees only real calls.
 
 **The recorder is ahead of the guards in `standing_middleware`, so it records the
-arguments the model wrote**, not the host paths `WorkspaceToolPathsMiddleware` makes of
+arguments the model wrote**, not the host paths `GuardedCallsMiddleware` makes of
 them; moved last, `test_the_arguments_recorded_are_the_ones_the_model_wrote` goes red.
 Its other two properties are not that position's: it sees a long result whole, inside
 deepagents' eviction, because deepagents lands every custom middleware after its own;
@@ -2094,7 +2094,7 @@ it is the next thing to fix.
 ## Tool failure
 
 **A workspace tool's exception is a failed tool result, not a dead run.**
-`ToolFailureMiddleware` converts it to a `ToolMessage` with `status="error"`, text whole.
+`GuardedCallsMiddleware` converts it to a `ToolMessage` with `status="error"`, text whole.
 Built-in tools are untouched but for a refused host path, the one failure they do not
 report themselves; converting the rest would put a second opinion between deepagents and
 its own error handling. `BaseException` is not caught: an interrupt is not a tool telling
@@ -2118,9 +2118,9 @@ the opposite of what the recorder sees by its position. *(2026-10-16, from an
 architecture review.)*
 
 **A call refused before it runs is answered by the middleware that refused it; what
-running it raised is `ToolFailureMiddleware`'s.** `WorkspaceToolPathsMiddleware` catches
-around its own translation alone, as `GuardedTool` does. Catching everything below it,
-it answered a built-in's host-path refusal first on any graph holding a workspace tool,
+running it raised is `GuardedCallsMiddleware`'s.** Its translation is caught around
+itself alone, as `GuardedTool`'s is. Catching everything below it, the translator
+answered a built-in's host-path refusal first on any graph holding a workspace tool,
 appending its rule after a doubled full stop, and gave a workspace tool's own refusal
 that rule in place of its type. Each guard's tests passed alone; only the stack showed
 it. A `ToolException` goes back as written on both routes, being the one exception a
@@ -2130,8 +2130,19 @@ the stack to `GuardedTool`'s answers, which `SessionPaths` says must be the same
 `task` hand-back of a subagent's refused model call is here by the same rule, and
 `ModelReplyMiddleware` keeps refusing a cut call. *(2026-10-18.)*
 
+**One middleware rewrites a workspace tool's paths and converts what any call raised,
+as `GuardedTool` does on a compiled subagent's tools.** The middleware and the tool must
+answer identically, and as two classes the middleware's two catches had already
+disagreed, in the entry above. `GuardedCallsMiddleware` keeps both, the translation's
+around itself alone, and sits where the conversion sat, outside
+`BuiltinToolsMiddleware`, so a split `grep` whose path is refused fails once
+(`test_a_split_grep_whose_path_is_refused_fails_once`). That moved the translation out
+past `LargePdfMiddleware` and `BuiltinToolsMiddleware`, which read no workspace tool's
+arguments: the guards' tests passed with only the class's name and the pinned stacks
+changed. *(2026-10-19.)*
+
 **A workspace tool is handed real paths, resolved against its own session.**
-`WorkspaceToolPathsMiddleware` rewrites a `path` argument before the tool sees it, so
+`GuardedCallsMiddleware` rewrites a `path` argument before the tool sees it, so
 `/inputs/config.ini` means to a workspace tool what it means to `read_file`; how is under
 *A tool's path is the backend's path*. A workspace tool opens files with the operating
 system, and nothing gives it the backend the file tools close over. It closed a leak too:

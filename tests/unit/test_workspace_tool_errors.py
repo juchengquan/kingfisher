@@ -14,7 +14,7 @@ from langchain_core.messages import ToolMessage
 from langchain_core.tools import ToolException
 
 from kingfisher.core.agent.host_paths import HostPathError
-from kingfisher.core.agent.middlewares.tool_failure import ToolFailureMiddleware
+from kingfisher.core.agent.middlewares.guarded_calls import GuardedCallsMiddleware
 from kingfisher.plugins import backend_at
 
 
@@ -34,7 +34,7 @@ def _raises(exc: BaseException):
 
 def test_a_workspace_tools_exception_becomes_a_failed_tool_result():
     """The failure this was written for."""
-    guard = ToolFailureMiddleware(frozenset({"csv_profile"}))
+    guard = GuardedCallsMiddleware(frozenset({"csv_profile"}))
 
     answer = guard.wrap_tool_call(
         _Request("csv_profile"), _raises(FileNotFoundError("/inputs/orders.csv"))
@@ -50,7 +50,7 @@ def test_the_message_names_the_exception_type():
     """A workspace tool is somebody else's code and its exceptions were not written to
     be read by a model.
     """
-    guard = ToolFailureMiddleware(frozenset({"probe"}))
+    guard = GuardedCallsMiddleware(frozenset({"probe"}))
 
     answer = guard.wrap_tool_call(_Request("probe"), _raises(FileNotFoundError("/inputs/x")))
 
@@ -62,7 +62,7 @@ def test_a_workspace_tool_refusing_a_host_path_still_names_the_type():
     that says it was the tool's own."""
     from kingfisher.core.agent.host_paths import HostPathError
 
-    guard = ToolFailureMiddleware(frozenset({"probe"}))
+    guard = GuardedCallsMiddleware(frozenset({"probe"}))
 
     answer = guard.wrap_tool_call(_Request("probe"), _raises(HostPathError("/etc/hosts")))
 
@@ -74,7 +74,7 @@ def test_a_built_in_refusing_a_host_path_is_handed_back_as_said():
     written."""
     from kingfisher.core.agent.host_paths import HostPathError
 
-    guard = ToolFailureMiddleware()
+    guard = GuardedCallsMiddleware()
 
     answer = guard.wrap_tool_call(_Request("read_file"), _raises(HostPathError("use /inputs")))
 
@@ -84,7 +84,7 @@ def test_a_built_in_refusing_a_host_path_is_handed_back_as_said():
 
 def test_a_built_in_tool_is_left_exactly_as_it_was():
     """The half that keeps this narrow."""
-    guard = ToolFailureMiddleware(frozenset({"csv_profile"}))
+    guard = GuardedCallsMiddleware(frozenset({"csv_profile"}))
 
     with pytest.raises(FileNotFoundError):
         guard.wrap_tool_call(_Request("read_file"), _raises(FileNotFoundError("/inputs/x")))
@@ -92,14 +92,14 @@ def test_a_built_in_tool_is_left_exactly_as_it_was():
 
 def test_a_tool_that_works_is_untouched():
     """The negative control."""
-    guard = ToolFailureMiddleware(frozenset({"probe"}))
+    guard = GuardedCallsMiddleware(frozenset({"probe"}))
 
     assert guard.wrap_tool_call(_Request("probe"), lambda _r: "the answer") == "the answer"
 
 
 def test_an_interrupt_is_not_a_tool_telling_the_model_something():
     """`BaseException` is deliberately outside the catch."""
-    guard = ToolFailureMiddleware(frozenset({"probe"}))
+    guard = GuardedCallsMiddleware(frozenset({"probe"}))
 
     with pytest.raises(KeyboardInterrupt):
         guard.wrap_tool_call(_Request("probe"), _raises(KeyboardInterrupt()))
@@ -117,7 +117,7 @@ def test_the_async_path_behaves_the_same():
     """Both halves exist because the harness uses both, and a guard that held on one
     would be absent exactly when a service is serving.
     """
-    guard = ToolFailureMiddleware(frozenset({"csv_profile"}))
+    guard = GuardedCallsMiddleware(frozenset({"csv_profile"}))
 
     answer = asyncio.run(guard.awrap_tool_call(_Request("csv_profile"), _araises))
 
@@ -126,7 +126,7 @@ def test_the_async_path_behaves_the_same():
 
 
 def test_the_async_path_leaves_a_built_in_alone_too():
-    guard = ToolFailureMiddleware(frozenset({"csv_profile"}))
+    guard = GuardedCallsMiddleware(frozenset({"csv_profile"}))
 
     with pytest.raises(FileNotFoundError):
         asyncio.run(guard.awrap_tool_call(_Request("read_file"), _araises))
@@ -148,10 +148,10 @@ TOOLS = [probe_one]
 '''
 
 
-def _guard_in(built) -> ToolFailureMiddleware | None:
+def _guard_in(built) -> GuardedCallsMiddleware | None:
     """The guard the build handed to `create_deep_agent`, if it added one."""
     for entry in built.middleware or ():
-        if isinstance(entry, ToolFailureMiddleware):
+        if isinstance(entry, GuardedCallsMiddleware):
             return entry
     return None
 
@@ -167,7 +167,7 @@ def test_the_build_guards_the_names_the_workspace_defined(cfg, session_dir):
     built = build_agent(cfg, backend=backend_at(cfg, session_dir), model=_a_model())
 
     guard = _guard_in(built)
-    assert guard is not None, "the build installed no ToolFailureMiddleware"
+    assert guard is not None, "the build installed no GuardedCallsMiddleware"
     assert "probe_one" in guard.names
 
 
@@ -510,3 +510,25 @@ def test_a_workspace_tool_fails_alike_through_the_stack_and_on_a_compiled_subage
 
     assert (middleware.content, middleware.status) == (compiled.content, compiled.status)
     assert middleware.status == "error"
+
+
+def test_a_split_grep_whose_path_is_refused_fails_once(stack, way):
+    """Moved inside `BuiltinToolsMiddleware`, the guard would answer each part of `alpha|beta`
+    apart, and the model would read one refusal under "matches for `alpha`" and another
+    under "matches for `beta`"."""
+    from langchain_core.tools import tool
+
+    said = "'/Users/me/notes' is a host path. Use '/inputs/notes'."
+
+    @tool
+    def grep(pattern: str, path: str) -> str:
+        """Stands in for deepagents' own, refusing the path as the backend does."""
+        raise HostPathError(said)
+
+    searched = {"pattern": "alpha|beta", "path": "/Users/me/notes"}
+    call = {"name": "grep", "args": searched, "id": "c1"}
+
+    answer = _through(stack, call, grep, way)
+
+    assert answer.content == f"Error: {said}"
+    assert answer.status == "error"

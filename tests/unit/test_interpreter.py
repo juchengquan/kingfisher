@@ -313,7 +313,7 @@ def test_a_workspace_tool_called_from_code_cannot_read_outside_the_session(
     cfg, session_dir, call, refused_with
 ):
     """From `eval` a tool reading its own argument returned another session's file and
-    the host's `/etc/hosts`, since `WorkspaceToolPathsMiddleware` never saw the call.
+    the host's `/etc/hosts`, since `GuardedCallsMiddleware` never saw the call.
     """
     wired = replace(cfg, interpreter_enabled=True)
     other = _with_code_tools(wired, session_dir)
@@ -341,7 +341,7 @@ def test_a_path_handed_to_a_tool_from_code_is_this_sessions(cfg, session_dir):
 
 def test_a_tool_that_raises_under_code_fails_the_call_and_not_the_turn(cfg, session_dir):
     """Uncaught in the program, a workspace tool's `FileNotFoundError` ended the turn:
-    `ToolFailureMiddleware` wraps a tool call, and a call from code is not one.
+    `GuardedCallsMiddleware` wraps a tool call, and a call from code is not one.
     """
     wired = replace(cfg, interpreter_enabled=True)
     _with_code_tools(wired, session_dir)

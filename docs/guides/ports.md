@@ -567,7 +567,7 @@ to catch.
 
 The last is ordinary: if you refuse host paths, refuse them with `HostPathError`
 (`from kingfisher.plugins import HostPathError`),
-because that is the type `ToolFailureMiddleware` turns into a correction the model can act
+because that is the type `GuardedCallsMiddleware` turns into a correction the model can act
 on. `reject_host_path`, beside it, is the refusal kingfisher's own backend makes:
 call it from your file operations to refuse the same paths with the same message. Refusing them at all is optional — inside a sandbox of your own, `/etc/passwd`
 is a file, and refusing it would be refusing your own filesystem.
