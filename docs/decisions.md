@@ -829,23 +829,16 @@ too, which Anthropic caches ahead of the system prompt, so no cache is lost that
 already. Where to write moved to the session's section, since it holds for an agent with
 only the shell. *(2026-10-18.)*
 
-The rule holds sentence by sentence too. *What your tools returned* sent every agent to
-`read_file`, `grep` and `glob` to see a saved result again, and with memory on, the memory
-section and the guidelines kingfisher hands `MemoryMiddleware` told it to record with
-`edit_file`. Each names only what is held now. `glob` is named only beside `read_file`,
-since a file found and not opened spends a call on nothing, and an agent holding none of
-the three is told to call the tool again. Memory is saved with `edit_file`, else
-`write_file`. An agent holding neither, as the shipped `operator` does, is told in the
-guidelines that its memory can be read and not added to, and hears none of the guidance
-on what to record. That goes in the guidelines and not the memory section, because a
-request declining memory keeps the section, as the cached prefix, while its file is
-denied, and "can be read" would be false there. The shell does not count as a way to
-save: it may run where `/memory` is not. No subagent needs the same, because none is
-handed memory: deepagents gives it only to a `mode: fork` subagent, which kingfisher
-refuses. An unrestricted grant hears the guidelines byte for byte as before, and the
-system prompt differs only in the reading sentences' wording. An agent holding the shell
-and none of the three is not told that nothing reads the files, since the shell may.
-Not changed: deepagents' own tool descriptions, which are deferred. *(2026-10-18.)*
+The rule holds sentence by sentence. *What your tools returned* names only the reading
+tools held -- `glob` only beside `read_file`, since a file found and not opened is a call
+spent on nothing -- and with none says to call the tool again; with the shell, not that
+nothing reads the files, since the shell may. Memory is saved with `edit_file`, else
+`write_file`, never the shell, which may run where `/memory` is not. An agent holding
+neither, as the shipped `operator` does, is told in the guidelines that its memory can be
+read and not added to, and not in the memory section: a request declining memory keeps
+that section as the cached prefix while its file is denied. No subagent is handed memory;
+deepagents gives it only to `mode: fork`, which kingfisher refuses. deepagents' own tool
+descriptions are deferred. *(2026-10-18.)*
 
 ## Source-id access
 
@@ -914,23 +907,19 @@ or subagent's lock is one line in its own file with nothing that could differ fr
 while a skills entry is a lock per use, and a use wider than its neighbours is what a
 roll-up shows. *(2026-10-17.)*
 
-**Who holds a tool is printed under each holder.** With the lock in the tool's file,
-the question the listing left open was the other half -- which agents list `http_fetch`
--- and answering it meant opening every agent file. So each agent and each subagent
-prints a `tools:` and a `builtin tools:` line, beside the `subagents:` line an agent
-already had. Under the holder rather than as a roll-up by tool, because there is only
-one way to hold a tool now, by listing it, and a roll-up would print that list a second
-time sorted the other way. A tool is spelt as the workspace tools section spells it, so
-the same tool reads the same under every agent whichever way each file wrote it.
+**Who holds a tool is printed under each holder.** Each agent and subagent prints
+`tools:` and `builtin tools:` lines beside an agent's `subagents:`, so which agents list
+`http_fetch` needs no file opened. Under the holder, not as a roll-up by tool: listing is
+the one way to hold a tool, and a roll-up would print that list again sorted the other
+way. A tool is spelt as the workspace tools section spells it, so it reads the same under
+every agent.
 
-A star prints as itself beside what it covers today, `* — today csv_profile, ...`: the
-names alone read as a fixed list, and a star also covers what is added tomorrow. A
-subagent's star is not expanded, `* — whatever the calling agent holds`, because a
-subagent is never handed more than its caller, which differs by caller; its `--json`
-`names` hold only its own tools, the part it holds whoever calls it. A scoped listing
-answers each line from the same `offers_tool` the `tools` section is filtered by,
-rather than reading each file again: a second answer to what a caller reaches would
-hand back under its agent the tool that section had just withheld. *(2026-10-18.)*
+A star prints beside what it covers today, `* — today csv_profile, ...`, since the names
+alone read as fixed and a star also covers what is added later. A subagent's is not
+expanded, `* — whatever the calling agent holds`, because a subagent never gets more than
+its caller; its `--json` `names` are only its own tools. A scoped listing answers each
+line from the same `offers_tool` that filters the `tools` section: a second answer would
+hand back under an agent a tool that section withheld. *(2026-10-18.)*
 
 **Reversed: a `tools:` or `subagents:` entry says who reaches that one.** Written long,
 `{name: X, source_ids: [...]}`, an entry was a lock per agent: an *and* with the
@@ -2049,7 +2038,10 @@ that made the result again. A model told to `grep` calls `grep` whatever it hold
 without it spends the step on a refusal. One holding `read_file` but not `grep` is not
 given an offloaded result's path, for the reason above. The grant is the one
 `BuiltinToolsMiddleware` and `GrantedOnlyMiddleware` get, so a handle never names a
-tool they take away. *(2026-10-18.)*
+tool they take away. A handle keeps its wording once written, so a later request on the
+session holding fewer tools may be pointed at one it lacks: it is refused once, told what
+it holds. Accepted rather than re-worded per call, for a grant that shrank between turns.
+*(2026-10-18.)*
 
 **The marks.** The high mark is the model entry's `clear_results_at`, or else the smaller
 of 64,000 tokens and half the summariser's trigger, read from
