@@ -225,7 +225,9 @@ def test_one_function_reads_what_shape_a_caller_s_source_ids_are_in():
 
     src = repository_root() / "src" / "kingfisher"
     readers = set()
-    for path in sorted([*(src / "core").glob("*.py"), src / "core/access/checks.py"]):
+    # The whole package, not a list of files: a list stays where the modules were when
+    # it was written, and a reader in a module that moved since passes unseen.
+    for path in sorted(src.rglob("*.py")):
         for function in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
@@ -240,7 +242,9 @@ def test_one_function_reads_what_shape_a_caller_s_source_ids_are_in():
                 ):
                     readers.add(f"{path.stem}.{function.name}")
 
-    assert readers == {"checks.held_by"}, (
+    # `with_datazone` only asks whether it may append: it passes a bare string on for
+    # `held_by` to refuse, and UNSCOPED has no caller to carry a datazone.
+    assert readers == {"checks.held_by", "source_ids.with_datazone"}, (
         f"the shape of source_ids is read in {sorted(readers)} -- ask "
         "`core.access.checks.held_by` instead, or one reader will disagree with another"
     )
