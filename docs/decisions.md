@@ -440,10 +440,11 @@ built in off the middleware its probe holds, so an offered checklist would leave
 probe and `builtin_tools: [write_todos]` would name a tool that is not there. Moving it
 waits on the built-ins being read some other way. *(2026-10-17.)*
 
-**Two pairs of standing middleware are one each now.** `GuardedCallsMiddleware` turns
+**Two pairs of standing middleware are one each now.** `GuardedCallsMiddleware` turned
 both kinds of exception into a failed result, a workspace tool's first so it keeps its
 type, from the outer place, so a `grep` that `BuiltinToolsMiddleware` runs as several
-searches fails once. `GrantedOnlyMiddleware` refuses both what a request was not granted
+searches fails once. *(Its workspace-tool half is `WorkspaceToolFailureMiddleware` since
+2026-10-19; see* What a deployment's own middleware raises *under* Tool failure.*)* `GrantedOnlyMiddleware` refuses both what a request was not granted
 and an undeclared subagent, granting everything where nothing was narrowed.
 `core.agent.middlewares.results.failed` builds every failed result kingfisher's own
 hand back. Offered ones keep their names, because `kingfisher` and `kingfisher.plugins`
@@ -2124,8 +2125,24 @@ same placement hands a hook host paths: the model wrote
 the opposite of what the recorder sees by its position. *(2026-10-16, from an
 architecture review.)*
 
+  - **Decided: it ends every turn.** A hook that falls over has no way to tell the model
+    about a fault of its own, so the quiet answer blamed the tool for it; and a rule that
+    did not run is not a rule, so carrying on is the worse of the two. The conversion was
+    the half that could not tell, so it moved rather than gaining a tag:
+    `WorkspaceToolFailureMiddleware` answers for what a workspace tool itself raised and
+    goes under the deployment's block, while `GuardedCallsMiddleware` keeps the
+    translation and the host-path and `task` conversions in the outer place, where a
+    `grep` run as several searches still fails once. Both are in `guarded_calls.py`, so
+    the two catches are still read together, and `GuardedTool` still answers alike.
+    `standing_middleware` now takes what goes **inside** it rather than each caller
+    appending afterwards, so the one layer that has to stay innermost cannot be left off
+    a graph; the three graphs pass their switched and declared middleware as `inner`. A
+    hook that wants a call to fail softly returns a failed result instead of raising,
+    which the guide now says. The host-paths half of the entry above is still open and
+    untouched. *(2026-10-19.)*
+
 **A call refused before it runs is answered by the middleware that refused it; what
-running it raised is `GuardedCallsMiddleware`'s.** Its translation is caught around
+running it raised is the guards' that convert.** Its translation is caught around
 itself alone, as `GuardedTool`'s is. Catching everything below it, the translator
 answered a built-in's host-path refusal first on any graph holding a workspace tool,
 appending its rule after a doubled full stop, and gave a workspace tool's own refusal

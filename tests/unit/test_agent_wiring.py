@@ -196,9 +196,9 @@ def test_an_agents_own_middleware_is_wrapped_around_the_agent(cfg, session_dir):
 def test_the_agents_middleware_runs_after_the_narrowing_kingfisher_applied(
     cfg, session_dir
 ):
-    """Last, for the reason `as_subagent` already gives for a subagent's: a deployment's
-    middleware should see the tool and skill narrowing rather than running ahead of
-    it.
+    """After the narrowing, for the reason `as_subagent` already gives for a subagent's: a
+    deployment's middleware should see the tool and skill narrowing rather than running
+    ahead of it.
     """
     built = build_agent(
         cfg,
@@ -210,8 +210,14 @@ def test_the_agents_middleware_runs_after_the_narrowing_kingfisher_applied(
     )
 
     names = [type(m).__name__ for m in built.middleware]
-    assert names[-1] == "_Audit", f"the deployment's middleware is not last: {names}"
     assert "GrantedOnlyMiddleware" in names, "nothing narrowed, so this proves nothing"
+    assert names.index("_Audit") > names.index("GrantedOnlyMiddleware"), (
+        f"the deployment's middleware runs ahead of the narrowing: {names}"
+    )
+    # Not `names[-1]`: `WorkspaceToolFailureMiddleware` goes under the deployment's own on a
+    # graph that holds a workspace tool, so asserting the deployment's was last held only
+    # because this workspace defines none.
+    assert set(names[names.index("_Audit") + 1 :]) <= {"WorkspaceToolFailureMiddleware"}, names
 
 
 def test_an_agent_naming_middleware_nothing_registered_is_refused(cfg, session_dir):

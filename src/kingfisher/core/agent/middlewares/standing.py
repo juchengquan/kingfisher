@@ -10,7 +10,10 @@ from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
 from kingfisher.core.agent.backend import shell_prompt_of, shell_runs_here
 from kingfisher.core.agent.middlewares.builtin_tools import BuiltinToolsMiddleware
 from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware
-from kingfisher.core.agent.middlewares.guarded_calls import GuardedCallsMiddleware
+from kingfisher.core.agent.middlewares.guarded_calls import (
+    GuardedCallsMiddleware,
+    WorkspaceToolFailureMiddleware,
+)
 from kingfisher.core.agent.middlewares.large_pdf_guard import LargePdfMiddleware
 from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware
 from kingfisher.core.agent.middlewares.narrowing import (
@@ -43,6 +46,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     skills: Sequence[str] | None = None,
     skill_sources: Sequence[Any] = (),
     reachable: Sequence[str] | None = None,
+    inner: Sequence[AgentMiddleware[Any, Any, Any]] = (),
 ) -> list[AgentMiddleware[Any, Any, Any]]:
     """Every standing middleware for one graph, in the order it wraps it.
 
@@ -52,6 +56,11 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     which builds the result clearing for that grant, and `reachable` are the agent's alone.
     `step_limit` is the turn's, which reaches only the agent's own run, so a subagent is held
     to it in model calls.
+
+    `inner` is what the deployment's settings switch on and what its definitions name, which
+    go inside every standing one. Taken here rather than appended by each caller so that the
+    one layer that must stay under them -- `WorkspaceToolFailureMiddleware`, which answers
+    for what the tool raised and must not answer for them -- cannot be left off a graph.
     """
     if kind != "agent" and (clearing is not None or reachable is not None):
         msg = f"result clearing and the declared-subagent check are the agent's, not a {kind}'s"
@@ -108,4 +117,9 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
                 allowed=tuple(skills), backend=backend, sources=list(skill_sources)
             )
         )
+    standing.extend(inner)
+    # Last of all, under `inner`. Left out where the graph holds no workspace tool: there is
+    # no name for it to answer for, and a middleware that cannot act reads as one that does.
+    if names:
+        standing.append(WorkspaceToolFailureMiddleware(names))
     return standing

@@ -299,6 +299,14 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     middleware.extend(
         standing_middleware(
             "subagent",
+            # Inside every standing one: deepagents gives a subagent no `task` tool, and
+            # `middleware` is the only spec field that carries code, so `task` comes the way
+            # the main agent gets it; the deployment's own go after that, so they see
+            # kingfisher's narrowing rather than running ahead of it.
+            inner=[
+                *([SubAgentMiddleware(backend=backend, subagents=helpers)] if helpers else []),
+                *(extra_middleware or []),
+            ],
             names=frozenset(entry.name for entry in (*catalogue, *private)),
             paths=paths,
             layout=cfg.layout,
@@ -320,12 +328,6 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
             skill_sources=skill_sources or [],
         )
     )
-    # deepagents gives a subagent no `task` tool, and `middleware` is the only spec field that
-    # carries code, so `task` comes the way the main agent gets it.
-    if helpers:
-        middleware.append(SubAgentMiddleware(backend=backend, subagents=helpers))
-    # Last, so a deployment's middleware sees kingfisher's narrowing rather than running ahead.
-    middleware.extend(extra_middleware or [])
     if middleware:
         subagent["middleware"] = middleware
 

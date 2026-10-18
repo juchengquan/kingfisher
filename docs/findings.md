@@ -399,8 +399,8 @@ not repeated here. What that file does not say is what the decorator is *for*, w
 cost an experiment to establish.
 
 - **`@tool` buys control, not capability.** A plain function reaches the graph, is
-  offered to the model, dispatches, and is covered by `GuardedCallsMiddleware` exactly
-  as a decorated one is -- deepagents wraps whatever it is handed, so by the time a
+  offered to the model, dispatches, and is covered by `WorkspaceToolFailureMiddleware`
+  exactly as a decorated one is -- deepagents wraps whatever it is handed, so by the time a
   tool is in the graph it has `.name` and `.invoke` either way. The decorator is
   worth reaching for when the name or description must *differ* from the function as
   written, and for nothing else. *(2026-09-04.)*

@@ -294,18 +294,19 @@ answers to `SummarizationMiddleware`, which is the name deepagents merges by.
 narrowing kingfisher applies, so it observes the tool set the request and the
 definition actually left in reach rather than what the definition asked for.
 
-**Host paths, not the paths the model wrote.** Running last puts your hook nearest
-the tool, below the translation, so `wrap_tool_call` on a workspace tool is handed
+**Host paths, not the paths the model wrote.** Running after kingfisher's own puts
+your hook below the translation, so `wrap_tool_call` on a workspace tool is handed
 `/Users/.../sessions/s/inputs/n.txt` where the model wrote `/inputs/n.txt`. An audit
 log fills with host paths, and a matcher looking for `/outputs/` never matches.
 Translate back against the session's own root, or match on the tail.
 
-**An exception from your hook is not handled the same way everywhere.** Raise in
-`wrap_tool_call` and a call to a workspace tool comes back to the model as a failed
-result carrying *the tool's* name, while the same raise on a built-in such as
-`read_file` ends the turn. Neither is a choice kingfisher makes about your
-middleware: the guard that converts a workspace tool's exceptions cannot see where
-the exception came from. Catch what your hook can raise.
+**An exception from your hook ends the turn, whichever tool was called.** Raise in
+`wrap_tool_call` and the caller gets your exception -- on a workspace tool as on a
+built-in such as `read_file`. It is the loud answer deliberately: a failed result
+would carry *the tool's* name, so your fault would read as the tool's while the turn
+carried on with your rule not applied. Catch what your hook can raise, and where a
+call should fail softly, return a failed `ToolMessage` rather than raising -- that is
+what kingfisher's own guards hand back, and the model reads it as the call's result.
 
 **One graph, not one turn.** The factory runs again for each graph built: the
 agent's, each declared subagent's, and the general-purpose subagent's. A counter

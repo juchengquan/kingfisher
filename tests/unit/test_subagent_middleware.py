@@ -221,6 +221,8 @@ def test_what_a_subagent_carries_is_pinned_here_and_only_here(cfg, session_dir):
         "NarrowedSkillsMiddleware",
         "SubAgentMiddleware",
         "Audited",
+        # Under the deployment's own, so what it raises is not answered for the tool.
+        "WorkspaceToolFailureMiddleware",
     ]
 
 
@@ -241,4 +243,5 @@ def test_a_bare_definition_carries_only_the_guards_and_its_allowlist(cfg, sessio
         "GuardedCallsMiddleware",
         "LargePdfMiddleware",
         "BuiltinToolsMiddleware",
+        "WorkspaceToolFailureMiddleware",
     ]
