@@ -9,15 +9,20 @@ cannot widen either.
 **`source_ids` and `datazone` are kingfisher's, and nothing below kingfisher sees
 them.** Kingfisher reads them to decide whether to build this subagent for a caller,
 then hands deepagents a spec made from its own record. Which is also why this dict is
-not annotated as deepagents' `SubAgent`, as `versions.py` is: that type has neither
-key, so a dict carrying them stops type-checking as one.
+annotated as kingfisher's `PortableSubagent` rather than deepagents' `SubAgent`, as
+`versions.py` is: that type has neither key, so a dict carrying them stops
+type-checking as one.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+from typing import TYPE_CHECKING
 
 from langchain_core.tools import tool
+
+if TYPE_CHECKING:
+    from kingfisher import PortableSubagent
 
 #: The EMEA fiscal year starts on 1 April and takes the name of the calendar year it
 #: starts in, so a date's fiscal quarter is not its calendar quarter.
@@ -39,7 +44,7 @@ def fiscal_quarter(day: str) -> str:
     return f"FY{year}-Q{(when.month - FIRST_MONTH) % 12 // 3 + 1}"
 
 
-SUBAGENTS = [
+SUBAGENTS: list[PortableSubagent] = [
     {
         "name": "quarters",
         "description": (

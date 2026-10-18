@@ -7882,18 +7882,26 @@ a workspace to spell wrong. *(2026-10-18.)*
 with `ToolSpec`, the record a tool file writes: the spec is what the author wrote, and a
 `FoundTool` is what the loader made of it. (2026-10-18.)*
 
-**Left for now: a `TypedDict` for a package writing `SUBAGENTS`.** A portable
-definition is a plain mapping on purpose -- it pins no kingfisher version -- and the
-want behind this is type checking, not a different runtime shape. A `PortableSubagent`
-and a `CompiledSubagent` published under `TYPE_CHECKING` would catch a misspelled key
-before a run does, with no runtime dependency.
+**Taken: a `TypedDict` for a package writing `SUBAGENTS`.** A portable definition is
+a plain mapping on purpose -- it pins no kingfisher version -- and the want behind this
+is type checking, not a different runtime shape. `PortableSubagent` and
+`CompiledSubagent` are exported from `kingfisher` and imported under `TYPE_CHECKING`,
+so a checker refuses a misspelled or refused key before a run does, and the entry is
+the same dict at runtime with nothing of kingfisher's imported.
 
-Not built, and **the trigger is the first package that is not ours**: nothing outside
-this repository exports `SUBAGENTS`, so there is no author to help and no usage to
-check the shape against. The cost is also the one *Keep a subagent's vocabulary beside the spec*
-is about -- the fields would be a fourth statement of a vocabulary `KNOWN`, `PORTABLE`
-and `NOT_PORTABLE` already state three times, so it needs a line in the drift test to
-stay honest.
+Left for now on 2026-09-18, with the trigger *the first package that is not ours*.
+Taken on 2026-10-18 before that fired, on request. What it bought in this
+repository: `quarters.py` could not be annotated at all, because deepagents' `SubAgent`
+has no `source_ids` or `datazone`, and the three shipped Python subagents are now each
+checked by `ty` against the keys its reader takes.
+
+The cost named then is paid as named: the types are a fourth statement of a vocabulary
+`KNOWN`, `PORTABLE` and `NOT_PORTABLE` already state. They sit beside those tables in
+`subagents/spec.py`, and `test_subagent_typeddicts` holds each type's keys equal to its
+table and its required keys to the ones `declared` refuses an entry without. It reads
+`Required[...]` through `get_type_hints`, not `__required_keys__`: the module postpones
+annotations, so the class is made with the marker still a string and lists every key
+as optional. *(2026-10-18.)*
 
 **Accepting `SubagentSpec` instances is refused rather than deferred**, which is the
 difference between this entry and the `ToolSpec` one above it, deferred when this was

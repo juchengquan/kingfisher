@@ -40,7 +40,10 @@ that is paid on every listing, for a subagent the request may never activate.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from kingfisher import CompiledSubagent
 
 #: How much of one call's arguments is printed. A display limit rather than a
 #: judgement: it decides how much of a known value to show, never what a value
@@ -140,7 +143,7 @@ def _build(model: Any, tools: list[Any]) -> Any:
     return builder.compile()
 
 
-SUBAGENTS = [
+SUBAGENTS: list[CompiledSubagent] = [
     {
         "name": "show-your-work",
         "description": (

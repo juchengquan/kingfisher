@@ -21,8 +21,8 @@ pointed at; the deployment's file adds the key, as above, and the package's own
 dict stays a `SubAgent`. What it names is narrowed still, so a request that
 withheld `execute` withholds it here. Without `metadata` it cannot record where it
 came from. Needing that, or wanting the package to choose its own built-ins, is the
-point to stop writing to the TypedDict: add the key, drop the annotation, and you
-have `timestamps`.
+point to stop writing to deepagents' TypedDict: add the key, annotate it as
+kingfisher's `PortableSubagent`, and you have `timestamps`.
 
 **And it has words kingfisher refuses.** `model`, `middleware`, `interrupt_on`,
 `permissions` and `response_format` are all `SubAgent` keys, and a spec writing
@@ -33,8 +33,8 @@ what a package can mean without having seen the deployment it lands in.
 **And kingfisher has two words it lacks.** `source_ids` and `datazone` say who
 reaches a subagent, and kingfisher reads them before deepagents sees anything. The
 TypedDict has neither, so a dict that says who reaches it -- `quarters.py` does --
-stops type-checking as a `SubAgent`. Drop the annotation there, as `timestamps`
-has.
+stops type-checking as a `SubAgent`. Annotate it as `PortableSubagent` there, as
+`timestamps` has.
 """
 
 from __future__ import annotations

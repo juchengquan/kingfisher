@@ -1696,6 +1696,10 @@ WITNESSES: dict[str, dict[str, str]] = {
         # `tools.md` writes `ToolSpec(...)` for a tool that says who may use it or what it
         # is called, in a tool file of the deployment's own, as `ToolContext` above is.
         "ToolSpec": "document",
+        # `formats.md` writes `from kingfisher import PortableSubagent` under
+        # `TYPE_CHECKING`, for a module's `SUBAGENTS`; `CompiledSubagent` is its pair.
+        "PortableSubagent": "document",
+        "CompiledSubagent": "document",
         # The type of `Kingfisher.run`'s `source_ids=`. `UNSCOPED` is one of its two
         # members and is documented; the type that admits it cannot be private.
         "Held": "embedder",

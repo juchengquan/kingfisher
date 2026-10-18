@@ -984,11 +984,40 @@ SUBAGENTS = [{**versions_subagent, "builtin_tools": ["read_file", "ls", "glob", 
 
 What it names is still narrowed by the request. With no `metadata`, it cannot record
 where it came from. Needing that, or wanting the package to choose its own built-ins,
-is the point to add the key and stop annotating the dict as a `SubAgent`.
+is the point to add the key and annotate the dict as kingfisher's `PortableSubagent`
+instead — see below.
 
 `kingfisher seed` ships `versions/` as a worked example, annotated as a `SubAgent`
 so that `ty` refuses any key the TypedDict does not define, with its own module
 adding `builtin_tools` the way a deployment's file would.
+
+#### Checked before it loads — `PortableSubagent` and `CompiledSubagent`
+
+Kingfisher publishes a `TypedDict` for each Python shape, so a type checker refuses a
+misspelt or refused key in the file, where otherwise startup would:
+
+```python
+from __future__ import annotations   # or the annotation is evaluated, and needs kingfisher
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from kingfisher import PortableSubagent
+
+SUBAGENTS: list[PortableSubagent] = [
+    {"name": "timestamps", "description": "...", "system_prompt": "..."},
+]
+```
+
+`CompiledSubagent` is the same for an entry with `build`. Each takes exactly the keys
+its shape takes, `source_ids` and `datazone` included, which `SubAgent` has no word
+for. Imported under `TYPE_CHECKING`, the package still pins no kingfisher version and
+runs without it installed: the entry is a plain dict either way.
+
+A type cannot say everything the reader checks. A name in a portable entry's `tools`,
+a relative `skills` path and a source id your vocabulary does not declare all pass a
+checker and are refused at load. The shipped `timestamps/`, `quarters.py` and
+`show_your_work.py` are annotated this way.
 
 #### When it wants a helper of its own
 
