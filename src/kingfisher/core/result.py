@@ -95,12 +95,13 @@ class LedgerEntry:
     #: The audience the result was produced under, or `None` with no `source_ids.yaml`
     #: in force. Kingfisher acts on none of it: who may read a session is the caller's to decide.
     access: Listed | None
-    #: The result's length in bytes, as the tool returned it.
+    #: The length in bytes of the result's text, as the tool returned it.
     size: int
     #: Where the result is kept in the session, or `None` where the backend refused
     #: the file; the row is kept either way.
     path: str | None
-    #: The tool, its arguments and the first line of its result. No model writes it.
+    #: The tool, its arguments and the first line of its result, and any attachment its
+    #: saved copy, the text alone, left out. No model writes it.
     summary: str
 
 

@@ -1831,7 +1831,9 @@ conversation already carries: measured, three updates beside one real search mad
 of the four `<ledger_delta>` lines a todo list. `execute`, `task`, workspace and MCP
 tools are recorded. A failed call has nothing worth finding again, and the conversation
 shows it. A subagent's results are *working* entries under the parent's `task` call,
-nested helpers included; its answer is a *main* one.
+nested helpers included; its answer is a *main* one. A result's attachments, an image or
+a PDF, are not kept: its file is its text, and its row's summary says what was left out
+and how large it was.
 
 **Middleware, not the stream.** The stream reaches further, to a compiled subagent's own
 calls, and needs no lock, but it can only watch, and the ledger changes the result: the
@@ -1963,9 +1965,9 @@ results only through access-checked tools was declined on the same ground, and b
 the shell reads the whole session. It is kept so a later design need not find old rows
 lacking it.
 
-**No model-written summaries.** A row's `summary` is the tool, its short arguments and the
-first line of the result. A model-written one costs a call per result and is the
-summary-from-memory the ledger exists to replace.
+**No model-written summaries.** A row's `summary` is the tool, its short arguments, the
+first line of the result, and any attachment its saved copy left out. A model-written
+one costs a call per result and is the summary-from-memory the ledger exists to replace.
 
 **What the model sees goes in the user message, never the system prompt.** The system
 prompt is the cached prefix, and anything there that moves with the ledger misses the

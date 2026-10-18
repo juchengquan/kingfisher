@@ -146,6 +146,8 @@ class RecorderMiddleware(AgentMiddleware):
         if answer.status == "error":
             return None
         text = str(answer.text)
+        # The text alone: the ledger finds deepagents' copy of an offloaded result by this
+        # length, so what the text leaves out is said in the summary instead.
         content = text.encode("utf-8")
         call_id = str(call.get("id") or "")
         run = RUN.get()
@@ -163,7 +165,7 @@ class RecorderMiddleware(AgentMiddleware):
                 access=access,
                 size=len(content),
                 path=f"{self._tool_results_route}{number}-{_segment(tool)}{_suffix(text)}",
-                summary=summary(tool, args, text),
+                summary=summary(tool, args, text, answer.content_blocks),
             )
         )
         return entry, content
