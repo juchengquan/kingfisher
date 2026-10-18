@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any, Literal
 
 from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
@@ -38,7 +38,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     backend: Any,
     step_limit: int,
     recorder: RecorderMiddleware | None = None,
-    clearing: ResultClearingMiddleware | None = None,
+    clearing: Callable[[tuple[str, ...] | None], ResultClearingMiddleware] | None = None,
     tools: Sequence[str] | None = None,
     tools_subject: str = "this request",
     skills: Sequence[str] | None = None,
@@ -49,9 +49,10 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
 
     Built here and nowhere else, so what kingfisher guarantees on a graph is read in one
     place. `names` are the workspace tools the graph holds; `tools` narrows what it is
-    offered and `skills` its skills index, each `None` where nothing narrows; `clearing`
-    and `reachable` are the agent's alone. `step_limit` is the turn's, which reaches only the
-    agent's own run, so a subagent is held to it in model calls.
+    offered and `skills` its skills index, each `None` where nothing narrows; `clearing`,
+    which builds the result clearing for that grant, and `reachable` are the agent's alone.
+    `step_limit` is the turn's, which reaches only the agent's own run, so a subagent is held
+    to it in model calls.
     """
     if kind != "agent" and (clearing is not None or reachable is not None):
         msg = f"result clearing and the declared-subagent check are the agent's, not a {kind}'s"
@@ -60,9 +61,13 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
         msg = "general-purpose is given the agent's skills index, and narrows none of its own"
         raise ValueError(msg)
 
+    # One grant for the handles and both guards, so a handle never names a tool they refuse.
+    granted = None if tools is None else tuple(tools)
     # First, so it measures the request deepagents' summariser counted, before anything
     # adds to it.
-    standing: list[AgentMiddleware[Any, Any, Any]] = [] if clearing is None else [clearing]
+    standing: list[AgentMiddleware[Any, Any, Any]] = (
+        [] if clearing is None else [clearing(granted)]
+    )
     if kind == "agent":
         # Outside `BuiltinToolsMiddleware`, which takes its prose out where `write_todos`
         # was not granted.
@@ -80,7 +85,6 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # as the call the model made, when its path is refused.
     standing.append(ToolFailureMiddleware(names))
     standing.append(LargePdfMiddleware())
-    granted = None if tools is None else tuple(tools)
     standing.append(
         BuiltinToolsMiddleware(
             layout, shell_prompt_of(backend), here=shell_runs_here(backend), tools=granted

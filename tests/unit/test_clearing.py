@@ -135,12 +135,17 @@ class Talk:
         return self.call("write_file", args, f"Updated file {path}")
 
     def passed(
-        self, high: int = 1_000, sent: list[Any] | None = None, system: str | None = None
+        self,
+        high: int = 1_000,
+        sent: list[Any] | None = None,
+        system: str | None = None,
+        tools: tuple[str, ...] | None = None,
     ) -> tuple[list[Any], dict[str, Any] | None]:
         """What one model call at this high mark sent, and the state update it returned.
 
         `sent` is the conversation as deepagents' summariser hands it on, the whole of it
         unless a test says otherwise; the state is the whole conversation either way.
+        `tools` is the agent's grant, every tool unless a test says otherwise.
         """
         request = ModelRequest(
             model=FakeToolCallingModel(responses=[]),
@@ -155,18 +160,23 @@ class Talk:
             heard.append(request)
             return ModelResponse(result=[AIMessage("ok")])
 
-        returned = ResultClearingMiddleware(self.ledger, high, OFFLOADS_ROUTE).wrap_model_call(
-            request, model
-        )
+        returned = ResultClearingMiddleware(
+            self.ledger, high, OFFLOADS_ROUTE, tools
+        ).wrap_model_call(request, model)
         (asked,) = heard
         if isinstance(returned, ExtendedModelResponse):
             assert returned.command is not None
             return asked.messages, returned.command.update
         return asked.messages, None
 
-    def cleared(self, high: int = 1_000, sent: list[Any] | None = None) -> list[Any]:
+    def cleared(
+        self,
+        high: int = 1_000,
+        sent: list[Any] | None = None,
+        tools: tuple[str, ...] | None = None,
+    ) -> list[Any]:
         """The conversation after one model call at this high mark."""
-        return _applied(self.messages, self.passed(high, sent)[1])
+        return _applied(self.messages, self.passed(high, sent, tools=tools)[1])
 
 
 def _stub(call: str, path: str, content: str) -> str:
@@ -539,6 +549,73 @@ def test_text_a_reply_carries_twice_is_cleared_in_both():
     assert after.content[0] == {"type": "text", "text": "Writing it."}
 
 
+# -- what a handle names, by what the agent holds ------------------------------------
+
+#: Where a handle sends an agent holding `read_file`, and one holding `grep`.
+PATH = "full result: /scratchpad/tool_results/A-0001-execute.txt"
+SEARCH = "offloaded: grep for [A-0002] under /scratchpad/large_tool_results/"
+
+
+def _handles(tools: tuple[str, ...] | None) -> tuple[str, str]:
+    """A recorded result's handle and an offloaded one's, cleared for an agent granted
+    `tools`."""
+    talk = Talk()
+    recorded = talk.call("execute", {"command": "python3 count.py"}, _text("rows: 86"))
+    whole = "\n".join(f"<p>{n} {'x' * 200}</p>" for n in range(500))
+    offloaded = talk.call("http_fetch", {"url": "https://a.example"}, whole)
+    stub = _stub(offloaded, f"{OFFLOADS_ROUTE}{offloaded}", talk.result(offloaded).content)
+    talk.messages[-1] = talk.messages[-1].model_copy(update={"content": stub})
+    talk.pad()
+    after = talk.cleared(tools=tools)
+    return _of(after, recorded).content, _of(after, offloaded).content
+
+
+def _saying(where: str, number: str) -> str:
+    return f" bytes, cleared; {where})\n[{number}]"
+
+
+@pytest.mark.parametrize("tools", [None, ("execute", "http_fetch", "read_file", "grep")])
+def test_an_agent_holding_read_file_and_grep_is_handed_the_path_and_the_search(tools):
+    """An agent holding both, by name or by holding everything, told to call the tool again
+    for a result it could have read back."""
+    recorded, offloaded = _handles(tools)
+
+    assert recorded == (
+        "execute command='python3 count.py' -- rows: 86\n"
+        f"(8,009 bytes, cleared; {PATH})\n[A-0001]"
+    )
+    assert offloaded.endswith(_saying(SEARCH, "A-0002"))
+
+
+def test_an_agent_without_grep_calls_an_offloaded_result_again():
+    """An agent holding `read_file` alone handed an offloaded result's path, which a later
+    call with the same id overwrites, or told to `grep` it, a call refused."""
+    recorded, offloaded = _handles(("execute", "http_fetch", "read_file"))
+
+    assert recorded.endswith(_saying(PATH, "A-0001"))
+    assert offloaded.endswith(_saying("call http_fetch again to see it", "A-0002"))
+
+
+def test_an_agent_without_read_file_calls_a_recorded_result_again():
+    """An agent holding `grep` alone told to read a recorded result's file, a call refused."""
+    recorded, offloaded = _handles(("execute", "http_fetch", "grep"))
+
+    assert recorded.endswith(_saying("call execute again to see it", "A-0001"))
+    assert offloaded.endswith(_saying(SEARCH, "A-0002"))
+
+
+def test_an_agent_holding_neither_calls_every_result_again():
+    """An agent holding neither file tool sent to one for each result it cleared, every
+    call refused."""
+    recorded, offloaded = _handles(("execute", "http_fetch"))
+
+    assert recorded == (
+        "execute command='python3 count.py' -- rows: 86\n"
+        "(8,009 bytes, cleared; call execute again to see it)\n[A-0001]"
+    )
+    assert offloaded.endswith(_saying("call http_fetch again to see it", "A-0002"))
+
+
 # -- what is never cleared -----------------------------------------------------------
 
 
@@ -776,6 +853,21 @@ def test_a_long_turn_clears_and_the_transcript_carries_the_handles(bulky, way):
     # The model was handed the handle on the calls after the pass, not only the file.
     last = [m.content for m in Scripted.heard[-1] if isinstance(m, ToolMessage)]
     assert last[0] == said["c1"] and last[1] == said["c2"]
+
+
+def test_a_turn_clears_to_handles_naming_only_tools_the_agent_holds(bulky):
+    """The grant reaching every guard but the clearing, which then hands an agent holding
+    no file tool the path of a file it cannot read."""
+    # `builtin_tools` left out grants none, so neither `read_file` nor `grep`.
+    an_agent(bulky, tools='["*"]')
+    cfg = _marked(bulky, clear_results_at=12_000)
+
+    calls = (_one("bulky", n, n=n) for n in range(1, 7))
+    _turn(cfg, *calls, AIMessage(content="done"))
+
+    said = {one.call_id: one.content for one in _transcript(cfg) if one.role == "tool"}
+    for call, number in (("c1", "A-0001"), ("c2", "A-0002")):
+        assert said[call].endswith(f"bytes, cleared; call bulky again to see it)\n[{number}]")
 
 
 def test_an_offloaded_results_handle_finds_it_after_the_turn(bulky):

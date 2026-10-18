@@ -8,6 +8,7 @@ deepagents, and naming `system_prompt` must not.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -371,7 +372,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     clearing = (
         None
         if ledger is None
-        else ResultClearingMiddleware(ledger, high_mark(running, mark), cfg.layout.offloads_route)
+        else partial(
+            ResultClearingMiddleware, ledger, high_mark(running, mark), cfg.layout.offloads_route
+        )
     )
     # Filled in kingfisher's order once the grant is known; the probe reads it before.
     middleware: list[Any] = []
