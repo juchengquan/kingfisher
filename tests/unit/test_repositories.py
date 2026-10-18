@@ -50,6 +50,10 @@ def catalogue(tmp_path):
 #: Reads of a repository member's name that are not reads of a repository, each with
 #: what they are reading instead. The rule matches by name, so these are the collisions.
 NOT_A_REPOSITORY = {
+    # A `Sessions` plugin's own `where(cfg)`, which answers where it keeps sessions. The
+    # default is load-bearing here: a plugin need not have it, and `kingfishers_own` asks
+    # exactly whether this one does.
+    ("kingfisher/core/origins.py", "where"): "a Sessions plugin's where(cfg)",
 }
 
 

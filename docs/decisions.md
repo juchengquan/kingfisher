@@ -3439,11 +3439,26 @@ and 65ms becoming 1 and 1ms.
 
 **Startup got stricter where the failure had nowhere else to surface.** A broken middleware
 module and a shadowed built-in stop `Kingfisher(...)`, about 11ms once; the shadow probe
-runs only when the workspace defines tools, keeping it off the 179 tests with an empty
-catalogue. **An agent naming a moved tool fails `doctor` and does not stop startup**,
-unlike the subagent case: it would stop a deployment that runs today over a file nobody
-touched, and the promise is that `doctor` tells you.
+runs where the workspace defines tools -- the catalogue's or a subagent bundle's -- keeping
+it off the tests with nothing defined at all. **An agent naming a moved tool fails `doctor`
+and does not stop startup**, unlike the subagent case: it would stop a deployment that runs
+today over a file nobody touched, and the promise is that `doctor` tells you.
 `test_doctor_sees_an_agents_moved_tool_that_nothing_else_would` asserts both halves.
+
+  - **A bundle is the second door, and it was open.** The probe walked the catalogue only,
+    and the comment at its call site said as much: *only with `tools:` nothing else
+    shadows*. Driven, a `read_file` in `subagents/surveyor/tools/` reached the subagent's
+    spec unrefused and took the name deepagents dispatches: with no `limit` in its schema,
+    where deepagents' own has one, every model call that subagent made died with
+    `KeyError: 'limit'`; with a `limit`, nothing failed and it had quietly replaced the
+    reader that enforces `read_only_permissions`. `doctor` called the workspace healthy and
+    exited 0. Both doors are judged now -- a folder's tools and the objects a portable
+    entry carries -- for every bundle the catalogue holds rather than only the subagents a
+    request activated, since the clash is a fact about the workspace. A bundle that will
+    not load is skipped rather than reported here, and a subagent file that will not parse
+    leaves the probe no bundles: either failure belongs to the rows that name the subagent,
+    and raising it from the tool probe sent a reader to the catalogue instead.
+    *(2026-10-19, from an architecture review.)*
 
 **`REFUSALS` is what stops the next one.** The table in `tests/unit/test_refusals.py` has an
 entry per catalogue-reading function that can refuse a definition, naming a broken

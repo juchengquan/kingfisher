@@ -1157,6 +1157,22 @@ entries from a folder it no longer owns, and that is refused too. `kingfisher
 list` prints the mismatch under the subagent and `doctor` fails on
 `bundled entries`, so both say it before startup does.
 
+**A bundled name cannot be a built-in's.** A `read_file` in `redactor/tools/` would
+take the name the agent runtime dispatches, and `redactor` would call your tool
+where every other graph calls the file reader -- with none of the rules that one
+applies. Refused where a catalogue tool of that name is refused, and for the same
+reason:
+
+```
+workspace tool(s) read_file would replace a built-in of the same name; rename
+them in subagents/redactor/tools
+```
+
+Checked for every bundle the catalogue holds, whether or not a request activates
+that subagent, so `Kingfisher(...)` refuses it at startup and `doctor` fails on
+`tools` with the folder to go and open. Tools a portable definition carries in
+Python are held to the same rule.
+
 **The subagent holds them whatever the request granted.** Activating `redactor`
 is what grants its parts — a caller never names them, which is the point, since
 naming them would mean knowing they exist. Leaving `redactor` out of a request's
