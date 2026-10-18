@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import operator
 from dataclasses import replace
 from typing import Annotated, Any
@@ -9,7 +10,7 @@ from typing import Annotated, Any
 import pytest
 from deepagents.middleware.memory import MEMORY_SYSTEM_PROMPT
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langgraph.graph import END, START, StateGraph
 from pydantic import Field
@@ -57,6 +58,18 @@ class RecordingModel(FakeToolCallingModel):
         return self
 
 
+class ToldModel(RecordingModel):
+    """The same, and the system message of every call: what an agent is told about the
+    tools it holds is composed on the way to the model, so no construction seam shows
+    it."""
+
+    heard: list[str] = []
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        self.heard.extend(m.text for m in messages if isinstance(m, SystemMessage))
+        return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+
+
 def _write_skill(definitions, name):
     directory = definitions / "skills" / name
     directory.mkdir(parents=True, exist_ok=True)
@@ -99,6 +112,41 @@ def test_restricting_tools_removes_the_shell_from_what_the_model_sees(cfg, sessi
 
     assert set(model.offered) == {"read_file", "write_file"}
     assert "execute" not in model.offered  # builtins are filtered too
+
+
+def test_a_turn_on_an_event_loop_is_offered_and_told_of_only_the_tools_it_was_granted(
+    cfg, session_dir
+):
+    """`Kingfisher.arun` and `astream` drive `awrap_model_call` alone, so a filter that
+    narrowed only on the sync hook would offer an async turn every built-in -- and what
+    the model is told of is derived from the tools on the request, so it would be told
+    about them too, and a model told of a tool calls it and is refused.
+
+    Measured, by narrowing only the async hook: the turn below was offered all ten
+    built-in tools and handed deepagents' line "The `execute` tool runs commands in the
+    host shell", while the sync twin above stayed green and the whole suite with it.
+    """
+    model = ToldModel(responses=[AIMessage(content="ok")])
+
+    built = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=model,
+        capabilities=Capabilities(builtin_tools=("read_file", "write_file")),
+    )
+    asyncio.run(
+        built.graph.ainvoke(
+            {"messages": [{"role": "user", "content": "go"}]}, context=built.context
+        )
+    )
+
+    assert set(model.offered) == {"read_file", "write_file"}
+    # The name, not the `## The shell` heading: that section is composed from the
+    # request's capabilities, so it is absent on this path whether the filter runs or
+    # not -- asserting on it is a check that cannot fail. The line that arrives with an
+    # unheld tool is deepagents' own, and it names `execute`.
+    (system,) = model.heard
+    assert "execute" not in system
 
 
 def test_an_unrestricted_run_is_offered_the_shell(cfg, session_dir):
