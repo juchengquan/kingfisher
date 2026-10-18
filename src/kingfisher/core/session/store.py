@@ -125,11 +125,12 @@ def entry_id(number: int) -> str:
     return f"A-{number:04d}"
 
 
-_ENTRY_ID = re.compile(r"A-(\d+)")
+#: The shape `entry_id` gives, its number the one group; a result's stamp is read by it too.
+ENTRY_ID = re.compile(r"A-(\d+)")
 
 #: The same shape at the front of a file name, which is how the sweep knows its own
-#: writing. Built from `_ENTRY_ID`, so the id and its file cannot drift apart.
-_RESULT_FILE = re.compile(_ENTRY_ID.pattern)
+#: writing. Built from `ENTRY_ID`, so the id and its file cannot drift apart.
+_RESULT_FILE = re.compile(ENTRY_ID.pattern)
 
 
 def names_a_result(name: str) -> bool:
@@ -200,7 +201,7 @@ def _kept(text: str) -> KeptLedger:
         if not isinstance(row, dict):
             continue
         lines.append(line)
-        if isinstance(row.get("id"), str) and (number := _ENTRY_ID.fullmatch(row["id"])):
+        if isinstance(row.get("id"), str) and (number := ENTRY_ID.fullmatch(row["id"])):
             last = max(last, int(number.group(1)))
         if isinstance(row.get("path"), str):
             paths.add(row["path"])

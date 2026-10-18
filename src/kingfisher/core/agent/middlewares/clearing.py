@@ -15,7 +15,12 @@ from langgraph.types import Command
 
 from kingfisher.core.agent.middlewares.builtin_tools import GREP, READ_FILE
 from kingfisher.core.agent.middlewares.model_reply import NOT_RUN
-from kingfisher.core.agent.middlewares.recorder import _arguments
+from kingfisher.core.agent.middlewares.recorded import (
+    STAMP_PATTERN,
+    arguments,
+    stamp,
+    stamped_id,
+)
 from kingfisher.core.agent.models import summarizer_trigger
 from kingfisher.core.agent.prompting import FILE_TOOLS
 from kingfisher.core.definitions.subagents import TASK_TOOL
@@ -43,17 +48,13 @@ WORTH = 1 / 4
 #: The arguments that carry a file's text, by the file tool they belong to.
 FILE_TEXT = {"write_file": ("content",), "edit_file": ("old_string", "new_string")}
 
-#: What the recorder ends a result with. A stub deepagents left numbers its lines, so the
-#: id is matched at the end of the text, not as a line of its own.
-_STAMP = re.compile(r"\[(A-\d+)\]\s*\Z")
-
 #: How deepagents' eviction stub begins, `_TOO_LARGE_TOOL_MSG` up to its first field.
 EVICTED = "Tool result too large, the result of this tool call "
 
 #: The handles this module writes, as each ends. Asked before clearing anything: a later pass
 #: would otherwise read a handle as what it replaced and clear it again, wrongly.
 _RESULT_HANDLE = re.compile(
-    r"(?:\n\([\d,]+ bytes, cleared; [^\n]*\)\n\[A-\d+\]"
+    rf"(?:\n\([\d,]+ bytes, cleared; [^\n]*\){STAMP_PATTERN}"
     r"| -- (?:[\d,]+ chars, )?cleared; call \S+ again to see it as it is now)\Z"
 )
 _TEXT_HANDLE = re.compile(
@@ -235,15 +236,15 @@ class ResultClearingMiddleware(AgentMiddleware):
         text = result.text
         if _RESULT_HANDLE.search(text):
             return text
-        if (stamp := _STAMP.search(text)) is not None and (
-            row := rows.get(stamp.group(1))
+        if (number := stamped_id(text)) is not None and (
+            row := rows.get(number)
         ) is not None and row.call == result.tool_call_id:
             return self._row_handle(row, text)
         # What a file tool returned is a file's text or a listing of files, and calling it
         # again gets that back.
         if result.name in FILE_TOOLS:
             args = (call or {}).get("args") or {}
-            called = f"{result.name} {_arguments(args)}" if args else str(result.name)
+            called = f"{result.name} {arguments(args)}" if args else str(result.name)
             size = _size(result)
             what = f"{size:,} chars, cleared" if size is not None else "cleared"
             return f"{called} -- {what}; call {result.name} again to see it as it is now"
@@ -270,7 +271,7 @@ class ResultClearingMiddleware(AgentMiddleware):
             where = f"full result: {row.path}" if self._holds(READ_FILE) else again
         else:
             return None
-        return f"{row.summary}\n({row.size:,} bytes, cleared; {where})\n[{row.id}]"
+        return f"{row.summary}\n({row.size:,} bytes, cleared; {where}){stamp(row.id)}"
 
 
 def _with(response: Any, update: Command[Any] | None) -> Any:

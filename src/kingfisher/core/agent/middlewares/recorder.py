@@ -17,6 +17,7 @@ from langgraph.types import Command
 
 from kingfisher.core.access.reach import stated
 from kingfisher.core.access.source_ids import Audience, jointly, listed, unlisted
+from kingfisher.core.agent.middlewares.recorded import arguments, stamp, summary
 from kingfisher.core.agent.prompting import FILE_TOOLS, WRITE_TODOS
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.layout import TOOL_RESULTS_ROUTE
@@ -35,10 +36,6 @@ RUN: ContextVar[str | None] = ContextVar("kingfisher_ledger_run", default=None)
 #: writes are a file already, and `write_todos`, one list the conversation carries. Not
 #: `execute`: what a command did is what a later turn wants to read back.
 UNRECORDED = frozenset({*FILE_TOOLS, WRITE_TODOS})
-
-#: How much of one argument, and of a result's first line, a row keeps.
-ARG_LIMIT = 60
-LINE_LIMIT = 100
 
 
 @dataclass(frozen=True)
@@ -152,7 +149,7 @@ class RecorderMiddleware(AgentMiddleware):
         content = text.encode("utf-8")
         call_id = str(call.get("id") or "")
         run = RUN.get()
-        args = _arguments(call.get("args") or {})
+        args = arguments(call.get("args") or {})
         access = self._access(tool, run or call_id)
         entry = self._ledger.add(
             lambda number: LedgerEntry(
@@ -166,7 +163,7 @@ class RecorderMiddleware(AgentMiddleware):
                 access=access,
                 size=len(content),
                 path=f"{self._tool_results_route}{number}-{_segment(tool)}{_suffix(text)}",
-                summary=_summary(tool, args, text),
+                summary=summary(tool, args, text),
             )
         )
         return entry, content
@@ -220,7 +217,7 @@ def _stamped(result: Any, answer: ToolMessage, number: str) -> Any:
     blocks gains one starting on a new line, because the transcript and `.text` join blocks
     with nothing between them.
     """
-    mark = f"\n[{number}]"
+    mark = stamp(number)
     content = answer.content
     marked = answer.model_copy(
         update={
@@ -233,24 +230,6 @@ def _stamped(result: Any, answer: ToolMessage, number: str) -> Any:
         return marked
     messages = [marked if one is answer else one for one in result.update["messages"]]
     return replace(result, update={**result.update, "messages": messages})
-
-
-def _cut(text: str, limit: int) -> str:
-    return text if len(text) <= limit else text[: limit - 1] + "…"
-
-
-def _arguments(args: Mapping[str, Any]) -> str:
-    """Each argument as `name=value`. `repr` keeps a value on one line and a string
-    in its quotes, so `path='/inputs/a b.csv'` reads as one argument.
-    """
-    return " ".join(f"{name}={_cut(repr(value), ARG_LIMIT)}" for name, value in args.items())
-
-
-def _summary(tool: str, args: str, text: str) -> str:
-    """The tool, its arguments and the first line of what it returned."""
-    first = next((line.strip() for line in text.splitlines() if line.strip()), "")
-    called = f"{tool} {args}" if args else tool
-    return f"{called} -- {_cut(first, LINE_LIMIT)}" if first else called
 
 
 #: A tool's name may come from an MCP server or a module author, and the file name
