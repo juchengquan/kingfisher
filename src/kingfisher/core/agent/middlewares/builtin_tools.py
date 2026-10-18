@@ -267,26 +267,40 @@ MUST_READ = "- You must read the file before editing; this tool errors otherwise
 #: What replaces it where `read_file` is held.
 READ_FIRST = "- Read the file before editing, so `old_string` matches it exactly."
 
+#: deepagents' advice on indentation, which speaks of `read_file`'s output and its header.
+FROM_READ = (
+    "- Preserve the exact source indentation from the read output, and never include the "
+    "read status header in old_string or new_string."
+)
 
-def _held_lines(held: Collection[str | None]) -> dict[str, tuple[str, str]]:
-    """Each built-in's deepagents line naming another tool, and what replaces it where the
-    tools `held` are: nothing, where it would name none of them."""
+#: What replaces it where `read_file` is not held: the indentation still has to match.
+EXACT_INDENT = "- Preserve the file's exact indentation in old_string and new_string."
+
+
+def _held_lines(held: Collection[str | None]) -> dict[str, tuple[tuple[str, str], ...]]:
+    """Each built-in's deepagents lines naming another tool, and what replaces each where
+    the tools `held` are: nothing, where it would name none of them."""
+    reads = READ_FILE in held
     return {
-        EXECUTE: (SEARCHING, _searching(held)),
-        GREP: (REGEX, REGEX if EXECUTE in held else ""),
-        LS: (BEFORE, _before(*(name for name in (READ_FILE, EDIT_FILE) if name in held))),
-        WRITE_FILE: (PREFER_EDIT, PREFER_EDIT if EDIT_FILE in held else ""),
-        EDIT_FILE: (MUST_READ, READ_FIRST if READ_FILE in held else ""),
+        EXECUTE: ((SEARCHING, _searching(held)),),
+        GREP: ((REGEX, REGEX if EXECUTE in held else ""),),
+        LS: ((BEFORE, _before(*(name for name in (READ_FILE, EDIT_FILE) if name in held))),),
+        WRITE_FILE: ((PREFER_EDIT, PREFER_EDIT if EDIT_FILE in held else ""),),
+        EDIT_FILE: (
+            (MUST_READ, READ_FIRST if reads else ""),
+            (FROM_READ, FROM_READ if reads else EXACT_INDENT),
+        ),
     }
 
 
-def _naming_held(tool: Any, lines: dict[str, tuple[str, str]]) -> Any:
+def _naming_held(tool: Any, lines: dict[str, tuple[tuple[str, str], ...]]) -> Any:
     if not isinstance(tool, BaseTool) or tool.name not in lines:
         return tool
-    theirs, ours = lines[tool.name]
-    # Unlike `_replaced`, nothing is appended where deepagents reworded the line: none of
+    said = tool.description
+    # Unlike `_replaced`, nothing is appended where deepagents reworded a line: none of
     # these says what kingfisher changed, and a test fails on the line left.
-    said = tool.description.replace(f"\n{theirs}", f"\n{ours}" if ours else "")
+    for theirs, ours in lines[tool.name]:
+        said = said.replace(f"\n{theirs}", f"\n{ours}" if ours else "")
     return tool if said == tool.description else tool.model_copy(update={"description": said})
 
 
