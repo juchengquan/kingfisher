@@ -232,7 +232,7 @@ def asessions_lists_what_sessions_does(make: Callable[[], Any]) -> None:
 
 
 def adelete_removes_the_session(make: Callable[[], Any]) -> None:
-    """`adelete_session` deletes with `adelete`. One that left the session listed would
+    """`Session.adelete` deletes through `adelete`. One that left the session listed would
     leave an async caller's deletion undone, with nothing said.
     """
     cfg, backends = make()
