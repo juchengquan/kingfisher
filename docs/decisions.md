@@ -837,8 +837,12 @@ nothing reads the files, since the shell may. Memory is saved with `edit_file`, 
 neither, as the shipped `operator` does, is told in the guidelines that its memory can be
 read and not added to, and not in the memory section: a request declining memory keeps
 that section as the cached prefix while its file is denied. No subagent is handed memory;
-deepagents gives it only to `mode: fork`, which kingfisher refuses. deepagents' own tool
-descriptions are deferred. *(2026-10-18.)*
+deepagents gives it only to `mode: fork`, which kingfisher refuses.
+deepagents' own tool descriptions name only held tools too, in its wording where it has a
+variant: it picks `execute`'s and `grep`'s itself, but from every built-in, since it runs
+before the grant is applied. `edit_file`'s claim to error on a file not read first was
+false for every agent -- it checks only the path and permissions -- so it becomes a reason
+to read first, and goes where `read_file` is not held. *(2026-10-18.)*
 
 ## Source-id access
 

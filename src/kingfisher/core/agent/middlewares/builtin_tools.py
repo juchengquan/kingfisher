@@ -1,12 +1,12 @@
-"""deepagents' built-in tools as a model is handed them: what `execute`, `read_file` and
-`grep` say, what they are called with, and what the system message says of them, changed
-from outside."""
+"""deepagents' built-in tools as a model is handed them: what they say, what `read_file`
+and `grep` are called with, and what the system message says of them, changed from
+outside."""
 
 from __future__ import annotations
 
 import inspect
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from functools import cache
 from typing import Any
 
@@ -204,6 +204,92 @@ def _offered(tool: Any) -> Any:
     )
 
 
+LS = "ls"
+GLOB = "glob"
+WRITE_FILE = "write_file"
+EDIT_FILE = "edit_file"
+
+#: deepagents' advice on searching to the shell's holder, by whether it holds `grep` and
+#: `glob`. deepagents picks one from the tools it sees, which is every built-in: it runs
+#: outside kingfisher's middleware.
+_SEARCH = {
+    (True, True): "You MUST avoid using search commands like find and grep. Instead use the "
+    "grep, glob tools to search. ",
+    (True, False): "You MUST avoid using shell grep for searches. Instead use the grep tool to "
+    "search text. ",
+    (False, True): "You MUST avoid using shell find for searches. Instead use the glob tool to "
+    "find files. ",
+    (False, False): "",
+}
+_CAT = "Use read_file rather than cat/head/tail."
+_FIND = "\n    - execute(command=\"find . -name '*.py'\")  # Use glob tool instead"
+_GREPPED = "\n    - execute(command=\"grep -r 'pattern' .\")  # Use grep tool instead"
+
+
+def _searching(held: Collection[str | None]) -> str:
+    """`execute`'s line on searching and reading, naming only the tools `held`."""
+    grep, glob = GREP in held, GLOB in held
+    said = (_SEARCH[grep, glob] + (_CAT if READ_FILE in held else "")).rstrip()
+    if not said:
+        return ""
+    return f"- {said}{_FIND if glob else ''}{_GREPPED if grep else ''}"
+
+
+#: deepagents' line in `execute`'s description, with its examples, as said to a holder of
+#: `grep`, `glob` and `read_file`.
+SEARCHING = _searching((GREP, GLOB, READ_FILE))
+
+
+def _before(*names: str) -> str:
+    """`ls`'s advice to list before using `names`, in deepagents' words."""
+    if not names:
+        return ""
+    tools = "tools" if len(names) > 1 else "tool"
+    return f"You should almost ALWAYS use this tool before using the {' or '.join(names)} {tools}."
+
+
+#: deepagents' advice in `ls`'s description.
+BEFORE = _before(READ_FILE, EDIT_FILE)
+
+#: deepagents' pointer from `grep` to the shell.
+REGEX = "- If you genuinely need regex, use the execute tool with `rg '<regex>'` instead."
+
+#: deepagents' advice in `write_file`'s description.
+PREFER_EDIT = (
+    "- Prefer to edit existing files (with the edit_file tool) over creating new ones when "
+    "possible."
+)
+
+#: deepagents' claim in `edit_file`'s description, untrue on every graph: its `edit_file`
+#: checks only the path and permissions before it edits.
+MUST_READ = "- You must read the file before editing; this tool errors otherwise."
+
+#: What replaces it where `read_file` is held.
+READ_FIRST = "- Read the file before editing, so `old_string` matches it exactly."
+
+
+def _held_lines(held: Collection[str | None]) -> dict[str, tuple[str, str]]:
+    """Each built-in's deepagents line naming another tool, and what replaces it where the
+    tools `held` are: nothing, where it would name none of them."""
+    return {
+        EXECUTE: (SEARCHING, _searching(held)),
+        GREP: (REGEX, REGEX if EXECUTE in held else ""),
+        LS: (BEFORE, _before(*(name for name in (READ_FILE, EDIT_FILE) if name in held))),
+        WRITE_FILE: (PREFER_EDIT, PREFER_EDIT if EDIT_FILE in held else ""),
+        EDIT_FILE: (MUST_READ, READ_FIRST if READ_FILE in held else ""),
+    }
+
+
+def _naming_held(tool: Any, lines: dict[str, tuple[str, str]]) -> Any:
+    if not isinstance(tool, BaseTool) or tool.name not in lines:
+        return tool
+    theirs, ours = lines[tool.name]
+    # Unlike `_replaced`, nothing is appended where deepagents reworded the line: none of
+    # these says what kingfisher changed, and a test fails on the line left.
+    said = tool.description.replace(f"\n{theirs}", f"\n{ours}" if ours else "")
+    return tool if said == tool.description else tool.model_copy(update={"description": said})
+
+
 def alternatives(pattern: str) -> list[str] | None:
     """The strings a `grep` pattern joins with `|`, or `None` where it is one string.
 
@@ -251,8 +337,9 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     """Put the shell's own line in `execute`'s description, on kingfisher's own shell say
     how a missed path is spelt there, and keep deepagents' host paths from a shell that
     is not on this host; have `read_file` read 1,000 lines unless told otherwise, and
-    `grep` search each string of `a|b`, and say so; and say nothing of the shell or of
-    `write_todos` to a graph not holding it.
+    `grep` search each string of `a|b`, and say so; say nothing of the shell or of
+    `write_todos` to a graph not holding it; and have each built-in's description name
+    only the tools the graph holds.
 
     The shell's line goes in the description, not the system prompt: a subagent gets none
     of `system.md`, and the description reaches every graph holding the shell. At
@@ -282,14 +369,17 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         self._virtual = _virtual(layout.session_dirs)
 
     def _told(self, request: Any) -> Any:
-        tools = [_offered(_described(tool, self._rule)) for tool in request.tools]
-        if not all(new is old for new, old in zip(tools, request.tools, strict=True)):
-            request = request.override(tools=tools)
         # Inside `GrantedOnlyMiddleware`, so the request holds only what was granted.
         held = {
             tool.get("name") if isinstance(tool, dict) else getattr(tool, "name", None)
             for tool in request.tools
         }
+        lines = _held_lines(held)
+        tools = [
+            _offered(_described(_naming_held(tool, lines), self._rule)) for tool in request.tools
+        ]
+        if not all(new is old for new, old in zip(tools, request.tools, strict=True)):
+            request = request.override(tools=tools)
         untold = []
         if not (self._here and EXECUTE in held):
             untold.append(MAPPINGS)
