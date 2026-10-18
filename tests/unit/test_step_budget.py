@@ -120,9 +120,9 @@ def _ask(who: str) -> AIMessage:
     return AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}])
 
 
-def _listing(n: int) -> AIMessage:
+def _listing(n: int, padding: str = "") -> AIMessage:
     call = {"name": "ls", "args": {"path": "/"}, "id": f"s{n}"}
-    return AIMessage(content="still looking", tool_calls=[call])
+    return AIMessage(content=f"still looking{padding}", tool_calls=[call])
 
 
 def _handed_back() -> str:
@@ -159,6 +159,41 @@ def test_a_subagent_that_answers_within_its_budget_is_handed_back_unmarked(consu
     _run(cfg, _ask("helper"), *(_listing(n) for n in range(listings)), found, AIMessage("done"))
 
     assert _handed_back().startswith("found it")
+
+
+#: Small enough that deepagents summarises the padded subagent below before it is warned.
+WINDOW = 14_000
+
+
+def _windowed(cfg: Any) -> Any:
+    """`cfg` with every model declaring `WINDOW`, which deepagents' summariser reads."""
+    models = {
+        name: replace(one, extra={"profile": {"max_input_tokens": WINDOW}})
+        for name, one in cfg.models.models.items()
+    }
+    return replace(cfg, models=replace(cfg.models, models=models))
+
+
+def test_a_subagent_summarised_partway_is_still_held_to_its_budget(consulting, way):
+    """After a summary the count restarted, so a subagent was never warned or stopped: 41
+    calls on a 10-call budget."""
+    cfg = _windowed(replace(consulting, recursion_limit=30))
+    padded = (_listing(n, " " + "x" * 6_000) for n in range(10))
+
+    # Two answers, so a subagent that runs past its budget fails the asserts, not the script.
+    _run(cfg, _ask("helper"), *padded, AIMessage("done"), AIMessage("done"), way=way)
+
+    # First: a subagent never summarised before its warning passes whatever the count reads.
+    first_warned = Scripted.heard[9]
+    assert any(
+        isinstance(one, HumanMessage) and one.additional_kwargs.get("lc_source") == "summarization"
+        for one in first_warned
+    ), "the subagent was not summarised before it was warned"
+    assert _told() == [None] + [None] * 8 + [1, "last"] + [None]
+    assert _handed_back().startswith(
+        "[Stopped: this subagent reached its limit of 10 model calls, and the answer below "
+        "is what it had then.]"
+    )
 
 
 def test_it_adds_no_step_to_the_agents_loop(busy):
