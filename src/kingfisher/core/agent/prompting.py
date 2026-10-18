@@ -39,6 +39,9 @@ CAPABILITY_FILES = {
     "memory": "capability_memory.md",
 }
 
+#: What follows the memory section where the agent holds a tool to save with.
+MEMORY_RECORDING = "capability_memory_recording.md"
+
 #: Where the shell's own section is spliced in. The rest of `system.md` says nothing
 #: about the shell, because what is true of one depends on what runs it.
 SHELL_MARKER = "<!-- shell -->"
@@ -51,9 +54,51 @@ FILE_TOOLS_FILE = "file_tools.md"
 FILE_TOOLS = ("ls", "read_file", "write_file", "edit_file", "delete", "glob", "grep")
 EXECUTE = "execute"
 
-#: The tools a section of the prompt is about. Nothing else in a grant changes the prompt,
+#: The tools anything in the prompt is said of. Nothing else in a grant changes the prompt,
 #: so nothing else goes in `render_system_prompt`'s cache key.
 _DESCRIBED = frozenset((*FILE_TOOLS, EXECUTE))
+
+#: Where the paragraphs on seeing a saved result again are spliced in.
+TOOL_RESULTS_MARKER = "<!-- tool results -->"
+TOOL_RESULTS_FILE = "tool_results.md"
+
+#: A sentence for each way to read a saved result back, and every tool it needs: `glob`
+#: finds a file only `read_file` opens.
+_READING = (
+    (
+        ("read_file",),
+        "Read one back with `read_file`, a range of lines at a time, rather than calling "
+        "the tool again.",
+    ),
+    (
+        ("grep",),
+        "Search them with `grep`, which also finds a result too long to show you whole: "
+        "that one is named after its call rather than its id, and ends in its `[A-0042]` "
+        "line, so `grep` for that in `/{{scratchpad}}/large_tool_results/`.",
+    ),
+    (
+        ("glob", "read_file"),
+        "To find an older result by its id, `glob` for `A-0042-*` in "
+        "`/{{scratchpad}}/{{tool_results}}/`.",
+    ),
+)
+_UNREAD = "None of your tools reads these files: to see a result again, call its tool again."
+#: For one holding the shell, which may read them.
+_AGAIN = "To see a result again, call its tool again."
+
+#: How a cleared result is seen again, by whether `read_file` and `grep` are held.
+_RECOVERING = {
+    (True, True): "Read that file, `grep` for the id where the handle says to, or call the "
+    "tool again; a file may have changed since.",
+    (True, False): "Read that file or call the tool again; a file may have changed since.",
+    (False, True): "`grep` for the id where the handle says to, or call the tool again; a "
+    "file may have changed since.",
+    (False, False): "To see a result whole again, call its tool again.",
+}
+
+#: The file tools memory is saved with, `edit_file` first: it changes the file in place,
+#: where `write_file` replaces it whole. Not `execute`, which may run where `/memory` is not.
+_SAVERS = ("edit_file", "write_file")
 
 #: What is said of a shell that says nothing, which is only what holds wherever a
 #: shell runs. No `execute` line: deepagents' own stands.
@@ -67,6 +112,10 @@ INSTRUCTIONS_FILE = "INSTRUCTIONS.md"
 #: re-synced on an upgrade: `/memory` is deleted with its session. Sent as written:
 #: deepagents strips HTML comments from the memory file, not from this.
 MEMORY_GUIDELINES = "memory_guidelines.md"
+
+#: What an agent holding nothing to save with is told in its place: its first half, the
+#: trust rules word for word.
+MEMORY_READ_ONLY = "memory_guidelines_read_only.md"
 
 
 def _prompt_text(name: str) -> str:
@@ -164,9 +213,32 @@ def execute_line(shell: ShellPrompt | None, layout: Layout = DEFAULT_LAYOUT) -> 
     return None if said is None else _fill(said, layout, "ShellPrompt execute")
 
 
-def memory_guidelines() -> str:
-    """The template `MemoryMiddleware` puts the memory file into, `{agent_memory}` and all."""
-    return _prompt_text(MEMORY_GUIDELINES)
+def _held(tools: Collection[str] | None) -> tuple[str, ...]:
+    """The file tools in `tools`, `None` being every one, in the order their section
+    names them."""
+    return tuple(name for name in FILE_TOOLS if tools is None or name in tools)
+
+
+def _saver(held: tuple[str, ...]) -> str | None:
+    """The file tool memory is saved with, or `None` where `held` has neither."""
+    return next((name for name in _SAVERS if name in held), None)
+
+
+def memory_guidelines(
+    tools: Collection[str] | None = None, layout: Layout = DEFAULT_LAYOUT
+) -> str:
+    """The template `MemoryMiddleware` puts the memory file into, `{agent_memory}` and all,
+    for an agent granted `tools`, `None` being everything."""
+    held = _held(tools)
+    evidence = (
+        "evidence from `read_file` and other tools"
+        if "read_file" in held
+        else "evidence from your tools"
+    )
+    saver = _saver(held)
+    if saver is None:
+        return _filled(MEMORY_READ_ONLY, layout, evidence=evidence)
+    return _filled(MEMORY_GUIDELINES, layout, save_tool=saver, evidence=evidence)
 
 
 def _file_tools(held: tuple[str, ...], layout: Layout) -> str:
@@ -175,6 +247,18 @@ def _file_tools(held: tuple[str, ...], layout: Layout) -> str:
         return ""
     named = ", ".join(f"`{name}`" for name in held)
     return _filled(FILE_TOOLS_FILE, layout, file_tools=named).strip()
+
+
+def _tool_results(held: tuple[str, ...], layout: Layout, *, shelled: bool) -> str:
+    """The paragraphs on seeing a saved result again, naming only the tools in `held`."""
+    told = [said for needs, said in _READING if all(name in held for name in needs)]
+    unread = _AGAIN if shelled else _UNREAD
+    return _filled(
+        TOOL_RESULTS_FILE,
+        layout,
+        reading=_fill("\n".join(told) or unread, layout, TOOL_RESULTS_FILE),
+        recovering=_RECOVERING["read_file" in held, "grep" in held],
+    ).strip()
 
 
 #: Enough for a fleet: `extra` carries the running agent's line, so there is a key per
@@ -197,12 +281,12 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
     tool it does not hold is not described, since a model told of one calls it.
     """
     base = _filled(BASE_PROMPT, layout)
-    for marker in (CAPABILITY_MARKER, FILE_TOOLS_MARKER, SHELL_MARKER):
+    for marker in (CAPABILITY_MARKER, FILE_TOOLS_MARKER, SHELL_MARKER, TOOL_RESULTS_MARKER):
         if marker not in base:  # pragma: no cover -- guards a silent edit
             msg = f"{BASE_PROMPT} is missing the {marker} marker"
             raise ValueError(msg)
 
-    held = tuple(name for name in FILE_TOOLS if tools is None or name in tools)
+    held = _held(tools)
     shelled = tools is None or EXECUTE in tools
     parts: list[str] = []
     if skills_enabled:
@@ -211,11 +295,14 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
             parts.append(_said(shell, "skills", layout))
     if memory_enabled:
         parts.append(_filled(CAPABILITY_FILES["memory"], layout).strip())
+        if _saver(held) is not None:
+            parts.append(_filled(MEMORY_RECORDING, layout).strip())
     sections = "\n\n".join(part for part in parts if part)
 
     assembled = _joined(
         base.replace(FILE_TOOLS_MARKER, _file_tools(held, layout))
         .replace(SHELL_MARKER, _said(shell, "prompt", layout) if shelled else "")
+        .replace(TOOL_RESULTS_MARKER, _tool_results(held, layout, shelled=shelled))
         .replace(CAPABILITY_MARKER, sections),
         extra,
     )

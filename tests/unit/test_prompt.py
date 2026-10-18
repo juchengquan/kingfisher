@@ -515,3 +515,93 @@ def test_a_subagent_is_not_told_of_a_shell_it_does_not_hold(scripted, subagent, 
     assert len(systems) == 3
     assert "You are kingfisher" not in systems[1]
     assert MAPPINGS not in systems[1]
+
+
+# -- told to read back and save only with the tools it holds ------------------------
+
+#: How each tool that reads a saved result back is told of, as the prompt reads.
+READ_BACK = {
+    "read_file": "Read one back with `read_file`",
+    "grep": "Search them with `grep`",
+    "glob": "`glob` for `A-0042-*`",
+}
+
+
+@pytest.mark.parametrize(
+    ("granted", "told"),
+    [
+        (None, {"read_file", "grep", "glob"}),
+        (("read_file",), {"read_file"}),
+        (("grep",), {"grep"}),
+        (("glob",), set()),
+        ((), set()),
+        (("execute",), set()),
+    ],
+    ids=["every", "read_file", "grep", "glob", "none", "shell only"],
+)
+def test_an_agent_is_told_to_read_a_result_back_only_with_tools_it_holds(
+    scripted, granted, told
+):
+    """Every agent was told to read a saved result back with `read_file`, `grep` and `glob`,
+    and one holding none of them spent a call on each refusal; one holding the shell is not
+    told that nothing it holds reads the files."""
+    builtin = '["*"]' if granted is None else f"[{', '.join(granted)}]"
+    (system,) = _told(scripted, builtin_tools=builtin)
+    flat = " ".join(system.split())
+
+    assert {tool for tool, said in READ_BACK.items() if said in flat} == told
+    shelled = granted is None or "execute" in granted
+    assert ("None of your tools reads these files" in flat) is (not told and not shelled)
+    assert ("Read that file" in flat) is ("read_file" in told)
+    for tool in set(READ_BACK) - set(READ_BACK if granted is None else granted):
+        assert f"`{tool}`" not in flat, tool
+
+
+@pytest.mark.parametrize(
+    ("granted", "saver", "reads"),
+    [
+        ("[read_file, write_file, edit_file]", "edit_file", True),
+        ("[write_file]", "write_file", False),
+        ("[read_file, ls, glob, grep, execute]", None, True),
+        ("[]", None, False),
+    ],
+    ids=["edit_file", "write_file", "as operator", "none"],
+)
+def test_memory_is_saved_only_with_a_tool_the_agent_holds(scripted, granted, saver, reads):
+    """With memory on, an agent holding no tool that writes, as the shipped `operator`
+    holds none, was told to record with `edit_file` and spent a call on each refusal."""
+    (system,) = _told(replace(scripted, memory_enabled=True), builtin_tools=granted)
+
+    assert "<agent_memory>" in system, "no memory was wired, so the rest is vacuous"
+    for tool in ("edit_file", "write_file"):
+        assert (f"calling the `{tool}` tool" in system) is (tool == saver), tool
+        assert (f"Tool Call: {tool}(" in system) is (tool == saver), tool
+    assert ("Record something when" in system) is (saver is not None)
+    assert ("can be read here but not added to" in system) is (saver is None)
+    assert ("evidence from `read_file`" in system) is reads
+
+
+@pytest.mark.parametrize(
+    ("subagent", "agent"),
+    [
+        ("reader", {"subagents": "[reader]", "builtin_tools": '["*"]'}),
+        ("general-purpose", {"builtin_tools": "[read_file, task]"}),
+    ],
+)
+def test_a_subagent_is_handed_no_memory_to_be_told_how_to_save(scripted, subagent, agent):
+    """A subagent handed the memory file would hear deepagents' own guidelines, naming
+    `edit_file` whatever it holds, since only the agent's follow its grant."""
+    subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(scripted) / "reader.yaml").write_text(READER, encoding="utf-8")
+    asks = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "task", "args": {"description": "read", "subagent_type": subagent}, "id": "t"}
+        ],
+    )
+    memory_on = replace(scripted, memory_enabled=True)
+
+    systems = _told(memory_on, asks, AIMessage("read"), AIMessage("done"), **agent)
+
+    assert "<agent_memory>" in systems[0], "the control: the agent was handed no memory"
+    assert "<agent_memory>" not in systems[1]

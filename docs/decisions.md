@@ -1404,6 +1404,24 @@ lost. Where to write, and that workspace tools take the same paths, moved from t
 tools' section to the session's: they hold for an agent with only the shell.
 *(2026-10-18.)*
 
+The rule holds sentence by sentence too. *What your tools returned* sent every agent to
+`read_file`, `grep` and `glob` to see a saved result again, and with memory on, the memory
+section and the guidelines kingfisher hands `MemoryMiddleware` told it to record with
+`edit_file`. Each names only what is held now. `glob` is named only beside `read_file`,
+since a file found and not opened spends a call on nothing, and an agent holding none of
+the three is told to call the tool again. Memory is saved with `edit_file`, else
+`write_file`. An agent holding neither, as the shipped `operator` does, is told in the
+guidelines that its memory can be read and not added to, and hears none of the guidance
+on what to record. That goes in the guidelines and not the memory section, because a
+request declining memory keeps the section, as the cached prefix, while its file is
+denied, and "can be read" would be false there. The shell does not count as a way to
+save: it may run where `/memory` is not. No subagent needs the same, because none is
+handed memory: deepagents gives it only to a `mode: fork` subagent, which kingfisher
+refuses. An unrestricted grant hears the guidelines byte for byte as before, and the
+system prompt differs only in the reading sentences' wording. An agent holding the shell
+and none of the three is not told that nothing reads the files, since the shell may.
+Not changed: deepagents' own tool descriptions, which are deferred. *(2026-10-18.)*
+
 ## Source-id access
 
 **An audience lives in the definition it is about.** An agent or subagent writes

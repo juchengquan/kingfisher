@@ -384,24 +384,27 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     # One answer to "are skills on", for this agent and every subagent it builds.
     skills_on = cfg.skills_enabled
 
+    def remembering(tools: Sequence[str] | None) -> MemoryMiddleware:
+        """The memory middleware, telling an agent granted `tools` what it saves with."""
+        return MemoryMiddleware(
+            backend=backend,
+            sources=extras["memory"],
+            # As deepagents' own has it: the memory block's own breakpoint.
+            add_cache_control=True,
+            system_prompt=memory_guidelines(tools, cfg.layout),
+        )
+
+    memory_at: int | None = None
     # Narrowing only subtracts: `memory=True` against a deployment that wired none
     # stays off.
     if cfg.memory_enabled and capabilities.memory is not False:
-        memory_files = memory_sources(cfg.layout)
-        extras["memory"] = memory_files
+        extras["memory"] = memory_sources(cfg.layout)
         # For its `system_prompt`: deepagents' own says memory lasts into "future
         # conversations". Beside `memory=`, not instead: merged by name, this takes the
         # slot deepagents builds its own in, after the static prompt's cache breakpoint.
         # Alone it lands ahead of it, and every memory edit costs the prompt its cache.
-        switched.append(
-            MemoryMiddleware(
-                backend=backend,
-                sources=memory_files,
-                # As deepagents' own has it: the memory block's own breakpoint.
-                add_cache_control=True,
-                system_prompt=memory_guidelines(),
-            )
-        )
+        memory_at = len(switched)
+        switched.append(remembering(None))
     elif cfg.memory_enabled:
         # Wired but declined: the prompt still describes memory, because it is the
         # cached prefix, so this stops the file being read. The memory block sits
@@ -533,6 +536,11 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             # Wrapped: a call from code meets none of the guards on this graph's stack.
             workspace=guarded_tools(surface.carried, paths),
         )
+
+    if memory_at is not None and permitted is not None:
+        # Re-wired now the grant is known, so an agent holding no tool to save with is
+        # not told to save.
+        switched[memory_at] = remembering(permitted)
 
     # Before either branch, and merged once: an agent and its subagents must select
     # from one mapping, or a name would mean different things one level apart.
