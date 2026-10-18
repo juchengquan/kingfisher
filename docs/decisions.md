@@ -2496,9 +2496,11 @@ agent's budget in model calls, counted off its own conversation: warned from fou
 of it, and on its last allowed call any tool calls it still asks for are dropped and its
 text handed back under a line saying it stopped at its limit. The turn goes on. Enforced
 there rather than by binding a limit onto graphs deepagents compiles, which leaves
-deepagents' config alone. After the `read_file` and `grep` changes, no trial turn on a
-neutral prompt reached the warning. *(2026-10-17, from the trial transcripts and a
-scripted turn.)*
+deepagents' config alone. Its calls are counted in the saved conversation, not the
+request, since a summary leaves earlier calls out of the request and the count restarted
+at each one: a 10-call subagent summarised partway made 41 calls, never warned or stopped.
+After the `read_file` and `grep` changes, no trial turn on a neutral prompt reached the
+warning. *(2026-10-17, from the trial transcripts and a scripted turn.)*
 
 **What the agent is told about the shell is said by the shell.** `system.md`,
 `capability_skills.md` and `BuiltinToolsMiddleware` told every deployment's agent four

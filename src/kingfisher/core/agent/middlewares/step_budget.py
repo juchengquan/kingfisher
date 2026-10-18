@@ -53,7 +53,9 @@ def warning(left: int) -> str:
 
 def _made(request: Any) -> int:
     """The model calls an agent's conversation shows it has made."""
-    return sum(isinstance(one, AIMessage) for one in request.messages)
+    # The stored conversation, not the request: deepagents' summariser, outside this
+    # middleware, leaves the calls its summary stands for out of the request.
+    return sum(isinstance(one, AIMessage) for one in request.state.get("messages", ()))
 
 
 def _stopped(reply: AIMessage, calls: int) -> AIMessage:
