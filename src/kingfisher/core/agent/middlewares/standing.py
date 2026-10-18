@@ -58,7 +58,10 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
         msg = f"result clearing and the declared-subagent check are the agent's, not a {kind}'s"
         raise ValueError(msg)
     if kind == "general-purpose" and skills is not None:
-        msg = "general-purpose is given the agent's skills index, and narrows none of its own"
+        msg = (
+            "general-purpose is handed no skills index, the agent's or its own, so has none "
+            "to narrow"
+        )
         raise ValueError(msg)
 
     # One grant for the handles and the filter, so a handle never names a tool it refuses.
